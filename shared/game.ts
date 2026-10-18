@@ -51,17 +51,20 @@ export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:
 export function createEmptyWorld():World {
   return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,launchAt:null},pickups:[]};
 }
-export function createWorld():World {
+export function createWorld(fleetSeed=0):World {
   const world=createEmptyWorld();
   world.pickups=Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-300+(i%6)*60,z:i<6?-55:113,kind:i%2?'air':'repair',active:true}));
   world.pickups.push({id:'rocket-island',x:0,z:-1160,kind:'rocket',active:true});
   for(const lot of PARKING_LOTS)world.pickups.push({id:`rocket-${lot.id}`,...lot.pickup,kind:'rocket',active:true});
   for(const [i,[x,z]] of [[0,60],[390,0],[510,120],[-240,180],[-1200,2080],[-40,6080],[1580,6070],[1530,8860]].entries())world.pickups.push({id:`rocket-${i}`,x,z,kind:'rocket',active:true});
-  VEHICLE_IDS.forEach((kind,i)=>{
-    const pose=routePose(i,VEHICLE_IDS.length);
+  // Sample the catalog, rather than simulating two permanent copies of every
+  // model. An explicit seed keeps simulation fixtures repeatable.
+  const cohort=(offset:number)=>Array.from({length:8},(_,i)=>VEHICLE_IDS[(Math.floor(i*VEHICLE_IDS.length/8)+Math.abs(Math.trunc(fleetSeed))+offset)%VEHICLE_IDS.length]);
+  cohort(0).forEach((kind,i)=>{
+    const pose=routePose(i,8);
     world.entities.push({...makeEntity(`traffic-${i}`,kind,pose.x,pose.z),...pose,npc:true,autopilot:true});
   });
-  VEHICLE_IDS.forEach((kind,i)=>{
+  cohort(13).forEach((kind,i)=>{
     const roads=[-240,-180,-120,-60,0,60,330,390,450,510],zSlots=[-165,-135,-105,-75,-45,-15,15,45,75,105,135,165];
     for(let n=0;n<roads.length*zSlots.length;n++){
       const slot=(i*7+n)%(roads.length*zSlots.length),x=roads[Math.floor(slot/zSlots.length)]+10,z=zSlots[slot%zSlots.length];
