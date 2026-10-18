@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.7-alpha',
-    label: '0.0.7 Alpha',
+    version: '0.0.8-alpha',
+    label: '0.0.8 Alpha',
     date: '2026-10-18',
     title: 'Drive together',
     intro: 'Smoother shared driving and longer-lasting Rocket pickups.',
@@ -11,6 +11,19 @@ export const RELEASES = [
         'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
         'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
         'A Rocket pickup now equips its car for the rest of the session.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.7-alpha',
+    label: '0.0.7 Alpha',
+    date: '2026-10-18',
+    title: 'Room for every control',
+    intro: 'The map and game controls fit more comfortably on short screens.',
+    sections: [
+      { title: 'Play and explore', items: [
+        'The minimap stays clear of mini-game and driving controls in compact portrait and landscape layouts.',
+        'Air-refill cues stay visible when they are active.'
       ] }
     ]
   },
