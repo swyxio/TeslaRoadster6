@@ -30,11 +30,6 @@ Each Durable Object has one alarm. Any Mars contributions and pending intents as
 
 ## Acceptance checks
 
-Run the existing local fixture when the performance team has a quiet window:
+Run `pnpm exec tsx tests/luxury-wallet.integration.ts` when the performance team has a quiet window. Its isolated local Wrangler fixture exercises the real room, profile and journal, including recovery, purchases, pickup contention, retries, acknowledgement cleanup and restart. It compares another driver's input acknowledgements, snapshot gaps and world-time advance during a held profile write against a no-delay baseline. [The playtest fixture](../tests/fixtures/README-luxury-wallet.md) provides a separate funded local driver for visual checks.
 
-- `pnpm exec tsx scripts/persistent-load-sample.ts` measures six saved drivers, snapshots, input acknowledgement and room-time progression with normal, delayed and lost profile replies.
-- `pnpm exec tsx tests/persistent-room.integration.ts` checks identity fencing, reconnects, property and uncertain writes.
-- `pnpm exec tsx tests/mars-alarm.integration.ts` checks a delayed retry while another driver continues.
-- `pnpm exec tsx tests/isolated-economy.integration.ts` exercises the fixture-only redesign at `beba738` on `codex/persistent-property`: ordered delivery credits, independent driver activity, sync barriers, retries and fencing. It has not yet run; its shared clock is not the production physics step.
-
-Extend the fixture to cover delayed authentication, a slow first donation, same-pickup contention, floor reservations with visitors, room switches during pending writes, and restart before and after commit. Compare acknowledgement latency, snapshot gaps and world-time advance with a no-delay baseline; unrelated sockets must remain active during a profile failure. Then run the repository's test/build checks and the normal two-client room integration. Record actual sample conditions and avoid extrapolating to the 64-player room limit.
+The earlier `codex/persistent-property` branch retains `scripts/persistent-load-sample.ts`, `tests/persistent-room.integration.ts`, `tests/mars-alarm.integration.ts` and `tests/isolated-economy.integration.ts`; those historical prototype tests are not in this checkout. Property floor reservations and visitors need their own checks when property is implemented. Run the repository's test/build checks and the normal two-client room integration as well. Record sample conditions and avoid extrapolating to the 64-player room limit.
