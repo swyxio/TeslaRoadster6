@@ -10,10 +10,11 @@ Stop the current vehicle in a ring and press **B**, use **Actions → Shop**, or
 |---|---:|---|
 | Rocket kit | $60 | Flight controls and a full air tank; free from a purple pickup |
 | Efficient nozzles | $45 | 25% less air for flight; requires rockets |
+| Air tank levels 2–5 | $30 / $60 / $120 / $240 | Each doubles capacity and refills; requires rockets |
 | Sport motor | $45 | 25% more acceleration and 10% higher road top speed |
 | Impact armor | $35 | Half collision and hard-landing damage |
 | Repair & refill | $12 | Restore condition and refill air; available when needed |
 
-A vehicle cannot buy an installed upgrade twice. The Rocket Roadster cannot buy a redundant kit but can buy the other upgrades. Upgrades are attached to the individual vehicle, including a taken NPC car, and do not follow the driver. Selecting a Tesla creates a new personal car and removes the old personal car. Abandoned ambient cars can eventually be reclaimed by traffic management; all vehicles, upgrades and cash disappear when the room resets. Spendable cash is also the session leaderboard's balance, so purchases affect the ranking. There is no account, real payment or persistence.
+Every vehicle starts with a Level 1 tank at twice the original capacity; each upgrade doubles it again, for 2×, 4×, 8×, 16× and 32× original capacity. Air is shown as a percentage of the installed tank. A vehicle cannot buy a one-time upgrade twice. The Rocket Roadster cannot buy a redundant kit but can buy the other upgrades. Upgrades are attached to the individual vehicle, including a taken NPC car, and do not follow the driver. Selecting a Tesla creates a new personal car and removes the old personal car. Abandoned ambient cars can eventually be reclaimed by traffic management; all vehicles, upgrades and cash disappear when the room resets. Spendable cash is also the session leaderboard's balance, so purchases affect the ranking. There is no account, real payment or persistence.
 
 The interaction draws on familiar in-world vehicle customization such as [GTA Online's vehicle shops](https://www.rockstargames.com/gta-online/special-interests/vehicles-enthusiast) and collectible driving boosts in [Rocket League](https://www.rocketleague.com/news/rocket-league-patch-notes-v2-53?lang=en). All mechanics, names, visuals and fictional flight are original game interpretations; no third-party game assets are included. See [CONTRACTS.md](CONTRACTS.md) for the protocol and simulation ownership.

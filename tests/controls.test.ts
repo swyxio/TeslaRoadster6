@@ -53,9 +53,9 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   const car=makeEntity('car','roadster',0,0,'driver');
   const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
   const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyE'});fakeWindow.dispatchEvent(key);
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,1);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,88);assert.equal(car.lastJump,1);
   jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,52);assert.equal(car.lastJump,2);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,2);
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',speed:20});
   brake.dispatchEvent(pointer('pointerdown',2));step(world,new Map([['driver',controls.read()]]),.05);
   assert.ok(car.speed<19);brake.dispatchEvent(pointer('pointerup',2));assert.equal(controls.read().brake,false);
