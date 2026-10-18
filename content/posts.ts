@@ -2,10 +2,10 @@
 export const POSTS = [
   {
     slug: 'planning-the-economy',
-    title: 'What a five-minute simulation taught us about the Tesland economy',
+    title: 'The Tesland economy: from deliveries to a Mars launch',
     date: '2026-10-18',
-    release: '0.0.5 Alpha',
-    description: 'Deliveries, Rocket Dome and Cybercabs should all lead somewhere. A small simulation showed where our first plan fell short.',
+    release: '0.0.8 Alpha',
+    description: 'An interactive look at deliveries, Cybercabs, property and the long road to a shared Starship launch.',
     file: '2026-10-18-planning-the-economy.md'
   },
   {
