@@ -12,6 +12,7 @@ export const DOME = {
   ballRadius: 2.5,
 } as const;
 
+// Recharge is percentage points of the installed tank per second, as at stations.
 // Keep the bright wall markings, HUD and authoritative recharge in agreement.
 export const DOME_CHARGE_HEIGHT=8, DOME_CHARGE_SPEED=5, DOME_CHARGE_RATE=24;
 export function chargingDomeWall(e:Entity):boolean {

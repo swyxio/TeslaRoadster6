@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Rocket Dome with flight tanks and global chat · protocol v16 · 2026-10-18 Pacific
+
+- After merging the flight and OTA changes, `pnpm test` passed 177/177 and `pnpm build` passed both typechecks and the production build. Vite's existing large-chunk warning remains (729 kB / 206 kB gzip main JavaScript). Wall-charge simulation checks cover all five tank levels, capacity-scaled boost consumption and the 100% cap.
+- The local Wrangler two-client room integration passed, including protocol health and welcome, flight, dome entry, a shared goal and wall recharge seen by both clients. The local global-chat integration also passed, including saved identity recovery. These are not load tests.
+- The browser and touch observations below predate this integration; the combined v16 build has not been checked in a browser or on a physical device. No new deployment was performed.
+
 ## Rocket Dome with global chat · protocol v14 · 2026-10-18 Pacific
 
 - After integrating global chat, `pnpm test` passed 167/167 and `pnpm build` passed both typechecks and the production build. Vite's existing chunk-size warning remains (725 kB / 205 kB gzip main JavaScript).
@@ -233,3 +239,17 @@ In the isolated release worktree, `pnpm run ci` passed; the two-client Wrangler 
 ## 2026-10-17 · Road-first HUD
 
 In the isolated worktree, `pnpm test` passed 112 tests after integrating the sound-settings change, including keyboard focus/Tab and Space brake coverage; `pnpm build` passed. Chrome local solo play was inspected at desktop and emulated 390×844 portrait and 844×390 landscape. The action drawer exposed all eight actions, fleet opened, both drawers closed with Escape, and sound settings opened from the action drawer; a citation interrupted and closed the guide and acknowledgement resumed play. After opening the action drawer, an emulated touch on Drive closed it and accelerated to 42 km/h, a touch on Brake stopped the car, and steering showed its pressed state on the same touch; a jump used air and changed Drive to Flip and steering labels to Bank. No physical phone or multiplayer-specific behavior was verified for this HUD change. Screenshots and concept comparison are linked from DESIGN.md.
+
+## 2026-10-17 · Flight controls and arcade tanks
+
+In the isolated worktree, `pnpm test` passed 159 tests and `pnpm build` passed. A local Wrangler two-client room integration verified protocol v13, tank-level snapshots, jump, flip, and forward flight while hovering; this was not a load test. Chrome solo play verified E plus W produced airborne motion (52 km/h before the tank change), and the updated Level 1 HUD and Jump were exercised. Phone emulation at 390×844 and 844×390 showed separate forward, flip, jump, hover and roll controls. These are emulations, not physical-device tests. Tank purchase progression, full refill, prices and capacity doubling through Level 5 were verified in the authoritative simulation tests.
+
+After integrating the shop confirmation follow-up, 161 tests and `pnpm build` passed; the local two-client Wrangler room test passed on protocol v14, including forward flight while hovering and purchase result messages. A focused solo shop test also confirmed a tank purchase reports success, deducts cash and refills. Chrome solo play additionally showed H holding altitude and X producing a visible roll.
+
+## 2026-10-17 · Remote OTA shop
+
+`pnpm test` passed 166 tests and `pnpm build` passed. The local two-client Wrangler room integration and a deployed Cloudflare preview passed with protocol v15, including subscription acknowledgement, paused state and cancellation replication. Shared-simulation tests exercise payment, renewal, insufficient funds, automatic resumption, cancellation, and remote airborne purchases. A controls regression covers delayed jump acknowledgement and preserves brake-before-jump ordering. In Chrome solo play, opening the shop away from a workshop showed the price and allowed enrollment with $0, displaying the paused state. The dialog was inspected at desktop and emulated 390×844 portrait and 844×390 landscape; physical phones were not tested.
+
+One additional local integration run timed out at the existing Tesla fleet-change assertion while Wrangler reloaded; a subsequent run passed. The preview integration also passed.
+
+After integrating main's global chat, 173 tests and `pnpm build` passed. Both the room and global-chat integrations passed against local Wrangler. Chrome portrait emulation showed the combined game and remote shop; no physical device was tested.

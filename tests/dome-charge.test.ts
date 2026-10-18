@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, NEUTRAL, step, travelDome } from '../shared/game';
 import { DOME, DOME_CHARGE_HEIGHT, DOME_CHARGE_RATE, chargingDomeWall } from '../shared/dome';
 import { DOME_PERIMETER, domeSurface } from '../shared/map';
+import { airCost, type TankLevel } from '../shared/air-tank';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver');
@@ -50,4 +51,15 @@ test('ceiling driving charges even during boost and never exceeds a full tank',(
   assert.ok(car.air>50,'charge outpaces the boost spent while moving');
   car.air=99.9;step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
   assert.equal(car.air,100);
+});
+
+test('wall recharge fills the installed tank by percentage at every level',()=>{
+  for(const level of [1,2,3,4,5] as TankLevel[]){
+    const {world,car}=setup();placeWall(car,1,12);car.tankLevel=level;car.air=50;
+    step(world,new Map([['p',{...NEUTRAL,throttle:1,boost:true}]]),.05);
+    const expected=50+(DOME_CHARGE_RATE-airCost(14,level))*.05;
+    assert.ok(Math.abs(car.air-expected)<1e-8,`level ${level} recharge and boost consumption`);
+    car.air=99.9;step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
+    assert.equal(car.air,100,`level ${level} is capped at 100%`);
+  }
 });

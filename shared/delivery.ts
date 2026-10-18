@@ -2,6 +2,7 @@ import type { Entity, Input, Player, World } from './game';
 import { BUILDINGS, terrainHeight } from './map';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
+import { initialOta, type OtaSubscription } from './ota';
 
 // Real business identities; game positions are artistic, not surveyed locations.
 export const RESTAURANTS = [
@@ -37,7 +38,7 @@ for (const {x,z,district,name} of [
 }
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
-export type DeliveryState = { cash: number; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryState = { cash: number; ota: OtaSubscription; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 function orderFor(index: number, origin: { x: number; z: number }, canFly = false): Order {
   const restaurant = index % RESTAURANTS.length;
@@ -49,7 +50,7 @@ function orderFor(index: number, origin: { x: number; z: number }, canFly = fals
   return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
 }
 export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
-  return { cash: 0, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
+  return { cash: 0, ota:initialOta(), activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
 }
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
