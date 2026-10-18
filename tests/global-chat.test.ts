@@ -50,7 +50,11 @@ test('socket teardown and racing recovery retain one live owner and persistent h
   Object.defineProperty(crypto.subtle, 'timingSafeEqual', { configurable: true, value: (a: Uint8Array, b: Uint8Array) => timingSafeEqual(a, b) });
   try {
     const data = new Map<string, unknown>();
-    const storage = { get: async (key: string) => data.get(key), put: async (key: string, value: unknown) => { data.set(key, value); } };
+    const storage = {
+      get: async (key: string) => data.get(key),
+      put: async (key: string, value: unknown) => { data.set(key, value); },
+      async transaction<T>(fn: (txn: {get: typeof storage.get; put: typeof storage.put}) => Promise<T>) { return fn(this); },
+    };
     const makeSocket = () => ({
       sent: [] as any[], closed: 0,
       send(message: string) { this.sent.push(JSON.parse(message)); },
@@ -149,7 +153,12 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     // name is still committed. The socket's order must remain observable.
     let releaseWrite!: () => void;
     const held = new Promise<void>(resolve => { releaseWrite = resolve; });
-    const orderedHub = new GlobalChat({ storage: { get: storage.get, put: async (key: string, value: unknown) => { await held; await storage.put(key, value); } } });
+    const orderedStorage = {
+      get: storage.get,
+      put: async (key: string, value: unknown) => { await held; await storage.put(key, value); },
+      async transaction<T>(fn: (txn: {get: typeof orderedStorage.get; put: typeof orderedStorage.put}) => Promise<T>) { return fn(this); },
+    };
+    const orderedHub = new GlobalChat({ storage: orderedStorage });
     const sender = makeSocket(), observer = makeSocket();
     const senderSession = attach(orderedHub, sender), observerSession = attach(orderedHub, observer);
     await orderedHub.hello(sender, senderSession, '', code);

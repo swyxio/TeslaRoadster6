@@ -1,3 +1,5 @@
+import { LUXURY_CATALOG, type LuxuryVehicleId } from './luxury';
+
 /** Fleet identities and arcade tuning. SI units. See docs/FLEET_RESEARCH.md for provenance. */
 export const VEHICLE_IDS = [
   'roadster-original', 'roadster', 'model-s', 'model-3', 'model-x', 'model-y', 'model-y-l',
@@ -6,18 +8,25 @@ export const VEHICLE_IDS = [
   'waymo-ojai', 'waymo-ioniq5', 'waymo-peterbilt', 'waymo-cascadia',
   'cruise-rp1', 'cruise-leaf', 'cruise-bolt', 'cruise-origin', 'zoox', 'zoox-highlander',
 ] as const;
-export type VehicleId = typeof VEHICLE_IDS[number];
+/** Special vehicles are owned through the showroom; they never seed traffic. */
+export const LUXURY_VEHICLE_IDS = LUXURY_CATALOG.map(vehicle=>vehicle.id);
+export type { LuxuryVehicleId } from './luxury';
+export type VehicleId = typeof VEHICLE_IDS[number] | LuxuryVehicleId;
+const luxuryVehicles = new Set<string>(LUXURY_VEHICLE_IDS);
+export function isLuxuryVehicle(id: string): id is LuxuryVehicleId { return luxuryVehicles.has(id); }
 export interface VehicleSpec {
   id: VehicleId;
   name: string;
-  brand: 'Tesla' | 'Waymo' | 'Cruise' | 'Zoox';
+  brand: 'Tesla' | 'Waymo' | 'Cruise' | 'Zoox' | 'Lamborghini' | 'Bugatti' | 'Ducati' | 'Kawasaki';
   status: string;
   length: number; width: number; height: number; wheelbase: number; massKg: number;
   /** Arcade tuning, NOT manufacturer performance claims. m/s, m/s², radians, m/s². */
   maxSpeed: number; acceleration: number; steerAngle: number; brakeDecel: number;
+  /** Fictional damage received multiplier; omitted means ordinary durability. */
+  damageFactor?: number;
   fourWheelSteering: boolean;
   airThrusters: boolean;
-  shape: 'roadster' | 'sedan' | 'suv' | 'pickup' | 'van' | 'pod' | 'semi' | 'bus';
+  shape: 'roadster' | 'sedan' | 'suv' | 'pickup' | 'van' | 'pod' | 'semi' | 'bus' | 'motorcycle';
   color: number;
   sensorRig: 'none' | 'roof' | 'corners';
   sourceUrls: string[];
@@ -63,4 +72,10 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
   'cruise-origin': car('cruise-origin', { name: 'Cruise · Origin', brand: 'Cruise', status: 'historical purpose-built prototype', shape: 'pod', color: 0xe5e5dc, length: 4.6, width: 2, height: 2, wheelbase: 3.1, massKg: 3000, sensorRig: 'corners', sourceUrls: [CRUISE, 'https://medium.com/cruise/cruise-embedded-systems-articulating-radars-7cae24642930'], estimates: [EST, 'Manual controls are fictional; real prototype was designed without wheel/pedals.'] }, [27, 5.5, .53, 13]),
   zoox: car('zoox', { name: 'Zoox · Robotaxi', brand: 'Zoox', status: 'purpose-built robotaxi', shape: 'pod', color: 0x96c6b8, length: 3.63, width: 1.94, height: 1.94, wheelbase: 2.6, massKg: 2450, fourWheelSteering: true, sensorRig: 'corners', sourceUrls: ['https://zoox.com/know-your-ride', 'https://zoox.com/common/files/galcpo3qq8khj63lhpqhiw-202507-zoox-vehicle-brochure-pdf.pdf'], estimates: [EST, 'Four-wheel steering and bidirectional exterior are sourced; manual control is fictional.'] }, [30, 6.5, .60, 15]),
   'zoox-highlander': car('zoox-highlander', { name: 'Zoox · Highlander', brand: 'Zoox', status: 'supervised test platform', shape: 'suv', color: 0x374e58, length: 4.95, width: 1.93, height: 1.73, wheelbase: 2.85, massKg: 2250, sensorRig: 'roof', sourceUrls: ['https://zoox.com/journal/autonomous-zoox-testing-vehicle', 'https://zoox.com/common/files/global-202604-zoox-leip-testing-fleet.pdf'] }, [34, 7, .51, 15]),
+  'ducati-panigale-v4': car('ducati-panigale-v4', { name: 'Ducati · Panigale V4', brand: 'Ducati', status: '2025 sport motorcycle', shape: 'motorcycle', color: 0xcc2427, length: 2.085, width: .75, height: 1.12, wheelbase: 1.485, massKg: 215, sourceUrls: ['https://media.ducati.com/dam/MY25_Panigale_V4_EU_UC662332.pdf'], estimates: ['Overall dimensions and mass are game estimates; wheelbase is sourced.', 'Rider and fictional Rocket hardware are not included in the body envelope.'] }, [47, 14, .66, 18]),
+  'kawasaki-ninja-h2-carbon': car('kawasaki-ninja-h2-carbon', { name: 'Kawasaki · Ninja H2 Carbon', brand: 'Kawasaki', status: '2019 sport motorcycle', shape: 'motorcycle', color: 0x343a3d, length: 2.085, width: .770, height: 1.125, wheelbase: 1.455, massKg: 240, sourceUrls: ['https://global.kawasaki.com/en/corp/newsroom/news/detail/?f=20180810_1441'], estimates: ['Game mass includes an estimated rider; dimensions and wheelbase are sourced.', 'Fictional Rocket hardware is not included in the body envelope.'] }, [52, 16, .58, 19]),
+  'lamborghini-temerario': car('lamborghini-temerario', { name: 'Lamborghini · Temerario', brand: 'Lamborghini', status: 'production supercar', shape: 'roadster', color: 0x91c848, length: 4.706, width: 1.996, height: 1.201, wheelbase: 2.658, massKg: 1900, sourceUrls: ['https://www.lamborghini.com/original/DAM/lamborghini/0_facelift_2025/model_details_new/temerario_2/brochure_2026/Lamborghini%20Temerario_DIGITAL_BROCHURE_2026_EN.pdf'], estimates: ['Game mass estimated; body dimensions and wheelbase are sourced.'] }, [52, 15, .58, 22]),
+  'lamborghini-revuelto': car('lamborghini-revuelto', { name: 'Lamborghini · Revuelto', brand: 'Lamborghini', status: 'production supercar', shape: 'roadster', color: 0xf77a14, length: 4.947, width: 2.033, height: 1.160, wheelbase: 2.779, massKg: 1950, sourceUrls: ['https://www.lamborghini.com/original/DAM/lamborghini/facelift_2019/model_detail/revuelto/2024/brochure/REVUELTO_DIGITAL_BROCHURE_CN_2024.pdf'], estimates: ['Game mass estimated; body dimensions and wheelbase are sourced.'] }, [54, 16, .53, 20]),
+  'bugatti-chiron': car('bugatti-chiron', { name: 'Bugatti · Chiron', brand: 'Bugatti', status: 'production hypercar', shape: 'roadster', color: 0x285c9f, length: 4.544, width: 2.038, height: 1.212, wheelbase: 2.711, massKg: 2000, damageFactor: .7, sourceUrls: ['https://newsroom.bugatti.com/api/en/press-releases/pdf/bugatti-eb110-vs-chiron-super-sports-and-hyper-sports-cars-compared'], estimates: ['Game mass and damage resistance are estimates; body dimensions and wheelbase are sourced.'] }, [55, 15, .50, 19]),
+  'bugatti-tourbillon': car('bugatti-tourbillon', { name: 'Bugatti · Tourbillon', brand: 'Bugatti', status: 'hybrid hypercar', shape: 'roadster', color: 0xb8c2d5, length: 4.671, width: 2.051, height: 1.189, wheelbase: 2.740, massKg: 2000, sourceUrls: ['https://worldpremiere.bugatti.com/fr', 'https://newsroom.bugatti.com/press-releases/pushing-the-limits-of-design'], estimates: ['Game mass estimated; published body dimensions and wheelbase require source re-verification.'] }, [56, 15.5, .52, 20]),
 };

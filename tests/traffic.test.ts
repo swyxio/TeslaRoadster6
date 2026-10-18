@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { LEVELS } from '../shared/delivery';
 import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
@@ -100,7 +101,7 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
 
 test('taking ambient traffic replenishes it, and disconnecting off-route leaves it parked', () => {
   const world=createWorld();addPlayer(world,'observer','Observer');
-  const player=addPlayer(world,'p','Player');player.delivery.level=3;
+  const player=addPlayer(world,'p','Player');player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
   const car=world.entities.find(entity=>entity.id==='ambient-seed-1')!;
   const person=makeEntity('person-p','person',car.x+3,car.z,'p');
   assert.equal(person.supportId,'ground');
@@ -129,7 +130,7 @@ test('taking ambient traffic replenishes it, and disconnecting off-route leaves 
 
 test('disconnecting a taken ambient car on a city route replenishes highway traffic', () => {
   const world=createWorld();addPlayer(world,'observer','Observer');
-  const player=addPlayer(world,'p','Player');player.delivery.level=3;
+  const player=addPlayer(world,'p','Player');player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
   const car=world.entities.find(entity=>entity.id==='ambient-seed-1')!;
   const [a,b]=ROUTES[0],x=(a.x+b.x)/2,z=(a.z+b.z)/2,pose=makeEntity('probe','model-3',x,z);
   assert.equal(pose.supportId,'ground');

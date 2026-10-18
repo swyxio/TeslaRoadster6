@@ -115,7 +115,8 @@ test('wire action fences require positive sequences and valid edge baselines',()
   const fence={actionSeq:1,edgeBaseline:{jump:0,flip:2147483647}};
   const actions=[{type:'interact'},{type:'reset'},{type:'autopilot'},{type:'dome'},
     {type:'selectVehicle',kind:'roadster'},{type:'minigame',game:'short'},
-    {type:'destination',x:0,z:0,requestId:1},{type:'race',action:'join',courseId:'short'}];
+    {type:'destination',x:0,z:0,requestId:1},{type:'race',action:'join',courseId:'short'},
+    {type:'luxury',action:'collect',vehicle:'ducati-panigale-v4',requestId:1}];
   for(const action of actions){
     assert.ok(parseMessage(JSON.stringify({...action,...fence})),action.type);
     assert.equal(parseMessage(JSON.stringify(action)),null,`${action.type} needs a fence`);
@@ -125,6 +126,7 @@ test('wire action fences require positive sequences and valid edge baselines',()
     assert.equal(parseMessage(JSON.stringify({type:'reset',...fence,...bad})),null);
   }
   assert.ok(parseMessage(JSON.stringify({type:'race',action:'start',courseId:'short'})),'non-join race actions remain unfenced');
+  assert.ok(parseMessage(JSON.stringify({type:'luxury',action:'buy',vehicle:'ducati-panigale-v4',requestId:1})),'buying does not replace the vehicle');
 });
 test('local input client fences actions with its latest counters and retains action order',()=>{
   const frames:string[]=[];

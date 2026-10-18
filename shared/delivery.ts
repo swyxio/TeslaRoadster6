@@ -5,14 +5,25 @@ import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
 import { initialOta, type OtaSubscription } from './ota';
 
-// Session milestones use lifetime delivery rewards, not spendable cash.
+// Current spendable cash determines level; ownership and awards survive a drop.
 export const LEVELS = [
-  { level:0, name:'San Francisco', deliveries:0, earned:0 },
-  { level:1, name:'Oakland & Berkeley', deliveries:2, earned:50 },
-  { level:2, name:'Peninsula & East Bay', deliveries:5, earned:140 },
-  { level:3, name:'San Jose', deliveries:8, earned:350 },
+  {level:0,name:'San Francisco',cash:0},
+  {level:1,name:'Oakland & Berkeley',cash:10_000},
+  {level:2,name:'Peninsula & East Bay',cash:50_000},
+  {level:3,name:'San Jose',cash:250_000},
+  {level:4,name:'Professional',cash:500_000},
+  {level:5,name:'Level 5',cash:1_000_000},
+  {level:6,name:'Level 6',cash:2_000_000},
+  {level:7,name:'Level 7',cash:4_000_000},
+  {level:8,name:'Level 8',cash:8_000_000},
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
+export function levelForCash(cash:number):Level {
+  let level:Level=0;
+  for(const milestone of LEVELS)if(cash>=milestone.cash)level=milestone.level;
+  return level;
+}
+const BASE_FARES=[3_000,4_000,6_000,9_500,11_000,13_000,15_000,20_000,26_000] as const;
 // Vertical gates also apply to flyers; the northern island approach remains open.
 const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
@@ -71,7 +82,7 @@ for (const {x,z,district,name} of [
 }
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
-export type DeliveryState = { cash: number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery' | 'supply-repair' | 'supply-air'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number} | null; lastReward: { id: number; kind: 'pickup' | 'delivery' | 'pickup-research' | 'delivery-research' | 'supply-repair' | 'supply-air' | 'research'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 function orderFor(index: number, origin: { x: number; z: number }, level:Level, canFly = false): Order {
   const restaurants = RESTAURANTS.map((place,i)=>({place,i})).filter(({place})=>requiredLevelAt(place.x,place.z)<=level);
@@ -85,23 +96,34 @@ function orderFor(index: number, origin: { x: number; z: number }, level:Level, 
     customer.rooftop===rooftop && requiredLevelAt(customer.x,customer.z)<=level &&
     Math.hypot(customer.x-pickup.x,customer.z-pickup.z)>100);
   // Keep returning to Peninsula/East Bay landmarks after San Jose opens.
-  const exploreLevel:Level = level===3 && index%4===2 ? 2 : level;
+  const exploreLevel:Level = level>=3 && index%4===2 ? 2 : Math.min(3,level) as Level;
   const newest = explore ? available.filter(({customer})=>requiredLevelAt(customer.x,customer.z)===exploreLevel) : [];
   const candidates = newest.length ? newest : available;
   const choice = newest.length ? Math.floor(index/2)+1 : Math.floor(index/restaurants.length+index*3);
   const customer = candidates[choice % candidates.length].i;
   const distance = Math.hypot(CUSTOMERS[customer].x - pickup.x, CUSTOMERS[customer].z - pickup.z);
   const pickupDistance = Math.hypot(origin.x - pickup.x, origin.z - pickup.z);
-  return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
+  const jobLevel=level;
+  const distanceFactor=Math.max(.5,Math.min(2,distance/700));
+  return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: Math.round(BASE_FARES[jobLevel]*distanceFactor) };
 }
 export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
-  return { cash: 0, ota:initialOta(), earned:0, level:0, lastBlocked:null, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin, 0), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
+  return { cash: 2_500, lifetimeIncome:0, ota:initialOta(), earned:0, level:0, lastBlocked:null, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin, 0), lastPayout: null, lastReroute:null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
 }
-function updateLevel(delivery:DeliveryState):void {
-  for(const milestone of LEVELS)if(delivery.completed>=milestone.deliveries&&delivery.earned>=milestone.earned)delivery.level=milestone.level;
-}
+export function updateLevel(delivery:DeliveryState):void { delivery.level=levelForCash(delivery.cash); }
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
+}
+/** Move an active job back into regions available at the new balance. */
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},canFly=false):boolean {
+  const old=delivery.order;
+  const pickup=RESTAURANTS[old.restaurant],customer=CUSTOMERS[old.customer];
+  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level)return false;
+  const next=orderFor(delivery.completed,origin,delivery.level,canFly);
+  // A collected order stays collected; never grant a second pickup bonus.
+  if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
+  delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1};
+  return true;
 }
 export function pickupBonusFor(order: Order): number {
   return Math.round(order.base * .4 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
@@ -148,6 +170,7 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
 
 function reward(delivery: DeliveryState, kind: 'pickup' | 'delivery', amount: number): void {
   delivery.cash += amount;
+  delivery.lifetimeIncome += amount;
   delivery.earned += amount;
   updateLevel(delivery);
   delivery.lastReward = { id: (delivery.lastReward?.id ?? 0) + 1, kind, amount };

@@ -3,7 +3,7 @@ const FIRST_CAB_AWARD = 5000;
 const CAB_HOURLY = 15000;
 const HORIZON = 6;
 
-/** A deliberately simple, continuous-income illustration; these are not game rewards. */
+/** A continuous-income illustration of the cab purchase decision. */
 export function investmentModel({ deliveryHourly, cabPrice, utilization, cosmetic }) {
   if (![deliveryHourly, cabPrice, utilization, cosmetic].every(Number.isFinite) || deliveryHourly <= 0 || cabPrice < FIRST_CAB_AWARD || utilization < 0 || utilization > 1 || cosmetic < 0) {
     throw new RangeError('Invalid investment model assumptions');
@@ -100,7 +100,7 @@ function initialize(lab) {
     </div>
     <div class="lab-legend" aria-label="Chart legend"><span class="lab-key lab-key-save">Save cash</span><span class="lab-key lab-key-cab">Buy one Cybercab</span><span class="lab-key lab-key-buy">Purchase</span></div>
     <div class="lab-graphic"></div><div class="lab-results" aria-live="polite" aria-atomic="true"></div>
-    <p class="lab-assumptions">Both paths start with $2,500, buy the selected cosmetic as soon as affordable, and earn deliveries continuously. The buyer pays the full cab price in cash, then receives a one-time $5,000 award. The cab earns $15,000 per hour at 100% utilization, only during active play. No other awards, events, costs, tier changes, resale value or offline income are included. Figures are hypothetical.</p>
+    <p class="lab-assumptions">Both paths start with $2,500, earn deliveries at a constant rate and buy the chosen cosmetic when affordable. The cab earns $15,000 per active hour at full utilization; its $5,000 purchase award is paid once.</p>
     <button type="button" class="lab-reset">Reset assumptions</button>`;
   const delivery = lab.querySelector('#lab-delivery');
   const price = lab.querySelector('#lab-price');
@@ -116,7 +116,7 @@ function initialize(lab) {
     lab.querySelector('.lab-graphic').innerHTML = chart(model, settings, lab.clientWidth < 500);
     const buy = model.buyTime > HORIZON ? `Buy after ${duration(model.buyTime)} (outside the chart)` : `Buy after ${duration(model.buyTime)}`;
     const crossover = model.paybackTime === null ? 'No cash payback at zero utilization' : `Cash catches up after ${duration(model.paybackTime)}${model.paybackTime > HORIZON ? ' (outside the chart)' : ''}`;
-    lab.querySelector('.lab-results').innerHTML = `<div><span>PURCHASE</span><strong>${escapeText(buy)}</strong></div><div><span>BREAK-EVEN</span><strong>${escapeText(crossover)}</strong></div><div><span>CASH AFTER 6 HOURS</span><strong>${money(model.cash(HORIZON, true))} cab · ${money(model.cash(HORIZON, false))} save</strong></div><div><span>CUMULATIVE EARNED AFTER 6 HOURS</span><strong>${money(model.earned(HORIZON, true))} cab · ${money(model.earned(HORIZON, false))} save</strong></div><p>“Earned” includes the cab award and income, but excludes starting cash and spending. An owned cab is an asset; its resale value is not estimated here.</p>`;
+    lab.querySelector('.lab-results').innerHTML = `<div><span>PURCHASE</span><strong>${escapeText(buy)}</strong></div><div><span>BREAK-EVEN</span><strong>${escapeText(crossover)}</strong></div><div><span>CASH AFTER 6 HOURS</span><strong>${money(model.cash(HORIZON, true))} cab · ${money(model.cash(HORIZON, false))} save</strong></div><div><span>CUMULATIVE EARNED AFTER 6 HOURS</span><strong>${money(model.earned(HORIZON, true))} cab · ${money(model.earned(HORIZON, false))} save</strong></div><p>“Earned” counts deliveries, the cab award and cab income. Wallet balance also reflects starting cash and purchases.</p>`;
   }
   controls.forEach(control => control.addEventListener('input', update));
   lab.querySelector('.lab-reset').addEventListener('click', () => { delivery.value = '60000'; price.value = '25000'; utilization.value = '75'; cosmetic.value = '0'; update(); });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, NEUTRAL } from '../shared/game';
+import { addPlayer, createWorld, NEUTRAL, step, type World } from '../shared/game';
 import { ScheduledInput } from '../shared/tick-input';
 import { terrainHeight } from '../shared/map';
 import { TickPrediction } from '../src/tick-prediction';
@@ -192,4 +192,25 @@ test('a relocation floor discards a previously accepted stale edge',()=>{
   prediction.snapshot(world,'p',0,{...control,revision:1,edgeFloorRevision:1},1,1,10);
   const preview=prediction.renderWorld(20,4,0,1)!.entities[0];
   assert.equal(preview.y,world.entities[0].y);
+});
+
+test('prediction does not award landmarks or claim supply pickups',()=>{
+  const {world,car,control}=setup(),prediction=new TickPrediction();
+  Object.assign(car,{x:-829,z:4030,y:0,health:40,speed:0,vx:0,vz:0,supportId:'ground'});
+  world.players[0].delivery.cash=8_000;
+  world.pickups=[{id:'test-repair',x:car.x,z:car.z,kind:'repair',active:true}];
+  const authoritative=structuredClone(world);
+  step(authoritative,new Map([['p',NEUTRAL]]),.05);
+  assert.ok(authoritative.players[0].achievements.unlocked.includes('luxury-visit'),'the same position earns a real landmark award');
+  assert.equal(authoritative.pickups[0].active,false,'the authority claims the nearby pickup');
+  assert.ok(authoritative.players[0].delivery.level>0,'the award would unlock a higher region');
+  prediction.snapshot(world,'p',0,control,0,1,0);
+  const shown=prediction.renderWorld(50,3,1)!;
+  const replay=Reflect.get(prediction,'cache') as {simulation:World};
+  assert.equal(replay.simulation.players[0].delivery.level,0,'the simulated car cannot use a speculative level');
+  assert.deepEqual(replay.simulation.players[0].achievements.unlocked,[], 'the replay does not grant landmarks');
+  assert.equal(shown.players[0].delivery.cash,world.players[0].delivery.cash);
+  assert.deepEqual(shown.players[0].achievements.unlocked,world.players[0].achievements.unlocked);
+  assert.equal(shown.entities[0].health,40);
+  assert.equal(shown.pickups[0].active,true);
 });

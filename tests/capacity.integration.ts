@@ -22,6 +22,7 @@ try {
     ws.addEventListener('message', e => {
       const raw=String(e.data),msg=JSON.parse(raw);
       input.observe(msg);
+      if(msg.type==='welcome')ws.send(JSON.stringify({type:'identity',code:null,requestId:1}));
       if(msg.type !== 'state')return;
       counts.set(ws,msg.world.players.length);snapshots.set(ws,(snapshots.get(ws)??0)+1);
       const times=seen.get(ws)??[];times.push(Date.now());seen.set(ws,times);
@@ -34,12 +35,13 @@ try {
     });
     await wait(20);
   }
-  timer=setInterval(()=>inputs.forEach(input=>{if(input.ready)input.send({...NEUTRAL,throttle:.3});}),50);
+  timer=setInterval(()=>inputs.forEach(input=>{if(input.active)input.send({...NEUTRAL,throttle:.3});}),50);
   await wait(8000);
   assert.equal(sockets.filter(ws=>ws.readyState===WebSocket.OPEN).length,count);
   assert.ok(sockets.every(ws=>counts.get(ws)===count),'all clients see all peers');
   assert.ok(sockets.every(ws=>(snapshots.get(ws)??0)>25),'all clients receive continuous snapshots');
   assert.ok(inputs.every(input=>(input.control?.appliedSeq??0)>0),'every client applied at least one input');
+  assert.ok(inputs.every(input=>input.active),'every client completed guest identity');
   const gaps=[...seen.values()].flatMap(times=>times.slice(1).map((t,i)=>t-times[i])).sort((a,b)=>a-b);
   console.log(JSON.stringify({result:'PASS',clients:count,inputRejections:inputs.reduce((sum,input)=>sum+input.rejectionCount,0),clientsWithAppliedInput:inputs.filter(input=>(input.control?.appliedSeq??0)>0).length,minimumSnapshots:Math.min(...snapshots.values()),snapshotGapP95Ms:gaps[Math.floor(gaps.length*.95)],maxSnapshotEntities,maxSnapshotNpcs,maxSnapshotAmbient,maxSnapshotBytes,maxWorldTimeSeconds:maxWorldTime,note:'8-second same-host synthetic smoke. Entity counts and bytes are per recipient, not room-wide. Peak/reserve traffic, mobile rendering, WAN latency and sustained load are not validated.'},null,2));
 } finally {clearInterval(timer);sockets.forEach(ws=>ws.close());}

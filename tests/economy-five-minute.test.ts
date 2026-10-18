@@ -105,3 +105,34 @@ test('rotating contracts replace delivery checkpoints and show progress separate
   assert.equal(baseline.ledger.deliveryRepeatable % 750, 0);
   assert.equal(baseline.windows.reduce((n, w) => n + w.contractProgress, 0), 0);
 });
+
+test('one notification groups one action while every earned award remains in the ledger', () => {
+  const run = simulate(paths[0].profile, 'candidate', 1729, 8, { ...core, cadenceRedesign: true });
+  assert.ok(run.windows.some(w => w.achievements > w.achievementNotifications));
+  // Multiple distinct actions in the same five-minute bin must remain distinct alerts.
+  const cabRun = simulate(paths[1].profile, 'candidate', 1729, 2, { ...core, cadenceRedesign: true });
+  assert.ok(cabRun.windows.some(w => w.achievementNotifications > 1));
+  for (const w of run.windows) {
+    assert.ok(w.achievementNotifications <= w.achievements);
+    close(w.gross, w.recurring + w.achievementCash + w.checkinCash + w.unlockCash);
+  }
+  const awards = run.windows.reduce((n, w) => n + w.achievements, 0);
+  const notifications = run.windows.reduce((n, w) => n + w.achievementNotifications, 0);
+  assert.ok(awards > notifications);
+});
+
+test('program jobs and premium tiers are finite, qualifying and independently optional', () => {
+  const profile = { ...paths[0].profile, programs: ['Berkeley energy'] as const };
+  const enabled = simulate({ ...profile, programs: [...profile.programs] }, 'candidate', 1730, 8, { ...core, cadenceRedesign: true });
+  const disabled = simulate({ ...profile, programs: [...profile.programs] }, 'candidate', 1730, 8, { ...core, cadenceRedesign: true, programs: false });
+  assert.ok(enabled.programJobs > 0 && enabled.programJobs <= enabled.deliveries - 20);
+  assert.equal(enabled.programAwards, [2, 6, 12, 20, 30].filter(n => n <= enabled.programJobs).length);
+  assert.equal(enabled.premiumAwards, [3, 8, 16, 28, 45].filter(n => n <= enabled.premiumJobs).length);
+  assert.equal(disabled.programJobs, 0);
+  assert.equal(disabled.programAwards, 0);
+  assert.equal(enabled.windows.reduce((n, w) => n + w.programJobs, 0), enabled.programJobs);
+  assert.equal(enabled.windows.reduce((n, w) => n + w.programAchievements, 0), enabled.programAwards);
+  const realEstate = simulate({ ...paths[0].profile, programs: ['UCSF real estate'] }, 'candidate', 1730, 1, { ...core, cadenceRedesign: true });
+  assert.equal(realEstate.programJobs, 0);
+  assert.ok(enabled.cityTierAwards <= 5 * 5);
+});

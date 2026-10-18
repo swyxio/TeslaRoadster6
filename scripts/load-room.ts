@@ -22,22 +22,23 @@ let timer:ReturnType<typeof setInterval>|undefined;
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 try {
   const ready=Array.from({length:count},(_,i)=>new Promise<void>((resolve,reject)=>{
-    const socket=new WebSocket(url);sockets.push(socket);const input=new RoomInputClient(socket);inputs.push(input);let welcomed=false;
+    const socket=new WebSocket(url);sockets.push(socket);const input=new RoomInputClient(socket);inputs.push(input);let joined=false;
     socket.addEventListener('message',event=>{
       const raw=String(event.data),message=JSON.parse(raw) as {type:string;version?:number;world?:World};
       input.observe(message);
-      if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}welcomed=true;resolve();}
+      if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
+      if(!joined&&input.active){joined=true;resolve();}
       if(message.type==='state'&&message.world&&measuring){
         const now=performance.now();if(lastSnapshot[i])gaps.push(now-lastSnapshot[i]);lastSnapshot[i]=now;
         snapshots++;snapshotCounts[i]++;bytes+=Buffer.byteLength(raw);seenPlayers[i]=message.world.players.length;
         firstTime[i]??=message.world.time;lastTime[i]=message.world.time;
       }
     });
-    socket.addEventListener('error',()=>{if(!welcomed)reject(new Error(`client ${i} failed to connect`));});
-    socket.addEventListener('close',event=>{closed++;if(!welcomed)reject(new Error(`client ${i} closed before welcome: ${event.code}`));});
+    socket.addEventListener('error',()=>{if(!joined)reject(new Error(`client ${i} failed to connect`));});
+    socket.addEventListener('close',event=>{closed++;if(!joined)reject(new Error(`client ${i} closed before identity and controls: ${event.code}`));});
   }));
   timer=setInterval(()=>{
-    for(let i=0;i<sockets.length;i++)if(inputs[i].ready){
+    for(let i=0;i<sockets.length;i++)if(inputs[i].active){
       inputs[i].send({...NEUTRAL,throttle:.5,steer:Math.sin(i)*.2});if(measuring)sent++;
     }
   },50);

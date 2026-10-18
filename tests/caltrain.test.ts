@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
-import { requiredLevelAt } from '../shared/delivery';
+import { LEVELS, requiredLevelAt } from '../shared/delivery';
 import { addPlayer, createWorld, setDestination, step } from '../shared/game';
 import { BUILDINGS, terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -64,9 +64,9 @@ test('both highway directions navigate into each station area after its unlock',
       world.entities=[car];world.pickups=[];
       Object.assign(car,{x:segment.a.x+(segment.b.x-segment.a.x)*t,z:segment.a.z+(segment.b.z-segment.a.z)*t,
         yaw:Math.atan2(-(segment.b.x-segment.a.x),-(segment.b.z-segment.a.z))});
-      player.delivery.level=stop.level===3?2:0;
+      player.delivery.level=stop.level===3?2:0;player.delivery.cash=LEVELS[player.delivery.level].cash+2_500;
       assert.equal(setDestination(world,'driver',stop),false,`${stop.id}: locked destination`);
-      player.delivery.level=stop.level;
+      player.delivery.level=stop.level;player.delivery.cash=LEVELS[player.delivery.level].cash+2_500;
       assert.equal(setDestination(world,'driver',stop),true,`${stop.id}: connected direction ${direction}`);
       for(let i=0;i<2600&&car.autopilot;i++)step(world,new Map(),.05);
       assert.equal(car.navigation?.status,'arrived',`${stop.id}: arrived direction ${direction}`);

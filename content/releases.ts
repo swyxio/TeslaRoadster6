@@ -6,6 +6,21 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'The Vault opens',
+    intro: 'Save your driver, build a collection and explore the Bay.',
+    sections: [
+      { title: 'Your collection', items: [
+        'Find the Vault to buy six luxury cars and motorcycles. Collect owned vehicles at a workshop.',
+        'Your saved driver keeps cash, delivery progress, achievements, vehicle upgrades, paint and decals.',
+        'Visit UCSF, UC Berkeley, Stanford and SFO for research awards and selected workshop discounts.',
+        'Explore the economy story for delivery and fleet simulations and a Bay landmark map.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.15-alpha',
+    label: '0.0.15 Alpha',
+    date: '2026-10-18',
     title: 'Keep the wheels moving',
     intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
     sections: [
@@ -49,7 +64,7 @@ export const RELEASES = [
     intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [
       { title: 'Drive together', items: [
-        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'The game always joins a shared room. If a room is full or unavailable, retry or choose another room.',
         'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
         'The changelog stays on its own page instead of downloading with the game.'
       ] }

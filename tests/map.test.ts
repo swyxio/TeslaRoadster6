@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
 import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,TESLAND_MONUMENTS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {PENINSULA_CROSS_STREETS} from '../shared/alternate-roads';
@@ -18,7 +19,7 @@ import {ovalBankSurface} from '../shared/oval-bank';
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
  const car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  world.entities=[car];world.pickups=[];Object.assign(car,{x,z,yaw});
  for(let i=0;i<650&&!goal(car.x,car.z);i++)step(world,new Map([['crossing',{...NEUTRAL,throttle:1}]]),.05);
  assert.ok(goal(car.x,car.z),`crossing stopped at ${car.x.toFixed(1)}, ${car.z.toFixed(1)}`);
@@ -187,7 +188,7 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
 });
 
 test('landmarks and their delivery arrivals share supported, collision-clear geography',()=>{
- assert.equal(LANDMARKS.length,5);
+ assert.equal(LANDMARKS.length,6);
  for(const landmark of LANDMARKS){
   assert.ok(BUILDINGS.some(b=>b.x===landmark.x&&b.z===landmark.z&&b.style===landmark.style),landmark.id);
   for(const sx of [-1,1])for(const sz of [-1,1])assert.ok(isLand(landmark.x+sx*landmark.w/2,landmark.z+sz*landmark.d/2),landmark.id);
@@ -203,7 +204,7 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
 
 test('new building landmarks share collision identities and remain distinct from the prior landmarks',()=>{
  assert.equal(EXTRA_LANDMARKS.length,100);
- assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,105);
+ assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,106);
  for(const place of EXTRA_LANDMARKS){
   const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
   if(place.id==='mission-peak')assert.equal(matching.length,0);
@@ -243,7 +244,7 @@ test('new landmarks, hills and signs clear parking, ferry and race gameplay area
 
 test('autopilot can cross the Bay and return without teleporting',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
  for(let i=0;i<2400;i++){const x=car.x,z=car.z;step(world,new Map(),.05);assert.ok(Math.hypot(car.x-x,car.z-z)<2);furthest=Math.max(furthest,car.x);}
  assert.ok(furthest>330);assert.ok(car.x<100);assert.equal(car.autopilot,true);
 });
