@@ -9,7 +9,8 @@ import type { AchievementEvidence } from '../../shared/achievement-evidence';
 import { applyAcceptedDelivery, applyObservedAchievement } from '../../worker/achievement-progress';
 import { applyTicketEvidence, ticketRoofAccess, newPolice, updatePolice } from '../../shared/police';
 import { BUILDINGS, terrainHeight } from '../../shared/map';
-import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
+import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
+import { LUXURY_SHOWROOM, luxuryPurchaseAwards, luxuryVehicle } from '../../shared/luxury';
 import type { CabIncomeStage } from '../../worker/room-economy';
 import type { DriverProgress } from '../../worker/driver-profile';
 
@@ -408,7 +409,7 @@ async function roofOnFoot(mode:'ticket'|'replay'|'locked'){
     if(intent.action.kind==='ticket')saved=ticketProgress(saved,intent.action);
     else if(intent.action.kind==='progress')saved=structuredClone(intent.action.progress);
     else throw new Error('Unexpected on-foot action');
-    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+    const result=receipt(saved,intent,[]);saved=structuredClone(result.progress);return result;
   },async acknowledge(){return true;}};
   const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
@@ -422,6 +423,50 @@ async function roofOnFoot(mode:'ticket'|'replay'|'locked'){
   if(session.pending||Reflect.get(session,'failed'))throw new Error('On-foot ticket failed to drain');
   return {initial,saved,writes,visible:player.delivery.order};
 }
+// Exercise real wallet actions with an on-foot driver and an existing rooftop job.
+async function roofOnFootSpend(mode:'buy'|'paint'|'contribute'|'luxury'|'locked'){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const person=world.entities.find(entity=>entity.id===player.entityId)!;
+  const roof=CUSTOMERS.findIndex(customer=>customer.rooftop&&customer.id.includes(mode==='locked'?'oakland':'sf'));
+  const cash=mode==='buy'?50_020:mode==='luxury'?2_000_020:10_020;
+  player.delivery.cash=cash;player.delivery.level=levelForCash(cash);player.delivery.completed=7;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:roof,elapsed:37,base:900};
+  Object.assign(person,{kind:'person',x:0,z:6,y:0,speed:0,vy:0,supportId:'ground'});
+  if(mode==='luxury')Object.assign(person,{x:LUXURY_SHOWROOM.arrival.x,z:LUXURY_SHOWROOM.arrival.z});
+  const initial=progressFrom(player.delivery,[],{},[],0,0),writes:EconomyIntent[]=[],messages:unknown[]=[];
+  if(mode==='paint'){
+    const purchase=purchaseCybercab(emptyCybercabFleet(),35_000,0,'cab-a');
+    if(!purchase.ok)throw new Error('Fixture cab purchase failed');initial.cybercabs=purchase.fleet;
+  }
+  let saved=structuredClone(initial),reply:boolean|undefined;
+  const ledger={async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+    writes.push(structuredClone(intent));const action=intent.action;let awards:AchievementId[]=[];
+    if(action.kind==='cab-buy'||action.kind==='cab-paint'){
+      const result=action.kind==='cab-buy'?purchaseCybercab(saved.cybercabs??emptyCybercabFleet(),saved.cash,saved.eligibleIncome,action.assetId):
+        paintCybercab(saved.cybercabs??emptyCybercabFleet(),saved.cash,saved.eligibleIncome,action.assetId,action.paint);
+      if(!result.ok)throw new Error(`Fixture cab action failed: ${result.reason}`);
+      saved={...saved,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+    }else if(action.kind==='contribute')saved={...saved,cash:saved.cash-action.amount};
+    else if(action.kind==='luxury'){
+      const entry=luxuryVehicle(action.vehicle);if(!entry)throw new Error('Fixture luxury vehicle missing');
+      const earned=luxuryPurchaseAwards(action.vehicle,saved.ownedLuxury,saved.unlocked);
+      const reward=earned.reduce((sum,award)=>sum+award.reward,0);awards=earned.map(award=>award.id);
+      saved={...saved,cash:saved.cash-entry.price+reward,eligibleIncome:saved.eligibleIncome+reward,
+        ownedLuxury:[...saved.ownedLuxury,action.vehicle],unlocked:[...saved.unlocked,...awards]};
+    }else throw new Error('Unexpected on-foot spend');
+    if('order' in action&&action.order)saved.order=structuredClone(action.order);
+    saved.level=levelForCash(saved.cash);const result=receipt(saved,intent,awards);saved=structuredClone(result.progress);return result;
+  },async acknowledge(){return true;}};
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(value:string){messages.push(JSON.parse(value));},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  if(mode==='buy')session.buyCab(ok=>{reply=ok;});
+  else if(mode==='paint')session.paintCab('cab-a','ember',ok=>{reply=ok;});
+  else if(mode==='luxury')session.luxury('buy','ducati-panigale-v4',1);
+  else session.contributeMars(100,1);
+  for(let i=0;i<2000&&(Reflect.get(session,'processing')||session.pending);i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(session.pending||Reflect.get(session,'failed'))throw new Error('On-foot spend failed to drain');
+  return {initial,saved,writes,messages,reply,visible:player.delivery.order};
+}
 export default {async fetch(request:Request){
   const path=new URL(request.url).pathname;
   return Response.json(path==='/history'?await transient('history'):path==='/profile'?await transient('profile'):
@@ -430,5 +475,6 @@ export default {async fetch(request:Request){
         path==='/cadence'?await cadence():path==='/market-handoff'?await marketHandoff():
           path==='/roof-restore'?await roofRepair('restore'):path==='/roof-switch'?await roofRepair('switch'):
             path==='/roof-foot-ticket'?await roofOnFoot('ticket'):path==='/roof-foot-replay'?await roofOnFoot('replay'):
-              path==='/roof-foot-locked'?await roofOnFoot('locked'):await scenario());
+              path==='/roof-foot-locked'?await roofOnFoot('locked'):
+                path.startsWith('/roof-spend-')?await roofOnFootSpend(path.slice('/roof-spend-'.length) as 'buy'|'paint'|'contribute'|'luxury'|'locked'):await scenario());
 }};
