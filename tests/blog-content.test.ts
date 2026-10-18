@@ -29,5 +29,8 @@ test('explicit fragments survive a heading rename and duplicate explicit IDs fai
   assert.equal(renamed.headings[0].id, 'original-section');
   assert.equal(renamed.headings[0].title, 'A new title');
   assert.doesNotMatch(renamed.html, /\{#original-section\}/);
+  const reserved = await renderPost('## Overview\n\n## Another section {#overview}\n');
+  assert.deepEqual(reserved.headings.map(({ id }) => id), ['overview-2', 'overview']);
   await assert.rejects(renderPost('## First {#same}\n\n## Second {#same}\n'), /Duplicate heading ID/);
+  await assert.rejects(renderPost('<div id="same"></div>\n\n## First {#same}\n'), /Duplicate heading ID/);
 });
