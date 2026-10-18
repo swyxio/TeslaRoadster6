@@ -12,6 +12,10 @@
 - Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
 - Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
 - Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
+## Rocket Dome production · 2026-10-17 Pacific
+
+- The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
+- Chrome desktop opened the live solo game and the Rocket Dome; the field, ball and first-to-five scoreboard were visible. Local desktop and touch-emulated playtests are documented below; no physical-device or production frame-rate test was performed.
 
 ## Rocket Dome with cockpit · protocol v11, local build · 2026-10-17 Pacific
 
