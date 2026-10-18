@@ -160,7 +160,7 @@ try{
   const ackLatencies=slots.flatMap(slot=>[...slot.sent.values()].filter(item=>item.at>=measurementStart&&item.at<measurementEnd&&item.ackAt!==undefined).map(item=>item.ackAt!-item.at));
   const result={origin:origin.origin,room,health,startedUtc,endedUtc,elapsedSeconds:(measurementEnd-measurementStart)/1000,
     clientModel:'Eight real Session and MotionClock instances; frame-cadenced throttle 0.35 with fixed varied steering, no renderer.',
-    assumptions:{savedDrivers:4,guestObservers:4,styleIntervalSeconds:5,ota:'active; 120 simulated second renewal',transport:'normal room and chat APIs',inputAck:'snapshot appliedSeq reaches this sequence; a later frame may have superseded it'},
+    assumptions:{savedDrivers:4,guestDrivers:4,styleIntervalSeconds:5,ota:'active; 120 simulated second renewal',transport:'normal room and chat APIs',inputAck:'snapshot appliedSeq reaches this sequence; a later frame may have superseded it'},
     clients,minimumWorldAdvance:Math.min(...clients.map(client=>client.worldAdvance??0)),
     snapshotGapMs:{p50:percentile(gaps,.5),p95:percentile(gaps,.95),max:percentile(gaps,1)},
     inputAckLatencyMs:{count:ackLatencies.length,p50:percentile(ackLatencies,.5),p95:percentile(ackLatencies,.95),max:percentile(ackLatencies,1)},
