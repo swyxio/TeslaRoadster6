@@ -34,3 +34,31 @@ test('explicit fragments survive a heading rename and duplicate explicit IDs fai
   await assert.rejects(renderPost('## First {#same}\n\n## Second {#same}\n'), /Duplicate heading ID/);
   await assert.rejects(renderPost('<div id="same"></div>\n\n## First {#same}\n'), /Duplicate heading ID/);
 });
+
+test('release context refers to published versions and real article sections', async () => {
+  const [{ RELEASES }, { RELEASE_DETAILS }, { POSTS }, { readFile }, { marked }] = await Promise.all([
+    import('../content/releases'), import('../content/release-details'), import('../content/posts'),
+    import('node:fs/promises'), import('marked')
+  ]);
+  const versions = new Set(RELEASES.map(release => release.version));
+  const headings = new Map<string, Set<string>>();
+  for (const post of POSTS) {
+    const result = await renderPost(await readFile(`content/posts/${post.file}`, 'utf8'));
+    headings.set(post.slug, new Set(result.headings.map(heading => heading.id)));
+  }
+  for (const [version, detail] of Object.entries(RELEASE_DETAILS)) {
+    assert.ok(versions.has(version), `Unknown release ${version}`);
+    assert.ok(detail.summary.trim() && detail.body.trim());
+    marked.walkTokens(marked.lexer(detail.body), token => {
+      if (token.type !== 'link' || !token.href.startsWith('/')) return;
+      const url = new URL(token.href, 'https://tesland.swyx.io');
+      if (url.pathname === '/changelog/') {
+        assert.ok(versions.has(url.hash.slice(1)), `Unknown release link ${token.href}`);
+      } else {
+        const match = url.pathname.match(/^\/blog\/([^/]+)\/$/);
+        assert.ok(match && headings.has(match[1]), `Unknown post link ${token.href}`);
+        if (url.hash) assert.ok(headings.get(match![1])!.has(url.hash.slice(1)), `Unknown post heading ${token.href}`);
+      }
+    });
+  }
+});
