@@ -189,7 +189,10 @@ export class GameScene {
         }
         scene.add(claim);this.parkingClaims.set(stall.id,claim);
       }
-      const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      // Charger lots have physical pylons; the floating name would cover them.
+      if(!lot.id.startsWith('charger-')){
+        const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      }
     }
     this.raceGate.visible=false;this.raceGate.scale.y=.52;scene.add(this.raceGate);
     for(const course of RACE_COURSES){

@@ -37,6 +37,8 @@ Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`
 
 ## Wire protocol v44 candidate
 
+The candidate includes the moved Oakland Hegenberger station, parking area and derived venue geometry. Clients and rooms must use the same static station map for prediction and authoritative play.
+
 Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:44,capacity:number}`.
 
 Client messages:
