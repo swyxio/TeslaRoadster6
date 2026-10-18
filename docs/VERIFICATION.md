@@ -532,4 +532,6 @@ The Cloudflare preview at commit e9d4fee passed the same two-client room integra
 
 Review also identified a map/telemetry collision at 390×500. The short-portrait layout now keeps the map, telemetry and flight controls apart; Chrome emulation at that size confirmed the map opens and the queue and driving-control center hit tests pass with coarse and fine pointers. Landscape map and telemetry clearance was rechecked at 844×390.
 
+The short-portrait active-refill indicator was also restored for fine pointers. At 390×500, the Dome wall-refill hint appeared with both pointer modes and remained clear of the flight controls; the sky-lane indicator shares the rule but was not separately observed in a lane.
+
 The deployed `tesland.swyx.io` game advertised protocol v25 and joined a shared room in Chrome. Its live two-client room integration passed; the test was not a load or ferry-crossing test. Both the new and previous domains served the Worker. A follow-up menu layout fix was checked locally at 1272×845 and built successfully, keeping the welcome heading reachable when the menu is taller than the viewport.
