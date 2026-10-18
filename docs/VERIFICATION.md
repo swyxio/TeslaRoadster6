@@ -4,7 +4,8 @@
 
 - After integrating flight-control and tank upgrades, `pnpm test` passed 178 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. The sky tests additionally verify that the same air units refill tanks of different capacities.
 - Local Wrangler two-client room integration passed, including a double jump into City Glide and server-applied speed and air refill. Local global-chat and isolated restart integration also passed. These are functional checks, not concurrency or production-load tests.
-- Chrome desktop solo reached City Glide with two timed E jumps, showing its speed and air indicator while police pursued. Chrome emulation at 390×844 portrait and 844×390 landscape showed the active lane indicator and updated touch controls. The landmark thermal and its touch jump were independently playtested before the flight-control integration below; the integrated build's thermal behavior is covered by the simulation tests. No physical phone, subjective comfort or frame rate was tested.
+- Staging at commit `5851eca` returned protocol v16, served the locally built assets, and passed the two-client room integration, including sky-lane refill and acceleration. This is not a load test.
+- Chrome desktop solo reached City Glide with two timed E jumps, showing its speed and air indicator while police pursued. Chrome emulation at 390×844 portrait and 844×390 landscape showed the active lane indicator and updated touch controls. A temporary, removed local fixture placed the Roadster beside Transamerica: one E jump entered the thermal, rose to 19 m and refilled air. Thermal touch jumping was also independently checked before the flight-control integration below. No physical phone, subjective comfort or frame rate was tested.
 
 ## Sky currents with global chat · before flight-control integration · protocol v14 · 2026-10-18 Pacific
 
