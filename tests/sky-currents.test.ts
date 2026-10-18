@@ -12,9 +12,19 @@ test('jet lanes push in their marked direction and refill an empty tank, includi
  const lane=JET_STREAMS[0],car=makeEntity('car','zoox',lane.start.x+80,lane.start.z,'p');
  Object.assign(car,{y:lane.height,supportId:null,air:0});const world=worldFor(car);
  tick(world,20);
- assert.ok(car.vx>10);assert.ok(car.air>13);assert.ok(car.y>=lane.height-lane.halfHeight);
+ assert.ok(car.vx>10);assert.ok(car.air>6.5);assert.ok(car.y>=lane.height-lane.halfHeight);
  assert.equal(car.upgrades.rocket,false);
  car.air=99.9;tick(world);assert.equal(car.air,100);
+});
+
+test('wind refills the same air units across tank upgrades without overflowing',()=>{
+ const lane=JET_STREAMS[0];
+ for(const [level,expected] of [[1,7],[5,.4375]] as const){
+  const car=makeEntity('car','roadster',-200,lane.start.z,'p');
+  Object.assign(car,{y:lane.height,supportId:null,air:20,tankLevel:level});
+  tick(worldFor(car),20);
+  assert.ok(Math.abs(car.air-20-expected)<1e-6,`level ${level} refill is scaled to tank capacity`);
+ }
 });
 
 test('thermals start above the road, lift a jumping car and replenish air to the skyline',()=>{

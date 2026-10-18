@@ -16,7 +16,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
-**Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+**Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
 **Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
 
@@ -51,12 +51,13 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 ## Play
 
 - **WASD / arrows:** accelerate, reverse, steer. **Space:** brake; steer while braking or reversing to drift, then release to regain grip.
-- **J:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
+- **E:** jump (or fictional air jump); J also jumps. **Space** in the air or **X:** one-tap flip. Hold **H** to hover. **Shift:** boost. **Q/R:** manual airborne roll. W/S provide forward/reverse thrust in the air; A/D turn.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** Tesla fleet catalog; select a new ride while stopped. **B:** enter a shop when stopped in its purple ring.
 - **L:** room leaderboard with cash and active play time. **T:** session achievements.
-- **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **R:** unstuck recovery, preserving air and condition.
-- Touch: steering and pedals; hold Brake or Rev while steering to drift. Tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
+- **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
+- Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump and hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
+- Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air; purple rocket pickups equip flight and refill air. Pickups return after 20 seconds.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
 

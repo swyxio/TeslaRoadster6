@@ -2,7 +2,7 @@ import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
-export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'upgrade';upgrade:UpgradeId;requestId:number};
+export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -19,6 +19,7 @@ export function parseMessage(raw: string): ClientMessage | null {
   }
   if(value.type==='selectVehicle' && typeof value.kind==='string' && Object.hasOwn(VEHICLES,value.kind))return {type:'selectVehicle',kind:value.kind as VehicleId};
   if(value.type==='upgrade' && typeof value.upgrade==='string' && Object.hasOwn(UPGRADES,value.upgrade) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'upgrade',upgrade:value.upgrade as UpgradeId,requestId:value.requestId as number};
+  if(value.type==='ota' && typeof value.enabled==='boolean' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'ota',enabled:value.enabled,requestId:value.requestId as number};
   if (value.type === 'interact' || value.type === 'reset' || value.type === 'autopilot' || value.type === 'dome') return { type: value.type };
   if (value.type === 'name' && typeof value.name === 'string') {
     return { type: 'name', name: normalizeName(value.name) };

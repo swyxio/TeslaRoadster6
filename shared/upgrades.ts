@@ -17,6 +17,7 @@ export const SHOP_RADIUS=12;
 export const UPGRADES = {
   rocket: {name:'Rocket kit', price:60, description:'Jump, hover, boost and flip in any vehicle.'},
   economy: {name:'Efficient nozzles', price:45, description:'Flight uses 25% less air.'},
+  tank: {name:'Air tank', price:30, description:'Double capacity and refill. Five levels of arcade flight.'},
   motor: {name:'Sport motor', price:45, description:'25% quicker acceleration and 10% higher road speed.'},
   armor: {name:'Impact armor', price:35, description:'Halves crash and hard-landing damage.'},
   service: {name:'Repair & refill', price:12, description:'Restore condition and fill your air tank.'},
