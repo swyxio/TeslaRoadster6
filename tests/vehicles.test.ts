@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Mesh,Box3 } from 'three';
-import {createVehicle,addRocketKit,setThrusterEffects} from '../src/vehicles';
+import {createVehicle,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {THRUSTER_REAR,THRUSTER_SIDE_LEFT} from '../shared/game';
 test('fleet meshes retain scale, bounded complexity and independent articulated transforms',()=>{
@@ -32,6 +32,11 @@ test('retrofit hardware and effects are independent for each non-Rocket vehicle'
   assert.equal(first.getObjectByName('jets')!.visible,false,id);
   const nozzles:string[]=[];first.traverse(o=>{if(o.name.startsWith('nozzle_'))nozzles.push(o.name);});
   assert.equal(nozzles.length,10,id);
+  setRocketKit(first,id,false);assert.equal(first.getObjectByName('rocket-kit')!.visible,false,id);
+  setThrusterEffects(first,0,2,false);assert.equal(first.getObjectByName('rocket_hardware')!.visible,false,id);
+  setRocketKit(first,id,true);assert.equal(first.getObjectByName('rocket-kit')!.visible,true,id);
+  setThrusterEffects(first,0,2,true);assert.equal(first.getObjectByName('rocket_hardware')!.visible,true,id);
+  assert.equal(first.children.filter(o=>o.name==='rocket-kit').length,1,id);
  }
 });
 test('Rocket has ten nozzles and independently controlled vapor on each clone',()=>{

@@ -13,7 +13,7 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, addRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { cockpitPose } from './camera';
 import { SHOPS, hasRockets } from '../shared/upgrades';
@@ -241,7 +241,7 @@ export class GameScene {
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       if(e.kind!=='person'){
-        if(e.upgrades.rocket&&!VEHICLES[e.kind].airThrusters)addRocketKit(mesh,e.kind);
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
       }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}

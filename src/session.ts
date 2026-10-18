@@ -11,14 +11,16 @@ export class Session {
   private accumulator = 0;
   private sendTime = 0;
   private lastState = 0;
+  private nextUpgradeRequest = 0;
+  upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   error = '';
   constructor() { addPlayer(this.world, this.id, 'You'); }
   solo(kind:VehicleId='roadster') {
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = '';
-    this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
+    this.upgradeResult=null;this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
   join(room: string, name: string,kind:VehicleId='roadster') {
-    this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.world = createWorld();
+    this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.upgradeResult=null;this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.status === 'connecting') { this.error = 'Connection timed out. Try again or drive solo.'; socket.close(); } }, 10000);
@@ -32,6 +34,7 @@ export class Session {
           if(kind!=='roadster')socket.send(JSON.stringify({type:'selectVehicle',kind}));
         }
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
+        if (message.type === 'upgradeResult') this.upgradeResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
     socket.onclose = () => { clearTimeout(timeout); if (this.socket === socket) { this.status = 'disconnected'; this.error ||= 'Room disconnected or full. Rejoin, choose a new room, or drive solo.'; } };
@@ -50,11 +53,16 @@ export class Session {
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
   parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')parkingAction(this.world,this.id,action);else this.send({type:'parking',action});}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
-  buyUpgrade(upgrade:UpgradeId){if(this.status==='solo')buyUpgrade(this.world,this.id,upgrade);else this.send({type:'upgrade',upgrade});}
+  buyUpgrade(upgrade:UpgradeId){
+    const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
+    if(this.status==='solo')this.upgradeResult={requestId,upgrade,ok:buyUpgrade(this.world,this.id,upgrade)};
+    else if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
+    return requestId;
+  }
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
     if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:type==='dome'?travelDome:resetPlayer)(this.world, this.id);
     else this.send({type});
   }
-  private send(value: unknown) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(value)); }
+  private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
   disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); }
 }

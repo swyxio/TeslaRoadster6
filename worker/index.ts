@@ -66,7 +66,10 @@ export class GameRoom extends DurableObject<Env> {
       if(player) player.name=message.name;
       return;
     }
-    if (now - session.lastAction < 400) return;
+    if (now - session.lastAction < 400) {
+      if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      return;
+    }
     session.lastAction = now;
     if (message.type === 'interact') interact(this.world, session.id);
     if (message.type === 'reset') resetPlayer(this.world, session.id);
@@ -75,7 +78,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
-    if(message.type==='upgrade')buyUpgrade(this.world,session.id,message.upgrade);
+    if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
   }
 
   private tick(): void {
