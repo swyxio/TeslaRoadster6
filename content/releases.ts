@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Keep the deliveries coming',
+    intro: 'A little extra for every three completed deliveries.',
+    sections: [
+      { title: 'Delivery checkpoints', items: [
+        'Earn a $750 bonus for every third delivery, even when a late fare has fallen to zero.',
+        'The mission card tracks progress to your next bonus. Your saved driver keeps it alongside delivery progress.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.16-alpha',
+    label: '0.0.16 Alpha',
+    date: '2026-10-18',
     title: 'The Vault opens',
     intro: 'Save your driver, build a collection and explore the Bay.',
     sections: [
