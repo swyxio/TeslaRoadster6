@@ -37,12 +37,21 @@ test('restaurant and fictional customer markers are on clear, reachable ground',
     assert.ok(!nearbyBuildings(place.x,place.z,4).some(b=>Math.abs(place.x-b.x)<b.w/2+2&&Math.abs(place.z-b.z)<b.d/2+2),place.name);
   }
 });
-test('early bonus and late penalty change the base fare in the expected direction',()=>{
-  const order=initialDelivery({x:40,z:60}).order;
-  const early=payoutFor({...order,elapsed:order.estimate/2});
-  const onTime=payoutFor({...order,elapsed:order.estimate});
-  const late=payoutFor({...order,elapsed:order.estimate*1.5});
-  assert.ok(early>onTime&&onTime>late&&late>=0);assert.equal(onTime,order.base);assert.equal(payoutFor({...order,elapsed:order.estimate*5}),0);
+test('delivery pay keeps the fast bonus and late penalty until the 50% floor',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:600,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:0}),1_050);
+  assert.equal(payoutFor({...order,elapsed:50}),825);
+  assert.equal(payoutFor({...order,elapsed:100}),600);
+  assert.equal(payoutFor({...order,elapsed:125}),500);
+  assert.equal(payoutFor({...order,elapsed:175}),300);
+  assert.equal(payoutFor({...order,elapsed:500}),300,'very late deliveries still pay');
+});
+test('the minimum fare rounds up for odd-dollar quotes',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:601,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:100}),601);
+  assert.equal(payoutFor({...order,elapsed:125}),501);
+  assert.equal(payoutFor({...order,elapsed:175}),301);
+  assert.equal(payoutFor({...order,elapsed:500}),301);
 });
 test('pickup bonus decreases with active time and expires at the estimate',()=>{
   const order=initialDelivery({x:40,z:60}).order;

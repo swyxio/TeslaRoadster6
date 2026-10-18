@@ -160,7 +160,9 @@ export function payoutFor(order: Order): number {
   const difference = order.estimate - order.elapsed;
   const bonus = difference > 0 ? Math.round(order.base * .75 * Math.min(1, difference / order.estimate)) : 0;
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
-  return Math.max(0, order.base + bonus - latePenalty);
+  // Even a very late delivery should pay for the trip. Round the half-dollar
+  // up so an odd quoted base never falls below the 50% minimum.
+  return Math.max(Math.ceil(order.base / 2), order.base + bonus - latePenalty);
 }
 export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false, resolvePayout?:DeliveryPayoutResolver): ResolvedDeliveryPayout[] | null | undefined {
   const delivery = player.delivery;
