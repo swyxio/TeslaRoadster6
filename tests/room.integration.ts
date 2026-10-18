@@ -5,7 +5,7 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with the relocated Dome and match awards.
-assert.equal(PROTOCOL_VERSION, 22);
+assert.equal(PROTOCOL_VERSION, 23);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

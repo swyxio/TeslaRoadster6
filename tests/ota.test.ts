@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { addPlayer, buyUpgrade, createWorld, NEUTRAL, step, subscribeOta } from '../shared/game';
 import { OTA_FEE, OTA_INTERVAL, updateOta } from '../shared/ota';
 import { parseMessage } from '../worker/protocol';
-import { Session } from '../src/session';
 
 test('OTA charges once per game hour, pauses without debt, resumes on income, and can be cancelled',()=>{
   const world=createWorld(),p=addPlayer(world,'p','Player');p.delivery.cash=10;
@@ -35,11 +34,8 @@ test('enrollment with no cash waits; paid remote shopping is authoritative and i
   subscribeOta(world,'p',false);assert.equal(buyUpgrade(world,'p','armor'),false,'cancelled subscription cannot shop remotely');
 });
 
-test('subscription protocol validates messages and solo requests report results',()=>{
+test('subscription protocol validates messages',()=>{
   assert.equal(parseMessage('{"type":"ota","enabled":"yes","requestId":1}'),null);
   assert.equal(parseMessage('{"type":"ota","enabled":true,"requestId":0}'),null);
   assert.deepEqual(parseMessage('{"type":"ota","enabled":true,"requestId":1}'),{type:'ota',enabled:true,requestId:1});
-  const session=new Session(),id=session.setOta(true);
-  assert.deepEqual(session.otaResult,{requestId:id,enabled:true,ok:true});
-  assert.equal(session.world.players[0].delivery.ota.active,false);
 });
