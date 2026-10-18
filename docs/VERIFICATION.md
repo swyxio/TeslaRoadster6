@@ -1197,6 +1197,8 @@ A second run of the same clean game revision and local workload gave 16.8 ms fra
 
 The clean 0.0.25-alpha revision `1a5a0479570f1bde7d33ed6218c0c0df670767d2` on the same M5 Pro reported a 16.7 ms browser p95 across 360 intervals and 0.952 room sim/wall ratio, with 0.983–1.052× synthetic speed and 8.333/16.667 ms modeled steering onset. One-minute load was 20.15 before and 13.66 after on 18 logical CPUs. See the version log for the report and raw evidence. Different reporter hashes mean this is not a paired comparison with 0.0.24.
 
+The merged 0.0.27-alpha revision `00f8ffeeaefa7a184816244c26b515cf19585539` passed 899 tests and the production build. A separate M5 Pro/Metal observation recorded 16.7 ms browser p95 across 360 intervals, 0.983–1.052× synthetic speed, 8.333/16.667 ms modeled steering onset and 0.914 room sim/wall ratio. One-minute host load rose from 16.15 to 34.72 on 18 logical CPUs; this is not a paired regression or capacity result. The version log retains the report and raw traces.
+
 A disposable GitHub-hosted `macos-15` probe ran the 720p scenario with headless Chromium reporting `ANGLE Metal Renderer: Apple Paravirtual device`. All four observations were available: 66.7 ms browser p95 across 165 intervals and 0.930 room sim/wall ratio, with the same synthetic metrics; one-minute VM load was 20.42 before and 8.47 after on three virtual CPUs. This is a single VM probe, not a physical-device or GPU-completion measurement. An earlier `ubuntu-24.04` SwiftShader run at 720p produced too few browser intervals for a result, so the selective CI uses the tested macOS runner and checks its renderer.
 
 ## 2026-10-18 · Goal and awards presentation candidate
