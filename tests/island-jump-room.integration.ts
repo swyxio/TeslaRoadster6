@@ -3,6 +3,7 @@
 // The fixture places the first player's car 25 m before the west jump. All
 // subsequent driving, physics and snapshots use the production room code.
 import assert from 'node:assert/strict';
+import { RoomInputClient } from './room-input-client';
 import { NEUTRAL, PROTOCOL_VERSION, type Entity, type World } from '../shared/game';
 import { ISLAND_JUMPS, islandJumpHeight } from '../shared/island-jumps';
 
@@ -34,14 +35,16 @@ async function closeCleanly(socket:WebSocket):Promise<void> {
 }
 function connect() {
   const socket = new WebSocket(room);
+  const input = new RoomInputClient(socket);
   const state: { id?:string; world?:World; closed?:number; history:Entity[] } = { history:[] };
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
+    input.observe(data);
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; }
     if (data.type === 'state') state.world = data.world;
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
-  return { socket, state };
+  return { socket, state, input };
 }
 
 const driver = connect();
@@ -49,7 +52,6 @@ await eventually(() => !!driver.state.id, 'first driver joined');
 const observer = connect();
 let inputTimer:ReturnType<typeof setInterval>|undefined;
 let highestY = 0;
-let inputSeq = 0;
 try {
   await eventually(() => !!observer.state.id && observer.state.world?.players.length === 2, 'observer joined the same room');
   const playerId = driver.state.id!;
@@ -77,9 +79,10 @@ try {
     if (sawLaunch && entity.supportId === 'ground' && entity.x > jump.end + 1) sawLanding = true;
   });
   inputTimer = setInterval(() => {
-    driver.socket.send(JSON.stringify({ type:'input', seq:++inputSeq, input:{ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 } }));
+    if(driver.input.ready)driver.input.send({ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 });
   }, 50);
   await eventually(() => sawRamp && sawLaunch && sawLanding, 'observer sees ramp support, takeoff and landing');
+  assert.ok((driver.input.control?.appliedSeq ?? 0) > 0, 'driver input was applied');
   assert.ok(highestY > jump.height, 'launch reaches above the lip');
   assert.equal(driver.state.closed, undefined);
   assert.equal(observer.state.closed, undefined);

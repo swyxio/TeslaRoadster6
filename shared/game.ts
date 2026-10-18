@@ -26,7 +26,7 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 
-export const PROTOCOL_VERSION=31;
+export const PROTOCOL_VERSION=32;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -568,7 +568,7 @@ function nearRocketIsland(x:number,z:number):boolean {
   }
   return isRocketIsland(x,z);
 }
-function landAirborne(world:World,e:Entity,old:PreviousPose):void {
+function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (playerId:string)=>void):void {
   if(e.supportId!==null)return;
   let landing:{id:SupportId;y:number}|null=null;
   const ground=terrainHeight(e.x,e.z),oldGround=terrainHeight(old.x,old.z);
@@ -607,6 +607,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
     const spawn=(nearRocketIsland(e.x,e.z)?sideSpawn(world,e.kind,'island',e):null)??availableSpawnPosition(world,e.kind);
     if(!spawn){Object.assign(e,{x:old.x,y:old.y,z:old.z,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0});return;}
     Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
+    if(e.driver)onRelocation?.(e.driver);
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
     const bottom=deckTopAt(e.x)-OVERPASS.thickness,height=dimensions(e.kind).height;
@@ -678,17 +679,25 @@ function constrainDome(e:Entity,rocket:boolean):void {
   }
 }
 
-export function step(world:World,inputs:Map<string,Input>,dt:number):void {
-  if(!Number.isFinite(dt)||dt<=0)return;
+export function simulationSubsteps(world:World,dt:number):number {
+  if(!Number.isFinite(dt)||dt<=0)return 1;
   dt=Math.min(dt,.05);
   // Allow for two vehicles approaching one another, not just one moving body.
   const maxSpeed=world.entities.reduce((max,e)=>Math.max(max,Math.abs(e.speed)+Math.hypot(e.pushX,e.pushZ),Math.hypot(e.vx,e.vy,e.vz)),0);
-  const steps=Math.min(8,Math.max(1,Math.ceil(2*maxSpeed*dt)));
-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps);
+  return Math.min(8,Math.max(1,Math.ceil(2*maxSpeed*dt)));
 }
-function advance(world:World,inputs:Map<string,Input>,dt:number):void {
+// A substep override is for client presentation replay only; the room always
+// chooses its adaptive value from the complete authoritative world.
+export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{substeps?:number;onSubsteps?:(count:number)=>void;onRelocation?:(playerId:string)=>void}):void {
+  if(!Number.isFinite(dt)||dt<=0)return;
+  dt=Math.min(dt,.05);
+  const steps=Number.isInteger(options?.substeps)&&options!.substeps!>=1&&options!.substeps!<=8?options!.substeps!:simulationSubsteps(world,dt);
+  options?.onSubsteps?.(steps);
+  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation);
+}
+function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void):void {
   world.time+=dt;
-  updateFerry(world,dt,(entity,side)=>moveToSide(world,entity,side));
+  updateFerry(world,dt,(entity,side)=>{const moved=moveToSide(world,entity,side);if(moved&&entity.driver)onRelocation?.(entity.driver);return moved;});
   for(const e of world.entities){updateDomeReturn(world,e);enterDomeIfInside(e);}
   updateHighwayTraffic(world,dt,makeEntity);
   updatePolice(world,dt);
@@ -911,7 +920,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
         }
       }
       if(e.y>=FLIGHT_CEILING){e.y=FLIGHT_CEILING;e.vy=Math.min(e.vy,0);}
-      landAirborne(world,e,old);
+      landAirborne(world,e,old,onRelocation);
       if(e.supportId==='ground'){
         // Landing can precede the final rotated-footprint check. Resolve any
         // wall overlap at the landed pose without overriding a ramp landing.

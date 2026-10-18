@@ -2,7 +2,7 @@ import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
-export type ClientMessage = { type: 'input'; seq:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number} | {type:'mars';action:'board';requestId:number};
+export type ClientMessage = { type: 'input'; seq:number; targetTick:number; roomEpoch:string; controlRevision:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number} | {type:'mars';action:'board';requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -11,12 +11,14 @@ export function parseMessage(raw: string): ClientMessage | null {
   const value = data as Record<string, unknown>;
   if (value.type === 'input') {
     if(!Number.isSafeInteger(value.seq)||(value.seq as number)<1)return null;
+    if(!Number.isSafeInteger(value.targetTick)||(value.targetTick as number)<1||!Number.isSafeInteger(value.controlRevision)||(value.controlRevision as number)<0)return null;
+    if(typeof value.roomEpoch!=='string'||value.roomEpoch.length!==36)return null;
     if (!value.input || typeof value.input !== 'object') return null;
     const input = value.input as Record<string, unknown>;
     for (const key of ['throttle', 'steer', 'roll']) if (typeof input[key] !== 'number' || !Number.isFinite(input[key]) || Math.abs(input[key] as number) > 1) return null;
     for (const key of ['boost', 'hover', 'brake', 'cockpit']) if (typeof input[key] !== 'boolean') return null;
     for (const key of ['jump', 'flip']) if (!Number.isSafeInteger(input[key]) || (input[key] as number)<0 || (input[key] as number)>2147483647) return null;
-    return { type: 'input', seq:value.seq as number, input: { throttle: input.throttle as number, steer: input.steer as number, roll: input.roll as number, boost: input.boost as boolean, hover: input.hover as boolean, brake: input.brake as boolean, jump: input.jump as number, flip: input.flip as number, cockpit: input.cockpit as boolean } };
+    return { type: 'input', seq:value.seq as number, targetTick:value.targetTick as number, roomEpoch:value.roomEpoch, controlRevision:value.controlRevision as number, input: { throttle: input.throttle as number, steer: input.steer as number, roll: input.roll as number, boost: input.boost as boolean, hover: input.hover as boolean, brake: input.brake as boolean, jump: input.jump as number, flip: input.flip as number, cockpit: input.cockpit as boolean } };
   }
   if(value.type==='sync'&&Number.isSafeInteger(value.token)&&(value.token as number)>0)return {type:'sync',token:value.token as number};
   if(value.type==='selectVehicle' && typeof value.kind==='string' && Object.hasOwn(VEHICLES,value.kind))return {type:'selectVehicle',kind:value.kind as VehicleId};

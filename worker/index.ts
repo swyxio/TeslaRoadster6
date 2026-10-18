@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { ScheduledInput, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -10,7 +11,8 @@ import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '.
 export { GlobalChat };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number };
+type Session = { id: string; lastMessage: number; windowStart: number; count: number; lastAction: number; control:ScheduledInput; poseRevision:number; pendingSync:number };
+type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -38,6 +40,8 @@ export class GameRoom extends DurableObject<Env> {
   private inputs = new Map<string, Input>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCount = 0;
+  private roomEpoch = crypto.randomUUID();
+  private lastSubsteps = 1;
 
   constructor(ctx:DurableObjectState,env:Env) {
     super(ctx,env);
@@ -67,12 +71,13 @@ export class GameRoom extends DurableObject<Env> {
       server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
       return new Response(null, { status: 101, webSocket: client });
     }
-    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
+    const control=new ScheduledInput({...NEUTRAL});
+    this.sessions.set(server, { id, lastMessage: now, windowStart: now, count: 0, lastAction: 0, control, poseRevision:0, pendingSync:0 });
     server.addEventListener('message', event => { void this.onMessage(server, event.data); });
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
-    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
-    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), inputAck:0 }));
+    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity, tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0 }));
+    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0, control:control.snapshot() }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -88,7 +93,10 @@ export class GameRoom extends DurableObject<Env> {
     if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
     session.lastMessage = now;
     if (message.type === 'input') {
-      if(message.seq>session.inputSeq){this.inputs.set(session.id, message.input);session.lastInput=now;session.inputSeq=message.seq;}
+      if(message.roomEpoch!==this.roomEpoch){this.rejectInput(socket,message,'epoch');return;}
+      const result=session.control.receive(message,this.tickCount,now);
+      this.sendEdges(socket,result.outcomes);
+      if(result.rejection&&this.sessions.has(socket))this.rejectInput(socket,message,result.rejection);
       return;
     }
     // Coalesce barriers into the next regular snapshot. WebSocket ordering
@@ -105,8 +113,8 @@ export class GameRoom extends DurableObject<Env> {
     // Joining and controlling a mini-game are often consecutive clicks. The
     // simulation checks membership, host and position; the socket rate limit
     // still applies, but the unrelated action cooldown must not drop them.
-    if(message.type==='dome'){travelDome(this.world,session.id);this.inputs.delete(session.id);return;}
-    if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);return;}
+    if(message.type==='dome'){if(travelDome(this.world,session.id))this.invalidate(socket,session,true);return;}
+    if(message.type==='minigame'){const before=this.pose(session);if(enterMinigame(this.world,session.id,message.game))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));return;}
     if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if (now - session.lastAction < 400) {
@@ -117,15 +125,19 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     session.lastAction = now;
-    if (message.type === 'interact') interact(this.world, session.id);
-    if (message.type === 'reset') resetPlayer(this.world, session.id);
-    if(message.type==='autopilot')toggleAutopilot(this.world,session.id);
-    if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
+    if (message.type === 'interact') {
+      const before=this.world.players.find(player=>player.id===session.id)?.entityId;
+      interact(this.world,session.id);
+      if(before!==this.world.players.find(player=>player.id===session.id)?.entityId)this.invalidate(socket,session,true);
+    }
+    if (message.type === 'reset') {const before=this.pose(session);resetPlayer(this.world, session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));}
+    if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session);
+    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind))this.invalidate(socket,session,true);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
-    if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
+    if(message.type==='race'){const before=this.pose(session);if(raceAction(this.world,session.id,message.action,message.courseId)&&message.action==='join')this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));}
     if(message.type==='destination'){
       const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
-      if(ok)this.inputs.delete(session.id);
+      if(ok)this.invalidate(socket,session);
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
@@ -155,20 +167,70 @@ export class GameRoom extends DurableObject<Env> {
   private tick(): void {
     const now = Date.now();
     for (const [socket, session] of this.sessions) {
-      if (now - session.lastInput > 300) this.inputs.delete(session.id);
       if (now - session.lastMessage > 30_000) this.disconnect(socket, 1001, 'Connection inactive');
     }
     if (!this.sessions.size) return;
-    for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
-    step(this.world, this.inputs, 0.05);
-    if (++this.tickCount % 2) return;
-    const snapshot = prepareSnapshots(this.world);
+    const nextTick=this.tickCount+1;
+    const edgeResults=new Map<string,{socket:WebSocket;outcomes:EdgeOutcome[]}>();
+    for(const [socket,session] of this.sessions){
+      const result=session.control.advance(nextTick,now);
+      this.inputs.set(session.id,result.input);
+      if(result.outcomes.length)edgeResults.set(session.id,{socket,outcomes:result.outcomes});
+    }
+    const relocated=new Set<string>();
+    step(this.world, this.inputs, 0.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
+      // Ferry apron moves happen before that substep consumes controls; water
+      // recovery happens after. Stop both from carrying old input forward.
+      const player=this.world.players.find(item=>item.id===id);
+      const entity=this.world.entities.find(item=>item.id===player?.entityId);
+      for(const outcome of edgeResults.get(id)?.outcomes??[]){
+        if(outcome.status==='processed'&&entity&&(outcome.kind==='jump'?entity.lastJump:entity.lastFlip)!==outcome.id)outcome.status='superseded';
+      }
+      this.inputs.delete(id);
+      relocated.add(id);
+    }});
+    this.tickCount=nextTick;
+    for(const {socket,outcomes} of edgeResults.values())this.sendEdges(socket,outcomes);
+    for(const [socket,session] of this.sessions)if(relocated.has(session.id))this.invalidate(socket,session,true);
+    if(!this.sessions.size)return;
+    if (this.tickCount % 2) return;
+    const snapshot = prepareSnapshots(this.world,this.tickCount,this.roomEpoch,this.lastSubsteps);
     for (const [socket, session] of this.sessions) {
       try {
-        socket.send(snapshot(session.id,session.appliedSeq,session.pendingSync||undefined));
+        socket.send(snapshot(session.id,session.control.snapshot(),session.poseRevision,session.pendingSync||undefined));
         session.pendingSync=0;
       } catch { this.disconnect(socket); }
     }
+  }
+
+  private sendEdges(socket:WebSocket,outcomes:EdgeOutcome[]):void {
+    try {for(const outcome of outcomes)socket.send(JSON.stringify({type:'inputEdge',...outcome}));}
+    catch {this.disconnect(socket);}
+  }
+
+  private rejectInput(socket:WebSocket,message:{seq:number;targetTick:number},reason:string):void {
+    try {socket.send(JSON.stringify({type:'inputRejected',seq:message.seq,targetTick:message.targetTick,reason}));}
+    catch {this.disconnect(socket);}
+  }
+
+  private pose(session:Session):ControlledPose|null {
+    const player=this.world.players.find(item=>item.id===session.id);
+    const e=this.world.entities.find(item=>item.id===player?.entityId);
+    return e?{id:e.id,x:e.x,y:e.y,z:e.z,yaw:e.yaw,pitch:e.pitch,roll:e.roll}:null;
+  }
+
+  private poseChanged(before:ControlledPose|null,after:ControlledPose|null):boolean {
+    if(!before||!after)return before!==after;
+    if(before.id!==after.id||Math.hypot(before.x-after.x,before.y-after.y,before.z-after.z)>.001)return true;
+    return (['yaw','pitch','roll'] as const).some(key=>Math.abs(Math.atan2(Math.sin(before[key]-after[key]),Math.cos(before[key]-after[key])))>.0001);
+  }
+
+  private invalidate(socket:WebSocket,session:Session,relocated=false):void {
+    const player=this.world.players.find(item=>item.id===session.id);
+    const entity=this.world.entities.find(item=>item.id===player?.entityId);
+    this.inputs.delete(session.id);
+    if(relocated)session.poseRevision++;
+    this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0}));
   }
 
   private disconnect(socket: WebSocket, code = 1000, reason = 'Session ended'): void {
@@ -179,7 +241,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.sessions.size) {
       if (this.timer) clearInterval(this.timer);
       const fund=this.world.mars.fund;
-      this.timer = null; this.tickCount = 0; this.world = createWorld(); this.world.mars.fund=fund;
+      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(); this.world.mars.fund=fund;
     }
   }
 }

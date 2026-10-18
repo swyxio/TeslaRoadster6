@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, NEUTRAL, BUILDINGS } from '../shared/game';
+import { addPlayer, createWorld, interact, removePlayer, resetPlayer, simulationSubsteps, step, NEUTRAL, BUILDINGS } from '../shared/game';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { refillStationFor } from '../shared/charging';
 import { HILL, terrainHeight } from '../shared/map';
@@ -8,6 +8,14 @@ import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
+test('presentation replay matches adaptive stepping when the authoritative count is known',()=>{
+  const {world,car}=setup();world.entities=[car];Object.assign(car,{speed:32,vz:-32});
+  const replay=structuredClone(world),inputs=new Map([['one',{...NEUTRAL,throttle:1,steer:.3}]]);
+  const substeps=simulationSubsteps(world,.05);assert.ok(substeps>1);
+  let actual=0;step(world,inputs,.05,{onSubsteps:value=>{actual=value;}});
+  step(replay,inputs,.05,{substeps});
+  assert.equal(actual,substeps);assert.deepEqual(replay,world);
+});
 test('authoritative jump and one-tap flip consume air and land', () => {
   const { world, car } = setup();
   const inputs = new Map([['one', { ...NEUTRAL, jump: 1 }]]);
@@ -72,17 +80,21 @@ test('64-player spawns do not overlap and simulation stays finite', () => {
   assert.ok(world.entities.every(e => [e.x, e.y, e.z, e.speed].every(Number.isFinite)));
 });
 test('protocol rejects malformed, non-finite, oversized and out-of-range input', () => {
-  assert.ok(parseMessage(JSON.stringify({ type: 'input', seq:1, input: NEUTRAL })));
+  const frame={type:'input',seq:1,targetTick:2,controlRevision:0,roomEpoch:'00000000-0000-0000-0000-000000000000',input:NEUTRAL};
+  assert.ok(parseMessage(JSON.stringify(frame)));
+  assert.equal(parseMessage(JSON.stringify({...frame,targetTick:0})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,controlRevision:-1})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,roomEpoch:'invalid'})),null);
   assert.equal(parseMessage(JSON.stringify({type:'input',input:NEUTRAL})),null);
-  assert.equal(parseMessage(JSON.stringify({type:'input',seq:0,input:NEUTRAL})),null);
-  assert.equal(parseMessage(JSON.stringify({type:'input',seq:1.5,input:NEUTRAL})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,seq:0})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,seq:1.5})),null);
   assert.deepEqual(parseMessage('{"type":"sync","token":2}'),{type:'sync',token:2});
   assert.equal(parseMessage('{"type":"sync","token":0}'),null);
   assert.equal(parseMessage('{'), null); assert.equal(parseMessage('x'.repeat(1025)), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, throttle: 2 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, throttle: 2 } })), null);
   assert.equal(parseMessage('{"type":"input","input":{"throttle":1e999}}'), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, boost: 1 } })), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, jump: -1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, boost: 1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, jump: -1 } })), null);
   assert.ok(parseMessage('{"type":"parking","action":"park"}'));
   assert.equal(parseMessage('{"type":"parking","action":"award"}'),null);
   assert.ok(parseMessage('{"type":"race","action":"join","courseId":"short"}'));
