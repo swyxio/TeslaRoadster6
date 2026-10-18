@@ -1,4 +1,4 @@
-# Implementation contracts · v33
+# Implementation contracts · v34
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the candidate implementation; the wallet integration is in progress. Correctness, gameplay, visual and performance verification remain pending. Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v33
+## Wire protocol v34
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:33,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:34,capacity:number}`.
 
 Client messages:
 
@@ -72,7 +72,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:33, capacity:number}
+{type:"welcome", id:string, version:34, capacity:number}
 {type:"state", world:World, inputAck:number, sync?:number}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"vehicleStyleResult", requestId:number, category:"paint"|"decal", choice:string, ok:boolean}
@@ -90,7 +90,7 @@ For local presentation only, the client replays at most three unacknowledged inp
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The simulation decides membership and applies lift, speed and air. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v33 adds wallet identity, owner-only wallet views and Vault purchase/collection messages to the shared world. The server validates visits, shop discounts and purchases; clients cannot claim visits or set prices. Server and client share world geometry, support queries and match schema. This version is a candidate pending integration and performance verification.
+Protocol v34 adds an explicit initial identity decision to wallet identity, owner-only wallet views and Vault purchase/collection messages. After welcome, clients send `identity` with a recovery code or `null` for a guest. The server pauses that player until the decision and any recovery resolve, without holding the rest of the room. Clients wait for the matching result and its subsequent snapshot before enabling play. The server validates visits, shop discounts and purchases; clients cannot claim visits or set prices. Server and client share world geometry, support queries and match schema. This version is a candidate pending integration and performance verification.
 
 The map includes a static, collision-backed monument base in the Marin headlands. Its footprint and landable roof height come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculpture above it is decorative. Rendering and minimap markers use the same position.
 
