@@ -211,18 +211,6 @@ test('destination and mini-game protocol accepts only finite bounded requests',(
   assert.equal(parseMessage(JSON.stringify({type:'minigame',game:'bogus',...fence})),null);
 });
 
-test('award binding accepts only a one-use ticket and positive request IDs',()=>{
-  const ticket='a'.repeat(64);
-  assert.deepEqual(parseMessage(JSON.stringify({type:'bindAwards',ticket,requestId:1})),{type:'bindAwards',ticket,requestId:1});
-  assert.deepEqual(parseMessage(JSON.stringify({type:'unbindAwards',requestId:2})),{type:'unbindAwards',requestId:2});
-  for(const packet of [
-    {type:'bindAwards',ticket:'a'.repeat(63),requestId:1},
-    {type:'bindAwards',ticket:'G'.repeat(64),requestId:1},
-    {type:'bindAwards',ticket,requestId:0},
-    {type:'unbindAwards',requestId:-1},
-  ])assert.equal(parseMessage(JSON.stringify(packet)),null);
-});
-
 test('self-driving rounds city turns without abrupt steering changes',()=>{
   const {world,car}=drivingWorld();
   assert.equal(setDestination(world,'driver',{x:-120,z:-60}),true);

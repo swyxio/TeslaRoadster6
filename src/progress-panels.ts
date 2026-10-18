@@ -2,9 +2,8 @@ import './progress-panels.css';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Player } from '../shared/game';
 import type { Session } from './session';
-import { awardProgress, deliveryStandings, GameResultHistory, nextDeliveryLevel, type GameScores } from './progress-model';
+import { awardDeliveryTarget, awardProgress, awardSaveView, deliveryStandings, GameResultHistory, nextDeliveryLevel, type GameScores } from './progress-model';
 
-export type SavedAwards = { unlocked:readonly AchievementId[]; status:string };
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const plural=(number:number,word:string)=>`${number} ${word}${number===1?'':'s'}`;
@@ -13,32 +12,28 @@ function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,t
 }
 
 /** Existing app dialogs retain native focus and Escape behavior; callers own driving controls. */
-export function createProgressPanels({session,awards,onOpen,onClose}:{
-  session:Session; awards:()=>SavedAwards; onOpen:()=>void; onClose:()=>void;
+export function createProgressPanels({session,driverId,onOpen,onClose}:{
+  session:Session; driverId:()=>string; onOpen:()=>void; onClose:()=>void;
 }) {
   const scoresDialog=document.getElementById('scores-dialog') as HTMLDialogElement;
   const awardsDialog=document.getElementById('awards-dialog') as HTMLDialogElement;
   scoresDialog.classList.add('progress-dialog');awardsDialog.classList.add('progress-dialog');
   scoresDialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / RESULTS</span><h2 id="scores-title">Scores</h2></div><button type="button" class="progress-close" aria-label="Close scores">✕</button></div>
-    <p class="progress-intro">Delivery scores and mini-game results last for this drive.</p>
+    <p class="progress-intro">Delivery progress follows your saved driver. Mini-game results last for this drive.</p>
     <div class="progress-scores-body"></div>`;
   awardsDialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER / LITTLE VICTORIES</span><h2 id="awards-title">Awards</h2></div><button type="button" class="progress-close" aria-label="Close awards">✕</button></div>
-    <p class="progress-intro">Explore, deliver and play to earn awards. They do not affect cash.</p>
+    <p class="progress-intro">Explore, deliver and play to earn awards. Some award a one-time cash reward.</p>
     <p class="progress-save-status"></p><div class="progress-awards-body"></div>`;
   for(const dialog of [scoresDialog,awardsDialog]){
     dialog.querySelector<HTMLButtonElement>('.progress-close')!.onclick=()=>dialog.close();
     dialog.addEventListener('close',onClose);
   }
   const history=new GameResultHistory();
-  let playerId=session.id,room=session.room;
   let games:GameScores={current:[],recent:[]},lastRender=0;
-  const available=()=>session.status==='online';
+  const available=()=>session.status==='online'&&(session.walletStatus==='guest'||(session.walletStatus==='ready'&&!!session.wallet));
   function observe(){
-    if(playerId!==session.id||room!==session.room){
-      history.clear();games={current:[],recent:[]};
-    }
-    playerId=session.id;room=session.room;
-    if(available())games=history.observe(session.world,session.id);
+    if(available())games=history.observe(session.world,session.id,session.room,driverId(),session.snapshotVersion);
+    else games={current:[],recent:[]};
   }
   function appendGameList(parent:HTMLElement,title:string,items:GameScores['current']){
     if(!items.length)return;
@@ -53,28 +48,27 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
   function renderScores(){
     const body=scoresDialog.querySelector<HTMLElement>('.progress-scores-body')!;body.replaceChildren();
     if(!available()){
-      body.append(element('p','progress-empty','Connect to a drive to see scores.'));return;
+      body.append(element('p','progress-empty',awardSaveView(session.status==='online',session.walletStatus,null,[]).text));return;
     }
     const player=session.world.players.find(item=>item.id===session.id);
     const personal=element('section','progress-section');
-    personal.append(element('h3','','Your delivery progress'));
+    personal.append(element('h3','','Your delivery progress'),element('p','progress-note',awardSaveView(true,session.walletStatus,session.wallet?.unlocked??null,[]).text));
     if(player){
       const stats=element('div','progress-stats');
-      for(const [label,value] of [['Deliveries',String(player.delivery.completed)],['Total earned',money(player.delivery.earned)],['Cash now',money(player.delivery.cash)]]){
+      for(const [label,value] of [['Deliveries',String(player.delivery.completed)],['Delivery earnings',money(player.delivery.earned)],['Cash now',money(session.wallet?.cash??player.delivery.cash)]]){
         const item=element('div','progress-stat');item.append(element('span','',label),element('strong','',value));stats.append(item);
       }
       personal.append(stats);
-      const next=nextDeliveryLevel(player);
+      const cash=session.wallet?.cash??player.delivery.cash;
+      const next=nextDeliveryLevel(cash);
       if(next){
         const card=element('div','progress-next');
-        card.append(element('strong','',`Next region: ${next.name}`));
-        const milestones:[[string,number,number],[string,number,number]]=[['Deliveries',player.delivery.completed,next.deliveries],['Total earned',player.delivery.earned,next.earned]];
-        for(const [label,value,max] of milestones){
-          const row=element('div','progress-milestone');row.append(element('span','',`${label}: ${label==='Total earned'?`${money(Math.min(value,max))} / ${money(max)}`:`${Math.min(value,max)} / ${max}`}`));
-          const bar=element('progress','');bar.max=max;bar.value=Math.min(value,max);bar.setAttribute('aria-label',`${label} toward ${next.name}`);row.append(bar);card.append(row);
-        }
+        card.append(element('strong','',`Next level: ${next.name}`));
+        const row=element('div','progress-milestone');row.append(element('span','',`Cash: ${money(Math.min(cash,next.cash))} / ${money(next.cash)}`));
+        const bar=element('progress','');bar.max=next.cash;bar.value=Math.max(0,Math.min(cash,next.cash));bar.setAttribute('aria-label',`Cash toward ${next.name}`);row.append(bar);card.append(row);
         personal.append(card);
-      }else personal.append(element('p','progress-note','All delivery regions unlocked this drive.'));
+      }else personal.append(element('p','progress-note','All cash levels reached.'));
+      personal.append(element('p','progress-note','Levels use your current cash. Spending or fines can lower your level.'));
     }else personal.append(element('p','progress-empty','Your delivery stats are not available yet.'));
     body.append(personal);
     const standings=element('section','progress-section');
@@ -104,19 +98,20 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
   }
   function renderAwards(){
     const body=awardsDialog.querySelector<HTMLElement>('.progress-awards-body')!,saveStatus=awardsDialog.querySelector<HTMLElement>('.progress-save-status')!;
-    body.replaceChildren();const saved=awards(),savedIds=new Set(saved.unlocked),player=available()?session.world.players.find(item=>item.id===session.id):undefined;
-    const current=new Set(player?.achievements.unlocked??[]),all=new Set([...savedIds,...current]);
-    const sessionOnly=[...current].filter(id=>!savedIds.has(id)).length;
-    saveStatus.textContent=saved.status;
-    body.append(element('p','progress-awards-count',`${all.size} / ${Object.keys(ACHIEVEMENTS).length} earned · ${savedIds.size} saved${sessionOnly?` · ${sessionOnly} earned this drive, not saved`:''}`));
+    body.replaceChildren();const player=available()?session.world.players.find(item=>item.id===session.id):undefined;
+    const view=awardSaveView(session.status==='online',session.walletStatus,session.wallet?.unlocked??null,player?.achievements.unlocked??[]);
+    const savedIds=new Set(view.saved),current=new Set(view.observed),all=new Set([...savedIds,...current]);
+    saveStatus.textContent=view.text;
+    if(!available()){body.append(element('p','progress-empty','Awards will appear when your driver is connected.'));return;}
+    body.append(element('p','progress-awards-count',`${all.size} / ${Object.keys(ACHIEVEMENTS).length} earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
     const list=element('ul','progress-award-list');
     for(const [key,award] of Object.entries(ACHIEVEMENTS)){
       const id=key as AchievementId,isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
       const row=element('li',`progress-award${earned?' is-earned':''}`),icon=element('span','progress-award-icon',earned?'★':'◇');icon.setAttribute('aria-hidden','true');
       const copy=element('div','progress-award-copy');copy.append(element('strong','',award.name),element('p','',award.description));
-      const status=isSaved?'Saved to your driver':isCurrent?'Earned this drive · not saved':awardProgress(id,player,session.world);
+      const status=isSaved?'Saved to your driver':isCurrent?(session.walletStatus==='guest'?'Earned · save your driver to keep':'Earned · awaiting wallet confirmation'):awardProgress(id,player,session.world);
       copy.append(element('small','progress-award-status',status));
-      if(id==='regular'&&!earned&&player){const bar=element('progress','progress-award-bar');bar.max=3;bar.value=Math.min(player.delivery.completed,3);bar.setAttribute('aria-label','Neighborhood Regular delivery progress');copy.append(bar);}
+      const target=awardDeliveryTarget(id);if(target&&!earned&&player){const bar=element('progress','progress-award-bar');bar.max=target;bar.value=Math.min(player.delivery.completed,target);bar.setAttribute('aria-label',`${award.name} delivery progress`);copy.append(bar);}
       row.append(icon,copy);list.append(row);
     }
     body.append(list);

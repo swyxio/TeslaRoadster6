@@ -15,11 +15,19 @@ const plural=(count:number,singular:string)=>`${count} ${singular}${count===1?''
 /** Keep only observed results for this drive; the simulation expires rounds quickly. */
 export class GameResultHistory {
   private results:GameResult[]=[];
-  clear(){this.results=[];}
+  private scope:{playerId:string;room:string;driverId:string}|null=null;
+  private snapshot=-1;
+  private latest:GameScores={current:[],recent:[]};
+  clear(){this.results=[];this.scope=null;this.snapshot=-1;this.latest={current:[],recent:[]};}
   private remember(result:GameResult){
     this.results=[result,...this.results.filter(item=>item.key!==result.key)].slice(0,5);
   }
-  observe(world:World,playerId:string):GameScores {
+  observe(world:World,playerId:string,room:string,driverId:string,snapshot:number):GameScores {
+    if(!this.scope||this.scope.playerId!==playerId||this.scope.room!==room||this.scope.driverId!==driverId){
+      this.clear();this.scope={playerId,room,driverId};
+    }
+    if(this.snapshot===snapshot)return this.latest;
+    this.snapshot=snapshot;
     const current:GameResult[]=[];
     const parking=world.parking.rounds.find(round=>round.entrants.some(entrant=>entrant.playerId===playerId));
     const entrant=parking?.entrants.find(item=>item.playerId===playerId);
@@ -59,19 +67,34 @@ export class GameResultHistory {
       if(car?.inDome)current.push(result);
       if(soccer.phase==='win'&&participant)this.remember(result);
     }
-    return {current,recent:this.results.filter(item=>!current.some(active=>active.key===item.key))};
+    this.latest={current,recent:this.results.filter(item=>!current.some(active=>active.key===item.key))};
+    return this.latest;
   }
 }
 
 export function deliveryStandings(players:readonly Player[]):Player[] {
   return [...players].sort((a,b)=>b.delivery.completed-a.delivery.completed||b.delivery.earned-a.delivery.earned||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
 }
-export function nextDeliveryLevel(player:Player){return LEVELS.find(level=>level.level>player.delivery.level);}
+export function nextDeliveryLevel(cash:number){return LEVELS.find(level=>level.cash>cash);}
+export function awardDeliveryTarget(id:AchievementId):number|null {
+  if(id==='regular')return 3;
+  const match=/^deliveries-(\d+)$/.exec(id);
+  return match?Number(match[1]):null;
+}
+export type AwardWalletStatus='guest'|'connecting'|'syncing'|'ready'|'failed';
+export function awardSaveView(online:boolean,status:AwardWalletStatus,wallet:readonly AchievementId[]|null,current:readonly AchievementId[]){
+  const usable=online&&(status==='guest'||status==='ready');
+  const saved=online&&status==='ready'&&wallet?[...wallet]:[];
+  const observed=usable?[...current]:[];
+  const text=status==='failed'?'Could not connect your saved driver. Rejoin to try again.':!online?'Reconnect to see your driver’s awards.':status==='guest'?'Guest driver · save your driver to keep your awards and wallet.':status==='connecting'||status==='syncing'?'Connecting your saved driver and wallet…':wallet?'Awards confirmed in your wallet are saved to your driver.':'Waiting for your wallet…';
+  return {saved,observed,text};
+}
 
 /** Only display intermediate progress the current simulation actually knows. */
 export function awardProgress(id:AchievementId,player:Player|undefined,world:World):string {
   if(!player)return 'Connect to see this drive’s progress';
-  if(id==='regular')return `${Math.min(player.delivery.completed,3)} / 3 deliveries this drive`;
+  const deliveryTarget=awardDeliveryTarget(id);
+  if(deliveryTarget)return `${Math.min(player.delivery.completed,deliveryTarget)} / ${deliveryTarget} deliveries`;
   if(id==='park-it'||id==='queue-cutter'){
     const round=world.parking.rounds.find(item=>item.mode===(id==='park-it'?'park':'queue')&&item.entrants.some(e=>e.playerId===player.id));
     const entrant=round?.entrants.find(e=>e.playerId===player.id);
