@@ -1,0 +1,15 @@
+# Releases, changelog and development blog
+
+The human-facing release version is independent of `PROTOCOL_VERSION`: a release can change without changing the multiplayer wire contract. `content/releases.ts` is the release-note source of truth, newest first. `package.json` uses the matching semver (`0.0.1-alpha`); the build fails if it differs from the latest entry. Each release needs a stable version, a display label, a Pacific calendar date, and concise player-facing notes. The first entry summarizes the alpha as it stands; do not invent earlier release dates.
+
+For a new release:
+
+1. Add the dated entry at the top of `content/releases.ts` and bump `package.json` to the same semver. Keep previous entries and their version IDs intact so a returning player's link can identify newer releases.
+2. Describe actual player-visible changes, limits and attribution accurately. Update the date when the release is published, rather than claiming an earlier build was a release.
+3. Run `pnpm test` and `pnpm build`, review `/changelog/` through `pnpm dev:server`, and follow the project's PR and deployment process.
+
+The menu reads `polyav:last-played` from `localStorage` before a new drive, then writes the current version and timestamp after solo starts or an online room successfully joins. During active driving it refreshes periodically and on page exit after recent activity. A visit to the menu or a failed room connection is not recorded as a drive. The record belongs to that browser and origin, can be cleared or blocked, and is not synced to other devices. It is not a save game. The changelog link passes the previous version as a query parameter; an unknown version shows the full history, and the page's content is complete without JavaScript. Browser storage and the optional query parameter should not be treated as an authenticated or competitive record.
+
+Posts are trusted Markdown files in `content/posts/`, with metadata in `content/posts.ts`. Add a unique URL-safe slug, publication date, release label, description and filename to that list. `pnpm build` uses Marked to compile the posts and emits complete static HTML for `/blog/`, each `/blog/<slug>/`, and `/changelog/`; no client-side rendering or game download is needed to read them. Preserve published slugs so links keep working. Markdown in the repository can contain HTML and must be reviewed as trusted project content, not accepted from untrusted users. Video and playthrough links can be added to a post when real recordings are available; don't invent footage or embed third-party trackers by default.
+
+Use `pnpm build` followed by `pnpm dev:server` to preview the publication pages and game together. `pnpm dev` is the Vite hot-reload server for game development and does not generate the publication routes. Check public links and page content at desktop and narrow portrait and landscape widths. Public page canonical URLs use `https://polyav.swyx.io`; staging and local builds intentionally point search engines to the production URL.
