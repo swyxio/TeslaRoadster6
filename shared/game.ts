@@ -514,7 +514,8 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
   const ramp=rampHeight(e.x,e.z),oldRamp=rampHeight(old.x,old.z)??ramp;
   if(ramp!==null&&oldRamp!==null&&e.vy<=0&&old.y>=oldRamp-.001&&e.y<=ramp&&(!landing||ramp>landing.y))landing={id:'stunt-ramp',y:ramp};
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
-  if(!e.inDome&&domeRoof!==null&&e.vy<=0&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
+  // The curved roof can rise faster than an ascending car moves upward.
+  if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
   for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
     const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
     if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};

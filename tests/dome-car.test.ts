@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, resetPlayer, step, travelDome } from '../shared/game';
 import { DOME } from '../shared/dome';
-import { domeSurface, DOME_PERIMETER, isLand } from '../shared/map';
+import { domeRoofHeight, domeSurface, DOME_PERIMETER, isLand } from '../shared/map';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { body, contact } from '../shared/physics';
 
@@ -130,6 +130,28 @@ test('descent from above lands on the arena roof rather than clipping through',(
   for(let i=0;i<30&&car.supportId===null;i++)step(world,new Map(),.05);
   assert.equal(car.inDome,false);assert.equal(car.supportId,'dome-roof');assert.equal(car.y,2*DOME.radius);
   assert.equal(car.air,42);assert.equal(car.health,83);
+});
+
+test('an ascending car crossing the curved exterior lands on the roof',()=>{
+  const {world,car}=setup();world.pickups=[];
+  Object.assign(car,{x:DOME.x-30,z:DOME.z+40,y:43.4,supportId:null,yaw:Math.PI,vx:0,vz:-65,vy:2,autopilot:false});
+  assert.ok(car.y>domeRoofHeight(car.x,car.z-VEHICLES.roadster.length/2)!,'the entire car starts above the roof');
+  for(let i=0;i<3&&car.supportId===null;i++)step(world,new Map(),.05);
+  assert.equal(car.inDome,false);assert.equal(car.supportId,'dome-roof');
+  assert.equal(car.y,domeRoofHeight(car.x,car.z));
+});
+
+test('airborne side approaches still enter below the roof',()=>{
+  for(const fromEnd of [false,true]){
+    const {world,car}=setup();world.pickups=[];
+    Object.assign(car,fromEnd
+      ?{x:DOME.x-DOME.halfLength-10,z:DOME.z,y:10,vx:30,vz:0}
+      :{x:DOME.x-30,z:DOME.z+DOME.flatHalfWidth+DOME.radius+10,y:10,vx:0,vz:-30},
+      {supportId:null,vy:0,autopilot:false});
+    for(let i=0;i<40&&!car.inDome;i++)step(world,new Map(),.05);
+    assert.equal(car.inDome,true,fromEnd?'end fly-in':'side fly-in');
+    assert.notEqual(car.supportId,'dome-roof');
+  }
 });
 
 test('passing above the roof or landing outside the capsule does not enter the dome',()=>{
