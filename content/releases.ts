@@ -1,6 +1,19 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.2-alpha',
+    label: '0.0.2 Alpha',
+    date: '2026-10-18',
+    title: 'One shared Bay',
+    intro: 'The game now starts in a shared room automatically.',
+    sections: [
+      { title: 'Play together', items: [
+        'Arrive in the public Bay room immediately, or follow an invite link into a named room.',
+        'If a room is full, retry or name another room. Connection errors do not start an offline game.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.1-alpha',
     label: '0.0.1 Alpha',
     date: '2026-10-18',

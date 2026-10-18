@@ -25,7 +25,7 @@ Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` coll
 
 ## UI alternatives
 
-Keep immediate solo/play-with-friends choices. Preserve room link sharing, joining feedback, explicit reconnect, a visible return-to-menu, drive/jump/flip/roll/boost/brake/enter-exit/recovery controls and station refill feedback. Touch must permit steering plus a one-tap jump or flip without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
+Automatically enter the shared Bay room or the room in an invite link. Preserve room link sharing, joining feedback, full-room alternatives, explicit reconnect, a visible return-to-menu, drive/jump/flip/roll/boost/brake/enter-exit/recovery controls and station refill feedback. Touch must permit steering plus a one-tap jump or flip without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
 
 ## Delivery format
 

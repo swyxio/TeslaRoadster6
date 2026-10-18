@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity } from '../shared/game';
-import { AMBIENT_INTEREST_METERS, snapshotFor } from '../worker/snapshot';
+import { AMBIENT_INTEREST_METERS, prepareSnapshots, snapshotFor } from '../worker/snapshot';
 
 test('snapshots retain players and owned cars, while ambient traffic follows the viewer', () => {
   const world = createWorld();
@@ -26,4 +26,12 @@ test('snapshots retain players and owned cars, while ambient traffic follows the
   assert.ok(world.entities.includes(ambient), 'filtering does not mutate the authoritative world');
   ambient.x=viewer.x+AMBIENT_INTEREST_METERS*3;ambient.supportId='ferry';
   assert.ok(snapshotFor(world,'one').entities.includes(ambient),'ferry passengers remain visible outside ambient interest');
+});
+
+test('cached snapshot serialization matches the recipient-specific world',()=>{
+  const world=createWorld();const one=addPlayer(world,'one','One');const two=addPlayer(world,'two','Two');
+  const distant=makeEntity('distant','model-3',AMBIENT_INTEREST_METERS*4,0);world.entities.push(distant);
+  const other=world.entities.find(entity=>entity.id===two.entityId)!;other.x=AMBIENT_INTEREST_METERS*3;
+  const prepare=prepareSnapshots(world);
+  for(const id of [one.id,two.id,'missing'])assert.deepEqual(JSON.parse(prepare(id)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id)})));
 });

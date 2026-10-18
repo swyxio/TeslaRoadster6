@@ -8,7 +8,7 @@ The project's [production game](https://bay-drive.swyxio.workers.dev) and [stagi
 
 1. Fork the repository. Install Node 22 and pnpm 10.33.1, then run `pnpm install --frozen-lockfile` and `pnpm run ci`.
 2. Log into your own Cloudflare account with `pnpm exec wrangler login`. In your fork, change `name` in `wrangler.jsonc` to a Worker name in your account. Keep the asset binding, Durable Object binding and migration.
-3. Run `pnpm exec wrangler deploy`. Visit the `workers.dev` URL returned by Wrangler and test a solo drive and a two-client room. This can incur account usage charges.
+3. Run `pnpm exec wrangler deploy`. Visit the `workers.dev` URL returned by Wrangler and test automatic room entry and a two-client room. This can incur account usage charges.
 
 ## Native Workers Builds
 
