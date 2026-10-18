@@ -94,20 +94,17 @@ test('dome travel withdraws parking and marks an active race DNF before relocati
   assert.equal(entrant.nextGate, gate);
 });
 
-test('the island and dome are connected by drivable protected land', async () => {
+test('the China Basin stadium is reached on supported city land, not island land', async () => {
   const { isRocketIsland, terrainHeight } = await import('../shared/map');
   const { world, car } = setup(); world.pickups=[];
-  for(let z=-1120;z<=-940;z+=5){
-    assert.equal(terrainHeight(300,z),0,`continuous surface at ${z}`);
-    assert.ok(isRocketIsland(300,z),`police-free island at ${z}`);
+  for(let z=120;z<=DOME.z;z+=5){
+    assert.equal(terrainHeight(DOME.x,z),0,`continuous surface at ${z}`);
+    assert.ok(!isRocketIsland(DOME.x,z),`city, not island, at ${z}`);
   }
-  Object.assign(car,{x:300,z:-1115,y:0,yaw:Math.PI,speed:0,supportId:'ground'});
-  for(let i=0;i<1200&&!car.inDome;i++)step(world,new Map([['p',{...NEUTRAL,throttle:.35}]]),.05);
-  assert.ok(car.inDome,'a car can drive from the island into the dome');
-  assert.equal(car.domeReturn,'island');
-  assert.ok(travelDome(world,'p'));
-  assert.equal(car.inDome,false);
-  assert.ok(isRocketIsland(car.x,car.z),'leaving returns an island visitor to the island');
+  Object.assign(car,{x:DOME.x,z:120,y:0,yaw:Math.PI,speed:0,supportId:'ground'});
+  for(let i=0;i<500&&!car.inDome;i++)step(world,new Map([['p',{...NEUTRAL,throttle:.35}]]),.05);
+  assert.ok(car.inDome,'a car can drive from the street into the dome');
+  assert.equal(car.domeReturn,'sf');
 });
 
 test('a dome shortcut from the Bay returns to the Bay while an island shortcut returns to the island', async () => {

@@ -2,9 +2,12 @@ import { DOME } from './dome';
 import type { Entity } from './game';
 import { domeSurface } from './map';
 import { dimensions } from './physics';
+import { VEHICLES } from './vehicles';
 
 export type SoccerSide = 'blue' | 'orange';
 export type SoccerBall = {x:number;y:number;z:number;vx:number;vy:number;vz:number};
+export type DomeCarClass = 'roadster' | 'retrofit' | 'pickup' | 'stock';
+export type DomeParticipant = {playerId:string;touches:Record<DomeCarClass,boolean>;goals:Record<DomeCarClass,number>};
 export type SoccerState = {
   ball:SoccerBall;
   blueScore:number;
@@ -13,6 +16,9 @@ export type SoccerState = {
   phaseUntil:number;
   winner:SoccerSide|null;
   lastScorer:SoccerSide|null;
+  participants:DomeParticipant[];
+  lastTouch:{playerId:string;carClass:DomeCarClass}|null;
+  winningPlayers:string[];
 };
 
 const BALL_RADIUS=DOME.ballRadius, MAX_BALL_SPEED=120, RESTITUTION=.78;
@@ -21,7 +27,24 @@ const EPSILON=.0001;
 const kickoff=():SoccerBall=>({x:DOME.x,y:BALL_RADIUS,z:DOME.z,vx:0,vy:0,vz:0});
 
 export function initialSoccer():SoccerState {
-  return {ball:kickoff(),blueScore:0,orangeScore:0,phase:'play',phaseUntil:0,winner:null,lastScorer:null};
+  return {ball:kickoff(),blueScore:0,orangeScore:0,phase:'play',phaseUntil:0,winner:null,lastScorer:null,participants:[],lastTouch:null,winningPlayers:[]};
+}
+
+export function domeGoals(participant:DomeParticipant):number {
+  return participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
+}
+
+function recordTouch(state:SoccerState,car:Entity,time:number):void {
+  if(!car.driver||car.kind==='person'){state.lastTouch=null;return;}
+  const carClass:DomeCarClass=car.kind==='roadster'?'roadster':
+    !VEHICLES[car.kind].airThrusters&&car.upgrades.rocket?'retrofit':time<car.rocketUntil?'pickup':'stock';
+  let participant=state.participants.find(p=>p.playerId===car.driver);
+  if(!participant){
+    participant={playerId:car.driver,touches:{roadster:false,retrofit:false,pickup:false,stock:false},goals:{roadster:0,retrofit:0,pickup:0,stock:0}};
+    state.participants.push(participant);
+  }
+  participant.touches[carClass]=true;
+  state.lastTouch={playerId:car.driver,carClass};
 }
 
 function limitSpeed(ball:SoccerBall):void {
@@ -44,9 +67,16 @@ function scoreCrossing(ball:SoccerBall,dx:number,dy:number,dz:number):{t:number;
 }
 
 function recordGoal(state:SoccerState,side:SoccerSide,time:number):void {
+  const touch=state.lastTouch,scorer=state.participants.find(p=>p.playerId===touch?.playerId);
+  if(touch&&scorer)scorer.goals[touch.carClass]++;
+  state.lastTouch=null;
   if(side==='blue')state.blueScore++;else state.orangeScore++;
   state.lastScorer=side;
   state.winner=(side==='blue'?state.blueScore:state.orangeScore)>=WIN_SCORE?side:null;
+  if(state.winner){
+    const high=Math.max(0,...state.participants.map(domeGoals));
+    state.winningPlayers=high>0?state.participants.filter(p=>domeGoals(p)===high).map(p=>p.playerId):[];
+  }
   state.phase=state.winner?'win':'goal';
   state.phaseUntil=time+(state.winner?WIN_SECONDS:GOAL_SECONDS);
   state.ball.vx=state.ball.vy=state.ball.vz=0;
@@ -134,7 +164,10 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number
     if(!hit){contain(ball);return;}
     ball.x+=hit.nx*(hit.depth+EPSILON);ball.y+=hit.ny*(hit.depth+EPSILON);ball.z+=hit.nz*(hit.depth+EPSILON);
     const relative=(ball.vx-hit.car.vx)*hit.nx+(ball.vy-hit.car.vy)*hit.ny+(ball.vz-hit.car.vz)*hit.nz;
-    if(relative<0){const impulse=-(1+RESTITUTION)*relative;ball.vx+=impulse*hit.nx;ball.vy+=impulse*hit.ny;ball.vz+=impulse*hit.nz;limitSpeed(ball);}
+    if(relative<0){
+      recordTouch(state,hit.car,time);
+      const impulse=-(1+RESTITUTION)*relative;ball.vx+=impulse*hit.nx;ball.vy+=impulse*hit.ny;ball.vz+=impulse*hit.nz;limitSpeed(ball);
+    }
     contain(ball);
   }
 }
@@ -144,7 +177,8 @@ export function stepSoccer(state:SoccerState,entities:readonly Entity[],dt:numbe
   if(!Number.isFinite(dt)||dt<=0||!Number.isFinite(worldTime))return;
   if(state.phase!=='play'){
     if(worldTime>=state.phaseUntil){
-      if(state.phase==='win'){state.blueScore=0;state.orangeScore=0;}
+      if(state.phase==='win'){state.blueScore=0;state.orangeScore=0;state.participants=[];state.winningPlayers=[];}
+      state.lastTouch=null;
       state.ball=kickoff();state.phase='play';state.phaseUntil=0;state.winner=null;state.lastScorer=null;
     }
     return;

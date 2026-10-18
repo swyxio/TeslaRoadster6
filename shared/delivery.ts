@@ -13,17 +13,17 @@ export const LEVELS = [
   { level:3, name:'San Jose', deliveries:8, earned:350 },
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
-// Vertical gates also apply to flyers; the northern Alcatraz approach remains open.
+// Vertical gates also apply to flyers; the northern island approach remains open.
 const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
-export const ACCESS_BOUNDARIES = { oaklandX:110, alcatrazNorthZ:-650, alcatrazMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
+export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
 export function requiredLevelAt(x:number,z:number):Level {
   // The whole fictional island and its SF parking playground are available
   // from the start, including the short approach across the Peninsula gate.
   if(isRocketIsland(x,z)||(Math.abs(x-SF_PARKING.area.x)<=SF_PARKING.area.width/2+6&&z>=ACCESS_BOUNDARIES.bayMaxZ&&z<=SF_PARKING.area.z+SF_PARKING.area.length/2+6))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
   if(z>ACCESS_BOUNDARIES.bayMaxZ)return 2;
-  const alcatrazApproach=z<ACCESS_BOUNDARIES.alcatrazNorthZ&&x<ACCESS_BOUNDARIES.alcatrazMaxX;
-  return x>ACCESS_BOUNDARIES.oaklandX&&!alcatrazApproach?1:0;
+  const islandApproach=z<ACCESS_BOUNDARIES.islandNorthZ&&x<ACCESS_BOUNDARIES.islandMaxX;
+  return x>ACCESS_BOUNDARIES.oaklandX&&!islandApproach?1:0;
 }
 
 // Real business identities; game positions are artistic, not surveyed locations.

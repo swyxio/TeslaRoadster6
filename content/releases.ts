@@ -17,7 +17,7 @@ export const RELEASES = [
         'Police can chase and ticket drivers who fly near them; longer and higher flights and repeat offenses increase the fine.'
       ] },
       { title: 'Play together', items: [
-        'Drive solo or join friends in a room with shared traffic and collisions. Try the Rocket Dome, a car-soccer arena on a fictional Alcatraz.',
+        'Drive solo or join friends in a room with shared traffic and collisions. Try the Rocket Dome, a car-soccer stadium on the China Basin waterfront.',
         'Play with keyboard, touch or a supported gamepad, with synthesized music and sound effects. Room scores and game progress last for the session.'
       ] }
     ]

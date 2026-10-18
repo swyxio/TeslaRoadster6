@@ -1,12 +1,26 @@
 # Verification · 2026-10-18 Pacific
 
+## Combined Rocket Island and China Basin stadium · protocol v21 · 2026-10-18 Pacific
+
+- `pnpm test` passed 301 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains.
+- Local Wrangler two-client room integration passed shared stadium scoring to five, the authoritative winner and Roadster awards, wall refills, movement and the existing room checks. A separate local-only fixture showed a second WebSocket receiving the first driver's jump support, launch and landing, with a 5.15 m peak. Neither was a load test or a multiplayer ferry crossing.
+- Chrome desktop solo on the combined build traveled to the China Basin stadium, drove into the ball and observed Blue score. The separate ramp, ferry, parking, and emulated mobile checks below were performed before the combined merge; the final combined build was not tested on a physical device.
+- After successful local room and fixture runs, Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown. This also occurred on the v19 baseline; the cause remains unconfirmed.
+
 ## Rocket Island jump ramps · protocol v20 · 2026-10-18 Pacific
+
 - `pnpm test` passed 288 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Shared-simulation tests drove a Model 3 and a Roadster over both ramps, including 72 m/s Rocket approaches, launch and landing, swept ramp contact, Rocket jump direction and grounded and airborne side/end impacts. Oriented-footprint checks cover angled near-misses, rotation, landing and vehicle separation. The tested approach and 150 m landing corridors clear the planned banked oval shoulders and other island attractions.
 - Local Wrangler protocol-v20 two-client room integration passed, including activity snapshots and protocol handshakes. A separate local-only fixture staged the first driver before the west ramp; a second client observed its authoritative ramp support, takeoff and landing, with a 5.15 m peak. This did not exercise a multiplayer ferry crossing or load.
 - After successful room and fixture runs, local Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown, even when both fixture clients observed normal code-1000 closes. The same log appeared after a passing room test on the protocol-v19 baseline; the cause remains unconfirmed.
 - Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
 - A temporary solo spawn at the SF lot's approach allowed a desktop keyboard playthrough: joined Cut the queue, started it, reversed into a marked stall, and saw a scored finish in 11.3 seconds. This was a single-player check, not a competitive queue playthrough.
 - With a temporary spawn near the SF ferry dock, a desktop solo Roadster drove aboard, departed secured with controls locked, crossed to Rocket Island and drove off. The HUD marked the ferry and island police-free. This was a single-car trip, not a full-deck or multiplayer crossing.
+
+## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
+
+- After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.
+- Local Wrangler room integration passed two-client play on protocol v20, including five goals, the authoritative winner and Roadster awards, spectator exclusion, wall refill visible to both clients, and exit. Local chat integration also passed. These are functional checks, not a load test.
+- Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. Gold wall markings and the refill hint were visible in desktop solo. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
 
 ## Economy planning model · 2026-10-18 Pacific
 
@@ -350,6 +364,11 @@ In Chrome local solo play, the level-zero objective pointed into SF, attempting 
 
 After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.
 
+## 2026-10-18 · Rocket Dome match achievements
+
+After integrating current main, `pnpm test` passed 205 tests and `pnpm build` passed, including client and Worker typechecks; Vite's existing large-chunk warning remains. Simulation tests cover real ball collisions, Roadster/retrofit/stock classification, goals at either end, tied winners, spectators, leaving, disconnects, car switches, match resets and all five award rules. The local Wrangler room and chat integrations passed.
+
+The two-client Wrangler test played five goals, replicated the winner and both Roadster awards, and confirmed that the observing nonparticipant received none. An earlier run timed out because the observer exceeded the server's 30-second inactivity limit; the test now sends neutral input to keep it connected. Before the main integration, a Chrome solo five-goal Roadster match displayed both earned awards. After integrating main, the dome scoreboard was inspected on desktop and in 390×844 portrait and 844×390 landscape touch emulation; an emulated landscape touch on Drive accelerated the car. No console errors were observed. These are local checks, not physical-device or multiplayer load evidence.
 ## 2026-10-18 · More Bay landmarks and billboards
 
 In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` passed, including TypeScript checks. The local Wrangler two-client room integration passed on protocol v18, which versions the new collision and terrain data; this is not a load test. Tests cover the 100 new landmark identities, physical envelopes, highway clearance, billboard placement, and driving over the three authored hills. The room landing check was updated to accept a supported landing on terrain or a roof rather than requiring sea-level ground.

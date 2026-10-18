@@ -1,11 +1,17 @@
 import type { Entity, Player } from './game';
 import { REGIONS, insidePolygon, isLand } from './map';
+import type { DomeParticipant } from './soccer';
 
 export const ACHIEVEMENTS = {
   'bay-hopper': { name:'Bay Hopper', description:'Fly from San Francisco to Oakland, or back, without landing on a bridge or island.' },
   'roof-rider': { name:'Roof Rider', description:'Land a car on a building rooftop.' },
   'sky-delivery': { name:'Sky Delivery', description:'Complete a rooftop delivery.' },
   'regular': { name:'Neighborhood Regular', description:'Complete three deliveries.' },
+  'rocket-rookie': { name:'Rocket Rookie', description:'Touch the ball in Roadster · Rocket and finish a Rocket Dome match.' },
+  'roadster-champion': { name:'Roadster Champion', description:'Win a Rocket Dome match with a goal credited to your Roadster · Rocket.' },
+  'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match.' },
+  'garage-champion': { name:'Garage Champion', description:'Win a Rocket Dome match with a goal credited to your rocket-retrofitted car.' },
+  'no-rockets-needed': { name:'No Rockets Needed', description:'Win with a goal, touching the ball only in cars without rockets.' },
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
 type Shore = 'sf' | 'oakland';
@@ -15,6 +21,16 @@ export function resetAchievementFlight(player:Player):void {player.achievements.
 function unlock(state:AchievementState,achievement:AchievementId):void {
   if(state.unlocked.includes(achievement))return;
   state.unlocked.push(achievement);state.lastUnlock={id:(state.lastUnlock?.id??0)+1,achievement};
+}
+/** Award completed Dome matches from server-owned touches and goal credits. */
+export function awardDomeMatchAchievements(player:Player,participant:DomeParticipant,won:boolean):void {
+  const state=player.achievements;
+  if(participant.touches.roadster)unlock(state,'rocket-rookie');
+  if(participant.touches.retrofit)unlock(state,'built-to-fly');
+  if(!won)return;
+  if(participant.touches.roadster&&participant.goals.roadster>0)unlock(state,'roadster-champion');
+  if(participant.touches.retrofit&&participant.goals.retrofit>0)unlock(state,'garage-champion');
+  if(participant.touches.stock&&participant.goals.stock>0&&!participant.touches.roadster&&!participant.touches.retrofit&&!participant.touches.pickup)unlock(state,'no-rockets-needed');
 }
 // Region polygons also contain the Peninsula and East Bay; the achievement's
 // endpoints are the SF and Oakland city grids, not the full Bay corridor.
