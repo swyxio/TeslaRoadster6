@@ -8,6 +8,12 @@ These entries describe separate historical builds. Check the version and scope i
 - Local Wrangler passed the two-client room integration and prediction/acknowledgement and barrier integration. A room run under concurrent build/test load timed out waiting for a subscription response; an isolated rerun passed. These are functional tests, not a capacity or load measurement.
 - Chrome on the integrated build used a local-only level-three staging fixture to display the Redwood City station, clock and redwood grove; 390×844 portrait emulation drove with touch and 844×390 landscape emulation drove and steered simultaneously. Before integration, Chrome started Park It at the Redwood City lot, displayed and drove near the Apple Park entrance, and displayed the Levi's Stadium entrance. There were no captured warning or error logs in the integrated playtest. No physical mobile device was tested. The stations, campuses and local streets are stylized game-space interpretations, and the rails have no train simulation.
 
+## In-progress owned-cab and market primitives · 2026-10-18 Pacific
+
+The isolated draft tests server-internal cab dispatch, ordinary takeover and release, reconnect rebinding, fleet switching, a 16-cab room limit, exact fractional income arithmetic and pure market custody, replay, balance, fee and property-gate rules. No wallet, UI, public protocol or marketplace storage is connected; a pure decision does not demonstrate an atomic cross-driver transaction or crash recovery.
+
+`pnpm exec tsx scripts/cybercab-load.bench.ts` ran one short same-process comparison with 64 idle synthetic players, 100 sampled 50 ms simulation steps and 50 batches of 64 recipient serializations after warm-up. With zero versus 16 dispatched cabs, mean snapshot size was 127,498 versus 139,095 bytes, median step time 4.46 versus 5.28 ms, and median snapshot-batch time 5.71 versus 9.55 ms. The p95 snapshot batches were 21.34 versus 78.73 ms under noisy concurrent host load. This is not a WebSocket, sustained-load, device or production capacity test; remeasure the integrated system before release.
+
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
 - After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.
