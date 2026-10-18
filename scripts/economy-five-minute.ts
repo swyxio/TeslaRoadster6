@@ -1,5 +1,5 @@
 // Hypothetical branch and pacing experiment; not an implementation of game rules.
-// Run: pnpm exec tsx scripts/economy-five-minute.ts --players 250 --hours 40 [--events] [--json]
+// Run: pnpm exec tsx scripts/economy-five-minute.ts --players 250 --hours 40 [--events [--all-activities]] [--json]
 import { pathToFileURL } from 'node:url';
 import { profiles, simulate, summarize, type FiveMinuteWindow, type Profile, type Result } from './economy-progression.ts';
 
@@ -95,17 +95,19 @@ function cli() {
     return n;
   };
   const players = value('--players', 250), hours = value('--hours', 40), eventsEnabled = process.argv.includes('--events');
+  const allActivityMultiplier = process.argv.includes('--all-activities');
+  if (allActivityMultiplier && !eventsEnabled) throw new Error('--all-activities requires --events');
   if (hours < 8) throw new Error('--hours must be at least 8 to compare all pacing phases');
   const results = (['baseline', 'balanced'] as const).flatMap(rules => paths.flatMap(path => {
     if (rules === 'baseline' && path.requiresNewTour) return [];
     const runs = Array.from({ length: players }, (_, i) => simulate(path.profile, 'candidate', 1729 + i, hours,
-      { global: eventsEnabled, room: eventsEnabled, branchBalance: rules === 'balanced', winChance: path.winChance,
+      { global: eventsEnabled, room: eventsEnabled, allActivityMultiplier, branchBalance: rules === 'balanced', winChance: path.winChance,
         trackWindows: true, trackWindowsUntil: 480 }));
     return [{ rules, ...summarizePath(path.name, runs) }];
   }));
-  if (process.argv.includes('--json')) console.log(JSON.stringify({ players, hours, eventsEnabled, results }, null, 2));
+  if (process.argv.includes('--json')) console.log(JSON.stringify({ players, hours, eventsEnabled, allActivityMultiplier, results }, null, 2));
   else {
-    console.log(`Hypothetical ${players}-seed branches; ${hours} active hours, events ${eventsEnabled ? 'on' : 'off'}, first 8h in five-minute bins.`);
+    console.log(`Hypothetical ${players}-seed branches; ${hours} active hours, events ${eventsEnabled ? 'on' : 'off'}${allActivityMultiplier ? ' for all activities' : ''}, first 8h in five-minute bins.`);
     console.table(results.map(r => ({ rules: r.rules, path: r.name, homeReached: r.homeReached, homeMedianHrs: r.homeMedianHrs,
       firstHourGross5m: r.phases[0].meanGross5m, hours1to4Gross5m: r.phases[1].meanGross5m,
       firstHourAchievements5m: r.phases[0].meanAchievements5m, firstHourZeroGrossPct: r.phases[0].zeroGrossPct,

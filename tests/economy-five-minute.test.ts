@@ -51,3 +51,19 @@ test('the alternative branch rules do not change a delivery-only seeded run', ()
   const balanced = simulate(courier, 'candidate', 1729, 8, { ...options, branchBalance: true });
   assert.deepEqual(balanced, baseline);
 });
+
+test('activity multipliers boost eligible task pay without retroactively boosting a triggering win', () => {
+  const dome = paths.find(p => p.name === 'Dome player')!.profile;
+  const options = { trackWindows: true, branchBalance: true, global: false, room: true, winChance: 1 };
+  const ordinary = simulate(dome, 'candidate', 1729, 1, options);
+  const boosted = simulate(dome, 'candidate', 1729, 1, { ...options, allActivityMultiplier: true });
+  const firstMatch = ordinary.windows.findIndex(w => w.tasks > 0);
+  assert.ok(firstMatch >= 0);
+  close(boosted.windows[firstMatch].gross, ordinary.windows[firstMatch].gross);
+  assert.ok(boosted.ledger.matchPay > ordinary.ledger.matchPay);
+
+  const global = { ...options, global: true, room: false, winChance: 0 };
+  const withoutGlobalTaskPay = simulate(dome, 'candidate', 1729, 1, global);
+  const withGlobalTaskPay = simulate(dome, 'candidate', 1729, 1, { ...global, allActivityMultiplier: true });
+  assert.ok(withGlobalTaskPay.ledger.matchPay > withoutGlobalTaskPay.ledger.matchPay);
+});

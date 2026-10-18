@@ -98,7 +98,7 @@ export function branchPayout(level: number, kind: 'dome' | 'race' | 'park' | 'to
 }
 
 type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean;
-  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number };
+  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean };
 export function simulate(profile: Profile, rules: RuleSet, seed: number, hours = 40,
   events: SimulationOptions = {}): Result {
   const rng = random(seed);
@@ -258,7 +258,8 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     if (t.kind === 'race' || t.kind === 'park' || t.kind === 'tour') {
       activities[t.kind]++;
       if (rules === 'candidate') {
-        const pay = events.branchBalance ? t.fare! : t.kind === 'race' ? 2500 : t.kind === 'park' ? 1500 : 0;
+        const pay = (events.branchBalance ? t.fare! : t.kind === 'race' ? 2500 : t.kind === 'park' ? 1500 : 0)
+          * (events.allActivityMultiplier ? multiplier() : 1);
         cash += pay; ledger.activityPay += pay;
         const milestones: Record<number, number> = events.branchBalance
           ? { 1: 2000, 3: 4000, 5: 8000, 10: 16000, 25: 32000 }
@@ -279,8 +280,10 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     if (t.kind === 'dome') {
       // Match reward is a candidate; the original proposal had none.
       matches++;
+      // Use the rate at completion; a win starts the room bonus after this match pays.
+      const matchMultiplier = events.allActivityMultiplier ? multiplier() : 1;
       if (rules === 'candidate') {
-        const pay = events.branchBalance ? Math.round(t.fare! * 0.7) : 1200;
+        const pay = (events.branchBalance ? Math.round(t.fare! * 0.7) : 1200) * matchMultiplier;
         cash += pay; ledger.matchPay += pay;
         if (events.branchBalance) {
           const milestones: Record<number, number> = { 1: 2000, 3: 4000, 5: 8000, 10: 16000, 25: 32000 };
@@ -291,7 +294,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
       }
       if (rng() < (events.winChance ?? 0.5)) {
         wins++; roomBonusUntil = clock() + 10;
-        if (rules === 'candidate') { const pay = events.branchBalance ? Math.round(t.fare! * 0.6) : 1800; cash += pay; ledger.matchPay += pay; }
+        if (rules === 'candidate') { const pay = (events.branchBalance ? Math.round(t.fare! * 0.6) : 1800) * matchMultiplier; cash += pay; ledger.matchPay += pay; }
         const winMilestones: Record<number, number> = rules === 'candidate'
           ? { 1: 2000, 3: 4000, 10: 8000, 25: 16000, 50: 32000 }
           : { 1: 5000, 3: 15000, 10: 35000, 25: 75000, 50: 150000 };

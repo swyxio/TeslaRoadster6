@@ -9,6 +9,7 @@ The desired experience is reasonably consistent money and meaningful achievement
 ```sh
 node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json
 node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --events --json
+node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --events --all-activities --json
 ```
 
 Each row runs 250 deterministic seeds, 1729–1978, over 40 **active hours**. Five-minute windows cover the first eight active hours; first-two-hour achievement results use 1,000 nonoverlapping 30-minute player blocks per path. The 30-minute earnings metric sums the six five-minute windows and divides by six so it can be compared on the same per-five-minute scale. The percentiles describe these imagined inputs, not confidence intervals or a forecast for real players. Home medians include only players who reached a home; completion counts are shown below. Each player's ledger is checked for conservation.
@@ -101,16 +102,19 @@ With events off, every balanced-path seed reaches the late property goal in the 
 
 The late property market still requires **$2m current balance** even though the starter plot and build cost $1m combined. Automatic purchases in this model buy both at the same boundary. The no-win path is substantially slower even with improved participation pay; it also assumes continuous available opponents and matches. In the baseline payout experiment, **0/250** pure Dome, no-win Dome and racer/parker players reached a home by 40h. These are deliberately extreme strategies, not promises of comparable real playtime.
 
-The optional event run assumes a developer-controlled 2× event for 30 minutes every four hours and a 1.5× room bonus for ten minutes after **this player's own** Dome win, stacked to 3×. The global cadence is invented for simulation. Only delivery earnings and active cabs are multiplied; match, tour and race payouts, achievements and checkpoints are not. Other players can trigger the real proposed room event, but this single-player experiment does not simulate them.
+Both event variants assume a developer-controlled 2× event for 30 minutes every four hours and a 1.5× room bonus for ten minutes after **this player's own** Dome win, stacked to 3×. The global cadence is invented for simulation. Other players could trigger the proposed room event, but this single-player experiment does not simulate them. The delivery/cab-only variant multiplies delivery earnings and active-cab income. The all-task variant also multiplies match, race, parking and tour pay using the rate at task completion; a win starts its room bonus only **after** that match pays. Neither variant multiplies one-off awards or repeatable checkpoints.
 
-| Balanced path | First-hour mean gross / 5m, events off → on | First home median, off → on |
+| Balanced path | First-hour mean gross / 5m: off → delivery/cab-only → all tasks | First home median: off → delivery/cab-only → all tasks |
 | --- | ---: | ---: |
-| Courier | $7,279 → $7,955 | 18.3h → 16.4h |
-| Cab operator | $9,009 → $9,739 | 15.3h → 14.1h |
-| Mixed activities | $8,417 → $8,857 | 16.4h → 15.4h |
-| Pure Dome | $7,286 → $7,286 | 19.7h → 19.7h |
+| Courier | $7,279 → $7,955 → $7,955 | 18.3h → 16.4h → 16.4h |
+| Explorer | $6,975 → $6,975 → $7,536 | 21.4h → 21.4h → 19.2h |
+| Dome, 50% wins | $7,286 → $7,286 → $8,818 | 19.7h → 19.7h → 14.8h |
+| Dome, no wins | $5,481 → $5,481 → $5,911 | 28.5h → 28.5h → 25.4h |
+| Racer and parker | $8,116 → $8,116 → $8,758 | 18.8h → 18.8h → 16.9h |
+| Cab operator | $9,009 → $9,739 → $9,739 | 15.3h → 14.1h → 14.1h |
+| Mixed activities | $8,417 → $8,857 → $9,414 | 16.4h → 15.4h → 14.3h |
 
-Explorer, racer/parker and no-win Dome also see no event benefit in these pure-mode simulations because they receive no eligible delivery or cab income. Decide whether that is an acceptable incentive before promising a room-wide earning boost; a Dome winner without a cab who stays in the arena receives the achievement and match payout, but not a multiplier benefit in this model. Event cadence, bonuses and repeatable win eligibility also need an abuse-resistance design.
+All balanced rows reached a home in 250/250 runs under each variant. The broader bonus gives every activity a benefit, including the no-win path through the global event, and brings the winning Dome median forward by 4.9 active hours versus events off. Actual multiplayer may produce substantially different uptime: repeated wins, overlapping events or coordinated win trading could make a room bonus nearly continuous. Before adopting it, model many players and queues, measure bonus uptime and minted currency, and test eligibility, cooldowns or other limits against collusion. The experiments share starting seeds, but the altered economy can change subsequent choices and random draws; these are scenario comparisons, not isolated causal measurements. Even with all-task bonuses, the baseline pure Dome, no-win Dome and racer/parker paths remain 0/250 home owners by 40h.
 
 These results remain sensitive to continuous matchmaking, a fixed 50% win chance, constant availability of repeatable tours, instant choice of high-tier jobs, no idle time and no measured travel or charging. Next, playtest mixed human sessions—including losses, queue time and 30-minute sessions—and record time between *meaningful* new things, actual cash and opportunities, not just badge counts. Tune payout sources and milestone timing together; do not treat a simulator average or a large number of notifications as proof of smooth progression.
 
@@ -119,7 +123,7 @@ These results remain sensitive to continuous matchmaking, a fixed 50% win chance
 Prototype distinct one-off goals that invite players to try features, rather than awarding another badge for each repeated action:
 
 - **Skill and sport:** Test a first clean lap, a parking challenge at a different location, and Dome contribution goals such as an assist or a save, including paths available to a player who loses. Only award an action the server can verify, and test whether it can be farmed through inactivity or collusion.
-- **Landmarks:** Test first visits, deliveries or landings at individually identified locations, such as Salesforce Tower, Coit Tower, SFO and Treasure Island, subject to the actual map and unlocks. Stagger distinct destinations instead of granting their achievements in a single city-unlock burst.
+- **Landmarks:** Test first visits, deliveries or landings at individually identified locations, such as Salesforce Tower, Coit Tower, SFO and Treasure Island, subject to the actual map and unlocks. Keep the requested per-city unlock badges, but group simultaneous notifications and add separate goals for visiting distinct destinations.
 - **Vehicles and cosmetics:** Test first drives in different available vehicle models, a clean race or rooftop delivery in a chosen car, and applying a first cosmetic. Keep ordinary driving accessible without requiring a car purchase; these goals and their prices are proposals, not implemented promises.
 
-Rerun the same 250-seed paths and report the first-two-hour 30-minute block distribution, P90 longest gap, city-badge bursts, cash per five minutes, and home affordability. In particular, test courier and losing Dome paths against both provisional cadence targets, then examine hours 4–8 for the explorer. Also test whether including Dome or race payouts in an event helps those paths without making the bonus exploitable. Keep repeatable checkpoints separate from one-off achievements. Follow the simulation with desktop and touch playtests, including actual queue time; passing these numeric targets alone cannot establish that the activities are fun.
+Rerun the same 250-seed paths and report the first-two-hour 30-minute block distribution, P90 longest gap, city-badge bursts, cash per five minutes, and home affordability. In particular, test courier and losing Dome paths against both provisional cadence targets, then examine hours 4–8 for the explorer. Test whether broader event payouts remain balanced and resistant to collusion in multiplayer. Keep repeatable checkpoints separate from one-off achievements. Follow the simulation with desktop and touch playtests, including actual queue time; passing these numeric targets alone cannot establish that the activities are fun.

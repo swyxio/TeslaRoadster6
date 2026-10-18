@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Five-minute economy design experiment · 2026-10-18 Pacific
+
+- On the checkout integrating main at `7b48759`, `pnpm test` passed 341 tests. `pnpm build` passed the two project typechecks, Vite and public-page generation; Vite retained its large-chunk warning. The standalone simulation and its tests also passed a separate TypeScript check.
+- Ran `node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json`, then the same command with `--events` and with `--events --all-activities`. These seeded hypothetical paths have balanced ledgers; the report records five-minute payouts, separate achievement categories, 30-minute distributions and their unmet pacing targets. The multiplier test covers the triggering match and later eligible payouts. None of this verifies player behavior, matchmaking, gameplay, devices or production, and no game or protocol rules changed.
+
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 
 - After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.
