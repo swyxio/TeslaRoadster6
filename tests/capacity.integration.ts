@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { NEUTRAL, type Entity } from '../shared/game';
 const base = process.argv[2] ?? 'http://localhost:8787';
+let inputSeq=0;
 const count = Number(process.argv[3] ?? 64);
 if (!Number.isInteger(count) || count < 2 || count > 128) throw new Error('Use 2–128 clients');
 const room = `/api/room/capacity-${Date.now()}`;
@@ -29,7 +30,7 @@ try {
     });
     await wait(20);
   }
-  timer=setInterval(()=>sockets.forEach((ws)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:.3}}));}),50);
+  timer=setInterval(()=>sockets.forEach((ws)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:.3}}));}),50);
   await wait(8000);
   assert.equal(sockets.filter(ws=>ws.readyState===WebSocket.OPEN).length,count);
   assert.ok(sockets.every(ws=>counts.get(ws)===count),'all clients see all peers');

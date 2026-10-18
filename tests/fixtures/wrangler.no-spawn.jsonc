@@ -1,0 +1,9 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "poly-no-spawn-fixture",
+  "main": "./no-spawn-worker.ts",
+  "compatibility_date": "2026-10-17",
+  "vars": { "MAX_PLAYERS": "2" },
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "NoSpawnGameRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NoSpawnGameRoom"] }]
+}

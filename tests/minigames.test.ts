@@ -48,31 +48,38 @@ function fixture(){
   return {session,world,controller,menu,games,dialog,feedback,start,leaveCurrent,notices};
 }
 
-test('pending mini-game requests survive snapshots but not a switch to another room',()=>{
+test('pending mini-game requests survive snapshots but not a switch from online to solo',()=>{
   const f=fixture();f.menu.onclick!();f.games.park.onclick!();
   assert.equal(f.games.park.disabled,true);
   f.session.world={...f.session.world};f.controller.update();
   assert.equal(f.games.park.disabled,true,'a normal online snapshot is the same session');
-  f.session.id='other';f.session.room='friends';f.session.world=f.world('other');f.controller.update();
+  f.session.id='local';f.session.room='';f.session.status='solo';f.session.world=f.world('local');f.controller.update();
   assert.equal(f.games.park.disabled,false);assert.equal(f.feedback.textContent,'');assert.deepEqual(f.notices,[]);
 });
 
-test('leaving state clears when joining a new room',()=>{
-  const f=fixture();f.session.world.parking.rounds.push({mode:'park',phase:'active',hostId:'online',entrants:[{playerId:'online'}]});
+test('leaving state clears on a new session, including a fresh solo drive with the same ID',()=>{
+  const f=fixture();f.session.status='solo';f.session.id='local';f.session.room='';f.session.world=f.world('local');
+  f.controller.update();f.session.world.parking.rounds.push({mode:'park',phase:'active',hostId:'local',entrants:[{playerId:'local'}]});
   f.menu.onclick!();f.leaveCurrent.onclick!();assert.equal(f.games.park.disabled,true);
-  f.session.id='other';f.session.room='friends';f.session.world=f.world('other');f.controller.update();
+  f.session.world=f.world('local');f.controller.update();
   assert.equal(f.games.park.disabled,false);assert.equal(f.feedback.textContent,'');assert.deepEqual(f.notices,[]);
 });
 
-test('starting state survives snapshots but clears on switching rooms',()=>{
+
+test('starting state survives snapshots but clears on switching drives',()=>{
   const f=fixture();
   f.session.world.parking.rounds.push({mode:'queue',phase:'waiting',hostId:'online',openedAt:1,entrants:[{playerId:'online'}]});
   f.controller.update();f.start.onclick!();
   assert.equal(f.start.disabled,true);assert.equal(f.start.textContent,'Starting…');
   f.session.world={...f.session.world};f.controller.update();
   assert.equal(f.start.disabled,true,'an ordinary snapshot keeps the pending start');
-  f.session.id='other';f.session.room='friends';f.session.world=f.world('other');f.controller.update();
+  f.session.id='local';f.session.room='';f.session.status='solo';f.session.world=f.world('local');f.controller.update();
   assert.equal(f.start.disabled,false);assert.equal(f.start.textContent,'Start now');assert.deepEqual(f.notices,[]);
+
+  f.session.world.parking.rounds.push({mode:'queue',phase:'waiting',hostId:'local',openedAt:2,entrants:[{playerId:'local'}]});
+  f.controller.update();f.start.onclick!();assert.equal(f.start.disabled,true);
+  f.session.world=f.world('local');f.controller.update();
+  assert.equal(f.start.disabled,false);assert.equal(f.games.queue.disabled,false);assert.deepEqual(f.notices,[]);
 });
 
 test('mini-game controls wait for confirmed start and leave, and recover after failure', async () => {

@@ -34,7 +34,7 @@ for(let tick=0;tick<100;tick++){
   if(tick%2===0){
     started=performance.now();
     for(const player of players){
-      const raw=JSON.stringify({type:'state',world:snapshotFor(world,player.id)});
+      const raw=JSON.stringify({type:'state',world:snapshotFor(world,player.id),inputAck:0});
       maxBytes=Math.max(maxBytes,Buffer.byteLength(raw));snapshots++;
     }
     snapshotTimes.push(performance.now()-started);

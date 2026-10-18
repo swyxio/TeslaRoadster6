@@ -3,21 +3,19 @@ import assert from 'node:assert/strict';
 import { DOME } from '../shared/dome';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step, travelDome, type Entity } from '../shared/game';
 import { initialSoccer, stepSoccer, type SoccerState } from '../shared/soccer';
-import { hasRocket, ROCKET_DURATION } from '../shared/rocket';
 import { hasRockets } from '../shared/upgrades';
 import type { VehicleId } from '../shared/vehicles';
 
-function touchCar(state:SoccerState,car:Entity,time=.05):void {
+function touchCar(state:SoccerState,car:Entity):void {
   Object.assign(car,{y:0,vx:400,vy:0,vz:0,yaw:-Math.PI/2,inDome:true});
   car.x=DOME.x+5;car.z=DOME.z;
   Object.assign(state.ball,{x:DOME.x,y:DOME.ballRadius,z:DOME.z,vx:0,vy:0,vz:0});
-  stepSoccer(state,[car],.05,time);
+  stepSoccer(state,[car],.05,.05);
   assert.ok(state.ball.vx>0,'an actual collision moved the ball');
 }
-function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false,pickup=false):void {
+function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false):void {
   const car=makeEntity('striker',kind,DOME.x+5,DOME.z,id);
   car.upgrades.rocket=retrofit;
-  car.rocketUntil=pickup?10:0;
   touchCar(state,car);
 }
 function goal(state:SoccerState,direction:1|-1,time:number,entities:readonly Entity[]=[]):void {
@@ -46,8 +44,6 @@ test('ball contacts record the actual vehicle class and ignore undriven cars',()
     assert.equal(state.lastTouch?.carClass,expected);
     assert.equal(state.participants[0].touches[expected],true);
   }
-  const temporary=initialSoccer();touch(temporary,'driver','model-3',false,true);
-  assert.equal(temporary.lastTouch?.carClass,'pickup');
   const state=initialSoccer();touch(state,'driver','roadster');touch(state,null,'model-3');
   assert.equal(state.lastTouch,null,'an undriven car cannot credit its collision to the previous player');
   goal(state,1,1);assert.equal(state.participants[0].goals.roadster,0);
@@ -165,27 +161,20 @@ test('stock win requires stock-only touches and a stock-credited goal',()=>{
   assert.ok(!p.achievements.unlocked.includes('no-rockets-needed'));
 });
 
-test('a temporary Rocket pickup expires, is not a retrofit, and disqualifies a rocket-free win',()=>{
+test('a pickup-installed Rocket kit earns retrofit awards and is not a rocket-free win',()=>{
   const world=createWorld(),p=addPlayer(world,'p','Player'),car=playerCar(world,p.id);
   car.kind='model-3';Object.assign(car,{x:0,z:60,y:0,speed:0,supportId:'ground'});
   world.entities=[car];world.pickups=[{id:'kit',x:0,z:60,kind:'rocket',active:true}];
   step(world,new Map(),.05);
-  assert.equal(car.upgrades.rocket,false,'the pickup does not install the permanent kit');
-  assert.equal(car.rocketUntil-world.time,ROCKET_DURATION);
-  assert.ok(hasRocket(car,world.time));
+  assert.ok(car.upgrades.rocket,'the pickup installs the Rocket kit');
+  world.pickups=[];world.time+=120;step(world,new Map(),.05);
+  assert.ok(hasRockets(car),'the pickup kit lasts for the session');
   assert.equal(travelDome(world,p.id),true);
-  touchCar(world.soccer,car,world.time);
-  assert.equal(world.soccer.lastTouch?.carClass,'pickup');
-  world.pickups=[];world.time=car.rocketUntil;
-  Object.assign(car,{vx:0,vy:0,vz:0,speed:0});
-  step(world,new Map(),.05);
-  assert.equal(hasRocket(car,world.time),false,'the pickup expires after 90 simulation seconds');
-  assert.equal(hasRockets(car),false);
-  touchCar(world.soccer,car,world.time);
-  assert.equal(world.soccer.lastTouch?.carClass,'stock');
+  touchCar(world.soccer,car);
+  assert.equal(world.soccer.lastTouch?.carClass,'retrofit');
   finish(world);
-  assert.ok(!p.achievements.unlocked.includes('built-to-fly'));
-  assert.ok(!p.achievements.unlocked.includes('garage-champion'));
+  assert.ok(p.achievements.unlocked.includes('built-to-fly'));
+  assert.ok(p.achievements.unlocked.includes('garage-champion'));
   assert.ok(!p.achievements.unlocked.includes('no-rockets-needed'));
 });
 

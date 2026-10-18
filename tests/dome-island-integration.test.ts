@@ -4,7 +4,7 @@ import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, p
 import { DOME } from '../shared/dome';
 import { FERRY_TRAVEL_SECONDS } from '../shared/ferry';
 import { domeSurface, FERRY_DOCKS } from '../shared/map';
-import { hasRocket } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 
 function setup() {
   const world = createWorld();
@@ -14,15 +14,14 @@ function setup() {
   return { world, player, car };
 }
 
-test('a collected Rocket upgrade powers dome adhesion until it expires', () => {
+test('a collected Rocket upgrade powers permanent dome adhesion', () => {
   const { world, car } = setup();
   car.kind = 'model-3';
   Object.assign(car, { x: 0, z: -1160, y: 0, supportId: 'ground' });
   step(world, new Map(), .05);
-  assert.ok(hasRocket(car, world.time));
-  const expires = car.rocketUntil;
+  assert.ok(hasRockets(car));
   assert.ok(travelDome(world, 'p'));
-  assert.equal(car.rocketUntil, expires);
+  assert.ok(hasRockets(car));
   assert.equal(car.supportId, 'dome');
   Object.assign(car, { x: DOME.x - 30, z: DOME.z, domeS: DOME.flatHalfWidth, yaw: 0, speed: 45 });
   for (let i = 0; i < 100 && car.y < 49.99; i++) {
@@ -33,11 +32,10 @@ test('a collected Rocket upgrade powers dome adhesion until it expires', () => {
   const ceiling = 3 * DOME.flatHalfWidth + Math.PI * DOME.radius;
   const surface = domeSurface(ceiling);
   Object.assign(car, { x: DOME.x - 30, y: surface.y, z: surface.z, domeS: ceiling, yaw: 0, speed: 17, vx: 0, vy: 0, vz: 17 });
-  world.time = expires - .01;
+  world.time += 120;
   step(world, new Map(), .02);
-  assert.equal(car.supportId, null);
-  assert.equal(car.domeS, null);
-  assert.ok(car.vz > 16 && car.vy < 0, 'momentum continues as gravity pulls the car off the ceiling');
+  assert.equal(car.supportId, 'dome');
+  assert.ok(car.domeS !== null && hasRockets(car));
 });
 
 test('upgraded ordinary vehicles remain attached when they collide on the dome wall', () => {
@@ -159,13 +157,13 @@ test('a fly-in or shortcut returns to the last supported side even after flying 
   }
 });
 
-test('walking from China Basin into the Dome returns to the city', async () => {
+test('walking from the city through the Dome gate returns to the Bay', async () => {
   const { isRocketIsland } = await import('../shared/map');
   const { world, player } = setup(); world.pickups = [];
   interact(world, player.id);
   const person = world.entities.find(e => e.id === player.entityId)!;
   assert.equal(person.kind, 'person');
-  Object.assign(person, { x: DOME.x, z: 120, y: 0, yaw: Math.PI, supportId: 'ground' });
+  Object.assign(person, { x: DOME.x, z: DOME.z - DOME.flatHalfWidth - 25, y: 0, yaw: Math.PI, supportId: 'ground' });
   for (let i = 0; i < 300 && !person.inDome; i++) step(world, new Map([['p', { ...NEUTRAL, throttle: 1 }]]), .05);
   assert.ok(person.inDome, 'the pedestrian walks into the Dome');
   assert.equal(person.domeReturn, 'sf');
