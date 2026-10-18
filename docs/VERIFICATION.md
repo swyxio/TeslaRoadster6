@@ -5,6 +5,11 @@
 - Local Wrangler protocol-v20 two-client room integration passed, including activity snapshots and protocol handshakes. A separate local-only fixture staged the first driver before the west ramp; a second client observed its authoritative ramp support, takeoff and landing, with a 5.15 m peak. This did not exercise a multiplayer ferry crossing or load.
 - Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
 
+## Economy planning model · 2026-10-18 Pacific
+
+- On checkout `8625bf0`, `pnpm test` passed 273 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The standalone planning script also passed a separate TypeScript check.
+- Ran both `node --experimental-strip-types scripts/economy-scenarios.ts --ledger` and the `--smooth --ledger` variant. Their cash ledgers balanced, and the first-home scenarios agreed with an independent calculation. These are hypothetical projections, not gameplay, device, live-room or production measurements. The economy proposal does not change gameplay or protocol.
+
 ## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
 
 - After integrating main's flight controls, tank levels, progression and chat, `pnpm test` passed 261 tests and `pnpm build` passed. The build retains Vite's existing large-chunk warning. Tests cover the ferry crossing, temporary Rocket expiry, parking and races, island surfaces, and level-zero access to the island and SF playground.
@@ -349,3 +354,7 @@ In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` p
 Chrome local solo play exercised keyboard driving at desktop size and inspected 390×844 portrait and 844×390 landscape with touch emulation. Temporary spawn fixtures inspected the Palace of Fine Arts and a roadside Moon Goose billboard; the fixture was removed from the final build. A billboard post was shortened after it obscured the panel. No console errors were observed during the local playtest. The new sites are stylized and compressed, and the hills are authored rather than surveyed terrain. This was not a complete manual visit to every site or a physical-device test; touch interaction was not verified in this pass.
 
 After integrating the Rocket Island, ferry and parking changes from main, 273 tests and the build passed. The local two-client room integration passed on protocol v19, including ferry and activity snapshots. Tests also check the new landmarks, hills and billboards against parking areas, the ferry corridor and island race routes. Chrome showed the merged solo start at desktop, portrait and landscape emulation; no physical device was tested.
+
+## 2026-10-18 · First development post rewrite
+
+In the isolated article worktree after integrating the Rocket Island and landmark changes, `pnpm test` passed 273 tests and `pnpm build` passed, including both TypeScript checks. In Chrome, the static article was inspected at desktop and emulated 390×844 portrait and 844×390 landscape widths; the delivery-loop graphic was resized for readable phone labels. Local solo play supplied the street, flight, citation and cockpit screenshots from the integrated build. These are browser captures, not physical-device or multiplayer load tests.
