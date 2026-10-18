@@ -1,5 +1,16 @@
 # Verification · 2026-10-17 Pacific
 
+## Synthesized audio with Bay integration · 2026-10-17 Pacific
+
+- After integrating the protocol-v9 Bay expansion, `pnpm run ci` passed 111 tests and the build. The existing chunk-size warning remains. Audio tests include supported landing on elevated roads and rooftops and a near-full station refill.
+- Local Wrangler two-client integration passed with protocol v9 and surface identity. Chrome desktop opened the sound dialog during a solo drive; 390×844 portrait and 844×390 landscape emulation showed the combined sound dialog. These checks do not establish physical touch or subjective listening quality.
+
+## Synthesized audio · pre-Bay-integration, 2026-10-17 Pacific
+
+- `pnpm run ci` passed 56 tests, both typechecks and the production build; the existing Vite chunk-size warning remains. Audio event tests cover delivery, pickup, citations, achievements, police pursuit, jump, landing, impacts, refills, vehicle changes and repeat snapshots.
+- In local Chrome, the sound dialog opened from the menu and during solo driving; mute, music volume, test cue and preference restoration after reload were exercised. Chrome 390×844 portrait and 844×390 landscape emulation showed the sound controls; emulated pointer actions did not activate the HUD button, although it worked at the desktop viewport. Physical touch remains unverified.
+- A temporary browser fixture measured nonzero Web Audio output for all 11 event cues and for music, wind, thrust and siren; muting reduced the measured signal to zero. This verifies signal generation, not speaker output, subjective mix quality or listening on real devices.
+
 ## Bay circuit deployment · 2026-10-17 Pacific
 
 - Cloudflare Workers Builds deployed merge commit `a0dff9546de09c8d626300a1a5125d9b11ef0d73` successfully. Worker version `2f7d5efe-11b7-40c6-a6a6-b19ce5ddc775` served `/api/health` with protocol 9 and capacity 64.

@@ -92,3 +92,8 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .map-panel{display:block;bottom:118px;left:12px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-key{display:none}
  .telemetry{bottom:118px;right:12px;width:180px;padding:8px}.telemetry .vehicle-title,.telemetry #station-status{display:none}.speed strong{font-size:30px}.meter-row{margin-top:4px}
 }
+.sound-button{font-size:21px;line-height:1}.sound-dialog{width:min(460px,94vw)}
+.sound-sliders{display:grid;gap:16px;margin:20px 0}.sound-sliders label{display:grid;grid-template-columns:1fr auto;gap:6px;color:#e8ede3;font-size:13px;font-weight:600}.sound-sliders output{color:#ffcf85;font:11px ui-monospace,monospace}.sound-sliders input[type=range]{grid-column:1/-1;width:100%;margin:0;padding:0;min-height:24px;accent-color:#ffc77f;background:transparent;border:0;cursor:pointer}
+.sound-actions{display:flex;gap:10px}.sound-actions button{flex:1;min-height:44px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:13px}.sound-actions button[aria-pressed=true]{background:#ffc77f;color:#21373b}
+@media(pointer:coarse),(max-width:800px){.top-actions{gap:6px}.sound-button{width:44px;height:44px}}
+@media(max-height:550px){.sound-dialog{padding:16px;max-height:94dvh}.sound-sliders{gap:8px;margin:10px 0}.sound-dialog .fleet-intro{margin:6px 0}.sound-actions button{min-height:40px}}
