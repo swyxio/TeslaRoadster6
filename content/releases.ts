@@ -6,6 +6,23 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A little direction',
+    intro: 'Find your next delivery and see the victories you are working toward.',
+    sections: [
+      { title: 'Your next move', items: [
+        'The mission card offers a route to your pickup or dropoff and a steady next award to work toward.',
+        'Look for a floating food bag at your pickup and a distinct marker at ground and rooftop dropoffs.'
+      ] },
+      { title: 'Your awards', items: [
+        'Explore grouped awards for delivery, flight, exploration, games and collection.',
+        'Open repeatable awards to see all five ranks, progress, bonuses and save status.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.24-alpha',
+    label: '0.0.24 Alpha',
+    date: '2026-10-18',
     title: 'Steadier earnings status',
     intro: 'Small timing differences between game services no longer discard a valid earnings-bonus update.',
     sections: [
