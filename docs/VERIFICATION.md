@@ -1,5 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+## Synthesized audio · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 55 tests, both typechecks and the production build; the existing Vite chunk-size warning remains. Audio event tests cover delivery, pickup, citations, achievements, police pursuit, jump, landing, impacts, refills, vehicle changes and repeat snapshots.
+- In local Chrome, the sound dialog opened from the menu and during solo driving; mute, music volume, test cue and preference restoration after reload were exercised. Chrome 390×844 portrait and 844×390 landscape emulation showed the sound controls; emulated pointer actions did not activate the HUD button, although it worked at the desktop viewport. Physical touch remains unverified.
+- A temporary browser fixture measured nonzero Web Audio output for all 11 event cues and for music, wind, thrust and siren; muting reduced the measured signal to zero. This verifies signal generation, not speaker output, subjective mix quality or listening on real devices.
+
 ## Keyboard controls · 2026-10-17 Pacific
 
 - `pnpm test` passed 41 tests and `pnpm build` passed; the input tests cover Space braking without jumping, J jumping, and touch brake and jump. The existing Vite chunk-size warning remains.

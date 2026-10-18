@@ -71,6 +71,10 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 `GameScene.render(world,playerId,dt,menu)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
 
+## Audio presentation
+
+`GameAudio` and `SoundEventTracker` in `src/audio*.ts` consume read-only world snapshots and user preferences. Cue names, mix buses, gesture-based startup, background suspension and event-inference limitations are documented in [AUDIO.md](AUDIO.md). Audio is client-side presentation: it must not mutate simulation, add client authority, duplicate cues on a repeated snapshot, or require any sound to understand gameplay. A replacement sound or UI layer retains separate master, music and effects controls and desktop/touch access.
+
 ## UI continuity and acceptance
 
 Keep brand/menu access in menu, game, joining and error states. Fullscreen/pointer lock must have a visible exit if introduced. Room invite links retain room slug and require explicit join. Names must enter DOM through `textContent`, never HTML interpolation. Support 390×844 portrait and 844×390 landscape plus desktop; gameplay and toolbar actions must remain visible without scrolling. Menu may scroll. Touch targets ≥44px where practical; no hover-only actions. Canvas needs accessible labeling; all interactive controls must have names, focus indication, and keyboard operation.

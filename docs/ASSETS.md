@@ -40,3 +40,7 @@ Keep the environment low-poly and spend geometry on vehicles. `src/coachwork.ts`
 Passenger cars use clearcoat paint and raked dark glass; rounded pods keep their contrasting glass belt; Cybertruck retains deliberate planar surfaces. Catalog and road use the same factory. Studio reflections are generated locally, without remote textures. These are stylized interpretations, not manufacturer CAD or photoreal replicas. More triangles alone are not acceptance: review silhouette, glazing visibility and lamp placement from front, side and chase-camera views.
 
 Rocket nozzle reference: [Tesla reveal](https://www.youtube.com/live/qt5p-_tE8d0) and [Jalopnik event report](https://www.jalopnik.com/2288450/tesla-roadster-rereveal-new-design-production-plans-for-flying-car/) describe four rear nozzles, four upward-lift corner nozzles, and two lateral front-fender nozzles. Geometry, vapor shape and firing patterns are original, approximate game art; they are not a measured prototype model. Suction fans are separate from gas effects.
+
+## Audio
+
+The original procedural soundtrack and sound effects are synthesized locally and MIT licensed. See [AUDIO.md](AUDIO.md) for the cue contract, mix and replacement guidance. Do not add recordings or music without documenting their origin and license.
