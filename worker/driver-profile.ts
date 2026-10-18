@@ -303,7 +303,13 @@ export class DriverProfile extends DurableObject<Env> {
       await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<number>('income-pending');
         if(current!==undefined && current<=pending)await txn.delete(['income-pending','income-retry']);
-        else if(current!==undefined){await txn.delete('income-retry');const alarm=await txn.getAlarm(),next=Date.now()+500;if(alarm===null||alarm>next)await txn.setAlarm(next);}
+        else if(current!==undefined){
+          // The successful credit did not include newer earnings. Preserve the
+          // existing reservation so a stream of earnings cannot reset backoff.
+          const retry=await txn.get<OutboxRetry>('income-retry');
+          const alarm=await txn.getAlarm(),next=retry?.next??Date.now()+500;
+          if(alarm===null||alarm>next)await txn.setAlarm(next);
+        }
       });
     } catch { /* The durable retry deadline is already armed. */ }})();
     await Promise.all([privacyFlush,incomeFlush]);
