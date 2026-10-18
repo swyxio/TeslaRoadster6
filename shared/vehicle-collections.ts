@@ -40,6 +40,10 @@ const vaultAwards={
   'bugatti-chiron':'vault-drive-chiron',
   'bugatti-tourbillon':'vault-drive-tourbillon',
 } as const;
+const collectionAwards=new Set<string>([
+  ...teslaMilestones.map(item=>item.id),...stolenMilestones.map(item=>item.id),...Object.values(vaultAwards),
+]);
+export const isVehicleCollectionAward=(id:string):boolean=>collectionAwards.has(id);
 
 export function isVehicleCollectionEvidence(evidence:{kind:string;vehicle?:unknown}):evidence is VehicleCollectionEvidence {
   return typeof evidence.vehicle==='string'&&(

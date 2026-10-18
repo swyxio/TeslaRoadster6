@@ -118,6 +118,12 @@ async function observedVehicleDrive(){
   assert.ok(after.vehicleCollections?.driven.includes('roadster'));
   assert.ok(after.unlocked.includes('tesla-drive-1'));
   assert.equal(after.cash,before.cash+100);assert.equal(after.eligibleIncome,before.eligibleIncome+100);
+  await until(()=>client.last('state')?.world.players.find((player:Message)=>player.id===playerId)?.achievements.unlocked.includes('tesla-drive-1'),'owner snapshot includes the collection award');
+  const committedTick=client.last('state')!.tick as number;
+  await until(()=>other.last('state')?.tick>=committedTick,'other driver receives the committed tick');
+  const remote=other.last('state')!.world.players.find((player:Message)=>player.id===playerId);
+  assert.ok(!remote.achievements.unlocked.includes('tesla-drive-1'),'remote snapshot omits collection award IDs');
+  assert.notEqual(remote.achievements.lastUnlock?.achievement,'tesla-drive-1','remote snapshot omits the collection event');
   client.socket.close();other.socket.close();
   const restored=await joinSaved(`collection-return-${randomUUID().slice(0,8)}`,driver.code);
   await sync(restored,303);
