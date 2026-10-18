@@ -1,4 +1,4 @@
-# Implementation contracts · v43 candidate
+# Implementation contracts · v44
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v43 candidate
+## Wire protocol v44
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:43,capacity:number}`.
+Protocol v44 fences the rebalanced flight physics from v43 clients. The message shapes and 20 Hz world step are unchanged; incompatible clients must reload before joining.
+
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:44,capacity:number}`.
 
 Client messages:
 
@@ -88,7 +90,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:43, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:44, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -294,7 +296,7 @@ Before settling an accepted cab interval, the room-owned history barrier checks 
 
 `shared/police.ts` measures airborne duration and peak height in the authoritative simulation. When a pursuit ends in a citation, `delivery.lastTicket` records the amount, offense number, flight duration, height and duration, height and repeat components. The stop and grace period are immediate; the candidate economy flow publishes the fine after its durable result. Presentation must make a citation conspicuous and require an accessible acknowledgement; clearing controls does not stop server heartbeats. A room continues running while a dialog is open. Session-local UI may not create tickets or alter their amount.
 
-Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. After Oakland unlocks, an eligible non-exploration order after every third completed run starting with the first may select a rooftop only when the current vehicle has flight capability. Level-zero deliveries remain on the ground. Other vehicles receive ground orders. The player may change cars later, so the interface must identify rooftop orders and the fleet remains available.
+Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. After Oakland unlocks, an eligible non-exploration order after every third completed run starting with the first may select a rooftop only when the vehicle has rockets and at least a Level 3 tank. Other vehicles receive ground orders. A saved or active roof job is rerouted to a ground customer if the driver enters a less capable vehicle; leaving the car on foot alone does not reroute it. A collected order retains its stage, elapsed time and fare ceiling. The room captures roof eligibility at delivery and citation event time; citations also capture whether the driver was on foot, deferring the vehicle check while still rerouting newly locked regions. Older staged evidence without these fields is conservatively ineligible. Repair waits while a prior delivery decision is unresolved.
 
 `shared/achievements.ts` owns unlocked award IDs and flight tracking. Bay Hopper requires leaving one mainland shore, crossing water, and arriving above or on the other without an intervening landing; a bridge, island, roof or stunt-loop contact ends the attempt, and recovery or vehicle switches cancel it. Flying above a bridge is allowed. Roof Rider requires a car to land on a building roof after a supported departure and at least 0.35 seconds of flight with 2 m of rise or 6 m of horizontal travel. A reset, vehicle switch, large relocation or grounded contact clears the flight. Sky Delivery requires a completed rooftop delivery; Neighborhood Regular requires three deliveries. Dome awards require a real ball touch and the player to be in the dome at match completion. Rocket Rookie and Built to Fly require touches in Roadster · Rocket and a retrofit respectively; Roadster Champion and Garage Champion require a win and at least one goal credited in the corresponding class. No Rockets Needed requires a win with at least one stock-car goal and only stock-car touches. A tie counts as a win for each leader. Flight samples are server-only; snapshots carry a neutral tracker value.
 

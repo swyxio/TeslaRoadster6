@@ -61,6 +61,17 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
   session.disconnect();
 });
 
+test('an incompatible flight-physics protocol closes before identity or driving',()=>{
+  assert.equal(PROTOCOL_VERSION,44);
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:43,capacity:64});
+  assert.equal(socket.readyState,3);
+  assert.equal(session.error,'Game updated. Reload to reconnect.');
+  assert.deepEqual(socket.sent,[]);
+  assert.equal(session.id,'');
+  session.disconnect();
+});
+
 test('a shared room connects and a disconnect never starts a solo simulation',()=>{
   assert.equal(DEFAULT_ROOM,'bay'); assert.ok(validRoom('friends-2')); assert.ok(!validRoom('../bay'));
   const session=new Session();session.join(DEFAULT_ROOM,'Alex');const socket=Socket.last;

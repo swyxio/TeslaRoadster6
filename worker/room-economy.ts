@@ -175,7 +175,7 @@ export class RoomEconomy extends DurableObject<Env> {
   async stageDelivery(stage:DeliveryStage):Promise<'accepted'|'superseded'|'conflict'> {
     const action=stage.action,stop=action?.stop;
     if(action?.kind!=='delivery'||!stop||![stop.x,stop.y,stop.z,stop.vy,stop.speed].every(Number.isFinite)||
-      typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||
+      typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||(stop.roofEligible!==undefined&&typeof stop.roofEligible!=='boolean')||
       !Number.isSafeInteger(action.atMs)||action.atMs<0||action.atMs>Date.now()||![null,1,1.5,2,3].includes(action.multiplier))return 'conflict';
     return this.stageObservation(stage,deliveryKey(stage));
   }
