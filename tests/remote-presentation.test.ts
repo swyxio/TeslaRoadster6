@@ -18,7 +18,7 @@ function remote(world:ReturnType<typeof createEmptyWorld>){return world.entities
 
 test('interpolates a buffered remote pose and wrapped angles without changing local authority',()=>{
   const {world,local,remote:car,presentation}=setup();
-  Object.assign(car,{x:0,y:0,z:0,yaw:Math.PI-.1,pitch:.1,roll:Math.PI-.2,steering:0});
+  Object.assign(car,{x:0,y:0,z:0,yaw:Math.PI-.1,pitch:.1,roll:Math.PI-.2,steering:0,supportId:null});
   presentation.snapshot(world,'local',10);
   Object.assign(car,{x:2,y:1,z:4,yaw:-Math.PI+.1,pitch:.3,roll:-Math.PI+.2,steering:1});
   presentation.snapshot(world,'local',12);
@@ -109,7 +109,7 @@ test('does not interpolate through ramp walls or the overpass',()=>{
   }
 });
 
-test('does not interpolate or extrapolate through sampled hilly terrain',()=>{
+test('does not interpolate airborne cars through sampled hilly terrain',()=>{
   const {world,remote:car,presentation}=setup();
   Object.assign(car,{x:-114,z:630,y:9.9,vx:70,vz:0,supportId:null});
   presentation.snapshot(world,'local',100);car.x=-100;presentation.snapshot(world,'local',104);
@@ -117,9 +117,28 @@ test('does not interpolate or extrapolate through sampled hilly terrain',()=>{
   assert.ok(terrainHeight(-108,630)!>car.y);
   assert.equal(remote(presentation.render(world,'local',102)),car);
 
-  presentation.reset();Object.assign(car,{x:-117,z:630,y:terrainHeight(-117,630)!,vx:30,supportId:'ground'});
+});
+
+test('distant supported cars interpolate and extrapolate along shared curved terrain',()=>{
+  const {world,remote:car,presentation}=setup();
+  for(const [from,to] of [[-114,-100],[-100,-114]]){
+    presentation.reset();Object.assign(car,{x:from,z:630,y:terrainHeight(from,630)!,vx:(to-from)/.2,vz:0,supportId:'ground'});
+    presentation.snapshot(world,'local',100);
+    Object.assign(car,{x:to,y:terrainHeight(to,630)!});presentation.snapshot(world,'local',104);
+    const authority=structuredClone(world);
+    for(let frame=0;frame<=24;frame++){
+      const t=frame/24,x=from+(to-from)*t,shown=remote(presentation.render(world,'local',100+4*t));
+      assert.ok(Math.abs(shown.x-x)<1e-9,`frame ${frame} follows snapshot history`);
+      assert.equal(shown.supportId,'ground');
+      assert.ok(Math.abs(shown.y-terrainHeight(x,630)!)<1e-9,`frame ${frame} follows shared terrain`);
+    }
+    assert.deepEqual(world,authority,'presentation does not mutate room state');
+  }
+  presentation.reset();Object.assign(car,{x:-117,z:630,y:terrainHeight(-117,630)!,vx:30,vz:0,supportId:'ground'});
   presentation.snapshot(world,'local',200);car.x=-114;car.y=terrainHeight(car.x,car.z)!;presentation.snapshot(world,'local',202);
-  assert.equal(remote(presentation.render(world,'local',204)),car,'flat-velocity extrapolation cannot cut into a rising hill');
+  const extrapolated=remote(presentation.render(world,'local',204));
+  assert.equal(extrapolated.x,-111);assert.equal(extrapolated.y,terrainHeight(-111,630));
+  assert.deepEqual(remote(presentation.render(world,'local',210)),extrapolated,'ground extrapolation remains bounded');
 });
 
 test('interpolates a remote car along the shared banked oval without cutting below it',()=>{

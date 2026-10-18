@@ -154,17 +154,28 @@ test('independent fades do not draw two following peers through each other',()=>
   session.disconnect();
 });
 
-test('a ferry passenger uses the authoritative shared deck frame',()=>{
-  const {session,local,state}=setup();local.supportId='ferry';state(16);
-  assert.equal(session.renderWorld(),session.world);
+test('a ferry passenger keeps the deck frame while other cars interpolate',()=>{
+  const {session,world,local,peer,state,setTime}=setup();
+  const passenger=addPlayer(world,'r','Passenger');
+  const deckCar=world.entities.find(entity=>entity.id===passenger.entityId)!;
+  local.supportId='ferry';deckCar.supportId='ferry';peer.x+=5;
+  setTime(100);state(16);
+  const shown=session.renderWorld(),latest=pair(session.world);
   assert.equal(session.localPresentationActive,false);
+  assert.equal(session.remotePresentationActive,true);
+  assert.equal(pair(shown).local,latest.local,'the controlled car stays on the authoritative deck');
+  assert.equal(shown.ferry,session.world.ferry,'the ferry stays in its shared frame');
+  assert.equal(shown.entities.find(entity=>entity.id===deckCar.id),session.world.entities.find(entity=>entity.id===deckCar.id),'other deck passengers stay authoritative');
+  assert.ok(pair(shown).peer.x<latest.peer.x,'a car on shore uses buffered remote playback');
+  assert.equal(latest.peer.x,-285,'presentation does not mutate authority');
   session.disconnect();
 });
 
 test('a predicted recovery is withheld and a confirmed relocation cuts the camera',()=>{
   const {session,local,state,setTime}=setup();
   setTime(50);Object.assign(local,{x:600,y:.01,z:-2250,vy:-5,supportId:null});state(15);
-  assert.equal(session.renderWorld(),session.world);
+  assert.equal(pair(session.renderWorld()).local,pair(session.world).local);
+  assert.equal(session.localPresentationActive,false);
   assert.equal(session.takeCameraSnap(),false);
   setTime(100);Object.assign(local,{x:-36,y:0,z:-1120,vy:0,supportId:'ground'});state(16,1);
   assert.equal(session.takeCameraSnap(),true);

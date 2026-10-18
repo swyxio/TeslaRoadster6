@@ -151,8 +151,8 @@ export class Session {
     this.remotePresentationActive=true;
     const predicted=this.prediction.renderWorld(now,this.clock.target(now),this.clock.estimate(now),this.clock.alpha(now),display,this.remote.ready);
     this.localPresentationActive=!!predicted;
-    // If replay is unsafe, both bodies return to the same authoritative tick.
-    return predicted??this.world;
+    // Local replay can pause on the ferry while other cars still use playback.
+    return predicted??display;
   }
   takePresentationSnap():boolean {return this.prediction.takeSnap();}
   takeCameraSnap():boolean {return this.prediction.takeCameraSnap();}

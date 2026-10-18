@@ -132,7 +132,7 @@ function plausibleMovement(previous:Pose,e:Entity,dtTicks:number):boolean {
 }
 function continuous(previous:Pose,e:Entity,dtTicks:number):boolean {
   return (sameEntity(previous,e)||ovalTransition(previous.supportId,e.supportId)||airTransition(previous.supportId,e.supportId))&&
-    plausibleMovement(previous,e,dtTicks)&&clearPath(previous,e);
+    plausibleMovement(previous,e,dtTicks)&&clearPath(previous,e,true);
 }
 function capture(e:Entity,since:number):Pose {
   return {kind:e.kind,driver:e.driver,owner:e.owner,supportId:e.supportId,inDome:e.inDome,health:e.health,
@@ -145,7 +145,11 @@ function blend(e:Entity,a:Pose,b:Pose,t:number):Entity {
   let y=a.y+(b.y-a.y)*t;
   let supportId=a.supportId;
   if(airTransition(a.supportId,b.supportId))supportId=t===0?a.supportId:t===1?b.supportId:null;
-  if(a.supportId==='island-oval'&&b.supportId==='island-oval'||ovalTransition(a.supportId,b.supportId)){
+  if(a.supportId==='ground'&&b.supportId==='ground'){
+    const surface=projectGroundOval({...e,x,y,z,supportId:'ground'});
+    if(!surface)return e;
+    y=surface.y;supportId=surface.supportId;
+  }else if(a.supportId==='island-oval'&&b.supportId==='island-oval'||ovalTransition(a.supportId,b.supportId)){
     const surface=ovalBankSurface(x,z);
     if(surface){y=surface.height;supportId='island-oval';}
     else if(ovalTransition(a.supportId,b.supportId)){
@@ -169,13 +173,17 @@ function extrapolate(e:Entity,pose:Pose,ticks:number):Entity {
   const seconds=Math.min(MAX_EXTRAPOLATION_TICKS,Math.max(0,ticks))*TICK_SECONDS;
   const x=pose.x+pose.vx*seconds,z=pose.z+pose.vz*seconds;
   let y=pose.y+pose.vy*seconds;
-  if(pose.supportId==='island-oval'){
+  if(pose.supportId==='ground'){
+    const surface=projectGroundOval({...e,x,y,z,supportId:'ground'});
+    if(!surface||surface.supportId!=='ground')return e;
+    y=surface.y;
+  }else if(pose.supportId==='island-oval'){
     const surface=ovalBankSurface(x,z);
     if(!surface)return e;
     y=surface.height;
   }
   const yaw=pose.yaw+pose.yawRate*seconds,pitch=pose.pitch+pose.pitchRate*seconds,roll=pose.roll+pose.rollRate*seconds;
-  if(!clearPath(pose,{x,y,z,yaw,pitch,roll,supportId:pose.supportId}))return e;
+  if(!clearPath(pose,{x,y,z,yaw,pitch,roll,supportId:pose.supportId},true))return e;
   if(x===e.x&&y===e.y&&z===e.z&&yaw===e.yaw&&pitch===e.pitch&&roll===e.roll)return e;
   return {...e,x,y,z,yaw,pitch,roll};
 }
