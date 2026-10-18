@@ -1,6 +1,19 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.5-alpha',
+    label: '0.0.5 Alpha',
+    date: '2026-10-18',
+    title: 'A smoother detour',
+    intro: 'It is easier to start a game and get back on the road.',
+    sections: [
+      { title: 'Play and explore', items: [
+        'Start or leave a mini-game immediately after joining, with confirmation while the room responds.',
+        'Self-driving can recover from some opposite-facing street positions, and the map explains where your car will stop.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.4-alpha',
     label: '0.0.4 Alpha',
     date: '2026-10-18',

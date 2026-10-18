@@ -116,6 +116,10 @@ try {
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'arena entry replicated');
+  one.socket.send(JSON.stringify({type:'dome'}));
+  await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'immediate arena exit replicated');
+  one.socket.send(JSON.stringify({type:'dome'}));
+  await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'immediate arena re-entry replicated');
   assert.equal(two.state.world!.soccer.blueScore,0);assert.equal(two.state.world!.soccer.orangeScore,0);
   for(let i=0;i<70;i++){one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1}}));await delay(50);}
   await eventually(()=>!!two.state.world&&two.state.world.soccer.ball.x>DOME.x+2,'car impact moves the shared ball');
@@ -192,8 +196,15 @@ try {
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
   assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
   await delay(500);one.socket.send(JSON.stringify({type:'minigame',game:'short'}));
-  await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.entrants.some(e=>e.playerId===id))??false,'direct race entry is replicated');
+  one.socket.send(JSON.stringify({type:'race',action:'start',courseId:'short'}));
+  await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.phase==='countdown'&&r.entrants.some(e=>e.playerId===id))??false,'race starts immediately after direct entry');
   assert.ok(two.state.world?.entities.some(e=>e.driver===id&&e.z< -1200&&!e.autopilot),'car is placed at the island race start');
+  one.socket.send(JSON.stringify({type:'race',action:'leave',courseId:'short'}));
+  one.socket.send(JSON.stringify({type:'minigame',game:'queue'}));
+  one.socket.send(JSON.stringify({type:'parking',action:'start'}));
+  await eventually(()=>!!two.state.world&&!two.state.world.races.rounds.some(r=>r.entrants.some(e=>e.playerId===id))&&two.state.world.parking.rounds.some(r=>r.mode==='queue'&&r.phase==='active'&&r.entrants.some(e=>e.playerId===id)),'immediate switch and parking start are replicated');
+  one.socket.send(JSON.stringify({type:'parking',action:'leave'}));
+  await eventually(()=>!two.state.world?.parking.rounds.some(r=>r.entrants.some(e=>e.playerId===id)),'parking leave is replicated immediately');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);

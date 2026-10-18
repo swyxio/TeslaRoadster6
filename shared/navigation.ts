@@ -57,24 +57,31 @@ export function planNavigation(car:Entity,destination:Point,level:Level):Navigat
   const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);
   const starts=candidates(car,30),ends=candidates(destination,100);
   if(!starts.length||!ends.length)return null;
-  const closeStarts=starts.filter(c=>{
+  const alignment=(c:typeof starts[number])=>{
     const s=segments[c.i],length=distance(s.a,s.b)||1;
-    const alignment=(-Math.sin(car.yaw)*(s.b.x-s.a.x)-Math.cos(car.yaw)*(s.b.z-s.a.z))/length;
-    return c.distance<=starts[0].distance+7&&alignment>.1;
-  }).slice(0,12);
+    return (-Math.sin(car.yaw)*(s.b.x-s.a.x)-Math.cos(car.yaw)*(s.b.z-s.a.z))/length;
+  };
+  const forward=starts.filter(c=>c.distance<=starts[0].distance+7&&alignment(c)>.1);
+  // If already on a lane facing against it, continue in the direction the
+  // car faces only as far as the previous intersection, then use directed
+  // streets normally. Avoid inventing an off-road turn to reach that lane.
+  const closeStarts=(forward.length?forward.map(c=>({...c,reverse:false})):
+    starts.filter(c=>c.distance<=3&&alignment(c)<-.75).map(c=>({...c,reverse:true}))).slice(0,12);
   if(!closeStarts.length)return null;
   const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
   const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,Point>(),used=new Set<number>();
   for(const start of closeStarts){
-    const s=segments[start.i],length=distance(s.a,s.b),heading=(-Math.sin(car.yaw)*(s.b.x-s.a.x)-Math.cos(car.yaw)*(s.b.z-s.a.z))/(length||1);
-    const next=segmentNodes[start.i].find(c=>c.t>=start.t-1e-7);if(!next||!allowed(car,nodes[next.id],level))continue;
+    const heading=alignment(start)*(start.reverse?-1:1);
+    const cuts=segmentNodes[start.i];
+    const next=start.reverse?[...cuts].reverse().find(c=>c.t<=start.t+1e-7):cuts.find(c=>c.t>=start.t-1e-7);
+    if(!next||(start.reverse&&distance(start.point,nodes[next.id])>120)||!allowed(car,nodes[next.id],level))continue;
     const cost=start.distance*2+(1-heading)*8+distance(start.point,nodes[next.id]);
     if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start.point);}
   }
   let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
   // Direct travel on a single segment need not pass through an intersection.
   let direct:Point[]|undefined;
-  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&end.t>=start.t&&allowed(car,end.point,level)){
+  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120:end.t>=start.t)&&allowed(car,end.point,level)){
     const cost=start.distance*2+distance(start.point,end.point)+end.distance*2;
     if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[end.point];}
   }
@@ -93,7 +100,9 @@ export function planNavigation(car:Entity,destination:Point,level:Level):Navigat
       if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;}
     }
   }
-  if(!bestEnd)return null;
+  // A one-way loop can technically connect nearby streets by routing around
+  // the entire region. Reject those routes instead of promising a local trip.
+  if(!bestEnd||bestCost>Math.max(1200,distance(car,bestEnd)*5))return null;
   const path:Point[]=direct??[];
   if(!direct){
     for(let at=bestNode;at!==-1;at=previous[at])path.unshift(nodes[at]);
