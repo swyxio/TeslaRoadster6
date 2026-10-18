@@ -2,7 +2,7 @@ I’ve never made a car game, and I’m not particularly a car-game person. I ju
 
 That idea became [Poly AV](/): an open-source Bay Area driving game where you deliver food, earn fictional cash, upgrade your car, and occasionally get chased by the police for flying it. You can play alone or share a room with friends in your browser.
 
-![A red Roadster waits on a San Francisco street, with a Tartine Bakery pickup marked on the dashboard.](/blog/building-poly-av/street.png)
+![A red Roadster waits on a San Francisco street, with a Tartine Bakery pickup marked on the dashboard.](/blog/building-poly-av/street.jpg)
 
 *A gameplay capture from the alpha: the next stop is Tartine, and the purple rocket collectible ahead can temporarily equip a car for flight.*
 
@@ -34,13 +34,13 @@ The Roadster Rocket starts with thrusters, but I didn’t want flight to be excl
 
 The sky has its own routes. Blue lanes give a flying car a speed boost and replenish air; golden thermals near landmarks lift it and replenish air. They make the skyline useful as well as recognizable. They’re arcade currents, not a model of actual Bay Area weather.
 
-![The Roadster hovers above a San Francisco street near a blue sky lane.](/blog/building-poly-av/airborne.png)
+![The Roadster hovers above a San Francisco street near a blue sky lane.](/blog/building-poly-av/airborne.jpg)
 
 *The Roadster hovers near a blue sky lane.*
 
 Flight can also attract police. Fly low near a patrol car and it can chase you; if it gets close while you’re on the ground, it can slow and stop you. Then the game issues a ticket: longer or higher flights and repeat offenses increase the fine. I wanted a shortcut to feel tempting without always being free. You can make good money by delivering early, then lose some of it if you get caught.
 
-![A police citation in the game shows a $68 fine and explains how flight time and repeat offenses affect it.](/blog/building-poly-av/citation.png)
+![A police citation in the game shows a $68 fine and explains how flight time and repeat offenses affect it.](/blog/building-poly-av/citation.jpg)
 
 *A citation from a play session. The amount is fictional game cash.*
 
@@ -55,7 +55,7 @@ Those tradeoffs gave the game a direction. Around them, we added cars, places an
 - **Make your own detour.** Free-roam, use autonomous cruise, ride the ferry to Rocket Island for races, or visit the fictional Rocket Dome for car soccer. There are parking challenges, synthesized music and sound effects, and keyboard, touch and gamepad controls.
 - **Drive together.** Share a room code to see other drivers, traffic and collisions. The room leaderboard shows cash alongside active play time, so leaving the game idle is less useful than actually driving.
 
-![The first-person view looks down a street with a small Tartine Bakery destination sign and dashboard.](/blog/building-poly-av/cockpit.png)
+![The first-person view looks down a street with a small Tartine Bakery destination sign and dashboard.](/blog/building-poly-av/cockpit.jpg)
 
 *Cockpit view keeps the pickup information in the scene while the camera follows the car.*
 
