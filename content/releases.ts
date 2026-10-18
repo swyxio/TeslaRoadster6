@@ -16,6 +16,19 @@ export const RELEASES = [
     ]
   },
   {
+    version: '0.0.32-alpha',
+    label: '0.0.32 Alpha',
+    date: '2026-10-18',
+    title: 'A little more lift',
+    intro: 'Boosts and landings bring more of the drive to life.',
+    sections: [
+      { title: 'Feel the ride', items: [
+        'Boosting brings a responsive chase view, fresh rocket vapor and a new sound. Look for lift-off and touchdown cues as you jump and land.',
+        'The Bay warms at sunrise and sunset. Reduced-motion settings keep the trail still and the camera steady.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.31-alpha',
     label: '0.0.31 Alpha',
     date: '2026-10-18',

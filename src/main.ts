@@ -3,7 +3,9 @@ import './style.css';
 import './shop.css';
 import './identity.css';
 import './mobile-hud.css';
+import './drive-feedback.css';
 import { setupMobileHud } from './mobile-hud';
+import { DriveFeedback } from './drive-feedback';
 import { setupMinigames } from './minigames';
 import { createProgressPanels } from './progress-panels';
 import { confirmedGoalOwner, nextDeliveryAward, nextReachableTier, tierGoalLabel } from './next-goal';
@@ -103,7 +105,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
  <div class="map-panel" id="map-panel"><button type="button" id="map-panel-toggle" class="mobile-panel-toggle" aria-controls="map-toggle" aria-expanded="true">Map −</button><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, orange bars are island ramps, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, a gold diamond marks the Vault showroom, coral squares mark Caltrain stops, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
- <div class="telemetry" id="instrument-panel"><button type="button" id="instrument-panel-toggle" class="mobile-panel-toggle" aria-controls="instrument-panel" aria-expanded="true">Stats −</button><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="telemetry" id="instrument-panel"><span id="drive-feedback" class="drive-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></span><button type="button" id="instrument-panel-toggle" class="mobile-panel-toggle" aria-controls="instrument-panel" aria-expanded="true">Stats −</button><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost · double-tap to self-drive to your delivery &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for North Bay Playground.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
@@ -154,6 +156,7 @@ const controls = new Controls();
 const session = new Session(undefined,()=>controls.edgeCounters());
 controls.onEdge=(kind,id)=>session.queueEdge(kind,id);
 const audio = new GameAudio();
+const driveFeedback = new DriveFeedback($('drive-feedback'));
 const soundDialog=$<HTMLDialogElement>('sound-dialog');
 const radio = new Radio(refreshRadio);
 function refreshRadio(){
@@ -1083,6 +1086,18 @@ function openShop(preferSpaceX=false){
 function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
 $('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 
+function updateFlightLabel(e:Entity){
+  const airborne=e.loopAngle===null&&e.supportId===null;
+  const label=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';
+  const flight=$('flight');
+  if(flight.textContent!==label){flight.textContent=label;flight.classList.toggle('flying',label!=='GROUNDED');}
+  $('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
+}
+function updateDriveControl(){
+  $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';
+  $('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
+}
+
 scene.start(dt=>{
   starship.tick(marsUi.isOpen());
   if(session.walletBlocked&&!walletWasBlocked){
@@ -1095,7 +1110,8 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);progressPanels.update();audio.update(session.world,session.id,started&&!menu&&session.status==='online'&&!session.walletBlocked);
+  const driving=started&&!menu&&session.status==='online'&&!session.walletBlocked;
+  session.tick(dt,input);progressPanels.update();const soundEvents=audio.update(session.world,session.id,driving);
   if(pendingTeleport){
     if(session.teleportResult?.requestId===pendingTeleport.requestId){notice(session.teleportResult.ok?'Teleported · sandbox progress is not saved.':'No safe ground near that pin. Choose a road or open ground.');pendingTeleport=null;session.teleportResult=null;}
     else if(performance.now()>pendingTeleport.expires){notice('Teleport timed out. Check your connection and try again.');pendingTeleport=null;}
@@ -1120,9 +1136,18 @@ scene.start(dt=>{
     if(pendingLuxury?.source==='workshop')$('shop-feedback').textContent='Disconnected. Rejoin to collect your vehicle.';
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
+  let feedbackCar:Entity|undefined,flightChanged=false,feedbackFerry=session.world.ferry;
   if(!marsUi.isViewing()){
-    const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),total:starship.total()});
+    const renderWorld=session.renderWorld(),renderPlayer=renderWorld.players.find(p=>p.id===session.id);
+    feedbackCar=renderWorld.entities.find(e=>e.id===renderPlayer?.entityId);
+    feedbackFerry=renderWorld.ferry;
+    for(const event of soundEvents){
+      if(event.cue==='jump'||event.cue==='land'){flightChanged=true;if(car)updateFlightLabel(car);}
+      if(event.cue==='land')scene.landed(event.strength??1);
+    }
+    scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),total:starship.total()});
   }
+  if(driveFeedback.update(feedbackCar,input,soundEvents,dt,driving&&!marsUi.isViewing(),feedbackFerry))audio.play('boost');
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   if(navigationDriving&&observedCar?.navigation?.status==='failed')notice('Self-driving could not get past an obstacle. Take over or use Unstuck (K) and try again.');
@@ -1162,6 +1187,7 @@ scene.start(dt=>{
     lastActiveSeconds=active;
   }
   if(observedCar)controls.observeFlight(hasRockets(observedCar)&&!ferrySecured(session.world.ferry,observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
+  if(flightChanged)updateDriveControl();
   document.body.classList.toggle('cockpit-active',cockpit);
   $('cockpit-trim').hidden=!cockpit;$('cockpit-dashboard').hidden=!cockpit||!!car?.inDome;
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
@@ -1227,9 +1253,8 @@ scene.start(dt=>{
   for(const control of ['KeyQ','KeyR','KeyX','ShiftLeft','KeyE']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket||secured;
   }
-  $('flight').textContent=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',airborne||e.loopAngle!==null||e.supportId==='dome');
-  $('jump-control').textContent='JUMP / HOVER';$('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
-  $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
+  updateFlightLabel(e);
+  $('jump-control').textContent='JUMP / HOVER';updateDriveControl();
   document.querySelector('[data-control="KeyA"]')?.setAttribute('aria-label',airborne?'Bank left':'Steer left');document.querySelector('[data-control="KeyD"]')?.setAttribute('aria-label',airborne?'Bank right':'Steer right');
   $('air-label').textContent=`AIR LV ${e.tankLevel}`;$('air').classList.toggle('air-low',rocket&&e.air<12);$('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=`${controlSettings.label('interact')} · ${e.kind==='person'?'Take nearby car':'Exit car'}`;

@@ -1,0 +1,18 @@
+{
+  "status": "verified",
+  "input": "touch emulation",
+  "viewport": {
+    "width": 844,
+    "height": 390,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "boostGroundedSeconds": 1.147,
+  "observedJumpSamples": 3,
+  "landingTick": 114,
+  "poseRevision": 1,
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  }
+}

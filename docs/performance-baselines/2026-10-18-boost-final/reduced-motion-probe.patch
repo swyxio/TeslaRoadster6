@@ -1,0 +1,69 @@
+--- a/scripts/playtest-record.ts
++++ b/scripts/playtest-record-reduced-probe.ts
+@@ -417,7 +417,52 @@
+   const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : values.gpu === 'swiftshader' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
+   browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : undefined, headless: !values.headed, args });
+   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
+-  context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
++  context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false, reducedMotion: 'reduce' });
++  await context.addInitScript(() => {
++    const names = new WeakSet<WebGLUniformLocation>();
++    const projections = new WeakMap<WebGLProgram, WebGLUniformLocation>();
++    const last = new WeakMap<WebGLProgram, number>();
++    const samples: {at:number; fov:number; boost:boolean}[] = [];
++    let boost = false;
++    window.addEventListener('keydown', event => { if (event.key === 'Shift') boost = true; }, true);
++    window.addEventListener('keyup', event => { if (event.key === 'Shift') boost = false; }, true);
++    for (const Type of [WebGLRenderingContext, WebGL2RenderingContext]) {
++      const proto = Type.prototype;
++      const get = proto.getUniformLocation;
++      const set = proto.uniformMatrix4fv;
++      proto.getUniformLocation = function(program: WebGLProgram, name: string) {
++        const loc = get.call(this, program, name);
++        if (name === 'projectionMatrix' && loc) { names.add(loc); projections.set(program, loc); }
++        return loc;
++      };
++      for (const method of ['drawElements', 'drawArrays'] as const) {
++        const draw = proto[method];
++        (proto as any)[method] = function(...args: unknown[]) {
++          if (boost) {
++            const now = performance.now();
++            const program = this.getParameter(this.CURRENT_PROGRAM) as WebGLProgram | null;
++            const loc = program && projections.get(program);
++            if (program && loc && now - (last.get(program) ?? 0) > 100) {
++              last.set(program, now);
++              const value = this.getUniform(program, loc) as Float32Array | null;
++              if (value && value.length >= 16 && Math.abs(Number(value[11]) + 1) < .00001 && Number(value[15]) === 0 && Number(value[5]) > 0 && samples.length < 20000) {
++                samples.push({ at: Math.round(now), fov: 2 * Math.atan(1 / Number(value[5])) * 180 / Math.PI, boost: true });
++              }
++            }
++          }
++          return (draw as Function).apply(this, args);
++        };
++      }
++      proto.uniformMatrix4fv = function(location: WebGLUniformLocation | null, transpose: boolean, value: Float32List, ...rest: number[]) {
++        if (location && names.has(location) && value.length >= 16 && Math.abs(Number(value[11]) + 1) < 0.00001 && Number(value[15]) === 0 && Number(value[5]) > 0 && samples.length < 20000) {
++          samples.push({ at: Math.round(performance.now()), fov: 2 * Math.atan(1 / Number(value[5])) * 180 / Math.PI, boost });
++        }
++        return (set as Function).call(this, location, transpose, value, ...rest);
++      } as typeof proto.uniformMatrix4fv;
++    }
++    Object.defineProperty(window, '__teslandReducedProbe', { value: { samples }, configurable: false });
++  });
++  (manifest.runner as Record<string, unknown>).reducedMotion = 'reduce';
+   if (scenario.freshGuest) {
+     // The normal default auto-saves a driver in chat. The repeatable scenario
+     // explicitly chooses a fresh guest in this disposable browser context.
+@@ -440,6 +485,12 @@
+   });
+   if (values.scenario) {
+     for (const step of scenario.steps) await act(step);
++    const reducedProbe = await page.evaluate(() => ({
++      matches: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
++      samples: (window as unknown as {__teslandReducedProbe:{samples:unknown[]}}).__teslandReducedProbe.samples,
++    }));
++    if (!reducedProbe.matches) throw new Error('Reduced-motion media query did not match.');
++    manifest.reducedMotionProbe = reducedProbe;
+   } else {
+     let close!: () => void;
+     const done = new Promise<void>(resolveDone => { close = resolveDone; });

@@ -1,0 +1,9 @@
+/* Short, local feedback lives with the instruments and never blocks controls. */
+.drive-feedback{position:absolute;right:0;bottom:calc(100% + 6px);padding:5px 9px;border-left:3px solid #ffc77f;border-radius:3px;background:#142d34ed;color:#fff2d8;font:700 10px/1.1 system-ui,sans-serif;letter-spacing:.5px;white-space:nowrap;pointer-events:none}
+.drive-feedback[hidden]{display:none}
+.drive-feedback[data-mode="boost"]{border-color:#ff9a50;color:#ffe2bc}
+.drive-feedback[data-mode="land"]{border-color:#a8e5c3;color:#d2ffe5}
+@media(prefers-reduced-motion:no-preference){
+ .drive-feedback[data-mode="jump"],.drive-feedback[data-mode="land"]{animation:drive-feedback-pop .22s ease-out both;transform-origin:right bottom}
+ @keyframes drive-feedback-pop{from{opacity:.45;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
+}
