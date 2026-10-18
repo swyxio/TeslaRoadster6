@@ -20,6 +20,18 @@ async function eventually(check:()=>boolean, description:string, timeout=15_000)
   while (Date.now() < until) { if (check()) return; await sleep(20); }
   throw new Error(`Timed out: ${description}`);
 }
+async function closeCleanly(socket:WebSocket):Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) return;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Timed out waiting for WebSocket close')), 3000);
+    socket.addEventListener('close', event => {
+      clearTimeout(timeout);
+      if (event.code === 1000) resolve();
+      else reject(new Error(`WebSocket closed unexpectedly: ${event.code}`));
+    }, { once:true });
+    if (socket.readyState !== WebSocket.CLOSING) socket.close(1000, 'Test complete');
+  });
+}
 function connect() {
   const socket = new WebSocket(room);
   const state: { id?:string; world?:World; closed?:number; history:Entity[] } = { history:[] };
@@ -36,6 +48,7 @@ const driver = connect();
 await eventually(() => !!driver.state.id, 'first driver joined');
 const observer = connect();
 let inputTimer:ReturnType<typeof setInterval>|undefined;
+let highestY = 0;
 try {
   await eventually(() => !!observer.state.id && observer.state.world?.players.length === 2, 'observer joined the same room');
   const playerId = driver.state.id!;
@@ -48,7 +61,6 @@ try {
   assert.equal(approach.supportId, 'ground');
 
   let sawRamp = false, sawLaunch = false, sawLanding = false;
-  let highestY = 0;
   observer.socket.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
     if (message.type !== 'state') return;
@@ -70,9 +82,8 @@ try {
   assert.ok(highestY > jump.height, 'launch reaches above the lip');
   assert.equal(driver.state.closed, undefined);
   assert.equal(observer.state.closed, undefined);
-  console.log(`PASS: two real WebSockets observed staged approach, island-jump support, launch and landing (peak ${highestY.toFixed(2)} m). Local fixture only; no load or physical-device claim.`);
 } finally {
   if (inputTimer) clearInterval(inputTimer);
-  driver.socket.close();
-  observer.socket.close();
+  await Promise.all([closeCleanly(driver.socket), closeCleanly(observer.socket)]);
 }
+console.log(`PASS: two real WebSockets observed staged approach, island-jump support, launch and landing (peak ${highestY.toFixed(2)} m). Local fixture only; no load or physical-device claim.`);
