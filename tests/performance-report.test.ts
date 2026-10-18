@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { browserFrameMetrics, deliveryRoute, frameMetrics, motionMetrics, performanceRoomName, roomProgress } from '../scripts/performance-report.mjs';
+import { browserFrameMetrics, deliveryRoute, frameMetrics, motionMetrics, performanceRoomName, roomProgress, withStagingDuration } from '../scripts/performance-report.mjs';
 import { selectPerformance } from '../scripts/performance-select.mjs';
 
 test('performance CI ignores documentation and small runtime edits unless explicitly selected', () => {
@@ -129,6 +129,13 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   assert.deepEqual(route.initialOrder, initialOrder);
   assert.deepEqual(route.secondOrder, secondOrder);
   assert.deepEqual(route.staging, { stagedTick: 22, confirmedTick: 24 });
+  const event = { type: 'stageRepeatDelivery', status: 'ok', commandDurationMs: 1200 };
+  assert.deepEqual(withStagingDuration(route, event).staging, { stagedTick: 22, confirmedTick: 24, durationMs: 1200 });
+  assert.equal(withStagingDuration(route, { ...event, commandDurationMs: 0 }).staging.durationMs, 0);
+  for (const missing of [undefined, { ...event, commandDurationMs: -1 }, { ...event, commandDurationMs: NaN }, { ...event, status: 'failed' }]) {
+    assert.equal(withStagingDuration(route, missing).staging.durationMs, null);
+  }
+  assert.deepEqual(withStagingDuration({ status: 'unavailable' }, event).staging, { durationMs: 1200 });
   assert.equal(route.jumpCount, 2);
   assert.equal(route.legs.length, 5);
   const check = (samples: typeof poses, first = initialOrder, stage = stageRepeat) => deliveryRoute(samples, first, stage).status;

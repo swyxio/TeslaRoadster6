@@ -10,7 +10,7 @@ const initialOrder = { restaurant: { id: 'tartine', x: -180, z: 120, index: 1 },
 const secondOrder = { restaurant: { id: 'second', x: -160, z: 120, index: 3 }, customer: { id: 'another', x: 15, y: 0, z: -180, rooftop: false, index: 4 } };
 const routeEvidence = {
   initialOrder, secondOrder,
-  firstCompletion: { tick: 15, x: 0, z: -180 }, staging: { stagedTick: 16, confirmedTick: 17 },
+  firstCompletion: { tick: 15, x: 0, z: -180 }, staging: { stagedTick: 16, confirmedTick: 17, durationMs: null as number | null },
   milestones: [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']].map(([completed, stage], i) => ({ completed, stage, tick: i * 10, x: i, z: 0 })),
 };
 
@@ -117,6 +117,22 @@ test('required comparisons fail when either report lacks any available observati
       return spawnSync(process.execPath, [script, before, after, flag], { encoding: 'utf8' });
     };
     assert.equal(compare(report, report, '--require-comparable').status, 0);
+    const staged = structuredClone(report);
+    report.route.staging.durationMs = 1200;
+    staged.route.staging.durationMs = 9000;
+    const durationResult = compare(report, staged, '--require-comparable');
+    assert.equal(durationResult.status, 0, 'different durations do not introduce a timing threshold');
+    assert.match(durationResult.stdout, /Second-delivery staging duration: base 1200 ms, candidate 9000 ms/);
+    assert.match(durationResult.stdout, /p95 includes the mostly stationary staging wait; distance-based path matching does not control elapsed time/);
+    report.route.staging.durationMs = null;
+    staged.route.staging.durationMs = -1;
+    const missingDuration = compare(report, staged, '--require-comparable');
+    assert.equal(missingDuration.status, 0, 'missing duration does not affect route comparability');
+    assert.match(missingDuration.stdout, /Second-delivery staging duration: base unavailable, candidate unavailable/);
+    const absent = structuredClone(report), zero = structuredClone(staged);
+    delete (absent.route.staging as Partial<typeof absent.route.staging>).durationMs;
+    zero.route.staging.durationMs = 0;
+    assert.match(compare(absent, zero, '--require-comparable').stdout, /Second-delivery staging duration: base unavailable, candidate 0 ms/);
     for (const side of ['base', 'candidate'] as const) {
       for (const metric of ['frame', 'room', 'steady', 'bunched'] as const) {
         const changed = structuredClone(report);

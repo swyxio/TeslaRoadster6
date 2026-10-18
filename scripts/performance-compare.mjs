@@ -77,6 +77,10 @@ const routeReason = targetsIdentified ? route.reason : 'target identity missing'
 const delta = (before, after, comparable, suffix) => n(before) && n(after) && comparable ? `${after - before >= 0 ? '+' : ''}${fmt(after - before)}${suffix}` : 'HOLD';
 const mark = report => !report ? 'HOLD (report missing)' : !hasTarget(report) ? 'HOLD (target identity missing)' : `${report.target.version} · ${report.target.revision.slice(0, 12)}${report.target.dirty ? ' · dirty' : ''}`;
 const capture = report => report?.fixture?.captureVideo === true ? 'on' : report?.fixture?.captureVideo === false ? 'off' : 'HOLD';
+const stagingDuration = report => {
+  const duration = report?.route?.staging?.durationMs;
+  return n(duration) && duration >= 0 ? `${fmt(duration)} ms` : 'unavailable';
+};
 const lines = [
   '## Tesland performance observation', '',
   `Base: ${mark(base)}  `, `Candidate: ${mark(head)}`, '',
@@ -88,8 +92,9 @@ const lines = [
   `Bunched 150 ms synthetic speed ratio: base ${tuple(model(base, 'bunched150')?.speedRatio)}, candidate ${tuple(model(head, 'bunched150')?.speedRatio)}.`,
   `Browser renderer: ${head?.environment?.runner?.webgl?.renderer ?? 'HOLD'}. Route: ${routeReason}; path difference p95 ${fmt(route.p95)} m, max ${fmt(route.max)} m.`, '',
   `Path difference by leg (p95 / max, m): ${route.legs?.map(leg => `${leg.leg}: ${fmt(leg.p95)} / ${fmt(leg.max)}`).join('; ') ?? 'HOLD'}.`, '',
+  `Second-delivery staging duration: base ${stagingDuration(base)}, candidate ${stagingDuration(head)}.`, '',
   `Required observations: ${metricsComplete(base) && metricsComplete(head) ? 'available' : 'HOLD (one or more metrics are missing or unavailable)'}.`, '',
-  `Animation intervals are browser callback timing, not GPU completion or actual display presentation. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks during two deliveries and flight in one local room. Video capture: base ${capture(base)}, candidate ${capture(head)}; video observations do not produce performance deltas.`,
+  `Animation intervals are browser callback timing, not GPU completion or actual display presentation. The p95 includes the mostly stationary staging wait; distance-based path matching does not control elapsed time. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks during two deliveries and flight in one local room. Video capture: base ${capture(base)}, candidate ${capture(head)}; video observations do not produce performance deltas.`,
   'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Frame and room deltas are held if environments or either delivery target differ, video is enabled, milestones are missing, or any of the five sampled paths diverges beyond the documented tolerances. Three-leg reports are incompatible with this scenario. Raw traces and conditions are in the uploaded artifact.',
 ];
 const markdown = lines.join('\n') + '\n';

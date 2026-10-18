@@ -1356,6 +1356,8 @@ The merged 0.0.27-alpha revision `00f8ffeeaefa7a184816244c26b515cf19585539` pass
 
 A disposable GitHub-hosted `macos-15` probe ran the 720p scenario with headless Chromium reporting `ANGLE Metal Renderer: Apple Paravirtual device`. All four observations were available: 66.7 ms browser p95 across 165 intervals and 0.930 room sim/wall ratio, with the same synthetic metrics; one-minute VM load was 20.42 before and 8.47 after on three virtual CPUs. This is a single VM probe, not a physical-device or GPU-completion measurement. An earlier `ubuntu-24.04` SwiftShader run at 720p produced too few browser intervals for a result, so the selective CI uses the tested macOS runner and checks its renderer.
 
+On the integrated `4d7cee4` baseline with the staging-duration reporting change, the focused reporter and comparison tests passed 12/12 using the existing workspace `tsx` installation. They cover recorded, missing and invalid durations without introducing a timing threshold. No new timed run or full build was performed for this reporting change.
+
 ## 2026-10-18 · Goal and awards presentation candidate
 
 The independent UI candidate was rebased on achievement merge `5c3779d`: `pnpm test` passed 884 tests and `pnpm build` passed with the existing Vite large-chunk warning. The build was repeated after increasing the touch targets to 44 CSS pixels. No room or gameplay protocol changes are included in this UI candidate.

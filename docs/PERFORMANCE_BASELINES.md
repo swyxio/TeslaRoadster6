@@ -24,7 +24,11 @@ own initial order at the current car position. This second assignment is
 controlled to make the route repeatable; it does not test natural second-job
 selection. The fixture waits for the guest's wallet queue to settle and commits
 the replacement to its disposable profile. This adds a local progress commit
-to the measured workload. The fixture checks that the same guest and vehicle
+to the measured workload. The report records the elapsed `stageRepeatDelivery`
+command duration, including the wait for assignment and wallet settlement and
+the confirming room snapshot. Browser frame p95 includes this mostly stationary
+period; unequal waits can change its mixture of driving and idle frames. The
+fixture checks that the same guest and vehicle
 remain in the room, the two targets remain accessible, and no pose revision has
 changed; it never moves the car. The comparison requires both orders' restaurant and
 customer IDs and coordinates and holds if they differ or are unavailable.
@@ -37,6 +41,9 @@ itself does not prove a jump or delivery occurred. A respawn holds the route.
 The report saves four delivery legs and a flight leg from received room poses.
 Each three-dimensional path is sampled at 41 evenly spaced fractions of its own
 traveled distance, including flight altitude.
+Matching these paths does not control elapsed time; compare staging durations
+when interpreting frame p95. Missing durations are shown as unavailable and do
+not impose an unvalidated timing threshold.
 The pair must have every leg, differ in leg length by at most the greater of
 20 m or 25% of the base leg. Each leg must have p95 sampled-point separation
 at most 25 m and maximum separation at most 50 m. Missing or

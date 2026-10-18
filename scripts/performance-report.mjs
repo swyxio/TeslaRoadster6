@@ -162,6 +162,11 @@ export function deliveryRoute(poses, initialOrder, stageRepeat) {
   return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
 }
 
+export function withStagingDuration(route, event) {
+  const duration = event?.type === 'stageRepeatDelivery' && event.status === 'ok' ? event.commandDurationMs : null;
+  return { ...route, staging: { ...route.staging, durationMs: number(duration) && duration >= 0 ? duration : null } };
+}
+
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
   if (result.error || result.status !== 0) throw new Error(`${command} failed: ${result.error ?? result.stderr.slice(-5000)}`);
@@ -286,14 +291,15 @@ async function main() {
   const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
     ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
     : { status: 'unavailable', reason: 'room was not live for the measurement window' };
-  const route = deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, event('stageRepeatDelivery')?.sample);
+  const stageRepeat = event('stageRepeatDelivery');
+  const route = withStagingDuration(deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, stageRepeat?.sample), stageRepeat);
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
     fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation. It includes the mostly stationary second-delivery staging wait; distance-based path matching does not control elapsed time.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

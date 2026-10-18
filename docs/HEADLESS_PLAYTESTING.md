@@ -229,6 +229,9 @@ normal progress queue, so the room projection, draft and disposable profile
 agree. That extra commit is part of the measured workload. This controlled second assignment
 is not a test of natural second-job selection. It is allowed once, for the
 same connected guest, vehicle and room, without a pose revision change.
+The report records the staging command duration, including assignment and
+wallet waits and snapshot confirmation. Frame p95 includes this mostly
+stationary period; distance-based route matching does not control elapsed time.
 
 The saved trajectory and report must confirm both pickups and both completed
 drop-offs at their authoritative targets, with both order IDs and coordinates
