@@ -21,11 +21,11 @@ Distinct cues include open original Roadster, new sports wedge, Cybertruck's ang
 
 ## Environment
 
-Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. Terrain/elevated roads/ramps require a shared height/collision design before meshes are introduced. Bridge, hillside and water models are currently scenery; do not imply traversable surfaces that simulation cannot support.
+Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. Terrain/elevated roads/ramps require a shared height/collision design before meshes are introduced. The existing Oakland stunt loop is derived from STUNT_LOOP in shared/map.ts. Bridge, hillside and water models are currently scenery; do not imply traversable surfaces that simulation cannot support.
 
 ## UI alternatives
 
-Keep immediate solo/play-with-friends choices. Preserve room link sharing, joining feedback, explicit reconnect, a visible return-to-menu, drive/lift/roll/boost/brake/enter-exit/recovery controls and station refill feedback. Touch must permit steering plus throttle plus lift without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
+Keep immediate solo/play-with-friends choices. Preserve room link sharing, joining feedback, explicit reconnect, a visible return-to-menu, drive/jump/flip/roll/boost/brake/enter-exit/recovery controls and station refill feedback. Touch must permit steering plus a one-tap jump or flip without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
 
 ## Delivery format
 

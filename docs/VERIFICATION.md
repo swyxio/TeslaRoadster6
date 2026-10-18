@@ -1,5 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket stunt implementation · 2026-10-17 Pacific
+
+- Local simulation checks cover 0–60 mph arcade targets, three jump/flip/landing sequences (99% tank), two flips in one jump, depleted-air driving and falling, inverted thruster hover, the physical ramp, a complete suction loop and detachment. After integrating delivery and police from main, the full test suite and production build passed; Vite retains its existing >500 kB chunk warning.
+- Local Wrangler two-client integration passed with authoritative movement, jump, one-tap flip, landing, fleet switching and invalid-input isolation. This is not a load or production test. One earlier integration run was interrupted when a concurrent Vite build caused Wrangler to reload; it passed when rerun after the build.
+- Local Chrome desktop: solo jump, flip, landing and 67% remaining air were visible. Chrome 390×844 portrait and 844×390 landscape emulation: layout and changing airborne control labels inspected; keyboard-activated fleet selection and invalid room validation verified. Those observations and screenshots preceded integration of the delivery and police UI: `screenshots/stunt-desktop.png`, `screenshots/stunt-portrait.png`, `screenshots/stunt-landscape.png`. After integration, the desktop delivery HUD and stunt keyboard controls were visible; the combined mobile layouts were not rechecked.
+- Chrome's emulated pointer actions in this session did not activate either touch or ordinary toolbar buttons. Pointer handling was exercised with synthetic unit events and keyboard activation worked, but genuine phone touch and multi-finger interaction remain unverified. The ramp and loop have simulation tests, not a completed manual route playtest. No physical device, new load test, or production deployment was verified.
+
 ## Open-source and staging preparation
 
 - A fresh clone of the public repository passed `pnpm install --frozen-lockfile` and `pnpm run ci` (18 tests, both typechecks, and Vite build). The build retains Vite's warning about a JavaScript chunk over 500 kB.

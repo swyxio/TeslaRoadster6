@@ -18,3 +18,4 @@
 @media(max-height:550px) and (pointer:coarse){.mission{max-width:280px}.mission #police-status,.mission #delivery-stats{display:none}.mission #hint{display:block}.drive-actions{top:65px;left:auto;right:16px;max-width:420px}}
 
 @media(max-height:550px) and (pointer:coarse){.mission #police-status.chased{display:block}}
+@media(pointer:coarse),(max-width:800px){.touch-flight .hover-control{font-size:9px;min-width:54px}}
