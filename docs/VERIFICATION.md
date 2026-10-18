@@ -4,6 +4,7 @@
 
 - The production build for merge `843657f` failed in the existing global-chat quota test: its simulated one-hour reset was based on a timestamp taken before the tested quota bucket was constructed. The test now uses a timestamp taken immediately after construction, avoiding a race on loaded builders without changing the runtime limit.
 - On the latest controls integration, `pnpm test` passed 182 tests and `pnpm build` passed both TypeScript checks and the production build; Vite's existing large-chunk warning remains.
+- The subsequent production build `bb85cf4` deployed protocol v16 and served the locally built assets. Its two-client room integration passed, including sky-lane speed and refill. Two initial runs exposed a test setup assumption: either connection can occupy the Bay spawn; the test now moves the other car when needed and checks the actual launch position. This is not a load test.
 
 ## Gamepad and keyboard bindings · 2026-10-18 Pacific
 
