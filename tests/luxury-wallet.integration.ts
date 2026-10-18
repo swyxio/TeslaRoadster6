@@ -182,6 +182,7 @@ async function luxury(client:ReturnType<typeof connect>,action:'buy'|'collect',v
 
 async function verifyAutonomyWallet(){
   const owner=await savedDriver(`Pilot${randomUUID().slice(0,6)}`),room=`autonomy-${randomUUID().slice(0,8)}`;
+  await rpc('fund',{driverId:owner.id,seedCash:50_000});
   let client=await join(room,owner.code);
   const playerId=client.last('welcome')!.id as string;
   await rpc('workshop',{room,playerId});await pause(450);await barrier(client,700);
@@ -244,10 +245,50 @@ async function verifyRolloutRetry(){
 
 }
 
+async function verifyOtaPriceChange(){
+  const legacy=await savedDriver('Legacy OTA');
+  await rpc('fund',{driverId:legacy.id,seedCash:2_500});
+  await rpc('legacy-ota',{driverId:legacy.id,count:3});
+  const room=`ota-old-${randomUUID().slice(0,8)}`,first=await join(room,legacy.code);
+  const player=()=>first.last('state')!.world.players.find((item:Message)=>item.id===first.last('welcome')!.id);
+  assert.deepEqual({enabled:player().delivery.ota.enabled,active:player().delivery.ota.active,needsRenewalConsent:player().delivery.ota.needsRenewalConsent},
+    {enabled:false,active:true,needsRenewalConsent:true},'the old paid period survives recovery');
+  try{await until(()=>player().delivery.ota.active===false,'old period expires',30_000);}
+  catch(error){console.error('OTA recovery state:',{ota:player().delivery.ota,time:first.last('state')!.world.time,socket:first.socket.readyState,profile:(await inspect(legacy.id)).progress.ota});throw error;}
+  assert.equal(first.last('wallet')!.cash,2_500,'the new rate does not renew without consent');
+  first.socket.close();await until(()=>first.socket.readyState===WebSocket.CLOSED,'old subscriber leaves');
+  const returned=await join(`ota-return-${randomUUID().slice(0,8)}`,legacy.code);
+  const returnedPlayer=()=>returned.last('state')!.world.players.find((item:Message)=>item.id===returned.last('welcome')!.id);
+  assert.equal(returned.last('wallet')!.cash,2_500);
+  assert.equal(returnedPlayer().delivery.ota.needsRenewalConsent,true,'re-enrollment prompt survives reconnect');
+  send(returned,{type:'ota',enabled:true,requestId:22});
+  await until(()=>returned.messages.some(message=>message.type==='otaResult'&&message.requestId===22&&message.ok),'re-enrollment committed');
+  await until(()=>returned.last('wallet')!.cash===2_400,'new period charged once');
+  returned.socket.close();await until(()=>returned.socket.readyState===WebSocket.CLOSED,'re-enrolled subscriber leaves');
+  const recovered=await join(`ota-again-${randomUUID().slice(0,8)}`,legacy.code);
+  const recoveredPlayer=recovered.last('state')!.world.players.find((item:Message)=>item.id===recovered.last('welcome')!.id);
+  assert.equal(recovered.last('wallet')!.cash,2_400);
+  assert.equal(recoveredPlayer.delivery.ota.enabled,true,'accepted renewal survives reconnect');
+  assert.equal(recoveredPlayer.delivery.ota.needsRenewalConsent,false);
+  recovered.socket.close();
+
+  const early=await savedDriver('Early OTA');
+  await rpc('fund',{driverId:early.id,seedCash:2_500});
+  await rpc('legacy-ota',{driverId:early.id,count:4});
+  const earlyRoom=await join(`ota-early-${randomUUID().slice(0,8)}`,early.code);
+  send(earlyRoom,{type:'ota',enabled:true,requestId:23});
+  await until(()=>earlyRoom.messages.some(message=>message.type==='otaResult'&&message.requestId===23&&message.ok),'early re-enrollment committed');
+  assert.equal(earlyRoom.last('wallet')!.cash,2_500,'early re-enrollment does not charge for the paid remainder');
+  await until(()=>earlyRoom.last('wallet')!.cash===2_400,'accepted subscription renews at new rate',30_000);
+  earlyRoom.socket.close();
+  console.log('PASS: pre-change saved OTA periods survive recovery; renewal waits for consent and charges once.');
+}
+
 try {
   child=start();await ready();
   if(process.argv.includes('--autonomy-only'))await verifyAutonomyWallet();
   else if(process.argv.includes('--rollout-only'))await verifyRolloutRetry();
+  else if(process.argv.includes('--ota-rollout-only'))await verifyOtaPriceChange();
   else {
 
   // Simulated world time crosses three checkpoint windows without a wall-clock
@@ -261,12 +302,12 @@ try {
   const failures=await rpc<{same:Rejection;order:Rejection;renewal:Rejection;closedSame:Rejection;closedOrder:Rejection}>('rejection-simulation',{});
   assert.equal(failures.same.after.order.elapsed,7,'unchanged committed order keeps elapsed time after a rejected write');
   assert.equal(failures.same.after.remaining,95,'the committed OTA period keeps counting down');
-  assert.deepEqual(failures.order.after.order,failures.order.initial.order,'a speculative order-stage change rolls back');
+  assert.deepEqual(failures.order.after.order,{...failures.order.initial.order,elapsed:7},'a speculative order-stage change rolls back while physical time survives');
   assert.equal(failures.order.after.completed,failures.order.initial.completed,'a speculative completion rolls back');
   assert.equal(failures.renewal.after.remaining,95,'a speculative OTA renewal cannot extend the committed period');
   assert.ok(failures.closedSame.queuedBeforeRejection>=2,'disconnect queues a final checkpoint behind the pending head');
   assert.equal(failures.closedSame.after.order.elapsed,7,'the already-closed session retains valid elapsed time');
-  assert.deepEqual(failures.closedOrder.after.order,failures.closedOrder.initial.order,'a final checkpoint cannot retain a speculative order');
+  assert.deepEqual(failures.closedOrder.after.order,{...failures.closedOrder.initial.order,elapsed:7},'a final checkpoint cannot retain a speculative order');
   for(const [scenario,result] of Object.entries(failures)){
     assert.equal(result.queued,1,`${scenario}: disconnect queues the preserved timers while acknowledgement is held`);
     assert.equal(result.writes.length,2,`${scenario}: the disconnect checkpoint follows the rejected head`);
@@ -412,7 +453,7 @@ try {
   assert.equal((await inspect(rejectedId)).progress.cash,purchaseCash(FUNDS,'ducati-panigale-v4'));
 
   // A late old-fence acknowledgement must not poison the new fence's sequence
-  // watermark, including a pickup rejection that never reached the profile.
+  // watermark, including a pickup request rejected by the room fence.
   const handoffId=driver(),oldFence=randomUUID(),newFence=randomUUID(),handoffRoom=`watermark-${randomUUID().slice(0,8)}`;
   await acquire(handoffId,oldFence,handoffRoom);
   const handoff=await acquire(handoffId,newFence,handoffRoom);
@@ -420,7 +461,7 @@ try {
   assert.deepEqual(await submit(handoffRoom,late),{ok:false,reason:'superseded'});
   assert.deepEqual(await ack(handoffRoom,late),{ok:true});
   const latePickup={...intent(handoffId,oldFence,handoff.revision,'ducati-panigale-v4',1001),pickup:{id:'missing-generation',generation:99}};
-  assert.deepEqual(await submit(handoffRoom,latePickup),{ok:false,reason:'reserved'});
+  assert.deepEqual(await submit(handoffRoom,latePickup),{ok:false,reason:'superseded'});
   assert.deepEqual(await ack(handoffRoom,latePickup),{ok:true});
   const current=intent(handoffId,newFence,handoff.revision,'ducati-panigale-v4',handoff.sequence+1);
   success(await submit(handoffRoom,current));
@@ -564,7 +605,7 @@ try {
   const restoredState=restoredGuest.last('state')!,restoredPlayer=restoredState.world.players.find((item:Message)=>item.id===restoredPlayerId);
   const otaAfter=restoredPlayer.delivery.ota.renewAt-restoredState.world.time;
   assert.ok(otaAfter>0&&otaAfter<=otaBefore+1,'OTA time is retained rather than renewed for free');
-  assert.equal(restoredGuest.last('wallet')!.cash,guestCash-5,'first-time identity retains guest cash and OTA debit');
+  assert.equal(restoredGuest.last('wallet')!.cash,guestCash-100,'first-time identity retains guest cash and OTA debit');
 
   // An unbound code must not attach to a wallet already owned by a different
   // saved driver. Rejoining can bind it to its own fresh guest wallet instead.
@@ -585,7 +626,7 @@ try {
   assert.notEqual(newWallet.driverId,boundGuest.driverId,'rejoining binds the new identity to a distinct wallet');
   assert.equal(newDriver.last('wallet')!.cash,2_500,'the new driver starts with its own balance');
   const originalAgain=await join(`guest-return-${randomUUID().slice(0,8)}`,guestCode);
-  assert.equal(originalAgain.last('wallet')!.cash,guestCash-5,'the original balance survives the attempted switch');
+  assert.equal(originalAgain.last('wallet')!.cash,guestCash-100,'the original balance survives the attempted switch');
   assert.equal(originalAgain.last('wallet')!.earned,guestEarned);
 
   // Durable reverse claims serialize overlapping binds. Same-code retries are
@@ -1074,10 +1115,10 @@ try {
   // Finish and tune this owned model at a workshop; both must follow the owner.
   await rpc('workshop',{room:liveRoom,playerId:alicePlayer});
   await pause(450);
-  send(aliceRoom,{type:'vehicleStyle',category:'paint',choice:'mint',requestId:30});
+  send(aliceRoom,{type:'vehicleStyle',category:'paint',choice:'gold',requestId:30});
   await until(()=>aliceRoom.messages.some(message=>message.type==='vehicleStyleResult'&&message.requestId===30),'style purchase result');
   const styleResult=aliceRoom.messages.find(message=>message.type==='vehicleStyleResult'&&message.requestId===30)!;
-  assert.equal(styleResult.ok,true);assert.equal(styleResult.category,'paint');assert.equal(styleResult.choice,'mint');
+  assert.equal(styleResult.ok,true);assert.equal(styleResult.category,'paint');assert.equal(styleResult.choice,'gold');
   await pause(450);
   send(aliceRoom,{type:'upgrade',upgrade:'motor',requestId:31});
   await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===31),'motor purchase result');
@@ -1088,10 +1129,16 @@ try {
   await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===32),'rocket purchase result');
   assert.equal(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===32)!.ok,true);
   await barrier(aliceRoom,105);
+  // The room rate-limits workshop actions to one every 400 ms.
+  await pause(450);
   const beforeAutonomy=await inspect(alice.id);
   await arm(alice.id,'hold-before');
   send(aliceRoom,{type:'upgrade',upgrade:'autonomyJump',requestId:33});
-  await until(async()=>(await faultState(alice.id)).held,'self-driving upgrade waits for wallet commit');
+  await until(async()=>(await faultState(alice.id)).held||aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===33),'self-driving upgrade waits for wallet commit');
+  const heldAutonomy=await faultState(alice.id);
+  assert.ok(heldAutonomy.held,`upgrade was rejected before reaching the wallet: ${JSON.stringify(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===33))}`);
+  assert.equal(heldAutonomy.heldAction?.kind,'progress');
+  if(heldAutonomy.heldAction?.kind==='progress')assert.equal(heldAutonomy.heldAction.progress.vehicles['ducati-panigale-v4'].upgrades.autonomyJump,true,'the held write contains the requested upgrade');
   assert.equal(aliceRoom.last('state')!.world.entities.find((entity:Message)=>entity.id===collectedId).upgrades.autonomyJump,false,'uncommitted upgrade is unavailable');
   assert.equal((await inspect(alice.id)).progress.cash,beforeAutonomy.progress.cash,'pending purchase has not debited the wallet');
   await release(alice.id);
@@ -1138,7 +1185,7 @@ try {
   await until(()=>{
     const world=aliceRoom.last('state')?.world,player=world?.players.find((item:Message)=>item.id===rejoinedId);
     const car=world?.entities.find((entity:Message)=>entity.id===player?.entityId);
-    return car?.kind==='ducati-panigale-v4'&&car.style.paint==='mint'&&car.upgrades.motor===true&&car.upgrades.autonomyJump===true&&car.upgrades.autonomySky===true;
+    return car?.kind==='ducati-panigale-v4'&&car.style.paint==='gold'&&car.upgrades.motor===true&&car.upgrades.autonomyJump===true&&car.upgrades.autonomySky===true;
   },'purchased paint, motor, and self-driving tiers restored on the owned car');
   assert.ok(!JSON.stringify(bobRoom.messages).includes(alice.code),'other player never receives the recovery code');
   assert.ok(!bobRoom.messages.some(message=>message.type==='wallet'&&message.ownedLuxury?.includes('lamborghini-temerario')),'other player never receives the owner wallet');

@@ -73,8 +73,8 @@ test('physical awards evaluate region milestones against the resulting committed
   const delivery=initialDelivery({x:0,z:0}),state=initialAchievements();delivery.cash=9_500;
   const awards=evaluateAchievementEvidence(state.unlocked,{kind:'roof',roof:'ordinary'});
   assert.deepEqual(applyAchievementAwards(delivery,state,awards),['roof-rider','region-oakland']);
-  assert.equal(delivery.cash,11_500);
-  assert.equal(delivery.lifetimeIncome,2_000);
+  assert.equal(delivery.cash,10_500);
+  assert.equal(delivery.lifetimeIncome,1_000);
   assert.deepEqual(applyAchievementAwards(delivery,state,awards),[]);
-  assert.equal(delivery.cash,11_500);
+  assert.equal(delivery.cash,10_500);
 });

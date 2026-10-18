@@ -15,14 +15,14 @@ export const SHOPS = [
 ] as const;
 export const SHOP_RADIUS=12;
 export const UPGRADES = {
-  rocket: {name:'Rocket kit', price:60, description:'Jump, hover, boost and flip in any vehicle.'},
-  economy: {name:'Efficient nozzles', price:45, description:'Flight uses 25% less air.'},
-  tank: {name:'Air tank', price:30, description:'Double capacity and refill. Five levels of arcade flight.'},
-  motor: {name:'Sport motor', price:45, description:'25% quicker acceleration and 10% higher road speed.'},
-  armor: {name:'Impact armor', price:35, description:'Halves crash and hard-landing damage.'},
-  autonomyJump: {name:'Ludicrous Leap', price:150, description:'Self-driving can hop past stopped traffic. Requires rockets.'},
-  autonomySky: {name:'Maximum Plaid', price:300, description:'Self-driving can fly and use helpful air currents. Requires Ludicrous Leap and rockets.'},
-  service: {name:'Repair & refill', price:12, description:'Restore condition and fill your air tank.'},
+  rocket: {name:'Rocket kit', price:2_500, description:'Jump, hover, boost and flip in any vehicle.'},
+  economy: {name:'Efficient nozzles', price:2_000, description:'Flight uses 25% less air.'},
+  tank: {name:'Air tank', price:1_500, description:'Double capacity and refill. Five levels of arcade flight.'},
+  motor: {name:'Sport motor', price:2_000, description:'25% quicker acceleration and 10% higher road speed.'},
+  armor: {name:'Impact armor', price:1_500, description:'Halves crash and hard-landing damage.'},
+  autonomyJump: {name:'Ludicrous Leap', price:6_000, description:'Self-driving can hop past stopped traffic. Requires rockets.'},
+  autonomySky: {name:'Maximum Plaid', price:12_000, description:'Self-driving can fly and use helpful air currents. Requires Ludicrous Leap and rockets.'},
+  service: {name:'Repair & refill', price:200, description:'Restore condition and fill your air tank.'},
 } as const;
 export type UpgradeId=keyof typeof UPGRADES;
 export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean;autonomyJump:boolean;autonomySky:boolean};

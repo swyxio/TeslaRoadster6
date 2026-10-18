@@ -6,6 +6,22 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Make your mark',
+    intro: 'Choose your next upgrade and make your ride your own.',
+    sections: [
+      { title: 'Your workshop', items: [
+        'Explore new paints and decals, with more finishes to unlock as your cash level rises.',
+        'Remote shop access costs $100 per game hour. Existing subscribers keep paid time and can re-enroll at the new rate.'
+      ] },
+      { title: 'The road ahead', items: [
+        'Delivery rewards, achievements, upgrades and marketplace paint prices have been rebalanced.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.20-alpha',
+    label: '0.0.20 Alpha',
+    date: '2026-10-18',
     title: 'More ways to self-drive',
     intro: 'Get back on the road, or give your car a little more ambition.',
     sections: [

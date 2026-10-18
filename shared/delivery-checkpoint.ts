@@ -1,6 +1,6 @@
 /** Repeatable delivery checkpoint; call only after a completed drop-off. */
 export const DELIVERY_CHECKPOINT_INTERVAL = 3;
-export const DELIVERY_CHECKPOINT_REWARD = 750;
+export const DELIVERY_CHECKPOINT_REWARD = 350;
 
 export function deliveryCheckpointReward(completed:number):number {
   return completed > 0 && completed % DELIVERY_CHECKPOINT_INTERVAL === 0 ? DELIVERY_CHECKPOINT_REWARD : 0;

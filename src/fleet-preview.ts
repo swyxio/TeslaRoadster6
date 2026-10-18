@@ -20,8 +20,8 @@ export class FleetPreview {
     if(this.model)this.scene.remove(this.model);
     this.scene.environment=null;this.environment.dispose();this.renderer.dispose();this.renderer.forceContextLoss();
   }
-  show(id:VehicleId,style?:VehicleStyle){
-    if(this.model)this.scene.remove(this.model);this.model=createVehicle(id);if(style)setVehicleStyle(this.model,id,style);this.scene.add(this.model);
+  show(id:VehicleId,style?:VehicleStyle,marketPaint:number|null=null){
+    if(this.model)this.scene.remove(this.model);this.model=createVehicle(id);if(style)setVehicleStyle(this.model,id,style,marketPaint);this.scene.add(this.model);
     const spec=VEHICLES[id],d=Math.max(spec.length,spec.height*2.5);
     this.camera.position.set(d*.69,d*.42,-d*.92);this.camera.lookAt(0,spec.height*.5,0);this.renderer.render(this.scene,this.camera);
   }

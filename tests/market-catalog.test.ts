@@ -33,3 +33,8 @@ test('only the two allowlisted cosmetics resolve to paint colors',()=>{
   assert.equal(marketPaintColor('pacific-blue-paint'),0x236b9d);
   for(const invalid of ['bay-bridge-postcard','unknown','__proto__',null,0])assert.equal(marketPaintColor(invalid),null);
 });
+
+test('primary market paint prices match their place in progression',()=>{
+  assert.equal(marketCatalogItem('sunrise-gold-paint')?.price,250_000);
+  assert.equal(marketCatalogItem('pacific-blue-paint')?.price,12_000);
+});

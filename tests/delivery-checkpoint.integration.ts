@@ -108,14 +108,14 @@ try {
   const after=(await inspect()).progress;
   const added=after.unlocked.filter(id=>!before.unlocked.includes(id));
   assert.ok(added.includes('regular'),'the third-delivery milestone also commits');
-  const awards:Record<string,number>={regular:1_000,'region-oakland':1_000,'berkeley-research':1_500,'roof-rider':1_000,'sky-delivery':2_000};
+  const awards:Record<string,number>={regular:400,'region-oakland':500,'berkeley-research':400,'roof-rider':500,'sky-delivery':1_000};
   for(const award of added)assert.ok(award in awards,`unexpected award ${award}`);
   const awardCash=added.reduce((total,id)=>total+awards[id],0),fare=after.earned-before.earned;
   assert.ok(fare>=0);
-  assert.equal(after.cash-before.cash,fare+750+awardCash);
-  assert.equal(after.eligibleIncome-before.eligibleIncome,fare+750+awardCash);
+  assert.equal(after.cash-before.cash,fare+350+awardCash);
+  assert.equal(after.eligibleIncome-before.eligibleIncome,fare+350+awardCash);
   assert.ok((await wallet<{started:number}>('fault-state',{driverId})).started>=armed.started+2,'commit was retried');
-  assert.equal(player(driver).delivery.lastReward.amount,fare+750+awardCash,'one grouped reward is shown');
+  assert.equal(player(driver).delivery.lastReward.amount,fare+350+awardCash,'one grouped reward is shown');
 
   driver.socket.close();await until(()=>driver.socket.readyState===WebSocket.CLOSED,'driver disconnected');
   await until(()=>observer.last('state')?.world.players.every((item:Message)=>item.id!==id),'driver removed');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { MarketCoordinator } from '../worker/market-coordinator';
 import { MARKET_LOCK_KEY, MarketWallet, type MarketWalletIntent } from '../worker/market-wallet';
+import { marketCatalogItem } from '../shared/market-catalog';
 
 // The production object uses the same transactional storage API. This fixture
 // persists its maps across reconstructed coordinators and wallet participants.
@@ -58,7 +59,7 @@ test('market settlement recovers a lost wallet reply, transfers once, and resume
   const state=new Storage(),coordinator=()=>new MarketCoordinator(cf(state),id=>stores.get(id)!.wallet);
   const market=coordinator(),item=acquire('pacific-blue-paint');
   assert.equal((await market.execute(seller.id,'Seller',item)).status,'completed');
-  assert.equal((await seller.storage.get<Driver>('driver'))!.progress.cash,98_000);
+  assert.equal((await seller.storage.get<Driver>('driver'))!.progress.cash,88_000);
   const owned=(await market.browse(seller.id,1)).owned;assert.equal(owned.length,1);
   const assetId=owned[0].assetId;
   const list={type:'market' as const,action:'list' as const,requestId:2,operationId:randomUUID(),assetId,price:101};
@@ -80,7 +81,7 @@ test('market settlement recovers a lost wallet reply, transfers once, and resume
   await coordinator().recover();
   assert.equal((await coordinator().status(buyer.id,buy.operationId,7)).status,'completed');
   assert.equal((await buyer.storage.get<Driver>('driver'))!.progress.cash,99_899);
-  assert.equal((await seller.storage.get<Driver>('driver'))!.progress.cash,98_095);
+  assert.equal((await seller.storage.get<Driver>('driver'))!.progress.cash,88_095);
   assert.deepEqual([(await buyer.storage.get<Driver>('driver'))!.progress.earned,(await seller.storage.get<Driver>('driver'))!.progress.eligibleIncome],[23,47]);
   assert.equal(await buyer.storage.get(MARKET_LOCK_KEY),undefined);
   assert.equal((await coordinator().browse(buyer.id,8)).owned[0].assetId,assetId);
@@ -136,7 +137,7 @@ test('city starter home charges once, enforces the gate and one purchased-home s
 });
 
 test('equipping persists the overlay, locks equipped custody, replaces and clears it exactly once',async()=>{
-  const owner=createDriver(20_000);await owner.seed();const registry=new Storage();
+  const owner=createDriver(300_000);await owner.seed();const registry=new Storage();
   const market=new MarketCoordinator(cf(registry),()=>owner.wallet);
   await market.execute(owner.id,'Owner',acquire('pacific-blue-paint'));
   await market.execute(owner.id,'Owner',acquire('sunrise-gold-paint'));
@@ -170,7 +171,60 @@ test('new items remain unavailable until their charged wallet resumes',async()=>
   assert.equal((await market.execute(owner.id,'Owner',{type:'market',action:'list',requestId:2,operationId:randomUUID(),assetId,price:0})).reason,'asset-locked');
   await new MarketCoordinator(cf(registry),()=>owner.wallet).recover();
   assert.equal((await market.browse(owner.id,3)).owned.length,1);
-  assert.equal((await owner.storage.get<Driver>('driver'))!.progress.cash,18_000);
+  assert.equal((await owner.storage.get<Driver>('driver'))!.progress.cash,8_000);
+});
+
+test('an accepted primary purchase keeps its original price after a catalog change and recovery',async()=>{
+  const owner=createDriver(50_000);await owner.seed();const registry=new Storage();
+  let offline=true;
+  const wallet={...owner.wallet,async marketPrepare(intent:MarketWalletIntent){
+    if(offline)throw new Error('wallet temporarily unavailable');
+    return owner.wallet.marketPrepare(intent);
+  }};
+  const command=acquire('pacific-blue-paint'),item=marketCatalogItem('pacific-blue-paint')!;
+  const price=item.price;
+  try{
+    // Simulate acceptance by the prior deployment before its wallet is ready.
+    Reflect.set(item,'price',2_000);
+    assert.equal((await new MarketCoordinator(cf(registry),()=>wallet).execute(owner.id,'Owner',command)).status,'pending');
+  }finally{Reflect.set(item,'price',price);}
+  const pending=(await registry.get<any>(`market:op:${owner.id}:${command.operationId}`))!;
+  assert.equal(pending.price,2_000);assert.equal(pending.participants[0].delta,-2_000);
+  offline=false;
+  const restarted=new MarketCoordinator(cf(registry),()=>wallet);await restarted.recover();
+  assert.equal((await restarted.status(owner.id,command.operationId,2)).status,'completed');
+  assert.equal((await owner.storage.get<Driver>('driver'))!.progress.cash,48_000);
+  assert.equal((await restarted.execute(owner.id,'Owner',command)).status,'completed');
+  assert.equal((await restarted.browse(owner.id,3)).owned.length,1);
+  assert.equal((await restarted.execute(owner.id,'Owner',acquire('pacific-blue-paint'))).status,'completed');
+  assert.equal((await owner.storage.get<Driver>('driver'))!.progress.cash,36_000);
+});
+
+test('paint owned before a price change remains available to equip',async()=>{
+  const owner=createDriver(10_000);await owner.seed();const registry=new Storage();
+  const item=marketCatalogItem('sunrise-gold-paint')!,price=item.price;
+  try{
+    Reflect.set(item,'price',2_000);
+    assert.equal((await new MarketCoordinator(cf(registry),()=>owner.wallet).execute(owner.id,'Owner',acquire('sunrise-gold-paint'))).status,'completed');
+  }finally{Reflect.set(item,'price',price);}
+  const restarted=new MarketCoordinator(cf(registry),()=>owner.wallet);
+  const assetId=(await restarted.browse(owner.id,1)).owned[0].assetId;
+  assert.equal((await restarted.execute(owner.id,'Owner',{type:'market',action:'equip',requestId:2,operationId:randomUUID(),assetId})).status,'completed');
+  assert.equal((await owner.storage.get<Driver>('driver'))!.progress.cash,8_000);
+  assert.deepEqual((await owner.storage.get<any>('driver'))!.marketPaint,{assetId,catalogId:'sunrise-gold-paint'});
+});
+
+test('players can transfer owned paint for free regardless of primary price',async()=>{
+  const seller=createDriver(300_000),buyer=createDriver(0);await Promise.all([seller.seed(),buyer.seed()]);
+  const wallets=new Map([seller,buyer].map(driver=>[driver.id,driver.wallet]));
+  const registry=new Storage(),market=new MarketCoordinator(cf(registry),id=>wallets.get(id)!);
+  assert.equal((await market.execute(seller.id,'Seller',acquire('sunrise-gold-paint'))).status,'completed');
+  const assetId=(await market.browse(seller.id,1)).owned[0].assetId;
+  assert.equal((await market.execute(seller.id,'Seller',{type:'market',action:'list',requestId:2,operationId:randomUUID(),assetId,price:0})).status,'completed');
+  const listing=(await market.browse(buyer.id,3)).listings[0];assert.equal(listing.price,0);
+  assert.equal((await market.execute(buyer.id,'Buyer',{type:'market',action:'buy',requestId:4,operationId:randomUUID(),assetId,listingId:listing.listingId,expectedRevision:listing.revision})).status,'completed');
+  assert.equal((await buyer.storage.get<Driver>('driver'))!.progress.cash,0);
+  assert.equal((await new MarketCoordinator(cf(registry),id=>wallets.get(id)!).browse(buyer.id,5)).owned[0].assetId,assetId);
 });
 
 test('concurrent duplicate prepare pauses once and an unsafe hold fails without sealing',async()=>{

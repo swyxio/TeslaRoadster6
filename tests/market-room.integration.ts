@@ -143,8 +143,8 @@ try{
 
   // A fully blocked resume disconnects the held buyer rather than trapping
   // either wallet in the sale; the durable result survives a fresh room.
-  const blockedSeller=await makeDriver('BlockedSeller',10_000),blockedBuyer=await makeDriver('BlockedBuyer',10_000);
-  const blockedSellerClient=await joinSaved('market-blocked-seller',blockedSeller,10_000);
+  const blockedSeller=await makeDriver('BlockedSeller',300_000),blockedBuyer=await makeDriver('BlockedBuyer',10_000);
+  const blockedSellerClient=await joinSaved('market-blocked-seller',blockedSeller,300_000);
   const blockedBuyerClient=await joinSaved('market-blocked-buyer',blockedBuyer,10_000);
   completed(await settle(blockedSellerClient,{action:'acquire',operationId:randomUUID(),catalogId:'sunrise-gold-paint'}));
   const blockedAsset=(await browse(blockedSellerClient)).owned.find(item=>item.name==='Sunrise Gold');assert.ok(blockedAsset);
@@ -178,16 +178,16 @@ try{
   // The profile calls back into the room during release. Dropping below the
   // Oakland access threshold forces that room to commit a reroute through the
   // very same profile before the market may report success.
-  const downgrade=await makeDriver('Downgrade',10_001);
+  const downgrade=await makeDriver('Downgrade',20_001);
   await rpc('market','restricted-order',{driverId:downgrade.driverId});
-  const downgradeClient=await joinSaved('market-downgrade',downgrade,10_001);
+  const downgradeClient=await joinSaved('market-downgrade',downgrade,20_001);
   const downgradeStart=(await inspect(downgrade.driverId)).progress;
   assert.equal(downgradeStart.order.customer,4);
-  assert.ok(downgradeStart.cash>=10_000&&downgradeStart.cash<12_000,'purchase crosses the level boundary');
+  assert.ok(downgradeStart.cash>=20_000&&downgradeStart.cash<22_000,'purchase crosses the level boundary');
   const downgradeOp=randomUUID();
-  completed(await settle(downgradeClient,{action:'acquire',operationId:downgradeOp,catalogId:'sunrise-gold-paint'}));
+  completed(await settle(downgradeClient,{action:'acquire',operationId:downgradeOp,catalogId:'pacific-blue-paint'}));
   const downgraded=(await inspect(downgrade.driverId)).progress;
-  assert.equal(downgraded.cash,downgradeStart.cash-2_000);assert.equal(downgraded.level,0);
+  assert.equal(downgraded.cash,downgradeStart.cash-12_000);assert.equal(downgraded.level,0);
   assert.equal(downgraded.order.stage,'dropoff');assert.notEqual(downgraded.order.customer,4);
   const refreshed=downgradeClient.messages.findIndex(message=>message.type==='wallet'&&message.cash===downgraded.cash);
   const reported=downgradeClient.messages.findIndex(message=>message.type==='marketResult'&&message.operationId===downgradeOp&&message.status==='completed');

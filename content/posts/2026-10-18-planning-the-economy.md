@@ -1,6 +1,19 @@
 Your first Tesland delivery gets you moving. A few more get you thinking: keep saving for the next city, buy a Cybercab that earns alongside you, or spend some cash making your car your own? We modeled those choices in five-minute slices, then followed drivers all the way from San Francisco to their first home—and, eventually, a shared launch to Mars.
 
-Deliveries, cash-based levels, saved vehicles and a game-wide Mars goal give the career its foundation. Next we want to add income-producing cabs and property. The simulations below explore how those investments could change the journey.
+Deliveries, cash-based levels, saved vehicles, income-producing Cybercabs and a game-wide Mars goal give the career its foundation. The longer simulations below explore how fleet and proposed property investments could change the journey.
+
+## Rebalancing the opening
+
+A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The new tuning brings the first delivery award to $500, makes every third delivery worth a $350 checkpoint, and prices the remote OTA shop at $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
+
+The chart follows four opening paths through the actual delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes four deliveries and earns $4,516 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $5,966 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $11,872 in five minutes; route travel and driving skill will change these results.
+
+<figure>
+<img src="/blog/economy/opening-wallet.svg" alt="Four modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">
+<figcaption>Minute-by-minute wallet snapshots using the current delivery and award rules. Task times are assumptions; events, travel to a shop, landmarks and fines are excluded.</figcaption>
+</figure>
+
+The 40-hour and property simulations later in this post use the earlier design's fares and awards. They remain useful for comparing the choices in that design; the revised economy needs new long-run playtests before those home and Mars estimates can be applied to it.
 
 ## The first big purchase
 
@@ -55,11 +68,11 @@ We want owners to find their cars on the map, follow them through the city, and 
 <figcaption>You can already select and drive the Cybercab from the fleet menu.</figcaption>
 </figure>
 
-At a workshop you can buy paint for $18 and decals for $12 or $18. A saved driver keeps the finish for that vehicle model, and other players see the driver name above it.
+At a workshop you can choose from paints and decals across cash levels 0–8. The menu shows locked finishes and their requirements; applying a paid finish charges the listed price each time. A saved driver keeps the applied finish for that vehicle model, and other players see the driver name above it.
 
 <figure>
 <img src="/blog/economy/workshop-current.jpg" alt="The current workshop shows a Roadster with mint paint and a speed stripe applied." loading="lazy">
-<figcaption>The workshop after buying mint paint and a stripe in a funded test drive.</figcaption>
+<figcaption>The workshop after buying mint paint and a stripe in an earlier funded test drive.</figcaption>
 </figure>
 
 <figure>
@@ -69,7 +82,7 @@ At a workshop you can buy paint for $18 and decals for $12 or $18. A saved drive
 
 The Vault near Stanford gives collectors an expensive destination today: two Lamborghinis, two Bugattis, a Ducati and a Kawasaki cost $1.5m–$12m each. Find the showroom to buy one, then collect it there or at a workshop. Each model and collection milestone has a one-off achievement; ownership and finishes stay with your saved driver.
 
-For the expanded economy, we modeled paint starting at $2k, decals and lettering at $5k, wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. Early vehicle and flight kits start at $10k, $20k and $40k. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
+For the expanded economy, we modeled wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. The older model also used different paint, decal and vehicle-kit prices. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
 
 ## A place of your own
 

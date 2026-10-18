@@ -8,6 +8,7 @@ import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabInte
 import type { VehicleUpgrades } from '../shared/upgrades';
 import type { PaintId, VehicleStyle } from '../shared/vehicle-style';
 import type { TankLevel } from '../shared/air-tank';
+import type { SavedOtaSubscription } from '../shared/ota';
 import type { GameRoom } from './index';
 import type { RoomEconomy } from './room-economy';
 import { StarshipLedger } from './starship';
@@ -22,7 +23,7 @@ export type SavedVehicles = Record<string,SavedVehicle>;
 export type DriverProgress = {
   cash:number; earned:number; completed:number; level:Level; order:Order; tickets:number;
   unlocked:AchievementId[]; vehicles:SavedVehicles; ownedLuxury:LuxuryVehicleId[];
-  ota:{enabled:boolean; active:boolean; remaining:number};
+  ota:SavedOtaSubscription;
   /** Cumulative verified game-created income; player transfers never increase this. */
   eligibleIncome:number;
   /** Cumulative active order time, independent of the current order. */
@@ -491,5 +492,5 @@ export function progressFrom(delivery:DeliveryState,unlocked:AchievementId[],veh
   return {cash:delivery.cash,earned:delivery.earned,completed:delivery.completed,level:delivery.level,
     order:{...delivery.order},tickets:delivery.tickets,unlocked:[...unlocked],vehicles:structuredClone(vehicles),
     ownedLuxury:[...ownedLuxury],eligibleIncome,
-    ota:{enabled:delivery.ota.enabled,active:delivery.ota.active,remaining:delivery.ota.active&&delivery.ota.renewAt!==null?Math.max(0,delivery.ota.renewAt-time):0}};
+    ota:{enabled:delivery.ota.enabled,active:delivery.ota.active,remaining:delivery.ota.active&&delivery.ota.renewAt!==null?Math.max(0,delivery.ota.renewAt-time):0,needsRenewalConsent:delivery.ota.needsRenewalConsent}};
 }
