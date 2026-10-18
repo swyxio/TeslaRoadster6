@@ -172,10 +172,11 @@ test('a ferry passenger keeps the deck frame while other cars interpolate',()=>{
 });
 
 test('a predicted recovery is withheld and a confirmed relocation cuts the camera',()=>{
-  const {session,local,state,setTime}=setup();
-  setTime(50);Object.assign(local,{x:600,y:.01,z:-2250,vy:-5,supportId:null});state(15);
-  assert.equal(pair(session.renderWorld()).local,pair(session.world).local);
+  const {session,local,peer,state,setTime}=setup();
+  setTime(50);Object.assign(local,{x:600,y:.01,z:-2250,vy:-5,supportId:null});peer.x+=5;state(15);
+  assert.equal(session.renderWorld(),session.world,'unsafe recovery keeps all cars on the authoritative frame');
   assert.equal(session.localPresentationActive,false);
+  assert.equal(session.remotePresentationActive,true,'the scene must not extrapolate peers away from that frame');
   assert.equal(session.takeCameraSnap(),false);
   setTime(100);Object.assign(local,{x:-36,y:0,z:-1120,vy:0,supportId:'ground'});state(16,1);
   assert.equal(session.takeCameraSnap(),true);
