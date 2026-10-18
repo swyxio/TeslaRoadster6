@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, makeEntity, NEUTRAL, parkingAction, raceAction, step, travelDome } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, parkingAction, raceAction, step, travelDome } from '../shared/game';
 import { DOME } from '../shared/dome';
 import { FERRY_TRAVEL_SECONDS } from '../shared/ferry';
-import { domeSurface } from '../shared/map';
+import { domeSurface, FERRY_DOCKS } from '../shared/map';
 import { hasRocket } from '../shared/rocket';
 
 function setup() {
@@ -46,7 +46,8 @@ test('upgraded ordinary vehicles remain attached when they collide on the dome w
   const center = 2 * DOME.flatHalfWidth + Math.PI * DOME.radius / 2;
   const cars = [center - 2.1, center + 2.1].map((arc, i) => {
     const surface = domeSurface(arc), car = makeEntity(`car-${i}`, 'model-3', DOME.x, surface.z);
-    Object.assign(car, { inDome: true, supportId: 'dome', domeS: arc, y: surface.y, yaw: 0, speed: i === 0 ? -8 : 8, rocketUntil: 30 });
+    Object.assign(car, { inDome: true, supportId: 'dome', domeS: arc, y: surface.y, yaw: 0, speed: i === 0 ? -8 : 8 });
+    car.upgrades.rocket = true;
     return car;
   });
   world.entities = cars;
@@ -71,6 +72,21 @@ test('dome travel releases the moving ferry passenger without moving other passe
   assert.deepEqual([car.air, car.health], [41, 73]);
   assert.equal(other.supportId, 'ferry');
   assert.equal(other.z, world.ferry.z);
+});
+
+test('a ferry passenger returns from the Dome to the ferry destination', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  for (const phase of ['to-island', 'to-sf'] as const) {
+    const { world, car } = setup();
+    world.ferry.phase = phase; world.ferry.remaining = FERRY_TRAVEL_SECONDS;
+    world.ferry.z = phase === 'to-island' ? FERRY_DOCKS.sf.deckZ : FERRY_DOCKS.island.deckZ;
+    Object.assign(car, { x: 0, z: world.ferry.z, y: 0, supportId: 'ferry' });
+    world.ferry.passengers = [{ entityId: car.id, x: 0, z: 0 }];
+    assert.ok(travelDome(world, 'p'));
+    assert.equal(car.domeReturn, phase === 'to-island' ? 'island' : 'sf');
+    assert.ok(travelDome(world, 'p'));
+    assert.equal(isRocketIsland(car.x, car.z), phase === 'to-island');
+  }
 });
 
 test('dome travel withdraws parking and marks an active race DNF before relocation', () => {
@@ -115,4 +131,61 @@ test('a dome shortcut from the Bay returns to the Bay while an island shortcut r
     assert.ok(travelDome(world,'p'));assert.equal(car.domeReturn,island?'island':'sf');
     assert.ok(travelDome(world,'p'));assert.equal(isRocketIsland(car.x,car.z),island);
   }
+});
+
+test('a fly-in or shortcut returns to the last supported side even after flying over Dome land', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  for (const island of [false, true]) for (const shortcut of [false, true]) {
+    const { world, car } = setup(); world.pickups = [];
+    if (island) Object.assign(car, { x: 0, z: -1150, y: 0, supportId: 'ground' });
+    step(world, new Map([['p', { ...NEUTRAL, jump: 1 }]]), .05);
+    assert.equal(car.supportId, null, 'the flight begins from supported land');
+    // Continue the flight over the protected Dome land, above the roof.
+    Object.assign(car, { x: DOME.x - 15, z: DOME.z, y: 52, vx: 0, vy: -8, vz: 0 });
+    step(world, new Map(), .05);
+    assert.equal(car.inDome, false);
+    if (shortcut) assert.ok(travelDome(world, 'p'));
+    else {
+      for (let i = 0; i < 40 && !car.inDome; i++) step(world, new Map(), .05);
+      assert.ok(car.inDome, 'the car enters through the roof');
+    }
+    assert.equal(car.domeReturn, island ? 'island' : 'sf');
+    assert.ok(travelDome(world, 'p'));
+    assert.equal(isRocketIsland(car.x, car.z), island, 'the return goes back to the departure side');
+  }
+});
+
+test('walking from China Basin into the Dome returns to the city', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  const { world, player } = setup(); world.pickups = [];
+  interact(world, player.id);
+  const person = world.entities.find(e => e.id === player.entityId)!;
+  assert.equal(person.kind, 'person');
+  Object.assign(person, { x: DOME.x, z: 120, y: 0, yaw: Math.PI, supportId: 'ground' });
+  for (let i = 0; i < 300 && !person.inDome; i++) step(world, new Map([['p', { ...NEUTRAL, throttle: 1 }]]), .05);
+  assert.ok(person.inDome, 'the pedestrian walks into the Dome');
+  assert.equal(person.domeReturn, 'sf');
+  assert.ok(travelDome(world, player.id));
+  assert.ok(!isRocketIsland(person.x, person.z));
+});
+
+
+test('an island Dome visitor keeps their return side when walking or changing cars', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  const { world, player, car } = setup();
+  Object.assign(car, { x: 0, z: -1150, y: 0, supportId: 'ground' });
+  assert.ok(travelDome(world, player.id));
+  assert.equal(car.domeReturn, 'island');
+  interact(world, player.id);
+  const person = world.entities.find(e => e.id === player.entityId)!;
+  assert.equal(person.kind, 'person');
+  assert.equal(person.domeReturn, 'island');
+  interact(world, player.id);
+  assert.equal(player.entityId, car.id);
+  assert.equal(car.domeReturn, 'island');
+  assert.ok(chooseVehicle(world, player.id, 'model-3'));
+  const replacement = world.entities.find(e => e.id === player.entityId)!;
+  assert.equal(replacement.domeReturn, 'island');
+  assert.ok(travelDome(world, player.id));
+  assert.ok(isRocketIsland(replacement.x, replacement.z));
 });

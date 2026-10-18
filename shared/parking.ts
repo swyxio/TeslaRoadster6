@@ -14,7 +14,7 @@ export type ParkingEntrant = {
 };
 export type ParkingRound = {
   lotId:string; mode:ParkingMode; phase:'waiting'|'active'|'results'; hostId:string;
-  openedAt:number; startedAt:number|null; endsAt:number; entrants:ParkingEntrant[];
+  openedAt:number; startedAt:number|null; endsAt:number; entrants:ParkingEntrant[]; claimedStallIds:string[];
 };
 export type ParkingState = { rounds:ParkingRound[] };
 
@@ -92,7 +92,7 @@ export function joinParking(state:ParkingState,lot:ParkingLot,world:World,player
   if(round&&(round.mode!==mode||round.phase!==(mode==='queue'?'waiting':'active')||round.entrants.length>=PARKING_MAX_ENTRANTS||world.time>=round.endsAt))return false;
   if(!round){
     round={lotId:lot.id,mode,phase:mode==='queue'?'waiting':'active',hostId:playerId,openedAt:world.time,
-      startedAt:mode==='park'?world.time:null,endsAt:world.time+(mode==='park'?PARKING_PARK_DURATION:PARKING_QUEUE_WAIT),entrants:[]};
+      startedAt:mode==='park'?world.time:null,endsAt:world.time+(mode==='park'?PARKING_PARK_DURATION:PARKING_QUEUE_WAIT),entrants:[],claimedStallIds:[]};
   }
   const targetId=mode==='park'?targetFor(lot,round,car,playerId):null;
   if(mode==='park'&&!targetId)return false;
@@ -163,7 +163,7 @@ export function updateParking(state:ParkingState,lots:readonly ParkingLot[],worl
         return {entrant,car,stall:lot.stalls.find(stall=>fitsParkingStall(stall,car))};
       }).filter((item):item is typeof item & {stall:ParkingStall}=>!!item.stall)
         .sort((a,b)=>compareIds(a.entrant.playerId,b.entrant.playerId));
-      const claimed=new Set<string>();
+      const claimed=new Set(round.claimedStallIds);
       for(const candidate of candidates){
         const {entrant,stall}=candidate;
         if(claimed.has(stall.id))continue;
@@ -171,10 +171,11 @@ export function updateParking(state:ParkingState,lots:readonly ParkingLot[],worl
         if(blocked(stall,world,contenders))continue;
         entrant.finishedAt=world.time;entrant.elapsed=world.time-round.startedAt!;entrant.targetId=stall.id;
         entrant.overtakes=round.entrants.filter(other=>other.finishedAt===null&&order(other,entrant)<0).length;
-        claimed.add(stall.id);
+        claimed.add(stall.id);round.claimedStallIds.push(stall.id);
       }
     }
-    if(round.entrants.every(entrant=>entrant.finishedAt!==null))results(round,world.time);
+    if(round.entrants.every(entrant=>entrant.finishedAt!==null)||
+      (round.mode==='queue'&&lot.stalls.every(stall=>round.claimedStallIds.includes(stall.id))))results(round,world.time);
   }
   state.rounds=state.rounds.filter(round=>round.entrants.length>0&&(round.phase!=='results'||world.time<round.endsAt));
 }

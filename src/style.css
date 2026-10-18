@@ -116,12 +116,10 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 /* Context for the ferry and optional parking games stays visible on touch. */
 .mission #ferry-status,.mission #parking-status,.mission #race-status{font-size:10px;line-height:1.35;color:#ffe0aa}
 .mission #ferry-status:empty,.mission #parking-status:empty,.mission #race-status:empty{display:none}
-#rocket-status{margin-top:7px;color:#ffd08e;font:700 9px ui-monospace,monospace;letter-spacing:.5px}
-#rocket-status[hidden]{display:none}
 .activity-help{margin:7px 10px 10px;color:#bcd2c8;font:11px/1.5 system-ui}
 .race-choice{display:grid;gap:5px;margin:10px 10px 2px;color:#c3d8cc;font:700 10px ui-monospace,monospace;letter-spacing:.6px}.race-choice select{width:100%;min-height:40px;border:1px solid #a9cbbb55;border-radius:6px;background:#203e42;color:#f9e9d1;padding:8px;font:12px system-ui}
 @media(pointer:coarse),(max-width:800px){.mission #ferry-status,.mission #parking-status,.mission #race-status{font-size:9px}.activity-help{font-size:11px}}
-@media(max-height:550px) and (pointer:coarse){.mission #ferry-status,.mission #parking-status,.mission #race-status{display:block}.mission #ferry-status:empty,.mission #parking-status:empty,.mission #race-status:empty{display:none}#rocket-status{font-size:8px;margin-top:2px}}
+@media(max-height:550px) and (pointer:coarse){.mission #ferry-status,.mission #parking-status,.mission #race-status{display:block}.mission #ferry-status:empty,.mission #parking-status:empty,.mission #race-status:empty{display:none}}
 
 .shop-key{color:#d8abff}.shop-prompt{position:fixed;top:215px;left:50%;transform:translateX(-50%);z-index:11;max-width:90vw;padding:11px 15px;border:1px solid #e3b8ff;border-radius:8px;background:#33294aee;color:#f7e8ff;font:700 12px system-ui;box-shadow:0 6px 22px #17203680}.shop-prompt[hidden]{display:none}
 .sky-key{font:7px ui-monospace,monospace;color:#b6e9ee;margin-top:5px;white-space:nowrap}

@@ -20,7 +20,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
-**Rocket shops:** Collect a purple rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+**Rocket shops:** Collect a purple Rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, larger air tanks, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
 **Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
 
@@ -30,7 +30,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md) (not yet implemented).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a separate banked lane, an inverted cliff, two eastbound jump ramps, a short circuit and speed oval. Purple Rocket pads temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -74,10 +74,10 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump / Hover to jump and hold it for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
-- Stop in a marked Supercharger stall to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
+- Stop inside a mint station ring or marked charging bay to refill air. Green pickups repair; amber pickups refill air; purple rocket pickups equip flight and refill air. Pickups return after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
-- Drive over a purple Rocket pickup in a car to refill air and grant that vehicle 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds; the stock Rocket Roadster remains capable permanently.
-- At a marked parking playground or Supercharger lot, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
+- Drive over a Rocket pickup on the island or at a parking playground to refill air and give that vehicle 90 simulation seconds of fictional flight. The stock Rocket Roadster is already equipped.
+- At a marked parking playground, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
 
 ## Boundaries
@@ -108,9 +108,9 @@ shared/day.ts       Accelerated day clock and demand profiles
 shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
 shared/ferry.ts     Authoritative ferry and passenger attachment
-shared/rocket.ts    Vehicle-local temporary Rocket pickups
 shared/island-stunts.ts  Shared bank and cliff surfaces
 shared/island-jumps.ts   Shared island launch ramps and landing contacts
+shared/oval-bank.ts  Shared speed-oval geometry and surface contacts
 shared/dome*.ts     Rocket Dome geometry and surface collisions
 shared/soccer.ts    Authoritative ball, goals and match state
 shared/parking*.ts  Parking playground definitions and rounds

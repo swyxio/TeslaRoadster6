@@ -2,8 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,buyUpgrade,chooseVehicle,createWorld,interact,makeEntity,NEUTRAL,resetPlayer,step,travelDome} from '../shared/game';
 import {ACCESS_BOUNDARIES,CUSTOMERS,LEVELS,orderTarget,requiredLevelAt,updateDelivery} from '../shared/delivery';
-import {SHOPS} from '../shared/upgrades';
+import {FERRY_DOCKS,ISLAND_TRACK,ROCKET_ISLAND} from '../shared/map';
+import {ovalBankSurface} from '../shared/oval-bank';
 import {PARKING_LOTS} from '../shared/parking-lots';
+import {SHOPS} from '../shared/upgrades';
 import {RACE_COURSES} from '../shared/race-courses';
 import {ISLAND_CLIFF} from '../shared/island-stunts';
 
@@ -78,6 +80,59 @@ test('level gates stop ground driving, jumps and the north approach while leavin
   step(world,new Map(),.05);assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);
   const npc=makeEntity('npc','model-3',109.9,60);Object.assign(npc,{yaw:-Math.PI/2,speed:70,npc:true});world.entities=[npc];
   step(world,new Map(),.05);assert.ok(npc.x>ACCESS_BOUNDARIES.oaklandX,'NPC traffic is not restricted');
+});
+
+test('the island and its approach are open while the Oakland gates remain locked',()=>{
+  for(const point of [...ROCKET_ISLAND.points,...ISLAND_TRACK])
+    assert.equal(requiredLevelAt(point.x,point.z),0,`island at ${point.x},${point.z}`);
+  assert.equal(requiredLevelAt(FERRY_DOCKS.island.x,FERRY_DOCKS.island.z),0);
+  for(let z=FERRY_DOCKS.sf.z;z>=FERRY_DOCKS.island.z;z-=10)
+    for(const x of [-7,0,7])assert.equal(requiredLevelAt(x,z),0,`ferry approach at ${x},${z}`);
+  assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z-1),0,'air alongside the island');
+  assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z+1),1,'northern water does not open Oakland');
+  assert.equal(requiredLevelAt(111,60),1,'Bay Bridge remains locked');
+  assert.equal(requiredLevelAt(200,ACCESS_BOUNDARIES.islandNorthZ+.1),1,'Alcatraz approach remains locked to the south');
+
+  // Cross the old x=430 boundary on the banked oval in either direction,
+  // then repeat in the air. All moves use a level-zero controlled car.
+  for(const direction of [-1,1])for(const airborne of [false,true]){
+    const {world,player,car}=setup(),x=ACCESS_BOUNDARIES.islandMaxX-direction*.1,z=-1338;
+    const surface=ovalBankSurface(x,z);assert.ok(surface,'fixture lies on the banked oval');
+    Object.assign(car,{x,z,y:airborne?30:surface.height,yaw:direction>0?-Math.PI/2:Math.PI/2,
+      speed:12,vx:direction*12,vy:0,vz:0,supportId:airborne?null:'island-oval'});
+    step(world,new Map(),.05);
+    assert.ok(direction*(car.x-ACCESS_BOUNDARIES.islandMaxX)>0,`${airborne?'air':'oval'} direction ${direction}`);
+    assert.equal(player.delivery.lastBlocked,null);
+  }
+});
+
+test('the SF playground has a connected, bounded level-zero pocket for driving and walking',()=>{
+  const lot=PARKING_LOTS.find(l=>l.id==='sf-playground')!,area=lot.area;
+  for(const kind of ['car','person'] as const){
+    const {world,player}=setup();
+    if(kind==='person')interact(world,'p');
+    const entity=world.entities.find(e=>e.id===player.entityId)!;
+    assert.equal(entity.kind==='person',kind==='person');
+    world.entities=[entity];
+    Object.assign(entity,{x:area.x,z:ACCESS_BOUNDARIES.bayMaxZ-1,y:0,yaw:Math.PI,speed:0,vx:0,vy:0,vz:0,supportId:'ground'});
+    for(let i=0;i<160&&entity.z<area.z-area.length/2+1;i++)step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
+    assert.ok(entity.z>=area.z-area.length/2+1,`${kind} enters the lot`);
+    Object.assign(entity,{yaw:0,speed:0,vx:0,vy:0,vz:0,pushX:0,pushZ:0});
+    for(let i=0;i<160&&entity.z>=ACCESS_BOUNDARIES.bayMaxZ;i++)step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
+    assert.ok(entity.z<ACCESS_BOUNDARIES.bayMaxZ,`${kind} returns to SF`);
+    assert.equal(player.delivery.lastBlocked,null);
+  }
+  for(const [x,z,yaw,axis,limit,sign] of [
+    [area.x-area.width/2+.1,area.z,Math.PI/2,'x',area.x-area.width/2,-1],
+    [area.x+area.width/2-.1,area.z,-Math.PI/2,'x',area.x+area.width/2,1],
+    [area.x,area.z+area.length/2-.1,Math.PI,'z',area.z+area.length/2,1],
+  ] as const){
+    const {world,player,car}=setup();
+    Object.assign(car,{x,z,y:0,yaw,speed:12,vx:0,vy:0,vz:0,supportId:'ground'});
+    step(world,new Map(),.05);
+    assert.ok(sign*(car[axis]-limit)<=0,'the pocket does not bypass the Peninsula gate');
+    assert.equal(player.delivery.lastBlocked?.level,2);
+  }
 });
 
 test('Peninsula and San Jose gates apply in the air and allow the next unlocked level',()=>{

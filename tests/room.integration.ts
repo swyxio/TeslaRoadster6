@@ -44,11 +44,15 @@ try {
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
+  assert.ok(two.state.world!.entities.every(e=>e.domeReturn==='sf'||e.domeReturn==='island'),'Dome return side is replicated');
   for(const state of [one.state,two.state]){
     assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
     assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);
-    assert.ok(state.world!.pickups.some(p=>p.kind==='rocket'),'Rocket pads are replicated');
-    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'vehicle capability expiry is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-island'&&p.kind==='rocket'),'island Rocket kit is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
+    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'temporary Rocket expiry is replicated');
+    assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
+    assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   }
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
   await delay(450);
@@ -56,8 +60,6 @@ try {
   one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
   await delay(450);
   assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
-  assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
-  assert.ok(two.state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
@@ -173,11 +175,14 @@ try {
   assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
   assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:true,requestId:3}));
+  one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
   await eventually(()=>one.state.otaResults?.some(r=>r.requestId===3&&r.ok)??false,'subscription receives an explicit result');
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled??false,'subscription state replicated');
   assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active,false,'unfunded subscription pauses');
   assert.equal(two.state.otaResults?.length??0,0,'subscription result goes only to requester');
-  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
+  await eventually(()=>one.state.otaResults?.some(r=>r.requestId===4&&!r.enabled&&!r.ok)??false,'rate-limited subscription receives an explicit result');
+  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled,true,'rate-limited cancellation did not alter subscription');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:5}));
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');

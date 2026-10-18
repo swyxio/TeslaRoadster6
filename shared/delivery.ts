@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
+import { BUILDINGS, FERRY_DOCKS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
 import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
@@ -17,11 +17,18 @@ export type Level = typeof LEVELS[number]['level'];
 const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
 export function requiredLevelAt(x:number,z:number):Level {
-  // The whole fictional island and its SF parking playground are available
-  // from the start, including the short approach across the Peninsula gate.
-  if(isRocketIsland(x,z)||(Math.abs(x-SF_PARKING.area.x)<=SF_PARKING.area.width/2+6&&z>=ACCESS_BOUNDARIES.bayMaxZ&&z<=SF_PARKING.area.z+SF_PARKING.area.length/2+6))return 0;
+  // The island is open from the start, including the SF ferry approach.
+  if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
-  if(z>ACCESS_BOUNDARIES.bayMaxZ)return 2;
+  if(z>ACCESS_BOUNDARIES.bayMaxZ){
+    // Connect the SF playground to the city without opening a route onward.
+    const area=SF_PARKING.area;
+    if(Math.abs(x-area.x)<=area.width/2&&z<=area.z+area.length/2)return 0;
+    return 2;
+  }
+  // The island and adjacent air remain open; the narrower ferry corridor
+  // still prevents flying south into locked Oakland.
+  if(z<=FERRY_DOCKS.island.z)return 0;
   const islandApproach=z<ACCESS_BOUNDARIES.islandNorthZ&&x<ACCESS_BOUNDARIES.islandMaxX;
   return x>ACCESS_BOUNDARIES.oaklandX&&!islandApproach?1:0;
 }

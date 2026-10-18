@@ -8,7 +8,7 @@ Own `src/main.ts` and `src/style.css`. Produce a coherent alternate menu/HUD tre
 
 ## Vehicle artist/coding model
 
-Own `src/vehicles.ts`, `src/fleet-preview.ts` and `public/assets/vehicles/` plus manifest. Improve the existing 26-family procedural fleet while preserving each registry ID and distinctive silhouette. Read FLEET_RESEARCH.md; do not reduce all models to generic sedan/SUV shapes. Keep ground-center pivots, −Z forward, meter scale, registry envelopes and `jets` group behavior, including `addRocketKit` for any non-native rocket vehicle. Use original/permitted assets, shared materials and mobile budgets. Leave `createVehicle(kind)` as the entry point. Test ground/air/roll views and several vehicles together. Do not change collision radii, controls or game balance to fit the art.
+Own `src/vehicles.ts`, `src/fleet-preview.ts` and `public/assets/vehicles/` plus manifest. Improve the existing 26-family procedural fleet while preserving each registry ID and distinctive silhouette. Read FLEET_RESEARCH.md; do not reduce all models to generic sedan/SUV shapes. Keep ground-center pivots, −Z forward, meter scale, registry envelopes and `jets` group behavior, including independent retrofit effects for session-long Rocket kits on non-native vehicles. Use original/permitted assets, shared materials and mobile budgets. Leave `createVehicle(kind)` as the entry point. Test ground/air/roll views and several vehicles together. Do not change collision radii, controls or game balance to fit the art.
 
 ## Environment artist/coding model
 

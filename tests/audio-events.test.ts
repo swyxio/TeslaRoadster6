@@ -43,6 +43,8 @@ test('nearby collected items, refills and police pursuit have cues without repea
   const {world,player,car,observe}=setup();
   const pickup=world.pickups[0];pickup.x=car.x;pickup.z=car.z;observe();pickup.active=false;
   assert.deepEqual(names(observe()),['repair']);
+  const rocket=world.pickups.find(pickup=>pickup.kind==='rocket')!;rocket.x=car.x;rocket.z=car.z;observe();rocket.active=false;
+  assert.deepEqual(names(observe()),['rocket']);
   car.air=95;assert.deepEqual(names(observe(.05,true)),['refill']);assert.deepEqual(names(observe(.05,true)),[]);
   const cop=world.entities.find(e=>e.police)!;cop.police!.targetId=player.id;
   assert.deepEqual(names(observe()),['pursuit']);assert.deepEqual(names(observe()),[]);

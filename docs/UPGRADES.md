@@ -1,6 +1,6 @@
 # Rocket pickups and fictional workshops
 
-Any of the 26 vehicles can become a rocket vehicle. Collect a purple spinning rocket pickup for 90 simulation seconds of flight and a full air tank, or buy a lasting kit at a purple workshop. The next-generation Roadster starts with its own fictional thrusters. A retrofit adds purple hardware to the car and uses the same jump, hover, boost and flip controls. Repair and air pickups stay green and amber; all pickups respawn after 20 simulation seconds.
+Any of the 26 vehicles can become a rocket vehicle. Collect a purple `rocket` pickup in the city, on the island or at a parking playground for 90 seconds of flight and a full air tank, or buy a session-long kit at a purple workshop. A later pickup refreshes the temporary duration. The next-generation Roadster starts with its own fictional thrusters. A retrofit adds visible hardware to the car and uses the same jump, hover, boost and flip controls. Repair and air pickups stay green and amber; all pickups respawn after 20 simulation seconds.
 
 The workshops are fictional SpaceX-branded game locations, not real facilities or an affiliation. The compressed map and sites are artistic placements. SF Mission and Richmond, Oakland Port, San Mateo, Palo Alto, Mountain View, San Jose, Fremont and East Bay each have a shop beside a street or highway. Purple diamonds mark them on the minimap. The location choices evoke industrial and roadside service areas; for example, the [City of Oakland describes the port's Gateway Industrial District](https://www.oaklandca.gov/Planning-Building/General-Plan-Neighborhood-Plans/Neighborhood-and-Citywide-Plans/Gateway-Industrial-District-Oakland-Army-Base). Do not use these positions as real-world navigation or facility data. Workshop gantries are decorative; the shared purple ground ring is the interaction area.
 
@@ -10,9 +10,9 @@ The shop can also be opened from Actions anywhere to subscribe to the fictional 
 
 | Item | Cash | Effect |
 |---|---:|---|
-| Rocket kit | $60 | Flight controls for the vehicle and a full air tank; pickups grant a temporary version |
-| Efficient nozzles | $45 | 25% less air for flight; requires rockets |
-| Air tank levels 2–5 | $30 / $60 / $120 / $240 | Each doubles capacity and refills; requires rockets |
+| Rocket kit | $60 | Session-long flight controls and a full air tank |
+| Efficient nozzles | $45 | 25% less air for flight; requires stock or purchased rockets |
+| Air tank levels 2–5 | $30 / $60 / $120 / $240 | Each doubles capacity and refills; requires stock or purchased rockets |
 | Sport motor | $45 | 25% more acceleration and 10% higher road top speed |
 | Impact armor | $35 | Half collision and hard-landing damage |
 | Repair & refill | $12 | Restore condition and refill air; available when needed |
