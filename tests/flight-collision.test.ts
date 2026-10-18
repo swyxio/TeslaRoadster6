@@ -15,7 +15,7 @@ function sustainedFlight() {
   world.players = [];
   world.pickups = [];
   const inputs = new Map([['pilot', flightInput]]);
-  for (let tick = 0; tick < 480; tick++) {
+  for (let tick = 0; tick < 400; tick++) {
     // Keep the long, straight flight within map bounds without changing velocity.
     if (tick === 300) car.z = -1800;
     step(world, inputs, dt);

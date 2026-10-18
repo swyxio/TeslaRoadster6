@@ -1,0 +1,425 @@
+{
+  "durationSeconds": 120,
+  "results": [
+    {
+      "economy": false,
+      "periodSeconds": 0.1,
+      "peakM": 10.07,
+      "longestAirborneSeconds": 3.5,
+      "thermalSeconds": 3.15,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 0.2,
+      "peakM": 12.99,
+      "longestAirborneSeconds": 4.05,
+      "thermalSeconds": 3.7,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 0.25,
+      "peakM": 14.4,
+      "longestAirborneSeconds": 4.35,
+      "thermalSeconds": 4,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 0.5,
+      "peakM": 20.15,
+      "longestAirborneSeconds": 5.6,
+      "thermalSeconds": 5.25,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 0.75,
+      "peakM": 24.46,
+      "longestAirborneSeconds": 6.8,
+      "thermalSeconds": 6.45,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 1,
+      "peakM": 27.09,
+      "longestAirborneSeconds": 7.9,
+      "thermalSeconds": 7.6,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 1.5,
+      "peakM": 27.88,
+      "longestAirborneSeconds": 9.95,
+      "thermalSeconds": 9.65,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 2,
+      "peakM": 22.58,
+      "longestAirborneSeconds": 11.75,
+      "thermalSeconds": 11.45,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 2.5,
+      "peakM": 10.93,
+      "longestAirborneSeconds": 13.15,
+      "thermalSeconds": 12.55,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 3,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 10.7,
+      "segments": 6,
+      "arrivals": 6,
+      "departures": 6,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 3.5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 10.7,
+      "segments": 6,
+      "arrivals": 6,
+      "departures": 6,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 4,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 10.75,
+      "segments": 6,
+      "arrivals": 6,
+      "departures": 6,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 4.5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 10.8,
+      "segments": 6,
+      "arrivals": 6,
+      "departures": 6,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": false,
+      "periodSeconds": 5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 10.8,
+      "segments": 6,
+      "arrivals": 6,
+      "departures": 6,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 0.1,
+      "peakM": 11.63,
+      "longestAirborneSeconds": 3.9,
+      "thermalSeconds": 3.55,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 0.2,
+      "peakM": 15.88,
+      "longestAirborneSeconds": 4.7,
+      "thermalSeconds": 4.35,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 0.25,
+      "peakM": 17.98,
+      "longestAirborneSeconds": 5.1,
+      "thermalSeconds": 4.75,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 0.5,
+      "peakM": 26.63,
+      "longestAirborneSeconds": 6.95,
+      "thermalSeconds": 6.6,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 0.75,
+      "peakM": 33.29,
+      "longestAirborneSeconds": 8.65,
+      "thermalSeconds": 8.35,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 1,
+      "peakM": 37.89,
+      "longestAirborneSeconds": 10.35,
+      "thermalSeconds": 10.05,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 1.5,
+      "peakM": 40.05,
+      "longestAirborneSeconds": 13.6,
+      "thermalSeconds": 13.3,
+      "segments": 1,
+      "arrivals": 1,
+      "departures": 1,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 2,
+      "peakM": 33.22,
+      "longestAirborneSeconds": 16.7,
+      "thermalSeconds": 16.4,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 2.5,
+      "peakM": 14.93,
+      "longestAirborneSeconds": 19.15,
+      "thermalSeconds": 18.55,
+      "segments": 2,
+      "arrivals": 2,
+      "departures": 2,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 3,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 15.5,
+      "segments": 8,
+      "arrivals": 8,
+      "departures": 8,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 3.5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 15.5,
+      "segments": 8,
+      "arrivals": 8,
+      "departures": 8,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 4,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 15.55,
+      "segments": 8,
+      "arrivals": 8,
+      "departures": 8,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 4.5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 15.6,
+      "segments": 8,
+      "arrivals": 8,
+      "departures": 8,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    },
+    {
+      "economy": true,
+      "periodSeconds": 5,
+      "peakM": 6.69,
+      "longestAirborneSeconds": 2.65,
+      "thermalSeconds": 15.6,
+      "segments": 8,
+      "arrivals": 8,
+      "departures": 8,
+      "end": {
+        "y": 0,
+        "air": 0,
+        "support": "ground"
+      }
+    }
+  ]
+}
