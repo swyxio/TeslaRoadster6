@@ -26,8 +26,8 @@ export const ROCKET_ISLAND:Region={id:'rocket-island',name:'Rocket Island',color
   [800,-1300],[600,-1140],[250,-1100],[20,-1100],[20,-1060],[-20,-1060],
   [-20,-1100],[-150,-1100],[-400,-1250],
 ])};
-const ISLAND_DOME_LINK:Region={id:'island-dome-link',name:'Rocket Dome approach',color:0xb8c7a3,points:polygon([[240,-1120],[380,-1120],[380,-935],[240,-935]])};
-const ALCATRAZ_DOME_LAND:Region={id:'alcatraz',name:'Alcatraz Rocket Dome',color:0x9fab8d,points:polygon([[190,-920],[215,-955],[385,-955],[410,-920],[410,-780],[385,-745],[215,-745],[190,-780]])};
+// Compressed China Basin waterfront: the stadium and its plaza remain on shared land.
+const DOME_WATERFRONT:Region={id:'china-basin',name:'China Basin Rocket Dome',color:0xd4d1bb,points:polygon([[-150,140],[45,140],[55,165],[55,230],[30,285],[-150,285]])};
 /** Pier tips and the center of a 38 m ferry deck alongside each tip. */
 export const FERRY_DOCKS={
   sf:{x:0,z:-255,deckZ:-274},
@@ -39,7 +39,7 @@ export const REGIONS:Region[]=[
   {id:'marin',name:'Marin Headlands',color:0x9ba883,points:polygon([[-410,-550],[-120,-550],[-116,-460],[-140,-413],[-185,-385],[-230,-374],[-275,-385],[-340,-382],[-400,-405],[-420,-470]])},
   {id:'yerba',name:'Yerba Buena Island',color:0xa9b49a,points:polygon([[169,27],[193,12],[222,22],[238,44],[235,70],[220,87],[187,91],[164,76],[158,49]])},
   {id:'sf-ferry-apron',name:'San Francisco ferry apron',color:0xb9b7a4,points:polygon([[-20,-255],[20,-255],[20,-195],[-20,-195]])},
-  ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND,
+  DOME_WATERFRONT, ROCKET_ISLAND,
 ];
 export type Bridge = { id:'golden-gate'|'bay-bridge'; name:string; axis:'x'|'z'; start:number; end:number; center:number; width:number };
 // Decks are at ground height, deliberate arcade simplification; water is below.
@@ -66,9 +66,8 @@ export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   return inside;
 }
 export function isLand(x:number,z:number):boolean{return REGIONS.some(r=>insidePolygon(x,z,r.points));}
-/** The island and dome approach share a server-side safety boundary at any altitude. */
-const ROCKET_ISLAND_ZONES = [ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND];
-export function isRocketIsland(x:number,z:number):boolean{return ROCKET_ISLAND_ZONES.some(region=>insidePolygon(x,z,region.points));}
+/** Rocket Island has a server-side safety boundary at any altitude. */
+export function isRocketIsland(x:number,z:number):boolean{return insidePolygon(x,z,ROCKET_ISLAND.points);}
 export function isBridge(x:number,z:number):boolean{return BRIDGES.some(b=>b.axis==='x'?x>=b.start&&x<=b.end&&Math.abs(z-b.center)<=b.width/2:z>=b.start&&z<=b.end&&Math.abs(x-b.center)<=b.width/2);}
 export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridge(x,z);}
 
@@ -186,14 +185,20 @@ export function domeSurface(arcLength:number):{y:number;z:number;tangentY:number
 
 export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'|'island';course?:'oval'};
 export const ROADS:RoadSegment[]=[];
+/** Clear the stadium footprint while leaving the adjoining city streets intact. */
+export function inDomePlaza(x:number,z:number):boolean {
+ return Math.abs(x-DOME.x)<96&&z>=DOME.z-65&&z<=DOME.z+80;
+}
 function streetGrid(xs:number[],zs:number[],xmin:number,xmax:number,zmin:number,zmax:number){
- for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
- for(const z of zs)for(let x=xmin;x<xmax;x+=15)if(isLand(x+7.5,z))ROADS.push({x:x+7.5,z,w:15,d:14,axis:'x'});
+ for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5)&&!inDomePlaza(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
+ for(const z of zs)for(let x=xmin;x<xmax;x+=15)if(isLand(x+7.5,z)&&!inDomePlaza(x+7.5,z))ROADS.push({x:x+7.5,z,w:15,d:14,axis:'x'});
 }
 streetGrid([-360,-300,-240,-180,-120,-60,0,60],[-240,-180,-120,-60,0,60,120,180,240],-405,105,-300,300);
 streetGrid([330,390,450,510,570],[-240,-180,-120,-60,0,60,120,180,240],270,610,-285,300);
 // Shore roads and bridge approaches, connected to the two street grids.
 ROADS.push({x:-240,z:-330,w:18,d:180,axis:'z'},{x:195,z:60,w:270,d:24,axis:'x'});
+// The north gate connects directly to the z=120 city street.
+ROADS.push({x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:18,d:DOME.z-DOME.flatHalfWidth-120,axis:'z'});
 
 // The route remains useful to the minimap; the oval's physical surface is
 // shared separately with its renderer in oval-bank.ts.
@@ -208,7 +213,6 @@ for(let i=0;i<SHORT_TRACK.length;i++){
 }
 ROADS.push(
  {x:0,z:-1200,w:24,d:280,axis:'z',kind:'island'},
- {x:300,z:-1090,w:24,d:320,axis:'z',kind:'island'},
  {x:0,z:-225,w:24,d:60,axis:'z'},
 );
 
@@ -270,7 +274,7 @@ function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax
    {x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type},
    {x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type},
   ];
-  for(const b of generated)if(!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
+  for(const b of generated)if(!inDomePlaza(b.x,b.z)&&!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
  }
 }
 blocks('sf',-360,60,-240,240);blocks('oakland',330,570,-240,240);

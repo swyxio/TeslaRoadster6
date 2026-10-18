@@ -4,7 +4,7 @@ export const STATIONS = [
   { id: 'sf-16th', name: 'SF · 16th Street', address: '2300 16th St, San Francisco, CA 94103', sourceUrl: 'https://www.tesla.com/en_CA/findus/location/supercharger/8739', x: 32, z: 30 },
   { id: 'sf-geary', name: 'SF · Geary Boulevard', address: '2675 Geary Blvd, San Francisco, CA 94118', sourceUrl: 'https://www.tesla.com/en_GB/findus/location/supercharger/SanFranciscoCAsupercharger2', x: -148, z: -90 },
   { id: 'oakland', name: 'Oakland · 2nd Street', address: '255 2nd Street, Oakland, CA 94607', sourceUrl: 'https://www.tesla.com/en_gb/findus/location/supercharger/oaklandcasupercharger', x: 362, z: 90 },
-  { id: 'san-mateo', name: 'San Mateo · Park Place', address: '1200 Park Place, San Mateo, CA 94403', sourceUrl: 'https://www.tesla.com/en_CA/findus/location/supercharger/sanmateosupercharger', x: -28, z: 270 },
+  { id: 'san-mateo', name: 'San Mateo · Park Place', address: '1200 Park Place, San Mateo, CA 94403', sourceUrl: 'https://www.tesla.com/en_CA/findus/location/supercharger/sanmateosupercharger', x: -1180, z: 1950 },
 ] as const;
 
 /** Fictional game-space parking geometry, shared by the map and activities. */
