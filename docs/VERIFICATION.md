@@ -1,5 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
+## Supercharger parking lots · protocol v14 · 2026-10-18 Pacific
+
+- `pnpm test` passed 219 tests and `pnpm build` passed both typechecks and Vite. The existing chunk warning remains (744 kB main JavaScript, 211 kB gzip). Shared-simulation checks cover every charging bay, all fleet footprints, clear lots and both parking modes.
+- Local Wrangler two-client integration passed ferry/activity snapshots, Rocket pads, shop responses, dome ball and goals, movement and disconnect checks. An earlier run timed out at the ball impact while files were changing; the settled rerun passed. This was not a multiplayer ferry crossing or load test.
+- In Chrome desktop solo, a temporary spawn fixture placed the car near the SF 16th Street lot. The lot, marked stalls and posts were visible; driving into a bay and stopping refilled the air tank, and Park It assigned a stall. The fixture was removed before the final build. Portrait 390×844 and landscape 844×390 emulation showed the lot, HUD and controls; no physical device or full touch drive was tested.
+- These checks describe this branch against its v14 base. Main advanced separately; integration and deployment remain outstanding.
+
 ## Ferry playground with shop feedback · protocol v14 · 2026-10-18 Pacific
 
 - After integrating main's shop purchase acknowledgements, `pnpm test` passed 217 tests and `pnpm build` passed both typechecks and Vite. The existing chunk warning remains (744 kB main JavaScript, 210 kB gzip).

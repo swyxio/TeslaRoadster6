@@ -1,4 +1,4 @@
-# Implementation contracts · v13
+# Implementation contracts · v14
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -126,7 +126,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 `shared/island-stunts.ts` defines a bank with tapered ground transitions and a separate parametric inverted cliff. Meshes and physics use the same vertices. Cliff attachment retains a local angle; Rocket-capable cars can adhere beyond vertical and ordinary cars detach or bounce. Airborne crossings use swept contacts and detachments preserve world velocity. Island and ferry support clear police pursuits and prevent detection; the current order timer pauses there while active-play time retains its normal rules. Previous tickets remain charged.
 
-`shared/parking-lots.ts` defines the two registered playgrounds and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
+`shared/parking-lots.ts` defines two playgrounds and four Supercharger lots; `parking.ts` owns their bounded rounds. `shared/stations.ts` defines the four marked stalls at each charger; stopped ground vehicles refill fictional air within those bays. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 
 ## Shops and upgrades contract
 

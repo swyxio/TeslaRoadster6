@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, NEUTRAL, BUILDINGS } from '../shared/game';
-import { STATIONS } from '../shared/stations';
+import { STATIONS, stationStalls } from '../shared/stations';
 import { HILL, terrainHeight } from '../shared/map';
 import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
@@ -35,11 +35,17 @@ test('collisions stop buildings and transfer motion between cars', () => {
   car.x = 0; car.z = 0; car.speed = 10; other.x = 0; other.z = -3.5;
   step(world, new Map(), 0.05); assert.ok(other.speed > 0);
 });
-test('stations refill only stopped cars; recovery does not manufacture air or health', () => {
-  const { world, car } = setup(); const station = STATIONS[0];
-  car.x = station.x; car.z = station.z; car.air = 10; car.speed = 0;
-  step(world, new Map(), 0.05); assert.ok(car.air > 10);
-  car.air = 10; car.speed = 5; step(world, new Map(), 0.05); assert.equal(car.air, 10);
+test('station stalls refill stopped cars; the aisle and moving cars do not', () => {
+  const { world, car } = setup(); world.entities=[car];world.pickups=[];
+  for(const station of STATIONS)for(const stall of stationStalls(station)){
+    Object.assign(car,{x:stall.x,z:stall.z,y:0,supportId:'ground',air:10,speed:0,vx:0,vy:0,vz:0});
+    step(world, new Map(), .05); assert.ok(car.air > 10,stall.id);
+  }
+  const station=STATIONS[0];
+  Object.assign(car,{x:station.x,z:station.z+6,air:10,speed:0});
+  step(world,new Map(),.05);assert.equal(car.air,10,'the driving aisle does not refill');
+  Object.assign(car,{x:stationStalls(station)[0].x,z:station.z-5,air:10,speed:5});
+  step(world, new Map(), .05); assert.equal(car.air, 10);
   car.health = 30; resetPlayer(world, 'one'); assert.equal(car.health, 30); assert.equal(car.air, 10); assert.equal(car.y, 0);
 });
 test('64-player spawns do not overlap and simulation stays finite', () => {

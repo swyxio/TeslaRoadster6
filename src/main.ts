@@ -8,7 +8,7 @@ import { GameScene } from './scene';
 import { Session } from './session';
 import { Controls } from './controls';
 import { GameAudio } from './audio';
-import { STATIONS } from '../shared/stations';
+import { STATIONS, chargingStationAt } from '../shared/stations';
 import { type Entity } from '../shared/game';
 import { ferryDocked, ferrySecured, islandProtected, FERRY_DECK } from '../shared/ferry';
 import { hasRocket } from '../shared/rocket';
@@ -476,7 +476,7 @@ scene.start(dt=>{
   $('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=e.kind==='person'?'F · Take nearby car':'F · Exit car';
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
-  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=distance<9&&e.supportId==='ground'&&e.loopAngle===null&&Math.abs(e.y-(terrainHeight(nearest.x,nearest.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
+  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),station=chargingStationAt(e.x,e.z),refilling=!!station&&e.supportId==='ground'&&Math.abs(e.y-(terrainHeight(station.x,station.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
   $('station-status').textContent=refilling?`ϟ FICTIONAL AIR REFILL · ${nearest.name}`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').classList.toggle('refilling',refilling);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);

@@ -1,8 +1,9 @@
 import type { ParkingLot } from './parking';
+import { CHARGER_LOT, STATIONS, stationStalls } from './stations';
 
 // All gameplay lots use this registry, including their approaches and pads.
 // They occupy clear shared land, rather than decorative street-side spaces.
-export const PARKING_LOTS:readonly (ParkingLot & {name:string; pickup:{x:number;z:number}})[] = [
+export const PARKING_LOTS:readonly (ParkingLot & {name:string; pickup?:{x:number;z:number}})[] = [
   {
     id:'sf-playground',name:'SF parking playground',
     area:{x:-300,z:340,yaw:0,width:80,length:60},
@@ -17,4 +18,10 @@ export const PARKING_LOTS:readonly (ParkingLot & {name:string; pickup:{x:number;
     stalls:[72,84,96,108].map((x,i)=>({id:`island-${i}`,x,y:0,z:-1203,yaw:0,width:5,length:10})),
     pickup:{x:116,z:-1172},
   },
+  ...STATIONS.map(s=>({
+    id:`charger-${s.id}`,name:`${s.name} · Supercharger`,
+    area:{x:s.x,z:s.z,yaw:0,width:CHARGER_LOT.width,length:CHARGER_LOT.length},
+    approach:{x:s.x-8,z:s.z+7,yaw:0,width:8,length:8},
+    stalls:stationStalls(s),
+  })),
 ];

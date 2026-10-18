@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {BAY_CIRCUIT,BRIDGES,BUILDINGS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,isLand,isRocketIsland,isSurface,nearbyBuildings} from '../shared/map';
-import {STATIONS} from '../shared/stations';
+import {BAY_CIRCUIT,BRIDGES,BUILDINGS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {CHARGER_LOT,STATIONS,stationStalls} from '../shared/stations';
+import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {DOME} from '../shared/dome';
@@ -66,6 +67,21 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  }
  for(const station of STATIONS)assert.ok(isLand(station.x,station.z),station.id);
  assert.ok(BUILDINGS.length>100);
+});
+
+test('Supercharger lots are on flat land, clear of buildings and roads, with usable stalls',()=>{
+ for(const station of STATIONS){
+  const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
+  assert.ok(lot,station.id);
+  const footprint={x:station.x,z:station.z,w:CHARGER_LOT.width,d:CHARGER_LOT.length,yaw:0};
+  for(const dx of [-12,0,12])for(const dz of [-12,0,12])assert.equal(terrainHeight(station.x+dx,station.z+dz),0,station.id);
+  assert.ok(!nearbyBuildings(station.x,station.z,30).some(b=>contact(footprint,{...b,yaw:0})),`${station.id} building`);
+  assert.ok(!ROADS.some(r=>contact(footprint,{...r,yaw:r.angle??0})),`${station.id} road`);
+  assert.equal(lot.stalls.length,4);
+  for(const stall of stationStalls(station))for(const kind of VEHICLE_IDS){
+   assert.ok(VEHICLES[kind].width<=stall.width&&VEHICLES[kind].length<=stall.length,`${stall.id}: ${kind}`);
+  }
+ }
 });
 
 test('Bay highway shoulders are supported and its lanes clear the largest truck',()=>{

@@ -1,7 +1,7 @@
 import { BUILDINGS, DOME_PERIMETER, FERRY_DOCKS, MAP_BOUNDS, OVERPASS, STUNT_LOOP, STUNT_RAMP, domeSurface, rampHeight, isRocketIsland, isSurface, nearbyBuildings, overpassHeight, supportHeight, terrainHeight, type SupportId } from './map';
 import { DOME } from './dome';
 export { BUILDINGS } from './map';
-import { STATIONS } from './stations';
+import { chargingStationAt } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
@@ -38,7 +38,7 @@ export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:
 export function createWorld():World {
   const world:World={entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-120+(i%5)*60,z:i<6?-60:120,kind:i%2?'air':'repair',active:true}))};
   world.pickups.push({id:'rocket-island',x:0,z:-1160,kind:'rocket',active:true});
-  for(const lot of PARKING_LOTS)world.pickups.push({id:`rocket-${lot.id}`,...lot.pickup,kind:'rocket',active:true});
+  for(const lot of PARKING_LOTS)if(lot.pickup)world.pickups.push({id:`rocket-${lot.id}`,...lot.pickup,kind:'rocket',active:true});
   for(const [i,[x,z]] of [[0,60],[390,0],[510,120],[-240,180],[-1200,2080],[-40,6080],[1580,6070],[1530,8860]].entries())world.pickups.push({id:`rocket-${i}`,x,z,kind:'rocket',active:true});
   VEHICLE_IDS.forEach((kind,i)=>{
     const pose=routePose(i,VEHICLE_IDS.length);
@@ -664,7 +664,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
       e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
     }
-    if(!person&&e.supportId==='ground'&&Math.abs(e.speed)<1&&STATIONS.some(s=>Math.hypot(e.x-s.x,e.z-s.z)<9&&Math.abs(e.y-(terrainHeight(s.x,s.z)??0))<1))e.air=Math.min(100,e.air+28*dt);
+    const station=chargingStationAt(e.x,e.z);
+    if(!person&&station&&e.supportId==='ground'&&Math.abs(e.speed)<1&&Math.abs(e.y-(terrainHeight(station.x,station.z)??0))<1)e.air=Math.min(100,e.air+28*dt);
   }
   const collisionIndex=new EntityIndex(world.entities);
   const domeIndices=world.entities.flatMap((e,i)=>e.inDome?[i]:[]);

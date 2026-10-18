@@ -130,7 +130,7 @@ test('queue ties use player IDs, staging and active timeouts run on simulation t
 
 test('the entire painted approach at each authored lot can join and stay queued',()=>{
   const approachPoints=[{x:-300,z:307},{x:47,z:-1190}];
-  for(const [index,lot] of PARKING_LOTS.entries()){
+  for(const [index,lot] of PARKING_LOTS.slice(0,2).entries()){
     const w=world(),state=createParking(),point=approachPoints[index],car=add(w,'p','roadster',point.x,point.z);
     assert.equal(joinParking(createParking(),lot,w,'p','park'),false,'Park It begins inside the lot');
     assert.equal(joinParking(state,lot,w,'p','queue'),true,lot.id);
@@ -143,6 +143,17 @@ test('the entire painted approach at each authored lot can join and stay queued'
     assert.equal(state.rounds[0].entrants.length,1,'driving from the approach into the lot stays in the round');
     Object.assign(car,{x:lot.area.x+lot.area.width,z:lot.area.z});w.time+=.05;updateParking(state,[lot],w,.05);
     assert.equal(state.rounds.length,0,'leaving both areas withdraws the entrant');
+  }
+});
+
+test('every Supercharger lot supports parking and queue games',()=>{
+  for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
+    const w=world(),car=add(w,'p','roadster',lot.approach.x,lot.approach.z);
+    const queue=createParking();
+    assert.equal(joinParking(queue,lot,w,'p','queue'),true,lot.id);
+    assert.equal(startQueue(queue,lot.id,w,'p'),true,lot.id);
+    Object.assign(car,{x:lot.area.x,z:lot.area.z});
+    assert.equal(joinParking(createParking(),lot,w,'p','park'),true,lot.id);
   }
 });
 
