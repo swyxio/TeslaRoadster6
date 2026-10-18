@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initialDelivery, type Order } from '../shared/delivery';
+import { applyAchievementAwards, initialAchievements } from '../shared/achievements';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
-import { achievementTierFamilies, applyTierProgress, deliveryTierFamilies } from '../worker/achievement-progress';
+import { achievementTierFamilies, applyAcceptedDelivery, applyObservedAchievement, applyTierProgress, coalesceEventRewards, deliveryTierFamilies } from '../worker/achievement-progress';
 
 test('only qualifying observed results advance the corresponding repeatable families',()=>{
   assert.deepEqual(achievementTierFamilies({kind:'crossing',origin:'sf',destination:'sf',crossedWater:true}),[]);
@@ -36,4 +37,36 @@ test('early delivery rewards are paid once per tier across repeated accepted sto
   assert.equal(progress['early-deliveries'].count,4);
   assert.deepEqual(deliveryTierFamilies({...pickup,elapsed:20},false),['pickups']);
   assert.deepEqual(deliveryTierFamilies({...dropoff,elapsed:30},true),['deliveries','rooftop-deliveries']);
+});
+
+test('one Dome result celebrates both its legacy award and repeatable tier bonus',()=>{
+  const delivery=initialDelivery({x:0,z:0}),state=initialAchievements();
+  delivery.lastReward={id:3,kind:'delivery',amount:333};
+  const progress=normalizeAchievementTiers(undefined,0,[]);
+  const result=applyObservedAchievement(delivery,state,progress,{kind:'dome',touches:{roadster:true,retrofit:false,stock:false},goals:{roadster:0,retrofit:0,stock:0},won:false});
+  assert.equal(delivery.cash,3_100);
+  assert.equal(delivery.lifetimeIncome,600);
+  assert.deepEqual(delivery.lastReward,{id:4,kind:'research',amount:600});
+  assert.equal(result.progress['dome-matches'].count,1);
+  assert.ok(result.awards.includes('rocket-rookie'));
+});
+
+test('delivery and supply celebrations include a region award unlocked by the tier bonus',()=>{
+  const pickup:Order={restaurant:0,customer:0,stage:'pickup',elapsed:1,pickupEstimate:20,estimate:30,base:100};
+  const delivery=initialDelivery({x:0,z:0}),state=initialAchievements();
+  delivery.cash=9_800;delivery.lastReward={id:7,kind:'pickup',amount:100};
+  applyAcceptedDelivery(delivery,state,normalizeAchievementTiers(undefined,0,[]),pickup,false,undefined,true);
+  assert.equal(delivery.cash,10_500);
+  assert.ok(state.unlocked.includes('region-oakland'));
+  assert.deepEqual(delivery.lastReward,{id:7,kind:'pickup-research',amount:800});
+
+  const supply=initialDelivery({x:0,z:0}),supplyState=initialAchievements();
+  supply.cash=9_900;supply.lastReward={id:2,kind:'supply-repair',amount:5};
+  const rewardBefore=supply.lastReward,cashBefore=supply.cash;
+  applyTierProgress(supply,normalizeAchievementTiers(undefined,0,[]),['supply-pickups'],true);
+  applyAchievementAwards(supply,supplyState,[]);
+  coalesceEventRewards(supply,rewardBefore,cashBefore,true);
+  assert.equal(supply.cash,10_500);
+  assert.ok(supplyState.unlocked.includes('region-oakland'));
+  assert.deepEqual(supply.lastReward,{id:2,kind:'supply-repair',amount:605});
 });

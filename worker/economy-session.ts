@@ -6,7 +6,7 @@ import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribe
 import { applyAchievementAwards, awardMarsAchievement, type AchievementState } from '../shared/achievements';
 import { evaluateAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { ACHIEVEMENT_TIER_CAP, normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
-import { achievementTierFamilies, applyAcceptedDelivery, applyObservedAchievement, applyTierProgress, deliveryTierFamilies } from './achievement-progress';
+import { achievementTierFamilies, applyAcceptedDelivery, applyObservedAchievement, applyTierProgress, coalesceEventRewards, deliveryTierFamilies } from './achievement-progress';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
 import type { PaintId, StyleChoice } from '../shared/vehicle-style';
@@ -532,8 +532,10 @@ export class EconomySession {
     const delivery=this.draft.delivery;
     delivery.cash+=5;delivery.lifetimeIncome+=5;delivery.level=levelForCash(delivery.cash);
     delivery.lastReward={id:(delivery.lastReward?.id??0)+1,kind:type==='repair'?'supply-repair':'supply-air',amount:5};
+    const rewardBefore=delivery.lastReward,cashBefore=delivery.cash;
     this.draft.achievementTiers=applyTierProgress(delivery,this.draft.achievementTiers,['supply-pickups'],true);
     applyAchievementAwards(delivery,this.draft.achievements,[]);
+    coalesceEventRewards(delivery,rewardBefore,cashBefore,true);
   }
   private rebaseSupply(item:Item,progress:DriverProgress):boolean{
     return progress.cash===item.view.delivery.cash&&progress.eligibleIncome===item.view.delivery.lifetimeIncome&&progress.level===item.view.delivery.level&&

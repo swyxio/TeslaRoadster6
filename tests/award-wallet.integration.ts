@@ -291,6 +291,8 @@ try {
   assert.equal(afterReplay.achievementTiers?.['dome-wins'].count,1);
   assert.equal(afterReplay.cash,baseline.cash+1_200,'replay credits the two game awards and first Dome tiers');
   assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+1_200,'rejected and speculative income are not replayed');
+  assert.deepEqual(replay.client.messages.filter(message=>message.type==='reward').map(message=>message.reward),
+    [{id:1,kind:'research',amount:1_200}],'one private celebration includes every award in the replayed transaction');
   let starshipRequest=700;
   await until(async()=>{
     const requestId=starshipRequest++;
@@ -333,6 +335,8 @@ try {
   assert.equal(lostRecovered.achievementTiers?.['dome-wins'].count,1);
   assert.equal(lostRecovered.cash,lostBefore.cash+1_200,'receipt retry does not credit twice');
   assert.equal(lostRecovered.eligibleIncome,lostBefore.eligibleIncome+1_200);
+  assert.deepEqual(lost.client.messages.filter(message=>message.type==='reward').map(message=>message.reward),
+    [{id:1,kind:'research',amount:1_200}],'a lost reply produces one complete celebration after retry');
 
   // A rejected physical evidence write fails closed without acknowledging the
   // barrier or allowing later speculative income to become committed.

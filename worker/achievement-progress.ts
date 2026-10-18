@@ -1,7 +1,7 @@
 import { applyAchievementTierEvent, type AchievementTierId, type AchievementTierProgress } from '../shared/achievement-tiers';
 import { evaluateAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { applyAchievementAwards, applyDeliveryAwards, type AchievementState } from '../shared/achievements';
-import { updateLevel, type DeliveryState, type Order } from '../shared/delivery';
+import { updateLevel, type DeliveryReward, type DeliveryState, type Order } from '../shared/delivery';
 
 /** The observation is produced by the room, never by a client claim. */
 export function achievementTierFamilies(evidence:AchievementEvidence):AchievementTierId[] {
@@ -49,21 +49,36 @@ export function applyTierProgress(delivery:DeliveryState,progress:AchievementTie
   return result.progress;
 }
 
+/** Represent all cash credited by one transaction in its one celebration. */
+export function coalesceEventRewards(delivery:DeliveryState,before:DeliveryReward|null,cashBefore:number,groupWithReward=false):void {
+  const added=delivery.cash-cashBefore;
+  if(added<=0)return;
+  const grouped=groupWithReward&&before;
+  const kind=grouped
+    ? before.kind==='pickup'||before.kind==='pickup-research'?'pickup-research'
+      : before.kind==='delivery'||before.kind==='delivery-research'?'delivery-research'
+      : before.kind
+    : 'research';
+  delivery.lastReward={id:grouped?before.id:(before?.id??0)+1,kind,amount:(grouped?before.amount:0)+added};
+}
+
 /** Apply both legacy and repeatable rewards to the same accepted delivery. */
 export function applyAcceptedDelivery(delivery:DeliveryState,state:AchievementState,progress:AchievementTierProgress,
   orderBefore:Order,rooftop:boolean,customer:string|undefined,sameTickReward:boolean){
-  const before=state.unlocked.length;
+  const before=state.unlocked.length,rewardBefore=delivery.lastReward,cashBefore=delivery.cash;
   applyDeliveryAwards(delivery,state,rooftop,customer,sameTickReward);
   const next=applyTierProgress(delivery,progress,deliveryTierFamilies(orderBefore,rooftop),sameTickReward);
   applyAchievementAwards(delivery,state,[]);
+  coalesceEventRewards(delivery,rewardBefore,cashBefore,sameTickReward);
   return {progress:next,awards:state.unlocked.slice(before)};
 }
 
 /** Apply one already validated, server-observed physical or match event. */
 export function applyObservedAchievement(delivery:DeliveryState,state:AchievementState,progress:AchievementTierProgress,evidence:AchievementEvidence){
-  const before=state.unlocked.length;
+  const before=state.unlocked.length,rewardBefore=delivery.lastReward,cashBefore=delivery.cash;
   applyAchievementAwards(delivery,state,evaluateAchievementEvidence(state.unlocked,evidence));
   const next=applyTierProgress(delivery,progress,achievementTierFamilies(evidence));
   applyAchievementAwards(delivery,state,[]);
+  coalesceEventRewards(delivery,rewardBefore,cashBefore);
   return {progress:next,awards:state.unlocked.slice(before)};
 }
