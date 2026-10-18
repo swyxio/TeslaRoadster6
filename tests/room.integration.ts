@@ -5,6 +5,7 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
+import { OTA_FEE } from '../shared/ota';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
 // The combined protocol includes Caltrain, research sites and vehicle finishes.
@@ -69,7 +70,7 @@ try {
   assert.ok(!two.state.world!.players.find(p=>p.id===one.state.id)!.achievements.unlocked.includes('ucsf-research'));
   one.socket.send(JSON.stringify({type:'vehicleStyle',category:'paint',choice:'mint',requestId:80}));
   one.socket.send(JSON.stringify({type:'vehicleStyle',category:'decal',choice:'stripe',requestId:81}));
-  await eventually(()=>one.state.vehicleStyleResults?.some(r=>r.requestId===80&&!r.ok)??false,'unfunded finish rejected');
+  await eventually(()=>one.state.vehicleStyleResults?.some(r=>r.requestId===80&&!r.ok)??false,'finish rejected outside a shop');
   await eventually(()=>one.state.vehicleStyleResults?.some(r=>r.requestId===81&&!r.ok)??false,'rate-limited finish rejected');
   assert.equal(two.state.vehicleStyleResults?.length??0,0,'finish purchase results are private');
   assert.deepEqual(two.state.world!.entities.find(e=>e.driver===one.state.id)!.style,{paint:'stock',decal:'none'},'rejected finish leaves remote car unchanged');
@@ -203,12 +204,14 @@ try {
   await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===1&&r.upgrade==='rocket'&&!r.ok)??false,'rejected purchase receives an explicit result');
   await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===2&&!r.ok)??false,'rate-limited purchase receives an explicit result');
   assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
-  assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
+  assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'purchase outside a shop rejected');
+  const cashBeforeOta=two.state.world!.players.find(p=>p.id===id)!.delivery.cash;
+  assert.ok(cashBeforeOta>=OTA_FEE,'driver can afford a subscription');
   await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:true,requestId:3}));
   one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
   await eventually(()=>one.state.otaResults?.some(r=>r.requestId===3&&r.ok)??false,'subscription receives an explicit result');
-  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled??false,'subscription state replicated');
-  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active,false,'unfunded subscription pauses');
+  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active??false,'paid subscription active in observer snapshot');
+  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.cash,cashBeforeOta-OTA_FEE,'subscription debits one period');
   assert.equal(two.state.otaResults?.length??0,0,'subscription result goes only to requester');
   await eventually(()=>one.state.otaResults?.some(r=>r.requestId===4&&!r.enabled&&!r.ok)??false,'rate-limited subscription receives an explicit result');
   assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled,true,'rate-limited cancellation did not alter subscription');

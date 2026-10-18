@@ -2,6 +2,7 @@
 // Start the test fixture described in tests/fixtures/README-luxury-wallet.md.
 // pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp/tesland-wallet-throughput.json
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import {cpus,loadavg} from 'node:os';
@@ -12,6 +13,8 @@ import {NEUTRAL,PROTOCOL_VERSION} from '../shared/game';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8797');
 if(base.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(base.hostname))throw new Error('Use an isolated local fixture only');
 const output=resolve(process.argv[3]??`/tmp/tesland-wallet-throughput-${Date.now()}.json`);
+const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+const dirtyWorktree=execFileSync('git',['status','--porcelain=v1'],{encoding:'utf8'}).trim().length>0;
 const room=`throughput-${randomUUID().slice(0,8)}`,sockets:WebSocket[]=[];
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
@@ -142,7 +145,7 @@ try{
   const profileKeys=await Promise.all(clients.slice(0,4).map(client=>rpc<string[]>('profile-keys',{driverId:client.driverId})));
   const baseline=summarize(baselineData,baselineServer),active=summarize(activeData,activeServer);
   const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time'},
-    environment:{node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
+    environment:{revision,dirtyWorktree,node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
     baseline,active,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
     pendingLedgerKeys:ledgerKeys.filter(key=>/^(pending|unacked|cleanup|intent):/.test(key)).length,
     profileReceiptCounts:profileKeys.map(keys=>keys.filter(key=>key.startsWith('receipt:')).length),closed:clients.filter(client=>client.socket.readyState!==WebSocket.OPEN).length,repliesDrained,queuesDrained,
