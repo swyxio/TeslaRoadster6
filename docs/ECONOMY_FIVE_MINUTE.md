@@ -6,16 +6,23 @@ The seven-path results below use the earlier design's $3k–$26k task fares and 
 
 ## Opening-session ledger
 
-Run `pnpm exec tsx scripts/economy-opening.ts --write-chart` to regenerate the [chart](../public/blog/economy/opening-wallet.svg) and [data](../public/blog/economy/opening-wallet.json). It starts with $2,500, calls the shared delivery and achievement functions, and checks that each wallet balances. The timing scenarios assume the player stays active, completes ground deliveries at the specified intervals, has no event multiplier or fines, and encounters no discoveries. The paint-and-OTA path begins at a workshop and pays $750 for Ember plus three $100 subscription periods. The scenarios do not simulate physical driving or workshop travel.
+Run `pnpm exec tsx scripts/economy-opening.ts --write-chart` to regenerate the [chart](../public/blog/economy/opening-wallet.svg) and [data](../public/blog/economy/opening-wallet.json). It starts with $2,500, calls the shared delivery and authoritative achievement-tier functions, and checks that each wallet balances. The timing scenarios assume the player stays active, completes ground deliveries at the specified intervals, has no event multiplier or fines, and encounters no discoveries. The paint-and-OTA path begins at a workshop and pays $750 for Ember plus three $100 subscription periods. The scenarios do not simulate physical driving or workshop travel.
 
-| Path | Pickup / drop-off | Gross by 1 minute | Gross by 5 minutes | Deliveries / awards by 5 minutes | Cash after 5 minutes |
+| Path | Pickup / drop-off | Gross by 1 minute | Gross by 5 minutes | Deliveries / badges / tiers by 5 minutes | Cash after 5 minutes |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Quick | 10 s / 30 s | $1,671 | $11,872 | 7 / 4 | $14,372 |
-| Steady | 20 s / 55 s | $126 | $4,516 | 4 / 2 | $7,016 |
-| Steady, paint and OTA | 20 s / 55 s | $126 | $4,516 | 4 / 2 | $5,966 |
-| Leisurely | 30 s / 90 s | $69 | $1,611 | 2 / 1 | $4,111 |
+| Quick | 10 s / 30 s | $1,971 | $12,172 | 7 / 4 / 4 | $14,672 |
+| Steady | 20 s / 55 s | $326 | $4,816 | 4 / 2 / 4 | $7,316 |
+| Steady, paint and OTA | 20 s / 55 s | $326 | $4,816 | 4 / 2 / 4 | $6,266 |
+| Leisurely | 30 s / 90 s | $269 | $1,811 | 2 / 1 / 3 | $4,311 |
+| Slow | 45 s / 150 s | $100 | $900 | 1 / 1 / 2 | $3,400 |
 
-Gross excludes the starting $2,500 and includes one-off awards. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
+Gross excludes the starting $2,500 and includes one-off awards. Badge and tier counts are separate; a tier can have a $0 cash award. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
+
+### Five active minutes in the game
+
+On 2026-10-18, before the achievement-tier update, a fresh local driver used Street Pilot for three deliveries, reopening the route at each pickup and drop-off. At 5:01 active, the wallet showed $2,539 and the room's lifetime-earnings counter showed $3,539. The driver started with $2,500 and spent $3,500: $750 paint, $450 decal, a $2,000 sport motor and three $100 OTA charges. The first delivery paid $613 plus a $500 First Delivery award; the second paid $564 plus location rewards; the third paid $691 plus the $350 checkpoint and Neighborhood Regular award. The locked level-1 paint and decal options were visible, and the driver remained at level 0.
+
+This was one self-driving route with shop visits on a busy development machine, and took longer than five wall-clock minutes. It earned less than the four-delivery steady model and does not establish typical manual-driving income. A slow completed delivery previously could pay nothing; the current rules retain at least half its distance-adjusted base fare. In the 45/150-second scenario that raises the first fare from $32 to $300. With the new $100 pickup tier, five-minute gross is $900.
 
 The pacing target is at most a 25-minute P90 longest gap between one-off achievements during the first two active hours, and two to four one-off achievements in each 30-minute block. These are diagnostics for comparing ideas, not a proven measure of fun. We count individual awards separately from notifications grouped when one action earns several awards. Repeatable checkpoints and progress indicators are separate from both.
 
