@@ -12,12 +12,13 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
     if (data.type === 'state') state.world = data.world;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
+    if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
   return { socket, state };
@@ -84,6 +85,13 @@ try {
   await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===2&&!r.ok)??false,'rate-limited purchase receives an explicit result');
   assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
   assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:true,requestId:3}));
+  await eventually(()=>one.state.otaResults?.some(r=>r.requestId===3&&r.ok)??false,'subscription receives an explicit result');
+  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled??false,'subscription state replicated');
+  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active,false,'unfunded subscription pauses');
+  assert.equal(two.state.otaResults?.length??0,0,'subscription result goes only to requester');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
+  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));

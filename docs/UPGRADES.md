@@ -6,6 +6,8 @@ The workshops are fictional SpaceX-branded game locations, not real facilities o
 
 Stop the current vehicle in a ring and press **B**, use **Actions → Shop**, or tap the shop prompt. A shop spends the player's delivery cash immediately; the room validates the location, vehicle, motion, balance and upgrade before applying it. Costs and effects are game tuning:
 
+The shop can also be opened from Actions anywhere to subscribe to the fictional SpaceX / Tesla OTA service. The opt-in costs $5 in delivery cash per game hour (120 real seconds); upgrades are charged separately. The first period is charged on enrollment if funds are available. If a renewal cannot be paid, access pauses without debt and automatically resumes with a fresh paid period when the player has $5. A paid period remains usable until its renewal; cancel anytime to stop future charges. Physical shops still work without a subscription. This is session-only game fiction, not a real subscription, payment, Tesla or SpaceX service. The remote-access pattern draws on [GTA Online's optional remote business access](https://support.rockstargames.com/articles/4WMldgJrkL3aVrIJNZN1E3/gta-benefits-for-accounts-with-multiple-grand-theft-auto-online-characters) and its [mechanic service pausing after an unpaid fee](https://support.rockstargames.com/articles/6TVXdrdzZPNztlOSGWu1Y1/issues-accessing-the-mechanic-in-gta-online).
+
 | Item | Cash | Effect |
 |---|---:|---|
 | Rocket kit | $60 | Flight controls and a full air tank; free from a purple pickup |

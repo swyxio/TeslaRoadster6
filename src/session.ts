@@ -1,5 +1,5 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
@@ -13,14 +13,15 @@ export class Session {
   private lastState = 0;
   private nextUpgradeRequest = 0;
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
+  otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   error = '';
   constructor() { addPlayer(this.world, this.id, 'You'); }
   solo(kind:VehicleId='roadster') {
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = '';
-    this.upgradeResult=null;this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
+    this.upgradeResult=null;this.otaResult=null;this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
   join(room: string, name: string,kind:VehicleId='roadster') {
-    this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.upgradeResult=null;this.world = createWorld();
+    this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.upgradeResult=null;this.otaResult=null;this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.status === 'connecting') { this.error = 'Connection timed out. Try again or drive solo.'; socket.close(); } }, 10000);
@@ -35,6 +36,7 @@ export class Session {
         }
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
         if (message.type === 'upgradeResult') this.upgradeResult = message;
+        if (message.type === 'otaResult') this.otaResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
     socket.onclose = () => { clearTimeout(timeout); if (this.socket === socket) { this.status = 'disconnected'; this.error ||= 'Room disconnected or full. Rejoin, choose a new room, or drive solo.'; } };
@@ -55,6 +57,12 @@ export class Session {
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
     if(this.status==='solo')this.upgradeResult={requestId,upgrade,ok:buyUpgrade(this.world,this.id,upgrade)};
     else if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
+    return requestId;
+  }
+  setOta(enabled:boolean){
+    const requestId=++this.nextUpgradeRequest;this.otaResult=null;
+    if(this.status==='solo')this.otaResult={requestId,enabled,ok:subscribeOta(this.world,this.id,enabled)};
+    else if(this.status!=='online'||!this.send({type:'ota',enabled,requestId}))this.otaResult={requestId,enabled,ok:false};
     return requestId;
   }
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {

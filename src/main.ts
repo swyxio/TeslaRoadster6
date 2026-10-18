@@ -55,7 +55,7 @@ document.querySelector('#app')!.innerHTML = `
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
-<dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
+<dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR ROOM / ACTIVE DRIVERS</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by cash and active play. First-person time and deliveries are self-reported; a first-person delivery requires the whole active run in cockpit view. Scores last only for this session.</p><div class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
 <dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR SESSION / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, take the scenic route, and earn these once per session.</p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / POLY AV RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">An original little soundtrack, plus sounds for your drive. Adjust them anytime.</p><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
@@ -118,7 +118,7 @@ function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   lastRewardId=0;lastTicketCount=0;resetCelebration();audio.reset();void audio.unlock();
-  pendingShop=null;shopBusyUntil=0;
+  pendingShop=null;pendingOta=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   controls.resetSequences();if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
@@ -126,7 +126,7 @@ function begin(solo:boolean){
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
 $('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
-$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;shopBusyUntil=0;session.solo();toggleMenu(true);};
+$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;shopBusyUntil=0;session.solo();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
   $('camera').textContent=`C · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;
@@ -282,6 +282,12 @@ $('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===
 const shopDialog=$<HTMLDialogElement>('shop-dialog');
 let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false;
 let pendingShop:{requestId:number;upgrade:UpgradeId;sentAt:number}|null=null;
+let pendingOta:{requestId:number;enabled:boolean;sentAt:number}|null=null;
+$('ota-toggle').onclick=()=>{
+  const player=session.world.players.find(p=>p.id===session.id);if(!player||pendingOta)return;
+  const enabled=!player.delivery.ota.enabled,now=performance.now();shopBusyUntil=now+800;
+  pendingOta={requestId:session.setOta(enabled),enabled,sentAt:now};updateShop();
+};
 for(const id of Object.keys(UPGRADES) as UpgradeId[]){
   const item=UPGRADES[id],row=document.createElement('div');row.className='shop-item';
   const copy=document.createElement('div'),title=document.createElement('strong'),description=document.createElement('p');title.dataset.upgradeTitle=id;
@@ -305,10 +311,20 @@ function updateShop(){
   }
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car)return;
-  const place=shopFor(car),rocket=hasRockets(car);
-  $('shop-location').textContent=place?`${place.name} · Stop in the purple bay to upgrade.`:'Return to the purple bay and stop to shop.';
+  if(pendingOta){
+    const result=session.otaResult;
+    if(result?.requestId===pendingOta.requestId&&!result.ok){$('shop-feedback').textContent='Subscription change declined. Please try again.';pendingOta=null;session.otaResult=null;}
+    else if(result?.requestId===pendingOta.requestId&&player.delivery.ota.enabled===pendingOta.enabled){$('shop-feedback').textContent=pendingOta.enabled?'Subscription enabled. Remote access starts when paid.':'Subscription cancelled.';pendingOta=null;session.otaResult=null;}
+    else if(performance.now()-pendingOta.sentAt>5000){$('shop-feedback').textContent='No reply yet. Check your subscription status before trying again.';pendingOta=null;}
+  }
+  const place=shopFor(car),rocket=hasRockets(car),ota=player.delivery.ota;
+  const available=car.kind!=='person'&&(!!place||ota.active);
+  $('shop-location').textContent=place?`${place.name} · Workshop connected.`:ota.active?'Remote shop connected · upgrades available anywhere.':'Visit a purple shop ring or subscribe for remote access.';
   $('shop-car').textContent=car.kind==='person'?'ON FOOT':VEHICLES[car.kind].name;
   $('shop-cash').textContent=`${money(player.delivery.cash)} available`;
+  $('ota-status').textContent=!ota.enabled?'OFF · Subscribe to activate':ota.active?'ACTIVE · Next charge in '+Math.ceil(Math.max(0,(ota.renewAt??0)-session.world.time))+' seconds':'PAUSED · Waiting for $5';
+  const otaButton=$<HTMLButtonElement>('ota-toggle');otaButton.textContent=pendingOta?'CHECKING…':ota.enabled?'CANCEL':'SUBSCRIBE';
+  otaButton.disabled=!!pendingOta||!!pendingShop||performance.now()<shopBusyUntil;
   for(const id of Object.keys(UPGRADES) as UpgradeId[]){
     const button=document.querySelector<HTMLButtonElement>(`[data-upgrade="${id}"]`)!;
     const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:car.upgrades[id];
@@ -318,14 +334,12 @@ function updateShop(){
     document.querySelector<HTMLElement>(`[data-upgrade-title="${id}"]`)!.textContent=name;
     button.textContent=installed?(id==='service'?'FULL':id==='tank'?'MAX':'INSTALLED'):needsRocket?'NEEDS ROCKET':money(price);
     button.setAttribute('aria-label',`${name}: ${button.textContent}`);
-    button.disabled=!place||installed||needsRocket||player.delivery.cash<price||!!pendingShop||performance.now()<shopBusyUntil;
+    button.disabled=!available||installed||needsRocket||player.delivery.cash<price||!!pendingShop||!!pendingOta||performance.now()<shopBusyUntil;
   }
 }
 function openShop(){
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
-  if(!car||car.kind==='person'){notice('Get into a vehicle to visit a shop.');return;}
-  const nearest=SHOPS.reduce((a,b)=>Math.hypot(car.x-a.x,car.z-a.z)<Math.hypot(car.x-b.x,car.z-b.z)?a:b);
-  if(!shopFor(car)){notice(`Stop inside a purple shop ring. Nearest: ${nearest.name} · ${Math.round(Math.hypot(car.x-nearest.x,car.z-nearest.z))} m.`);return;}
+  if(!player||!car)return;
   controls.clear();controls.enabled=false;
   if(!pendingShop)$('shop-feedback').textContent='Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.';
   updateShop();shopDialog.showModal();

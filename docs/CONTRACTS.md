@@ -1,4 +1,4 @@
-# Implementation contracts · v14
+# Implementation contracts · v15
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -33,11 +33,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 - `World`: entities, players, pickups, time and authoritative `soccer` (ball position/velocity, both scores and goal/win phase). Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
-Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `buyUpgrade`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
+Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `buyUpgrade`, `subscribeOta`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v14
+## Wire protocol v15
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:14,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:15,capacity:number}`.
 
 Client messages:
 
@@ -49,28 +49,30 @@ Client messages:
 {"type":"dome"}
 {"type":"selectVehicle","kind":"model-3"}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
+{"type":"ota","enabled":true,"requestId":2}
 {"type":"name","name":"Driver"}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:14, capacity:number}
+{type:"welcome", id:string, version:15, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
+{type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 ```
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players and occupied vehicles plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Static map and simulation are shared and the room remains authoritative. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms, names trimmed/control characters stripped/24-character max. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
-Upgrade requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. Solo mode returns the same result from the shared simulation.
+Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. Solo mode returns the same result from the shared simulation. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
 Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Shared room state is memory-only. Start timer with first connection; stop and reset when empty. No persistent promise of garages/accounts. Do not replace with a global room object or client-authoritative coordinates.
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
