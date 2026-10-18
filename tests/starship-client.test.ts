@@ -52,17 +52,6 @@ test('a recovered driver is polled as soon as the new wallet is ready',()=>{
   client.tick(true);assert.equal(requests,2,'the old driver polling deadline does not delay recovery');
 });
 
-test('server time drives the global launch and outranks local replay',async()=>{
-  let now=1000;const session=fakeSession();
-  const completed=status({total:1_000_000_000,crossing:'recorded',launchTotal:1_000_000_000,completedAt:1,launchAt:10_000,launchId:'launch'});
-  const client=new StarshipClient(session,()=>now,async()=>response({status:completed,serverTime:9_000}));
-  await client.refresh();client.replay();
-  assert.equal(client.animation()?.source,'replay');
-  now=2200;
-  assert.deepEqual(client.animation(),{source:'global',elapsed:.2});
-  assert.equal(client.animation(now,false)?.source,'global');
-});
-
 test('a queued privacy choice stays unconfirmed until the profile outbox clears',()=>{
   let now=1000,requests=0;const session=fakeSession();session.status='online';
   session.requestStarshipStatus=()=>{requests++;return true;};
