@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Controls} from '../src/controls';
+import {makeEntity,step,type World} from '../shared/game';
 
 class FakeButton extends EventTarget {
   dataset:{control:string};
@@ -37,4 +38,22 @@ test('Space brakes, J jumps, and touch brake combines with steering without stic
   steering.dispatchEvent(pointer('pointerdown',1));brake.dispatchEvent(pointer('pointerdown',2));
   assert.equal(controls.read().steer,1);assert.equal(controls.read().brake,true);
   brake.dispatchEvent(pointer('pointercancel',2));assert.equal(controls.read().brake,false);assert.equal(controls.read().steer,1);
+});
+
+
+test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
+  const jump=new FakeButton('KeyJ'),brake=new FakeButton('Space');
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=selector=>selector==='[data-control]'?[jump,brake]:[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const car=makeEntity('car','roadster',0,0,'driver');
+  const world:World={entities:[car],players:[],pickups:[],time:0};
+  const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyJ'});fakeWindow.dispatchEvent(key);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,1);
+  jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,52);assert.equal(car.lastJump,2);
+  Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',speed:20});
+  brake.dispatchEvent(pointer('pointerdown',2));step(world,new Map([['driver',controls.read()]]),.05);
+  assert.ok(car.speed<19);brake.dispatchEvent(pointer('pointerup',2));assert.equal(controls.read().brake,false);
 });
