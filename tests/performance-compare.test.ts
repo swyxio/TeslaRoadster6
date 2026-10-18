@@ -6,12 +6,14 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+const initialOrder = { restaurant: { id: 'tartine', x: -180, z: 120 }, customer: { id: 'cable', x: 0, y: 0, z: -180, rooftop: false } };
+
 test('every route leg must meet p95 and maximum path tolerances', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tesland-leg-compare-'));
   try {
     const report = {
       target: { version: 'test', revision: 'abc123' },
-      route: { status: 'available', legs: Array.from({ length: 5 }, () => ({
+      route: { status: 'available', initialOrder, legs: Array.from({ length: 3 }, () => ({
         lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]),
       })) },
     };
@@ -30,10 +32,10 @@ test('every route leg must meet p95 and maximum path tolerances', () => {
     assert.match(p95Result.stdout, /3: 30 \/ 30/);
 
     const maxFailure = structuredClone(report);
-    maxFailure.route.legs[4].points[0][1] = 51;
+    maxFailure.route.legs[1].points[0][1] = 51;
     const maxResult = compare(maxFailure);
     assert.equal(maxResult.status, 1);
-    assert.match(maxResult.stdout, /leg 5 path divergence exceeds tolerance/);
+    assert.match(maxResult.stdout, /leg 2 path divergence exceeds tolerance/);
 
     const boundary = structuredClone(report);
     for (let i = 0; i < 3; i++) boundary.route.legs[2].points[i][1] = 25;
@@ -41,6 +43,18 @@ test('every route leg must meet p95 and maximum path tolerances', () => {
     const boundaryResult = compare(boundary);
     assert.equal(boundaryResult.status, 0);
     assert.match(boundaryResult.stdout, /3: 25 \/ 50/);
+
+    const differentOrder = structuredClone(report);
+    differentOrder.route.initialOrder.customer.id = 'another-customer';
+    const orderResult = compare(differentOrder);
+    assert.equal(orderResult.status, 1);
+    assert.match(orderResult.stdout, /initial delivery identity or coordinates differ/);
+
+    const oldRoute = structuredClone(report);
+    oldRoute.route.legs.push(...structuredClone(oldRoute.route.legs.slice(0, 2)));
+    const oldResult = compare(oldRoute);
+    assert.equal(oldResult.status, 1);
+    assert.match(oldResult.stdout, /prior five-leg reports are incompatible with this scenario/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -53,7 +67,7 @@ test('required comparisons fail when either report lacks any available observati
       environment: { runner: { webgl: { renderer: 'test renderer' } } },
       fixture: { scenarioSha256: 'scenario', recorderSha256: 'recorder', reporterSha256: 'reporter', stageSha256: 'stage', motionBenchmarkSha256: 'benchmark', motionAdapterSha256: 'adapter', captureVideo: false },
       metrics: { browserFrameIntervalP95: { status: 'available', p95Ms: 16 }, roomProgress: { status: 'available', ratio: 1 }, modeledMotion: { steady150: structuredClone(motion), bunched150: structuredClone(motion) } },
-      route: { status: 'available', legs: Array.from({ length: 5 }, () => ({ lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]) })) },
+      route: { status: 'available', initialOrder, legs: Array.from({ length: 3 }, () => ({ lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]) })) },
     };
     const before = join(dir, 'before.json'), after = join(dir, 'after.json');
     const script = fileURLToPath(new URL('../scripts/performance-compare.mjs', import.meta.url));

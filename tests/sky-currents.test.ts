@@ -211,7 +211,7 @@ test('each Caltrain stop has two distinct, narrow, elevated and clearly named lo
 test('a Caltrain current gives directional speed and refills a flying car',()=>{
  const stop=CALTRAIN_STOPS.find(s=>s.name==='Redwood City')!;
  const lane=CALTRAIN_CURRENTS.find(l=>l.id===`caltrain-${stop.id}-south`)!;
- const {world,player,car}=controlledCar();player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
+ const {world,player,car}=controlledCar();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  Object.assign(car,{x:(lane.start.x+lane.end.x)/2,z:(lane.start.z+lane.end.z)/2,y:lane.height,air:0,supportId:null});
  tick(world,20);
  const dx=lane.end.x-lane.start.x,dz=lane.end.z-lane.start.z;
@@ -221,7 +221,7 @@ test('a Caltrain current gives directional speed and refills a flying car',()=>{
 
 test('a Rocket can reach a Caltrain lane from the station without another current',()=>{
  const lane=CALTRAIN_CURRENTS.find(l=>l.id==='caltrain-redwood-city-south')!;
- const {world,player,car}=controlledCar();player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
+ const {world,player,car}=controlledCar();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  Object.assign(car,{x:(lane.start.x+lane.end.x)/2,z:(lane.start.z+lane.end.z)/2,y:0,
   vx:0,vy:0,vz:0,air:100,tankLevel:2,supportId:'ground'});
  for(let i=0;i<220&&currentAt(car)?.id!==lane.id;i++)tick(world,1,{...NEUTRAL,jump:1+Math.floor(i/20)});
@@ -233,7 +233,7 @@ test('unboosted flight can leave a Caltrain current against its flow',()=>{
  const lane=CALTRAIN_CURRENTS.find(l=>l.id===`caltrain-${stop.id}-south`)!;
  const dx=(lane.end.x-lane.start.x)/180,dz=(lane.end.z-lane.start.z)/180;
  for(const [yaw,throttle] of [[Math.atan2(dx,dz),1],[Math.atan2(dx,dz)+Math.PI,-1]] as const){
-  const {world,player,car}=controlledCar();player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
+  const {world,player,car}=controlledCar();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
   Object.assign(car,{x:lane.start.x+dx*12,z:lane.start.z+dz*12,y:lane.height,yaw,air:0,supportId:null});
   tick(world,60,{...NEUTRAL,throttle});
   assert.ok((car.x-lane.start.x)*dx+(car.z-lane.start.z)*dz<0,'the car exits upstream without a boost');

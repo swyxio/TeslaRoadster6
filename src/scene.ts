@@ -10,7 +10,7 @@ import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
-import { orderTarget } from '../shared/delivery';
+import { canAssignDeliveryRoof, isOrderAccessible, orderTarget } from '../shared/delivery';
 import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -194,7 +194,10 @@ export class GameScene {
         }
         scene.add(claim);this.parkingClaims.set(stall.id,claim);
       }
-      const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      // Charger lots have physical pylons; the floating name would cover them.
+      if(!lot.id.startsWith('charger-')){
+        const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      }
     }
     this.raceGate.visible=false;this.raceGate.scale.y=.52;scene.add(this.raceGate);
     for(const course of RACE_COURSES){
@@ -309,7 +312,7 @@ export class GameScene {
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
     for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
-    for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
+    for(const level of [1,2,3,4,5,6] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
     this.skyCurrents.update(world.time,controlled);
@@ -411,7 +414,7 @@ export class GameScene {
     this.dome.update(this.ballPosition);
     const e=controlled;
     const target=player?orderTarget(player.delivery.order):undefined;
-    this.objective.visible=!!player&&!menu&&!e?.inDome;if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    this.objective.visible=!!player&&!menu&&!e?.inDome&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!e||e.kind==='person'||canAssignDeliveryRoof(e)));if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
     if(menu){

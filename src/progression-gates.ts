@@ -1,9 +1,10 @@
 import * as T from 'three';
 import { ACCESS_BOUNDARIES, LEVELS } from '../shared/delivery';
+import { ACCESS_ROAD_GATES } from '../shared/service-areas';
 import { BRIDGES, HIGHWAYS, terrainHeight, type MapPoint } from '../shared/map';
 import { FLIGHT_CEILING } from '../shared/sky-currents';
 
-type GateLevel = 1|2|3;
+type GateLevel = 1|2|3|4|5|6;
 type Placement = { x:number; z:number; yaw:number; width:number };
 
 // Intersect the road with the shared Z boundary, not a perpendicular road
@@ -40,7 +41,7 @@ function requirementMaterial(level:GateLevel):T.SpriteMaterial {
 
 /** Visual-only checkpoints. Caller adds each group and sets its visibility per local player. */
 export function createProgressionGates():Record<GateLevel,T.Group> {
-  const groups:Record<GateLevel,T.Group>={1:new T.Group(),2:new T.Group(),3:new T.Group()};
+  const groups:Record<GateLevel,T.Group>={1:new T.Group(),2:new T.Group(),3:new T.Group(),4:new T.Group(),5:new T.Group(),6:new T.Group()};
   const fieldGeometry=new T.PlaneGeometry(1,1),railGeometry=new T.BoxGeometry(1,1,1);
   const fieldMaterial=new T.MeshBasicMaterial({color:0xffc56f,transparent:true,opacity:.14,depthWrite:false,side:T.DoubleSide});
   const railMaterial=new T.MeshBasicMaterial({color:0xffc56f,transparent:true,opacity:.8,depthWrite:false});
@@ -51,7 +52,7 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
   const airGuideGeometry=new T.BufferGeometry();
   airGuideGeometry.setAttribute('position',new T.Float32BufferAttribute(airGuidePoints,3));
   const airGuideMaterial=new T.LineBasicMaterial({color:0xffc56f,transparent:true,opacity:.65,depthWrite:false});
-  const requirements:Record<GateLevel,T.SpriteMaterial>={1:requirementMaterial(1),2:requirementMaterial(2),3:requirementMaterial(3)};
+  const requirements:Record<GateLevel,T.SpriteMaterial>={1:requirementMaterial(1),2:requirementMaterial(2),3:requirementMaterial(3),4:requirementMaterial(4),5:requirementMaterial(5),6:requirementMaterial(6)};
 
   function add(level:GateLevel, placement:Placement) {
     const group=new T.Group();group.name=`level-${level}-checkpoint`;
@@ -73,9 +74,9 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
   if(bridge&&bridge.axis==='x'&&ACCESS_BOUNDARIES.oaklandX>=bridge.start&&ACCESS_BOUNDARIES.oaklandX<=bridge.end){
     add(1,{x:ACCESS_BOUNDARIES.oaklandX,z:bridge.center,yaw:Math.PI/2,width:bridge.width+4});
   }
-  for(const highway of HIGHWAYS){
-    for(const gate of crossings(highway.points,ACCESS_BOUNDARIES.bayMaxZ))add(2,gate);
-    for(const gate of crossings(highway.points,ACCESS_BOUNDARIES.sanJoseMinZ))add(3,gate);
+  for(const gate of ACCESS_ROAD_GATES){
+    const highway=HIGHWAYS.find(road=>road.id===gate.road);
+    if(highway)for(const placement of crossings(highway.points,gate.z))add(gate.level,placement);
   }
   return groups;
 }

@@ -13,6 +13,7 @@ import type { SettledDeliveryEarning } from '../shared/earnings-events';
 import type { DriverOutcome, DriverProgress } from '../worker/driver-profile';
 import type { DeliveryStage } from '../worker/room-economy';
 import { RoomInputClient } from './room-input-client';
+import { NEUTRAL } from '../shared/game';
 
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
@@ -60,7 +61,7 @@ function connect(path:string){
 }
 type Client=ReturnType<typeof connect>;
 const send=(client:Client,message:object)=>client.socket.send(JSON.stringify(message));
-async function joinSaved(room:string,code:string){
+async function joinSaved(room:string,code:string|null){
   const client=connect(`/api/room/${room}`);
   await until(()=>!!client.last('welcome')&&!!client.last('wallet'),'room welcome');
   send(client,{type:'identity',code,requestId:1});
@@ -90,6 +91,51 @@ try{
   await sync(client,2);
   const before=(await inspect(driverId)).progress;
   assert.equal(before.completed,0);assert.equal(before.order.stage,'dropoff');
+
+  // An actual room keeps accepting and acknowledging both players' inputs
+  // while one profile is held between durable assignment batches.
+  const parallelRoom=`assignment-live-${randomUUID().slice(0,8)}`;
+  const assignmentChat=connect('/api/chat');await until(()=>assignmentChat.socket.readyState===WebSocket.OPEN,'assignment chat opens');
+  send(assignmentChat,{type:'hello',name:'Assignment Courier'});await until(()=>!!assignmentChat.last('ready'),'assignment chat identity');
+  send(assignmentChat,{type:'save'});await until(()=>!!assignmentChat.last('recovery'),'assignment recovery code');
+  const assignmentCode=assignmentChat.last('recovery')!.code as string,assigningDriver=randomUUID();
+  assignmentChat.socket.close();
+  await rpc('wallet-test','associate',{driverId:assigningDriver,code:assignmentCode});
+  await rpc('wallet-test','acquire',{driverId:assigningDriver,fence:randomUUID()});
+  const assigning=await joinSaved(parallelRoom,assignmentCode),observer=await joinSaved(parallelRoom,null);
+  const assigningId=assigning.last('welcome')!.id as string;
+  const players=await rpc<Array<{playerId:string;driverId:string}>>('wallet-test','players',{room:parallelRoom});
+  assert.equal(players.find(item=>item.playerId===assigningId)!.driverId,assigningDriver,'assignment uses the saved driver');
+  await rpc('wallet-test','delivery-pickup',{room:parallelRoom,playerId:assigningId});
+  await until(async()=>(await inspect(assigningDriver)).progress.order.stage==='dropoff','assignment test pickup committed');
+  await sync(assigning,10);await sync(observer,11);
+  await rpc('delivery-crash','hold-assignment',{driverId:assigningDriver});
+  await rpc('delivery-crash','dropoff',{room:parallelRoom,playerId:assigningId});
+  await until(()=>rpc<boolean>('delivery-crash','assignment-held',{driverId:assigningDriver}),'assignment checkpoint held');
+  const held=(await inspect(assigningDriver)).progress;
+  assert.equal(held.completed,0,'payout waits for assignment');
+  const ownerTick=assigning.input.tick,observerTick=observer.input.tick;
+  const ownerSeq=assigning.input.send({...NEUTRAL,steer:1}),observerSeq=observer.input.send({...NEUTRAL,steer:1});
+  await until(()=>assigning.input.tick>=ownerTick+8&&observer.input.tick>=observerTick+8&&
+    (assigning.input.control?.appliedSeq??0)>=ownerSeq&&(observer.input.control?.appliedSeq??0)>=observerSeq,
+    'both clients receive snapshots and applied inputs during assignment');
+  const position=()=>{
+    const world=assigning.last('state')?.world;
+    const player=world?.players.find((item:{id:string})=>item.id===assigningId);
+    return world?.entities.find((item:{id:string})=>item.id===player?.entityId) as {x:number;z:number}|undefined;
+  };
+  const startPosition=position();assert.ok(startPosition,'held driver has a car snapshot');
+  for(let i=0;i<40;i++){assigning.input.send({...NEUTRAL,throttle:1});await delay(50);}
+  const stopSeq=assigning.input.send(NEUTRAL);
+  await until(()=>(assigning.input.control?.appliedSeq??0)>=stopSeq,'held driver releases throttle');
+  const end=position();assert.ok(end&&Math.hypot(end.x-startPosition.x,end.z-startPosition.z)>1,'saved driver actually drives while assignment is held');
+  await rpc('delivery-crash','release-assignment',{driverId:assigningDriver});
+  await until(async()=>(await inspect(assigningDriver)).progress.completed===1,'assignment completes');
+  const assigned=(await inspect(assigningDriver)).progress;
+  assert.equal(assigned.order.search,undefined);
+  assert.ok(assigned.order.elapsed<.1,`the new pickup did not count the held driving time: ${assigned.order.elapsed}`);
+  assert.ok(Math.abs((assigned.deliveryClock??0)-(held.deliveryClock??0))<.1,'the paused delivery clock did not advance while driving');
+  assigning.socket.close();observer.socket.close();
 
   // The event ends before recovery, proving settlement uses the rate at the
   // observed arrival, not the post-restart current rate.

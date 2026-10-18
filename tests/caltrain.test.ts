@@ -64,7 +64,7 @@ test('both highway directions navigate into each station area after its unlock',
       world.entities=[car];world.pickups=[];
       Object.assign(car,{x:segment.a.x+(segment.b.x-segment.a.x)*t,z:segment.a.z+(segment.b.z-segment.a.z)*t,
         yaw:Math.atan2(-(segment.b.x-segment.a.x),-(segment.b.z-segment.a.z))});
-      player.delivery.level=stop.level===3?2:0;player.delivery.cash=LEVELS[player.delivery.level].cash+2_500;
+      player.delivery.level=(stop.level-1) as typeof player.delivery.level;player.delivery.cash=LEVELS[player.delivery.level].cash+2_500;
       assert.equal(setDestination(world,'driver',stop),false,`${stop.id}: locked destination`);
       player.delivery.level=stop.level;player.delivery.cash=LEVELS[player.delivery.level].cash+2_500;
       assert.equal(setDestination(world,'driver',stop),true,`${stop.id}: connected direction ${direction}`);
