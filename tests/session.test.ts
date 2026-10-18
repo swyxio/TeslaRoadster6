@@ -68,3 +68,17 @@ test('offline navigation requests fail without starting a local session',()=>{
   assert.deepEqual(session.destinationResult,{requestId,ok:false});
   assert.equal(session.world.players.length,0);
 });
+
+test('online destination and mini-game requests use the current socket',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});
+  const requestId=session.setDestination(-180,60);
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'destination',x:-180,z:60,requestId});
+  socket.message({type:'destinationResult',requestId,ok:true});
+  assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
+  session.enterMinigame('park');assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'minigame',game:'park'});
+  session.join('another-room','Alex');assert.equal(session.destinationResult,null);
+  socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+  Socket.last.closed();
+});

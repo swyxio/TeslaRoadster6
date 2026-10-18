@@ -17,8 +17,10 @@ import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
 import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
+import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
-import { SHOPS, hasRockets } from '../shared/upgrades';
+import { SHOPS } from '../shared/upgrades';
+import { hasRocket } from '../shared/rocket';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
@@ -110,6 +112,7 @@ export class GameScene {
     this.spaceport=buildFremontSpaceport(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
+    addIslandJumps(scene);
     // The hull travels with the authoritative deck; its top is the physical y=0 support.
     box(this.ferry,0,-.65,0,FERRY_DECK.width,1.3,FERRY_DECK.length,0x485e63);
     box(this.ferry,0,-1.5,0,FERRY_DECK.width-1,1,FERRY_DECK.length-2,0x254b54);
@@ -294,8 +297,8 @@ export class GameScene {
       const target=new T.Vector3(e.x+e.vx*elapsed,e.y+e.vy*elapsed,e.z+e.vz*elapsed);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,hasRocket(e,world.time));
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRocket(e,world.time));
       }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;

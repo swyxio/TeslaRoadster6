@@ -5,6 +5,7 @@ import {nearbyBuildings, terrainHeight} from '../shared/map';
 import {contact,body} from '../shared/physics';
 import {VEHICLE_IDS, VEHICLES} from '../shared/vehicles';
 import {SHOPS, UPGRADES, hasRockets} from '../shared/upgrades';
+import {hasRocket} from '../shared/rocket';
 import {parseMessage} from '../worker/protocol';
 import {cliffPose} from '../shared/island-stunts';
 import type {TankLevel} from '../shared/air-tank';
@@ -38,6 +39,15 @@ test('shop validates location, funds, eligibility and one-time purchases on the 
   assert.equal(player.delivery.cash,15);car.health=45;car.air=30;assert.equal(buyUpgrade(world,'p','service'),true);assert.equal(car.health,100);assert.equal(car.air,100);assert.equal(player.delivery.cash,3);
   assert.equal(buyUpgrade(world,'p','service'),false);
 });
+test('shop purchases deduct funds once and refill a tank in the shared simulation',()=>{
+  const {world,player,car}=setup();player.delivery.cash=UPGRADES.rocket.price;
+  assert.equal(buyUpgrade(world,'p','rocket'),true);
+  assert.equal(player.delivery.cash,0);assert.ok(car.upgrades.rocket);
+  assert.equal(buyUpgrade(world,'p','rocket'),false);
+  player.delivery.cash=30;car.air=12;
+  assert.equal(buyUpgrade(world,'p','tank'),true);
+  assert.equal(car.tankLevel,2);assert.equal(car.air,100);assert.equal(player.delivery.cash,0);
+});
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
   const world=createWorld(), rockets=world.pickups.filter(p=>p.kind==='rocket');
   assert.equal(rockets.length,9+PARKING_LOTS.length);
@@ -49,19 +59,21 @@ test('rocket pickups sit on clear ground without overlapping other pickups',()=>
     assert.ok(world.pickups.every(other=>other===pickup||Math.hypot(pickup.x-other.x,pickup.z-other.z)>8),pickup.id);
   }
 });
-test('every charger lot pickup installs the session kit',()=>{
+test('every charger lot pickup grants temporary flight',()=>{
   for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
     const {world,car}=setup(),pickup=createWorld().pickups.find(p=>p.id===`rocket-${lot.id}`)!;
     Object.assign(car,{x:pickup.x,z:pickup.z,y:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0,air:20});
     world.pickups=[pickup];step(world,new Map(),.05);
-    assert.equal(pickup.active,false,lot.id);assert.ok(hasRockets(car),lot.id);assert.equal(car.air,100,lot.id);
-    world.time+=100;step(world,new Map(),.05);assert.ok(hasRockets(car),`${lot.id}: kit persists`);
+    assert.equal(pickup.active,false,lot.id);assert.ok(hasRocket(car,world.time),lot.id);assert.equal(car.air,100,lot.id);
+    assert.equal(car.upgrades.rocket,false,lot.id);
+    world.pickups=[];world.time=car.rocketUntil;step(world,new Map(),.05);
+    assert.equal(hasRocket(car,world.time),false,`${lot.id}: flight expired`);
   }
 });
 test('each family can collect a rocket pickup and use jump',()=>{
   for(const kind of VEHICLE_IDS){
     const {world,player,car}=setup(kind);car.x=0;car.z=60;car.y=0;car.air=50;world.pickups=[{id:'rocket',x:0,z:60,kind:'rocket',active:true}];
-    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRockets(car),kind);
+    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRocket(car,world.time),kind);
     step(world,new Map([[player.id,{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null,kind);assert.ok(car.y>0,kind);assert.ok(car.air<100,kind);
   }
 });
@@ -90,15 +102,17 @@ test('economy, motor and armor alter actual simulation outcomes',()=>{
   assert.ok(Math.abs(land(true)*2-land(false))<.001,'armor halves landing damage');
 });
 
-test('an island kit remains installed and enables the shop after crossing back',()=>{
+test('a temporary island kit can be replaced with a paid kit at a shop',()=>{
   const {world,player,car}=setup();
   world.pickups=[{id:'island-kit',x:0,z:-1160,kind:'rocket',active:true}];
   Object.assign(car,{x:0,z:-1160,y:0,supportId:'ground',air:10});
-  step(world,new Map(),.05);assert.ok(car.upgrades.rocket);assert.equal(car.air,100);
-  world.time+=120;Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0});
+  step(world,new Map(),.05);assert.ok(hasRocket(car,world.time));assert.equal(car.upgrades.rocket,false);assert.equal(car.air,100);
+  const expires=car.rocketUntil;
+  world.time+=30;Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0});
   player.delivery.cash=200;
-  assert.equal(buyUpgrade(world,'p','rocket'),false);assert.equal(player.delivery.cash,200);
-  assert.equal(buyUpgrade(world,'p','economy'),true);assert.equal(player.delivery.cash,200-UPGRADES.economy.price);
+  assert.equal(buyUpgrade(world,'p','rocket'),true);assert.equal(player.delivery.cash,200-UPGRADES.rocket.price);
+  world.time=expires+1;assert.ok(hasRocket(car,world.time),'purchased flight survives the pickup expiry');
+  assert.equal(buyUpgrade(world,'p','economy'),true);assert.equal(player.delivery.cash,200-UPGRADES.rocket.price-UPGRADES.economy.price);
   car.supportId='ferry';assert.equal(buyUpgrade(world,'p','motor'),false);
 });
 

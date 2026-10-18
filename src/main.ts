@@ -29,6 +29,7 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
+import { hasRocket } from '../shared/rocket';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
 import { MARS_GOAL } from '../shared/mars';
 import { createMarsUI } from './mars-ui';
@@ -69,8 +70,8 @@ document.querySelector('#app')!.innerHTML = `
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
  <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
- <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for Rocket Island.</small></div></div>
+ <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div id="rocket-status" hidden></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant 90 seconds of flight or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for Rocket Island.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump / hold to hover · X / □ flip · B / ○ boost · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
@@ -114,7 +115,7 @@ for(const event of ['pointerdown','keydown'] as const)window.addEventListener(ev
 refreshSoundSettings();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
-catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-join').hidden=true; $('error-room').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
+catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true;  $('error-join').hidden=true; $('error-room').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
 let lastLevel:Level|undefined,lastBlockedAt=-1,lastBlockedNoticeAt=-10;
 let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
@@ -262,15 +263,16 @@ function begin(){
     $('error').classList.add('hidden');toggleMenu(false);return;
   }
   lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();
-  pendingShop=null;pendingOta=null;shopBusyUntil=0;
+  pendingShop=null;pendingOta=null;pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
-  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,nameInput.value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
+  controls.resetSequences();
+  $<HTMLInputElement>('room').value=room;session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('join').onclick=() => begin();$('retry').onclick=() => begin();
+$('join').onclick=()=>begin();$('retry').onclick=()=>begin();
 $('error-join').onclick=()=>{
   const room=$<HTMLInputElement>('error-room').value.trim().toLowerCase();
   if(!validRoom(room)){ $('error-room-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
@@ -636,14 +638,14 @@ scene.start(dt=>{
     if(!playRecorded||(active>lastActiveSeconds&&now-lastPlayWrite>=10000))recordPlay(now);
     lastActiveSeconds=active;
   }
-  if(observedCar)controls.observeFlight(hasRockets(observedCar)&&!ferrySecured(session.world.ferry,observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
+  if(observedCar)controls.observeFlight(hasRocket(observedCar,session.world.time)&&!ferrySecured(session.world.ferry,observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
   document.body.classList.toggle('cockpit-active',cockpit);
   $('cockpit-trim').hidden=!cockpit;$('cockpit-dashboard').hidden=!cockpit||!!car?.inDome;
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
   $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
-  $('connection').title=`Room: ${$<HTMLInputElement>('room').value}`;
+  $('connection').title=`Room: ${session.room}`;
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
@@ -656,11 +658,13 @@ scene.start(dt=>{
   if(e.inDome){
     const soccer=session.world.soccer;
     const blue=`BLUE ${soccer.blueScore}`,orange=`${soccer.orangeScore} ORANGE`;
-    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.stock;
+    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
     const ownParticipant=soccer.participants.find(participant=>participant.playerId===session.id);
     const ownGoals=ownParticipant?goalCount(ownParticipant):0;
-    const topGoals=Math.max(0,...soccer.participants.map(goalCount));
-    const leaders=topGoals?soccer.participants.filter(participant=>goalCount(participant)===topGoals):[];
+    const present=new Set(session.world.entities.filter(entity=>entity.inDome&&entity.driver).map(entity=>entity.driver));
+    const eligible=soccer.participants.filter(participant=>present.has(participant.playerId));
+    const topGoals=Math.max(0,...eligible.map(goalCount));
+    const leaders=topGoals?eligible.filter(participant=>goalCount(participant)===topGoals):[];
     const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Departed driver';
     const leader=leaders.length?`${driverName(leaders[0].playerId)}${leaders.length>1?` +${leaders.length-1}`:''} (${topGoals})`:'No leader yet';
     const standings=soccer.phase==='win'?`Your goals: ${ownGoals}`:`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
@@ -676,8 +680,8 @@ scene.start(dt=>{
   $('cockpit-speed').textContent=String(Math.round(Math.abs(e.speed)*3.6));
   const spec=e.kind==='person'?null:VEHICLES[e.kind];
   $('vehicle').textContent=spec?.name.toUpperCase()??'ON FOOT';
-  const rocket=hasRockets(e);
-  if(lastRocketEntity===e.id&&!lastRocketInstalled&&rocket)notice('Rocket kit installed! Jump, hover, boost and flip are ready.');
+  const rocket=hasRocket(e,session.world.time);
+  if(lastRocketEntity===e.id&&!lastRocketInstalled&&rocket)notice(e.upgrades.rocket?'Rocket kit installed! Jump, hover, boost and flip are ready.':'Temporary Rocket! Jump, hover, boost and flip for 90 seconds.');
   lastRocketEntity=e.id;lastRocketInstalled=rocket;
   $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${rocket?' · ROCKET':''}${e.autopilot?' · AUTONOMOUS':''}`:'';
   $('autopilot').textContent=`${controlSettings.label('autopilot')} · AV ${e.autopilot?'on':'off'}`;$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
@@ -686,6 +690,8 @@ scene.start(dt=>{
   for(const control of ['KeyQ','KeyR','KeyX','ShiftLeft','KeyE']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket||secured;
   }
+  $('rocket-status').hidden=!rocket||!!spec?.airThrusters||e.upgrades.rocket;
+  $('rocket-status').textContent=rocket&&!spec?.airThrusters&&!e.upgrades.rocket?`TEMP ROCKET · ${Math.ceil(e.rocketUntil-session.world.time)}s`:'';
   $('flight').textContent=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',airborne||e.loopAngle!==null||e.supportId==='dome');
   $('jump-control').textContent='JUMP / HOVER';$('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
   $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');

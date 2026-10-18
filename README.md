@@ -14,9 +14,11 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
-**Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose ⚽ Rocket Dome in Actions. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out or use Leave Dome to return to the Bay or island where you entered.
+**Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose Rocket Dome in the Mini-games picker. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out to SF, or use Leave Dome to return to a checked SF or island spawn based on where you entered.
 
-**Global chat:** Pick a driver name and chat with players across rooms. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+**Global chat:** Pick a driver name and chat with players across rooms, across the game. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+
+**Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. The Mini-games picker offers quick entry to the Dome, parking games and island races.
 
 **Tesland in 2050:** An enormous fictional Elon Musk colossus watches the Golden Gate from Marin; nearby, the First Delivery Monument celebrates the Bay’s most important cargo. Their bases are solid and landable. See [the setting](content/lore.md).
 
@@ -24,7 +26,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
-**Rocket shops:** Collect a purple rocket pickup to equip any car for flight for its session lifetime, or spend delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, larger air tanks, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+**Rocket shops:** Collect a purple Rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, larger air tanks, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
 **Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
 
@@ -34,7 +36,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff and a short circuit. Rocket pickups on the island and at parking playgrounds equip any vehicle with the Roadster's fictional air moves for its session lifetime. The two playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -48,7 +50,7 @@ pnpm dev:server
 # http://localhost:8787 serves both client and WebSocket server
 ```
 
-For frontend hot reload, leave Wrangler running and start `pnpm dev` in another terminal. Vite proxies `/api` and WebSockets to port 8787. The room server runs the simulation in local development and on Cloudflare.
+For frontend hot reload, leave Wrangler running and start `pnpm dev` in another terminal. Vite proxies `/api` and WebSockets to port 8787. The room server runs the multiplayer simulation in local development and on Cloudflare.
 
 ```sh
 pnpm run ci # tests, TypeScript checks and production build
@@ -81,9 +83,9 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
 - Stop inside a mint station ring or marked charging bay to refill air. Green diamonds repair; amber diamonds refill air. Each also gives $5 in session cash and returns after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
-- Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
-- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code.
+- Drive over a purple Rocket pickup in a car to refill air and grant 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full equipped car leaves the pad for others.
+- Open **Actions → Mini-games** to enter the Dome, Park It, Cut the queue or an island race. Parking uses the current registered lot when you're there, or a checked playground otherwise; races use checked starting positions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
+- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code. There is no offline mode.
 
 ## Boundaries
 
@@ -108,6 +110,7 @@ shared/upgrades.ts  Fictional shop locations, prices and eligibility
 shared/sky-currents.ts  Shared sky-lane and thermal volumes
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous routes and traffic demand
+shared/navigation.ts  Lane-graph routing for player-selected destinations
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
 shared/police.ts    Police detection, chase and severity-based tickets
 shared/achievements.ts  Session awards and flight tracking
@@ -116,6 +119,7 @@ shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
 shared/ferry.ts     Authoritative ferry and passenger attachment
 shared/island-stunts.ts  Shared bank and cliff surfaces
+shared/island-jumps.ts   Shared island launch ramps and landing contacts
 shared/oval-bank.ts  Shared speed-oval geometry and surface contacts
 shared/dome*.ts     Rocket Dome geometry and surface collisions
 shared/soccer.ts    Authoritative ball, goals and match state
@@ -125,6 +129,8 @@ worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 worker/global-chat.ts  Global chat and optional saved identities
 src/session.ts     Multiplayer transport adapter
+src/map-dialog.ts  Destination selection and autonomous driving controls
+src/minigames.ts   Quick entry to shared mini-games
 src/controls.ts    Keyboard, gamepad and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
@@ -135,7 +141,9 @@ src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/north-landmarks.ts, src/south-landmarks.ts  Original procedural landmark art
 src/billboards.ts  Original parody billboard art
 src/island-stunts.ts  Bank and cliff meshes from shared geometry
+src/island-jumps.ts  Island launch ramp meshes from shared geometry
 src/rocket-dome.ts  Dome, goals and ball visuals
+src/dome-stadium.ts  Decorative stadium architecture and wall-charge markings
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment

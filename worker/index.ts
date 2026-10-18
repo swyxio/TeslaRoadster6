@@ -87,6 +87,13 @@ export class GameRoom extends DurableObject<Env> {
       if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
       return;
     }
+    // Joining and controlling a mini-game are often consecutive clicks. The
+    // simulation checks membership, host and position; the socket rate limit
+    // still applies, but the unrelated action cooldown must not drop them.
+    if(message.type==='dome'){travelDome(this.world,session.id);this.inputs.delete(session.id);return;}
+    if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);return;}
+    if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
+    if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if (now - session.lastAction < 400) {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
@@ -98,11 +105,9 @@ export class GameRoom extends DurableObject<Env> {
     if (message.type === 'interact') interact(this.world, session.id);
     if (message.type === 'reset') resetPlayer(this.world, session.id);
     if(message.type==='autopilot')toggleAutopilot(this.world,session.id);
-    if(message.type==='dome'){travelDome(this.world,session.id);this.inputs.delete(session.id);}
     if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
-    if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);}
     if(message.type==='destination'){
       const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
       if(ok)this.inputs.delete(session.id);
