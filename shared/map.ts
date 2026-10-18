@@ -219,7 +219,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'|'station-venue';stationId?:string};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -266,7 +266,8 @@ for(const district of DISTRICTS){
  for(const side of [-1,1])for(const along of [-70,0,70])for(const offset of [65,120]){
   const x=district.x+tx*along+tz*offset*side,z=district.z+tz*along-tx*offset*side;
   const w=24,d=22;
-  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2))))continue;
+  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2)))||
+   STATIONS.some(s=>Math.abs(x-s.x)<(w+CHARGER_LOT.width)/2&&Math.abs(z-s.z)<(d+CHARGER_LOT.length)/2))continue;
   const high=district.id==='san-jose'&&offset===65;
   const h=high?48+(along+70)/7:12+(Math.abs(along)+offset)%17;
   BUILDINGS.push({x,z,w,d,h,district:district.id==='san-jose'?'south-bay':district.id==='fremont'||district.id==='east-bay'?'east-bay':'peninsula',style:high?'tower':h>22?'midrise':'house'});
@@ -286,6 +287,19 @@ for(let i=BUILDINGS.length-1;i>=0;i--){
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }
 BUILDINGS.push(...landmarkBuildings);
+// These compact venue buildings sit beside selected lots. Collision, roof and
+// rendering all use the same footprint; the facades are stylized, not surveys.
+export const STATION_VENUES:Building[]=STATIONS.filter(s=>s.frontage).map(s=>({
+ x:s.x+s.frontage!.x,z:s.z+s.frontage!.z,w:20,d:18,h:s.setting==='garage'?12:8,
+ district:s.area==='Marin'||s.area==='San Francisco'?'sf':s.area==='San Jose'?'south-bay':s.area==='East Bay'||s.area==='Fremont'?'east-bay':'peninsula',
+ style:'station-venue',stationId:s.id,
+}));
+for(let i=BUILDINGS.length-1;i>=0;i--){
+ const b=BUILDINGS[i];
+ if(!['house','midrise','tower'].includes(b.style))continue;
+ if(STATION_VENUES.some(v=>Math.abs(v.x-b.x)<(v.w+b.w)/2+1&&Math.abs(v.z-b.z)<(v.d+b.d)/2+1))BUILDINGS.splice(i,1);
+}
+BUILDINGS.push(...STATION_VENUES);
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

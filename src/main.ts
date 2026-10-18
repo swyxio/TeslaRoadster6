@@ -656,7 +656,8 @@ scene.start(dt=>{
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=refillStationFor(e);
   const skyCurrent=currentAt(e);
-  $('station-status').textContent=skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + AIR':'➜ SKY LANE · SPEED + AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').textContent=skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + AIR':'➜ SKY LANE · SPEED + AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name} · ${refilling.venue}`:distance<24?`ϟ ${nearest.name} · ${nearest.venue}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').title=`${nearest.venue} · ${nearest.address??'Fictional game location'}`;
   $('station-status').classList.toggle('refilling',!!refilling||!!skyCurrent);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);

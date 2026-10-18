@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { STATIONS } from '../shared/stations';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
@@ -213,8 +214,21 @@ export function buildBay(scene:T.Scene) {
     if(b.style==='landmark')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
-    if(!landmark&&!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
-    if(b.style==='campanile'||b.style==='hoover'){
+    if(!landmark&&!['pyramid','coit','salesforce','station-venue'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
+    if(b.style==='station-venue'){
+      const station=STATIONS.find(s=>s.id===b.stationId)!;
+      const color=station.setting==='garage'?0xa9adab:station.setting==='museum'?0x9bb6bd:0xd6ccb9;
+      const accent=station.setting==='retail'?0xb9473d:station.setting==='museum'?0x507a85:station.setting==='garage'?0x6b797d:0xa57761;
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,color);
+      box(b.x,b.h-.5,b.z+b.d/2+.04,b.w,.7,.1,accent);
+      box(b.x,2.8,b.z+b.d/2+.04,b.w-3,2.8,.1,0x49666c);
+      for(const side of [-1,1])box(b.x+side*4.5,2.8,b.z+b.d/2+.1,.28,3,.1,0xe9dfca);
+      const canvas=document.createElement('canvas');canvas.width=768;canvas.height=96;
+      const ctx=canvas.getContext('2d')!;ctx.fillStyle='#f4ebd9';ctx.fillRect(0,0,768,96);
+      ctx.fillStyle='#243b40';ctx.textAlign='center';ctx.font='bold 50px system-ui';ctx.fillText(station.venue.toUpperCase(),384,65,730);
+      const sign=new T.Mesh(new T.PlaneGeometry(15,1.9),new T.MeshBasicMaterial({map:new T.CanvasTexture(canvas),side:T.DoubleSide}));
+      sign.position.set(b.x,5.4,b.z+b.d/2+.12);scene.add(sign);
+    }else if(b.style==='campanile'||b.style==='hoover'){
       const berkeley=b.style==='campanile',stone=berkeley?0xdad6c7:0xd5c2a0;
       box(b.x,(b.h-10)/2,b.z,b.w*.8,b.h-10,b.d*.8,stone);
       box(b.x,b.h-12,b.z,b.w*.94,2,b.d*.94,berkeley?0xe5e2d3:0xc6a883);
