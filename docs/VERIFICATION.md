@@ -1,5 +1,16 @@
 # Verification · 2026-10-17 Pacific
 
+## Combined v11 · local checks · 2026-10-17 Pacific
+
+- `pnpm test` passed 168 tests and `pnpm build` passed, including both TypeScript checks. Vite reports a 710 kB main chunk (199 kB gzip) and its existing chunk-size warning.
+- Local Wrangler two-client integration passed with protocol 11, including cockpit and island state replication and rejection of remote activity intents. It did not exercise an end-to-end ferry crossing.
+- A same-host, eight-second 64-client WebSocket smoke passed with at least 63 snapshots per client and a 139 ms p95 snapshot gap; maximum recipient snapshot was 119,828 bytes. This new room did not exercise occupied ferry/activities or peak traffic. It is not a WAN, sustained or production test.
+- `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
+- In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
+- Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
+
+The two protocol v10 records below describe separate builds before the combined v11 merge; they do not verify the merged build.
+
 ## Rocket Island · protocol v10, local checkout · 2026-10-17 Pacific
 
 - Local Wrangler two-client room integration passed, including ferry/activity snapshots, Rocket pads and rejection of activity requests from outside their locations. It did not exercise a two-client ferry crossing or a load test.
@@ -7,6 +18,12 @@
 - Local Chrome desktop and 390×844 portrait emulation exercised driving and Jump; the portrait run accelerated from 0 to 72 km/h and reached 4 m during Jump. The portrait Actions drawer eventually scrolled to `scrollTop` 194.
 - After same-tab Chrome recovery, 844×390 coarse-pointer emulation opened and closed Actions, held Drive from 0 to 66 km/h, and jumped to 5 m. Park It was tapped away from a lot, so joining a parking game was not verified.
 - The first local 64-client smoke was interrupted by a Wrangler reload while source files changed; it produced no capacity result. Real-device touch, complete island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified. These local observations do not establish a production deployment or performance budget.
+
+## Cockpit view · protocol v10 · 2026-10-17 Pacific
+
+- After merging the road-first HUD, `pnpm run ci` passed 116 tests and the production build; local Wrangler two-client integration replicated cockpit selection, active time and switching back, alongside existing multiplayer checks. Camera pose tests cover pitch and roll; simulation tests cover complete and mixed-view runs, paused intervals, on-foot use and malformed flags. Camera claims are not anti-cheat proof.
+- The staging deployment of commit `b49338e` returned protocol v10 and matched the locally built browser assets. Its live two-client room integration passed, including cockpit state replication; this was not a load test.
+- Chrome desktop solo: switched to cockpit, drove, jumped and flipped with the view rolling with the vehicle, and saw first-person active time in the leaderboard. Chrome 390×844 portrait and 844×390 landscape emulation showed dashboard guidance and driving controls; the on-foot chase fallback and a switch to Model 3 were observed before the HUD merge. After integration, the phone action drawer switched views and a projected restaurant sign appeared when driving toward the pickup. No browser console errors were captured. These are browser emulation, not physical touch, frame-rate or motion-comfort tests.
 
 ## Synthesized audio with Bay integration · 2026-10-17 Pacific
 

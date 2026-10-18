@@ -25,7 +25,7 @@ function add(world:World,id:string,kind:Entity['kind']='roadster',x=0,z=0):Entit
   const car=makeEntity(`car-${id}`,kind,x,z,id);
   Object.assign(car,{y:0,supportId:'ground'});
   world.entities.push(car);
-  world.players.push({id,name:id,entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()});
+  world.players.push({id,name:id,entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}});
   return car;
 }
 function place(car:Entity,stall=lot.stalls[0]):void {

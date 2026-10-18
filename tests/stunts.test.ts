@@ -10,10 +10,22 @@ import {createRace} from '../shared/race';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()}],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace()};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}}],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace()};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }
+test('island exploration pauses cockpit delivery eligibility while active cockpit time continues',()=>{
+  const {car,world,send}=playground(0,-1300),player=world.players[0];
+  send({...NEUTRAL,throttle:1});
+  assert.equal(player.delivery.order.elapsed,0);
+  assert.equal(player.cockpit.orderEligible,true);
+  send({...NEUTRAL,throttle:1,cockpit:true});
+  assert.ok(player.cockpit.activeSeconds>0);
+  assert.equal(player.cockpit.orderSeconds,0);
+  Object.assign(car,{x:0,y:0,z:0,speed:0,supportId:'ground'});
+  send({...NEUTRAL,throttle:1});
+  assert.equal(player.cockpit.orderEligible,false);
+});
 test('thruster signals track actual boosts, jumps, flips and depleted air',()=>{
   const {car,send}=playground();
   send({...NEUTRAL,throttle:1,boost:true});assert.equal(car.thrusters,THRUSTER_REAR);

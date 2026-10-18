@@ -18,7 +18,7 @@ const course:RaceCourse={id:'short',start:{x:0,y:0,z:5,radius:50},gates:[
 function world():World {const w=createWorld();w.entities=[];w.players=[];w.pickups=[];return w;}
 function add(w:World,id:string,kind:Entity['kind']='roadster'):Entity {
   const car=makeEntity(`car-${id}`,kind,0,5,id);Object.assign(car,{y:0,supportId:'ground'});
-  w.entities.push(car);w.players.push({id,name:id,entityId:car.id,delivery:initialDelivery(car),achievements:initialAchievements()});
+  w.entities.push(car);w.players.push({id,name:id,entityId:car.id,delivery:initialDelivery(car),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}});
   return car;
 }
 function tick(state:RaceState,w:World,dt:number):void {w.time+=dt;updateRace(state,[course],w,dt);}

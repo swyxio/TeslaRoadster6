@@ -47,10 +47,10 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** fleet catalog; select a new ride while stopped.
 - **L:** room leaderboard with cash and active play time. **T:** session achievements.
-- **C:** alternate chase camera. **R:** unstuck recovery, preserving air and condition.
+- **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **R:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake or Rev while steering to drift. Tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
-- At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The ferry HUD shows its countdown and whether an obstruction is holding departure.
+- At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds; the stock Rocket Roadster remains capable permanently.
 - At a marked parking playground, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
@@ -88,6 +88,7 @@ src/session.ts     Solo/multiplayer transport adapter
 src/controls.ts    Keyboard and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
+src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/island-stunts.ts  Bank and cliff meshes from shared geometry

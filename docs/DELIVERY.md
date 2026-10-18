@@ -14,6 +14,8 @@ Police patrol the city in marked vehicles. Flying 3–80 m above street level wi
 
 Open **L · Scores** to see the room's current drivers, ranked by cash, alongside active time and cash per active minute. It is not a persistent leaderboard: leaving removes your score, and a room resets when empty or restarted. Solo scores last until the solo session is reset. Cash and time are simulation-owned in multiplayer; no client sends a fare or delivery result.
 
+Press **C** or choose **Actions → Camera** for cockpit view; press again for a wide chase view. Inside a vehicle, the view rolls and pitches with it. The small dashboard shows the current pickup or dropoff, its direction and time estimate; a private floating sign appears when the destination is in view. The minimap and police warnings remain available. The leaderboard also shows first-person active time and deliveries whose entire active pickup-and-dropoff run was in cockpit. Camera choice is reported by the client and can be spoofed; it is recognition for this session, not a verified competitive ranking or extra cash. Backgrounding, switching views or stale input during active play can make the current run ineligible. A paused interval does not.
+
 ## Session achievements
 
 Open **T · Awards** to see progress. **Bay Hopper** rewards flying from San Francisco to Oakland or back without landing on the bridge or Yerba Buena Island; flying over the bridge is fine. **Roof Rider** is for landing on a building, **Sky Delivery** for completing a rooftop order, and **Neighborhood Regular** for three deliveries. These are session-only and shared simulation decides unlocks.
