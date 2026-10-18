@@ -38,6 +38,11 @@ These entries describe separate historical builds. Check the version and scope i
 - In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
 - This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
 
+## Release notes and dev blog · 2026-10-18 Pacific
+
+- `pnpm test` passed 195 tests, including browser-storage failure, return-visit records, and changelog comparisons against synthetic older, current and unknown releases. `pnpm build` passed both TypeScript checks and emitted the static blog index, first post and changelog. Vite's existing large-chunk warning remains.
+- The local two-client Wrangler room integration passed, including shared movement, deliveries, police, sky currents and Rocket Dome; this was not a load test. Local Wrangler served complete article and changelog HTML, the game and `/api/health`. In Chrome, starting a solo drive and reloading displayed the recorded date and version; the changelog reported no newer release. The blog index, article and changelog were inspected at desktop size; the article was inspected at emulated 390×844 portrait and 844×390 landscape, and the game menu was inspected at those sizes. These are browser-emulation observations, not physical-device checks. The game remains playable when browser storage is unavailable according to the focused storage test.
+
 ## Chat quota test timing · 2026-10-18 Pacific
 
 - The production build for merge `843657f` failed in the existing global-chat quota test: its simulated one-hour reset was based on a timestamp taken before the tested quota bucket was constructed. The test now uses a timestamp taken immediately after construction, avoiding a race on loaded builders without changing the runtime limit.
