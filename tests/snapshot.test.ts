@@ -37,7 +37,7 @@ test('a remote snapshot preserves the banked oval support needed to orient a car
   const car = world.entities.find(e => e.id === two.entityId)!;
   const surface = ovalBankSurface(710, -1650)!;
   Object.assign(car, {x:710, z:-1650, y:surface.height, supportId:'island-oval'});
-  const wire = JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,one.id)}));
+  const wire = JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,one.id),inputAck:0}));
   const remote = wire.world.entities.find((e:{id:string}) => e.id === car.id);
   assert.equal(remote.supportId, 'island-oval');
   assert.equal(remote.y, surface.height);
@@ -61,7 +61,16 @@ test('cached snapshots retain a distant dome player and ferry passenger',()=>{
   Object.assign(person,{kind:'person',x:AMBIENT_INTEREST_METERS*3,inDome:true});
   const ferryCar=makeEntity('ferry-car','model-3',-AMBIENT_INTEREST_METERS*3,0);
   ferryCar.supportId='ferry';world.entities.push(ferryCar);
-  const wire=JSON.parse(prepareSnapshots(world)(viewer.id));
+  const wire=JSON.parse(prepareSnapshots(world)(viewer.id,0));
+  assert.equal(wire.inputAck,0);
   assert.ok(wire.world.entities.some((entity:{id:string;inDome:boolean})=>entity.id===person.id&&entity.inDome));
   assert.ok(wire.world.entities.some((entity:{id:string;supportId:string})=>entity.id===ferryCar.id&&entity.supportId==='ferry'));
+});
+
+test('cached snapshots include the required acknowledgement and optional sync metadata',()=>{
+  const world=createWorld(),player=addPlayer(world,'viewer','Viewer'),prepare=prepareSnapshots(world);
+  const initial=JSON.parse(prepare(player.id,0));
+  assert.equal(initial.inputAck,0);assert.ok(!('sync' in initial));
+  const ordered=JSON.parse(prepare(player.id,3,7));
+  assert.equal(ordered.inputAck,3);assert.equal(ordered.sync,7);
 });
