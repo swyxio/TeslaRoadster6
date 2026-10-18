@@ -554,6 +554,25 @@ try {
   const reclaimedCode=await savedCode(`Unused${randomUUID().slice(0,6)}`);
   assert.equal((await rpc<BoundIdentity>('associate',{code:reclaimedCode,driverId:tentativeWallet})).walletId,tentativeWallet,'no unacknowledged claimant leaves a permanent binding');
 
+  // A previous chat version cannot accept either RPC. A failed dispatch made
+  // no claim and must not leave identity retries waiting for release forever.
+  const rolloutCode=await savedCode(`Rollout${randomUUID().slice(0,6)}`);
+  const rollout=connect(`/api/room/rollout-${randomUUID().slice(0,8)}`,true);
+  await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.ok),'rollout guest joins');
+  await rpc('binding-arm',{bindingStage:'missing-bind'});
+  try{
+    send(rollout,{type:'identity',code:rolloutCode,requestId:330});
+    await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.requestId===330),'missing bind returns');
+    assert.equal(rollout.messages.find(message=>message.type==='identityResult'&&message.requestId===330)!.ok,false);
+    send(rollout,{type:'identity',code:rolloutCode,requestId:331});
+    await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.requestId===331),'rollout retry does not await missing release');
+    assert.equal(rollout.messages.find(message=>message.type==='identityResult'&&message.requestId===331)!.ok,true);
+    console.log('PASS: saved-driver retry after unavailable bind RPC');
+  }finally{
+    await rpc('binding-arm',{bindingStage:'restore'});
+    rollout.socket.close();
+  }
+
   for(const stage of ['lost-bind','lost-confirm'] as const){
     const lostRoom=`${stage}-${randomUUID().slice(0,8)}`,lost=connect(`/api/room/${lostRoom}`,true);
     await until(()=>lost.messages.some(message=>message.type==='identityResult'&&message.ok),'lost-reply guest joins');
