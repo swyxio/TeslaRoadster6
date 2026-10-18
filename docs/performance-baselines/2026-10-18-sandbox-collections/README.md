@@ -100,6 +100,31 @@ runner output are `corrected-throughput-{base,candidate}.json.gz` and
 `corrected-run-{base,candidate}.log.gz`; `run-corrected-wallet-pair.sh` retains
 the local orchestration. Its absolute `/private/tmp` paths require adaptation.
 
+## Hosted comparison held — run 39171065918
+
+The hosted macOS 15 / Apple Paravirtual Metal comparison collected both reports,
+but failed `--require-comparable`. The PR event supplied base `009af539404082d5d5da4c3947bd013a6c2e3209`
+(0.0.28) while `main` had already advanced to flight merge `0b27e97`; candidate
+was `5212945ccb2893e804a4e72cc75cda387efbbfb4` (0.0.31). Its shared region
+catalog produced a different second delivery route: the fourth sampled leg was
+664.364 m on base and 1,007.243 m on candidate, with different endpoints. The
+comparison correctly held path, frame and room deltas rather than claiming a
+regression or improvement.
+
+Reported browser callback p95 was 116.7 ms on both. Observed room simulation /
+wall ratios were 0.928 and 0.923; the base ran 155.3 simulated / 167.392 wall
+seconds and the candidate 186.9 / 202.502. Base one-minute VM load was 13.87 →
+8.37; candidate was 7.34 → 8.80 on three virtual CPUs. These callback and room
+figures describe a contended hosted VM with different routes, not physical-device
+or GPU-completion results. Both modeled bunched speed ranges were 0.936–1.151×;
+those are synthetic, not the live continuity gate.
+
+The GitHub run retained its full artifact; selected raw reports, browser
+trajectories, manifests, input events and synthetic motion traces are also
+preserved here as `hosted-39171065918-{base,candidate}-*.json.gz`. A route
+correction is being prepared for a later comparable hosted run. The same
+five-leg comparability guard and existing thresholds remain in force.
+
 ## Recipient snapshot microbenchmark
 
 A same-process synthetic world with 64 players each holding all 13 collection
