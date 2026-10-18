@@ -168,6 +168,7 @@ function sensors(root: T.Group, spec: VehicleSpec) {
 /** Original stylized models. Ground-centered pivot; -Z front; SI dimensions. */
 const templates=new Map<string,T.Group>();
 const distantTemplates=new Map<VehicleId,T.Mesh>();
+const decalTemplates=new Map<string,T.Group>();
 const distantMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.65});
 const vehicleDetails=new WeakMap<T.Object3D,{near:T.Group;far:T.Mesh}>();
 
@@ -252,28 +253,45 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle,m
   let decal=detail.getObjectByName('vehicle-decal') as T.Group|undefined;
   if(decal)decal.removeFromParent();
   if(style.decal!=='none'){
-    decal=new T.Group();decal.name='vehicle-decal';
+    const decalKey=`${kind}:${style.decal}`;
+    let template=decalTemplates.get(decalKey);
+    if(!template){
+    template=new T.Group();template.name='vehicle-decal';
     for(const side of [-1,1]){
       if(spec.shape==='motorcycle'){
         // The overall bike width includes handlebars; decals follow the narrower front fairing.
         const x=side*(MOTORCYCLE_FAIRING_WIDTH*.5+.004),y=.66,z=-.48;
-        if(style.decal==='stripe')box(decal,x,y,z,.008,.08,.66,0xffe9b9);
+        if(style.decal==='stripe')box(template,x,y,z,.008,.08,.66,0xffe9b9);
         else if(style.decal==='checker'){
           for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
-            box(decal,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+            box(template,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
         }
-        else addDecalPattern(decal,style.decal,x,y,z,.008,.08,.66);
+        else addDecalPattern(template,style.decal,x,y,z,.008,.08,.66);
         continue;
       }
       const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
-      if(style.decal==='stripe')box(decal,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
+      if(style.decal==='stripe')box(template,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
       else if(style.decal==='checker'){
         for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
-          box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+          box(template,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
       }
-      else addDecalPattern(decal,style.decal,x,y,0,.035,.16,spec.length*.56);
+      else addDecalPattern(template,style.decal,x,y,0,.035,.16,spec.length*.56);
     }
-    detail.add(decal);
+    // A pattern can contain dozens of boxes. Merge by material once per
+    // vehicle and pattern, then share those geometries between all clones.
+    const groups=new Map<T.Material,T.Mesh[]>();
+    for(const piece of template.children as T.Mesh[]){
+      const mat=piece.material as T.Material,parts=groups.get(mat)??[];parts.push(piece);groups.set(mat,parts);
+    }
+    const pieces=[...template.children];template.remove(...pieces);
+    for(const [mat,meshes] of groups){
+      const parts=meshes.map(mesh=>{mesh.updateMatrix();const part=mesh.geometry.toNonIndexed();part.deleteAttribute('uv');return part.applyMatrix4(mesh.matrix);});
+      const merged=mergeGeometries(parts);parts.forEach(part=>part.dispose());
+      if(merged)template.add(new T.Mesh(merged,mat));
+    }
+    decalTemplates.set(decalKey,template);
+    }
+    detail.add(template.clone(true));
   }
   root.userData.vehicleStyle=key;
 }

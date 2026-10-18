@@ -128,7 +128,7 @@ test('luxury cars use distant silhouettes while bikes retain independent riders'
   setVehicleStyle(car,id,{paint:'mint',decal:'checker'});
   assert.equal(far.material,material,id);
   assert.equal(car.getObjectByName('vehicle-decal')?.parent?.name,'vehicle-detail',id);
-  assert.equal(car.getObjectByName('vehicle-decal')?.children.length,16,'the newer decal replaces the hidden one');
+  assert.equal(car.getObjectByName('vehicle-decal')?.children.length,1,'the newer decal replaces the hidden one in one batch');
   let painted=0;
   car.traverse(node=>{
    if(node instanceof Mesh&&node.userData.originalVehiclePaint){

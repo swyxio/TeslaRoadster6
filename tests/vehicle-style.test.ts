@@ -73,18 +73,14 @@ test('motorcycle decals sit on both fairings without changing a shared bike',()=
     for(const style of ['stripe','checker'] as const){
       setVehicleStyle(bike,kind,{paint:'mint',decal:style});
       const decal=bike.getObjectByName('vehicle-decal');assert.ok(decal);
-      assert.equal(decal.children.length,style==='stripe'?2:12);
+      assert.equal(decal.children.length,1,'same-color marks share one mesh');
       bike.updateMatrixWorld(true);
-      for(const piece of decal.children){
-        assert.ok(piece instanceof T.Mesh);
-        const side=Math.sign(piece.position.x);
-        for(const dy of [-.4,.4])for(const dz of [-.4,.4]){
-          raycaster.set(new T.Vector3(side*(Math.abs(piece.position.x)+.04),piece.position.y+piece.scale.y*dy,piece.position.z+piece.scale.z*dz),new T.Vector3(-side,0,0));
-          const hit=raycaster.intersectObjects(body)[0];
-          assert.ok(hit,`${kind} ${style} has fairing behind each corner`);
-          const gap=Math.abs(piece.position.x-hit.point.x)-piece.scale.x/2;
-          assert.ok(Math.abs(gap)<.002,`${kind} ${style} touches its fairing (gap ${gap})`);
-        }
+      const cells=style==='stripe'?[[0,0]]:Array.from({length:6},(_,i)=>[(i%2-.5)*.04,(i-2.5)*.11]);
+      for(const side of [-1,1])for(const [dy,dz] of cells){
+        raycaster.set(new T.Vector3(side*.4,.66+dy,-.48+dz),new T.Vector3(-side,0,0));
+        const mark=raycaster.intersectObjects(decal.children)[0],fairing=raycaster.intersectObjects(body)[0];
+        assert.ok(mark&&fairing,`${kind} ${style} shows every mark over the fairing`);
+        assert.ok(Math.abs(mark.point.x-fairing.point.x)<.01,`${kind} ${style} touches its fairing`);
       }
       assert.equal(body[0].geometry,geometry,'styling preserves cached geometry');
       assert.equal(other.getObjectByName('vehicle-decal'),undefined,'other clones stay unchanged');
@@ -98,8 +94,30 @@ test('all catalog decals produce distinct marks on cars and motorcycles',()=>{
       if(decal==='none')continue;
       setVehicleStyle(vehicle,kind,{paint:'gold',decal});
       const marks=vehicle.getObjectByName('vehicle-decal');assert.ok(marks?.children.length,`${kind} ${decal} has visible marks`);
-      const signature=JSON.stringify(marks.children.map(mark=>[mark.position.toArray(),mark.scale.toArray()]));
+      const signature=JSON.stringify(marks.children.map(mark=>Array.from((mark as T.Mesh).geometry.getAttribute('position').array)));
       assert.ok(!signatures.has(signature),`${kind} ${decal} has a distinct pattern`);signatures.add(signature);
+    }
+  }
+});
+test('decal meshes are batched by color and shared safely between vehicles',()=>{
+  for(const kind of ['roadster','cybercab','ducati-panigale-v4'] as const){
+    for(const decal of Object.keys(DECALS) as (keyof typeof DECALS)[]){
+      if(decal==='none')continue;
+      const first=createVehicle(kind),second=createVehicle(kind),style={paint:'stock' as const,decal};
+      setVehicleStyle(first,kind,style);setVehicleStyle(second,kind,style);
+      const firstMarks=first.getObjectByName('vehicle-decal')!,secondMarks=second.getObjectByName('vehicle-decal')!;
+      assert.equal(firstMarks.children.length,decal==='circuit'?2:1,`${kind} ${decal} draw batches`);
+      let disposed=false;
+      for(let i=0;i<firstMarks.children.length;i++){
+        const geometry=(firstMarks.children[i] as T.Mesh).geometry;
+        assert.equal(geometry,(secondMarks.children[i] as T.Mesh).geometry,`${kind} ${decal} shares geometry`);
+        geometry.addEventListener('dispose',()=>{disposed=true;});
+      }
+      setVehicleStyle(first,kind,{paint:'stock',decal:'none'});
+      assert.equal(disposed,false,'changing a finish does not dispose shared geometry');
+      assert.ok(second.getObjectByName('vehicle-decal'),'the other vehicle keeps its decal');
+      setVehicleStyle(first,kind,style);
+      assert.equal((first.getObjectByName('vehicle-decal')!.children[0] as T.Mesh).geometry,(secondMarks.children[0] as T.Mesh).geometry,'returning to a finish reuses its geometry');
     }
   }
 });
