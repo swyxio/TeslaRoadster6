@@ -83,13 +83,15 @@ Client messages:
 {"type":"market","action":"status","requestId":15,"operationId":"<same-uuid>"}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
 {"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":10,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"teleport","x":-120,"z":60,"requestId":23,"actionSeq":11,"edgeBaseline":{"jump":1,"flip":0}}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:43, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:43, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
+{type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
@@ -101,7 +103,7 @@ Server messages:
 {type:"starshipNameResult", requestId:number, ok:boolean, publicName:string|null}
 {type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
-{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], achievementTiers:AchievementTierProgress, ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
+{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], achievementTiers:AchievementTierProgress, vehicleCollections:VehicleCollections, ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
 {type:"reward", reward:{id:number, kind:"pickup"|"delivery"|"pickup-research"|"delivery-research"|"supply-repair"|"supply-air"|"research", amount:number}}
 {type:"cabResult", requestId:number, action:"buy"|"paint", ok:boolean, reason?:string, assetId?:string, paint?:PaintId}
 {type:"marketState", requestId:number, listings:MarketListingView[], owned:MarketAssetView[], shop:MarketShopView[], nextCursor?:string, nextOwnedCursor?:string}
@@ -304,7 +306,7 @@ Perfect Park and Queue Cutter require the corresponding parking completion; Chec
 
 Vehicle collections record server-observed models in the owner-only wallet. For each of the 11 Tesla and six Vault models, 100 m of horizontal movement above 2 m/s must occur in one uninterrupted ride; switching or leaving the vehicle, ferry travel, wallet binding, a relocation or a gap over 12 m in one room tick resets the partial distance. Selecting a car is not a drive. Partial distance remains room-local and is lost on disconnect; the completed model is journaled. A theft records a catalog model only after a successful on-foot takeover of an ambient NPC or server-seeded parked fleet car, using its pre-entry state; police, occupied cars, player-owned or abandoned personal cars, and owned or retired Cybercabs do not count. NPC autonomy need not be active. Tesla milestones at 1/5/11 distinct models pay $100/$500/$2,000; theft milestones at 1/5/10/26 distinct ambient models pay $100/$500/$2,000/$5,000. Each Vault model also has a separate $1,000 driving award, independent of its purchase award. Individual models and rewards are credited once. All 26 ambient models can occur in traffic or the parked fleet, but a room only spawns a subset at a time.
 
-`vehicleCollections` is a bounded pair of validated unique model arrays in the driver profile and private wallet, never in world snapshots. Earned achievement IDs, including collection milestones and individual Vault badges, follow the existing public player-snapshot contract. Missing pre-feature progress starts empty without inferred history or back pay; malformed saved progress fails closed. The existing fenced achievement journal commits each observation, model set, unlock and cash atomically and replays it idempotently. Generic progress checkpoints cannot overwrite the collection. When sandbox rooms are integrated, their room host must skip persistent collection evidence rather than relying on a client claim.
+`vehicleCollections` is a bounded pair of validated unique model arrays in the driver profile and private wallet, never in world snapshots. Earned achievement IDs, including collection milestones and individual Vault badges, follow the existing public player-snapshot contract. Missing pre-feature progress starts empty without inferred history or back pay; malformed saved progress fails closed. The existing fenced achievement journal commits each observation, model set, unlock and cash atomically and replays it idempotently. Generic progress checkpoints cannot overwrite the collection. Sandbox and practice room hosts skip persistent collection evidence rather than relying on a client claim.
 
 The owner-only wallet includes committed counts and claimed ranks; private counters are not replicated to other players. Profile receipt, count, rank and cash commit atomically through the fenced room journal. Duplicated event IDs replay the existing receipt. A pre-tier profile seeds the known delivery total and one occurrence proven by each relevant saved badge, marks those ranks claimed without back pay, and leaves unknown history at zero; malformed stored tier data fails closed. A generic progress checkpoint cannot overwrite authoritative counts. Each newly reached tier pays once. The delivery ladder preserves its existing 1 / 10 / 100 awards, with $50,000 at 1,000 and $200,000 at 10,000. Other ladders pay $350 / $1,500 / $5,000 / $20,000 at 10 / 100 / 1,000 / 10,000; the first rank adds $100 for families without a guaranteed cash-bearing legacy award and $0 extra for roof landings, rooftop deliveries and crossings, whose existing first awards still apply. These amounts contribute to cash and eligible income, not delivery-only `earned`.
 
