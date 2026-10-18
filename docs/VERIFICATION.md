@@ -2,12 +2,18 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Distant transform traversal · protocol v31 · 2026-10-18 Pacific
+
+- Three.js `Object3D.updateMatrixWorld` visits invisible descendants. The distant-detail path now detaches the inactive model tree, retaining it for reuse; this removes its per-frame matrix traversal without claiming a memory reduction. Reachable scene nodes per stock distant Roadster/Model 3/Cybertruck/Zoox fell from 95/31/32/32 to 2 each (root plus distant mesh). Entity-level incident warnings remain attached. Geometry, draw counts and rendered shapes are unchanged.
+- All 491 tests and `pnpm build` passed. Tests cover all 26 models, near/far hysteresis, restoring detail, updating hidden rocket hardware/effects without duplicate mounts, and preserving incident markers. The same Chrome distant-model fixture remains visually intact. The motion protocol and authoritative simulation are unchanged.
+
 ## Research stops, car finishes and economy article · protocol v31 · 2026-10-18 Pacific
 
 - After integrating the North Bay and sky-current changes, `pnpm test` passed 467 tests and `pnpm build` passed. The existing Vite large-chunk warning remains.
 - Local two-client room and global-chat integrations passed. A separate local workshop fixture started each driver with $200 at a shop. Buying $18 mint paint and a $12 stripe left $170; both finishes appeared in the other driver's snapshot and purchase results remained private. The fixture is test-only.
 - Chrome showed the finished Roadster and its driver's name to a second driver, and the workshop screenshot in the article comes from that funded test. The workshop was inspected in desktop and emulated portrait and landscape; landscape uses the dialog's scroll. The home planner showed $875,000 and level 4 after all four upgrades. No physical mobile device was tested.
 - The university and airport rate calculations and the seven delivery-led simulation paths are design experiments. The article identifies the property, earning Cybercabs and game-wide lifetime earnings goal as planned work.
+
 ## Reduced background fleet and vehicle detail · protocol v31 · 2026-10-18 Pacific
 
 - Default deterministic room population is 22 background vehicles rather than 67: eight city cars, eight parked cars, two highway cars and four police. Peak highway demand is four cars (24 background total); taken/abandoned highway reserve is bounded at 12. Seeded cohorts cover all 26 models without permanent simultaneous copies. All police, deliveries, flight, map content and player car detail remain. This is a population count, not a measured end-to-end speedup.

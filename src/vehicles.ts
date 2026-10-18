@@ -78,7 +78,8 @@ function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
 export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
   // The stock Roadster always has its hardware. Other cars show it only while
   // an authoritative Rocket capability is active (including between bursts).
-  const hardware=root.getObjectByName('rocket_hardware'),jets=root.getObjectByName('jets');
+  const detail=vehicleDetails.get(root)?.near??root;
+  const hardware=detail.getObjectByName('rocket_hardware'),jets=detail.getObjectByName('jets');
   const spec=VEHICLES[root.name as VehicleId];
   if(hardware instanceof T.Group&&jets instanceof T.Group&&spec){
     hardware.visible=spec.airThrusters||capable||mask!==0;
@@ -99,7 +100,7 @@ export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capab
 
 /** Add visible fictional retrofit hardware to a vehicle when its shared kit is installed. */
 export function addRocketKit(root:T.Group,kind:VehicleId){
-  if(root.getObjectByName('rocket-kit'))return;
+  if((vehicleDetails.get(root)?.near??root).getObjectByName('rocket-kit'))return;
   const spec=VEHICLES[kind],w=spec.width,l=spec.length;
   const kit=new T.Group();kit.name='rocket-kit';(vehicleDetails.get(root)?.near??root).add(kit);
   for(const side of [-1,1]){
@@ -110,7 +111,7 @@ export function addRocketKit(root:T.Group,kind:VehicleId){
 /** Reconcile cached meshes when an entity ID is reused by a new session. */
 export function setRocketKit(root:T.Group,kind:VehicleId,installed:boolean){
   if(installed)addRocketKit(root,kind);
-  const kit=root.getObjectByName('rocket-kit');if(kit)kit.visible=installed;
+  const kit=(vehicleDetails.get(root)?.near??root).getObjectByName('rocket-kit');if(kit)kit.visible=installed;
 }
 
 /** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
@@ -168,7 +169,7 @@ function sensors(root: T.Group, spec: VehicleSpec) {
 const templates=new Map<string,T.Group>();
 const distantTemplates=new Map<VehicleId,T.Mesh>();
 const distantMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.65});
-const vehicleDetails=new WeakMap<T.Group,{near:T.Group;far:T.Mesh}>();
+const vehicleDetails=new WeakMap<T.Object3D,{near:T.Group;far:T.Mesh}>();
 
 /** Preserve the real body silhouette, flatten distant detail into one draw. */
 function distantVehicle(kind:VehicleId):T.Mesh {
@@ -200,11 +201,19 @@ export function setVehicleDetail(root:T.Group,distanceSquared:number,forceDetail
   const detailed=forceDetailed||distanceSquared<(state?.near.visible===false?100**2:125**2);
   if(!state){
     if(detailed)return true;
-    const near=new T.Group();near.name='vehicle-detail';near.add(...root.children);
+    const near=new T.Group();near.name='vehicle-detail';
+    // Incident warnings are entity-level indicators, not model detail.
+    near.add(...root.children.filter(child=>child.name!=='traffic-hazard'));
     const far=distantVehicle(root.name as VehicleId);far.name='vehicle-distant';
     root.add(near,far);state={near,far};vehicleDetails.set(root,state);
   }
-  state.near.visible=detailed;state.far.visible=!detailed;return detailed;
+  state.near.visible=detailed;state.far.visible=!detailed;
+  // Invisible descendants still receive Three.js matrix updates. Detach the
+  // inactive tree, retain it in the weak cache, and reattach without rebuilding.
+  const active=detailed?state.near:state.far,inactive=detailed?state.far:state.near;
+  if(inactive.parent===root)root.remove(inactive);
+  if(active.parent!==root)root.add(active);
+  return detailed;
 }
 export function createVehicle(kind:VehicleId|'person'):T.Group {
   if(!templates.has(kind)){
@@ -231,8 +240,8 @@ export function createVehicle(kind:VehicleId|'person'):T.Group {
 export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
   const key=`${style.paint}:${style.decal}`;
   if(root.userData.vehicleStyle===key)return;
-  const spec=VEHICLES[kind],color=PAINTS[style.paint].color;
-  root.traverse(node=>{
+  const spec=VEHICLES[kind],color=PAINTS[style.paint].color,detail=vehicleDetails.get(root)?.near??root;
+  detail.traverse(node=>{
     if(!(node instanceof T.Mesh)||Array.isArray(node.material)||node.name==='vehicle-distant')return;
     const current=node.material;
     if(node.userData.originalVehiclePaint===undefined&&current instanceof T.MeshStandardMaterial&&current.color.getHex()===spec.color)
@@ -240,7 +249,7 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
     const original=node.userData.originalVehiclePaint as T.Material|undefined;
     if(original)node.material=color===null?original:paint(color);
   });
-  let decal=root.getObjectByName('vehicle-decal') as T.Group|undefined;
+  let decal=detail.getObjectByName('vehicle-decal') as T.Group|undefined;
   if(decal)decal.removeFromParent();
   if(style.decal!=='none'){
     decal=new T.Group();decal.name='vehicle-decal';
@@ -250,7 +259,7 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
       else for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
         box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
     }
-    (vehicleDetails.get(root)?.near??root).add(decal);
+    detail.add(decal);
   }
   root.userData.vehicleStyle=key;
 }
