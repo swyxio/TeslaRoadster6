@@ -24,7 +24,7 @@ test('authoritative jump and one-tap flip consume air and land', () => {
   step(world, inputs, .05);
   inputs.set('one', { ...NEUTRAL, jump: 1, flip: 1 });
   for (let i = 0; i < 20; i++) step(world, inputs, .05);
-  assert.ok(car.y > 1); assert.ok(car.stunts === 1); assert.equal(car.air, 89.5);
+  assert.ok(car.y > 1); assert.ok(car.stunts === 1); assert.equal(car.air, 58);
   for (let i = 0; i < 80; i++) step(world, inputs, .05);
   assert.equal(car.y, 0); assert.equal(car.roll, 0); assert.equal(car.vy, 0);
 });

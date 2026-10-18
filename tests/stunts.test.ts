@@ -54,8 +54,8 @@ test('a jump starts the delivery activity clock without keeping it active indefi
   for(let i=0;i<80;i++)send({...NEUTRAL,jump:1});
   assert.ok(world.players[0].delivery.activeSeconds<3.2);
 });
-test('jump reaches the proposed height and duration and the starter tank lasts twice as long',()=>{
-  const {car,send}=playground();let jump=0,flip=0;
+test('an upgraded tank supports three jump and flip sequences at the unchanged jump height',()=>{
+  const {car,send}=playground();car.tankLevel=3;let jump=0,flip=0;
   for(let sequence=0;sequence<3;sequence++){
     jump++;send({...NEUTRAL,jump,flip});flip++;send({...NEUTRAL,jump,flip});
     let peak=car.y,steps=2;
@@ -70,7 +70,7 @@ test('two deliberate flips fit in one jump and airborne steering banks',()=>{
   for(let i=0;i<16;i++)send({...NEUTRAL,jump:1,flip:1});
   assert.equal(car.stunts,1);send({...NEUTRAL,jump:1,flip:2});
   for(let i=0;i<16;i++)send({...NEUTRAL,jump:1,flip:2});
-  assert.equal(car.stunts,2);assert.ok(car.y>0);assert.equal(car.air,85);
+  assert.equal(car.stunts,2);assert.ok(car.y>0);assert.equal(car.air,40);
   for(let i=0;i<4;i++)send({...NEUTRAL,jump:1,flip:2,steer:1});assert.ok(Math.sin(car.roll)>.05);assert.ok(car.yawRate>0);
 });
 test('empty tank disables thrust, jumps and flips while driving and gravity still work',()=>{
@@ -102,6 +102,18 @@ test('Rocket reaches 60 mph near the requested arcade times',()=>{
     assert.ok(Math.abs(crossing-target)<.025,`${boost?'boost':'normal'} ${crossing}`);
   }
 });
+test('ground boost retains its prior tank consumption while airborne boost uses the flight budget',()=>{
+  for(const level of [1,2,5] as const)for(const economy of [false,true]){
+    const grounded=playground(),flying=playground();
+    for(const fixture of [grounded,flying]){fixture.car.tankLevel=level;fixture.car.upgrades.economy=economy;}
+    grounded.send({...NEUTRAL,throttle:1,boost:true});
+    const oldGroundCost=14*.05*100/(200*2**(level-1))*(economy?.75:1);
+    assert.ok(Math.abs(grounded.car.air-(100-oldGroundCost))<1e-8);
+    // Airborne forward thrust also uses air, so test boost without throttle.
+    Object.assign(flying.car,{y:100,supportId:null});flying.send({...NEUTRAL,boost:true});
+    assert.ok(Math.abs(flying.car.air-(100-oldGroundCost*4))<1e-8);
+  }
+});
 test('the visible ramp supports cars and launches their world velocity',()=>{
   const {car,send}=playground(STUNT_RAMP.start-2,STUNT_RAMP.z);car.yaw=-Math.PI/2;car.speed=18;
   let climbed=false,launched=false;
@@ -131,19 +143,38 @@ test('loop has a real attached ceiling, fans do not consume tank air, and jump d
 test('jump and flip edges fire once when a fast tick uses substeps',()=>{
   const {car,send}=playground();car.speed=60;
   send({...NEUTRAL,jump:1,flip:1});
-  assert.equal(car.supportId,null);assert.equal(car.air,89.5);
+  assert.equal(car.supportId,null);assert.equal(car.air,58);
   assert.equal(car.lastJump,1);assert.equal(car.lastFlip,1);
-  send({...NEUTRAL,jump:1,flip:1});assert.equal(car.air,89.5);
+  send({...NEUTRAL,jump:1,flip:1});assert.equal(car.air,58);
 });
 
 test('low air gives a proportional jump and hover works with the remainder',()=>{
-  const {car,send}=playground();car.air=9;send({...NEUTRAL,jump:1});
+  const {car,send}=playground();car.air=27;send({...NEUTRAL,jump:1});
   assert.equal(car.supportId,null);assert.ok(car.y>0);assert.equal(car.air,3);
   const air=car.air;send({...NEUTRAL,jump:1,hover:true,throttle:1});assert.ok(car.air<air);assert.ok(car.vz<0);
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',air:3});send({...NEUTRAL,jump:2});
   assert.equal(car.air,0);assert.ok(car.y>0);assert.ok(car.vy>0&&car.vy<6);
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',air:0});send({...NEUTRAL,jump:3});
   assert.equal(car.supportId,'ground');assert.equal(car.y,0);
+});
+
+test('a partial air jump cannot cancel a fall for almost no air',()=>{
+  const {car,send}=playground();
+  Object.assign(car,{y:30,vy:-20,supportId:null,air:1});
+  send({...NEUTRAL,jump:1});
+  assert.equal(car.air,0);
+  assert.ok(car.vy< -18,'a tiny partial jump only slows the fall proportionally');
+});
+
+test('heavier fictional vehicles have a bounded flight penalty',()=>{
+  const light=playground(),heavy=playground();heavy.car.kind='tesla-semi';heavy.car.upgrades.rocket=true;
+  light.send({...NEUTRAL,jump:1});heavy.send({...NEUTRAL,jump:1});
+  assert.ok(heavy.car.vy<light.car.vy,'a heavier vehicle jumps less high');
+  assert.ok(heavy.car.air<light.car.air,'the same jump consumes more air');
+  Object.assign(light.car,{y:100,vy:0,air:0,supportId:null});
+  Object.assign(heavy.car,{y:100,vy:0,air:0,supportId:null});
+  light.send();heavy.send();
+  assert.ok(heavy.car.vy<light.car.vy,'the arcade flight load makes it fall faster');
 });
 
 test('tank upgrades do not change jump power and air jumps do not stack upward velocity',()=>{

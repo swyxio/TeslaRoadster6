@@ -123,7 +123,7 @@ test('an unavailable relock preserves and pauses the job until an open-road retr
   assert.equal(rerouteInaccessibleOrder(delivery,{x:0,z:1e9}),true);
   assert.equal(delivery.lastReroute?.reason,'searching');finishSearch(delivery);
   assert.deepEqual(delivery.order,original);assert.equal(delivery.lastReroute?.reason,'unavailable');
-  assert.equal(isOrderAccessible(delivery.order,delivery.level),false);
+  assert.equal(isOrderAccessible(delivery.order,delivery.level,false),false);
   const notice=delivery.lastReroute?.id;
   assert.equal(rerouteInaccessibleOrder(delivery,{x:0,z:1e9}),false);
   assert.equal(delivery.lastReroute?.id,notice,'repeated failures do not spam notices');
@@ -132,7 +132,7 @@ test('an unavailable relock preserves and pauses the job until an open-road retr
   assert.equal(rerouteInaccessibleOrder(delivery,{x:-120,z:60}),true);
   finishSearch(delivery);
   assert.equal(delivery.order.stage,'dropoff');assert.equal(delivery.order.elapsed,12);
-  assert.equal(isOrderAccessible(delivery.order,delivery.level),true);
+  assert.equal(isOrderAccessible(delivery.order,delivery.level,false),true);
   assert.notEqual(delivery.lastReroute?.reason,'unavailable');
 });
 

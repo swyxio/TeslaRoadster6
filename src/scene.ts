@@ -10,7 +10,7 @@ import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
-import { isOrderAccessible, orderTarget } from '../shared/delivery';
+import { canAssignDeliveryRoof, isOrderAccessible, orderTarget } from '../shared/delivery';
 import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -405,7 +405,7 @@ export class GameScene {
     this.dome.update(this.ballPosition);
     const e=controlled;
     const target=player?orderTarget(player.delivery.order):undefined;
-    this.objective.visible=!!player&&!menu&&!e?.inDome&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level));if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    this.objective.visible=!!player&&!menu&&!e?.inDome&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!e||e.kind==='person'||canAssignDeliveryRoof(e)));if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
     if(menu){

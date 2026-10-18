@@ -16,7 +16,7 @@ export class DriverProfile extends WalletDriverProfile {
     delivery.completed=2;
     // Simulate a previous Tony's → Poly Ave job, ending at this origin.
     delivery.order.restaurant=1;delivery.order.customer=0;
-    delivery.order.search={kind:'next',origin,level:0,canFly:true,cursor:{pair:0,leg:0,heading:0}};
+    delivery.order.search={kind:'next',origin,level:0,roofEligible:true,cursor:{pair:0,leg:0,heading:0}};
     let steps=0;
     while(!advanceDeliverySearch(delivery,true))if(++steps>10_000)throw new Error('Fixture assignment did not finish');
     if(CUSTOMERS[delivery.order.customer].id!=='landmark-ucsf')throw new Error('Scheduler did not select UCSF');

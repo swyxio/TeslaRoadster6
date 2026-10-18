@@ -12,7 +12,7 @@ import { terrainHeight } from '../../shared/map';
 // written only after the assignment has been resolved.
 function finishAssignment(delivery:ReturnType<typeof initialDelivery>){
   const pending=!!delivery.order.search;
-  for(let i=0;i<10_000&&delivery.order.search;i++)advanceDeliverySearch(delivery,delivery.order.search.canFly);
+  for(let i=0;i<10_000&&delivery.order.search;i++)advanceDeliverySearch(delivery,delivery.order.search.roofEligible);
   if(delivery.order.search)throw new Error('Fixture assignment did not finish');
   if(pending&&delivery.lastReroute){const {reason,origin,level}=delivery.lastReroute;return {reason,origin,level};}
 }

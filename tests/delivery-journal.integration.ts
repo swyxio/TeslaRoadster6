@@ -89,6 +89,36 @@ try{
   assert.deepEqual(await rpc('sources',e),['earned-source:delivery:1:dropoff']);
   assert.deepEqual(await rpc('submit',{...e,intent:later}),paid,'a lost response cannot pay twice');
 
+  // The journal selects the next job from immutable event-time capability;
+  // old accepted stops lacking the new field remain valid but conservative.
+  for(const roofEligible of [true,false,undefined]){
+    const driver=entry();await rpc('producer',{...driver,active:true});
+    const progress={cash:10_120,level:1,completed:6,order:{...order(),customer:0},deliveryClock:0,unlocked:['region-oakland']};
+    await rpc('acquire',{...driver,progress});
+    const stop={...pose(0),kind:'roadster',canFly:true,...(roofEligible===undefined?{}:{roofEligible})};
+    const observed=stage(driver,1,0,stop),submitted=intent(observed,0,1);
+    assert.equal(await rpc('stage',{...driver,stage:observed}),'accepted');
+    const result=await rpc<DriverOutcome>('submit',{...driver,intent:submitted});success(result);
+    assert.equal(result.progress.completed,7);
+    assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,roofEligible===true,`captured roof capability ${roofEligible}`);
+  }
+  // Ticket replay also preserves event-time eligibility after a balance drop.
+  for(const roofEligible of [true,false,undefined]){
+    const driver=entry();await rpc('producer',{...driver,active:true});
+    const roof=CUSTOMERS.findIndex(customer=>customer.rooftop);
+    const prior={...order(),customer:roof};
+    const progress={cash:50_020,level:2,completed:7,order:prior,deliveryClock:0,unlocked:['region-oakland']};
+    const acquired=await rpc<{progress:DriverProgress}>('acquire',{...driver,progress});
+    const ticket:TicketStage={eventId:randomUUID(),driverId:driver.driverId,fence:driver.fence,roomId:driver.room,walletOrder:1,clock:0,
+      action:{kind:'ticket',evidence:{seconds:0,peakHeight:0,at:1,x:0,z:0,canFly:true,...(roofEligible===undefined?{}:{roofEligible})},orderBefore:acquired.progress.order,completedBefore:7}};
+    assert.equal(await rpc('stage-ticket',{...driver,stage:ticket}),'accepted');
+    const submitted:EconomyIntent={...ticket,revision:0,sequence:1,action:ticket.action};
+    const result=await rpc<DriverOutcome>('submit',{...driver,intent:submitted});success(result);
+    assert.equal(result.progress.cash,49_960);
+    assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,roofEligible===true,`ticket roof capability ${roofEligible}`);
+    assert.equal(result.progress.order.stage,'dropoff');
+  }
+
   // Every ordinary submission waits behind an accepted physical stage. Freeze
   // resolves the observation and a later ticket in order with the same clock.
   const ordered=entry(),saved=await acquire(ordered),candidate=stage(ordered,1,5,pose(0));
@@ -214,7 +244,7 @@ try{
   for(let i=0;i<10_000&&relockPreview.order.search;i++)advanceDeliverySearch(relockPreview,false);
   assert.equal(relockPreview.order.search,undefined);
   assert.equal(relockPreview.order.stage,'dropoff');assert.equal(relockPreview.order.elapsed,45);
-  assert.ok(isOrderAccessible(relockPreview.order,0));
+  assert.ok(isOrderAccessible(relockPreview.order,0,false));
   assert.notEqual(relockPreview.order.customer,relockInitial.progress.order.customer);
   const replacementStop=stage(relock,2,6,pose(relockPreview.order.customer),2);
   const replacementIntent=intent(replacementStop,1,2);

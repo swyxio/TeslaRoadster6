@@ -79,18 +79,23 @@ export const CUSTOMERS: Customer[] = [
   }),
   ...ADDED_CUSTOMERS,
 ];
-type DeliverySearch = {kind:'next'|'reroute';origin:{x:number;z:number;supportId?:Entity['supportId']};level:Level;canFly:boolean;cursor:DeliverySearchCursor};
+type DeliverySearch = {kind:'next'|'reroute';origin:{x:number;z:number;supportId?:Entity['supportId']};level:Level;roofEligible:boolean;cursor:DeliverySearchCursor};
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number; search?:DeliverySearch };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
 export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
 export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'|'unavailable'|'searching'|'ready';origin?:{x:number;z:number};level?:Level} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
+/** A full Level 3 tank provides a conservative budget for the current roof jobs. */
+export function canAssignDeliveryRoof(entity:Entity):boolean {
+  return hasRockets(entity)&&entity.tankLevel>=3;
+}
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
-export type DeliveryStop = DeliveryPose & {canFly:boolean};
+// Older journaled stops may lack roofEligible; replay treats them as ineligible.
+export type DeliveryStop = DeliveryPose & {canFly:boolean;roofEligible?:boolean};
 export function captureDeliveryStop(entity:Entity):DeliveryStop {
   const {x,y,z,vy,speed,supportId,kind}=entity;
-  return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity)};
+  return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity),roofEligible:canAssignDeliveryRoof(entity)};
 }
 function matchesTarget(stop:DeliveryPose,target:{x:number;y?:number;z:number;rooftop?:boolean}):boolean {
   if(stop.vy>.1||Math.abs(stop.speed)>4)return false;
@@ -141,23 +146,23 @@ function quotedOrder(restaurant:number,customer:number,origin:{x:number;z:number
   const distanceFactor=Math.max(.5,Math.min(2,distance/700));
   return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: Math.round(BASE_FARES[level]*distanceFactor) };
 }
-function beginDeliverySearch(delivery:DeliveryState,kind:DeliverySearch['kind'],origin:DeliverySearch['origin'],canFly:boolean):void {
+function beginDeliverySearch(delivery:DeliveryState,kind:DeliverySearch['kind'],origin:DeliverySearch['origin'],roofEligible:boolean):void {
   delivery.order.search={kind,origin:{x:origin.x,z:origin.z,...(origin.supportId!==undefined?{supportId:origin.supportId}:{})},
-    level:delivery.level,canFly,cursor:{pair:0,leg:0,heading:0}};
+    level:delivery.level,roofEligible,cursor:{pair:0,leg:0,heading:0}};
   delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'searching'};
 }
 
 /** Advance at most one bounded batch; the unfinished cursor is persisted. */
-export function advanceDeliverySearch(delivery:DeliveryState,canFly:boolean):boolean {
+export function advanceDeliverySearch(delivery:DeliveryState,roofEligible:boolean):boolean {
   const old=delivery.order,search=old.search;if(!search)return false;
-  if(search.kind==='reroute'&&isOrderAccessible(old,delivery.level)){
+  if(search.kind==='reroute'&&isOrderAccessible(old,delivery.level,roofEligible)){
     delete old.search;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'ready'};return true;
   }
-  if(search.level!==delivery.level||search.canFly!==canFly){
-    search.level=delivery.level;search.canFly=canFly;search.cursor={pair:0,leg:0,heading:0};
+  if(search.level!==delivery.level||search.roofEligible!==roofEligible){
+    search.level=delivery.level;search.roofEligible=roofEligible;search.cursor={pair:0,leg:0,heading:0};
   }
   chooseDelivery??=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
-  const result=chooseDelivery.advance(delivery.completed,search.origin,search.level,search.canFly,old,search.cursor);
+  const result=chooseDelivery.advance(delivery.completed,search.origin,search.level,search.roofEligible,old,search.cursor);
   if(result.status==='pending'){search.cursor=result.cursor;return false;}
   if(result.status==='none'){
     delete old.search;
@@ -182,19 +187,19 @@ export function updateLevel(delivery:DeliveryState):void { delivery.level=levelF
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
 }
-export function isOrderAccessible(order:Order,level:Level):boolean {
+export function isOrderAccessible(order:Order,level:Level,roofEligible:boolean):boolean {
   const pickup=RESTAURANTS[order.restaurant],customer=CUSTOMERS[order.customer];
-  return (order.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=level) && requiredLevelAt(customer.x,customer.z)<=level;
+  return (order.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=level) && requiredLevelAt(customer.x,customer.z)<=level && (!customer.rooftop||roofEligible);
 }
 /** Move an active job back into regions available at the new balance.
  * Returns true if the order or its availability notice changed. */
-export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},canFly=false):boolean {
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},roofEligible=false):boolean {
   const old=delivery.order;
-  if(isOrderAccessible(old,delivery.level))return false;
+  if(isOrderAccessible(old,delivery.level,roofEligible))return false;
   if(old.search&&old.search.level===delivery.level)return false;
   if(delivery.lastReroute?.reason==='unavailable'&&delivery.lastReroute.level===delivery.level&&
     delivery.lastReroute.origin?.x===origin.x&&delivery.lastReroute.origin.z===origin.z)return false;
-  beginDeliverySearch(delivery,'reroute',origin,canFly);
+  beginDeliverySearch(delivery,'reroute',origin,roofEligible);
   return true;
 }
 export function pickupBonusFor(order: Order): number {
@@ -215,12 +220,12 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
   const searching=!!delivery.order.search;
-  const unavailable=delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(delivery.order,delivery.level);
+  const unavailable=delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(delivery.order,delivery.level,entity.kind==='person'||canAssignDeliveryRoof(entity));
   if (active) {
     delivery.activeSeconds += dt;
     if(!orderPaused&&!entity.inDome&&!unavailable&&!searching)delivery.order.elapsed += dt;
   }
-  if(searching){if(advanceSearch)advanceDeliverySearch(delivery,hasRockets(entity));return;}
+  if(searching){if(advanceSearch)advanceDeliverySearch(delivery,entity.kind==='person'?delivery.order.search!.roofEligible:canAssignDeliveryRoof(entity));return;}
   if(orderPaused||entity.inDome||unavailable)return;
   const payouts=applyDeliveryStop(delivery,entity,resolvePayout);
   if(payouts===null)delivery.order.elapsed=elapsedBefore;
@@ -258,7 +263,7 @@ export function applyDeliveryStop(delivery:DeliveryState,stop:DeliveryStop|Entit
     const previous=delivery.order;
     // Finish payment first. Search for the next job across later room frames.
     delivery.order=quotedOrder(previous.restaurant,previous.customer,stop,delivery.level);
-    beginDeliverySearch(delivery,'next',stop,'canFly' in stop?stop.canFly:hasRockets(stop));
+    beginDeliverySearch(delivery,'next',stop,'canFly' in stop?stop.roofEligible===true:canAssignDeliveryRoof(stop));
     return parts;
   }
 }

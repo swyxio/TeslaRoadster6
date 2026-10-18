@@ -73,8 +73,8 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     if(prepared.size>=128)prepared.delete(prepared.keys().next().value!);
     prepared.set(key,value);
   }
-  function candidates(completed:number,origin:Origin,level:Level,canFly:boolean,previous?:Previous):Prepared|null {
-    const key=JSON.stringify([completed,origin.x,origin.z,origin.supportId,level,canFly,previous?.restaurant,previous?.customer]);
+  function candidates(completed:number,origin:Origin,level:Level,roofEligible:boolean,previous?:Previous):Prepared|null {
+    const key=JSON.stringify([completed,origin.x,origin.z,origin.supportId,level,roofEligible,previous?.restaurant,previous?.customer]);
     if(prepared.has(key))return prepared.get(key)!;
     const anchor=nearestNavigationAnchor(origin,level);
     if(!anchor){rememberPrepared(key,null);return null;}
@@ -83,7 +83,7 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     const from=((origin.supportId!==undefined&&origin.supportId!=='ground')||
       (!!previous&&customers[previous.customer]?.rooftop)||anchor.distance>7)?anchor.point:origin;
     const explore=level>0&&completed%2===0;
-    const preferRooftop=canFly&&level>0&&!explore&&completed%3===1;
+    const preferRooftop=roofEligible&&level>0&&!explore&&completed%3===1;
     const newest=Math.min(level,6),originLevel=requiredLevelAt(origin.x,origin.z);
     const recentArea=previous?customers[previous.customer]?.areaId:undefined;
     const relocked=originLevel>level;
@@ -106,13 +106,13 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     const result:Prepared={from,pickups,pickup:0,dropoff:0,heap:[],ordered:[],scores,ready:false,compare};
     rememberPrepared(key,result);return result;
   }
-  function advance(completed:number,origin:Origin,level:Level,canFly:boolean,previous:Previous|undefined,
+  function advance(completed:number,origin:Origin,level:Level,roofEligible:boolean,previous:Previous|undefined,
     cursor:DeliverySearchCursor={pair:0,leg:0,heading:0}):SearchStep {
-    const work=candidates(completed,origin,level,canFly,previous);
+    const work=candidates(completed,origin,level,roofEligible,previous);
     if(!work)return {status:'none',plans:0,pairs:0,scans:0};
     const next={...cursor};let plans=0,pairs=0,scans=0;
     const explore=level>0&&completed%2===0;
-    const preferRooftop=canFly&&level>0&&!explore&&completed%3===1;
+    const preferRooftop=roofEligible&&level>0&&!explore&&completed%3===1;
     const originLevel=requiredLevelAt(origin.x,origin.z),newest=Math.min(level,6);
     const recentArea=previous?customers[previous.customer]?.areaId:undefined;
     while(!work.ready&&scans<DELIVERY_SEARCH_CANDIDATES_PER_STEP){
@@ -168,9 +168,9 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     return {status:'pending',cursor:next,plans,pairs,scans};
   }
   // Offline verification may exhaust a search; gameplay resumes bounded steps.
-  function choose(completed:number,origin:Origin,level:Level,canFly:boolean,previous?:Previous):Choice|null {
+  function choose(completed:number,origin:Origin,level:Level,roofEligible:boolean,previous?:Previous):Choice|null {
     let cursor:DeliverySearchCursor={pair:0,leg:0,heading:0};
-    for(;;){const step=advance(completed,origin,level,canFly,previous,cursor);
+    for(;;){const step=advance(completed,origin,level,roofEligible,previous,cursor);
       if(step.status==='found')return step.choice;if(step.status==='none')return null;cursor=step.cursor;}
   }
   choose.advance=advance;
