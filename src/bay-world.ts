@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { STATIONS } from '../shared/stations';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 import { buildNorthBayScenery } from './north-bay-scenery';
@@ -136,6 +137,11 @@ export function buildBay(scene:T.Scene) {
     if(r.axis==='z'&&Math.abs(r.z%60)>14)stripes.push({x:r.x,y:.14,z:r.z,w:.16,h:.018,d:4});
     if(r.axis==='x'&&Math.abs(r.x%60)>14)stripes.push({x:r.x,y:.145,z:r.z,w:4,h:.018,d:.16});
   }
+  // These local streets span several highway lanes, so the city-grid pass
+  // above skips their long rectangles. Mark their shared centerlines as well.
+  for(const street of PENINSULA_CROSS_STREETS)
+    for(let x=street.x-street.w/2+6;x<street.x+street.w/2-4;x+=14)
+      stripes.push({x,y:.145,z:street.z,w:7,h:.018,d:.16});
   batches(0xe7d8aa,stripes);
   // Paint follows each authoritative road rectangle. No separate decorative
   // asphalt, walls or ramps can suggest a surface the simulation lacks.

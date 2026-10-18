@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.10-alpha',
-    label: '0.0.10 Alpha',
+    version: '0.0.11-alpha',
+    label: '0.0.11 Alpha',
     date: '2026-10-18',
     title: 'The scenic way around',
     intro: 'A greener North Bay, more ways down the Peninsula and friendlier skies.',
@@ -11,6 +11,19 @@ export const RELEASES = [
         'Explore the wooded Marin headlands and North Bay Playground; its races, ramps and ferry remain open.',
         'At level 2, take US 101, I-280 or El Camino Real down the Peninsula. Drive the split yourself or place a map pin on the road you want to visit.',
         'Skyline Express is much higher, its current is gentler, and fewer thermals fill the sky. Wind stops pushing you into locked areas so you can escape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.10-alpha',
+    label: '0.0.10 Alpha',
+    date: '2026-10-18',
+    title: 'Radio for the ride',
+    intro: 'Take a podcast along as you explore the Bay.',
+    sections: [
+      { title: 'Choose your station', items: [
+        'Switch between the original 8-bit soundtrack and random public episodes of Latent Space or ThursdAI in the sound panel.',
+        'Play, pause and skip episodes; sound effects keep their own volume, and podcast audio streams directly from its publisher.'
       ] }
     ]
   },
