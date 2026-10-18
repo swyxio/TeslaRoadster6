@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Mars and predictive shared driving · protocol v29 · 2026-10-18 Pacific
+
+- The combined build passed 422 tests and `pnpm build`, including both TypeScript checks. Local Wrangler prediction/acknowledgement/barrier integration passed. An isolated Mars fixture verified simultaneous contributions, ordered post-action snapshots, boarding, room isolation and fund persistence after the last disconnect and a Worker restart; it used test-only funded players and positions.
+- On the pre-launch-animation-smoothing build, Chrome on an Apple M5 Pro drove online and steered in explicit solo, with no console errors. The Mars dialog showed the room fund online and correctly explained that the solo fund and awards last only for that drive. A 6.65-second online driving capture at 1413×939 CSS pixels, rendered at DPR 1.0 on WebGL2/Metal, averaged 58.7 FPS with 33.6 ms p95 frame intervals and no frames over 50 ms. Host load was high; this is one short local sample, not a sustained FPS guarantee or a controlled before/after comparison.
+
 ## Predictive shared driving · protocol v28 · 2026-10-18 Pacific
 
 - The merged build passed 415 tests and `pnpm build`, including both TypeScript checks. Vite retains its large-chunk warning. Local Wrangler two-client room, prediction/acknowledgement/barrier and chat integrations passed.
