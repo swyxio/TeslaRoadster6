@@ -3,6 +3,9 @@ import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { CALTRAIN_ACCESS_ROUTES } from './caltrain';
 import { MARIN_ROUTES } from './marin-roads';
+import { TOWN_DELIVERY_ROUTES } from './town-delivery-roads';
+import { SFO_DELIVERY_ROUTES } from './sfo-delivery-road';
+import { LANDMARK_ACCESS_ROUTES } from './landmark-access-roads';
 import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
@@ -62,6 +65,9 @@ for(const cross of PENINSULA_CROSS_STREETS)ROUTES.push([
 // Local two-way streets extend the same directed graph to the station lots.
 ROUTES.push(...CALTRAIN_ACCESS_ROUTES);
 ROUTES.push(...MARIN_ROUTES);
+ROUTES.push(...TOWN_DELIVERY_ROUTES,...SFO_DELIVERY_ROUTES,...LANDMARK_ACCESS_ROUTES);
+// Existing Berkeley street tiles reach the preserved Campanile delivery marker.
+ROUTES.push([{x:393,z:-237},{x:507,z:-237},{x:507,z:-123},{x:393,z:-123}]);
 
 /** A fictional disabled-car vignette; timing uses real room seconds. */
 export const TRAFFIC_INCIDENT={entityId:'ambient-seed-0',cycleSeconds:360,startSeconds:180,endSeconds:240} as const;

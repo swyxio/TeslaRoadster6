@@ -14,6 +14,9 @@ import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
 import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 import { MARIN_ROADS } from './marin-roads';
+import { TOWN_DELIVERY_ROADS } from './town-delivery-roads';
+import { SFO_DELIVERY_ROADS } from './sfo-delivery-road';
+import { LANDMARK_ACCESS_ROADS } from './landmark-access-roads';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -236,6 +239,9 @@ ROADS.push(
  ...PENINSULA_CROSS_STREETS,
  ...CALTRAIN_ROADS,
  ...MARIN_ROADS,
+ ...TOWN_DELIVERY_ROADS,
+ ...SFO_DELIVERY_ROADS,
+ ...LANDMARK_ACCESS_ROADS,
 );
 
 /** Distances and shorelines are game-space approximations, not navigation. */
