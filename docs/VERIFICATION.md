@@ -1,5 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 157 tests, both typechecks and the build; Vite's existing chunk-size warning remains. Regression checks cover reused retrofit meshes, solo purchase results and validated request IDs.
+- Local Wrangler two-client integration passed with requester-only results for a rejected purchase and a second immediate request. Successful multiplayer purchases remain covered by shared simulation, not a live room transaction; this is not a load test.
+- Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. The fixture is absent from the built source. No physical device was tested for this follow-up.
+
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
@@ -198,3 +204,5 @@ In the isolated worktree, `pnpm test` passed 112 tests after integrating the sou
 ## 2026-10-17 · Flight controls and arcade tanks
 
 In the isolated worktree, `pnpm test` passed 159 tests and `pnpm build` passed. A local Wrangler two-client room integration verified protocol v13, tank-level snapshots, jump, flip, and forward flight while hovering; this was not a load test. Chrome solo play verified E plus W produced airborne motion (52 km/h before the tank change), and the updated Level 1 HUD and Jump were exercised. Phone emulation at 390×844 and 844×390 showed separate forward, flip, jump, hover and roll controls. These are emulations, not physical-device tests. Tank purchase progression, full refill, prices and capacity doubling through Level 5 were verified in the authoritative simulation tests.
+
+After integrating the shop confirmation follow-up, 161 tests and `pnpm build` passed; the local two-client Wrangler room test passed on protocol v14, including forward flight while hovering and purchase result messages. A focused solo shop test also confirmed a tank purchase reports success, deducts cash and refills. Chrome solo play additionally showed H holding altitude and X producing a visible roll.

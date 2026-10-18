@@ -12,11 +12,12 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
     if (data.type === 'state') state.world = data.world;
+    if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
   return { socket, state };
@@ -77,7 +78,11 @@ try {
   assert.ok(!two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox'),'non-Tesla selection rejected by room');
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'model-3'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='model-3')??false,'Tesla fleet change visible to remote player');
-  await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket'}));await delay(500);
+  await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket',requestId:1}));
+  one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket',requestId:2}));
+  await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===1&&r.upgrade==='rocket'&&!r.ok)??false,'rejected purchase receives an explicit result');
+  await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===2&&!r.ok)??false,'rate-limited purchase receives an explicit result');
+  assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
   assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
