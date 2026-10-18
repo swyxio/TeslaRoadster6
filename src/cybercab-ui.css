@@ -2,7 +2,7 @@
 .cybercab-dialog::backdrop{background:#071d27b8;backdrop-filter:blur(5px)}
 .cybercab-dialog *{box-sizing:border-box}
 .cybercab-dialog [hidden]{display:none!important}
-.cybercab-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.cybercab-header{position:sticky;top:-20px;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:12px;margin:-8px 0 0;padding:8px 0;background:#183139}
 .cybercab-heading h2{font-size:clamp(1.5rem,5vw,2rem);letter-spacing:-.04em;margin:4px 0}
 .cybercab-eyebrow{color:#ffcf89;font-size:.7rem;font-weight:700;letter-spacing:.1em}
 .cybercab-dialog button,.cybercab-dialog select{min-height:44px;font:inherit;touch-action:manipulation}
@@ -18,4 +18,4 @@
 .cybercab-detail,.cybercab-people,.cybercab-revenue{margin:7px 0;overflow-wrap:anywhere}.cybercab-revenue{font-size:.85rem;color:#ffcf89}.cybercab-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.cybercab-actions button{flex:1 1 auto}
 .cybercab-style{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:7px;margin-top:12px}.cybercab-style label{display:grid;gap:4px;min-width:0;color:#c4d5ce;font-size:.8rem}.cybercab-style select{width:100%;min-width:0;background:#142f36;border:1px solid #aacabc66;border-radius:7px;color:#f7ecd6;padding:7px}.cybercab-style-status{grid-column:1/-1;margin:0;overflow-wrap:anywhere}.cybercab-style-status:empty,.cybercab-status:empty{display:none}
 .cybercab-quote{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;margin:14px 0;font-size:.85rem}.cybercab-quote dt{color:#c4d5ce}.cybercab-quote dd{text-align:right;margin:0;font-weight:700}.cybercab-estimate{margin:10px 0}.cybercab-dialog .cybercab-primary{background:#f6c780;border-color:#f6c780;color:#173138;font-weight:700}.cybercab-dialog .cybercab-primary:hover:not(:disabled){background:#ffda9c}.cybercab-purchase>.cybercab-primary{width:100%}.cybercab-confirm{padding:12px;border:1px solid #f6c78066;border-radius:8px}.cybercab-confirm p{font-size:.85rem;line-height:1.4;color:#c4d5ce}.cybercab-status{margin:10px 0 0;overflow-wrap:anywhere}
-@media(max-width:600px){.cybercab-dialog{padding:16px;max-height:94dvh}.cybercab-content{grid-template-columns:1fr}.cybercab-purchase{grid-row:1}.cybercab-quote{gap:5px 10px}}
+@media(max-width:600px){.cybercab-dialog{padding:16px;max-height:94dvh}.cybercab-header{top:-16px}.cybercab-content{grid-template-columns:1fr}.cybercab-purchase{grid-row:1}.cybercab-quote{gap:5px 10px}}
