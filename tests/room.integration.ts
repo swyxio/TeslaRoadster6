@@ -8,8 +8,8 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
-// Protocol 31 adds the private, authenticated award binding.
-assert.equal(PROTOCOL_VERSION, 31);
+// Protocol 32 combines the Caltrain world with authenticated award binding.
+assert.equal(PROTOCOL_VERSION, 32);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
