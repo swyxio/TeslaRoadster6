@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-18 Pacific",
+  "baselineRef": "3307584",
+  "scope": "Static Bay only; Chrome desktop, same origin and fixture. Timing is noisy shared-host lab evidence, not game FPS or GPU duration.",
+  "baseline": {
+    "baseline": true,
+    "buildMs": 82.70000004768372,
+    "objects": 614,
+    "width": 1280,
+    "height": 720,
+    "rows": [
+      {
+        "view": "Golden Gate",
+        "calls": 110,
+        "triangles": 143770,
+        "geometries": 108,
+        "cpuP50": 0.7000000476837158,
+        "cpuP95": 0.9000000953674316,
+        "frameP95": 9.10000000000582
+      },
+      {
+        "view": "Bay Bridge",
+        "calls": 199,
+        "triangles": 167290,
+        "geometries": 287,
+        "cpuP50": 0.8999998569488525,
+        "cpuP95": 1.1000001430511475,
+        "frameP95": 9.10000000000582
+      },
+      {
+        "view": "Waterfront",
+        "calls": 156,
+        "triangles": 182728,
+        "geometries": 340,
+        "cpuP50": 1,
+        "cpuP95": 1.2999999523162842,
+        "frameP95": 9.199999999982538
+      },
+      {
+        "view": "Oakland port",
+        "calls": 149,
+        "triangles": 238218,
+        "geometries": 341,
+        "cpuP50": 0.7999999523162842,
+        "cpuP95": 1.2999999523162842,
+        "frameP95": 9.199999999982538
+      },
+      {
+        "view": "SFO",
+        "calls": 44,
+        "triangles": 188690,
+        "geometries": 357,
+        "cpuP50": 0.5,
+        "cpuP95": 0.7000000476837158,
+        "frameP95": 9.200000000011642
+      },
+      {
+        "view": "Stanford",
+        "calls": 61,
+        "triangles": 144902,
+        "geometries": 386,
+        "cpuP50": 0.7999999523162842,
+        "cpuP95": 1,
+        "frameP95": 9.200000000011642
+      }
+    ]
+  },
+  "candidate": {
+    "baseline": false,
+    "buildMs": 57.200000047683716,
+    "objects": 396,
+    "width": 1280,
+    "height": 720,
+    "rows": [
+      {
+        "view": "Golden Gate",
+        "calls": 58,
+        "triangles": 143830,
+        "geometries": 34,
+        "cpuP50": 0.9000000953674316,
+        "cpuP95": 6.1000001430511475,
+        "frameP95": 25,
+        "baselineCalls": 110,
+        "changedPixelsPct": 0.0014105902777777778,
+        "changedOver4Pct": 0.0010850694444444445,
+        "meanChannelError": 9.837962962962963e-05
+      },
+      {
+        "view": "Bay Bridge",
+        "calls": 96,
+        "triangles": 167422,
+        "geometries": 75,
+        "cpuP50": 0.7000000476837158,
+        "cpuP95": 1.3000001907348633,
+        "frameP95": 17,
+        "baselineCalls": 199,
+        "changedPixelsPct": 0.011067708333333332,
+        "changedOver4Pct": 0.0028211805555555555,
+        "meanChannelError": 0.0004814091435185185
+      },
+      {
+        "view": "Waterfront",
+        "calls": 92,
+        "triangles": 183436,
+        "geometries": 89,
+        "cpuP50": 0.7000000476837158,
+        "cpuP95": 1.6999998092651367,
+        "frameP95": 16.700000000000728,
+        "baselineCalls": 156,
+        "changedPixelsPct": 0.03135850694444445,
+        "changedOver4Pct": 0.027126736111111112,
+        "meanChannelError": 0.0038071469907407407
+      },
+      {
+        "view": "Oakland port",
+        "calls": 91,
+        "triangles": 238650,
+        "geometries": 90,
+        "cpuP50": 1.0999999046325684,
+        "cpuP95": 2.1000001430511475,
+        "frameP95": 9.199999999999818,
+        "baselineCalls": 149,
+        "changedPixelsPct": 0.019097222222222224,
+        "changedOver4Pct": 0.006510416666666667,
+        "meanChannelError": 0.0013172743055555555
+      },
+      {
+        "view": "SFO",
+        "calls": 37,
+        "triangles": 188798,
+        "geometries": 92,
+        "cpuP50": 0.6000001430511475,
+        "cpuP95": 1.0999999046325684,
+        "frameP95": 9.199999999998909,
+        "baselineCalls": 44,
+        "changedPixelsPct": 0.0028211805555555555,
+        "changedOver4Pct": 0.0028211805555555555,
+        "meanChannelError": 0.00043583622685185186
+      },
+      {
+        "view": "Stanford",
+        "calls": 60,
+        "triangles": 144902,
+        "geometries": 100,
+        "cpuP50": 0.5999999046325684,
+        "cpuP95": 1,
+        "frameP95": 9,
+        "baselineCalls": 61,
+        "changedPixelsPct": 0.002387152777777778,
+        "changedOver4Pct": 0.002387152777777778,
+        "meanChannelError": 0.0005262586805555555
+      }
+    ]
+  }
+}

@@ -2,6 +2,8 @@
 
 Read docs/FLEET_RESEARCH.md, README.md, docs/CONTRACTS.md, docs/DESIGN.md and docs/ASSETS.md before implementation. User intent: optimize for simple fun; other models will produce alternate UI/assets. Shared gameplay and wire contracts belong to the lead integrator. Keep the default game playable while adding layers.
 
+Performance is the current priority. Feature releases are held pending the integrated driving-continuity and performance gates in docs/PERFORMANCE_RELEASE_GATES.md. Higher FPS alone does not satisfy the motion gate. Do not claim room capacity from connected sockets or ship an optimization whose end-to-end regression is unexplained.
+
 Stack: pnpm, TypeScript, Tailwind, Three.js, Cloudflare Workers + Durable Objects + WebSockets. Pure shared simulation; authoritative multiplayer; automatically join the public Bay room or the room in an invite link. Do not add backward-compatibility layers to this baseline. Preserve unrelated changes. No speculative engine abstractions. The shared Mars fund persists per room; individual game progress remains session-only. Optional saved chat identities are stored separately. The browser may store the last-played release and timestamp, plus local control and audio preferences; these are not game progression.
 
 Desktop AND touch are required. Room capacity default64 is provisional, not Cloudflare's connection maximum. Do not claim scaling beyond measured evidence. Real Supercharger site identities need primary-source provenance; compressed game placement and fictional air service must remain explicit.
