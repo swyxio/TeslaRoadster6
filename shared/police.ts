@@ -2,6 +2,7 @@ import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
 import { OVERPASS, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
+import { islandProtected } from './ferry';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -60,8 +61,8 @@ export function updatePolice(world:World,dt:number):void {
   for (const player of world.players) {
     const e=world.entities.find(e=>e.id===player.entityId), flight=player.delivery.flight;
     // The fictional arena is a no-police playground, including its ceiling.
-    const height=e&&!e.inDome?flightHeight(e):0;
-    if(e?.inDome){flight.seconds=0;flight.peakHeight=0;}
+    const height=e&&!e.inDome&&!islandProtected(e)?flightHeight(e):0;
+    if(e&&(e.inDome||islandProtected(e))){flight.seconds=0;flight.peakHeight=0;}
     if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
     else if(world.time-flight.lastAirborneAt>3&&!world.entities.some(c=>c.police?.targetId===player.id)){flight.seconds=0;flight.peakHeight=0;}
   }
@@ -69,9 +70,9 @@ export function updatePolice(world:World,dt:number):void {
     const state=cop.police;if(!state)continue;
     let player=world.players.find(p=>p.id===state.targetId);
     let target=world.entities.find(e=>e.id===player?.entityId);
-    if(state.targetId&&(!player||!target||target.inDome||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
+    if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&!e.inDome&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
+      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&!e.inDome&&!islandProtected(e)&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
       if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target){

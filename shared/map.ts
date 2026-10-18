@@ -1,12 +1,15 @@
 /** Compressed Bay geography. X east, Z south, meters in game space. */
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
+import { SHORT_TRACK } from './race-courses';
+import { bankSurface } from './island-stunts';
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
+import { CHARGER_LOT, STATIONS } from './stations';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
-export const MAP_BOUNDS={minX:-1800,maxX:2400,minZ:-1050,maxZ:9400} as const;
+export const MAP_BOUNDS={minX:-1800,maxX:2400,minZ:-2400,maxZ:9400} as const;
 // A vertical, driveable ribbon along Oakland's eastbound 180 street. The same
 // circle defines its collision surface and its rendered geometry.
 export const STUNT_LOOP={x:450,z:180,radius:12,width:12} as const;
@@ -15,12 +18,26 @@ export function rampHeight(x:number,z:number):number|null {
   if(x<STUNT_RAMP.start||x>STUNT_RAMP.end||Math.abs(z-STUNT_RAMP.z)>STUNT_RAMP.width/2)return null;
   return STUNT_RAMP.height*(x-STUNT_RAMP.start)/(STUNT_RAMP.end-STUNT_RAMP.start);
 }
+/** Fictional playground: the southward projection is the island ferry apron. */
+export const ROCKET_ISLAND:Region={id:'rocket-island',name:'Rocket Island',color:0xb8c7a3,points:polygon([
+  [-500,-1800],[-450,-2050],[-300,-2180],[600,-2180],[850,-2050],[900,-1700],
+  [800,-1300],[600,-1140],[250,-1100],[20,-1100],[20,-1060],[-20,-1060],
+  [-20,-1100],[-150,-1100],[-400,-1250],
+])};
+const ISLAND_DOME_LINK:Region={id:'island-dome-link',name:'Rocket Dome approach',color:0xb8c7a3,points:polygon([[240,-1120],[380,-1120],[380,-935],[240,-935]])};
+const ALCATRAZ_DOME_LAND:Region={id:'alcatraz',name:'Alcatraz Rocket Dome',color:0x9fab8d,points:polygon([[190,-920],[215,-955],[385,-955],[410,-920],[410,-780],[385,-745],[215,-745],[190,-780]])};
+/** Pier tips and the center of a 38 m ferry deck alongside each tip. */
+export const FERRY_DOCKS={
+  sf:{x:0,z:-255,deckZ:-274},
+  island:{x:0,z:-1060,deckZ:-1041},
+} as const;
 export const REGIONS:Region[]=[
   {id:'sf',name:'San Francisco and the Peninsula',color:0xd4d1bb,points:polygon([[-390,-225],[-355,-290],[-285,-302],[-230,-290],[-160,-290],[-90,-276],[-25,-240],[25,-205],[65,-150],[86,-90],[92,-30],[86,45],[78,105],[52,170],[12,230],[-5,290],[10,600],[80,1200],[180,3000],[340,4800],[650,6500],[1150,8000],[1450,8800],[1600,8800],[1900,9200],[1050,9300],[650,9000],[350,8000],[-500,6800],[-800,5500],[-1200,4500],[-1500,3000],[-1550,2000],[-1500,1700],[-1300,1300],[-800,1000],[-600,700],[-400,300],[-390,245],[-410,120],[-408,-80]])},
   {id:'oakland',name:'Oakland and the East Bay',color:0xd3cfb8,points:polygon([[310,-270],[400,-300],[550,-280],[602,-205],[610,260],[950,1000],[1300,2000],[1800,3500],[1800,5000],[2200,6500],[2340,8000],[1890,9100],[1500,9200],[1300,8800],[1600,8000],[1550,6500],[1150,5000],[760,3400],[500,1600],[350,1000],[230,430],[285,260],[285,195],[290,110],[305,50],[295,-40],[280,-125],[287,-215]])},
   {id:'marin',name:'Marin Headlands',color:0x9ba883,points:polygon([[-410,-550],[-120,-550],[-116,-460],[-140,-413],[-185,-385],[-230,-374],[-275,-385],[-340,-382],[-400,-405],[-420,-470]])},
   {id:'yerba',name:'Yerba Buena Island',color:0xa9b49a,points:polygon([[169,27],[193,12],[222,22],[238,44],[235,70],[220,87],[187,91],[164,76],[158,49]])},
-  {id:'alcatraz',name:'Alcatraz Rocket Dome',color:0x9fab8d,points:polygon([[190,-920],[215,-955],[385,-955],[410,-920],[410,-780],[385,-745],[215,-745],[190,-780]])},
+  {id:'sf-ferry-apron',name:'San Francisco ferry apron',color:0xb9b7a4,points:polygon([[-20,-255],[20,-255],[20,-195],[-20,-195]])},
+  ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND,
 ];
 export type Bridge = { id:'golden-gate'|'bay-bridge'; name:string; axis:'x'|'z'; start:number; end:number; center:number; width:number };
 // Decks are at ground height, deliberate arcade simplification; water is below.
@@ -47,6 +64,9 @@ export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   return inside;
 }
 export function isLand(x:number,z:number):boolean{return REGIONS.some(r=>insidePolygon(x,z,r.points));}
+/** The island and dome approach share a server-side safety boundary at any altitude. */
+const ROCKET_ISLAND_ZONES = [ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND];
+export function isRocketIsland(x:number,z:number):boolean{return ROCKET_ISLAND_ZONES.some(region=>insidePolygon(x,z,region.points));}
 export function isBridge(x:number,z:number):boolean{return BRIDGES.some(b=>b.axis==='x'?x>=b.start&&x<=b.end&&Math.abs(z-b.center)<=b.width/2:z>=b.start&&z<=b.end&&Math.abs(x-b.center)<=b.width/2);}
 export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridge(x,z);}
 
@@ -64,7 +84,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-cliff'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -96,13 +116,15 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='ground')return terrainHeight(x,z);
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
- // The loop can have two heights at one x/z; its support uses loopAngle.
- if(id==='stunt-loop'||id==='dome')return null;
+ if(id==='island-bank')return bankSurface(x,z)?.height??null;
+ // Curved surfaces can have multiple heights at one point; ferry support moves.
+ if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
  const b=BUILDINGS[Number(id.slice(5))];
  return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
 }
 export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
  if(supportHeight(id,x,z)===null)return null;
+ if(id==='island-bank')return bankSurface(x,z)?.normal??null;
  let dx=0,dz=0;
  if(id==='ground')({dx,dz}=hillSurface(x,z));
  else if(id==='stunt-ramp')dx=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
@@ -125,7 +147,7 @@ export function domeSurface(arcLength:number):{y:number;z:number;tangentY:number
  return {y:r*(1+Math.cos(a)),z:DOME.z-w-r*Math.sin(a),tangentY:-Math.sin(a),tangentZ:-Math.cos(a),normalY:-Math.cos(a),normalZ:Math.sin(a)};
 }
 
-export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'};
+export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'|'island'};
 export const ROADS:RoadSegment[]=[];
 function streetGrid(xs:number[],zs:number[],xmin:number,xmax:number,zmin:number,zmax:number){
  for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
@@ -135,6 +157,26 @@ streetGrid([-360,-300,-240,-180,-120,-60,0,60],[-240,-180,-120,-60,0,60,120,180,
 streetGrid([330,390,450,510,570],[-240,-180,-120,-60,0,60,120,180,240],270,610,-285,300);
 // Shore roads and bridge approaches, connected to the two street grids.
 ROADS.push({x:-240,z:-330,w:18,d:180,axis:'z'},{x:195,z:60,w:270,d:24,axis:'x'});
+
+// A flat, wide free-roam loop and dock connection. The land is the physical
+// surface; these shared road rectangles are the same paint shown in the map.
+export const ISLAND_TRACK:MapPoint[]=Array.from({length:48},(_,i)=>{
+ const a=i/48*Math.PI*2;
+ return {x:200+510*Math.cos(a),z:-1650+350*Math.sin(a)};
+});
+for(let i=0;i<ISLAND_TRACK.length;i++){
+ const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z;
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:28,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'island'});
+}
+for(let i=0;i<SHORT_TRACK.length;i++){
+ const a=SHORT_TRACK[i],b=SHORT_TRACK[(i+1)%SHORT_TRACK.length],dx=b.x-a.x,dz=b.z-a.z;
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:28,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'island'});
+}
+ROADS.push(
+ {x:0,z:-1200,w:24,d:280,axis:'z',kind:'island'},
+ {x:300,z:-1090,w:24,d:320,axis:'z',kind:'island'},
+ {x:0,z:-225,w:24,d:60,axis:'z'},
+);
 
 /** Distances and shorelines are game-space approximations, not navigation. */
 export const HIGHWAYS:{id:string;name:string;points:MapPoint[]}[]=[
@@ -190,8 +232,11 @@ function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax
   const seed=Math.abs((x*71+z*31)%17), downtown=district==='sf'&&cx>-165&&cz<75&&cz>-190;
   const tall= downtown?28+seed*3 : district==='oakland'&&cx>375&&cx<525&&cz<65?20+seed*2:9+seed;
   const type:Building['style']=tall>38?'tower':tall>22?'midrise':'house';
-  BUILDINGS.push({x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type});
-  BUILDINGS.push({x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type});
+  const generated:Building[]=[
+   {x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type},
+   {x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type},
+  ];
+  for(const b of generated)if(!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
  }
 }
 blocks('sf',-360,60,-240,240);blocks('oakland',330,570,-240,240);

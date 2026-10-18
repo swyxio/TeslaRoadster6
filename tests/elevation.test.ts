@@ -6,9 +6,12 @@ import {contact,dimensions} from '../shared/physics';
 import {STATIONS} from '../shared/stations';
 import {SHOPS} from '../shared/upgrades';
 import {CUSTOMERS,RESTAURANTS} from '../shared/delivery';
+import {createFerry} from '../shared/ferry';
+import {createParking} from '../shared/parking';
+import {createRace} from '../shared/race';
 import {initialSoccer} from '../shared/soccer';
 
-const isolated=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()});
+const isolated=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer()});
 const drive=new Map([['p',{...NEUTRAL,throttle:1}]]);
 
 test('hill is supported land with shared triangular heights and normals',()=>{

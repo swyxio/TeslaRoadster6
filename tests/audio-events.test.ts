@@ -74,3 +74,10 @@ test('elevated roads and rooftops use authoritative support for landing sounds',
   car.y=25;car.vy=-4;car.supportId=null;observe();
   car.y=20;car.vy=0;car.supportId='roof:0';assert.deepEqual(names(observe()),['land']);
 });
+
+test('nearby ferry arrival or departure sounds once from authoritative state',()=>{
+  const {world,car,observe}=setup();car.x=world.ferry.x;car.z=world.ferry.z;observe();
+  world.ferry.phase='to-island';assert.deepEqual(names(observe()),['ferry']);
+  assert.deepEqual(names(observe()),[]);
+  car.x+=300;world.ferry.phase='island';assert.deepEqual(names(observe()),[]);
+});

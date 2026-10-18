@@ -48,10 +48,32 @@ function nozzle(root:T.Group,jets:T.Group,name:string,x:number,y:number,z:number
   jets.add(plume);
 }
 
+function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
+  const {length:l,width:w}=spec;
+  for(let i=0;i<4;i++)nozzle(hardware,jets,`rear_${i}`,(i-1.5)*w*.16,.33,l*.51,new T.Vector3(0,0,1));
+  for(const side of [-1,1]){
+    const label=side<0?'l':'r';
+    for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
+      nozzle(hardware,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
+    nozzle(hardware,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
+  }
+}
+
 /** Snapshot flags describe arcade effects, not the prototype's real control law. */
-export function setThrusterEffects(root:T.Object3D,mask:number,time:number){
-  const jets=root.getObjectByName('jets');if(!jets)return;
+export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
+  // The stock Roadster always has its hardware. Other cars show it only while
+  // the authoritative temporary upgrade is active (including between bursts).
+  const hardware=root.getObjectByName('rocket_hardware'),jets=root.getObjectByName('jets');
+  const spec=VEHICLES[root.name as VehicleId];
+  if(hardware instanceof T.Group&&jets instanceof T.Group&&spec){
+    hardware.visible=spec.airThrusters||capable||mask!==0;
+    // Most traffic never upgrades. Allocate its mounts and sprites only if it
+    // does, keeping the fleet's shared geometry and materials in use.
+    if(hardware.visible&&!hardware.children.length)addRocketNozzles(hardware,jets,spec);
+  }
+  if(!jets)return;
   jets.visible=mask!==0;
+  if(!mask)return;
   for(const child of jets.children){
     const name=child.name;
     const flag=name.startsWith('plume_rear')?THRUSTER_REAR:name.startsWith('plume_down_l')?THRUSTER_DOWN_LEFT:name.startsWith('plume_down_r')?THRUSTER_DOWN_RIGHT:name==='plume_side_l'?THRUSTER_SIDE_LEFT:THRUSTER_SIDE_RIGHT;
@@ -65,14 +87,8 @@ export function addRocketKit(root:T.Group,kind:VehicleId){
   if(root.getObjectByName('rocket-kit'))return;
   const spec=VEHICLES[kind],w=spec.width,l=spec.length;
   const kit=new T.Group();kit.name='rocket-kit';root.add(kit);
-  const jets=root.getObjectByName('jets') as T.Group;
   for(const side of [-1,1]){
-    const label=side<0?'l':'r';
     box(kit,side*w*.39,.34,l*.47,.32,.3,.35,0x9b7be8);
-    nozzle(kit,jets,`rear_${label}`,side*w*.39,.34,l*.52,new T.Vector3(0,0,1));
-    for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
-      nozzle(kit,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
-    nozzle(kit,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
   }
 }
 
@@ -250,6 +266,7 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   }
   wheels(root, spec); sensors(root, spec);
   const jets = new T.Group(); jets.name = 'jets'; jets.visible = false;
+  const hardware = new T.Group(); hardware.name = 'rocket_hardware'; hardware.visible = spec.airThrusters;
   if (spec.airThrusters) {
     // The four rear, four corner and two front lateral nozzles follow the
     // reported arrangement. Shapes and activation are artistic estimates.
@@ -258,14 +275,10 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
       for(const angle of [0,Math.PI/2]){const blade=box(root,0,.075,z,.6,.025,.045,0x82969a);blade.rotation.y=angle;}
     }
     box(root,0,.32,l*.498,w*.76,.24,.035,0x10191e);
-    for(let i=0;i<4;i++)nozzle(root,jets,`rear_${i}`,(i-1.5)*w*.16,.33,l*.51,new T.Vector3(0,0,1));
-    for(const side of [-1,1]){
-      const label=side<0?'l':'r';
-      for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
-        nozzle(root,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
-      nozzle(root,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
-    }
   }
+  // Other fleet models instantiate the dimensioned mounts only when upgraded.
+  if(spec.airThrusters)addRocketNozzles(hardware,jets,spec);
+  root.add(hardware);
   root.add(jets);
   const seat = new T.Object3D(); seat.name = 'seat_driver'; seat.position.set(-w * .2, belt + .2, 0); root.add(seat);
   return root;

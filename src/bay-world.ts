@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, ISLAND_TRACK, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 
@@ -101,6 +101,18 @@ export function buildBay(scene:T.Scene) {
     joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(16,1,16).setPosition(p.x,.13,p.z)));
     mesh.computeBoundingSphere();scene.add(mesh);
   }
+  // Round joins and center dashes follow the shared flat island track.
+  const islandJoinGeometry=new T.CircleGeometry(14,24);islandJoinGeometry.rotateX(-Math.PI/2);
+  const islandJoins=new T.InstancedMesh(islandJoinGeometry,material(0x505e60),ISLAND_TRACK.length),islandMatrix=new T.Matrix4();
+  ISLAND_TRACK.forEach((p,i)=>islandJoins.setMatrixAt(i,islandMatrix.makeTranslation(p.x,.13,p.z)));
+  islandJoins.computeBoundingSphere();scene.add(islandJoins);
+  const islandDashes:BoxItem[]=[];
+  for(const r of ROADS.filter(r=>r.kind==='island')){
+    const angle=r.angle??0,s=Math.sin(angle),c=Math.cos(angle);
+    for(let along=-r.d/2+5;along<r.d/2-3;along+=16)
+      islandDashes.push({x:r.x+s*along,y:.15,z:r.z+c*along,w:.18,h:.02,d:7,angle});
+  }
+  batches(0xe9d6a1,islandDashes);
   const r=STUNT_RAMP,near=r.z-r.width/2,far=r.z+r.width/2;
   const rampGeometry=new T.BufferGeometry();rampGeometry.setAttribute('position',new T.Float32BufferAttribute([
     r.start,0,near,r.start,0,far,r.end,0,near,r.end,0,far,r.end,r.height,near,r.end,r.height,far
@@ -281,8 +293,11 @@ export function buildBay(scene:T.Scene) {
   const spire=new T.Mesh(new T.ConeGeometry(8,10,4),material(0x6f927d));spire.position.set(420,53,-90);spire.rotation.y=Math.PI/4;scene.add(spire);
   // Distant headlands and East Bay hills are scenery beyond playable bounds.
   for(let i=0;i<9;i++){
-    const hill=new T.Mesh(new T.ConeGeometry(95+i%3*25,80+i%4*14,7),material(i%2?0x81977d:0x93a689));
-    hill.position.set(-490+i*95,-10,-650-i%3*32);scene.add(hill);
+    const x=-490+i*95,radius=95+i%3*25;
+    // The former backdrop now crosses the ferry's open-water corridor.
+    if(Math.abs(x)<radius+35)continue;
+    const hill=new T.Mesh(new T.ConeGeometry(radius,80+i%4*14,7),material(i%2?0x81977d:0x93a689));
+    hill.position.set(x,-10,-650-i%3*32);scene.add(hill);
   }
   for(let i=0;i<7;i++){
     const x=750+i%2*40,z=-260+i*100;
@@ -357,9 +372,6 @@ export function buildBay(scene:T.Scene) {
     if(!isLand(x,z)&&!isBridge(x,z))wavelets.push({x,y:-3.97,z,w:6+i%5*2,h:.02,d:.12});
   }
   batches(0x82b5b9,wavelets);
-  // A ferry and a few wakes provide scale and movement cues without collision obstacles.
-  box(128,-.7,-95,28,2,8,0xd7e4df);box(128,1,-95,12,2,6,0xe7ece1);box(128,2.2,-95,6,.7,5,0x4e777b);
-  const wakes:BoxItem[]=[];for(let i=0;i<7;i++)wakes.push({x:146+i*4,y:-3.96,z:-95,w:2,h:.02,d:8+i*1.7});batches(0x86b7b7,wakes);
   // A fictional billionaire-sized yacht, safely offshore and decorative.
   const yacht=MYSTERY_YACHT;
   box(yacht.x,-2.3,yacht.z,42,3.4,12,0xe8e8de);

@@ -1,8 +1,11 @@
 /** Original, fictional roadside advertising for the compressed Bay. */
-import { BUILDINGS, HIGHWAYS, ROADS, terrainHeight, type MapPoint } from './map';
+import { BUILDINGS, FERRY_DOCKS, HIGHWAYS, REGIONS, ROADS, terrainHeight, type MapPoint } from './map';
 import { STATIONS } from './stations';
 import { SHOPS } from './upgrades';
 import { CUSTOMERS, RESTAURANTS } from './delivery';
+import { PARKING_LOTS } from './parking-lots';
+import { FERRY_DECK } from './ferry';
+import { contact } from './physics';
 
 export const BILLBOARD_WIDTH=16;
 export const BILLBOARD_HEIGHT=6;
@@ -23,6 +26,16 @@ export const BILLBOARD_DESIGNS = [
 
 export type Billboard = {x:number;z:number;yaw:number;design:number;route:string};
 const fractions=[.002,.035,.10,.17,.24,.31,.38,.45,.52,.59,.66,.73,.80,.87,.94];
+const sfApron=REGIONS.find(region=>region.id==='sf-ferry-apron')!;
+const apronX=sfApron.points.map(point=>point.x),apronZ=sfApron.points.map(point=>point.z);
+const apronMinX=Math.min(...apronX),apronMaxX=Math.max(...apronX),apronMinZ=Math.min(...apronZ),apronMaxZ=Math.max(...apronZ);
+// Protect the activity rectangles and the whole dock, including the docked
+// ferry. Two meters of margin keeps a sign frame off their edges.
+const protectedAreas=[
+  ...PARKING_LOTS.flatMap(lot=>[lot.area,lot.approach]),
+  {x:(apronMinX+apronMaxX)/2,z:(apronMinZ+apronMaxZ)/2,yaw:0,width:apronMaxX-apronMinX,length:apronMaxZ-apronMinZ},
+  {x:FERRY_DOCKS.sf.x,z:FERRY_DOCKS.sf.deckZ,yaw:0,width:FERRY_DECK.width,length:FERRY_DECK.length},
+];
 
 function pointAlong(points:MapPoint[],fraction:number):{x:number;z:number;yaw:number} {
   const lengths=points.slice(1).map((point,i)=>Math.hypot(point.x-points[i].x,point.z-points[i].z));
@@ -58,6 +71,8 @@ function clearPoint(x:number,z:number):boolean {
 // so neither the face nor its supports encroach on roads and active markers.
 function clearBillboard(x:number,z:number,yaw:number):boolean {
   const c=Math.cos(yaw),s=Math.sin(yaw);
+  const frame={x,z,yaw,w:BILLBOARD_WIDTH+.35,d:.35};
+  if(protectedAreas.some(area=>contact(frame,{x:area.x,z:area.z,yaw:area.yaw,w:area.width+4,d:area.length+4})))return false;
   return [-8,-4,0,4,8].every(offset=>clearPoint(x+c*offset,z-s*offset));
 }
 
