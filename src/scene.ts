@@ -15,6 +15,7 @@ import { cockpitPose } from './camera';
 import { SHOPS } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
+import { createSkyCurrents } from './sky-currents';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -36,6 +37,7 @@ export class GameScene {
   private objective=new T.Group();
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
+  private skyCurrents=createSkyCurrents();
   private ballPosition=new T.Vector3();
   private ballReady=false;
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
@@ -85,6 +87,7 @@ export class GameScene {
     buildBay(scene);
     for(const gate of Object.values(this.progressionGates))scene.add(gate);
     scene.add(this.dome.group);
+    scene.add(this.skyCurrents.group);
     const signal=BAY_BRIDGE_SIGNAL;
     // The meter is visual only: the same shared fixture controls NPCs and AVs.
     box(scene,signal.stopX,.06,signal.centerZ+signal.halfWidth/2,.35,.1,signal.halfWidth,0xf7f1db);
@@ -141,6 +144,8 @@ export class GameScene {
     const player=world.players.find(p=>p.id===playerId);
     for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
+    this.skyCurrents.group.visible=!controlled?.inDome;
+    this.skyCurrents.update(world.time);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));

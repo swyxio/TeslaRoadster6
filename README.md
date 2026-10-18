@@ -18,6 +18,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
+**Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
+
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
 **Proposal:** The [larger Rocket Island and parking playgrounds](docs/ROCKET_ISLAND_PLAN.md) are planned; the Rocket Dome is playable now.
@@ -45,6 +47,14 @@ pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
 ```
 
 The network checks need the local Worker running. See [deployment](docs/DEPLOYMENT.md) for a separate Cloudflare deployment and the native build/preview workflow; deploying is not needed to contribute.
+
+### Controls and gamepads
+
+Open **Controls & gamepad** from the start screen or the Actions menu to customize up to two keyboard keys per action, or restore defaults. Bindings stay in this browser; touch controls are unchanged. Space brakes and drifts on the road and flips in the air by default. Browser shortcuts remain available.
+
+Standard-mapped Xbox/PlayStation-style controllers use the left stick to steer, right trigger to accelerate and left trigger to brake and then reverse (or fly backward). A/Cross jumps, X/Square flips, B/Circle boosts, Y/Triangle hovers, and the bumpers or right stick roll. D-pad up enters/exits, down changes camera, left unsticks and right toggles autopilot. Menu/Options opens the menu; use keyboard, mouse or touch in menus. A controller must return to neutral after connecting, focus loss or a menu before driving resumes. Non-standard controllers are reported as unsupported.
+
+The trigger layout follows familiar racing conventions ([Forza Motorsport accessibility notes](https://forums.forza.net/t/meet-the-most-accessible-forza-motorsport-ever/597587/38)); browser controller detection uses the [Gamepad API](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API).
 
 ## Play
 
@@ -74,6 +84,7 @@ shared/game.ts      Pure authoritative simulation and world schema
 shared/map.ts       Shared land, bridges, road and collision geometry
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/upgrades.ts  Fictional shop locations, prices and eligibility
+shared/sky-currents.ts  Shared sky-lane and thermal volumes
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous routes and traffic demand
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
@@ -86,10 +97,11 @@ worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 worker/global-chat.ts  Global chat and optional saved identities
 src/session.ts     Solo/multiplayer transport adapter
-src/controls.ts    Keyboard and multitouch intent adapter
+src/controls.ts    Keyboard, gamepad and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
 src/scene.ts       Three.js world and camera
+src/sky-currents.ts  Animated sky-lane and thermal markers
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap

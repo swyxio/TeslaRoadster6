@@ -29,9 +29,10 @@ function requirementMaterial(level:GateLevel):T.SpriteMaterial {
   ctx.fillStyle='rgba(25,38,43,.94)';ctx.beginPath();ctx.roundRect(8,8,1008,240,24);ctx.fill();
   ctx.strokeStyle='#ffc777';ctx.lineWidth=7;ctx.stroke();
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle='#ffcc83';ctx.font='bold 56px system-ui';ctx.fillText(`LEVEL ${level}  ·  ${goal.name.toUpperCase()}`,512,82,950);
-  ctx.fillStyle='#fff7e7';ctx.font='bold 43px system-ui';
-  ctx.fillText(`${goal.deliveries} DELIVERIES  +  $${goal.earned} TOTAL EARNED`,512,173,950);
+  ctx.fillStyle='#ffcc83';ctx.font='bold 52px system-ui';ctx.fillText(`LEVEL ${level}  ·  ${goal.name.toUpperCase()}`,512,64,950);
+  ctx.fillStyle='#fff7e7';ctx.font='bold 40px system-ui';
+  ctx.fillText(`${goal.deliveries} DELIVERIES  +  $${goal.earned} TOTAL EARNED`,512,137,950);
+  ctx.fillStyle='#ffcc83';ctx.font='bold 33px system-ui';ctx.fillText('LOCKED ON THE ROAD AND IN THE AIR',512,205,950);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   return new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false});
 }
@@ -42,6 +43,13 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
   const fieldGeometry=new T.PlaneGeometry(1,1),railGeometry=new T.BoxGeometry(1,1,1);
   const fieldMaterial=new T.MeshBasicMaterial({color:0xffc56f,transparent:true,opacity:.14,depthWrite:false,side:T.DoubleSide});
   const railMaterial=new T.MeshBasicMaterial({color:0xffc56f,transparent:true,opacity:.8,depthWrite:false});
+  // Thin dashed guides mark the same full-height boundary used by flyers,
+  // without placing an opaque wall over the road or scenery.
+  const airGuidePoints:number[]=[];
+  for(const x of [-.5,.5])for(let y=12;y<100;y+=12)airGuidePoints.push(x,y,0,x,Math.min(y+7,100),0);
+  const airGuideGeometry=new T.BufferGeometry();
+  airGuideGeometry.setAttribute('position',new T.Float32BufferAttribute(airGuidePoints,3));
+  const airGuideMaterial=new T.LineBasicMaterial({color:0xffc56f,transparent:true,opacity:.65,depthWrite:false});
   const requirements:Record<GateLevel,T.SpriteMaterial>={1:requirementMaterial(1),2:requirementMaterial(2),3:requirementMaterial(3)};
 
   function add(level:GateLevel, placement:Placement) {
@@ -54,6 +62,8 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
     }
     const top=new T.Mesh(railGeometry,railMaterial);top.position.y=10;top.scale.set(placement.width,.3,.3);group.add(top);
     const label=new T.Sprite(requirements[level]);label.position.y=12.7;label.scale.set(30,7.5,1);group.add(label);
+    const airGuide=new T.LineSegments(airGuideGeometry,airGuideMaterial);airGuide.scale.x=placement.width;group.add(airGuide);
+    const airLabel=new T.Sprite(requirements[level]);airLabel.position.y=62;airLabel.scale.set(24,6,1);group.add(airLabel);
     groups[level].add(group);
   }
 
