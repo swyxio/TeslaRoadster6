@@ -180,6 +180,7 @@ test('police follow a turn instead of circling back to an intersection',()=>{
 
 test('rooftop customers use flat physical roofs and require an actual landing',()=>{
   const {world,player,car}=setup();
+  player.delivery.cash=10_000;player.delivery.level=1;car.tankLevel=3;
   for(const target of CUSTOMERS.filter(c=>c.rooftop)){
     assert.ok(BUILDINGS.some(b=>b.x===target.x&&b.z===target.z&&b.h===target.y&&b.style==='midrise'),target.name);
   }
@@ -198,7 +199,7 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
 
 test('eligible Roadster orders can be rooftop after Oakland unlock; ordinary cars receive ground orders',()=>{
   for(const kind of ['roadster','model-3'] as const){
-    const {world,player,car}=setup();car.kind=kind;player.delivery.cash=10_000;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
+    const {world,player,car}=setup();car.kind=kind;car.tankLevel=3;player.delivery.cash=10_000;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
     const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
     Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world,NEUTRAL,20);
     assert.equal(player.delivery.order.search,undefined);

@@ -8,7 +8,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
-**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Current cash determines your level and which regions are open; purchases and tickets can lower it again. The HUD shows the next milestone. Flying near police can lead to a citation; some rocket-equipped orders lead to rooftops. See [delivery design](docs/DELIVERY.md).
+**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Current cash determines your level and which regions are open; purchases and tickets can lower it again. The HUD shows the next milestone. Flying near police can lead to a citation; some orders lead to rooftops when your vehicle has rockets and a Level 3 air tank. See [delivery design](docs/DELIVERY.md).
 
 **Research tour:** Find the blue rings at UCSF Parnassus in SF, the Berkeley Campanile, Stanford’s Hoover Tower and SFO’s control tower; the map labels each landmark. Stop in each ring for a one-time award: UCSF pays $250; Berkeley pays $400 and gives 20% off efficient nozzles; Stanford pays $600 and gives 20% off sport motors; SFO pays $600 and gives 20% off air tanks. Complete a delivery to SFO for an additional $1,000 achievement. Open **Actions → Awards** to see each goal.
 

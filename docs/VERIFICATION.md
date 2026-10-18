@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Service areas with flight and rooftop eligibility · integration candidate · 2026-10-18 Pacific
+
+- On `6423e82`, after integrating flight candidate `94024ac` and main `ea960db`, all 964 tests and the build passed. The existing Vite large-chunk warning remains. The later rooftop guard required additional checks below; this is not final release evidence.
+- The combined scheduler now captures rocket and tank eligibility at the stop or citation, resumes that decision in bounded assignment checkpoints, and treats older evidence without eligibility as ineligible for roofs. Typechecking, 13 focused scheduler and rooftop tests, and local Wrangler delivery-journal, restore/switch repair, cybercab reroute, checkpoint, recovery and real-room crash integrations passed. A lost reply and a killed room were exercised; these are functional checks, not load measurements.
+- In a controlled full-tank simulation without a sky current, both a Level 3 Roadster and rocket-retrofitted Semi took off from beside each of the three actual delivery buildings and landed within the delivery marker. The Semi retained 5.5% air at the 23 m and 25 m roofs. This tests one controlled path per case, not every approach, remaining-air level or vehicle.
+- In local Chrome on the pre-guard combined candidate, keyboard driving reduced the pickup distance from 228 m to 187 m; the SF pylon was visible and an Oakland map destination reported that it was locked. Emulated touch held and released Drive while moving in both orientations. Because of this Chrome session's scaling, the measured page viewports were approximately 433 × 938 portrait and 938 × 433 landscape. No physical device or live deployment was tested in this pass.
+
 ## Service areas, stations and current main · preliminary integration · 2026-10-18 Pacific
 
 - On `fd8b787`, typechecking passed and 56 focused station, artwork, navigation, town-route, delivery-stop and progression tests passed together. These are preliminary checks before integrating the pending flight changes; they do not replace the final room, visual or performance checks.

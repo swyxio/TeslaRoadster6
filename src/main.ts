@@ -44,7 +44,7 @@ import { playerRace } from '../shared/race';
 import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { OTA_FEE } from '../shared/ota';
 import { marketPaintColor } from '../shared/market-catalog';
-import { LEVELS, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
+import { canAssignDeliveryRoof, LEVELS, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
 import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUntilCheckpoint } from '../shared/delivery-checkpoint';
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
@@ -536,7 +536,7 @@ function driveToDelivery(){
   if(!player||!car||car.kind==='person'){notice('Get into a car to self-drive to your delivery.');return;}
   if(car.supportId!=='ground'||car.inDome){notice('Land on the ground outside the Dome first.');return;}
   if(player.delivery.order.search){notice('Finding a safe delivery route.');return;}
-  if(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level)){notice('Return to an open road to retry your delivery.');return;}
+  if(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,canAssignDeliveryRoof(car))){notice('Return to an open road to retry your delivery.');return;}
   const target=orderTarget(player.delivery.order);
   if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
@@ -643,7 +643,7 @@ function minimap(entity:Entity|undefined,level:Level){
   SHOPS.filter(s=>visible(s.x,s.z)).forEach(s=>{map.save();map.translate(px(s.x),pz(s.z));map.rotate(Math.PI/4);map.fillStyle='#cf99ff';map.fillRect(-3,-3,6,6);map.restore();});
   session.world.pickups.filter(p=>p.kind==='rocket'&&p.active&&visible(p.x,p.z)).forEach(p=>{map.beginPath();map.arc(px(p.x),pz(p.z),2,0,Math.PI*2);map.fillStyle='#f1caff';map.fill();});
   session.world.entities.filter(e=>e.npc&&!e.driver&&visible(e.x,e.z)).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
-  const player=session.world.players.find(p=>p.id===session.id);if(player&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level))){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
+  const player=session.world.players.find(p=>p.id===session.id);if(player&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!entity||entity.kind==='person'||canAssignDeliveryRoof(entity)))){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
   if(entity?.navigation){const target=entity.navigation.destination;map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ff7771';map.lineWidth=2;map.stroke();}
   session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id||!visible(e.x,e.z))return;map.beginPath();map.arc(px(e.x),pz(e.z),3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
   if(entity){
@@ -1230,7 +1230,7 @@ scene.start(dt=>{
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
-    const searching=!!order.search,unavailable=d.lastReroute?.reason==='unavailable'&&!isOrderAccessible(order,d.level);
+    const searching=!!order.search,unavailable=d.lastReroute?.reason==='unavailable'&&!isOrderAccessible(order,d.level,e.kind==='person'||canAssignDeliveryRoof(e));
     const routeButton=$<HTMLButtonElement>('route-goal'),routeAdvice=$('route-advice');
     const advice=searching?'Finding a safe delivery route.':unavailable?'Return to an open road to retry.':session.status!=='online'||session.walletBlocked?'Connect your driver to self-drive.':e.kind==='person'?'Get in a car to self-drive.':target.rooftop?'Rooftop delivery · fly manually.':e.supportId!=='ground'||e.inDome?'Land on the ground outside the Dome to self-drive.':requiredLevelAt(target.x,target.z)>d.level?'This delivery is in a locked area.':'';
     const routeLabel=`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;

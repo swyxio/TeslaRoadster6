@@ -1,5 +1,5 @@
-import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, isOrderAccessible, levelForCash, matchesDeliveryStop, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
-import { hasRockets, initialVehicleUpgrades } from '../shared/upgrades';
+import { applyDeliveryStop, canAssignDeliveryRoof, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, isOrderAccessible, levelForCash, matchesDeliveryStop, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
+import { initialVehicleUpgrades } from '../shared/upgrades';
 import { restoreOta } from '../shared/ota';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type EconomyUpdateResult, type Entity, type Pickup, type Player, type World } from '../shared/game';
@@ -90,7 +90,7 @@ export class EconomySession {
   private install(progress:DriverProgress){
     const d=this.player.delivery;
     Object.assign(d,{cash:progress.cash,lifetimeIncome:progress.eligibleIncome,earned:progress.earned,completed:progress.completed,level:progress.level,order:structuredClone(progress.order),tickets:progress.tickets});
-    if(!d.order.search&&!isOrderAccessible(d.order,d.level)&&d.lastReroute?.reason!=='unavailable')
+    if(!d.order.search&&!isOrderAccessible(d.order,d.level,true)&&d.lastReroute?.reason!=='unavailable')
       d.lastReroute={id:(d.lastReroute?.id??0)+1,reason:'unavailable'};
     d.ota=restoreOta(progress.ota,this.world.time);
     this.player.achievements.unlocked=[...progress.unlocked];
@@ -173,7 +173,8 @@ export class EconomySession {
     if(this.closed||this.failed)throw new Error('Wallet is unavailable');
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
     if(!car)throw new Error('Driver is unavailable');
-    if(!rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car)))return;
+    if(car.kind==='person'&&isOrderAccessible(this.draft.delivery.order,this.draft.delivery.level,true))return;
+    if(!rerouteInaccessibleOrder(this.draft.delivery,car,canAssignDeliveryRoof(car)))return;
     const item=this.enqueue({kind:'progress',progress:this.progress()});
     const outcome=await new Promise<DriverOutcome>(resolve=>{item.onApplied=resolve;});
     if(!outcome.ok)throw new Error('Unable to save rerouted order');
@@ -227,7 +228,7 @@ export class EconomySession {
     this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.lifetimeIncome=result.eligibleIncome;
     this.draft.delivery.level=levelForCash(result.cash);
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
-    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,canAssignDeliveryRoof(car));
     this.enqueue({kind:'cab-buy',assetId,...(rerouted?{order:structuredClone(this.draft.delivery.order)}:{})},undefined,
       outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason));
   }
@@ -238,7 +239,7 @@ export class EconomySession {
     const previousLevel=this.draft.delivery.level;
     this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.level=levelForCash(result.cash);
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
-    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,canAssignDeliveryRoof(car));
     this.enqueue({kind:'cab-paint',assetId,paint,...(rerouted?{order:structuredClone(this.draft.delivery.order)}:{})},undefined,
       outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason));
   }
@@ -335,14 +336,15 @@ export class EconomySession {
       payouts=apply();player.delivery.level=levelForCash(player.delivery.cash);
       if(player.delivery.level<previousLevel){
         const car=this.world.entities.find(e=>e.id===player.entityId);
-        if(car)rerouteInaccessibleOrder(player.delivery,ticket??car,ticket?.canFly??hasRockets(car));
+        if(car)rerouteInaccessibleOrder(player.delivery,ticket??car,ticket?ticket.roofEligible===true:canAssignDeliveryRoof(car));
       }else if(!ticket&&!this.pending&&!this.processing&&!this.uncertainDeliveries&&
-        player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level)&&
+        player.delivery.lastReroute?.reason==='unavailable'&&
         this.world.time>=this.nextDeliveryRetry){
         const car=this.world.entities.find(e=>e.id===player.entityId);
-        if(car?.supportId==='ground'&&!car.inDome&&requiredLevelAt(car.x,car.z)<=player.delivery.level){
+        if(car?.supportId==='ground'&&!car.inDome&&requiredLevelAt(car.x,car.z)<=player.delivery.level&&
+          !isOrderAccessible(player.delivery.order,player.delivery.level,car.kind==='person'||canAssignDeliveryRoof(car))){
           this.nextDeliveryRetry=this.world.time+5;
-          rerouteInaccessibleOrder(player.delivery,car,hasRockets(car));
+          rerouteInaccessibleOrder(player.delivery,car,canAssignDeliveryRoof(car));
         }
       }
     }finally{
@@ -585,7 +587,7 @@ export class EconomySession {
         if(action.kind==='cab-income')valid=!!item.cabEvents&&this.projectCab(action.intervals,item.cabEvents);
         else if(action.kind==='ticket'){
           const level=this.draft.delivery.level;applyTicketEvidence(this.draft.delivery,action.evidence);
-          if(this.draft.delivery.level<level)rerouteInaccessibleOrder(this.draft.delivery,action.evidence,action.evidence.canFly);
+          if(this.draft.delivery.level<level)rerouteInaccessibleOrder(this.draft.delivery,action.evidence,action.evidence.roofEligible===true);
         }else if(action.kind==='delivery')valid=this.projectDelivery(action);
         else if(action.kind==='achievement')this.projectAchievement(action.evidence);
         else this.projectSupply(action.type);
@@ -674,7 +676,7 @@ export class EconomySession {
               advanceClock(discarded.intent.clock);
               const evidence=discarded.intent.action.evidence,previousLevel=this.draft.delivery.level;
               applyTicketEvidence(this.draft.delivery,evidence);
-              if(this.draft.delivery.level<previousLevel)rerouteInaccessibleOrder(this.draft.delivery,evidence,evidence.canFly);
+              if(this.draft.delivery.level<previousLevel)rerouteInaccessibleOrder(this.draft.delivery,evidence,evidence.roofEligible===true);
               discarded.intent.revision=this.nextRevision++;discarded.intent.sequence=this.nextSequence++;
               discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
             }
@@ -801,7 +803,7 @@ export class EconomySession {
     this.draft.delivery.cash+=reward-entry.price;this.draft.delivery.lifetimeIncome+=reward;
     this.draft.delivery.level=levelForCash(this.draft.delivery.cash);this.draft.ownedLuxury.push(vehicle);
     for(const award of awards){const id=award.id as typeof this.draft.achievements.unlocked[number];this.draft.achievements.unlocked.push(id);this.draft.achievements.lastUnlock={id:(this.draft.achievements.lastUnlock?.id??0)+1,achievement:id};}
-    const rerouted=this.draft.delivery.level<previousLevel && rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    const rerouted=this.draft.delivery.level<previousLevel && rerouteInaccessibleOrder(this.draft.delivery,car,canAssignDeliveryRoof(car));
     this.enqueue({kind:'luxury',vehicle,...(rerouted?{order:structuredClone(this.draft.delivery.order)}:{})},undefined,outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason,outcome.ok?outcome.awards:undefined));
   }
   restoreCurrentVehicle(){
@@ -833,7 +835,7 @@ export class EconomySession {
     if(this.failed||this.marketPaused||!this.decisionsAvailable||this.queue.length>=32||!car||!Number.isSafeInteger(amount)||amount<=0||amount>MARS_GOAL||this.draft.delivery.cash<amount){reply(false);return;}
     const previousLevel=this.draft.delivery.level;
     this.draft.delivery.cash-=amount;this.draft.delivery.level=levelForCash(this.draft.delivery.cash);
-    const rerouted=this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    const rerouted=this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,canAssignDeliveryRoof(car));
     this.enqueue({kind:'contribute',amount,...(rerouted?{order:structuredClone(this.draft.delivery.order)}:{})},undefined,outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.available));
   }
   ota(enabled:boolean,requestId:number){
