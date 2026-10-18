@@ -10,6 +10,17 @@ import { travelDome, type World } from '../../shared/game';
 
 export { GlobalChat };
 export class GlobalEarningsEvent extends ProductionGlobalEvents {
+  private leaseTiming:'normal'|'ahead'|'expired'|'far-future'='normal';
+  private leaseCount=0;
+  fixtureLeaseTiming(timing:typeof this.leaseTiming){this.leaseTiming=timing;return this.leaseCount;}
+  fixtureLeaseCount(){return this.leaseCount;}
+  override lease(){
+    const lease=super.lease();this.leaseCount++;
+    // Reproduce a cross-object issue time ahead of the room callback without
+    // changing the authority's durable clock or event history.
+    const offset=this.leaseTiming==='ahead'?500:this.leaseTiming==='expired'?-20_000:this.leaseTiming==='far-future'?10_000:0;
+    return {...lease,issuedAtMs:lease.issuedAtMs+offset,validUntilMs:lease.validUntilMs+offset};
+  }
   // Deliberately bypasses scheduling lead-time only to make an active event
   // available immediately. Rate lookup and leases remain production code.
   fixtureSeed(){
@@ -34,16 +45,16 @@ export class DriverProfile extends ProductionDriverProfile {
   fixtureLoseDelivery(){this.loseDelivery=true;}
   override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents){
     const result=await super.commit(intent,cabEvents);
-    if(intent.action.kind==='progress'&&intent.action.earnings?.some(part=>part.kind==='delivery')){
-      await this.ctx.storage.put('fixture-delivery-intent',intent);
+    if(intent.action.kind==='delivery'&&result.ok&&result.delivery?.earnings.some(part=>part.kind==='delivery')){
+      await this.ctx.storage.put('fixture-delivery-intent',{intent,cabEvents});
       if(this.loseDelivery){this.loseDelivery=false;this.lost=true;throw new Error('Injected lost profile reply');}
     }
     return result;
   }
   async fixtureReplay(){
-    const intent=await this.ctx.storage.get<EconomyIntent>('fixture-delivery-intent');
-    if(!intent)throw new Error('No delivery intent');
-    return super.commit(intent);
+    const recorded=await this.ctx.storage.get<{intent:EconomyIntent;cabEvents?:import('../../shared/earnings-events').EarningsEvents}>('fixture-delivery-intent');
+    if(!recorded)throw new Error('No delivery intent');
+    return super.commit(recorded.intent,recorded.cabEvents);
   }
   async fixtureState(){
     return {driver:await this.ctx.storage.get('driver'),sources:Object.fromEntries(await this.ctx.storage.list({prefix:'earned-source:'})),
@@ -65,6 +76,14 @@ export class RoomEconomy extends ProductionRoomEconomy {
   fixtureWins(){return this.ctx.storage.sql.exec('SELECT event_id,requested_at,won_at,ends_at FROM room_earnings_wins').toArray();}
 }
 export class GameRoom extends ProductionGameRoom {
+  async fixtureRefresh(){
+    await Reflect.get(this,'refreshEarnings').call(this);
+    return {snapshot:Reflect.get(this,'earningsSnapshot'),now:Date.now()};
+  }
+  fixtureInvalidateRate(){
+    Reflect.set(this,'earningsGeneration',Reflect.get(this,'earningsGeneration')+1);
+    Reflect.set(this,'earningsSnapshot',null);
+  }
   fixturePlayer(id:string){
     const world=Reflect.get(this,'world') as World;
     const player=world.players.find(p=>p.id===id);
@@ -98,11 +117,15 @@ export default {
   async fetch(request:Request,env:Env,ctx:ExecutionContext){
     const url=new URL(request.url);
     if(!url.pathname.startsWith('/__earnings-test/'))return worker.fetch(request,env as never,ctx);
-    const data=await request.json() as {room?:string;player?:string;driver?:string};
+    const data=await request.json() as {room?:string;player?:string;driver?:string;timing:'normal'|'ahead'|'expired'|'far-future'};
     const room=env.ROOMS.get(env.ROOMS.idFromName(data.room??'earnings'));
     const income=env.INCOME.get(env.INCOME.idFromName('global'));
     try{
       switch(url.pathname.slice('/__earnings-test/'.length)){
+        case 'lease-timing':return Response.json(await env.GLOBAL_EVENTS.get(env.GLOBAL_EVENTS.idFromName('global')).fixtureLeaseTiming(data.timing));
+        case 'lease-count':return Response.json(await env.GLOBAL_EVENTS.get(env.GLOBAL_EVENTS.idFromName('global')).fixtureLeaseCount());
+        case 'refresh':return Response.json(await room.fixtureRefresh());
+        case 'invalidate-rate':await room.fixtureInvalidateRate();return Response.json({ok:true});
         case 'seed-event':await env.GLOBAL_EVENTS.get(env.GLOBAL_EVENTS.idFromName('global')).fixtureSeed();return Response.json({ok:true});
         case 'player':return Response.json(await room.fixturePlayer(data.player!));
         case 'place':return Response.json(await room.fixturePlace(data.player!));

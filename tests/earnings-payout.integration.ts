@@ -38,6 +38,25 @@ try{
   const courierId=courier.last('welcome')!.id as string,scorerId=scorer.last('welcome')!.id as string;
   const a=await rpc<{driver:string}>('player',{player:courierId}),b=await rpc<{driver:string}>('player',{player:scorerId});
   await until(async()=>{const room=await rpc<any>('room');return !!room.snapshot&&room.snapshot.events.room.length===0&&room.snapshot.events.global.length===0;},'base earnings rate');
+  // A future-issued lease is unavailable until its time arrives. Waiting is
+  // asynchronous: real room ticks and snapshots must continue in the meantime.
+  await rpc('lease-timing',{timing:'ahead'});
+  const tickBefore=courier.last('state')!.tick;
+  const delayed=await rpc<any>('refresh');
+  assert.ok(delayed.snapshot,'a slightly ahead lease becomes usable');
+  assert.ok(delayed.now>=delayed.snapshot.lease.issuedAtMs,'never publish before issue time');
+  assert.ok(courier.last('state')!.tick>=tickBefore+4,'room advances during lease wait');
+  const count=await rpc<number>('lease-timing',{timing:'ahead'});
+  const invalidated=rpc<any>('refresh');
+  await until(async()=>(await rpc<number>('lease-count'))>count,'future lease requested');
+  await rpc('invalidate-rate');
+  assert.equal((await invalidated).snapshot,null,'an invalidation during the wait cannot restore an obsolete rate');
+  await rpc('lease-timing',{timing:'expired'});
+  assert.equal((await rpc<any>('refresh')).snapshot,null,'expired lease still fails closed');
+  await rpc('lease-timing',{timing:'far-future'});
+  assert.equal((await rpc<any>('refresh')).snapshot,null,'do not wait beyond the observation freshness budget');
+  await rpc('lease-timing',{timing:'normal'});
+  assert.ok((await rpc<any>('refresh')).snapshot,'valid rates recover after failures');
   const before=await profile(a.driver);
   assert.equal((await rpc<{stage:string}>('place',{player:courierId})).stage,'pickup');
   await until(async()=>!!(await profile(a.driver)).sources['earned-source:delivery:1:pickup'],'base pickup receipt');
@@ -51,7 +70,13 @@ try{
   await until(async()=>{const room=await rpc<any>('room');return !room.hasPending&&room.snapshot?.events.room.length===1&&room.snapshot?.events.global.length===1;},'room and global bonus lease');
   await rpc('lose-delivery',{driver:a.driver});await rpc('hold',{driver:a.driver});
   assert.equal((await rpc<{stage:string}>('place',{player:courierId})).stage,'dropoff');
-  await until(async()=>{const state=await profile(a.driver);return !!state.sources['earned-source:delivery:1:dropoff']&&state.lost;},'delivery commits despite lost profile reply');
+  try{
+    await until(async()=>{const state=await profile(a.driver);return !!state.sources['earned-source:delivery:1:dropoff']&&state.lost;},'delivery commits despite lost profile reply');
+  }catch(error){
+    const world=courier.last('state')?.world,player=world?.players.find((p:any)=>p.id===courierId);
+    console.error('Delivery diagnostic',JSON.stringify({player,car:world?.entities.find((e:any)=>e.id===player?.entityId),room:await rpc('room'),profile:await profile(a.driver)}));
+    throw error;
+  }
   await until(async()=>(await income(a.driver)).held,'global credit committed and reply held');
   const delivery=await profile(a.driver),source=delivery.sources['earned-source:delivery:1:dropoff'];
   assert.equal(source.multiplier,3);assert.equal(source.amount,source.base*3);assert.ok(source.base>0);

@@ -159,6 +159,12 @@ export class GameRoom extends DurableObject<Env> {
         this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global')).lease().catch(error=>{source='global';throw error;}),
       ]);
       receivedLease=lease;
+      const receivedAt=Date.now();
+      // A remote DO can issue its lease ahead of this callback's cached clock.
+      // Yield to a timer rather than discarding it or paying before it begins.
+      // Never wait past our existing room-observation freshness budget.
+      if(lease.issuedAtMs>receivedAt&&lease.issuedAtMs<observedAt+ROOM_EARNINGS_STALE_MS)
+        await new Promise(resolve=>setTimeout(resolve,lease.issuedAtMs-receivedAt));
       if(generation!==this.earningsGeneration||roomId!==this.roomId||this.hasPendingWin)return;
       const room=roomUntil===null?[]:[{startsAtMs:roomUntil-ROOM_WIN_DURATION_MS,endsAtMs:roomUntil}];
       const now=Date.now();globalWindowsForInstant(lease,now);

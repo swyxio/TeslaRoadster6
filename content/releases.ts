@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Steadier earnings status',
+    intro: 'Small timing differences between game services no longer discard a valid earnings-bonus update.',
+    sections: [
+      { title: 'Keep driving', items: [
+        'Earnings updates can wait briefly for their confirmed start time while the room keeps running.',
+        'Expired or unavailable bonus data still waits for confirmation; rewards never assume a missing rate.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.23-alpha',
+    label: '0.0.23 Alpha',
+    date: '2026-10-18',
     title: 'Keep the victories coming',
     intro: 'Find more milestones as you keep exploring and playing.',
     sections: [

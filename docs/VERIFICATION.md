@@ -1,5 +1,13 @@
 # Verification · 2026-10-18 Pacific
 
+## Earnings lease timing · 0.0.24 candidate / protocol v43 · 2026-10-18 Pacific
+
+- Fresh disposable sockets reproduced intermittent unavailable earnings status on production and an isolated Cloudflare preview. They sent no identity, controls, purchases or delivery actions. In the 14-second diagnostic preview sample, the first status was valid and six subsequent refreshes were unavailable, while 127 snapshots advanced through tick 252. This does not establish that historical payout settlement was blocked.
+- Preview `26370c2` added a rate-limited server log. The captured validation failure had room observation `1792354342268`, post-RPC room time `1792354342319`, lease issue time `1792354342347`, and expiry `1792354357347`: the room rejected a lease issued 28 ms ahead of its clock. Both RPCs completed. [Cloudflare documents production timer values advancing on I/O](https://developers.cloudflare.com/workers/runtime-apis/performance/); the log proves the timestamp gap, not its platform-level cause.
+- The fix waits asynchronously only when the issue time fits within the existing five-second observation budget, then rechecks the pending-win/generation barriers and exact lease validity. It does not shift event times, extend stale leases, assume 1× pay, or change physics, snapshots or room capacity.
+- The isolated real-room earnings fixture passed a 500 ms ahead lease with continued snapshots, invalidation during that wait, expired and excessively future leases, and recovery to a valid rate. Its full base pickup, 3× delivery, lost-reply, exactly-once income and watchdog-restart flow passed. Two earlier attempts reached the existing delivery receipt but timed out waiting for an injected lost reply: the fixture watched the obsolete `progress.earnings` path. It now intercepts the actual `delivery` transaction and retains its resolved history for receipt replay.
+- Local build passed with the existing Vite chunk warning. Hosted before/after and production verification will be recorded with the release PR; no production delivery or persistent identity was used for diagnosis.
+
 ## Recent podcast radio and loaded-build label · 0.0.22 candidate / protocol v42 · 2026-10-18 Pacific
 
 - After merging deployed `82c37f1` (PR #75), the isolated candidate passed all 854 tests and `pnpm build`, with the existing large-chunk warning. The radio checks cover two-calendar-month boundaries, month-end/leap-year clamping, missing/future dates, cached shuffle expiry, delayed Play, an incorrect device clock, sleep with a paused monotonic clock and existing playback/race behavior. The fake media element queues pause events like a browser; the empty-catalog explanation survives that delayed event.
