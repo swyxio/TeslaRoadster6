@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Economy article Bay map · 2026-10-18 Pacific
+
+- The landmark map was regenerated from the shared Bay, Caltrain and campus data. Its SVG parsed successfully, and the article legend was updated alongside it.
+- Chrome displayed the article and map at desktop size and at an emulated 390 × 844 phone viewport. At phone width the map scrolls horizontally to keep labels legible; both edges and the 20-item landmark list were inspected. No physical phone was tested.
+
 ## Production driving release · 0.0.15 Alpha / protocol v32 · 2026-10-18 Pacific
 
 - PR #65 merged as `74c2255`; native Workers Build `daa8e1ff-a18a-410c-8377-dba70de4f09f` succeeded. Production advertised v32/capacity eight, served the 0.0.15 changelog, and its `index-DQSL1AOa.js` SHA-256 matched the final tested local build. All 609 tests and the build passed before merge; native CI ran them again.

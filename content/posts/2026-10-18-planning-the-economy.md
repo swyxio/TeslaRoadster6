@@ -109,8 +109,9 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 
 ## A Bay worth exploring
 
+<p class="map-scroll-hint">Swipe across the map to read all the labels.</p>
 <figure>
-<img src="/blog/economy/bay-landmarks.svg" alt="Map of Tesland from the North Bay to San José, showing bridges, research sites, Redwood City station, East Bay and South Bay landmarks, and decorative Caltrain tracks." loading="lazy">
+<div class="map-scroll" role="region" aria-label="Bay map; scroll horizontally on a narrow screen" tabindex="0"><img src="/blog/economy/bay-landmarks.svg" alt="Map of Tesland from the North Bay to San José, showing bridges, research sites, Redwood City station, East Bay and South Bay landmarks, and decorative Caltrain tracks." loading="lazy"></div>
 <figcaption>The Bay opens from San Francisco toward the East Bay and down the Peninsula. This map follows the game's compressed coastlines, roads and landmark positions; the dashed Caltrain tracks are scenery. Road traces © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.</figcaption>
 </figure>
 
@@ -121,10 +122,9 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 <figcaption>A postcard from the Bay: bridges, towers, the Rocket Dome and a Fremont launch. Concept art.</figcaption>
 </figure>
 
-
 The next delivery can take you somewhere new, and the place should give you a reason to come back. Down the Peninsula, Redwood City has a clock-tower station, redwoods and a little downtown; farther south are NASA Ames, Levi’s Stadium and Apple Park’s ring. Across the Bay, you can find Chabot in the Oakland hills and the Oakland Zoo. These are small, stylized versions of familiar places in the world you can drive today.
 
-The blue research ringspay for a visit: UCSF's Homes Lab gives $1,000 and a badge; Berkeley's Energy Lab gives $1,500 and a discount on efficient nozzles; Stanford's Speed Lab gives $2,000 and a motor discount; SFO's Flight Lab gives $2,000 and an air-tank discount. Your first delivery to SFO earns an extra $2,500. The candidate saves these rewards and discounts with your driver.
+The blue research rings pay for a visit: UCSF's Homes Lab gives $1,000 and a badge; Berkeley's Energy Lab gives $1,500 and a discount on efficient nozzles; Stanford's Speed Lab gives $2,000 and a motor discount; SFO's Flight Lab gives $2,000 and an air-tank discount. Your first delivery to SFO earns an extra $2,500. The candidate saves these rewards and discounts with your driver.
 
 <div class="research-gallery">
 <figure><img src="/blog/economy/research-ucsf.webp" alt="Researchers study a model home at a UCSF hillside campus." loading="lazy"><figcaption><strong>UCSF · Homes</strong><br>Design a place of your own, then build it up.</figcaption></figure>
