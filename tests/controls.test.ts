@@ -40,8 +40,8 @@ test('Space brakes on the road and flips in the air, E jumps, and touch brake co
   assert.equal(controls.read().flip,0,'road braking does not queue a flip');
   controls.airborne=true;fakeWindow.dispatchEvent(key('keydown','Space'));fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().flip,1);
   fakeWindow.dispatchEvent(key('keydown','KeyX'));fakeWindow.dispatchEvent(key('keyup','KeyX'));assert.equal(controls.read().flip,2);
-  fakeWindow.dispatchEvent(key('keydown','KeyH'));fakeWindow.dispatchEvent(key('keydown','KeyW'));assert.equal(controls.read().hover,true);assert.equal(controls.read().throttle,1);
-  fakeWindow.dispatchEvent(key('keyup','KeyH'));fakeWindow.dispatchEvent(key('keyup','KeyW'));assert.equal(controls.read().hover,false);
+  fakeWindow.dispatchEvent(key('keydown','KeyW'));assert.equal(controls.read().throttle,1);
+  fakeWindow.dispatchEvent(key('keyup','KeyW'));assert.equal(controls.read().hover,false);
   steering.dispatchEvent(pointer('pointerdown',1));brake.dispatchEvent(pointer('pointerdown',2));
   assert.equal(controls.read().steer,1);assert.equal(controls.read().brake,true);
   brake.dispatchEvent(pointer('pointercancel',2));assert.equal(controls.read().brake,false);assert.equal(controls.read().steer,1);
@@ -57,7 +57,7 @@ test('a Space tap immediately after jump flips even before the HUD updates',()=>
   for(const code of ['KeyE','Space']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   assert.equal(controls.airborne,false);
   step(world,new Map([['driver',controls.read()]]),.05);
-  assert.equal(car.supportId,null);assert.ok(car.flipRemaining>0);assert.equal(car.air,83.5);
+  assert.equal(car.supportId,null);assert.ok(car.flipRemaining>0);assert.equal(car.air,89.5);
 });
 
 test('braking before a jump in the same tick does not trigger a flip',()=>{
@@ -69,7 +69,7 @@ test('braking before a jump in the same tick does not trigger a flip',()=>{
   const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
   for(const code of ['Space','KeyE']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   step(world,new Map([['driver',controls.read()]]),.05);
-  assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,88);
+  assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,94);
 });
 
 test('pending jump preserves flip until acknowledged, even with a delayed snapshot',()=>{
@@ -96,9 +96,9 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   const car=makeEntity('car','roadster',0,0,'driver');
   const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
   const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyE'});fakeWindow.dispatchEvent(key);
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,88);assert.equal(car.lastJump,1);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,94);assert.equal(car.lastJump,1);
   jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,2);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,88);assert.equal(car.lastJump,2);
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',speed:20});
   brake.dispatchEvent(pointer('pointerdown',2));step(world,new Map([['driver',controls.read()]]),.05);
   assert.ok(car.speed<19);brake.dispatchEvent(pointer('pointerup',2));assert.equal(controls.read().brake,false);
@@ -133,11 +133,11 @@ test('standard gamepad drives, brakes, reverses, flies, and triggers tricks once
   fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const buttons=Array.from({length:16},()=>({pressed:false,value:0}));const axes=[0,0,0,0];
   const pad={connected:true,mapping:'standard',index:0,buttons,axes} as Gamepad;
-  let connected=true;const controls=new Controls(()=>connected?[pad]:[]);controls.enabled=true;
+  let connected=true,now=0;const controls=new Controls(()=>connected?[pad]:[],()=>now);controls.enabled=true;
   controls.read();axes[0]=-.575;buttons[7].value=.75;
   let input=controls.read();assert.ok(Math.abs(input.steer-.5)<.001);assert.equal(input.throttle,.75);
-  buttons[0].pressed=true;buttons[2].pressed=true;buttons[1].pressed=true;buttons[3].pressed=true;
-  input=controls.read();assert.equal(input.jump,1);assert.equal(input.flip,1);assert.equal(input.boost,true);assert.equal(input.hover,true);
+  buttons[0].pressed=true;buttons[2].pressed=true;buttons[1].pressed=true;
+  input=controls.read();assert.equal(input.jump,1);assert.equal(input.flip,1);assert.equal(input.boost,true);assert.equal(input.hover,false);now=251;assert.equal(controls.read().hover,true);
   assert.equal(controls.read().jump,1);assert.equal(controls.read().flip,1);
   buttons[0].pressed=false;buttons[2].pressed=false;controls.read();buttons[0].pressed=true;assert.equal(controls.read().jump,2);
   controls.observeFlight(false,2,10);buttons[7].value=0;buttons[6].value=1;input=controls.read();assert.equal(input.brake,true);assert.equal(input.throttle,0);
@@ -156,4 +156,18 @@ test('controller action edges pause driving immediately when a menu opens',()=>{
   const controls=new Controls(()=>[pad]);controls.enabled=true;let menus=0;controls.onAction=action=>{if(action==='menu'){menus++;controls.enabled=false;}};
   controls.read();buttons[9].pressed=true;buttons[7].value=1;assert.equal(controls.read().throttle,0);assert.equal(menus,1);
   controls.enabled=true;controls.read();assert.equal(menus,1,'held menu button does not fire twice');
+});
+
+test('tap jump then hold the same rebound key or touch button to hover',()=>{
+  const jump=new FakeButton('KeyE'),drive=new FakeButton('KeyW');
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=selector=>selector==='[data-control]'?[jump,drive]:[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  let now=0;const controls=new Controls(()=>[],()=>now);controls.enabled=true;controls.bindings.jump=['KeyI',''];
+  const key=(type:string,code:string)=>{const event=new Event(type);Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);};
+  key('keydown','KeyI');assert.equal(controls.read().jump,1);assert.equal(controls.read().hover,false);
+  now=249;assert.equal(controls.read().hover,false);now=250;assert.equal(controls.read().hover,true);
+  key('keydown','KeyW');assert.equal(controls.read().throttle,1);key('keyup','KeyI');assert.equal(controls.read().hover,false);
+  jump.dispatchEvent(pointer('pointerdown',3));assert.equal(controls.read().jump,2);now=501;assert.equal(controls.read().hover,true);
+  jump.dispatchEvent(pointer('pointercancel',3));assert.equal(controls.read().hover,false);
+  jump.dispatchEvent(pointer('pointerdown',4));assert.equal(controls.read().hover,false);controls.clear();now=1000;assert.equal(controls.read().hover,false);
 });

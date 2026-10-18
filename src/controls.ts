@@ -14,6 +14,7 @@ export class Controls {
   private jump = 0;
   private flip = 0;
   private pendingJump:number|null = null;
+  private jumpHeldSince:number|null = null;
   private previousButtons:boolean[]=[];
   private armed=false;
   private padIndex:number|null=null;
@@ -24,7 +25,7 @@ export class Controls {
   airborne = false;
   enabled = false;
   onAction: (action: Action) => void = () => {};
-  constructor(private getGamepads:()=>readonly (Gamepad|null)[]=pads) {
+  constructor(private getGamepads:()=>readonly (Gamepad|null)[]=pads, private now:()=>number=()=>performance.now()) {
     window.addEventListener('keydown', e => {
       const target=e.target as HTMLElement;
       if (target.matches('input,textarea,select,[contenteditable="true"]') || (e.code==='Space' && target.matches('button,a'))) return;
@@ -46,7 +47,7 @@ export class Controls {
     document.querySelectorAll<HTMLElement>('[data-control]').forEach(button => {
       button.addEventListener('pointerdown', e => {
         if(!this.enabled)return;
-        if(button.dataset.control==='KeyE'){this.queueJump();return;}
+        if(button.dataset.control==='KeyE')this.queueJump();
         if(button.dataset.control==='KeyX'){this.queueFlip();return;}
         e.preventDefault(); button.setPointerCapture(e.pointerId);
         this.pointers.set(e.pointerId, button.dataset.control!); button.classList.add('pressed');
@@ -62,10 +63,10 @@ export class Controls {
       button.addEventListener('lostpointercapture', release);
     });
   }
-  private queueJump(){this.jump=(this.jump+1)%2147483648;this.pendingJump=this.jump;}
+  private queueJump(){this.jump=(this.jump+1)%2147483648;this.pendingJump=this.jump;this.jumpHeldSince=null;}
   private queueFlip(){this.flip=(this.flip+1)%2147483648;}
   observeFlight(airborne:boolean,lastJump:number,speed=0){this.airborne=airborne;this.speed=speed;if(this.pendingJump===lastJump)this.pendingJump=null;}
-  clear() { this.keys.clear(); this.pointers.clear(); this.pendingJump=null; this.armed=false; document.querySelectorAll('.pressed').forEach(e => e.classList.remove('pressed')); }
+  clear() { this.keys.clear(); this.pointers.clear(); this.pendingJump=null; this.jumpHeldSince=null; this.armed=false; document.querySelectorAll('.pressed').forEach(e => e.classList.remove('pressed')); }
   resetSequences(){this.jump=0;this.flip=0;this.pendingJump=null;}
   read(): Input {
     let available:readonly (Gamepad|null)[]=[];
@@ -91,9 +92,12 @@ export class Controls {
     const stillActive=active&&this.enabled&&!this.suspended;
     const down=(action:KeyAction,touch:string)=>stillActive&&(this.bindings[action].some(code=>code&&this.keys.has(code))||[...this.pointers.values()].includes(touch));
     const usePadNow=usePad&&stillActive;
+    const jumpHeld=down('jump','KeyE')||(usePadNow&&!!buttons[0]);
+    if(jumpHeld){if(this.jumpHeldSince===null)this.jumpHeldSince=this.now();}else this.jumpHeldSince=null;
+    const hovering=jumpHeld&&this.jumpHeldSince!==null&&this.now()-this.jumpHeldSince>=250;
     const rt=usePadNow?value(7):0,lt=usePadNow?value(6):0;
     const padBrake=lt>.08&&!this.airborne&&(this.speed>.5||rt>.08);
     const padThrottle=rt-(padBrake?0:lt);
-    return { throttle:clamp(Number(down('forward','KeyW'))-Number(down('reverse','KeyS'))+padThrottle), steer:clamp(Number(down('left','KeyA'))-Number(down('right','KeyD'))-(usePadNow?x:0)), boost:down('boost','ShiftLeft')||(usePadNow&&!!buttons[1]), hover:down('hover','KeyH')||(usePadNow&&!!buttons[3]), jump:this.jump, flip:this.flip, roll:clamp(Number(down('rollLeft','KeyQ'))-Number(down('rollRight','KeyR'))+(usePadNow?(Number(!!buttons[4])-Number(!!buttons[5])-rx):0)), brake:down('brake','Space')||padBrake, cockpit:false };
+    return { throttle:clamp(Number(down('forward','KeyW'))-Number(down('reverse','KeyS'))+padThrottle), steer:clamp(Number(down('left','KeyA'))-Number(down('right','KeyD'))-(usePadNow?x:0)), boost:down('boost','ShiftLeft')||(usePadNow&&!!buttons[1]), hover:hovering, jump:this.jump, flip:this.flip, roll:clamp(Number(down('rollLeft','KeyQ'))-Number(down('rollRight','KeyR'))+(usePadNow?(Number(!!buttons[4])-Number(!!buttons[5])-rx):0)), brake:down('brake','Space')||padBrake, cockpit:false };
   }
 }

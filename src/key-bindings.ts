@@ -1,13 +1,13 @@
 export const ACTION_LABELS = {
   forward:'Drive / fly forward', reverse:'Reverse / fly backward', left:'Steer / bank left', right:'Steer / bank right',
-  brake:'Brake / drift; air flip', jump:'Jump', flip:'Flip', hover:'Hover', boost:'Boost', rollLeft:'Roll left', rollRight:'Roll right',
+  brake:'Brake / drift; air flip', jump:'Jump / hold to hover', flip:'Flip', boost:'Boost', rollLeft:'Roll left', rollRight:'Roll right',
   interact:'Enter / exit', reset:'Unstuck', camera:'Camera', autopilot:'Autopilot', fleet:'Fleet', shop:'Shop', scores:'Scores', awards:'Awards',
 } as const;
 export type KeyAction = keyof typeof ACTION_LABELS;
 export type Bindings = Record<KeyAction, [string, string]>;
 export const DEFAULT_BINDINGS: Bindings = {
   forward:['KeyW','ArrowUp'], reverse:['KeyS','ArrowDown'], left:['KeyA','ArrowLeft'], right:['KeyD','ArrowRight'],
-  brake:['Space',''], jump:['KeyE','KeyJ'], flip:['KeyX',''], hover:['KeyH',''], boost:['ShiftLeft','ShiftRight'], rollLeft:['KeyQ',''], rollRight:['KeyR',''],
+  brake:['Space',''], jump:['KeyE','KeyJ'], flip:['KeyX',''], boost:['ShiftLeft','ShiftRight'], rollLeft:['KeyQ',''], rollRight:['KeyR',''],
   interact:['KeyF',''], reset:['KeyK',''], camera:['KeyC',''], autopilot:['KeyV',''], fleet:['KeyG',''], shop:['KeyB',''], scores:['KeyL',''], awards:['KeyT',''],
 };
 export const KEY_ACTIONS = Object.keys(ACTION_LABELS) as KeyAction[];

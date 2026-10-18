@@ -35,7 +35,7 @@
 @media(max-height:550px) and (pointer:coarse){.map-panel{display:block;bottom:125px;left:16px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-title{font-size:7px;margin-bottom:3px}.map-panel .map-key{display:none}.reward{top:48%}.reward-card{min-width:160px;padding:8px 14px}.reward-card strong{font-size:40px}}
 @media(max-height:550px) and (pointer:coarse){.map-panel .map-title{letter-spacing:.5px}.map-panel .map-title span{font-size:7px;white-space:nowrap}}
 @media(prefers-reduced-motion:reduce){.reward.celebrate{animation:none}.celebrate .confetti i{display:none}}
-@media(pointer:coarse),(max-width:800px){.touch-flight .hover-control{font-size:9px;min-width:54px}}
+
 
 /* Citation and session achievements */
 .ticket-dialog{width:min(480px,94vw);background:#2c2023;border:2px solid #fa766d;box-shadow:0 0 0 7px #df4f4f38,0 25px 80px #170b0dbb;text-align:center;padding:30px}
@@ -80,7 +80,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .steering{grid-template-columns:repeat(2,62px);gap:7px}.steering button{min-width:62px}.steering button:nth-child(-n+2){font-size:19px}
  .pedals{grid-template-columns:repeat(2,67px);gap:7px}.pedals button{min-width:67px}.pedals .accelerate{background:#ef8c72eb;color:#263a38}
  .touch-flight{position:absolute;bottom:126px;left:0;margin:0;gap:7px}
- .touch-flight button{min-width:49px;height:45px;font-size:19px}.touch-flight .hover-control,.touch-flight .flip-control{min-width:55px;font-size:10px}
+ .touch-flight button{min-width:49px;height:45px;font-size:19px}.touch-flight .flip-control{min-width:55px;font-size:10px}
  .map-panel{left:12px;bottom:196px;width:132px;padding:7px}.map-panel #minimap{width:116px;height:116px}
  .map-title{letter-spacing:.6px}.map-key{font-size:6px;margin-top:6px}
  .telemetry{right:12px;bottom:196px;width:190px;padding:11px}.speed strong{font-size:42px}.speed{margin:0 0 4px}
@@ -90,7 +90,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .mission{top:62px;max-width:min(280px,calc(100vw - 130px))}.mission #hint{display:block}
  .action-drawer{top:62px}.drive-actions{max-height:calc(100dvh - 118px)}
  .touch-controls{bottom:10px}.touch-controls button{height:46px}.steering{grid-template-columns:repeat(2,55px)}.steering button{min-width:55px}.pedals{grid-template-columns:repeat(2,60px)}.pedals button{min-width:60px}
- .touch-flight{position:absolute;left:50%;bottom:0;transform:translateX(-50%);margin:0}.touch-flight button{height:43px;min-width:43px}.touch-flight .hover-control{min-width:52px}
+ .touch-flight{position:absolute;left:50%;bottom:0;transform:translateX(-50%);margin:0}.touch-flight button{height:43px;min-width:43px}
  .map-panel{display:block;bottom:118px;left:12px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-key{display:none}
  .telemetry{bottom:118px;right:12px;width:180px;padding:8px}.telemetry .vehicle-title,.telemetry #station-status{display:none}.speed strong{font-size:30px}.meter-row{margin-top:4px}
 }
@@ -127,3 +127,5 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 @media(pointer:coarse),(max-width:800px){.dome-score{top:78px;left:12px;max-width:calc(100vw - 124px);padding:9px 12px;gap:3px}.dome-score .eyebrow{font-size:8px;letter-spacing:1px}.dome-score strong{font-size:16px}.dome-score #dome-status,.dome-score small{font-size:9px}}
 @media(max-height:550px) and (pointer:coarse){.dome-score{top:62px;max-width:min(280px,calc(100vw - 130px))}.dome-score small{display:none}}
 .controls-dialog{width:min(640px,94vw);max-height:90dvh;overflow:auto}.gamepad-guide{padding:14px;border:1px solid #a5ccba35;border-radius:8px;background:#ffffff08;font-size:12px;line-height:1.5}.gamepad-guide p{margin:6px 0 0;color:#c4d5cb}.gamepad-guide #gamepad-status{color:#ffcf8f}.bindings-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}.bindings-heading button,.binding-row button{border:1px solid #ffffff40;border-radius:6px;background:#ffffff0b;padding:8px 10px;min-height:40px}.bindings-heading button{font-size:11px}.bindings-feedback{color:#ffcf8f;font-size:11px;min-height:16px}.bindings-list{display:grid;gap:5px}.binding-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(74px,auto) minmax(74px,auto);align-items:center;gap:6px;font-size:12px}.binding-row button{font-size:11px;min-width:74px}.binding-row button:hover{background:#ffffff20}@media(max-height:550px){.controls-dialog{max-height:94dvh;padding:14px}.controls-dialog .fleet-header h2{font-size:22px}.gamepad-guide{padding:9px;font-size:11px}.bindings-heading{margin-top:10px}}
+
+#air.air-low{color:#ff9785;font-weight:800}

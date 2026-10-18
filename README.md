@@ -52,19 +52,19 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 
 Open **Controls & gamepad** from the start screen or the Actions menu to customize up to two keyboard keys per action, or restore defaults. Bindings stay in this browser; touch controls are unchanged. Space brakes and drifts on the road and flips in the air by default. Browser shortcuts remain available.
 
-Standard-mapped Xbox/PlayStation-style controllers use the left stick to steer, right trigger to accelerate and left trigger to brake and then reverse (or fly backward). A/Cross jumps, X/Square flips, B/Circle boosts, Y/Triangle hovers, and the bumpers or right stick roll. D-pad up enters/exits, down changes camera, left unsticks and right toggles autopilot. Menu/Options opens the menu; use keyboard, mouse or touch in menus. A controller must return to neutral after connecting, focus loss or a menu before driving resumes. Non-standard controllers are reported as unsupported.
+Standard-mapped Xbox/PlayStation-style controllers use the left stick to steer, right trigger to accelerate and left trigger to brake and then reverse (or fly backward). A/Cross jumps and holds to hover, X/Square flips, B/Circle boosts, and the bumpers or right stick roll. D-pad up enters/exits, down changes camera, left unsticks and right toggles autopilot. Menu/Options opens the menu; use keyboard, mouse or touch in menus. A controller must return to neutral after connecting, focus loss or a menu before driving resumes. Non-standard controllers are reported as unsupported.
 
 The trigger layout follows familiar racing conventions ([Forza Motorsport accessibility notes](https://forums.forza.net/t/meet-the-most-accessible-forza-motorsport-ever/597587/38)); browser controller detection uses the [Gamepad API](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API).
 
 ## Play
 
 - **WASD / arrows:** accelerate, reverse, steer. **Space:** brake; steer while braking or reversing to drift, then release to regain grip.
-- **E:** jump (or fictional air jump); J also jumps. **Space** in the air or **X:** one-tap flip. Hold **H** to hover. **Shift:** boost. **Q/R:** manual airborne roll. W/S provide forward/reverse thrust in the air; A/D turn.
+- **E:** tap to jump (or fictional air jump), hold to hover; J also works. **Space** in the air or **X:** one-tap flip. **Shift:** boost. **Q/R:** manual airborne roll. W/S provide forward/reverse thrust in the air; A/D turn.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** Tesla fleet catalog; select a new ride while stopped. **B:** enter a shop when stopped in its purple ring.
 - **L:** room leaderboard with cash and active play time. **T:** session achievements.
 - **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
-- Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump and hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
+- Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump / Hover to jump and hold it for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air; purple rocket pickups equip flight and refill air. Pickups return after 20 seconds.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.

@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Flight and steering feel · 2026-10-18 Pacific
+
+- `pnpm test` passed 194 tests, and `pnpm build` passed. Vite retains its existing large-chunk warning. Tests cover held jump/hover across keyboard, touch and simulated gamepad, rebound controls, proportional low-air launches, forward thrust while hovering, steering at road speeds and in reverse, and existing drift/autopilot behavior. No physical controller or phone was tested.
+- Local Wrangler two-client room integration passed movement, jump/flip/landing, sky currents and the existing room checks; this is not a load test.
+- Chrome desktop solo: holding E launched and hovered at 4 m; a steering input visibly turned the moving car. A temporary, removed local fixture set the tank to 9%: the HUD showed a low-air refill direction, and a 350 ms E press launched to 4 m with 2% remaining. Chrome emulation showed the combined Jump / Hover control at 390×844 portrait and 844×390 landscape. Touch activation and subjective handling on a physical device remain unverified.
+
+
 ## Chat quota test timing · 2026-10-18 Pacific
 
 - The production build for merge `843657f` failed in the existing global-chat quota test: its simulated one-hour reset was based on a timestamp taken before the tested quota bucket was constructed. The test now uses a timestamp taken immediately after construction, avoiding a race on loaded builders without changing the runtime limit.

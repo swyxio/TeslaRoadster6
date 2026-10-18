@@ -25,7 +25,7 @@ export function setupControlSettings(controls:Controls, open:()=>void, close:()=
     const title=document.createElement('strong');title.textContent='DRIVING CONTROLS';guide.append(title);
     for(const [text,keys] of [
       ['Drive / fly, steer',`${label('forward')} · ${label('reverse')} · ${label('left')} · ${label('right')}`],
-      ['Brake / drift; flip in air',label('brake')],['Jump / flip / hover',`${label('jump')} · ${label('flip')} · ${label('hover')}`],
+      ['Brake / drift; flip in air',label('brake')],['Jump / hold to hover · flip',`${label('jump')} · ${label('flip')}`],
       ['Boost / roll',`${label('boost')} · ${label('rollLeft')} / ${label('rollRight')}`],
       ['Enter / exit · unstuck · camera',`${label('interact')} · ${label('reset')} · ${label('camera')}`],
       ['Autopilot · fleet · shop · scores · awards',`${label('autopilot')} · ${label('fleet')} · ${label('shop')} · ${label('scores')} · ${label('awards')}`],
