@@ -85,12 +85,21 @@ export type Ticket = { amount:number; offense:number; flightSeconds:number; peak
 export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
 export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
+/** A full Level 3 tank provides a conservative budget for the current roof jobs. */
+export function canAssignDeliveryRoof(entity:Entity):boolean {
+  return hasRockets(entity)&&entity.tankLevel>=3;
+}
+/** On foot, defer checking vehicle capability until the driver enters one. */
+export function deliveryRoofAccess(entity:Entity):boolean|null {
+  return entity.kind==='person'?null:canAssignDeliveryRoof(entity);
+}
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
-export type DeliveryStop = DeliveryPose & {canFly:boolean};
+// Older journaled stops may lack roofEligible; replay treats them as ineligible.
+export type DeliveryStop = DeliveryPose & {canFly:boolean;roofEligible?:boolean};
 export function captureDeliveryStop(entity:Entity):DeliveryStop {
   const {x,y,z,vy,speed,supportId,kind}=entity;
-  return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity)};
+  return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity),roofEligible:canAssignDeliveryRoof(entity)};
 }
 function matchesTarget(stop:DeliveryPose,target:{x:number;y?:number;z:number;rooftop?:boolean}):boolean {
   if(stop.vy>.1||Math.abs(stop.speed)>4)return false;
@@ -112,14 +121,14 @@ export function deliveryStopSignature(stop:DeliveryPose):string {
   return matches.join(',');
 }
 
-function orderFor(index: number, origin: { x: number; z: number }, level:Level, canFly = false): Order {
+function orderFor(index: number, origin: { x: number; z: number }, level:Level, roofEligible = false): Order {
   const restaurants = RESTAURANTS.map((place,i)=>({place,i})).filter(({place})=>requiredLevelAt(place.x,place.z)<=level);
   const restaurant = restaurants[index % restaurants.length].i;
   const pickup = RESTAURANTS[restaurant];
   // Every other later order explores the newest unlocked region; intervening
   // local and rooftop jobs keep long highway trips from becoming mandatory.
   const explore = level>0 && index%2===0;
-  const rooftop = canFly && level>0 && !explore && index%3===1;
+  const rooftop = roofEligible && level>0 && !explore && index%3===1;
   const available = CUSTOMERS.map((customer,i)=>({customer,i})).filter(({customer})=>
     customer.rooftop===rooftop && requiredLevelAt(customer.x,customer.z)<=level &&
     Math.hypot(customer.x-pickup.x,customer.z-pickup.z)>100);
@@ -143,11 +152,11 @@ export function orderTarget(order: Order): {x:number; z:number; y:number; name:s
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
 }
 /** Move an active job back into regions available at the new balance. */
-export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},canFly=false):boolean {
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},roofEligible:boolean|null=false):boolean {
   const old=delivery.order;
   const pickup=RESTAURANTS[old.restaurant],customer=CUSTOMERS[old.customer];
-  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level)return false;
-  const next=orderFor(delivery.completed,origin,delivery.level,canFly);
+  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level && (!customer.rooftop||roofEligible!==false))return false;
+  const next=orderFor(delivery.completed,origin,delivery.level,roofEligible===true);
   // A collected order stays collected; never grant a second pickup bonus.
   if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
   delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1};
@@ -208,7 +217,7 @@ export function applyDeliveryStop(delivery:DeliveryState,stop:DeliveryStop|Entit
     delivery.lastPayout = payout;
     delivery.completed++;
     updateLevel(delivery);
-    delivery.order = orderFor(delivery.completed, stop, delivery.level, 'canFly' in stop?stop.canFly:hasRockets(stop));
+    delivery.order = orderFor(delivery.completed, stop, delivery.level, 'canFly' in stop?stop.roofEligible===true:canAssignDeliveryRoof(stop));
     return parts;
   }
 }
