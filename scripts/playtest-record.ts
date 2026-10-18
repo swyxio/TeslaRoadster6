@@ -174,6 +174,7 @@ async function stopRecording() {
       audioRecordings.push(pendingAudio);
     } catch (error) {
       audioFailure = error;
+      failure ??= error;
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
     } finally { pendingAudio = undefined; }
   }

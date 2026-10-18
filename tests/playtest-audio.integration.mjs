@@ -1,6 +1,6 @@
 // Calibration for the optional playtest audio path. Requires Chromium and FFmpeg.
 import assert from 'node:assert/strict';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -59,6 +59,40 @@ try {
   assert.equal(failed.recordings.length, 1);
   execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', join(failureRun, failed.recordings[0])]);
   console.log('Audio finalization failure retained the finalized video and failed the run.');
+
+  const interactiveRun = join(temp, 'interactive-failed-run');
+  const secret = 'test-only-audio-calibration-secret-0000';
+  const child = spawn('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${server.address().port}/`, '--target-ref', 'interactive-audio-failure', '--serve', '--out', interactiveRun, '--audio'], {env:{...process.env,TESLAND_PLAYTEST_SECRET:secret}, stdio:['ignore','pipe','pipe']});
+  const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+  try {
+    const endpoint = await new Promise((resolve, reject) => {
+      let output = '';
+      const timer = setTimeout(() => reject(new Error('Interactive runner did not start')), 60000);
+      child.stdout.on('data', data => {
+        output += data;
+        for (const line of output.split('\n')) {
+          try { const parsed = JSON.parse(line); if (parsed.endpoint) { clearTimeout(timer); resolve(parsed.endpoint); return; } } catch { /* pnpm output */ }
+        }
+      });
+      child.once('exit', () => { clearTimeout(timer); reject(new Error('Interactive runner exited before starting')); });
+    });
+    const action = async (body, status = 200) => {
+      const response = await fetch(`${endpoint}/actions`, {method:'POST', headers:{authorization:`Bearer ${secret}`, 'content-type':'application/json'}, body:JSON.stringify(body)});
+      assert.equal(response.status, status);
+    };
+    await action({type:'keyPress',key:'KeyA'});
+    await action({type:'recordStart'});
+    await action({type:'wait',ms:500});
+    await action({type:'keyPress',key:'KeyC'});
+    await action({type:'recordStop'}, 400);
+    await action({type:'finish'}, 202);
+    assert.equal(await exited, 1);
+    const interactive = JSON.parse(await readFile(join(interactiveRun, 'manifest.json'), 'utf8'));
+    assert.equal(interactive.status, 'failed');
+    assert.equal(interactive.capture.audioFinalizationFailed, true);
+    assert.equal(interactive.recordings.length, 1);
+    console.log('Interactive audio failure also fails the run and preserves video.');
+  } finally { if (child.exitCode === null) child.kill('SIGTERM'); }
 } finally {
   await new Promise(resolve => server.close(resolve));
   await rm(temp, {recursive:true, force:true});
