@@ -14,15 +14,15 @@ export const LEVELS = [
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
 // Vertical gates also apply to flyers; the northern island approach remains open.
+const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
-const sfPlayground = PARKING_LOTS.find(lot=>lot.id==='sf-playground')!;
 export function requiredLevelAt(x:number,z:number):Level {
   // The island and its approach, and the China Basin Dome, are open from the start.
   if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
   if(z>ACCESS_BOUNDARIES.bayMaxZ){
     // Connect the SF playground to the city without opening a route onward.
-    const area=sfPlayground.area;
+    const area=SF_PARKING.area;
     if(Math.abs(x-area.x)<=area.width/2&&z<=area.z+area.length/2)return 0;
     return 2;
   }

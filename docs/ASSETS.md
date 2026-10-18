@@ -6,7 +6,7 @@
 
 The 26-model dimensions and visual traits are in `shared/vehicles.ts` and [FLEET_RESEARCH.md](FLEET_RESEARCH.md). Every catalog ID maps to one original procedural detailed model; `person` is separate. The registry's length/width defines collision envelopes. Dimensions include no extra clearance promise for decorative sensor rigs.
 
-+Y is up; −Z is forward; root is ground-center in meters. Preserve `createVehicle(kind)`. Named wheel groups `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr` articulate with authoritative steering. The stock Rocket has ten named nozzles and separate vapor groups; other fleet models show fictional retrofit hardware and effects when a session-long kit makes them capable. `setThrusterEffects` uses authoritative capability and thruster flags. Geometry and materials are cached and shared; do not dispose on individual despawn. Model factory changes must preserve scale and tests across all registry IDs.
++Y is up; −Z is forward; root is ground-center in meters. Preserve `createVehicle(kind)`. Named wheel groups `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr` articulate with authoritative steering. The stock Rocket has ten named nozzles and separate vapor groups; other fleet models show fictional retrofit hardware and effects when a Rocket pickup or purchased kit makes them capable. `setThrusterEffects` uses authoritative capability and thruster flags. Geometry and materials are cached and shared; do not dispose on individual despawn. Model factory changes must preserve scale and tests across all registry IDs.
 
 Distinct cues include open original Roadster, new sports wedge, Cybertruck's angular steel body, gold Cybercab, Falcon-door seams on X, tall Semi, Robovan, Waymo roof rigs/Firefly pod, orange Cruise sensors/pods, and mint symmetric Zoox/corner sensors. Trucks are tractors without trailers. All geometry is original, with no copied brand logos or remote artwork.
 
@@ -25,7 +25,7 @@ Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` coll
 
 ## UI alternatives
 
-Automatically enter the shared Bay room or the room in an invite link. Preserve room link sharing, joining feedback, full-room alternatives, explicit reconnect, a visible return-to-menu, drive/jump/flip/roll/boost/brake/enter-exit/recovery controls and station refill feedback. Touch must permit steering plus a one-tap jump or flip without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
+Automatically enter the shared Bay room or the room in an invite link, and retain an explicit solo choice. Preserve room link sharing, joining feedback, full-room alternatives, explicit reconnect, a visible return-to-menu, drive/jump/flip/roll/boost/brake/enter-exit/recovery controls and station refill feedback. A failed connection must not silently start solo play. Touch must permit steering plus a one-tap jump or flip without impossible finger placement. Menus neutralize input; release/cancel clears held controls. UI may use a framework if replacing the current HUD reduces complexity; do not introduce one only for a visual variant.
 
 ## Delivery format
 

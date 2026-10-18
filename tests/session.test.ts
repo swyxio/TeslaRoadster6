@@ -123,3 +123,55 @@ test('a rejected vehicle change stays unconfirmed until its ordered state and re
     socket.closed();
   }
 });
+
+test('switching from a room to solo keeps a playable local world and ignores old socket events',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const online=createWorld();addPlayer(online,'p','Alex');socket.message({type:'state',world:online,inputAck:0});
+  session.solo('model-3','Solo Alex');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');assert.equal(socket.readyState,3);
+  const player=session.world.players.find(p=>p.id===session.id)!;
+  const car=session.world.entities.find(e=>e.id===player.entityId)!;
+  assert.equal(player.name,'Solo Alex');assert.equal(car.kind,'model-3');
+  socket.message({type:'state',world:online,inputAck:0});socket.closed();
+  assert.equal(session.status,'solo');assert.equal(session.world.players[0].id,'local');
+  session.tick(.05,NEUTRAL);assert.ok(session.world.time>0);
+  session.setName('Renamed');assert.equal(player.name,'Renamed');
+  session.action('dome');assert.ok(car.inDome);
+  assert.equal(session.parkingAction('leave'),true);
+  const requestId=session.setOta(true);assert.deepEqual(session.otaResult,{requestId,enabled:true,ok:true});
+  session.join('friends','Solo Alex');assert.equal(session.status,'connecting');assert.equal(session.world.players.length,0);
+  Socket.last.closed();
+});
+
+test('a full-room error can be followed by an explicit solo drive',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.closed(ROOM_FULL_CODE);assert.equal(session.roomFull,true);
+  session.solo();assert.equal(session.status,'solo');assert.equal(session.roomFull,false);assert.equal(session.error,'');
+  assert.equal(session.world.players.length,1);
+});
+
+test('solo mini-game requests use the local simulation',()=>{
+  const session=new Session();session.solo('model-3','Scout');
+  assert.equal(session.enterMinigame('park'),true);
+  assert.ok(session.world.parking.rounds.some(round=>round.mode==='park'&&round.entrants.some(entry=>entry.playerId===session.id)));
+  assert.equal(session.parkingAction('leave'),true);
+  assert.equal(session.enterMinigame('oval'),true);
+  assert.ok(session.world.races.rounds.some(round=>round.courseId==='oval'&&round.entrants.some(entry=>entry.playerId===session.id)));
+});
+
+test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const requestId=session.setDestination(-180,60);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'destinationResult',requestId,ok:true});
+  assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  session.solo();assert.equal(session.destinationResult,null);
+  socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+});

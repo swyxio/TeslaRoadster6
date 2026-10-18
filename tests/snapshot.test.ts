@@ -54,3 +54,14 @@ test('cached snapshot serialization matches the recipient-specific world',()=>{
     assert.deepEqual(JSON.parse(prepare(id,9,4)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),inputAck:9,sync:4})));
   }
 });
+
+test('cached snapshots retain a distant dome player and ferry passenger',()=>{
+  const world=createWorld(),viewer=addPlayer(world,'viewer','Viewer'),visitor=addPlayer(world,'visitor','Visitor');
+  const person=world.entities.find(entity=>entity.id===visitor.entityId)!;
+  Object.assign(person,{kind:'person',x:AMBIENT_INTEREST_METERS*3,inDome:true});
+  const ferryCar=makeEntity('ferry-car','model-3',-AMBIENT_INTEREST_METERS*3,0);
+  ferryCar.supportId='ferry';world.entities.push(ferryCar);
+  const wire=JSON.parse(prepareSnapshots(world)(viewer.id));
+  assert.ok(wire.world.entities.some((entity:{id:string;inDome:boolean})=>entity.id===person.id&&entity.inDome));
+  assert.ok(wire.world.entities.some((entity:{id:string;supportId:string})=>entity.id===ferryCar.id&&entity.supportId==='ferry'));
+});

@@ -287,7 +287,7 @@ function begin(solo:boolean,userGesture=true){
   }
   menuRidePending=null;startingSelect.disabled=false;$<HTMLButtonElement>('apply-ride').disabled=false;
   lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
-  pendingShop=null;pendingOta=null;shopBusyUntil=0;
+  pendingShop=null;pendingOta=null;pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   $<HTMLInputElement>('room').value=room;controls.resetSequences();if(solo){session.solo(selectedVehicle,nameInput.value.trim()||'Driver');history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}

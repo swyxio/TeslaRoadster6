@@ -1,17 +1,35 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.7-alpha',
+    label: '0.0.7 Alpha',
+    date: '2026-10-18',
+    title: 'Drive together',
+    intro: 'Smoother shared driving and longer-lasting Rocket pickups.',
+    sections: [
+      { title: 'Drive together', items: [
+        'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
+        'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
+        'A Rocket pickup now equips its car for the rest of the session.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.6-alpha',
     label: '0.0.6 Alpha',
     date: '2026-10-18',
-    title: 'A little more lift',
-    intro: 'Take two new launch ramps for a spin on Rocket Island.',
+    title: 'Island playground',
+    intro: 'Ride the autonomous ferry to a police-free island of ramps, banked turns and races.',
     sections: [
-      { title: 'Drive together', items: [
-        'Find two eastbound launch ramps inside the island playground and try them in any car.',
-        'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
-        'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
-        'Start and leave mini-games with clearer feedback, and recover self-driving from some opposite-facing streets.'
+      { title: 'Play your way', items: [
+        'Try the two new launch ramps, speed oval, inverted cliff and island parking games.',
+        'Play Park It or Cut the Queue at any registered parking lot. Rocket pickups give any car 90 seconds of flight.',
+        'The Rocket Dome moves to the China Basin ballpark area, with car soccer to five goals and wall charging.',
+        'Join the shared Bay automatically or choose a solo drive from the menu.'
+      ] },
+      { title: 'Play and explore', items: [
+        'Start or leave a mini-game immediately after joining, with confirmation while the room responds.',
+        'Self-driving can recover from some opposite-facing street positions, and the map explains where your car will stop.'
       ] }
     ]
   },
@@ -70,7 +88,7 @@ export const RELEASES = [
     sections: [
       { title: 'Ride and explore', items: [
         'Board the shared ferry on foot or in a car, then explore Rocket Island’s cliff, banked oval and race courses. The island is open from the start of a session.',
-        'Collect Rocket kits on the island and at selected Supercharger playgrounds to add flight to any vehicle for the session.'
+        'Collect Rocket pickups on the island and at selected Supercharger playgrounds to add 90 seconds of flight to any vehicle.'
       ] },
       { title: 'Play a round', items: [
         'Join short or oval races on the island, or try Park It and Cut the queue at the parking playgrounds.',

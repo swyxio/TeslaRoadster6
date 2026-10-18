@@ -26,7 +26,7 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt } from './sky-currents';
 
-export const PROTOCOL_VERSION=27;
+export const PROTOCOL_VERSION=28;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -326,25 +326,28 @@ export function enterMinigame(world:World,id:string,game:'park'|'queue'|'short'|
     const pose={x:car.x,z:car.z,yaw:car.yaw};
     removeFerryPassenger(world.ferry,car.id);placeEntity(car,pose,false);resetAchievementFlight(player);return true;
   }
-  // Use the lot the driver is visiting. Queue entry may need a checked move
-  // to its approach; remote entry keeps the default playgrounds as before.
   const ground=terrainHeight(car.x,car.z);
-  const currentLot=car.supportId==='ground'&&ground!==null&&Math.abs(car.y-ground)<=.5
-    ? PARKING_LOTS.find(l=>insideParkingArea(l.area,car.x,car.z)||insideParkingArea(l.approach,car.x,car.z)) : undefined;
-  if(currentLot&&parkingAction(world,id,game)){
-    placeEntity(car,{x:car.x,z:car.z,yaw:car.yaw},false);resetAchievementFlight(player);return true;
-  }
-  const lots=currentLot?[currentLot]:PARKING_LOTS.filter(l=>l.id==='sf-playground'||l.id==='island-playground');
+  const local=!car.inDome&&car.supportId==='ground'&&ground!==null&&Math.abs(car.y-ground)<=.5
+    ?PARKING_LOTS.find(lot=>insideParkingArea(lot.area,car.x,car.z)||insideParkingArea(lot.approach,car.x,car.z)):undefined;
+  const finish=(pose:{x:number;z:number;yaw:number})=>{
+    leaveRace(world.races,id);removeFerryPassenger(world.ferry,car.id);
+    placeEntity(car,pose,false);resetAchievementFlight(player);return true;
+  };
+  // Join in place when already in the requested region. A busy local lot must
+  // not unexpectedly send its driver to a different parking playground.
+  if(local&&joinParking(world.parking,local,world,id,game))return finish({x:car.x,z:car.z,yaw:car.yaw});
+  const lots=local?[local]:PARKING_LOTS.filter(l=>l.id==='sf-playground'||l.id==='island-playground');
   for(const lot of lots){
     const region=game==='queue'?lot.approach:lot.area;
     for(const dx of [0,-5,5,-10,10,-15,15])for(const dz of [0,-5,5,-10,10]){
-      const x=region.x+dx,z=region.z+dz;
+      const c=Math.cos(region.yaw),s=Math.sin(region.yaw);
+      const x=region.x+dx*c-dz*s,z=region.z-dx*s-dz*c;
       if(Math.abs(dx)>region.width/2-1||Math.abs(dz)>region.length/2-1)continue;
       const candidate=makeEntity('activity-spawn',car.kind,x,z);candidate.yaw=region.yaw;
       if(!fits(world,candidate,car))continue;
       Object.assign(car,{x,y:candidate.y,z,supportId:'ground',speed:0});
-      if(!parkingAction(world,id,game)){restore();continue;}
-      removeFerryPassenger(world.ferry,car.id);placeEntity(car,{x,z,yaw:region.yaw},false);resetAchievementFlight(player);return true;
+      if(!joinParking(world.parking,lot,world,id,game)){restore();continue;}
+      return finish({x,z,yaw:region.yaw});
     }
   }
   restore();return false;

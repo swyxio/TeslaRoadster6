@@ -7,6 +7,7 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 .connection-wait{position:fixed;z-index:35;top:50%;left:50%;transform:translate(-50%,-50%);padding:16px 22px;border:1px solid #eac38b66;border-radius:10px;background:#183039;color:#f7ecd6;box-shadow:0 0 0 100vmax #1021259e;font-size:14px}
+.launch-card #solo{margin-top:8px}
 .error{max-height:90dvh;overflow:auto}
 .alternative-room{display:block;margin-top:20px;color:#b9ccc3;font:10px ui-monospace,monospace;letter-spacing:1px}
 .error .form-note{margin:6px 0 0;font-size:11px}
@@ -145,3 +146,10 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 #air.air-low{color:#ff9785;font-weight:800}
 .release-links{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:18px;font-size:12px;color:#d4e0d5}.release-links span{font:10px ui-monospace,monospace;letter-spacing:.04em;color:#b8cec3}.release-links a{color:#ffcf8f;padding:4px 0}.last-played{font-size:10px;color:#b4c9bd;line-height:1.5;margin:4px 0 0}
 @media(max-height:550px) and (pointer:coarse){.release-links,.last-played{grid-column:1 / -1;margin-top:0}.release-links{gap:14px}}
+
+#rocket-status{margin-top:7px;color:#ffd08e;font:700 9px ui-monospace,monospace;letter-spacing:.5px}
+#rocket-status[hidden]{display:none}
+@media (max-width:600px){#rocket-status{font-size:8px;margin-top:2px}}
+
+/* Keep the landscape map beside activity controls instead of covering them. */
+@media(max-height:550px) and (pointer:coarse){.map-panel{top:62px;bottom:auto;left:min(304px,calc(100vw - 110px))}}
