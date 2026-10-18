@@ -1,4 +1,4 @@
-# Implementation contracts · v24
+# Implementation contracts · v25
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -12,7 +12,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
 | Data/map | `shared/map.ts`, `stations.ts`, `vehicles.ts` | Documented primary sources | Live fetching at render time |
 
-Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. Multiplayer is server-authoritative; explicit solo play uses the same shared simulation locally. A connection failure must never automatically start a local simulation.
+Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. Multiplayer is server-authoritative; the client never starts a local simulation on connection failure.
 
 ## Coordinates and time
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v24
+## Wire protocol v25
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:24,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:25,capacity:number}`.
 
 Client messages:
 
@@ -65,7 +65,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:24, capacity:number}
+{type:"welcome", id:string, version:25, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -76,6 +76,8 @@ Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Ea
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v22 versions the relocated Rocket Dome world geometry and soccer match state, alongside the curved roof and loop collision and supply reward changes in v21. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
+Protocol v25 adds two static, collision-backed monument bases in the Marin headlands. Their footprints and landable roof heights come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculptures above them are decorative. Rendering and minimap markers use the same positions. These are entirely fictional game art and do not imply affiliation.
+
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403. A full room accepts the WebSocket then closes it with application code4003 and reason `Room full`; this lets browser clients distinguish capacity from a failed connection. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
 Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
@@ -84,7 +86,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Global chat and saved identities
 
-Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms and available during solo play while connected. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. An active saved identity is reported with `code:"identity_active"`; the client retries briefly before requiring action. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
+Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. An active saved identity is reported with `code:"identity_active"`; the client retries briefly before requiring action. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
 
 Names are NFKC-normalized, stripped of control and invisible direction/format characters, whitespace-collapsed and capped at 20 Unicode code points; an empty name becomes `Driver`. Active names are compared case-insensitively. A conflict adds the first available ` #2`, ` #3`, and so on, trimming the base if needed. Names are not reserved when disconnected. Game rooms use the same rule independently, so a room display name can differ from the global chat name. Room labels are self-asserted: they are not proof of a saved chat identity. The full server-issued UUID identifies a chat sender; a short on-screen prefix is for convenience and is not guaranteed unique.
 
@@ -94,7 +96,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `room`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `solo(kind,name)`, `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue or automatic offline fallback; Drive solo is an explicit local option. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `room`, `status` (`connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue or offline mode. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
