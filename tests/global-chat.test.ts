@@ -134,13 +134,16 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     assert.equal(limits.allowIdentityCreation('shared-address', now), false);
     assert.equal(limits.allowIdentityCreation('shared-address', now + 3_600_001), true, 'hourly quota resets');
     const globalLimit = new GlobalChat({ storage });
-    for (let i = 0; i < 240; i++) assert.equal(globalLimit.allowIdentityCreation(`address-${i}`, now), true);
-    assert.equal(globalLimit.allowIdentityCreation('one-more', now), false);
+    // Its global bucket starts at construction, so use a timestamp no earlier
+    // than construction even when a loaded CI runner pauses between statements.
+    const globalNow = Date.now();
+    for (let i = 0; i < 240; i++) assert.equal(globalLimit.allowIdentityCreation(`address-${i}`, globalNow), true);
+    assert.equal(globalLimit.allowIdentityCreation('one-more', globalNow), false);
     const limitedSocket = makeSocket(), limited = attach(globalLimit, limitedSocket);
     limited.playerId = crypto.randomUUID(); limited.name = 'New driver';
     globalLimit.onMessage(limitedSocket, JSON.stringify({ type: 'save' }));
     assert.match(limitedSocket.sent.at(-1).message, /temporarily limited/);
-    assert.equal(globalLimit.allowIdentityCreation('one-more', now + 3_600_001), true);
+    assert.equal(globalLimit.allowIdentityCreation('one-more', globalNow + 3_600_001), true);
   } finally {
     Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
   }
