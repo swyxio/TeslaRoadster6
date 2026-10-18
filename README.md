@@ -61,7 +61,7 @@ pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
 pnpm exec tsx tests/mars-restart.integration.ts # isolated Worker with endgame test fixture
-pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
+pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 8
 ```
 
 The network checks need the local Worker running. See [deployment](docs/DEPLOYMENT.md) for a separate Cloudflare deployment and the native build/preview workflow; deploying is not needed to contribute.
@@ -96,9 +96,9 @@ This is a working foundation, not GTA-scale content or a persistent MMO. Twenty 
 
 Rooms are public-by-code. Delivery money is fictional and session-only; shooting and death/respawn are not implemented. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room simulation resets on deployment, runtime restart, or last disconnect; only each room’s shared Mars fund persists. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
-Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
+Rooms default to **eight players**, with retry or another named room when full. This conservative limit replaces 64 after local load tests showed substantial simulation slowdown at 64. The eight-player sample also narrowly missed the simulation-time target on the busy test host; it is not validated production capacity. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Raise the deployed limit only after measuring playable performance. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
 
-To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
+To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8787 8 60` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. For larger local experiments, start Wrangler with an explicit override such as `pnpm exec wrangler dev --var MAX_PLAYERS:64`. This is a synthetic check, not proof of player experience or sustained production capacity.
 
 ## Layout
 

@@ -6,6 +6,30 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Keep the wheels moving',
+    intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
+    sections: [
+      { title: 'More consistent motion', items: [
+        'Your car keeps moving between network updates, with more immediate steering and flight controls.',
+        'The chase camera stays with you through ordinary takeoffs and landings.',
+        'Nearby cars share the driving timeline so bumping and close passes remain part of the game.'
+      ] },
+      { title: 'Less work around you', items: [
+        'Fewer ambient cars share the roads. Police remain, and different vehicle models appear across rooms.',
+        'Your car keeps its detail; distant cars use simpler models, and rocket hardware takes fewer drawing calls.',
+        'The Bay keeps its geography and landmarks, with more efficient scenery rendering. The 3D view uses a lower resolution on high-density displays while the interface stays sharp.',
+        'Rooms now default to eight players. If one is full, retry or create another named room.'
+      ] },
+      { title: 'Still in alpha', items: [
+        'Long network interruptions can still cause a visible position correction when the connection recovers.',
+        'The smaller room limit is a precaution while testing continues; it is not a performance guarantee for every device or connection.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.14-alpha',
+    label: '0.0.14 Alpha',
+    date: '2026-10-18',
     title: 'The Peninsula local',
     intro: 'Explore Caltrain-inspired stops, local roads and Silicon Valley landmarks.',
     sections: [

@@ -4,11 +4,11 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-17",
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
-  "vars": { "MAX_PLAYERS": "64" },
+  "vars": { "MAX_PLAYERS": "8" },
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }, { "name": "CHAT", "class_name": "GlobalChat" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }, { "tag": "v2", "new_sqlite_classes": ["GlobalChat"] }],
   "previews": {
-    "vars": { "MAX_PLAYERS": "128" },
+    "vars": { "MAX_PLAYERS": "8" },
     "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }, { "name": "CHAT", "class_name": "GlobalChat" }] }
   },
   "observability": { "enabled": true }

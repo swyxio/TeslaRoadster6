@@ -17,12 +17,14 @@ test('quick touch jumps and flips survive release without interrupting steering'
   fakeDocument.hidden=false;fakeDocument.querySelectorAll=(selector)=>selector==='[data-control]'?[steering,drive,jump,flip]:[];
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
+  const edges:{kind:string;id:number}[]=[];controls.onEdge=(kind,id)=>edges.push({kind,id});
   steering.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerdown',2));jump.dispatchEvent(pointer('pointerup',2));jump.dispatchEvent(click(1));
   assert.equal(controls.read().jump,1);assert.equal(controls.read().steer,1);
   controls.airborne=true;drive.dispatchEvent(pointer('pointerdown',3));flip.dispatchEvent(pointer('pointerdown',4));
   assert.equal(controls.read().throttle,1);assert.equal(controls.read().flip,1);assert.equal(controls.read().steer,1);
   drive.dispatchEvent(pointer('pointerup',3));flip.dispatchEvent(pointer('pointerup',4));
   jump.dispatchEvent(click(0));assert.equal(controls.read().jump,2);
+  assert.deepEqual(edges,[{kind:'jump',id:1},{kind:'flip',id:1},{kind:'jump',id:2}], 'each actual press is emitted exactly once');
   controls.clear();assert.equal(controls.read().steer,0);
 });
 
@@ -155,6 +157,18 @@ test('controller action edges pause driving immediately when a menu opens',()=>{
   const controls=new Controls(()=>[pad]);controls.enabled=true;let menus=0;controls.onAction=action=>{if(action==='menu'){menus++;controls.enabled=false;}};
   controls.read();buttons[9].pressed=true;buttons[7].value=1;assert.equal(controls.read().throttle,0);assert.equal(menus,1);
   controls.enabled=true;controls.read();assert.equal(menus,1,'held menu button does not fire twice');
+});
+
+test('action callbacks can snapshot gamepad edge counters without rereading the controller',()=>{
+  const fakeWindow=new EventTarget(),fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const buttons=Array.from({length:16},()=>({pressed:false,value:0}));const pad={connected:true,mapping:'standard',index:0,buttons,axes:[0,0,0,0]} as Gamepad;
+  let reads=0;const controls=new Controls(()=>{reads++;return [pad];});controls.enabled=true;
+  let seen:{jump:number;flip:number}|undefined;
+  controls.onAction=action=>{if(action==='reset')seen=controls.edgeCounters();};
+  controls.read();buttons[0].pressed=true;buttons[14].pressed=true;controls.read();
+  assert.deepEqual(seen,{jump:1,flip:0});assert.equal(reads,2);
+  controls.read();assert.deepEqual(controls.edgeCounters(),{jump:1,flip:0},'held controls do not create another edge');
 });
 
 test('tap jump then hold the same rebound key or touch button to hover',()=>{

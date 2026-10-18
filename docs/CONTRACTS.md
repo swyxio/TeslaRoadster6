@@ -1,4 +1,4 @@
-# Implementation contracts · v31
+# Implementation contracts · v32
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -35,20 +35,20 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v31
+## Wire protocol v32
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:31,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:32,capacity:number}`.
 
 Client messages:
 
 ```json
-{"type":"input","seq":1,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
+{"type":"input","seq":1,"targetTick":3,"roomEpoch":"00000000-0000-0000-0000-000000000000","controlRevision":0,"actionSeq":0,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
 {"type":"sync","token":1}
-{"type":"interact"}
-{"type":"reset"}
-{"type":"autopilot"}
-{"type":"dome"}
-{"type":"selectVehicle","kind":"model-3"}
+{"type":"interact","actionSeq":1,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"reset","actionSeq":2,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"autopilot","actionSeq":3,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"dome","actionSeq":4,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"selectVehicle","kind":"model-3","actionSeq":5,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
 {"type":"ota","enabled":true,"requestId":2}
 {"type":"name","name":"Driver"}
@@ -56,11 +56,11 @@ Client messages:
 {"type":"parking","action":"queue"}
 {"type":"parking","action":"start"}
 {"type":"parking","action":"leave"}
-{"type":"race","action":"join","courseId":"short"}
+{"type":"race","action":"join","courseId":"short","actionSeq":6,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"race","action":"start","courseId":"oval"}
 {"type":"race","action":"leave","courseId":"short"}
-{"type":"minigame","game":"park"}
-{"type":"destination","x":-120,"z":60,"requestId":3}
+{"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"mars","action":"contribute","amount":50,"requestId":4}
 {"type":"mars","action":"board","requestId":5}
 ```
@@ -68,17 +68,27 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:31, capacity:number}
-{type:"state", world:World, inputAck:number, sync?:number}
+{type:"welcome", id:string, version:32, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
+{type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
+{type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
 {type:"marsResult", requestId:number, action:"contribute"|"board", ok:boolean, amount:number}
 ```
 
-Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient’s complete filtered JSON. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz with a strictly increasing positive sequence; the server keeps the latest intent and acknowledges the latest sequence actually used in a physics tick. The same input can run for multiple ticks, and intermediate sequences may be skipped. `sync` tags the next regular snapshot after preceding socket messages; multiple requests are coalesced and do not force extra snapshots or physics ticks.
+Welcome precedes the initial snapshot. The room simulates one fixed 50 ms outer step per completed tick and sends snapshots every two ticks. `tick=T` is the world *after* step T; it advances only when a step completes, independent of wall time. `roomEpoch` identifies one room incarnation: it changes after the room empties and resets, not when a single driver reconnects. The WebSocket is that driver's connection generation. `substeps` is the count used by the most recently completed step (1 at tick zero). The authoritative room retains the adaptive global maximum-speed substep policy. Presentation replay may override its local count, but a last-known count cannot predict unseen traffic, collisions or changing physics.
 
-For local presentation only, the client replays at most three unacknowledged inputs with shared physics from each snapshot. It stops prediction when snapshots are stale, input backlog is excessive, another body is close, the vehicle is airborne or on a special surface, or an action is waiting for its `sync` barrier. A new vehicle or discontinuity clears pending preview. The server alone owns collisions, position, pickups, races, cash and HUD state; this short preview can be corrected when the next snapshot arrives, particularly when inputs are batched or reused. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
+Input frames carry a strictly increasing positive `seq`, the room epoch, the driver's current `controlRevision`, the latest sent `actionSeq` (initially zero), and the intended `targetTick`. The server accepts continuous controls only for T+1 through T+8. A newer sequence replaces the same slot and supersedes older slots at later ticks, preventing old acceleration from returning after a newer release. A missing slot holds the last controls for at most six completed ticks, then neutralizes. A 300 ms wall-clock watchdog also clears stale queued and held controls on the next callback; an edge-only frame cannot refresh the continuous-control watchdog. The rejected frame gets `inputRejected`; a sequence is receipt ordering, not elapsed time or an execution acknowledgement. `sync` tags the next regular snapshot after preceding socket messages, with requests coalesced.
+
+Jump and flip are modulo-2^31 monotonic per-connection press counters. The scheduler recognizes new counters separately from held levels; repeated or backward counters cannot fire again. It reserves successive ticks for distinct same-kind edges, within T+1 through T+8. A slightly late edge (up to three ticks) may be rescheduled even though its continuous controls are rejected; older, far-future and overflow edges expire. Each pending edge expires after 300 ms wall time, independently of later input. `inputEdge` is private to the owner: `accepted` or `rescheduled` reports an edge bridged across an old revision before its level rejection, and a later terminal outcome reports whether it was processed, expired or superseded. Counter gaps do not invent intermediate presses. The simulation consumes an edge even if the car is secured on the ferry or the action is otherwise ineffective; an edge invalidated before the relocated car consumes it is superseded.
+
+Every potentially invalidating action carries a strictly increasing positive `actionSeq` and a synchronous `edgeBaseline` of the current counters; an invalid or backward baseline closes the socket. The server records the sequence even when cooldown or game rules reject the action, but only an accepted action cancels pending controls and marks its baseline seen. Input continues while `sync` waits. After an accepted action, an input with an older revision may still schedule new edges if its action sequence matches the latest processed action and its revision is at least `edgeFloorRevision`; its levels are rejected. Autonomous water or ferry relocation raises the floor to the new revision, closing that bridge even after later actions. A wrong room epoch is rejected before modifying the scheduler. Clients capture separate presses in a bounded queue rather than inferring them from a counter gap.
+
+The owner-only `control` field has `revision`, `actionSeq`, `edgeFloorRevision`, `receivedSeq`, `appliedSeq`, `held`, `heldUntilTick`, `queued` (at most eight `{seq,targetTick,input}` slots) and `jump`/`flip` (`seen`, `processed` and at most eight pending `{id,targetTick}` entries). `receivedSeq` means an ordered frame for this epoch was received, including rejected frames; `appliedSeq` identifies the most recent continuous slot actually run. It is not a duration. The snapshot's T makes all steps through T final; clients replay only later ticks. Reset attempts, accepted teleport/minigame/race placement, vehicle takeover or replacement, autopilot/destination changes, water recovery and forced ferry-apron relocation clear that driver's queue and increment `control.revision`. The separate top-level `poseRevision` increments when the controlled entity changes or its pose changes by more than 1 mm or 0.0001 radians, or on a reported water/ferry relocation. This prevents an autopilot change or floating-point noise during a no-op reset from forcing a camera cut. A revision change for one driver never resets another's. Socket closure clears only that driver's session.
+
+Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Command queues and edge metadata are sent only to their owner. The server alone owns collisions, position, pickups, races, cash and HUD state. Prediction is presentation only and must reconcile authoritative snapshots, including unknown contacts and special surfaces. The client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, a version bump and integration tests; do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The simulation decides membership and applies lift, speed and air. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
@@ -90,7 +100,7 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Start timer with first connection; stop and reset simulation when empty. Each room's Mars fund is durable; players, cash, awards, vehicles and all other simulation state remain ephemeral. Do not replace with a global room object or client-authoritative coordinates.
+Capacity: `MAX_PLAYERS`, default8, clamped2–128. Production and preview use eight as a conservative performance limit; higher settings require explicit load experiments, and eight is not a validated capacity claim. A full room closes with `ROOM_FULL_CODE`; the UI offers retry or another named room. One named Durable Object per room. Start timer with first connection; stop and reset simulation when empty. Each room's Mars fund is durable; players, cash, awards, vehicles and all other simulation state remain ephemeral. Do not replace with a global room object or client-authoritative coordinates.
 
 ## Mars mission
 
@@ -187,7 +197,7 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v31 requires matching world geometry and soccer match state on both ends.
+`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v32 requires matching world geometry and soccer match state on both ends.
 
 Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. It also works on the ceiling and while boosting, including with a Rocket kit from a pickup; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change and clients display replicated air and eligibility.
 
