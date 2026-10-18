@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Flight balance release candidate · 0.0.29 / protocol v44 · 2026-10-18 Pacific
+
+- Integrated production main `f2e4a2d` after the 0.0.28 workshop release. All 906 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. Protocol v44 fences the changed shared physics from v43 clients; a client test verifies an incompatible welcome closes before identity or driving.
+- Local Wrangler prediction and the isolated two-client empty-tank Skyline gate passed on v44. The first integrated two-client room run reached five goals but missed the wall-refill assertion: its observed car stayed near the Dome floor without reaching the wall. A later isolated rerun passed the full room test including wall refill, movement, sky-lane refill and the five-goal match. The first run overlapped another local test and a browser game; the cause is not established. Host one-minute load at the start and end of the successful rerun was about 36 and 19 on 18 logical CPUs. This is a functional check, not a load test.
+- After integrating main, full reports and raw traces for Level 4 flight-turn with steady simulated 150 ms RTT, ground fast-slalom with steady 150 ms RTT and Level 4 flight with bunched delivery exactly matched the candidate traces linked below. These synthetic 120 Hz presentation / 20 Hz physics checks are not browser, GPU, WAN or physical-device performance evidence.
+- In local Chrome, a desktop keyboard jump reached 4 m and used air. Fresh-guest emulated 390 × 844 portrait and 844 × 390 landscape touch presses activated jump/hover, used air and cleared the pressed state on release; the responsive game controls and changelog were inspected at both sizes. No physical device was tested.
+
 ## Flight balance candidate · protocol v43 · 2026-10-18 Pacific
 
 - Against main `dad912e`, the fixed-tick [flight matrix and motion traces](benchmarks/2026-10-18-flight-balance/) record stock and nozzle levels 1–5 for the Roadster and a rocket-retrofitted Semi. Roadster Level 2 stock hover before and Level 4 after both lasted 22.25 s. The Semi now consumes more air in flight, jumps lower and falls faster under bounded fictional tuning based on in-game mass estimates. Its autonomous controller rejects a tested jump into a stopped Robovan and falls back to road navigation; if the obstruction remains, recovery can still report failure.

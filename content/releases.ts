@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A little more gravity',
+    intro: 'Flight takes more planning, especially in heavier vehicles.',
+    sections: [
+      { title: 'Earn your wings', items: [
+        'Early air tanks run out sooner in flight; tank upgrades and efficient nozzles open longer trips.',
+        'Sky currents give a smaller assist, while heavier vehicles jump lower and fall faster. Ground boost lasts as long as before.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.28-alpha',
+    label: '0.0.28 Alpha',
+    date: '2026-10-18',
     title: 'A better workshop',
     intro: 'Give your ride some attention in a new garage.',
     sections: [
