@@ -1,12 +1,13 @@
 # Economy and property design
 
-**Planning proposal, 2026-10-18.** Values below are fictional game money and untested design assumptions, not current game prices or a promise of future implementation. This document records the economy discussion in one place; it does not change the playable game or its contracts.
+**Planning proposal, 2026-10-18.** Values below are fictional game money and untested design assumptions, not current game prices or a promise of future implementation. The [player simulations](ECONOMY_SIMULATIONS.md) compare the current candidate with the earlier proposal and explain its limitations. This document does not change the playable game or its contracts.
 
 At the reference checkout, [delivery](DELIVERY.md) money, regional unlocks and four achievements are session-only. Current regions require both completed deliveries and session lifetime delivery earnings; spending does not relock them. There is no XP, persistent wallet, persistent property or owned income-producing Cybercab. Saved chat identity does not restore game progress. The world has the fictional Alcatraz Rocket Dome, connected Rocket Island and a ferry, plus Yerba Buena Island; Treasure Island is not currently a separate playable island. See [README](../README.md), [MAP](MAP.md), and the shared simulation for actual behavior. This proposal deliberately changes progression and requires a separate persistence and multiplayer design.
 
 ## Goals
 
 - Drive, explore and play with friends immediately; money and ownership add goals, not a mandatory tutorial or a paywall around the basic fleet.
+- Fill the early game with city discoveries, deliveries, landmarks, races, Dome matches, cosmetics, vehicle upgrades and the first Cybercab. Property is a late-game goal.
 - Make money useful: deliveries, achievements and Cybercabs fund cosmetics, property, building and upgrades. Homes are expensive, with a first city-supplied home or plot-plus-build costing $1 million before awards.
 - Make achievements guide players into cities, landmarks, the Dome and property. Give one-off cash, not XP.
 - Let purchases reduce the player's current level. Keep owned items and permanent achievement progress after a level drop.
@@ -21,48 +22,63 @@ Use the **current spendable wallet** for levels; no XP or career-earnings gate. 
 | $0 or less | 0: San Francisco, Marin and Rocket Dome; starter jobs |
 | $10,000 | 1: Oakland and Berkeley |
 | $50,000 | 2: Peninsula and East Bay, including Fremont and SFO |
-| $250,000 | 3: San Jose and the home/plot market |
-| $1,250,000 | 4: luxury purchase tiers |
-| $6,250,000 | 5: estate purchase tiers |
+| $250,000 | 3: San Jose |
+| $500,000 | 4: professional delivery contracts |
+| $1,000,000 | 5: higher-paying fleet and delivery contracts |
+| $2,000,000 | 6: property market, including the $1m starter home and $400k starter plot |
+| $4,000,000 | 7: luxury contracts |
+| $8,000,000 | 8: estate contracts |
 
-Thresholds are inclusive. Current city gates unlock regional groups, not separate cities; each named city in a group gets its own first-unlock badge and $2,500 award once per account. For the model, San Francisco pays $2,500 at the start, Oakland and Berkeley together pay $5,000, San Mateo/Palo Alto/Mountain View/Fremont together pay $10,000, and San Jose pays $2,500. Awards are credited to the wallet and can cause another threshold to be crossed, but crossing the same threshold again never pays again. Marin is a region, not a city. Assign explicit destination-city IDs before offering per-city delivery milestones.
+Thresholds are inclusive. City gates unlock regional groups, not separate cities; each named city in a group gets its own first-unlock badge and $2,500 award once per account. For the model, San Francisco pays $2,500 at the start, Oakland and Berkeley together pay $5,000, San Mateo/Palo Alto/Mountain View/Fremont together pay $10,000, and San Jose pays $2,500. The first arrival at levels 4–8 also awards $2,500 / $5,000 / $5,000 / $10,000 / $20,000, respectively. Awards can cause another threshold to be crossed, but crossing it again never pays again. Marin is a region, not a city. Assign explicit destination-city IDs before offering per-city delivery milestones.
 
-Recalculate levels after each payment, purchase, fine, transfer and one-off award. Relocked areas block **new entry** after the player leaves; do not abruptly eject a player already there. Let an accepted delivery finish, and make home teleport work even if the home's city has relocked. That is an intentional way to reach one's own home despite a lower level. A $1 million purchase with exactly $1 million leaves $0; the first-home award below then raises the wallet to $10,000 and level 1, assuming earlier city-unlock awards were already claimed. The home and its contents remain owned.
+Recalculate levels after each payment, purchase, fine, transfer and one-off award. Relocked areas block **new entry** after the player leaves; do not abruptly eject a player already there. Let an accepted delivery finish and keep local jobs available at that city's normal difficulty and pay; premium contracts still require the current wallet level. Let the owner teleport to and manage an owned plot or home, even if its city has relocked. The owner can then enter that local city on foot or by car. Owned assets and earned achievements persist when levels fall. Before a purchase, show the resulting wallet, level and relocked access; offer a reserve calculation without imposing a mandatory minimum balance.
+
+Buying any new plot or completed home, including player resale or a zero-price transfer, requires level 6 immediately before the transaction. Managing, building on or selling an already owned plot does not. A $1m starter home is therefore still priced at $1m, but the player must first hold $2m; at the threshold its purchase leaves $1m plus any first-home award. Later purchases can leave less and cause a much larger level drop.
 
 ## Cash sources and awards
 
-As an initial tuning experiment, multiply current delivery pay and existing shop, tank, service, OTA and fine values by 50. This preserves their approximate relative scale; the $1 million first home is a separate, deliberately expensive new goal. The current $43 example fare would become $2,150. The actual fare depends on distance, timing and pickup bonuses; later routes can be much longer and pay more. Measure the actual mix before choosing a multiplier or shipping prices.
+As an initial tuning experiment, multiply current shop, tank, service, OTA and fine values by 50, but tune delivery pay by route difficulty and duration. The current $43 example fare would become $2,150 under the old flat ×50 experiment. The candidate simulation instead uses the illustrative jobs below, with ±20% fare and duration variation. The actual fare depends on distance, timing and pickup bonuses; these tiers and job times are invented inputs, not measured gameplay.
+
+| Job tier | Base fare | Typical task time |
+| ---: | ---: | ---: |
+| 0 / 1 / 2 / 3 | $3k / $4k / $6k / $9.5k | 3 / 3.5 / 4.5 / 5.5 min |
+| 4 / 5 / 6 / 7 / 8 | $11k / $13k / $15k / $20k / $26k | 6 / 6.5 / 7 / 7.5 / 8 min |
+
+The model picks the highest tier available from the current balance or the current city's local tier. It does not implement a job board, test routes or prove those earnings are available in the current game.
 
 One-off achievement tiers, payable once each per player and additive when the same action satisfies several achievements:
 
 | Chain | Triggers for levels 1–5 | Award per level |
 | --- | --- | --- |
-| Total deliveries | 1 / 10 / 50 / 100 / 250 | $2,500 / $10,000 / $40,000 / $80,000 / $200,000 |
-| Deliveries **in each city** | 1 / 10 / 25 / 50 / 100 | $2,000 / $8,000 / $20,000 / $40,000 / $80,000 |
-| **Each landmark** | Discover / 1 / 3 / 5 / 10 deliveries there | $2,500 / $5,000 / $10,000 / $20,000 / $40,000 |
-| Rocket Dome wins | 1 / 3 / 10 / 25 / 50 | $5,000 / $15,000 / $35,000 / $75,000 / $150,000 |
+| Total deliveries | 1 / 10 / 50 / 100 / 250 | $2,500 / $5,000 / $10,000 / $20,000 / $40,000 |
+| Deliveries **in each city** | 1 / 10 / 25 / 50 / 100 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
+| **Each landmark** | Discover / 1 / 3 / 5 / 10 deliveries there | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| Rocket Dome wins | 1 / 3 / 10 / 25 / 50 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
+| Each of race and parking challenge completions | 1 / 3 / 10 / 25 / 50 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
 | Cybercabs owned | 1 / 2 / 3 / 4 / 5 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
 | Distinct plots acquired | 1 / 2 / 3 / 5 / 10 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
 | Homes constructed | 1 / 2 / 3 / 5 / 10 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
 
-The first home, bought or constructed, pays an additional $10,000 once. Count unique plot/build events per player, so selling and reacquiring the same plot does not repeat an award. Add small first-use bonuses for decoration, a home charger, home teleport and a launch pad; amounts remain to be tuned. The existing Awards UI should show the next goal, its reward and a map pin. Allow choosing a destination city when jobs exist there; the current generator does not offer that choice.
+The first home, bought or constructed, pays an additional $10,000 once. Unranked, one-time delivery check-ins pay $1k / $1.5k / $2k / $2.5k / $3k / $5k / $10k / $15k at 3 / 5 / 20 / 30 / 40 / 75 / 150 / 200 total jobs; each city's check-ins pay $1k / $2k / $3k at 5 / 15 / 20 jobs. These sit between the five ranked achievement tiers. A separate repeatable $750 contract checkpoint pays every three deliveries. The first cosmetic and first vehicle upgrade pay $1,000 and $2,000 respectively. A completed Dome match pays $1,200 plus $1,800 for a win; a completed race pays $2,500 and a parking challenge $1,500. These completion rewards and one-off achievements are not multiplied. Tune eligibility and anti-AFK rules before implementation.
+
+Count unique plot/build events per player, so selling and reacquiring the same plot does not repeat an award. This does not stop multiple accounts cycling a plot through $0 sales for achievements; property achievement payouts need a sybil/fraud design before trading launches. Add small first-use bonuses for decoration, a home charger, home teleport and a launch pad; amounts remain to be tuned. The existing Awards UI should show the next goal, its reward and a map pin. Allow choosing a destination city when jobs exist there; the current generator does not offer that choice.
 
 Landmarks should include SFO, the Alcatraz Dome, Bay Bridge/Yerba Buena, Golden Gate, Ferry Building, Transamerica Pyramid, Oakland Tribune Tower, Berkeley Campanile, Stanford Hoover Tower, Mission San José and San Jose City Hall. Salesforce and Coit require **landing on the tower**, not merely approaching it. Their visible caps and collision surfaces need a visibly landable target and playtest. Treasure Island needs to be added before it can have an award. Landmark-specific deliveries and city IDs do not yet exist for all these places. A Dome win award needs reliable player/side attribution; coordinate with the separate Dome achievement work rather than duplicate it.
 
-### Smoothing the 250-delivery cliff
+### Early goals and remaining gaps
 
-The original $200,000 award at delivery 250 creates a large step in the model below. A cab or a 30-minute event can earn meaningful cash without advancing the first-home time. A candidate revision keeps the same $332,500 total through 250 deliveries and keeps five ranked achievement levels: give two **unranked progress bonuses** of $50,000 at 150 and 200 deliveries, and $100,000 for the fifth rank at 250. The fifth rank still pays more than the $80,000 fourth rank. This is a recommendation to playtest, not a locked price decision.
+Keep five ranked levels per chain, with small early milestones and repeatable checkpoints. Put a few optional, varied goals on the HUD: a nearby landmark, the next delivery milestone, a race or parking challenge, a Dome match, a cosmetic, and the first cab. Rewarding participation makes trying the Dome useful even without a win. Suggested later experiments include rotating mixed-activity challenges; their payouts and impact are **not** included in the simulations. Avoid presenting repeated payouts or a growing menu as proof of new experiences: simulated one-off milestones and purchases still have multi-hour gaps later on.
 
 ## Cybercabs and events
 
-Proposed ordinal Cybercab prices: $25,000 / $50,000 / $100,000 / $200,000 / $400,000. Each active, dispatched cab earns $15,000 per real active hour before any multiplier; paid amounts arrive in the wallet as they accrue. The model assumes continuous active operation with no operating cost. Offline income and prices beyond the fifth cab remain undecided. Owned cabs are persistent, visible in the world, locatable on the map and branded with the owner's name; a human driver and owner should be distinguishable when different.
+Proposed ordinal Cybercab prices: $25,000 / $50,000 / $100,000 / $200,000 / $400,000. Each active, dispatched cab earns $15,000 per real active hour before any multiplier; paid amounts arrive in the wallet as they accrue. The new simulations assume 65–80% average utilization while the owner is actively playing, no operating cost and no offline income. Offline income and prices beyond the fifth cab remain undecided. Owned cabs are persistent, visible in the world, locatable on the map and branded with the owner's name; a human driver and owner should be distinguishable when different.
 
 Before bonuses, payback is 1h40 / 3h20 / 6h40 / 13h20 / 26h40 respectively. After each one-off ownership award it is 1h20 / 2h40 / 5h20 / 10h40 / 21h20, assuming full utilization and no costs. Five cost $775,000 gross, or $620,000 after those awards, and produce $75,000 per active hour: 8h16 combined payback. These are straight-line calculations, not measured game performance.
 
 Proposed event rules:
 
 - A developer-controlled global event grants **2×** for 30 minutes. A Rocket Dome match win grants **1.5×** to everyone in that room for 10 minutes; another win refreshes the room timer. The winner can additionally receive the first-win achievement once.
-- Multipliers combine multiplicatively, capped at **3×**. Apply them to pickup/delivery earnings and active Cybercab income. Achievement awards, gifts, refunds and resale proceeds are not multiplied.
+- Multipliers combine multiplicatively, capped at **3×**. Apply them to pickup/delivery earnings and active Cybercab income. Match/activity payouts, achievement awards, checkpoints, gifts, refunds and resale proceeds are not multiplied.
 - Use the rate when each pickup or delivery pays; credit cab income proportionally to the time it actually operated at each rate. Show the multiplier, scope and remaining time. In particular, no retroactive multiplication of accumulated cab income.
 - Repeated quick Dome wins might keep the room bonus running indefinitely. Measure win frequency and money creation before deciding whether to change its duration or add a cooldown.
 
@@ -80,7 +96,7 @@ An account may own **at most one ready-built home it acquired by purchase** at a
 | Mansion | $3,200,000 | $4,800,000 | $8,000,000 |
 | Estate | $6,400,000 | $9,600,000 | $16,000,000 |
 
-These are example matched packages, not a requirement to buy only that pairing: any design that physically fits may be built on a plot. The first city-supplied ready-made home is also $1 million. For the first implementation, choose a preset exterior and pay for immediate construction; add material-delivery missions and deeper customization later. Include a two-car garage with each home. Decorations, chargers and launch pads are separate purchases.
+These are example matched packages, not a requirement to buy only that pairing: any design that physically fits may be built on a plot. The first city-supplied ready-made home is also $1 million. For the first implementation, choose a preset exterior and pay for immediate construction; add material-delivery missions and deeper customization later. The $2m market gate means a player buying the $400k plot can immediately afford the $600k build; dividing it into four payments therefore creates no extra progression in the model. Include a two-car garage with each home. Decorations, chargers and launch pads are separate purchases.
 
 ### Scarcity and supply
 
@@ -93,7 +109,7 @@ No mandatory rent, recurring property tax, foreclosure or automatic seizure is p
 
 ### Resale and money sinks
 
-Owners may list vacant plots or completed properties at **any nonnegative price**; the buyer chooses whether to pay it. Use a fixed-price listing first. A sale transfers the plot and any included building; personal cars and portable possessions remain with the seller and return to account storage if needed. List explicitly what transfers. Reject a completed-home sale if the buyer's purchased-home slot is occupied. A listing may be canceled or repriced before sale. There is no guaranteed city buyback or resale value.
+Owners may list vacant plots or completed properties at **any nonnegative price**; the buyer chooses whether to pay it and must meet the current level-6 market gate. Use a fixed-price listing first. A sale transfers the plot and any included building; personal cars and portable possessions remain with the seller and return to account storage if needed. List explicitly what transfers. Reject a completed-home sale if the buyer's purchased-home slot is occupied. A listing may be canceled or repriced before sale. There is no guaranteed city buyback or resale value.
 
 The buyer pays the listed price, the seller receives **95%**, and the remaining 5% leaves the economy. A player-to-player sale otherwise transfers existing cash rather than creating or destroying it. Primary city plot purchases and construction fees are sinks. Example: a player buys a city plot for $400k and builds for $600k, then sells it for $2m. The buyer pays $2m, the seller receives $1.9m, the fee removes $100k, and the seller's nominal profit is $900k before any other expenses or achievement awards. The initial $1m plus the resale fee removes $1.1m in total. A player is free to sell below $1m, so the $1m starting price is a **city-supply price**, not a resale floor.
 
@@ -105,14 +121,16 @@ Keep ordinary available passenger vehicles free to drive and select; do not intr
 
 Two garage spaces are included per home; the next five spaces cost $50k / $100k / $200k / $400k / $800k. Cosmetic starting prices: paint $2k, decals and lettering $5k, wheels/trim $15k, wraps and fleet branding $50k, and premium lights/effects $150k. Account-owned cosmetics can be reapplied to compatible cars; earned special designs can celebrate achievements. Show driver names and Cybercab owner names. Prices and compatibility need playtesting.
 
+Optional early vehicle or flight kits at $10k / $20k / $40k give players goals before property. Their abilities and balance are not specified; the simulation counts purchases but gives them no speed or income benefit. Keep the Roadster's existing flight and public launch pads available without buying a kit.
+
 Optional home chargers cost $25k / $50k / $100k; launch/thermal upgrades cost $50k / $100k / $200k. Home teleport is free after ownership. The effects and whether they change competitive balance remain to be designed.
 
-## First-home napkin math
+## Historical first-home napkin math
 
-The following scenarios simulate the original, **unsmoothed** award ladder above. They are not measured playtimes:
+The following earlier scenarios use the original 1/10/50/100/250 delivery awards of $2.5k/$10k/$40k/$80k/$200k, larger city awards, and a level-3 property gate. They do **not** use the candidate's later property gate or revised pay and awards. Keep them as a record of why the design changed; use the [new simulations](ECONOMY_SIMULATIONS.md) for the current candidate. They are not measured playtimes:
 
 - Start with $0, then credit the $2,500 SF unlock. Each delivery pays exactly $2,150 and takes 102 seconds: the game's current $43 example fare × 50, with an illustrative 40-second pickup plus 62-second drop-off. Every job is on time with no pickup bonus. The model assumes a selectable supply of SF and Oakland jobs, which the current game does not have.
-- Credit all global, per-city and first-time city-unlock awards shown above. At sufficient balance, immediately buy a $400k plot and later a $600k house; first-plot / first-construction / first-home awards total $20k. No other landmark, decoration or property rewards. Home-market access requires level 3 before purchase; these prices exceed that threshold. A cab strategy buys the indicated number as soon as affordable, before the plot, and receives each ownership award once.
+- Credit the original global, per-city and first-time city-unlock awards encoded in the historical script. At sufficient balance, immediately buy a $400k plot and later a $600k house; first-plot / first-construction / first-home awards total $20k. No other landmark, decoration or property rewards. Home-market access requires level 3 before purchase; these prices exceed that threshold. A cab strategy buys the indicated number as soon as affordable, before the plot, and receives each ownership award once.
 - Each active cab earns $15k/hour continuously, even while the player plays a Dome match or changes cities. Construction and purchases take no time, and cab income can fund a purchase between deliveries. No tickets, upgrades, repairs, charging, waiting, downtime or resale. Actual play will differ.
 - The two-city route completes 100 SF deliveries, spends 5 minutes repositioning, then delivers in Oakland at the same assumed rate. For event scenarios, a 2× global event runs from minutes 30–60; a five-minute Dome match pauses driving from 35–40, then a win grants the $5k first-win award and a 1.5× room bonus from 40–50, stacking to 3×. These timings are chosen examples, not a guarantee the player wins or an event occurs.
 
@@ -146,9 +164,9 @@ The standalone model is planning code, not imported by the game. It checks that 
 ## Implementation order and open questions
 
 1. Agree on persistent player identity, authoritative wallet and atomic one-off awards; preserve the playable session/solo loop. Update gameplay and protocol contracts with implementation, not in this proposal.
-2. Add balance-based level changes, city/landmark achievement tracking and clear UI. Coordinate the already-planned Dome attribution work.
-3. Add owned, visible Cybercabs and room match bonuses; add global event coordination separately. Measure fare/hour, cab utilization, bonus uptime, level churn and currency created/removed.
-4. Add a guaranteed starter home/plot, preset construction, garage and home teleport. Add persistent scenic parcels and resale once cross-room ownership and atomic transfers exist.
-5. Expand cosmetics, player-created property decoration, additional vehicles and flight/thermal options. Player-priced collectible/skin trading can use the same eventual marketplace, but item transfer rules and availability remain open.
+2. Add balance-based level changes, early city/landmark/delivery milestones and clear next-goal UI. Coordinate the already-planned Dome attribution work; measure real route duration and earnings.
+3. Add simple cosmetics and early vehicle goals, then owned visible Cybercabs and room match bonuses; add global event coordination separately. Measure fare/hour, cab utilization, bonus uptime, level churn and currency created/removed.
+4. Add the late-game guaranteed starter home/plot, preset construction, garage and home teleport. Add persistent scenic parcels and resale once cross-room ownership and atomic transfers exist.
+5. Expand player-created property decoration, additional vehicles and flight/thermal options. Player-priced collectible/skin trading can use the same eventual marketplace, but item transfer rules and availability remain open.
 
 Before launch, decide persistent identity/recovery, solo-wallet trust, building and garage permissions for visitors, actual plot capacity, whether parcels can be traded without a home, event cadence and offline cab earnings. None of the proposed balances or duration targets is validated by production or device playtesting.

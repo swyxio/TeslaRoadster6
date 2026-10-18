@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Economy progression simulations · 2026-10-18 Pacific
+
+- On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
+- Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
+
 ## Economy planning model · 2026-10-18 Pacific
 
 - On checkout `8625bf0`, `pnpm test` passed 273 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The standalone planning script also passed a separate TypeScript check.
