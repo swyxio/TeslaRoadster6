@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Dome roof fix and economy integration · protocol v22 · 2026-10-18 Pacific
+
+- After the latest main integration and roof-crossing fix, `pnpm test` passed 348 tests and `pnpm build` passed. Vite retains its existing large-chunk warning. Focused tests cover an ascending car crossing the roof and side/end fly-ins.
+- The protocol-v22 room, jump fixture and Chrome observations below preceded the roof fix; they are not physical-device or load tests.
+
 ## Combined island, driving update and China Basin stadium · protocol v22 · 2026-10-18 Pacific
 
 - `pnpm test` passed 340 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Coverage includes the island ramps and banked oval, temporary Rocket expiry, ferry and parking behavior, dome roof and game scoring.
