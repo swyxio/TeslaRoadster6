@@ -7,8 +7,8 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
-// Protocol 30 combines sequenced inputs with the updated Bay map and sky currents.
-assert.equal(PROTOCOL_VERSION, 30);
+// Protocol 31 includes the updated Bay world and Caltrain stops.
+assert.equal(PROTOCOL_VERSION, 31);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

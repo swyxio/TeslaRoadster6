@@ -6,7 +6,7 @@ export function createSkyCurrents(){
  const group=new T.Group(),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(1,1,1);
  const makeLabel=(text:string,color:string)=>{
   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;const ctx=canvas.getContext('2d')!;
-  ctx.fillStyle='#17383de8';ctx.fillRect(0,4,512,88);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 37px system-ui';ctx.fillText(text,256,49);
+  ctx.fillStyle='#17383de8';ctx.fillRect(0,4,512,88);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 37px system-ui';ctx.fillText(text,256,49,488);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   const sprite=new T.Sprite(new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));sprite.scale.set(15,2.8,1);group.add(sprite);return sprite;
  };
@@ -14,7 +14,10 @@ export function createSkyCurrents(){
  const dashMaterial=new T.MeshBasicMaterial({color:0x71e7ff,transparent:true,opacity:.82,depthWrite:false});
  const jets=JET_STREAMS.map(lane=>{
   const mesh=new T.InstancedMesh(dashGeometry,dashMaterial,24);mesh.frustumCulled=false;group.add(mesh);
-  const label=makeLabel('SKY LANE · SPEED + AIR','#a8f3ff');label.position.set(lane.start.x,lane.height+4,lane.start.z);
+  const caltrain=lane.id.startsWith('caltrain-');
+  const label=makeLabel(caltrain?`${lane.name.toUpperCase()} · SPEED + AIR`:'SKY LANE · SPEED + AIR',caltrain?'#ffd8ad':'#a8f3ff');
+  if(caltrain)label.scale.set(25,4.7,1);
+  label.position.set(caltrain?(lane.start.x+lane.end.x)/2:lane.start.x,lane.height+4,caltrain?(lane.start.z+lane.end.z)/2:lane.start.z);
   const dx=lane.end.x-lane.start.x,dz=lane.end.z-lane.start.z,length=Math.hypot(dx,dz),angle=-Math.atan2(dz,dx);
   return {lane,mesh,label,length,dx:dx/length,dz:dz/length,rotation:new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),angle)};
  });
@@ -29,6 +32,10 @@ export function createSkyCurrents(){
   const showLabel=(label:T.Sprite)=>{const distance=viewer?Math.hypot(viewer.x-label.position.x,viewer.y-label.position.y,viewer.z-label.position.z):Infinity;label.visible=distance>20&&distance<180;};
   for(const {lane,mesh,label,length,dx,dz,rotation} of jets){
    showLabel(label);
+   // Stop markers outside the fog are neither drawn nor animated; the longer
+   // original lanes remain visible along their full extents.
+   mesh.visible=!lane.id.startsWith('caltrain-')||!viewer||Math.hypot(viewer.x-label.position.x,viewer.y-lane.height,viewer.z-label.position.z)<1400;
+   if(!mesh.visible)continue;
    for(let row=0;row<3;row++)for(let i=0;i<8;i++){
     const along=((i/8+row*.043+time*18/length)%1)*length,side=(row-1)*lane.halfWidth*.7;
     position.set(lane.start.x+dx*along-dz*side,lane.height+(row-1)*lane.halfHeight*.45,lane.start.z+dz*along+dx*side);
