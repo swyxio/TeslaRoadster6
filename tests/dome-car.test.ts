@@ -88,14 +88,22 @@ test('ordinary cars remain enclosed without adhesion; Rocket cannot escape throu
   assert.equal(car.inDome,true);assert.equal(car.supportId,'dome');
 });
 
-test('a grounded approach from the island joins the dome without teleporting and can leave normally',()=>{
-  const {world,car}=setup();world.pickups=[];
-  Object.assign(car,{x:DOME.x-DOME.halfLength-8,z:DOME.z,y:0,supportId:'ground',yaw:-Math.PI/2,speed:12,air:42,health:83});
-  for(let i=0;i<50&&!car.inDome;i++)step(world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
-  assert.equal(car.inDome,true);assert.ok(car.x<DOME.x-DOME.halfLength+10,'entry keeps the driven position');
-  assert.ok(car.speed>0,'entry preserves motion');assert.equal(car.air,42);assert.equal(car.health,83);
-  assert.ok(travelDome(world,'one'));assert.equal(car.inDome,false);
-  assert.ok(Math.hypot(car.x-DOME.x,car.z-DOME.z)>100,'the explicit leave action returns to the Bay');
+test('every vehicle drives through the stadium gate in both directions without teleporting',()=>{
+  for(const kind of VEHICLE_IDS){
+    const {world,player}=setup();world.pickups=[];
+    const car=makeEntity('gate-car',kind,DOME.x,120,'one');world.entities=[car];player.entityId=car.id;
+    Object.assign(car,{yaw:Math.PI,air:42,health:83});
+    for(let i=0;i<600&&!car.inDome;i++)step(world,new Map([['one',{...NEUTRAL,throttle:.35}]]),.05);
+    assert.equal(car.inDome,true,`${kind} enters`);
+    assert.ok(car.z<DOME.z,`${kind} keeps its driven position`);
+    assert.equal(car.domeReturn,'sf');assert.deepEqual([car.air,car.health],[42,83]);
+    Object.assign(car,{yaw:0,speed:4,vx:0,vz:-4});
+    for(let i=0;i<200&&car.inDome;i++)step(world,new Map([['one',{...NEUTRAL,throttle:.35}]]),.05);
+    assert.equal(car.inDome,false,`${kind} exits`);
+    assert.ok(car.z>DOME.z-30,`${kind} leaves at the gate without teleporting`);
+    assert.ok(car.speed>0,`${kind} retains motion`);
+    assert.deepEqual([car.air,car.health],[42,83]);
+  }
 });
 
 test('natural entry disables autonomy while preserving position and resources',()=>{
@@ -137,7 +145,7 @@ test('passing above the roof or landing outside the capsule does not enter the d
   assert.ok(car.y>2*DOME.radius);
   Object.assign(car,{x:DOME.x+DOME.halfLength+12,z:DOME.z,y:.3,supportId:null,vx:0,vy:-5,vz:0,speed:0,pushX:0,pushZ:0});
   for(let i=0;i<10;i++)step(world,new Map(),.05);
-  assert.equal(car.supportId,'ground');assert.equal(car.inDome,false,'the island outside the arena is not its interior');
+  assert.equal(car.supportId,'ground');assert.equal(car.inDome,false,'the plaza outside the arena is not its interior');
 });
 
 test('ordinary cars respect yaw-projected body length at both side walls',()=>{

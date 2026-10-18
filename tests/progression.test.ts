@@ -72,8 +72,8 @@ test('level gates stop ground driving, jumps and the north approach while leavin
   step(world,new Map(),.05);assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX);assert.equal(player.delivery.lastBlocked?.level,1);assert.equal(car.health,100);
   Object.assign(car,{x:109.9,z:60,y:20,yaw:-Math.PI/2,speed:70,vx:70,vz:0,vy:0,supportId:null});
   step(world,new Map(),.05);assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX,'flight cannot bypass the bridge gate');
-  Object.assign(car,{x:200,z:ACCESS_BOUNDARIES.alcatrazNorthZ-.1,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
-  step(world,new Map(),.05);assert.ok(car.z<ACCESS_BOUNDARIES.alcatrazNorthZ,'the northern corridor cannot enter Oakland');
+  Object.assign(car,{x:200,z:ACCESS_BOUNDARIES.islandNorthZ-.1,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
+  step(world,new Map(),.05);assert.ok(car.z<ACCESS_BOUNDARIES.islandNorthZ,'the northern corridor cannot enter Oakland');
   player.delivery.level=1;Object.assign(car,{x:109.9,z:60,y:0,yaw:-Math.PI/2,speed:70,vx:0,vz:0,supportId:'ground'});
   step(world,new Map(),.05);assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);
   const npc=makeEntity('npc','model-3',109.9,60);Object.assign(npc,{yaw:-Math.PI/2,speed:70,npc:true});world.entities=[npc];

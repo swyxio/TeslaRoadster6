@@ -26,9 +26,10 @@ test('both bridges traverse water and connect the correct shores',()=>{
 test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
  assert.ok(isRocketIsland(200,-1650));
  assert.ok(!isRocketIsland(0,-800));
- // The connected dome shares the island's protected area.
+ // The dome is on the SF waterfront, separate from the island.
  assert.ok(isLand(DOME.x,DOME.z));
- assert.ok(isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isLand(300,-850),'the old Alcatraz arena land is gone');
  for(let i=0;i<ISLAND_TRACK.length;i++){
   const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
   for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){
@@ -75,6 +76,7 @@ test('Supercharger lots are on flat land, clear of buildings and roads, with usa
   const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
   assert.ok(lot,station.id);
   const footprint={x:station.x,z:station.z,w:CHARGER_LOT.width,d:CHARGER_LOT.length,yaw:0};
+  assert.equal(contact(footprint,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id} stadium plaza`);
   for(const dx of [-12,0,12])for(const dz of [-12,0,12])assert.equal(terrainHeight(station.x+dx,station.z+dz),0,station.id);
   assert.ok(!nearbyBuildings(station.x,station.z,30).some(b=>contact(footprint,{...b,yaw:0})),`${station.id} building`);
   assert.ok(!ROADS.some(r=>contact(footprint,{...r,yaw:r.angle??0})),`${station.id} road`);

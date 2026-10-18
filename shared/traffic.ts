@@ -8,8 +8,11 @@ export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
 // large district loops let NPCs tour more than a single block.
 function loop(left:number,top:number,right:number,bottom:number):Point[]{return [{x:left+3,z:top+3},{x:right-3,z:top+3},{x:right-3,z:bottom-3},{x:left+3,z:bottom-3}];}
-export const ROUTES:Point[][]=[loop(-240,-180,0,180),loop(-180,-120,60,120),loop(-120,-60,0,60),loop(330,-180,510,180),loop(390,-120,570,120),loop(330,-60,450,60)];
-for(let x=-240;x<0;x+=60)for(let z=-180;z<180;z+=60)ROUTES.push(loop(x,z,x+60,z+60));
+export const ROUTES:Point[][]=[loop(-240,-180,0,120),loop(-180,-120,60,120),loop(-120,-60,0,60),loop(330,-180,510,180),loop(390,-120,570,120),loop(330,-60,450,60)];
+for(let x=-240;x<0;x+=60)for(let z=-180;z<180;z+=60){
+  if(x>=-120&&z>=120)continue; // The China Basin stadium replaces these blocks.
+  ROUTES.push(loop(x,z,x+60,z+60));
+}
 // Cross-Bay route includes loops on both shores; no mid-bridge U-turn.
 ROUTES.push([{x:0,z:63},{x:327,z:63},{x:333,z:117},{x:387,z:117},{x:387,z:57},{x:330,z:57},{x:3,z:57},{x:3,z:117},{x:57,z:117},{x:57,z:63}]);
 
