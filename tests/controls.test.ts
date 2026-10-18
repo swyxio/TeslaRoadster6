@@ -23,3 +23,21 @@ test('quick touch jumps and flips survive release without interrupting steering'
   jump.dispatchEvent(click(0));assert.equal(controls.read().jump,2);
   controls.clear();assert.equal(controls.read().steer,0);
 });
+
+test('Ctrl brakes and touch brake combines with steering without sticking',()=>{
+  const steering=new FakeButton('KeyA'),brake=new FakeButton('KeyB');
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=(selector)=>selector==='[data-control]'?[steering,brake]:[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const key=(type:string,code:string)=>{const e=new Event(type);Object.defineProperty(e,'code',{value:code});return e;};
+  fakeWindow.dispatchEvent(key('keydown','ControlLeft'));assert.equal(controls.read().brake,true);
+  fakeWindow.dispatchEvent(key('keyup','ControlLeft'));assert.equal(controls.read().brake,false);
+  fakeWindow.dispatchEvent(key('keydown','ControlRight'));assert.equal(controls.read().brake,true);
+  fakeWindow.dispatchEvent(key('keyup','ControlRight'));
+  const turn=new Event('keydown',{cancelable:true});Object.defineProperties(turn,{code:{value:'KeyA'},ctrlKey:{value:true}});
+  fakeWindow.dispatchEvent(turn);assert.equal(turn.defaultPrevented,true);fakeWindow.dispatchEvent(key('keyup','KeyA'));
+  steering.dispatchEvent(pointer('pointerdown',1));brake.dispatchEvent(pointer('pointerdown',2));
+  assert.equal(controls.read().steer,1);assert.equal(controls.read().brake,true);
+  brake.dispatchEvent(pointer('pointercancel',2));assert.equal(controls.read().brake,false);assert.equal(controls.read().steer,1);
+});

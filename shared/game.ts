@@ -172,22 +172,30 @@ export function step(world:World,inputs:Map<string,Input>,dt:number):void {
         e.vx=dir*Math.cos(next)*e.speed;e.vy=dir*Math.sin(next)*e.speed;e.vz=0;
       }
     }else if(grounded){
+      // Braking into a turn breaks rear traction only for a player driving
+      // forward; straight braking, reverse and autonomous traffic stay stable.
+      const drifting=!!e.driver&&!person&&Math.abs(input.steer)>.1&&e.speed>5&&(input.brake||input.throttle<0);
       const top=person?8:boostFraction?Math.max(72,spec!.maxSpeed):spec!.maxSpeed;
       const accel=person?28:rocket?spec!.acceleration+boostFraction*(45.46-spec!.acceleration):spec!.acceleration;
       e.speed+=input.throttle*accel*dt;
       e.speed*=Math.exp(-(input.throttle===0?.65:rocket?0:.12)*dt);
-      if(input.brake){const delta=(person?20:spec!.brakeDecel)*dt;e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-delta);}
+      if(input.brake){const delta=(person?20:spec!.brakeDecel)*(drifting?.45:1)*dt;e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-delta);}
       e.speed=clamp(e.speed,-Math.min(top*.35,12),top)*(e.health<20?.995:1);
       const oldYaw=e.yaw;
+      const oldVX=-Math.sin(oldYaw)*e.speed+e.pushX,oldVZ=-Math.cos(oldYaw)*e.speed+e.pushZ;
       if(person)e.yaw+=input.steer*2.7*dt;
       else {
         const rearFactor=spec!.fourWheelSteering?1+.55*Math.max(0,1-Math.abs(e.speed)/25):1;
         const yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*rearFactor;
-        e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*dt;
+        e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*(drifting?1.5:1)*dt;
+      }
+      if(drifting){
+        const side=oldVX*Math.cos(e.yaw)-oldVZ*Math.sin(e.yaw);
+        e.pushX=Math.cos(e.yaw)*side;e.pushZ=-Math.sin(e.yaw)*side;
       }
       e.pitch=0;e.roll=0;e.pitchRate=0;e.yawRate=(e.yaw-oldYaw)/dt;e.rollRate=0;
       e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;
-      e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-3*dt);e.pushZ*=Math.exp(-3*dt);
+      e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-(drifting?1:3)*dt);e.pushZ*=Math.exp(-(drifting?1:3)*dt);
       const nextHeight=rampHeight(e.x,e.z);
       if(nextHeight!==null&&(onRamp||(oldY===0&&oldX<=STUNT_RAMP.start&&e.x>=STUNT_RAMP.start))){
         e.y=nextHeight;e.vy=e.vx*rampSlope;e.pitch=Math.atan(-Math.sin(e.yaw)*rampSlope);

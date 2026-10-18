@@ -69,6 +69,30 @@ test('rooftop landing stays supported and can drive off; positive steer turns le
   assert.ok(car.x < 0); assert.ok(car.yaw > 0);
 });
 
+test('player braking into a turn slides, then regains grip; straight braking still stops', () => {
+  function carAtSpeed() {
+    const setupResult = setup();
+    setupResult.world.entities = [setupResult.car];
+    Object.assign(setupResult.car, { x: 0, z: 0, yaw: 0, speed: 20 });
+    return setupResult;
+  }
+  const slide = carAtSpeed(), normal = carAtSpeed();
+  for (let i = 0; i < 12; i++) {
+    step(slide.world, new Map([['one', {...NEUTRAL, steer: 1, brake: true}]]), .05);
+    step(normal.world, new Map([['one', {...NEUTRAL, steer: 1}]]), .05);
+  }
+  const slip = Math.hypot(slide.car.pushX, slide.car.pushZ);
+  assert.ok(slip > 1); assert.ok(slip > Math.hypot(normal.car.pushX, normal.car.pushZ) + 1);
+  for (let i = 0; i < 20; i++) step(slide.world, new Map(), .05);
+  assert.ok(Math.hypot(slide.car.pushX, slide.car.pushZ) < slip * .1);
+  const reverse = carAtSpeed();
+  for (let i = 0; i < 8; i++) step(reverse.world, new Map([['one', {...NEUTRAL, steer: -1, throttle: -1}]]), .05);
+  assert.ok(Math.hypot(reverse.car.pushX, reverse.car.pushZ) > 1);
+  const straight = carAtSpeed();
+  for (let i = 0; i < 60; i++) step(straight.world, new Map([['one', {...NEUTRAL, brake: true}]]), .05);
+  assert.equal(straight.car.speed, 0); assert.equal(Math.hypot(straight.car.pushX, straight.car.pushZ), 0);
+});
+
 test('pickups refill resources once and return after twenty simulation seconds', () => {
   const world = createWorld();
   const player = addPlayer(world, 'collector', 'Collector');

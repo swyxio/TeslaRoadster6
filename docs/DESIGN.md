@@ -20,7 +20,7 @@ Roadster flight can shorten a run but nearby police may spot it, pursue and slow
 
 A compressed Bay spans distinct San Francisco and Oakland shores, Yerba Buena Island and Marin. The Bay Bridge crosses water to Oakland; the Golden Gate crosses the strait to Marin. Street grids, waterfront, parks, port cranes and landmark silhouettes are hand-authored, not a surveyed map. Driveable decks and streets are flat at the same height; the Oakland launch ramp and stunt loop are shared physical surfaces; water is below and off-bridge water landings recover the car to a safe street. See [MAP.md](MAP.md). Four primary-source station identities use artistic coordinates; air refilling and flight are fictional.
 
-Controls: steering plus forward/reverse; separate brake. Person movement currently uses the same turn-and-move arcade controls. Exit requires grounded speed≤5m/s; entry selects closest empty car within7m. Unstuck recovery repositions the current entity while preserving condition/air and is not death/respawn.
+Controls: steering plus forward/reverse; separate brake. While a player car is moving forward, braking or reversing into a turn starts an arcade slide; release to regain grip. Person movement currently uses the same turn-and-move arcade controls. Exit requires grounded speed≤5m/s; entry selects closest empty car within7m. Unstuck recovery repositions the current entity while preserving condition/air and is not death/respawn.
 
 ## Visual direction
 
