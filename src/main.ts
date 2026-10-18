@@ -7,7 +7,8 @@ import { Controls } from './controls';
 import { STATIONS } from '../shared/stations';
 import { type Entity } from '../shared/game';
 import { BRIDGES, MAP_BOUNDS, REGIONS, ROADS } from '../shared/map';
-import { orderTarget, payoutFor } from '../shared/delivery';
+import { orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
+import { celebrateReward, resetCelebration } from './rewards';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -29,9 +30,10 @@ document.querySelector('#app')!.innerHTML = `
  <aside class="world-caption"><span class="eyebrow">37°46′ N &nbsp; 122°25′ W</span><h2>Open relationships.<br>Open roads.</h2><span class="caption-rule"></span><p>TESLA · WAYMO · CRUISE · ZOOX</p></aside>
 </section>
 <section id="hud" class="hidden" aria-label="Driving instruments">
+ <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
  <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button></div>
- <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: San Francisco, Oakland, Marin and bridges; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas><div class="map-key"><i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
+ <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: San Francisco, Oakland, Marin and bridges; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="keyboard-help"><kbd>W A S D</kbd> drive <kbd>SPACE</kbd> lift <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>B</kbd> brake <kbd>V</kbd> autopilot <kbd>G</kbd> fleet <kbd>L</kbd> scores</div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse">REV</button><button data-control="KeyB" aria-label="Brake">STOP</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button data-control="Space">LIFT ↑</button><button class="accelerate" data-control="KeyW">DRIVE ↑</button></div></div>
@@ -52,13 +54,14 @@ const controls = new Controls();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; throw new Error('WebGL unavailable'); }
-let menu = true, started = false, hudTime = 0;
+let menu = true, started = false, hudTime = 0, lastRewardId = 0;
 const roomParam = new URLSearchParams(location.search).get('room');
 if (roomParam && /^[a-z0-9][a-z0-9-]{0,31}$/.test(roomParam)) $<HTMLInputElement>('room').value=roomParam;
 function toggleMenu(show: boolean) {menu=show;controls.enabled=!show;controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started);$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
+  lastRewardId=0;resetCelebration();
   if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
@@ -94,7 +97,13 @@ function minimap(entity:Entity|undefined){
   session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
   const player=session.world.players.find(p=>p.id===session.id);if(player){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
   session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id)return;map.beginPath();map.arc(px(e.x),pz(e.z),3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
-  if(entity){map.save();map.translate(px(entity.x),pz(entity.z));map.rotate(-entity.yaw);map.beginPath();map.moveTo(0,-6);map.lineTo(-4,5);map.lineTo(0,3);map.lineTo(4,5);map.closePath();map.fillStyle='#ffbe66';map.fill();map.restore();}
+  if(entity){
+    map.save();map.translate(px(entity.x),pz(entity.z));
+    const markerScale=Math.max(1,160/(map.canvas.clientWidth||160));map.scale(markerScale,markerScale);
+    map.beginPath();map.arc(0,0,10,0,Math.PI*2);map.fillStyle='#17343bcc';map.fill();map.strokeStyle='#fff7de';map.lineWidth=2;map.stroke();
+    map.rotate(-entity.yaw);map.beginPath();map.moveTo(0,-15);map.lineTo(-7,9);map.lineTo(0,5);map.lineTo(7,9);map.closePath();
+    map.lineJoin='round';map.strokeStyle='#17343b';map.lineWidth=3;map.stroke();map.fillStyle='#ffbe66';map.fill();map.restore();
+  }
 }
 
 const scoresDialog=$<HTMLDialogElement>('scores-dialog');
@@ -155,7 +164,9 @@ scene.start(dt=>{
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
     $('mission').textContent=`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
     const paused=session.world.time>d.activeUntil;
-    $('hint').textContent=order.stage==='pickup'?`Stop at the gold marker. Base fare ${money(order.base)}.`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused?' · paused':''} · ${money(payoutFor(order))} if delivered now`;
+    const pickupBonus=pickupBonusFor(order);
+    $('hint').textContent=order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused?' · paused':''} · ${money(payoutFor(order))} if delivered now`;
+    if(d.lastReward&&d.lastReward.id>lastRewardId){lastRewardId=d.lastReward.id;celebrateReward(d.lastReward);}
     $('delivery-stats').textContent=`${money(d.cash)} earned · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'POLICE CHASE · land and escape, or risk a $25 ticket':d.lastTicket!==null?`Last ticket −${money(d.lastTicket)} · flying near police starts a chase`:'Flying near police starts a chase.';

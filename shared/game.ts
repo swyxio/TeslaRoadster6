@@ -7,7 +7,7 @@ import { engageAutopilot, routePose, trafficInput } from './traffic';
 import { initialDelivery, updateDelivery, type DeliveryState } from './delivery';
 import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 
-export const PROTOCOL_VERSION=4;
+export const PROTOCOL_VERSION=5;
 export type Input = { throttle:number;steer:number;boost:boolean;lift:boolean;roll:number;brake:boolean };
 export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;roll:number;speed:number;health:number;air:number;driver:string|null;vy:number;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number;police?:PoliceState};
 export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState};
@@ -63,7 +63,7 @@ function spawnPosition(world:World,kind:Entity['kind']='roadster'):{x:number;z:n
 export function addPlayer(world:World,id:string,name:string):Player {
   const existing=world.players.find(p=>p.id===id);if(existing)return existing;
   const spawn=spawnPosition(world),car=makeEntity(`ride-${id}`,'roadster',spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
-  const player:Player={id,name:name.slice(0,24),entityId:car.id,delivery:initialDelivery()};world.entities.push(car);world.players.push(player);return player;
+  const player:Player={id,name:name.slice(0,24),entityId:car.id,delivery:initialDelivery(spawn)};world.entities.push(car);world.players.push(player);return player;
 }
 function cleanupCars(world:World){world.entities=world.entities.filter(e=>!e.owner||e.driver!==null||world.players.some(p=>p.id===e.owner));}
 function release(e:Entity,world:World){e.driver=null;e.speed=0;e.autopilot=false;if(e.npc){engageAutopilot(e);e.pauseUntil=world.time+2;}}

@@ -18,3 +18,17 @@
 @media(max-height:550px) and (pointer:coarse){.mission{max-width:280px}.mission #police-status,.mission #delivery-stats{display:none}.mission #hint{display:block}.drive-actions{top:65px;left:auto;right:16px;max-width:420px}}
 
 @media(max-height:550px) and (pointer:coarse){.mission #police-status.chased{display:block}}
+
+.map-key b{color:#ffd180;font-size:8px;white-space:nowrap}
+.reward{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%);z-index:20;pointer-events:none;opacity:0;text-align:center}
+.reward.celebrate{opacity:1;animation:reward-appear .45s cubic-bezier(.2,1.5,.5,1) both}
+.reward-card{position:relative;display:grid;gap:2px;min-width:230px;padding:16px 24px;border:2px solid #fff1bf;border-radius:14px;background:#173a3aeF;box-shadow:0 0 0 6px #ffc87835,0 12px 35px #102b34a0;color:#ffdda1}
+.reward-card span{font:700 11px ui-monospace,monospace;letter-spacing:2px;color:#d8ede0}
+.reward-card strong{font-size:clamp(42px,7vw,72px);font-weight:850;line-height:1;color:#ffd080;text-shadow:0 3px 0 #986143}
+.confetti{position:absolute;inset:50% auto auto 50%}.confetti i{position:absolute;display:block;width:8px;height:14px;background:var(--color);border-radius:2px;opacity:0}
+.celebrate .confetti i{animation:confetti-pop 1.6s ease-out both}
+@keyframes reward-appear{from{opacity:0;transform:translate(-50%,-50%) scale(.55)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes confetti-pop{0%{opacity:1;transform:translate(0,0) rotate(0)}75%{opacity:1}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--spin))}}
+@media(pointer:coarse),(max-width:800px){.reward{top:36%}.reward-card{min-width:180px;padding:12px 18px}.map-key b{font-size:7px}}
+@media(max-height:550px) and (pointer:coarse){.map-panel{display:block;bottom:125px;left:16px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-title{font-size:7px;margin-bottom:3px}.map-panel .map-key{display:none}.reward{top:48%}.reward-card{min-width:160px;padding:8px 14px}.reward-card strong{font-size:40px}}
+@media(prefers-reduced-motion:reduce){.reward.celebrate{animation:none}.celebrate .confetti i{display:none}}

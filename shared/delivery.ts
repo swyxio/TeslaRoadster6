@@ -20,21 +20,25 @@ export const CUSTOMERS = [
   { id: 'lake', name: '34 Lake Lane · Oakland', x: 510, z: -180 },
   { id: 'port', name: '8 Port Place · Oakland', x: 330, z: 120 },
 ] as const;
-export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; estimate: number; base: number };
-export type DeliveryState = { cash: number; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastTicket: number | null; tickets: number; ticketGraceUntil: number };
+export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
+export type DeliveryState = { cash: number; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: number | null; tickets: number; ticketGraceUntil: number };
 
-function orderFor(index: number): Order {
+function orderFor(index: number, origin: { x: number; z: number }): Order {
   const restaurant = index % RESTAURANTS.length;
   // Never choose a destination beside the pickup.
   const candidates = CUSTOMERS.map((customer, i) => ({ customer, i })).filter(({ customer }) => Math.hypot(customer.x - RESTAURANTS[restaurant].x, customer.z - RESTAURANTS[restaurant].z) > 100);
   const customer = candidates[Math.floor(index / RESTAURANTS.length + index * 3) % candidates.length].i;
   const distance = Math.hypot(CUSTOMERS[customer].x - RESTAURANTS[restaurant].x, CUSTOMERS[customer].z - RESTAURANTS[restaurant].z);
-  return { restaurant, customer, stage: 'pickup', elapsed: 0, estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
+  const pickupDistance = Math.hypot(origin.x - RESTAURANTS[restaurant].x, origin.z - RESTAURANTS[restaurant].z);
+  return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
 }
-export function initialDelivery(): DeliveryState {
-  return { cash: 0, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0), lastPayout: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0 };
+export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
+  return { cash: 0, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0 };
 }
 export function orderTarget(order: Order) { return order.stage === 'pickup' ? RESTAURANTS[order.restaurant] : CUSTOMERS[order.customer]; }
+export function pickupBonusFor(order: Order): number {
+  return Math.round(order.base * .4 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
+}
 export function payoutFor(order: Order): number {
   const difference = order.estimate - order.elapsed;
   const bonus = difference > 0 ? Math.round(order.base * .75 * Math.min(1, difference / order.estimate)) : 0;
@@ -48,19 +52,26 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
   const active = world.time <= delivery.activeUntil;
   if (active) {
     delivery.activeSeconds += dt;
-    if (delivery.order.stage === 'dropoff') delivery.order.elapsed += dt;
+    delivery.order.elapsed += dt;
   }
   const target = orderTarget(delivery.order);
   if (entity.y > 1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > 9) return;
   if (delivery.order.stage === 'pickup') {
+    const bonus = pickupBonusFor(delivery.order);
+    if (bonus > 0) reward(delivery, 'pickup', bonus);
     delivery.order.stage = 'dropoff';
     delivery.order.elapsed = 0;
     delivery.lastPayout = null;
   } else {
     const payout = payoutFor(delivery.order);
-    delivery.cash += payout;
+    if (payout > 0) reward(delivery, 'delivery', payout);
     delivery.lastPayout = payout;
     delivery.completed++;
-    delivery.order = orderFor(delivery.completed);
+    delivery.order = orderFor(delivery.completed, entity);
   }
+}
+
+function reward(delivery: DeliveryState, kind: 'pickup' | 'delivery', amount: number): void {
+  delivery.cash += amount;
+  delivery.lastReward = { id: (delivery.lastReward?.id ?? 0) + 1, kind, amount };
 }
