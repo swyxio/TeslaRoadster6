@@ -741,6 +741,14 @@ After integrating the concurrent charging and island changes, protocol v27 passe
 
 The deployed `tesland.swyx.io` game advertised protocol v25 and joined a shared room in Chrome. Its live two-client room integration passed; the test was not a load or ferry-crossing test. Both the new and previous domains served the Worker. A follow-up menu layout fix was checked locally at 1272×845 and built successfully, keeping the welcome heading reachable when the menu is taller than the viewport.
 
+## 2026-10-18 · Performance and architecture pass
+
+On the 0.0.13 Alpha branch based on `9d81b35`, all 447 tests and `pnpm build` passed; both browser and Worker typechecks ran, and Vite still reported its large-chunk warning. Focused regression tests cover input cadence, session disconnects, police targeting, pickups, ferry and island collision behavior, and navigation. The runtime bundle measured 265.78 kB gzip versus 274.68 kB on that baseline. Simulation hashes matched in the controlled benchmark, but local 64-client load runs fell behind real time and varied considerably. The measurement details, reproducible commands, and outstanding capacity and device work are in [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md).
+
+Chrome desktop joined a named local room, drove, flew, and showed a police citation; the menu and static changelog reflected the release. The desktop console showed no errors. Emulated 390×844 portrait and 844×390 landscape layouts rendered, including landscape touch controls. Automated taps did not activate reliably during this session; touch interaction and physical-device behavior remain unverified. The diagnostic desktop frame sample is documented in the audit and is not a GPU or sustained-performance measurement.
+
+Local Wrangler on protocol v30 passed the two-client gameplay integration, including destination navigation and activity snapshots, and the chat integration. A separate two-seat room verified full-room rejection, a named room and a freed slot. A short local frame sample negotiated WebSocket compression. These checks do not establish capacity, WAN behavior or a ferry crossing.
+
 On a separate earlier follow-up, 345 tests and `pnpm build` passed. Simulation covered recovery from a representative opposite-facing city lane and rejection of an excessive regional detour. The mini-game panel test checked snapshot-confirmed start/leave, duplicate clicks, timeout and disconnection; a local two-client room run checked immediate race start, switching to a parking queue, immediate start and leave. A separate run timed out during the cockpit assertion while Wrangler was reloading. A fresh Chrome visual check of the follow-up controls was blocked by tab navigation and frame-tree timeouts; the earlier desktop Park It and Dome checks above apply to the prior build. These checks do not establish smoothness or safe routing in every traffic situation.
 
 ## 2026-10-18 · Delivery-led economy study

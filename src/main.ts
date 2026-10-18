@@ -752,7 +752,7 @@ scene.start(dt=>{
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
-  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='disconnected'?'○ DISCONNECTED':'● SOLO PLAYGROUND';
+  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`Room: ${session.room}`:'';
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
