@@ -7,6 +7,7 @@ import {PAINTS,DECALS,type StyleChoice} from '../shared/vehicle-style';
 import {parseMessage} from '../worker/protocol';
 import {snapshotFor} from '../worker/snapshot';
 import {createVehicle,setVehicleStyle} from '../src/vehicles';
+import {VEHICLES} from '../shared/vehicles';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Sky'),car=makeEntity('car','roadster',SHOPS[0].x,SHOPS[0].z,'p');
@@ -48,4 +49,33 @@ test('the Cybercab has visible paint and decal meshes',()=>{
   cab.traverse(node=>{if(node instanceof T.Mesh&&node.userData.originalVehiclePaint)changed++;});
   assert.ok(changed>0,'Cybercab body is repainted');
   assert.ok(cab.getObjectByName('vehicle-decal')?.children.length,'Cybercab has checker marks on both sides');
+});
+test('motorcycle decals sit on both fairings without changing a shared bike',()=>{
+  for(const kind of ['ducati-panigale-v4','kawasaki-ninja-h2-carbon'] as const){
+    const bike=createVehicle(kind),other=createVehicle(kind),body:T.Mesh[]=[];
+    bike.traverse(node=>{
+      if(node instanceof T.Mesh&&node.material instanceof T.MeshStandardMaterial&&node.material.color.getHex()===VEHICLES[kind].color)body.push(node);
+    });
+    assert.ok(body.length,`${kind} has a painted fairing`);
+    const geometry=body[0].geometry,raycaster=new T.Raycaster();
+    for(const style of ['stripe','checker'] as const){
+      setVehicleStyle(bike,kind,{paint:'mint',decal:style});
+      const decal=bike.getObjectByName('vehicle-decal');assert.ok(decal);
+      assert.equal(decal.children.length,style==='stripe'?2:12);
+      bike.updateMatrixWorld(true);
+      for(const piece of decal.children){
+        assert.ok(piece instanceof T.Mesh);
+        const side=Math.sign(piece.position.x);
+        for(const dy of [-.4,.4])for(const dz of [-.4,.4]){
+          raycaster.set(new T.Vector3(side*(Math.abs(piece.position.x)+.04),piece.position.y+piece.scale.y*dy,piece.position.z+piece.scale.z*dz),new T.Vector3(-side,0,0));
+          const hit=raycaster.intersectObjects(body)[0];
+          assert.ok(hit,`${kind} ${style} has fairing behind each corner`);
+          const gap=Math.abs(piece.position.x-hit.point.x)-piece.scale.x/2;
+          assert.ok(Math.abs(gap)<.002,`${kind} ${style} touches its fairing (gap ${gap})`);
+        }
+      }
+      assert.equal(body[0].geometry,geometry,'styling preserves cached geometry');
+      assert.equal(other.getObjectByName('vehicle-decal'),undefined,'other clones stay unchanged');
+    }
+  }
 });

@@ -37,6 +37,7 @@ const cylinder = new T.CylinderGeometry(1, 1, 1, 20);
 const sphere = new T.SphereGeometry(1, 12, 8);
 const DARK = 0x171c23, RUBBER = 0x16181b, GLASS = 0x253f4c;
 const SILVER = 0xc2c9ce, LIGHT = 0xeafaff, RED_LIGHT = 0xef303a;
+export const MOTORCYCLE_FAIRING_WIDTH = .42;
 
 function material(color: number, metalness = .18, emissive = false): T.MeshStandardMaterial {
   const key = `${color}:${metalness}:${emissive}`;
@@ -229,7 +230,7 @@ function buildBike(id: 'ducati-panigale-v4' | 'kawasaki-ninja-h2-carbon'): T.Gro
   wheel(root, 'wheel_r', 0, wb / 2, ducati ? .31 : .315, .19, accent);
   // The frame is open around the two wheels; fairings sit above and between them.
   box(root, [0, .47, .02], [.34, .30, .56], DARK);
-  fairing(root, .42, [[-.96, .68], [-.88, .96], [-.54, 1.08], [-.23, .88], [.08, .67], [-.10, .34], [-.56, .36]], color);
+  fairing(root, MOTORCYCLE_FAIRING_WIDTH, [[-.96, .68], [-.88, .96], [-.54, 1.08], [-.23, .88], [.08, .67], [-.10, .34], [-.56, .36]], color);
   fairing(root, .30, [[.02, .70], [.27, .83], [.72, .84], [.89, .70], [.35, .61]], color);
   box(root, [0, .86, .27], [.27, .08, .41], DARK); // seat
   const seat = new T.Object3D(); seat.name = 'seat_driver'; seat.position.set(0, .90, .27); root.add(seat);

@@ -2,7 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
 import { VEHICLES, isLuxuryVehicle, type VehicleId, type VehicleSpec } from '../shared/vehicles';
-import { buildLuxuryModel } from './luxury-models';
+import { buildLuxuryModel, MOTORCYCLE_FAIRING_WIDTH } from './luxury-models';
 import { PAINTS, type VehicleStyle } from '../shared/vehicle-style';
 import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
@@ -254,6 +254,14 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
   if(style.decal!=='none'){
     decal=new T.Group();decal.name='vehicle-decal';
     for(const side of [-1,1]){
+      if(spec.shape==='motorcycle'){
+        // The overall bike width includes handlebars; decals follow the narrower front fairing.
+        const x=side*(MOTORCYCLE_FAIRING_WIDTH*.5+.004),y=.66,z=-.48;
+        if(style.decal==='stripe')box(decal,x,y,z,.008,.08,.66,0xffe9b9);
+        else for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+          box(decal,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+        continue;
+      }
       const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
       if(style.decal==='stripe')box(decal,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
       else for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
