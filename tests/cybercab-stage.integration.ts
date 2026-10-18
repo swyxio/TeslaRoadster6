@@ -155,6 +155,58 @@ try{
   await until(async()=>{const state=await inspect(d.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'blocked predecessor and later stage recovery');
   assert.equal((await inspect(d.driverId)).progress.cash,d.progress.cash-123+1);
 
+  // Overflow closes the observed tail and stages it behind 32 speculative
+  // events, even while the first profile write remains blocked.
+  type OverloadResult={queue:number;failed:boolean;closes:number;overloadApplied:boolean;final:EconomyIntent[];open:number};
+  async function overload(driver:Awaited<ReturnType<typeof seed>>,invalidHead:boolean,closedCount=0){
+    await rpc('arm',{driverId:driver.driverId,fault:'hold-before'});
+    const result=await post<OverloadResult>('/__cab-stage/overload',{...driver,invalidHead,closedCount});
+    assert.equal(result.queue,33+(closedCount?1:0),'the final intervals add at most two bounded batches');
+    assert.equal(result.failed,true);assert.equal(result.closes,1);assert.equal(result.overloadApplied,false);assert.equal(result.open,0);
+    const tail=result.final.at(-1)!;
+    assert.equal(tail.sequence,34+(closedCount?1:0));assert.deepEqual(tail.action,{kind:'cab-income',intervals:[{assetId:'cab-a',startMs:1000,endMs:1240,multiplier:1}]});
+    if(closedCount){assert.equal(result.final[0].sequence,34);assert.equal(result.final[0].action.kind,'cab-income');
+      if(result.final[0].action.kind==='cab-income')assert.equal(result.final[0].action.intervals.length,closedCount);}
+    await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:driver.driverId})).held,'overloaded predecessor held');
+    await until(async()=>{const saved=await keys(driver.room,driver.driverId);return result.final.every(item=>saved.includes(`cab-stage:${driver.driverId}:${item.eventId}`));},'overload tail durably staged');
+    return tail;
+  }
+  const overloaded=await seed(),overloadObserver=connect(`/api/room/${overloaded.room}`,true);
+  await until(()=>overloadObserver.input.active,'overload observer joins');
+  const overloadTail=await overload(overloaded,false,128);
+  const observedTick=overloadObserver.input.tick,applied=overloadObserver.input.control?.appliedSeq??0;
+  const inputTimer=setInterval(()=>{if(overloadObserver.input.ready)overloadObserver.input.send(NEUTRAL);},100);
+  try{await until(()=>overloadObserver.input.tick>=observedTick+8&&(overloadObserver.input.control?.appliedSeq??0)>applied,
+    'other player receives room ticks and input while overload drains');}finally{clearInterval(inputTimer);}
+  assert.equal((await rpc<{held:boolean}>('fault-state',{driverId:overloaded.driverId})).held,true);
+  await stop(child);child=undefined;child=start();await ready();
+  const overloadFence=randomUUID(),overloadRoom=`overload-next-${randomUUID().slice(0,8)}`;
+  const overloadRecovered=await rpc<{sequence:number;progress:DriverProgress}>('acquire',
+    {driverId:overloaded.driverId,fence:overloadFence,room:overloadRoom},15_000);
+  assert.equal(overloadRecovered.sequence,35);assert.equal(overloadRecovered.progress.cash,overloaded.progress.cash);
+  assert.equal(overloadRecovered.progress.cybercabs!.assets[0].gross,1);
+  assert.equal(overloadRecovered.progress.cybercabs!.assets[0].lastEndMs,1240);
+  assert.equal(overloadRecovered.progress.cybercabs!.assets[0].remainder,3_840_000);
+  assert.equal(await stage({eventId:overloadTail.eventId,driverId:overloaded.driverId,fence:overloaded.fence,
+    roomId:overloaded.room,sequence:35,intervals:[{assetId:'cab-a',startMs:1000,endMs:1240,multiplier:1}]}),'superseded');
+  const overloadAgain=await rpc<{progress:DriverProgress}>('acquire',
+    {driverId:overloaded.driverId,fence:randomUUID(),room:`overload-again-${randomUUID().slice(0,8)}`},15_000);
+  assert.equal(overloadAgain.progress.cash,overloadRecovered.progress.cash);assert.equal(overloadAgain.progress.cybercabs!.assets[0].gross,1);
+
+  // An invalid predecessor can invalidate the speculative wallet entirely.
+  // The observed tail still survives and is applied to the committed wallet.
+  const invalidOverload=await seed(),invalidTail=await overload(invalidOverload,true);
+  await rpc('release',{driverId:invalidOverload.driverId});
+  await until(async()=>{const state=await post<{processing:boolean;staging:number}>('/__cab-stage/overload-state',{room:invalidOverload.room});
+    return !state.processing&&state.staging===0;},'failed overloaded queue drains');
+  assert.ok((await keys(invalidOverload.room,invalidOverload.driverId)).includes(`cab-stage:${invalidOverload.driverId}:${invalidTail.eventId}`));
+  await rpc('producer-gone',{room:invalidOverload.room,driverId:invalidOverload.driverId,fence:invalidOverload.fence});
+  const invalidRecovered=await rpc<{sequence:number;progress:DriverProgress}>('acquire',
+    {driverId:invalidOverload.driverId,fence:randomUUID(),room:`overload-invalid-${randomUUID().slice(0,8)}`},15_000);
+  assert.equal(invalidRecovered.sequence,34);assert.equal(invalidRecovered.progress.cash,invalidOverload.progress.cash+1);
+  assert.equal(invalidRecovered.progress.earned,invalidOverload.progress.earned);
+  assert.equal(invalidRecovered.progress.cybercabs!.assets[0].gross,1);
+
   // An alarm that finds a hung profile must return. A later alarm must find a
   // different driver's orphaned stage that was added after the first scan.
   const sharedRoom=`alarm-${randomUUID().slice(0,8)}`,slow=await seed(sharedRoom),orphan=await seed(sharedRoom);

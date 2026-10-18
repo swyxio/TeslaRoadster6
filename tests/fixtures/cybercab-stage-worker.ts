@@ -1,13 +1,44 @@
 // LOCAL TEST ONLY: exercise the production room journal and per-player queue.
-import cabFixture, { GameRoom } from './cybercab-room-worker';
+import cabFixture, { GameRoom as CabGameRoom } from './cybercab-room-worker';
 import { DriverProfile, GlobalChat, RoomEconomy as WalletRoomEconomy, GlobalIncome } from './luxury-wallet-worker';
 import { EconomySession } from '../../worker/economy-session';
-import { progressFrom, type DriverOutcome, type EconomyIntent } from '../../worker/driver-profile';
+import { progressFrom, type DriverOutcome, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
 import type { CabIncomeStage } from '../../worker/room-economy';
-import { addPlayer, createEmptyWorld } from '../../shared/game';
+import { addPlayer, createEmptyWorld, makeEntity } from '../../shared/game';
 import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
 
-export { GameRoom, DriverProfile, GlobalChat, GlobalIncome };
+export { DriverProfile, GlobalChat, GlobalIncome };
+export class GameRoom extends CabGameRoom {
+  private overloadSession:EconomySession|null=null;
+  async fixtureOverload(driverId:string,fence:string,roomId:string,progress:DriverProgress,invalidHead:boolean,closedCount:number){
+    const world=createEmptyWorld(),player=addPlayer(world,driverId,'Overloaded driver');
+    const cab=makeEntity('fixture-cab','cybercab',0,0);
+    Object.assign(cab,{owner:driverId,npc:true,autopilot:true,cab:{assetId:'cab-a'}});world.entities.push(cab);
+    let closes=0,overloadApplied=false;
+    const socket={send(){},close(){closes++;}} as unknown as WebSocket;
+    const ledger=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(roomId));
+    const session=new EconomySession(this.env,ledger,world,player,socket,driverId,fence,roomId,1,1,progress,new Map(),new Set());
+    this.overloadSession=session;
+    session.observeCabs(1000);session.observeCabs(1120);session.observeCabs(1240);
+    const closed=Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals'];
+    for(let i=0;i<closedCount;i++)closed.push({assetId:'cab-a',startMs:i,endMs:i+1,multiplier:1});
+    for(let i=0;i<32;i++)session.update(player,()=>{
+      if(invalidHead){player.delivery.cash=Number.MAX_SAFE_INTEGER;player.delivery.earned=-1;player.delivery.tickets++;}
+      else player.delivery.cash--;
+    });
+    session.update(player,()=>{overloadApplied=true;});
+    const queue=Reflect.get(session,'queue') as {intent:EconomyIntent}[];
+    const result={queue:queue.length,failed:Reflect.get(session,'failed') as boolean,closes,overloadApplied,
+      final:queue.slice(32).map(item=>item.intent),open:(Reflect.get(session,'cabOpen') as Map<string,unknown>).size};
+    session.finish();this.ctx.waitUntil(session.freeze());
+    return result;
+  }
+  async fixtureOverloadState(){
+    const session=this.overloadSession;
+    return {processing:session?Reflect.get(session,'processing') as boolean:false,
+      staging:session?(Reflect.get(session,'staging') as Set<unknown>).size:0};
+  }
+}
 export class RoomEconomy extends WalletRoomEconomy {
   private alarmCalls=0;
   private alarmActive=false;
@@ -96,15 +127,17 @@ async function rejectedHeadSimulation(){
   return {initial,persisted,writes,stages,barrier:session.sync(),failedDrained,failedQueue:(Reflect.get(failed,'queue') as unknown[]).length};
 }
 
-type Env={ECONOMIES:DurableObjectNamespace<RoomEconomy>;INCOME:DurableObjectNamespace<GlobalIncome>};
+type Env={ECONOMIES:DurableObjectNamespace<RoomEconomy>;INCOME:DurableObjectNamespace<GlobalIncome>;ROOMS:DurableObjectNamespace<GameRoom>};
 export default {
   async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(request.url).pathname;
     if(path==='/__cab-stage/rejected-head')return Response.json(await rejectedHeadSimulation());
     if(path==='/__cab-stage/total')return Response.json({total:await env.INCOME.get(env.INCOME.idFromName('global')).total()});
     if(path.startsWith('/__cab-stage/')){
-      const body=await request.json() as {room:string;stage:CabIncomeStage;intent:EconomyIntent};
+      const body=await request.json() as {room:string;stage:CabIncomeStage;intent:EconomyIntent;driverId:string;fence:string;progress:DriverProgress;invalidHead:boolean;closedCount?:number};
       const room=env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room));
+      if(path==='/__cab-stage/overload')return Response.json(await env.ROOMS.get(env.ROOMS.idFromName(body.room)).fixtureOverload(body.driverId,body.fence,body.room,body.progress,body.invalidHead,body.closedCount??0));
+      if(path==='/__cab-stage/overload-state')return Response.json(await env.ROOMS.get(env.ROOMS.idFromName(body.room)).fixtureOverloadState());
       if(path==='/__cab-stage/lose-reply'){await room.fixtureLoseStageReply();return Response.json({ok:true});}
       if(path==='/__cab-stage/hold-reply'){await room.fixtureHoldStageReply();return Response.json({ok:true});}
       if(path==='/__cab-stage/hold-state')return Response.json(await room.fixtureStageState());

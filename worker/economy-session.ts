@@ -197,6 +197,14 @@ export class EconomySession {
     // Bound memory during an extended backend outage. The pending events keep
     // retrying after this driver leaves; the rest of the room is unaffected.
     if(this.queue.length>=32){
+      // Preserve the final observed intervals before closing this session. Do
+      // not project them through a speculative wallet that may be rejected;
+      // the journal settles them after the preceding events, or on recovery.
+      this.closeCabIntervals();
+      while(this.cabIntervals.length){
+        const intervals=this.cabIntervals.splice(0,128);
+        this.enqueue({kind:'cab-income',intervals});
+      }
       this.failed=true;
       try{this.socket.close(1011,'Wallet delayed. Rejoin to recover.');}catch{}
       return;
