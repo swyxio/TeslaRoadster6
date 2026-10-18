@@ -15,6 +15,7 @@ pnpm exec tsx scripts/economy-five-minute.ts --players 250 --hours 8 --landmarks
 pnpm exec tsx scripts/economy-five-minute.ts --players 250 --hours 8 --contracts --json > public/blog/economy/sensitivity-contracts.json
 pnpm exec tsx scripts/economy-charts.ts --players 250
 pnpm exec tsx scripts/economy-developer.ts --players 250 --json > public/blog/economy/developer-simulation.json
+pnpm exec tsx scripts/economy-tower-chart.ts
 pnpm exec tsx scripts/economy-community.ts --json
 ```
 

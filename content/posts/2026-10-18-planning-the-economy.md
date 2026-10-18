@@ -92,6 +92,11 @@ For players who want to keep building, the property career can grow upward. A de
 Across our seven paths, the median 20-story tower arrives after **101–163 active hours**. Drivers pay for each stage as soon as they can afford it; the tower run carries each path's later earning rate forward after hour 40. The earlier $1.2m-per-floor curve pushed the same goal past 489 hours, so we gave the building a larger foundation cost and more approachable additions.
 
 <figure>
+<picture><source media="(max-width: 600px)" srcset="/blog/economy/developer-journey-mobile.svg"><img src="/blog/economy/developer-journey.svg" alt="Seven delivery-led paths show median active hours to a first home, development plot, and five, ten and twenty floors."></picture>
+<figcaption>Home, plot and building milestones across 250 seeded runs per path. Later income is projected from hours 32–40.</figcaption>
+</figure>
+
+<figure>
 <img src="/blog/economy/developer-tower.webp" alt="A Bay Area residential tower rises above a small neighborhood, with a crane adding its upper floors." loading="lazy">
 <figcaption>Imagine a plot growing from its first foundation into a tower, one story at a time. Concept art for the developer path.</figcaption>
 </figure>
