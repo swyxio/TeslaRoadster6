@@ -222,6 +222,45 @@ export class RoomEconomy extends ProductionRoomEconomy {
 /** Deterministic positioning while all rewards and purchases use real game logic. */
 export class GameRoom extends ProductionGameRoom {
   private fixtureLive=new Set<string>();
+  private measuring=false;
+  private measureStart:{wall:number;world:number;tick:number}|null=null;
+  private measuredTicks:number[]=[];
+  private droppedTicks=0;
+  private maxQueue=0;
+  constructor(ctx:DurableObjectState,env:ConstructorParameters<typeof ProductionGameRoom>[1]) {
+    super(ctx,env);
+    const tick=Reflect.get(this,'tick') as ()=>void;
+    Reflect.set(this,'tick',()=>{
+      if(!this.measuring)return tick.call(this);
+      const start=performance.now();
+      try{tick.call(this);}finally{
+        const elapsed=performance.now()-start;
+        if(this.measuredTicks.length<1500)this.measuredTicks.push(elapsed);else this.droppedTicks++;
+        const sessions=Reflect.get(this,'sessions') as Map<WebSocket,{economy:object}>;
+        for(const session of sessions.values())this.maxQueue=Math.max(this.maxQueue,(Reflect.get(session.economy,'queue') as unknown[]).length);
+      }
+    });
+  }
+  async fixtureMeasure(action:'start'|'stop') {
+    const world=Reflect.get(this,'world') as World;
+    const sessions=Reflect.get(this,'sessions') as Map<WebSocket,{id:string;economy:object}>;
+    if(action==='start'){
+      if(this.measuring||sessions.size!==5)throw new Error('Measurement needs exactly five connected clients');
+      this.measuredTicks=[];this.droppedTicks=0;this.maxQueue=0;
+      this.measureStart={wall:performance.now(),world:world.time,tick:Reflect.get(this,'tickCount') as number};
+      this.measuring=true;return {started:true};
+    }
+    if(!this.measuring||!this.measureStart)throw new Error('No active measurement');
+    this.measuring=false;
+    return {wallMs:performance.now()-this.measureStart.wall,worldSeconds:world.time-this.measureStart.world,
+      tickCount:(Reflect.get(this,'tickCount') as number)-this.measureStart.tick,players:sessions.size,
+      ticksMs:this.measuredTicks,droppedTicks:this.droppedTicks,maxQueue:this.maxQueue};
+  }
+  async fixtureQueues() {
+    const sessions=Reflect.get(this,'sessions') as Map<WebSocket,{id:string;economy:object}>;
+    return [...sessions.values()].map(session=>({playerId:session.id,queued:(Reflect.get(session.economy,'queue') as unknown[]).length,
+      processing:Reflect.get(session.economy,'processing') as boolean}));
+  }
   async fixtureSetLive(driverId:string,fence:string,live:boolean) {
     const key=`${driverId}:${fence}`;
     if(live)this.fixtureLive.add(key);else this.fixtureLive.delete(key);
@@ -321,6 +360,15 @@ export default {
       case '/__wallet-test/queue-income': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixtureQueueIncome(body.playerId,body.count));
+      }
+      case '/__wallet-test/measurement-start': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureMeasure('start'));
+      }
+      case '/__wallet-test/measurement-stop': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureMeasure('stop'));
+      }
+      case '/__wallet-test/queues': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureQueues());
       }
       case '/__wallet-test/position': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));

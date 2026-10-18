@@ -39,3 +39,22 @@ curl -sS -X POST http://127.0.0.1:8797/__wallet-test/workshop \
 
 The fixture grants $20 million only in its local storage. Delete
 `/tmp/tesland-wallet-visual` after the playtest to remove that isolated state.
+
+## Sustained active-wallet sample
+
+With the isolated fixture running and the host otherwise idle, run:
+
+```sh
+pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp/tesland-wallet-throughput.json
+```
+
+The sample connects four funded drivers and an observer, warms up, measures a
+five-second no-purchase baseline, then samples 60 seconds of production room
+ticks with 20 Hz input and 48 paid workshop changes. Active OTA and delivery
+timers generate their normal checkpoints; a fresh OTA subscription renews
+after 120 simulated seconds, beyond this window. The JSON artifact contains
+raw per-input acknowledgement times, snapshot times and local tick timings,
+plus profile commit attempts, queue bounds and cleanup counts. Fixture
+instrumentation and same-host client decoding affect the result; it is not a
+production or capacity measurement. The script exits nonzero if the existing
+room-throughput gate or the recorded correctness conditions fail.
