@@ -56,7 +56,7 @@ export class Session {
   vehicleStyleResult: ({requestId:number;ok:boolean}&StyleChoice)|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
-  marsResult: {requestId:number;action:'board';ok:boolean}|null = null;
+  marsResult: {requestId:number;action:'board'|'contribute';ok:boolean;amount:number;available?:number}|null = null;
   identityResult: {requestId:number;ok:boolean;message:string;levelBaseline:{level:number;eligibleIncome:number;afterSnapshot:number}|null}|null = null;
   wallet: WalletView|null = null;
   luxuryResult: LuxuryResult|null = null;
@@ -271,7 +271,12 @@ export class Session {
   }
   mars(){
     const requestId=++this.nextUpgradeRequest;this.marsResult=null;
-    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'board',requestId},false))this.marsResult={requestId,action:'board',ok:false};
+    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'board',requestId},false))this.marsResult={requestId,action:'board',ok:false,amount:0};
+    return requestId;
+  }
+  contributeMars(amount:number){
+    const requestId=++this.nextUpgradeRequest;this.marsResult=null;
+    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'contribute',amount,requestId},false))this.marsResult={requestId,action:'contribute',ok:false,amount:0};
     return requestId;
   }
   setOta(enabled:boolean){

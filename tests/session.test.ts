@@ -176,10 +176,15 @@ test('online Mars actions use an ordered sync barrier and clear stale results on
   const requestId=session.mars();
   assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'board',requestId});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'marsResult',requestId,action:'board',ok:true});
+  socket.message({type:'marsResult',requestId,action:'board',ok:true,amount:0});
   assert.equal(session.marsResult?.ok,true);
+  const donation=session.contributeMars(123);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:123,requestId:donation});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  socket.message({type:'marsResult',requestId:donation,action:'contribute',ok:false,amount:0,available:75});
+  assert.deepEqual(session.marsResult,{type:'marsResult',requestId:donation,action:'contribute',ok:false,amount:0,available:75});
   session.join('friends','Alex');assert.equal(session.marsResult,null);
-  socket.message({type:'marsResult',requestId,action:'board',ok:true});assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'board',ok:true,amount:0});assert.equal(session.marsResult,null);
   session.disconnect();
 });
 

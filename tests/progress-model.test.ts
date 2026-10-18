@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld } from '../shared/game';
 import { awardDeliveryTarget, awardProgress, awardSaveView, deliveryStandings, GameResultHistory, nextDeliveryLevel } from '../src/progress-model';
+import { MARS_GOAL } from '../shared/mars';
 
 function setup(){const world=createWorld(),player=addPlayer(world,'p','Driver');return {world,player};}
 let snapshot=0;
@@ -74,6 +75,14 @@ test('race win progress uses starters after green even if an opponent leaves',()
   assert.match(awardProgress('race-winner',player,world),/Checkpoint/);
   world.races.rounds[0].starterCount=1;
   assert.match(awardProgress('race-winner',player,world),/Start a race with another driver/);
+});
+
+test('Mars award progress reports both mission funds and recognizes either goal',()=>{
+  const {world,player}=setup();
+  world.mars.fund=4;world.mars.roomFund=7;
+  assert.match(awardProgress('to-mars',player,world),/Global: \$4.*Room: \$7/);
+  world.mars.roomFund=MARS_GOAL;assert.equal(awardProgress('to-mars',player,world),'Mission funded · board at Fremont');
+  world.mars.roomFund=0;world.mars.fund=MARS_GOAL;assert.equal(awardProgress('to-mars',player,world),'Mission funded · board at Fremont');
 });
 
 

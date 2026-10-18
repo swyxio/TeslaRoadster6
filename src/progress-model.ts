@@ -1,7 +1,7 @@
 import { LEVELS } from '../shared/delivery';
 import type { Player, World } from '../shared/game';
 import { PARKING_LOTS } from '../shared/parking-lots';
-import { MARS_GOAL } from '../shared/mars';
+import { MARS_GOAL, marsGoalReached } from '../shared/mars';
 import { playerRace } from '../shared/race';
 import { RACE_COURSES } from '../shared/race-courses';
 import { domeGoals } from '../shared/soccer';
@@ -107,7 +107,7 @@ export function awardProgress(id:AchievementId,player:Player|undefined,world:Wor
     const starters=race.round.phase==='lobby'||race.round.phase==='countdown'?race.round.entrants.length:race.round.starterCount;
     return id==='race-winner'&&starters<2?'Start a race with another driver to compete for this award':course?`Checkpoint ${Math.min(race.entrant.nextGate,course.gates.length)} / ${course.gates.length}`:'Race in progress';
   }
-  if(id==='to-mars')return world.mars.fund>=MARS_GOAL?(player.delivery.level<2?'Funded · unlock level 2 and board at Fremont':'Funded · board at Fremont'):`Mission fund: $${world.mars.fund.toLocaleString('en-US')} / $${MARS_GOAL.toLocaleString('en-US')}`;
+  if(id==='to-mars')return marsGoalReached(world.mars)?'Mission funded · board at Fremont':`Global: $${world.mars.fund.toLocaleString('en-US')} / $${MARS_GOAL.toLocaleString('en-US')} · Room: $${world.mars.roomFund.toLocaleString('en-US')} / $${MARS_GOAL.toLocaleString('en-US')}`;
   if(id==='bay-hopper'&&player.achievements.crossing?.crossedWater)return 'Over the water · reach the opposite shore';
   const participant=world.soccer.participants.find(item=>item.playerId===player.id);
   if(!participant)return 'Ready to earn';

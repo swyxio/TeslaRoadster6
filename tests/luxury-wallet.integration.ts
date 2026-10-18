@@ -148,7 +148,9 @@ async function savedCode(name:string) {
   await until(()=>!!chat.last('ready'),`${name} identity ready`);
   send(chat,{type:'save'});
   await until(()=>!!chat.last('recovery'),`${name} recovery code`);
-  return chat.last('recovery')!.code as string;
+  const code=chat.last('recovery')!.code as string;
+  chat.socket.close();await until(()=>chat.socket.readyState===WebSocket.CLOSED,`${name} chat closes`);
+  return code;
 }
 async function savedDriver(name:string) {
   const code=await savedCode(name),id=driver();
@@ -396,8 +398,24 @@ try {
   assert.equal(recoveredPending.revision,1);assert.equal(recoveredPending.progress.cash,purchaseCash(FUNDS,'lamborghini-temerario'));
   assert.equal((await submit(pendingRoom,pendingItem))?.ok,false,'an abandoned recovered event cannot debit again');
 
+  // A room can crash between the durable provisional bind and its reply.
+  // Confirmed claims stay recoverable; abandoned provisional claims can expire.
+  const crashPendingCode=await savedCode(`Pending${randomUUID().slice(0,6)}`),crashPendingWallet=driver(),crashPendingToken=randomUUID();
+  const crashConfirmedCode=await savedCode(`Confirmed${randomUUID().slice(0,6)}`),crashConfirmedWallet=driver(),crashConfirmedToken=randomUUID();
+  assert.equal((await rpc<{claim:boolean}>('binding-begin',{code:crashPendingCode,driverId:crashPendingWallet,token:crashPendingToken})).claim,true);
+  assert.equal((await rpc<{claim:boolean}>('binding-begin',{code:crashConfirmedCode,driverId:crashConfirmedWallet,token:crashConfirmedToken})).claim,true);
+  assert.equal(await rpc<boolean>('binding-confirm',{code:crashConfirmedCode,driverId:crashConfirmedWallet,token:crashConfirmedToken}),true);
+
   // Persisted ownership and receipts survive the whole Worker process restarting.
   await stop(child);child=undefined;child=start();await ready();
+  await rpc('binding-expire',{code:crashPendingCode});
+  const postCrashCode=await savedCode(`Reclaim${randomUUID().slice(0,6)}`);
+  assert.equal((await rpc<{walletId:string}>('associate',{code:postCrashCode,driverId:crashPendingWallet})).walletId,crashPendingWallet,'expired provisional claim is reclaimed after restart');
+  const replacementWallet=driver();
+  assert.equal((await rpc<{walletId:string}>('associate',{code:crashPendingCode,driverId:replacementWallet})).walletId,replacementWallet,'unconfirmed identity is free after expiry');
+  assert.equal((await rpc<{walletId:string}>('associate',{code:crashConfirmedCode,driverId:driver()})).walletId,crashConfirmedWallet,'a confirmed claim survives a lost reply and restart');
+  await rpc('binding-release',{code:crashConfirmedCode,driverId:crashConfirmedWallet,token:crashConfirmedToken});
+  assert.equal((await rpc<{walletId:string}>('associate',{code:crashConfirmedCode,driverId:driver()})).walletId,crashConfirmedWallet,'late cleanup cannot detach an adopted confirmed claim');
   const afterRestart=await acquire(a,randomUUID());
   assert.equal(afterRestart.resumed,true);assert.equal(afterRestart.progress.cash,winning.progress.cash);
   assert.deepEqual(afterRestart.progress.ownedLuxury,winning.progress.ownedLuxury);
@@ -523,6 +541,86 @@ try {
   const unusedWallet=sameWallets.find(id=>id!==sameResults[0].walletId)!;
   const unusedCode=await savedCode(`Unused${randomUUID().slice(0,6)}`);
   assert.equal((await rpc<BoundIdentity>('associate',{driverId:unusedWallet,code:unusedCode})).walletId,unusedWallet,'the losing guest wallet remains unclaimed');
+
+  // Merely starting a second recovery must not permanently adopt a claim:
+  // both independently stale requests can be released without losing ownership.
+  const tentativeCode=await savedCode(`Tentative${randomUUID().slice(0,6)}`),tentativeWallet=driver(),tentativeA=randomUUID(),tentativeB=randomUUID();
+  assert.equal((await rpc<{claim:boolean;walletId:string}>('binding-begin',{code:tentativeCode,driverId:tentativeWallet,token:tentativeA})).claim,true);
+  const tentativeSecond=await rpc<{claim:boolean;walletId:string}>('binding-begin',{code:tentativeCode,driverId:driver(),token:tentativeB});
+  assert.equal(tentativeSecond.claim,true);assert.equal(tentativeSecond.walletId,tentativeWallet);
+  await rpc('binding-release',{code:tentativeCode,token:tentativeA});
+  assert.equal(await rpc<boolean>('binding-confirm',{code:tentativeCode,token:tentativeB}),true,'second claimant remains after first cleanup');
+  await rpc('binding-release',{code:tentativeCode,token:tentativeB});
+  const reclaimedCode=await savedCode(`Unused${randomUUID().slice(0,6)}`);
+  assert.equal((await rpc<BoundIdentity>('associate',{code:reclaimedCode,driverId:tentativeWallet})).walletId,tentativeWallet,'no unacknowledged claimant leaves a permanent binding');
+
+  for(const stage of ['lost-bind','lost-confirm'] as const){
+    const lostRoom=`${stage}-${randomUUID().slice(0,8)}`,lost=connect(`/api/room/${lostRoom}`,true);
+    await until(()=>lost.messages.some(message=>message.type==='identityResult'&&message.ok),'lost-reply guest joins');
+    await rpc('binding-arm',{bindingStage:stage});send(lost,{type:'identity',code:tentativeCode,requestId:305});
+    await until(()=>lost.messages.some(message=>message.type==='identityResult'&&message.requestId===305),'lost-reply request settles');
+    assert.equal(lost.messages.find(message=>message.type==='identityResult'&&message.requestId===305)!.ok,false);
+    const fresh=driver();
+    await until(async()=>{
+      const token=randomUUID();
+      const candidate=await rpc<{walletId:string;claim:boolean}>('binding-begin',{code:tentativeCode,driverId:fresh,token});
+      await rpc('binding-release',{code:tentativeCode,token});
+      return candidate.walletId===fresh;
+    },`${stage} claim is cleaned after a committed reply is lost`);
+    lost.socket.close();
+  }
+
+  // Supersession and disconnect in either actual chat transaction window must
+  // release that request's claim before another identity uses the wallet.
+  for(const stage of ['bind','confirm'] as const)for(const action of ['supersede','disconnect'] as const){
+    const room=`bind-${stage}-${action}-${randomUUID().slice(0,6)}`,client=connect(`/api/room/${room}`,true);
+    await until(()=>client.messages.some(message=>message.type==='identityResult'&&message.ok),'race guest joins');
+    const playerId=client.last('welcome')!.id as string;
+    const wallet=(await rpc<{playerId:string;driverId:string}[]>('players',{room})).find(item=>item.playerId===playerId)!.driverId;
+    const oldCode=await savedCode(`Old${randomUUID().slice(0,6)}`),newCode=await savedCode(`New${randomUUID().slice(0,6)}`);
+    await rpc('binding-arm',{bindingStage:stage});
+    send(client,{type:'identity',code:oldCode,requestId:301});
+    try{
+      await until(async()=>(await rpc<{held:boolean}>('binding-state',{})).held,`${stage} is held after its transaction`);
+      if(action==='supersede'){
+        send(client,{type:'identity',code:newCode,requestId:302});await pause(150);
+      }else{
+        client.socket.close();await until(()=>client.socket.readyState===WebSocket.CLOSED,'binding client disconnects');await pause(150);
+      }
+      await rpc('binding-resume',{});
+      if(action==='supersede'){
+        await until(()=>client.messages.some(message=>message.type==='identityResult'&&message.requestId===302),'new identity settles');
+        assert.equal(client.messages.find(message=>message.type==='identityResult'&&message.requestId===302)!.ok,true);
+        assert.ok(!client.messages.some(message=>message.type==='identityResult'&&message.requestId===301),'stale identity never confirms');
+        assert.equal((await rpc<BoundIdentity>('associate',{driverId:driver(),code:newCode})).walletId,wallet,'new identity owns the original wallet');
+      }else{
+        let claimed:BoundIdentity|null=null;
+        await until(async()=>{claimed=await rpc<BoundIdentity>('associate',{driverId:wallet,code:newCode});return claimed.walletId===wallet;},'disconnected claim is released');
+      }
+      const fresh=driver();
+      assert.equal((await rpc<BoundIdentity>('associate',{driverId:fresh,code:oldCode})).walletId,fresh,'stale identity did not retain the guest wallet');
+    }finally{await rpc('binding-resume',{}).catch(()=>{});}
+  }
+
+  // A different room may recover a provisional identity while the original
+  // reply is held. Its adoption must fence the original and survive cleanup.
+  const adoptRoom=`adopt-${randomUUID().slice(0,8)}`,adoptGuest=connect(`/api/room/${adoptRoom}`,true);
+  await until(()=>adoptGuest.messages.some(message=>message.type==='identityResult'&&message.ok),'adoption guest joins');
+  const adoptPlayer=adoptGuest.last('welcome')!.id as string;
+  await rpc('delivery-pickup',{room:adoptRoom,playerId:adoptPlayer});
+  await until(()=>adoptGuest.last('wallet')?.earned>0,'adoption guest earns money');
+  await barrier(adoptGuest,303);
+  const adoptCash=adoptGuest.last('wallet')!.cash as number;
+  const adoptWallet=(await rpc<{playerId:string;driverId:string}[]>('players',{room:adoptRoom})).find(item=>item.playerId===adoptPlayer)!.driverId;
+  const adoptCode=await savedCode(`Adopt${randomUUID().slice(0,6)}`);
+  await rpc('binding-arm',{bindingStage:'bind'});send(adoptGuest,{type:'identity',code:adoptCode,requestId:304});
+  try{
+    await until(async()=>(await rpc<{held:boolean}>('binding-state',{})).held,'original provisional bind held');
+    const adopter=await join(`adopter-${randomUUID().slice(0,8)}`,adoptCode);
+    assert.equal(adopter.last('wallet')!.cash,adoptCash,'adopting session recovers the earned wallet');
+    await rpc('binding-resume',{});await pause(200);
+    assert.equal((await rpc<BoundIdentity>('associate',{driverId:driver(),code:adoptCode})).walletId,adoptWallet,'old cleanup cannot release the adopted wallet');
+  }finally{await rpc('binding-resume',{}).catch(()=>{});}
 
   // An earned guest cannot silently overwrite its progress with an already
   // bound different driver; reconnecting makes the requested switch explicit.
@@ -974,7 +1072,7 @@ try {
   assert.equal(afterCrash.progress.unlocked.filter(award=>award==='luxury-chiron').length,1,'crash retry does not repeat the award');
   await until(async()=>!(await economyKeys(liveRoom,alice.id)).some(key=>key.startsWith(`unacked:${alice.id}:`)),'abandoned room result eventually compacts');
 
-  console.log('PASS: wallet revision races, duplicate receipts, fencing, ordered commits, failed and lost writes, compaction and crash recovery, independent drivers, rejected-head freeze, ownership and restart persistence; transient pickup refresh, stale pickup generation, bounded outage recovery, concurrent recovery, guest binding, paid pickup during a stalled write, showroom purchases and collection, customization, disconnect and recovery.');
+  console.log('PASS: wallet revision races, duplicate receipts, fencing, ordered commits, failed and lost writes, compaction and crash recovery, independent drivers, rejected-head freeze, ownership and restart persistence; transient pickup refresh, stale pickup generation, bounded outage recovery, concurrent recovery, guest binding and bind/confirm supersession, disconnect, lost replies and adoption; paid pickup during a stalled write, showroom purchases and collection, customization, disconnect and recovery.');
 } finally {
   for(const socket of sockets)if(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)socket.close();
   if(child)await stop(child);

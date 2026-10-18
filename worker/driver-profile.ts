@@ -18,11 +18,11 @@ export type DriverProgress = {
   /** Cumulative verified game-created income; player transfers never increase this. */
   eligibleIncome:number;
 };
-export type DriverAction = {kind:'progress';progress:DriverProgress} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order};
+export type DriverAction = {kind:'progress';progress:DriverProgress} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
-  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[]}
-  | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready'};
+  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number}
+  | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready';available?:number};
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean};
 type Receipt = {payload:string;outcome:DriverOutcome};
 
@@ -89,6 +89,11 @@ export class DriverProfile extends DurableObject<Env> {
         if(intent.action.kind==='progress'){
           if(!validProgress(intent.action.progress,record.progress))error='invalid';
           else Object.assign(next,structuredClone(intent.action.progress));
+        } else if(intent.action.kind==='contribute'){
+          const amount=intent.action.amount;
+          if(!Number.isSafeInteger(amount)||amount<=0||amount>1_000_000_000)error='invalid';
+          else if(next.cash<amount)error='unaffordable';
+          else {next.cash-=amount;if(intent.action.order)next.order=structuredClone(intent.action.order);}
         } else {
           const vehicle=luxuryVehicle(intent.action.vehicle);
           if(!vehicle)error='invalid';
@@ -158,7 +163,11 @@ export class DriverProfile extends DurableObject<Env> {
       if(!record||record.fence!==fence||record.sealed)return false;
       if(!record.incomeActivated){
         await txn.put('driver',{...record,incomeActivated:true} satisfies DriverRecord);
-        if(record.progress.eligibleIncome>0){await txn.put('income-pending',record.progress.eligibleIncome);await txn.setAlarm(Date.now()+500);}
+        if(record.progress.eligibleIncome>0){
+          await txn.put('income-pending',record.progress.eligibleIncome);
+          const alarm=await txn.getAlarm(),next=Date.now()+500;
+          if(alarm===null||alarm>next)await txn.setAlarm(next);
+        }
       }
       return true;
     });
@@ -167,17 +176,35 @@ export class DriverProfile extends DurableObject<Env> {
   async checkFence(fence:string):Promise<boolean>{const record=await this.ctx.storage.get<DriverRecord>('driver');return record?.fence===fence&&!record.sealed;}
 
   async alarm():Promise<void>{
+    // Arm before reading the outbox or awaiting its remote credit, preserving
+    // any earlier deadline set by another operation.
+    const watchdog=Date.now()+1000;
+    const armed=await this.ctx.storage.transaction(async txn=>{
+      const alarm=await txn.getAlarm();
+      if(alarm!==null&&alarm<=watchdog)return false;
+      await txn.setAlarm(watchdog);return true;
+    });
     const [record,pending]=await Promise.all([this.ctx.storage.get<DriverRecord>('driver'),this.ctx.storage.get<number>('income-pending')]);
-    if(!record||pending===undefined)return;
+    if(!record||pending===undefined){
+      if(armed&&pending===undefined)await this.ctx.storage.transaction(async txn=>{
+        if(await txn.getAlarm()===watchdog && await txn.get('income-pending')===undefined)await txn.deleteAlarm();
+      });
+      return;
+    }
     try {
       const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
       await global.credit(record.driverId,pending);
       await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<number>('income-pending');
         if(current!==undefined && current<=pending)await txn.delete('income-pending');
-        else if(current!==undefined)await txn.setAlarm(Date.now()+500);
+        else if(current!==undefined){const alarm=await txn.getAlarm(),next=Date.now()+500;if(alarm===null||alarm>next)await txn.setAlarm(next);}
       });
-    } catch { await this.ctx.storage.setAlarm(Date.now()+1000); }
+    } catch {
+      await this.ctx.storage.transaction(async txn=>{
+        const alarm=await txn.getAlarm(),next=Date.now()+1000;
+        if(alarm===null||alarm>next)await txn.setAlarm(next);
+      });
+    }
   }
 }
 

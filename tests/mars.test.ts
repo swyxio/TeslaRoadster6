@@ -40,6 +40,17 @@ test('boarding rejects sideways movement until the car settles',()=>{
   assert.equal(boardMars(world,'a'),true,'the same stopped threshold as the workshop permits small residual movement');
 });
 
+test('a completed room fund independently unlocks boarding',()=>{
+  const world=createWorld(),player=addPlayer(world,'a','A');
+  const car=world.entities.find(e=>e.id===player.entityId)!;
+  Object.assign(car,FREMONT_SPACEPORT.entrance,{supportId:'ground',speed:0,pushX:0,pushZ:0});
+  world.mars.roomFund=MARS_GOAL-1;
+  assert.equal(boardMars(world,'a'),false);
+  world.mars.roomFund=MARS_GOAL;
+  assert.equal(boardMars(world,'a'),true);
+  assert.equal(world.mars.fund,0,'the room fund does not become global income');
+});
+
 test('spaceport collision footprints and boarding ring occupy supported, clear Fremont ground',()=>{
   const {factory,pad,tower,entrance}=FREMONT_SPACEPORT;
   for(const part of [factory,pad,tower]){
@@ -57,8 +68,9 @@ test('spaceport collision footprints and boarding ring occupy supported, clear F
   assert.ok(!BUILDINGS.some(b=>contact(body(car),{...b,yaw:0})),'boarding point is clear for a car');
 });
 
-test('Mars wire requests use boarding only and request IDs',()=>{
-  assert.equal(parseMessage(JSON.stringify({type:'mars',action:'contribute',amount:5,requestId:7})),null);
+test('Mars wire requests require valid contribution amounts and request IDs',()=>{
+  assert.deepEqual(parseMessage(JSON.stringify({type:'mars',action:'contribute',amount:5,requestId:7})),{type:'mars',action:'contribute',amount:5,requestId:7});
+  for(const amount of [0,-1,1.5,MARS_GOAL+1])assert.equal(parseMessage(JSON.stringify({type:'mars',action:'contribute',amount,requestId:7})),null);
   assert.deepEqual(parseMessage(JSON.stringify({type:'mars',action:'board',requestId:8})),{type:'mars',action:'board',requestId:8});
   assert.equal(parseMessage(JSON.stringify({type:'mars',action:'board',requestId:0})),null);
 });

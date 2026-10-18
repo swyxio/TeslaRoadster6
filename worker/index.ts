@@ -58,6 +58,14 @@ export class GameRoom extends DurableObject<Env> {
   private refreshing=false;
 
   private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
+  private async initializeRoom(world=this.world){
+    // The pre-wallet room fund remains in its original object and is never
+    // rewritten; the journal seeds its own balance once before accepting gifts.
+    const stored=await this.ctx.storage.get<number>('mars-fund');
+    if(stored!==undefined&&(!Number.isSafeInteger(stored)||stored<0||stored>MARS_GOAL))throw new Error('Invalid legacy room fund');
+    const [,balance]=await Promise.all([this.refreshPickups(world),this.ledger().initializeRoomFund(stored??0)]);
+    if(world===this.world)world.mars.roomFund=Math.max(world.mars.roomFund,balance);
+  }
   private async refreshPickups(world=this.world){
     const ids=world.pickups.filter(p=>p.kind!=='rocket').map(p=>p.id);
     const states=await this.ledger().pickupStates(ids);
@@ -80,6 +88,7 @@ export class GameRoom extends DurableObject<Env> {
     void Promise.allSettled([
       this.refreshPickups(world),
       this.env.INCOME.get(this.env.INCOME.idFromName('global')).total().then(total=>{if(world===this.world)world.mars.fund=Math.min(MARS_GOAL,total);}),
+      this.ledger().roomFund().then(balance=>{if(world===this.world)world.mars.roomFund=Math.max(world.mars.roomFund,balance);}),
     ]).finally(()=>{this.refreshing=false;});
   }
 
@@ -93,7 +102,7 @@ export class GameRoom extends DurableObject<Env> {
     if(!slug)return close(1008,'Invalid room');
     this.roomId=slug;
     const world=this.world;
-    this.ready??=this.refreshPickups(world);
+    this.ready??=this.initializeRoom(world);
     const walletId=crypto.randomUUID(),fence=crypto.randomUUID();
     const initial=initialDelivery({x:0,z:0});
     let acquired:Awaited<ReturnType<DriverProfile['acquire']>>;
@@ -103,7 +112,7 @@ export class GameRoom extends DurableObject<Env> {
         this.ready,
       ]);
     }catch{this.ready=null;return close(1011,'Wallet unavailable. Rejoin to retry.');}
-    if(this.world!==world){this.ready=null;try{await(this.ready=this.refreshPickups(this.world));}catch{this.ready=null;return close(1011,'Room unavailable');}}
+    if(this.world!==world){this.ready=null;try{await(this.ready=this.initializeRoom(this.world));}catch{this.ready=null;return close(1011,'Room unavailable');}}
     if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
     const id=crypto.randomUUID(),now=Date.now();
     let player;
@@ -140,18 +149,27 @@ export class GameRoom extends DurableObject<Env> {
 
   private async attachIdentity(socket:WebSocket,session:Session,code:string|null,requestId:number,sequence:number):Promise<void>{
     const current=()=>socket.readyState===1&&this.sessions.get(socket)===session&&session.identitySequence===sequence;
-    const send=(ok:boolean,message:string)=>{if(current())try{socket.send(JSON.stringify({type:'identityResult',requestId,ok,message}));}catch{}};
+    const send=(ok:boolean,message:string)=>{if(!current())return false;try{socket.send(JSON.stringify({type:'identityResult',requestId,ok,message}));return true;}catch{return false;}};
     if(!current())return;
-    let accepted=false;
+    let accepted=false,claimed=false;
+    const token=crypto.randomUUID(),guestWalletId=session.economy.walletId;
+    const chat=this.env.CHAT.get(this.env.CHAT.idFromName('global'));
     try{
       if(code===null){send(false,'Rejoin to start a new guest driver.');return;}
-      const identity=await this.env.CHAT.get(this.env.CHAT.idFromName('global')).bindWallet(code,session.economy.walletId);
+      const identity=await chat.bindWallet(code,guestWalletId,token);
+      claimed=identity?.claim??false;
       if(!current())return;
       if(!identity){send(false,'Invalid recovery code.');return;}
       if(!identity.walletId){send(false,'Rejoin before loading a different saved driver.');return;}
       if(identity.walletId===session.economy.walletId){
         const ok=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).activateIncome(session.economy.currentFence);
-        accepted=ok;send(ok,ok?'Saved driver connected.':'Session superseded. Rejoin to recover.');return;
+        if(!current())return;
+        if(!ok){send(false,'Session superseded. Rejoin to recover.');return;}
+        if(identity.claim && !await chat.confirmWallet(code,token)){
+          send(false,'Driver connection changed. Rejoin to retry.');return;
+        }
+        if(!current())return;
+        accepted=send(true,'Saved driver connected.');return;
       }
       if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
       const fence=crypto.randomUUID(),initial=initialDelivery({x:0,z:0});
@@ -160,6 +178,13 @@ export class GameRoom extends DurableObject<Env> {
       session.pendingBind={driverId:identity.walletId,fence};
       const result=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).acquire(identity.walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),this.roomId);
       if(!current())return;
+      if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      if(identity.claim && !await chat.confirmWallet(code,token)){
+        send(false,'Driver connection changed. Rejoin to retry.');return;
+      }
+      if(!current())return;
+      // A match can finish while confirmation is in flight. Its result belongs
+      // to the original wallet, so recheck immediately before replacing it.
       if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
       // The room player ID is reused for the new wallet. Drop the previous
       // driver's unfinished activity so it cannot become the new driver's win.
@@ -179,10 +204,19 @@ export class GameRoom extends DurableObject<Env> {
       session.pendingBind=null;
       session.economy.restoreCurrentVehicle();
       this.invalidate(socket,session,true);
-      accepted=true;send(true,'Saved driver connected.');
+      accepted=send(true,'Saved driver connected.');
     }catch{send(false,'Could not load driver. Rejoin to retry.');}
     finally{
       session.pendingBind=null;
+      if(accepted&&claimed&&code!==null)this.ctx.waitUntil(chat.settleWallet(code,token).catch(()=>{}));
+      else if(!accepted&&code!==null){
+        // A bind may have committed even when its reply was lost. Reconcile it
+        // before starting the next identity request; other drivers keep moving.
+        for(;;){
+          try{await chat.releaseWallet(code,token);break;}
+          catch{await new Promise(resolve=>setTimeout(resolve,500));}
+        }
+      }
       // A failed or superseded recovery stays paused until the driver makes a
       // new identity choice; another request may already be queued.
       if(current())session.attachPending=!accepted;
@@ -210,6 +244,7 @@ export class GameRoom extends DurableObject<Env> {
       const car=this.world.entities.find(e=>e.id===player?.entityId);
       if(car){car.autopilot=false;car.navigation=null;}
       session.identityTail=session.identityTail.then(()=>this.attachIdentity(socket,session,message.code,message.requestId,sequence));
+      this.ctx.waitUntil(session.identityTail);
       return;
     }
     if(message.type==='input'){
@@ -272,7 +307,10 @@ export class GameRoom extends DurableObject<Env> {
       if(message.action==='collect')session.economy.luxury(message.action,message.vehicle,message.requestId,()=>this.invalidate(socket,session,true,message.edgeBaseline));
       else session.economy.luxury(message.action,message.vehicle,message.requestId);
     }
-    if(message.type==='mars')session.economy.boardMars(message.requestId);
+    if(message.type==='mars'){
+      if(message.action==='board')session.economy.boardMars(message.requestId);
+      else session.economy.contributeMars(message.amount,message.requestId);
+    }
   }
 
   private tick():void{
@@ -355,7 +393,7 @@ export class GameRoom extends DurableObject<Env> {
     try{socket.close(code,reason);}catch{}
     if(!this.sessions.size){
       if(this.timer)clearInterval(this.timer);
-      const fund=this.world.mars.fund;this.timer=null;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;
+      const {fund,roomFund}=this.world.mars;this.timer=null;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;this.world.mars.roomFund=roomFund;
       this.ready=null;this.pickupGenerations=new Map();this.pendingPickups=new Set();
     }
   }

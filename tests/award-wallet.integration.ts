@@ -231,6 +231,28 @@ try {
   const boundPlayers=await rpc<{playerId:string;driverId:string}[]>('players',{room:acquired.room});
   assert.equal(boundPlayers.find(player=>player.playerId===acquired.playerId)?.driverId,acquired.driverId,'original wallet remains attached');
 
+  // A provisional saved identity adds a second await after acquisition. A
+  // win during confirmation still belongs only to the original driver.
+  const confirming=await prepareDomeGuest(),confirmCode=await newRecoveryCode('Confirm Boundary');
+  const confirmedDriverId=randomUUID(),priorClaim=randomUUID();
+  await rpc('acquire',{driverId:confirmedDriverId,fence:randomUUID()});
+  const provisional=await rpc<{walletId:string;claim:boolean}>('binding-begin',{code:confirmCode,driverId:confirmedDriverId,token:priorClaim});
+  assert.equal(provisional.walletId,confirmedDriverId);assert.equal(provisional.claim,true);
+  await rpc('binding-arm',{bindingStage:'confirm'});
+  send(confirming.client,{type:'identity',code:confirmCode,requestId:2});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('binding-state',{})).held,'different identity held after confirmation');
+    await rpc('dome-score',{room:confirming.room});
+    await until(async()=>(await inspect(confirming.driverId)).progress.unlocked.includes('rocket-rookie'),'original wallet owns result during confirmation');
+  } finally { await rpc('binding-resume',{}); }
+  await until(()=>confirming.client.last('identityResult')?.requestId===2,'confirmed identity decision resolves');
+  assert.equal(confirming.client.last('identityResult')!.ok,false,'post-confirm check rejects replacement after an award');
+  assert.equal((await inspect(confirming.driverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,1,'the old driver keeps the award exactly once');
+  assert.equal((await inspect(confirmedDriverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,0,'the incoming driver does not inherit the award');
+  const confirmingPlayers=await rpc<{playerId:string;driverId:string}[]>('players',{room:confirming.room});
+  assert.equal(confirmingPlayers.find(player=>player.playerId===confirming.playerId)?.driverId,confirming.driverId);
+  await rpc('binding-release',{code:confirmCode,token:priorClaim});
+
   // The one-time win must survive rollback of a preceding rejected operation.
   // A speculative income behind the rejected operation must not be replayed.
   const replay=await prepareDomeGuest(),replayCode=await newRecoveryCode('Rejected Before Win');

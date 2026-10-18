@@ -20,11 +20,11 @@ The exact level thresholds, fares, award sizes, cab rates, property tiers, floor
 
 ## What exists today
 
-The held candidate branch adds a saved wallet and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the candidate's rules. Local game, recovery and isolation checks have passed; release remains held pending the combined motion and wallet performance test. See [VERIFICATION.md](VERIFICATION.md).
+The wallet and showroom implementation adds saved driver progress and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the implemented rules. See [VERIFICATION.md](VERIFICATION.md) for testing and release evidence.
 
 Property, income-producing cabs, city-specific delivery chains, expanded research programs, event multipliers and season retirement remain design work. In particular, the candidate groups Oakland with Berkeley and the Peninsula with the East Bay; it does not yet implement the separate city gates described below.
 
-Saved-driver persistence must be isolated from room responsiveness before new persistent features ship. The prototype exposed room-wide stalls when a profile write was slow or failed. See [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) for the proposed transaction boundary, local fixture and performance checks. Keep the existing game playable while integrating each layer.
+Saved-driver persistence must remain isolated from room responsiveness as new persistent features ship. A prototype exposed room-wide stalls when a profile write was slow or failed; the implemented transaction boundary and its checks are documented in [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) and [VERIFICATION.md](VERIFICATION.md). Keep the existing game playable while integrating each layer.
 
 ## The player's wallet and the Bay
 
@@ -44,9 +44,9 @@ Additional city gates spread out exploration: Berkeley $20k, San Mateo $75k, Pal
 
 Recalculate the level after every wallet change, including rewards, fines, purchases, sales and transfers. An earned city or level award pays once, even if the player drops below its threshold and reaches it again. Resolve any additional thresholds crossed by an award and group awards caused by the same action in the UI.
 
-Before a purchase, show the resulting cash and any level or access change. When a city relocks, allow a player already there to finish an accepted job and use ordinary local jobs; prevent a new entry after they leave until they meet the gate again. A player can always reach, enter and manage an owned home or plot, including by home teleport. Premium contracts still require their current level.
+The intended purchase flow shows the resulting cash and any level or access change. The intended relock rule lets a player already in a city finish an accepted job and use ordinary local jobs; after leaving, new entry requires the gate again. The current implementation instead reroutes an inaccessible active delivery to an open area when a purchase or fine lowers the level. Preserving an accepted delivery across locked boundaries and reconnects requires an explicit, persisted job-access rule; see [DELIVERY.md](DELIVERY.md) for current behavior. When property is implemented, a player should always be able to reach and manage an owned home or plot, including by home teleport. Premium contracts still require their current level.
 
-For example, a player at $49,900 receives a $2,000 delivery payment and reaches Fremont's $50k gate. If this is their first Fremont unlock, its $2,000 award brings the wallet to $53,900. Buying $15k wheels later leaves $38,900 and level 1, assuming the first-cosmetic award was already claimed. Fremont relocks on leaving; the wheels and unlock achievement remain.
+For example, a player at $49,900 receives a $2,000 delivery payment and reaches Fremont's $50k gate. If this is their first Fremont unlock, its $2,000 award brings the wallet to $53,900. Buying $15k wheels later leaves $38,900 and level 1, assuming the first-cosmetic award was already claimed. Fremont relocks when the wallet falls below its gate; a player already there can leave, and the wheels and unlock achievement remain.
 
 ## Jobs, achievements and discoveries
 
@@ -107,7 +107,7 @@ Deliveries, cab earnings and game-issued rewards create cash; shops, city proper
 
 Candidate events are a developer-controlled **2× global event for 30 minutes** and a **1.5× room bonus for 10 minutes** after a Rocket Dome win. Another win refreshes the room timer. Multipliers combine up to 3× and apply to eligible delivery, active cab and verified repeatable activity pay. A winning match is paid before the new room bonus starts. One-off achievements, check-ins, checkpoints, gifts, refunds and resale proceeds are not multiplied. Display scope and remaining time; investigate win trading and sustained bonus uptime before release.
 
-The global $1bn Starship meter counts each eligible game-issued earning once, including one-off achievements. Purchases, fines and later spending do not subtract from it. Players retain the money; there is no contribution button or deduction. Future multipliers, transfers, sales, loans, gifts and refunds need the same accounting rules before those features are added.
+The global $1bn Starship meter counts each eligible game-issued earning once, including one-off achievements. Purchases, fines and later spending do not subtract from it. Players retain their earnings; this global counter does not require a contribution or deduct cash. A separate voluntary per-room fund preserves the earlier room goal and its existing balances. Future multipliers, transfers, sales, loans, gifts and refunds need the same accounting rules before those features are added.
 
 Show the global meter and each player's contribution. At the first verified threshold crossing, record one season result, honor all contributors with an appropriate privacy choice, and provide a launch celebration and replay for people who cannot attend. Retiring a season must preserve player identity, lifetime records and paid-for property until successor-season rules are decided. The event classifications, recovery and simulation are in [STARSHIP_ECONOMY.md](STARSHIP_ECONOMY.md).
 
