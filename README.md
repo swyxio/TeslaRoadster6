@@ -30,7 +30,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Planning:** [economy, achievements and property proposal](docs/ECONOMY.md) and [player progression simulations](docs/ECONOMY_SIMULATIONS.md) (not yet implemented).
+**Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
 **Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff and a short circuit. Rocket pickups on the island and at parking playgrounds equip any vehicle with the Roadster's fictional air moves for its session lifetime. The two playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
