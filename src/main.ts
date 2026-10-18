@@ -1,4 +1,6 @@
 import './style.css';
+import { FleetPreview } from './fleet-preview';
+import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
 import { Session } from './session';
 import { Controls } from './controls';
@@ -7,13 +9,14 @@ import { BUILDINGS, type Entity } from '../shared/game';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
-<canvas id="world" aria-label="Bay Drive 3D driving world"></canvas>
+<canvas id="world" aria-label="Poly AV 3D driving world"></canvas>
 <div class="vignette"></div>
-<header class="topbar"><a class="brand" href="/" aria-label="Bay Drive home"><span class="brand-icon">↗</span> BAY<span class="brand-light">DRIVE</span><span class="alpha">PLAYGROUND / 01</span></a><div class="top-actions"><span id="connection" class="pill"><i></i> SOLO PLAYGROUND</span><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
+<header class="topbar"><a class="brand" href="/" aria-label="Poly AV home"><span class="brand-icon">↗</span> POLY<span class="brand-light">AV</span><span class="alpha">POLY AVENUE / 02</span></a><div class="top-actions"><span id="connection" class="pill"><i></i> SOLO PLAYGROUND</span><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
 <section id="menu" class="menu">
- <div class="intro"><div class="eyebrow"><span class="line"></span> SAN FRANCISCO BAY AREA</div><h1>The road is<br>just the <em>start.</em></h1><p class="intro-copy">Take the Roadster beyond the asphalt.<br>Find your crew. Make your own way.</p>
- <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / EXPLORE</span></div>
+ <div class="intro"><div class="eyebrow"><span class="line"></span> SAN FRANCISCO BAY AREA</div><h1>Many rides.<br>Zero <em>commitment.</em></h1><p class="intro-copy">A low-poly love letter to San Francisco.<br>Catch a ride. Catch air. See other vehicles.</p>
+ <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / AUTONOMY</span></div>
  <div class="launch-card"><div class="card-heading"><span class="eyebrow">YOUR NEXT DETOUR</span><span class="online-dot">● FREE ROAM</span></div>
+ <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
  <button id="solo" class="primary">Take a solo drive <span>↗</span></button>
  <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="24" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
  <button id="join" class="secondary">Drive with friends <span>→</span></button><p class="form-note" id="form-note" role="status">Same room code, same playground. No account needed.</p>
@@ -21,19 +24,26 @@ document.querySelector('#app')!.innerHTML = `
  </div>
  <p class="fine-print">An independent arcade prototype. Fictional flight & air service.<br>Real Supercharger sites. A deliberately remixed Bay Area.</p>
  </div>
- <aside class="world-caption"><span class="eyebrow">37°46′ N &nbsp; 122°25′ W</span><h2>A little less traffic.<br>A lot more possibility.</h2><span class="caption-rule"></span><p>TESLA ROADSTER / AIR THRUST EDITION</p></aside>
+ <aside class="world-caption"><span class="eyebrow">37°46′ N &nbsp; 122°25′ W</span><h2>Open relationships.<br>Open roads.</h2><span class="caption-rule"></span><p>TESLA · WAYMO · CRUISE · ZOOX</p></aside>
 </section>
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div class="mission"><span class="eyebrow">NO ROUTE REQUIRED</span><strong id="mission">Hold SPACE to leave the road.</strong><span id="hint">Stop at a mint ring to refill your air tanks.</span></div>
- <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button></div>
+ <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button></div>
  <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: mint dots are Superchargers, orange arrow is you"></canvas><div class="map-key"><i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
- <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="keyboard-help"><kbd>W A S D</kbd> drive <kbd>SPACE</kbd> lift <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>B</kbd> brake</div>
+ <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="keyboard-help"><kbd>W A S D</kbd> drive <kbd>SPACE</kbd> lift <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>B</kbd> brake <kbd>V</kbd> autopilot <kbd>G</kbd> fleet</div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse">REV</button><button data-control="KeyB" aria-label="Brake">STOP</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button data-control="Space">LIFT ↑</button><button class="accelerate" data-control="KeyW">DRIVE ↑</button></div></div>
 </section>
+<dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / VEHICLE COLLECTION</span><h2 id="fleet-title">See other vehicles.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Every model is driving around town and parked nearby. Borrow one, or choose your next ride here.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="error" class="error hidden" role="alert"><h2>Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Rejoin room</button><button id="error-solo" class="secondary">Drive solo</button><button id="error-menu" class="text-button">Back to menu</button></div>
 `;
+let selectedVehicle:VehicleId='roadster';
+const startingSelect=$<HTMLSelectElement>('starting-ride');
+for(const brand of ['Tesla','Waymo','Cruise','Zoox']){const group=document.createElement('optgroup');group.label=brand;for(const id of VEHICLE_IDS.filter(id=>VEHICLES[id].brand===brand)){const option=document.createElement('option');option.value=id;option.textContent=VEHICLES[id].name;group.append(option);}startingSelect.append(group);}
+startingSelect.value=selectedVehicle;
+function updateStarting(){selectedVehicle=startingSelect.value as VehicleId;const spec=VEHICLES[selectedVehicle];$('starting-spec').textContent=`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel':'Front-wheel'} steering · ${spec.airThrusters?'Air thrusters':'Autonomous cruise'}`;}
+startingSelect.onchange=updateStarting;updateStarting();
 const session = new Session();
 const controls = new Controls();
 let scene: GameScene;
@@ -46,16 +56,18 @@ function toggleMenu(show: boolean) {menu=show;controls.enabled=!show;controls.cl
 function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
-  if(solo){session.solo();history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver');history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
+  if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
 $('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');session.solo();toggleMenu(true);};
-function action(type:'interact'|'reset'|'camera'|'menu'){
+function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'){
+  if(type==='fleet'){openFleet();return;}
   if(type==='menu')toggleMenu(!menu);else if(type==='camera')scene.wideCamera=!scene.wideCamera;else session.action(type);
 }
 controls.onAction=action;
+$('autopilot').onclick=()=>action('autopilot');$('fleet').onclick=()=>openFleet();
 $('interact').onclick=()=>action('interact');$('recover').onclick=()=>action('reset');$('camera').onclick=()=>action('camera');
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
@@ -72,9 +84,25 @@ function minimap(entity:Entity|undefined){
   for(let a=-180;a<=180;a+=60){map.beginPath();map.moveTo(a*scale+offset,9);map.lineTo(a*scale+offset,231);map.moveTo(9,a*scale+offset);map.lineTo(231,a*scale+offset);map.stroke();}
   map.fillStyle='#99a092';BUILDINGS.forEach(b=>map.fillRect((b.x-b.w/2)*scale+offset,(b.z-b.d/2)*scale+offset,b.w*scale,b.d*scale));
   STATIONS.forEach(s=>{map.beginPath();map.arc(s.x*scale+offset,s.z*scale+offset,3,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
+  session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle='#71cdd5';map.fillRect(e.x*scale+offset-1,e.z*scale+offset-1,2,2);});
   session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id)return;map.beginPath();map.arc(e.x*scale+offset,e.z*scale+offset,3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
   if(entity){map.save();map.translate(entity.x*scale+offset,entity.z*scale+offset);map.rotate(-entity.yaw);map.beginPath();map.moveTo(0,-6);map.lineTo(-4,5);map.lineTo(0,3);map.lineTo(4,5);map.closePath();map.fillStyle='#ffbe66';map.fill();map.restore();}
 }
+const fleetDialog=$<HTMLDialogElement>('fleet-dialog');
+let previewVehicle:VehicleId='roadster';
+let fleetPreview:FleetPreview|undefined;
+function showVehicle(id:VehicleId){
+  previewVehicle=id;fleetPreview??=new FleetPreview($<HTMLCanvasElement>('fleet-preview'));fleetPreview.show(id);const spec=VEHICLES[id];$('fleet-brand').textContent=spec.brand;$('fleet-name').textContent=spec.name;$('fleet-status').textContent=spec.status;
+  $('fleet-specs').replaceChildren();
+  for(const [label,value] of [['Length × width × height',`${spec.length.toFixed(2)} × ${spec.width.toFixed(2)} × ${spec.height.toFixed(2)} m`],['Simulation mass',`${spec.massKg.toLocaleString()} kg`],['Wheelbase',`${spec.wheelbase.toFixed(2)} m`],['Steering',spec.fourWheelSteering?'Four-wheel steering':'Front-wheel steering'],['Arcade top speed',`${Math.round(spec.maxSpeed*3.6)} km/h`],['Air thrusters',spec.airThrusters?'Fictional flight enabled':'Not fitted']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;$('fleet-specs').append(dt,dd);}
+  $('fleet-estimates').textContent=spec.estimates.join(' ');$<HTMLAnchorElement>('fleet-source').href=spec.sourceUrls[0];
+  document.querySelectorAll<HTMLButtonElement>('[data-vehicle]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.vehicle===id)));
+}
+for(const id of VEHICLE_IDS){const spec=VEHICLES[id],button=document.createElement('button');button.dataset.vehicle=id;button.textContent=spec.name;button.style.setProperty('--vehicle-color',`#${spec.color.toString(16).padStart(6,'0')}`);button.onclick=()=>showVehicle(id);$('fleet-list').append(button);}
+function openFleet(){controls.clear();controls.enabled=false;const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);showVehicle(entity&&entity.kind!=='person'?entity.kind:selectedVehicle);fleetDialog.showModal();}
+function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu;}
+$('fleet-close').onclick=closeFleet;fleetDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
+$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.y>.5||Math.abs(entity.speed)>1){$('fleet-feedback').textContent='Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
 scene.start(dt=>{
   const input=controls.read();session.tick(dt,input);scene.render(session.world,session.id,dt,menu,input.lift);
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;
@@ -83,7 +111,10 @@ scene.start(dt=>{
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   if(!e)return;
   $('speed').textContent=Math.round(Math.abs(e.speed)*3.6).toString().padStart(3,'0');$('altitude').textContent=`${Math.round(e.y)} M ALT`;
-  $('vehicle').textContent={roadster:'TESLA ROADSTER',coupe:'GOLDEN COUPE',truck:'BAY UTILITY',person:'ON FOOT'}[e.kind];
+  const spec=e.kind==='person'?null:VEHICLES[e.kind];
+  $('vehicle').textContent=spec?.name.toUpperCase()??'ON FOOT';
+  $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${e.autopilot?' · AUTONOMOUS':''}`:'';
+  $('autopilot').textContent=e.autopilot?'V · AV on':'V · AV off';$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
   $('flight').textContent=e.y>1?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',e.y>1);
   $('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=e.kind==='person'?'F · Take nearby car':'F · Exit car';
@@ -92,7 +123,8 @@ scene.start(dt=>{
   $('station-status').textContent=refilling?`ϟ REFILLING AIR · ${nearest.name}`:`ϟ ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').classList.toggle('refilling',refilling);
   const touch=matchMedia('(pointer: coarse), (max-width: 800px)').matches;
-  $('mission').textContent=e.kind==='person'?'A different ride is around the corner.':e.y>2?'The sky is part of the street.':e.air<20?'Low air. Find a mint Supercharger ring.':touch?'Hold LIFT to leave the road.':'Hold SPACE to leave the road.';
-  $('hint').textContent=e.kind==='person'?'Stop beside an empty car and tap Take nearby car.':e.y>2?(touch?'Hold ↶ / ↷ to roll. Release LIFT to land.':'Hold Q / E to roll. Release SPACE to land.'):'Stop inside a mint ring to refill your air tanks.';
+  $('mission').textContent=e.kind==='person'?'Your next situationship has four wheels.':e.autopilot?'Hands off. The AV has this block.':e.y>2?'The sky is part of the street.':!spec?.airThrusters?'Try autonomous cruise on a street.':e.air<20?'Low air. Find a mint Supercharger ring.':touch?'Hold LIFT to leave the road.':'Hold SPACE to leave the road.';
+  $('hint').textContent=e.kind==='person'?'Get near a parked or NPC car. Tap Take nearby car.':e.autopilot?'Steer, accelerate, or brake to take over.':!spec?.airThrusters?(touch?'Tap AV to cruise. Fleet lets you try every model.':'Press V to cruise. Press G to try every model.'):'Stop inside a mint ring to refill your air tanks.';
+  $('air').textContent=spec?.airThrusters?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=spec?.airThrusters?`${e.air}%`:'0%';
   $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e);
 });

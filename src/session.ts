@@ -1,4 +1,5 @@
-import { createWorld, addPlayer, step, interact, resetPlayer, type World, type Input } from '../shared/game';
+import type { VehicleId } from '../shared/vehicles';
+import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, type World, type Input } from '../shared/game';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
   world: World = createWorld();
@@ -11,11 +12,11 @@ export class Session {
   private lastState = 0;
   error = '';
   constructor() { addPlayer(this.world, this.id, 'You'); }
-  solo() {
+  solo(kind:VehicleId='roadster') {
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = '';
-    this.world = createWorld(); addPlayer(this.world, this.id, 'You');
+    this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
-  join(room: string, name: string) {
+  join(room: string, name: string,kind:VehicleId='roadster') {
     this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
@@ -24,9 +25,10 @@ export class Session {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'welcome') {
-          if (message.version !== 1) { this.error = 'Game updated. Reload to reconnect.'; socket.close(); return; }
+          if (message.version !== PROTOCOL_VERSION) { this.error = 'Game updated. Reload to reconnect.'; socket.close(); return; }
           this.id = message.id; this.capacity = message.capacity; this.lastState = performance.now();
           socket.send(JSON.stringify({type:'name',name}));
+          if(kind!=='roadster')socket.send(JSON.stringify({type:'selectVehicle',kind}));
         }
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
@@ -44,8 +46,9 @@ export class Session {
       if (this.sendTime >= .05) { this.send({type:'input',input}); this.sendTime = 0; }
     }
   }
-  action(type: 'interact' | 'reset') {
-    if (this.status === 'solo') (type === 'interact' ? interact : resetPlayer)(this.world, this.id);
+  selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
+  action(type: 'interact' | 'reset' | 'autopilot') {
+    if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:resetPlayer)(this.world, this.id);
     else this.send({type});
   }
   private send(value: unknown) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(value)); }

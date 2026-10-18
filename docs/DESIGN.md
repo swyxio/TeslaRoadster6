@@ -1,4 +1,4 @@
-# Game design · simple fun first
+# Poly AV game design · simple fun first
 
 ## Product decisions
 
@@ -6,7 +6,7 @@ Approved: stylized compressed Bay Area; driving/stunts first; real Tesla Superch
 
 ## Thirty-second loop
 
-Join → start seated in a Roadster → accelerate → lift above a block → roll → land → find a charger → do it again with a friend. No account, tutorial wall, garage purchase, grind, or mandatory mission. Every participant starts with a usable vehicle and100 air. Nearby parked coupe/truck/Roadster vehicles can be taken once empty. Occupied cars cannot be stolen in v1.
+Join → start seated in a Roadster → accelerate → lift above a block → roll → land → find a charger → do it again with a friend. No account, tutorial wall, garage purchase, grind, or mandatory mission. Every participant starts with a usable vehicle and100 air. Every researched family has parked and autonomous traffic examples. NPCs can be taken while nearby; human-occupied cars cannot be stolen. Fleet selection also offers every model directly when stopped.
 
 The simulation prioritizes arcade legibility over realism. Ground friction slows an unattended car. Roadster air is a shared boost/lift budget. Space/Lift holds thrust; releasing it allows gravity to land the car. Q/E/touch rolls provide stunts with automatic ground stabilization. A depleted air tank never prevents ordinary driving. Station refills take about3.6seconds from empty, only when grounded and stopped within9m. Pickups provide instant full air or repair with20second respawn. Condition is clamped to5 rather than introducing death before its design exists.
 
@@ -20,7 +20,7 @@ Controls: steering plus forward/reverse; separate brake. Person movement current
 
 Warm coastal daylight, desaturated sea/teal city, cream type, amber player/actions, mint charger markers. Car silhouettes and roadway contrast matter more than texture detail. Vehicle airborne state, remaining air, repair state, nearest station distance and visible other players must remain readable. Keep minimal instruments; do not turn the screen into a dashboard of implementation metrics.
 
-Alternatives can change style, HUD organization and models. Preserve the same gameplay entry points, touch equivalents and state transitions. See ASSETS.md for geometry/attachment budgets. Brand name is Bay Drive; Tesla Roadster is an in-game vehicle identity, with no claim of official affiliation or real flight capability.
+Alternatives can change style, HUD organization and models. Preserve the same gameplay entry points, touch equivalents and state transitions. See ASSETS.md for geometry/attachment budgets. Brand name is Poly AV (formerly Bay Drive); Poly Ave is an in-world street. Tesla Roadster is an in-game vehicle identity, with no claim of official affiliation or real flight capability.
 
 ## Multiplayer scale
 
@@ -44,8 +44,18 @@ First scaling step, when measurements justify it: spatial grid for collisions an
 
 1. Human playtest on a real iPhone and Android: steering, lift/roll reachability, heat and frame rate.
 2. Vehicle feel: tune camera, air time, collisions and refill loop from playtests.
-3. Art pass within existing pivots and collision volumes; better Roadster silhouette and distinct districts.
+3. Improve district art while preserving registry model pivots and collision volumes.
 4. Playful destinations: shared stunt rings, short time trials, small ramps using authoritative terrain geometry.
 5. Only then opt-in combat/respawning or progression.
 
 Avoid adding quests, inventories, currencies, matchmaking services, chat moderation burdens or a broad asset pipeline before the driving loop is satisfying.
+
+## Poly AV fleet layer
+
+26 researched vehicle/platform families: 11 Tesla, 9 Waymo, 4 Cruise, 2 Zoox. Catalog scope includes historical and announced designs; trims and unnamed internal chassis are not extra models. See FLEET_RESEARCH.md for every source and uncertainty.
+
+The new loop is drive → see an interesting AV → exit → take it → feel its weight/turning radius → enable AV and watch it cruise → manually take over. Fleet selection removes the need to hunt for a specific car when testing. All model families can drive themselves in the game regardless of real-world autonomy capability. Wheel-less robotaxis receive fictional manual controls.
+
+Traffic uses street loops with short corner pauses and forward-obstacle yielding. It has no perception ML, traffic lights, pedestrian rules, route destination planner or complex blockage recovery; persistently obstructed NPCs wait. Player AV engagement off supported streets is rejected. Ordinary manual input cancels AV immediately. Only the fictional next-generation Roadster retains air thrusters; other vehicles carry no flight capability.
+
+The affectionate SF wordplay is “See other vehicles,” “Many rides. Zero commitment,” and “Open relationships. Open roads.” Keep jokes about car choice and low polygon counts rather than mocking people's relationships.

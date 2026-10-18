@@ -4,19 +4,16 @@
 
 `src/vehicles.ts:createVehicle(kind)` returns a Three.js Group. Replace internals or load a GLB behind that factory; retain kind, origin and orientation. Loading must leave procedural geometry playable until ready; asset failure must remain visible/recoverable. Do not block room join on downloads. A full new renderer still consumes the same World/Player/Entity schema.
 
-| Kind | Approx visual envelope (m) | Collision radius | Role |
-|---|---|---|---|
-| roadster | 2 wide × 1.5 high × 4.5 long | 1.8 | Hero, red; air jets |
-| coupe | 2 × 1.5 × 4.5 | 1.8 | Gold/cream street car |
-| truck | 2 × 1.7 × 4.9 | 2.4 | Silver utility silhouette |
-| person | .7 × 2 × .5 | .65 | Readable on foot |
+The 26-model dimensions and visual traits are in `shared/vehicles.ts` and [FLEET_RESEARCH.md](FLEET_RESEARCH.md). Every catalog ID maps to one original procedural detailed model; `person` is separate. The registry's length/width defines collision envelopes. Dimensions include no extra clearance promise for decorative sensor rigs.
 
-Collision bodies intentionally approximate arcade vehicles; visual replacements cannot enlarge gameplay hitboxes silently. +Y is up; −Z forward; root ground-center. Model at1 meter/unit, transforms applied, no baked world position. Root handles yaw; visual roll rotates around localZ. Proposed future named attachments: `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`, `jet_left`, `jet_right`, `muzzle`, `seat_driver`. Only current `jets` group is consumed; other sockets are reserved conventions, not implemented runtime APIs.
++Y is up; −Z is forward; root is ground-center in meters. Preserve `createVehicle(kind)`. Named wheel groups `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr` articulate with authoritative steering. Preserve `jets` for the Air Edition. Geometry and materials are cached and shared; do not dispose on individual despawn. Model factory changes must preserve scale and tests across all registry IDs.
+
+Distinct cues include open original Roadster, new sports wedge, Cybertruck's angular steel body, gold Cybercab, Falcon-door seams on X, tall Semi, Robovan, Waymo roof rigs/Firefly pod, orange Cruise sensors/pods, and mint symmetric Zoox/corner sensors. Trucks are tractors without trailers. All geometry is original, with no copied brand logos or remote artwork.
 
 ## Initial performance budgets (targets, not measured claims)
 
 - Aim60fps desktop,30fps midrange mobile. DPR≤1.5 baseline; allow a quality control if measurement justifies it.
-- Hero ≤12k triangles, other cars≤6k; LOD for distant peers when larger rooms justify it.
+- Vehicles ≤12k triangles; LOD for distant peers when larger rooms justify it.
 - Shared materials/geometry, instanced repeated city details. Do not make a texture/material per window or per player.
 - Textures≤1024px mobile; use compressed textures only when toolchain is deliberately added. Keep first-play compressed downloads under3MB, optional art pack under8MB.
 - Avoid mandatory realtime shadows/postprocessing. Add toggles with measured mobile cost.
@@ -35,3 +32,9 @@ Keep immediate solo/play-with-friends choices. Preserve room link sharing, joini
 For each supplied asset, provide source file and optimized export, author/source link, license/permission, dimensions, triangles, texture memory estimate and attachment names in `public/assets/manifest.md`. Current procedural assets are original project code; no remote artwork is bundled. Do not copy GTA, Tesla promotional models, music, trademarks-as-logos or third-party assets without usable permission. Referencing real location names is distinct from distributing third-party assets.
 
 Include screenshots at desktop/phone portrait/phone landscape and demonstrate the asset in the actual playable route. An isolated model viewer is supplemental. Deliver alternatives in isolated scoped work; the lead selects/integrates one coherent default.
+
+## Vehicle detail direction
+
+Keep the environment low-poly and spend geometry on vehicles. `src/coachwork.ts` owns curved body cross-sections, wheel openings, and per-platform cabin landmarks. `src/vehicles.ts` owns assembly, specialized truck/pod shapes, wheels, sensors, lights and cached templates. Templates clone transforms but share geometry/materials; static meshes are combined by material. Do not change simulation dimensions to accommodate artwork.
+
+Passenger cars use clearcoat paint and raked dark glass; rounded pods keep their contrasting glass belt; Cybertruck retains deliberate planar surfaces. Catalog and road use the same factory. Studio reflections are generated locally, without remote textures. These are stylized interpretations, not manufacturer CAD or photoreal replicas. More triangles alone are not acceptance: review silhouette, glazing visibility and lamp placement from front, side and chase-camera views.

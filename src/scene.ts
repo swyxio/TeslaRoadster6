@@ -1,4 +1,6 @@
 import * as T from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { VEHICLES } from '../shared/vehicles';
 import { BUILDINGS, WORLD_LIMIT, type World, type Entity } from '../shared/game';
 import { STATIONS } from '../shared/stations';
 import { box, material, createVehicle } from './vehicles';
@@ -9,6 +11,7 @@ export class GameScene {
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
   private pickups = new Map<string,T.Mesh>();
+  private labels:T.Sprite[]=[];
   private focus = new T.Vector3(0,1,24);
   private follow = new T.Vector3();
   private cameraReady = false;
@@ -23,6 +26,7 @@ export class GameScene {
     this.scene.fog = new T.Fog(0xa8cbd0,180,650);
     this.scene.add(new T.HemisphereLight(0xe9f5ff,0x626953,2.8));
     const sun = new T.DirectionalLight(0xffdfb5,3.5); sun.position.set(-100,160,80); this.scene.add(sun);
+    const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
     window.addEventListener('resize',resize); resize();
@@ -90,7 +94,7 @@ export class GameScene {
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
       const label=this.label('ϟ  '+s.name);label.position.set(s.x,6,s.z);scene.add(label);
     });
-    const labels:[string,number,number][]=[['SAN FRANCISCO',-80,70],['GOLDEN GATE',0,-190],['EAST BAY',180,-70],['PENINSULA',0,210]];
+    const labels:[string,number,number][]=[['SAN FRANCISCO',-80,70],['GOLDEN GATE',0,-190],['EAST BAY',180,-70],['PENINSULA',0,210],['POLY AVE',0,0]];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,35,z);label.scale.multiplyScalar(1.5);scene.add(label);});
     // Edge bollards clearly mark the limits of the first playground.
     for(let p=-WORLD_LIMIT;p<=WORLD_LIMIT;p+=12) for(const [x,z] of [[p,-WORLD_LIMIT],[p,WORLD_LIMIT],[-WORLD_LIMIT,p],[WORLD_LIMIT,p]]) box(scene,x,.6,z,.4,1.2,.4,0xe8d7ac);
@@ -98,19 +102,21 @@ export class GameScene {
   private label(text: string) {
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=64;
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
-    const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);return sprite;
+    const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
   render(world: World, playerId: string, dt: number, menu: boolean, lift: boolean) {
     const ids=new Set(world.entities.map(e=>e.id));
-    for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);mesh.traverse(o=>{if(o instanceof T.Mesh)o.geometry.dispose();});this.entities.delete(id);}
+    for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
     for(const e of world.entities) {
       let mesh=this.entities.get(e.id);
+      if(mesh&&mesh.name!==e.kind){this.scene.remove(mesh);this.entities.delete(e.id);mesh=undefined;}
       if(!mesh){mesh=createVehicle(e.kind);mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       const yawDelta=Math.atan2(Math.sin(e.yaw-mesh.rotation.y),Math.cos(e.yaw-mesh.rotation.y));mesh.rotation.y+=yawDelta*alpha;mesh.rotation.z=e.roll;
-      const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind==='roadster'&&e.y>.5&&(e.driver!==playerId||lift);
+      const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind!=='person'&&VEHICLES[e.kind].airThrusters&&e.y>.5&&(e.driver!==playerId||lift);
+      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
@@ -128,7 +134,7 @@ export class GameScene {
       this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*lookAhead,e.y+1.3,e.z-Math.cos(e.yaw)*lookAhead),1-Math.exp(-8*dt));
     }
     if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
-    this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);this.renderer.render(this.scene,this.camera);
+    this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
 }

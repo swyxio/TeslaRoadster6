@@ -1,4 +1,4 @@
-# Implementation contracts · v1
+# Implementation contracts · v2
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -6,11 +6,11 @@ These contracts are the handoff for other coding agents. The lead integrator own
 
 | Lane | Owns | May depend on | Must not change incidentally |
 |---|---|---|---|
-| Gameplay | `shared/game.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
+| Gameplay | `shared/game.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
 | Visuals/assets | `src/scene.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
-| Data/map | `shared/stations.ts`, building definitions | Documented primary sources | Live fetching at render time |
+| Data/map | `shared/stations.ts`, `vehicles.ts`, building definitions | Documented primary sources | Live fetching at render time |
 
 Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. Solo and server use exactly the same simulation; solo is an explicit menu choice, never a silent network-failure fallback.
 
@@ -27,17 +27,17 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`roadster|coupe|truck|person`), x/y/z, yaw/roll, speed/vy, health/air, driver (player ID or null).
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/roll, speed/vy, health/air, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil.
 - `Player`: id, display name, entityId. Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/lift/brake are booleans. Complete input frames replace previous intent.
 
-Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
+Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v1
+## Wire protocol v2
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:1,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:2,capacity:number}`.
 
 Client messages:
 
@@ -45,13 +45,15 @@ Client messages:
 {"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"lift":true,"brake":false}}
 {"type":"interact"}
 {"type":"reset"}
+{"type":"autopilot"}
+{"type":"selectVehicle","kind":"zoox"}
 {"type":"name","name":"Driver"}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:1, capacity:number}
+{type:"welcome", id:string, version:2, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -63,7 +65,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo()`, `join(room,name)`, `tick(dt,input)`, `action('interact'|'reset')`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot')`, `selectVehicle(kind)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -81,3 +83,17 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 4. Visual/input changes: inspect desktop and portrait/landscape phone layouts, drive/lift/land, and switch cars. Record actual browser/device used; emulation is not physical-device evidence.
 5. List assets, provenance/licenses, budgets and known gaps. No unlicensed GTA assets or unexplained remote dependencies.
 6. Provide a small concrete diff and verification result. Do not change deployment names, domains, accounts or shared contracts as part of an art/UI task.
+
+## Fleet and autonomy contract (v2)
+
+`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only `roadster` Air Edition has flight/boost.
+
+Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. This is not suspension/tire simulation. Terrain roof support remains shared.
+
+Every model has one parked entity and one NPC traffic entity. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting/disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
+
+Autonomy uses deterministic clockwise right-lane loops and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/lift/boost/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+
+Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
+
+Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` remains the flight effect group. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.

@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, removePlayer, resetPlayer, step, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; MAX_PLAYERS?: string };
@@ -9,7 +9,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    if (url.pathname === '/api/health') return Response.json({ ok: true, version: 1, capacity: roomCapacity(env.MAX_PLAYERS) });
+    if (url.pathname === '/api/health') return Response.json({ ok: true, version: PROTOCOL_VERSION, capacity: roomCapacity(env.MAX_PLAYERS) });
     const slug = roomSlug(url.pathname);
     if (!slug) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
     if (request.method !== 'GET') return reply('GET required', 405);
@@ -43,7 +43,7 @@ export class GameRoom extends DurableObject<Env> {
     server.addEventListener('message', event => this.onMessage(server, event.data));
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
-    server.send(JSON.stringify({ type: 'welcome', id, version: 1, capacity }));
+    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
     server.send(JSON.stringify({ type: 'state', world: this.world }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
@@ -60,14 +60,17 @@ export class GameRoom extends DurableObject<Env> {
     if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
     session.lastMessage = now;
     if (message.type === 'input') { this.inputs.set(session.id, message.input); session.lastInput = now; return; }
+    if (message.type === 'name') {
+      const player = this.world.players.find(p => p.id === session.id);
+      if(player) player.name=message.name;
+      return;
+    }
     if (now - session.lastAction < 400) return;
     session.lastAction = now;
     if (message.type === 'interact') interact(this.world, session.id);
     if (message.type === 'reset') resetPlayer(this.world, session.id);
-    if (message.type === 'name') {
-      const player = this.world.players.find(p => p.id === session.id);
-      if (player) player.name = message.name;
-    }
+    if(message.type==='autopilot')toggleAutopilot(this.world,session.id);
+    if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
   }
 
   private tick(): void {

@@ -1,44 +1,202 @@
 import * as T from 'three';
-import type { Entity } from '../shared/game';
-const materials = new Map<number, T.MeshStandardMaterial>();
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { coachwork, loft } from './coachwork';
+import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+
+// Geometry and materials belong to the fleet, not individual entities: never dispose
+// them when removing a single car. No external models, textures, or brand logos.
+const materials = new Map<string, T.MeshStandardMaterial>();
+const geometries = new Map<string, T.BufferGeometry>();
+const cube = new T.BoxGeometry(1, 1, 1);
+const tire = new T.CylinderGeometry(1, 1, 1, 32);
+const hub = new T.CylinderGeometry(1, 1, 1, 24);
+const head = new T.SphereGeometry(.25, 8, 6);
+const jetGeometry = new T.ConeGeometry(.22, 1.8, 8);
+const paintCache=new Map<number,T.MeshPhysicalMaterial>();
+function paint(color:number){if(!paintCache.has(color))paintCache.set(color,new T.MeshPhysicalMaterial({color,metalness:.42,roughness:.28,clearcoat:1,clearcoatRoughness:.16}));return paintCache.get(color)!;}
+const jetMaterial = new T.MeshBasicMaterial({ color: 0x8feaff, transparent: true, opacity: .75 });
+const DARK = 0x17272f, GLASS = 0x284954, WHITE = 0xe6eeeb;
+
 export function material(color: number, metalness = .1) {
-  if (!materials.has(color)) materials.set(color, new T.MeshStandardMaterial({color,roughness:.65,metalness}));
-  return materials.get(color)!;
+  const key = `${color}:${metalness}`;
+  if (!materials.has(key)) materials.set(key, new T.MeshStandardMaterial({ color, roughness: color === GLASS ? .19 : .38, metalness, flatShading: false }));
+  return materials.get(key)!;
 }
-export function box(parent: T.Object3D, x: number,y: number,z: number,w: number,h: number,d: number,color: number) {
-  const mesh = new T.Mesh(new T.BoxGeometry(w,h,d),material(color)); mesh.position.set(x,y,z); parent.add(mesh); return mesh;
+export function box(parent: T.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, color: number) {
+  const mesh = new T.Mesh(cube, material(color));
+  mesh.scale.set(w, h, d); mesh.position.set(x, y, z); parent.add(mesh); return mesh;
 }
-/** Replace visual internals freely. Root origin is ground center, forward is -Z. */
-export function createVehicle(kind: Entity['kind']): T.Group {
+
+/** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
+function profile(parent: T.Object3D, width: number, points: [number, number][], color: number) {
+  const key = JSON.stringify([width, points]);
+  let geometry = geometries.get(key);
+  if (!geometry) {
+    const shape = new T.Shape();
+    points.forEach(([z, y], i) => i ? shape.lineTo(z, y) : shape.moveTo(z, y));
+    shape.closePath();
+    geometry = new T.ExtrudeGeometry(shape, { depth: width - .06, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 3, steps: 1 });
+    // Local shape XY -> vehicle ZY, extrusion Z -> vehicle -X.
+    geometry.rotateY(-Math.PI / 2); geometry.translate(width / 2 - .03, 0, 0);
+    geometries.set(key, geometry);
+  }
+  const mesh = new T.Mesh(geometry, material(color, .28)); parent.add(mesh); return mesh;
+}
+
+function wheels(root: T.Group, spec: VehicleSpec) {
+  const radius = spec.shape === 'semi' || spec.shape === 'bus' ? .5 : spec.shape === 'pickup' ? .44 : spec.shape === 'pod' ? .32 : .35;
+  for (const side of [-1, 1]) for (const axle of [-1, 1]) {
+    const assembly = new T.Group();
+    assembly.name = `wheel_${axle < 0 ? 'f' : 'r'}${side < 0 ? 'l' : 'r'}`;
+    assembly.position.set(side * (spec.width / 2 - .09), radius, axle * spec.wheelbase / 2);
+    const rubber = new T.Mesh(tire, material(DARK)); rubber.rotation.z = Math.PI / 2; rubber.scale.set(radius, .24, radius); assembly.add(rubber);
+    const disk = new T.Mesh(hub, material(spec.id.includes('cybercab') ? spec.color : 0xa6b6b8, .5));
+    disk.rotation.z = Math.PI / 2; disk.scale.set(radius * .65, .255, radius * .65); assembly.add(disk);
+    const rim=new T.Mesh(new T.TorusGeometry(radius*.73,.025,6,32),material(0xc4cbd0,.7));rim.rotation.y=Math.PI/2;rim.position.x=side*.135;assembly.add(rim);
+    for(let j=0;j<5;j++){
+      const spoke=box(assembly,side*.14,0,0,.035,radius*1.22,.035,0x89949e);spoke.rotation.x=j*Math.PI/5;
+    }
+    root.add(assembly);
+  }
+  if (spec.shape === 'semi') for (const side of [-1, 1]) {
+    const extra = new T.Mesh(tire, material(DARK)); extra.rotation.z = Math.PI / 2;
+    extra.scale.set(radius, .32, radius); extra.position.set(side * (spec.width / 2 - .1), radius, spec.wheelbase / 2 - 1.1); root.add(extra);
+  }
+}
+
+function sensors(root: T.Group, spec: VehicleSpec) {
+  const { width: w, height: h, length: l } = spec;
+  if (spec.sensorRig === 'roof') {
+    box(root, 0, h + .06, 0, w * .72, .12, .5, DARK);
+    const dome = new T.Mesh(hub, material(WHITE)); dome.scale.set(.24, .3, .24); dome.position.set(0, h + .25, 0); root.add(dome);
+    for (const side of [-1, 1]) box(root, side * w * .37, h + .18, 0, .21, .25, .28, DARK);
+  } else if (spec.sensorRig === 'corners') {
+    for (const side of [-1, 1]) for (const end of [-1, 1]) {
+      box(root, side * w * .46, h - .08, end * l * .38, .21, .32, .24, DARK);
+    }
+  }
+}
+
+/** Original stylized models. Ground-centered pivot; -Z front; SI dimensions. */
+const templates=new Map<string,T.Group>();
+export function createVehicle(kind:VehicleId|'person'):T.Group {
+  if(!templates.has(kind)){
+    const template=buildVehicle(kind);
+    const batch=(group:T.Group)=>{
+      const buckets=new Map<T.Material,T.Mesh[]>();
+      for(const child of [...group.children]){
+        if(child instanceof T.Group)batch(child);
+        if(child instanceof T.Mesh&&!child.name&&!Array.isArray(child.material)){
+          const meshes=buckets.get(child.material)??[];meshes.push(child);buckets.set(child.material,meshes);
+        }
+      }
+      for(const [mat,meshes] of buckets)if(meshes.length>1){
+        const parts=meshes.map(mesh=>{mesh.updateMatrix();const part=mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone();part.deleteAttribute('uv');return part.applyMatrix4(mesh.matrix);});
+        const merged=mergeGeometries(parts);parts.forEach(part=>part.dispose());
+        if(merged){meshes.forEach(mesh=>group.remove(mesh));group.add(new T.Mesh(merged,mat));}
+      }
+    };
+    batch(template);templates.set(kind,template);
+  }
+  return templates.get(kind)!.clone(true);
+}
+function buildVehicle(kind: VehicleId | 'person'): T.Group {
   const root = new T.Group(); root.name = kind;
   if (kind === 'person') {
-    box(root,0,1,0,.65,1,.4,0xf5b94b);
-    const head = new T.Mesh(new T.SphereGeometry(.25,8,6),material(0xd5a786)); head.position.y=1.75; root.add(head);
-    box(root,-.18,.3,0,.22,.6,.25,0x253544); box(root,.18,.3,0,.22,.6,.25,0x253544); return root;
+    box(root, 0, 1, 0, .65, 1, .4, 0xf5b94b);
+    const face = new T.Mesh(head, material(0xd5a786)); face.position.y = 1.75; root.add(face);
+    box(root, -.18, .3, 0, .22, .6, .25, 0x253544); box(root, .18, .3, 0, .22, .6, .25, 0x253544);
+    return root;
   }
-  const truck = kind === 'truck', roadster = kind === 'roadster';
-  const color = roadster ? 0xf04d35 : truck ? 0x98abb1 : 0xe7bb69;
-  box(root,0,.6,0,2,.6,truck?4.9:4.5,color);
-  box(root,0,.38,0,1.9,.24,4.3,0x182831);
-  box(root,0,1.02,truck?-.6:.1,1.65,.6,truck?2:2.1,0x233e49);
-  box(root,0,1.36,truck?-.6:.2,1.7,.09,truck?2.1:1.5,color);
-  if (truck) box(root,0,.95,1.6,1.85,.25,1.5,0x60747a);
-  else {
-    const hood = box(root,0,.88,-1.55,1.9,.12,1.25,color); hood.rotation.x=-.09;
-    box(root,0,.98,1.9,2,.1,.24,0x202d32);
+  const spec = VEHICLES[kind];
+  const { length: l, width: w, height: h, color, shape } = spec;
+  const id = String(kind);
+  const zoox = id.includes('zoox') && shape === 'pod';
+  const firefly = id.includes('firefly');
+  const origin = id.includes('origin');
+  const cybercab = id.includes('cybercab');
+  const classic = shape === 'roadster' && (id.includes('2008') || id.includes('original') || id.includes('classic'));
+  const belt = shape === 'pod' || shape === 'bus' ? h * .43 : shape === 'semi' ? .95 : h * .48;
+  box(root, 0, .36, 0, w * .9, .22, l * .9, DARK);
+
+  if (shape === 'pickup') {
+    profile(root, w, [[-l / 2, .47], [-l / 2, .88], [-l * .08, h], [l / 2, h * .56], [l / 2, .47]], color);
+    profile(root, w * 1.006, [[-l * .32, 1.28], [-l * .08, h + .01], [l * .22, h * .75], [l * .22, 1.03]], GLASS);
+    // Windshield follows the exterior roof plane rather than hiding inside it.
+    const glassFrontY=.88+(h-.88)*(.16/.42),glassRise=h-glassFrontY;
+    const windshield=box(root,0,(h+glassFrontY)/2+.025,-l*.21,w*.88,.035,Math.hypot(l*.26,glassRise),GLASS);
+    windshield.rotation.x=-Math.atan2(glassRise,l*.26);
+    const tonneau=box(root,0,h*.685+.025,l*.34,w*.79,.035,l*.25,DARK);
+    tonneau.rotation.x=Math.atan2(h*.44,l*.58);
+    box(root, 0, .93, -l / 2 - .015, w * .93, .065, .03, WHITE);
+  } else if (shape === 'semi' && id !== 'tesla-semi') {
+    // Conventional Waymo Via tractor: long bonnet, upright sleeper cab.
+    box(root, 0, .65, 0, w * .87, .32, l, DARK);
+    profile(root, w * .77, [[-l / 2, .8], [-l / 2, 1.55], [-l * .22, 1.8], [-l * .22, .8]], color);
+    profile(root, w, [[-l * .24, .8], [-l * .24, h * .78], [-l * .12, h], [l * .15, h], [l * .19, .8]], color);
+    box(root, 0, h * .65, -l * .245, w * .85, h * .23, .04, GLASS);
+    box(root, 0, 1.08, -l / 2 - .025, w * .57, .7, .04, 0x8c9da0);
+    if (id.includes('peterbilt')) for (const side of [-1, 1]) box(root, side * w * .44, h * .53, l * .07, .12, h * .76, .12, 0xa6b6b8);
+  } else if (shape === 'semi') {
+    profile(root, w, [[-l / 2, .5], [-l / 2, h * .58], [-l * .36, h], [-l * .02, h], [l * .05, .8], [l / 2, .8], [l / 2, .5]], color);
+    profile(root, w * 1.005, [[-l * .49, h * .6], [-l * .36, h * .89], [-l * .08, h * .89], [-l * .04, h * .6]], GLASS);
+    box(root, 0, .94, l * .26, w * .65, .14, l * .2, DARK);
+  } else if (shape === 'pod' || shape === 'bus') {
+    // Rounded bidirectional shuttles; Firefly has a much narrower egg-shaped nose.
+    const ends=firefly?.66:.88;
+    root.add(new T.Mesh(loft([
+      [-l*.5,w*ends/2,.4,belt],[-l*.46,w*.48,.3,belt+.04],[-l*.34,w*.5,.28,belt+.06],
+      [0,w*.5,.28,belt+.06],[l*.34,w*.5,.28,belt+.06],[l*.46,w*.48,.3,belt+.04],[l*.5,w*ends/2,.4,belt],
+    ],firefly?.8:.35),paint(color)));
+    root.add(new T.Mesh(loft([
+      [-l*.467,w*.448,belt,h*.74],[-l*.35,w*.48,belt,h*.91],[0,w*.484,belt,h*.94],
+      [l*.35,w*.48,belt,h*.91],[l*.467,w*.448,belt,h*.74],
+    ],.4),material(GLASS,.5)));
+    root.add(new T.Mesh(loft([[-l*.35,w*.46,h*.91,h*.96],[0,w*.47,h*.94,h],[l*.35,w*.46,h*.91,h*.96]],.4),paint(color)));
+    for (const side of [-1, 1]) {
+      box(root, side * w * .507, h * .51, 0, .025, h * .76, .035, color);
+      box(root, side * w * .509, h * .52, -.12, .03, .18, .04, WHITE);
+      if (shape === 'bus') for (let z = -.3; z <= .3; z += .15) box(root, side * w * .51, h * .71, l * z, .02, h * .35, .055, color);
+    }
+    if (zoox) for (const end of [-1, 1]) box(root, 0, .8, end * (l / 2 + .015), w * .8, .16, .03, DARK);
+    if (firefly) {
+      for (const side of [-1, 1]) {
+        const eye = new T.Mesh(hub, material(WHITE)); eye.rotation.x = Math.PI / 2; eye.scale.set(.18, .03, .18); eye.position.set(side * w * .3, .8, -l / 2 - .02); root.add(eye);
+      }
+      box(root, 0, .58, -l / 2 - .02, w * .3, .06, .035, DARK);
+    }
+  } else {
+    coachwork(root,spec,paint(color),material(GLASS,.55),material(DARK));
+
   }
-  [-1,1].forEach(x => {
-    [-1.4,1.4].forEach(z => {
-      const wheel = new T.Mesh(new T.CylinderGeometry(.48,.48,.28,12),material(0x172126)); wheel.rotation.z=Math.PI/2; wheel.position.set(x,.48,z); root.add(wheel);
-      const hub = new T.Mesh(new T.CylinderGeometry(.27,.27,.3,8),material(0xb9c2c3)); hub.rotation.z=Math.PI/2; hub.position.copy(wheel.position); root.add(hub);
-    });
-    box(root,x*.72,.76,-2.26,.42,.12,.035,0xf7f0d1);
-    box(root,x*.72,.76,2.26,.5,.1,.035,0xe94032);
-  });
-  const jets = new T.Group(); jets.name='jets';
-  [-.65,.65].forEach(x => {
-    const jet = new T.Mesh(new T.ConeGeometry(.22,1.8,8),new T.MeshBasicMaterial({color:0x8feaff,transparent:true,opacity:.75})); jet.rotation.z=Math.PI; jet.position.set(x,-.55,1); jets.add(jet);
-  });
-  root.add(jets); jets.visible=false;
+
+  if (id.includes('lexus')) {
+    box(root, 0, .57, -l / 2 - .03, w * .37, .33, .04, DARK);
+  }
+  if (id.includes('prius')) box(root, 0, belt + .2, l * .35, w * .77, .06, .19, DARK);
+  if (id.includes('ipace')) box(root, 0, .57, -l / 2 - .03, w * .48, .22, .04, DARK);
+  // Family markings without copied logos; sensors remain obvious at driving distance.
+  if (id.includes('cruise') || origin) for (const side of [-1, 1]) box(root, side * w * .51, belt * .82, 0, .025, .25, l * .68, 0xef6a37);
+  if (id.includes('waymo')) for (const side of [-1, 1]) box(root, side * w * .51, belt * .82, l * .12, .025, .17, l * .28, 0x73c4bd);
+  if (id.includes('ioniq')) {
+    for (const side of [-1, 1]) for (const pixel of [-1, 1]) box(root, side * w * .31 + pixel * .09, belt, -l / 2 - .025, .13, .13, .03, WHITE);
+  } else if (!firefly && shape !== 'pickup' && shape !== 'roadster') for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), -l / 2 - .025, w * .22, .09, .03, WHITE);
+  for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), l / 2 + .025, w * .23, .09, .03, 0xe9483c);
+  if(shape==='roadster'){
+    for(const side of [-1,1]){
+      const lamp=box(root,side*w*.25,h*.49,-l*.47,w*.18,.025,.1,WHITE);lamp.rotation.y=side*.24;
+      box(root,side*w*.26,.37,-l*.493,w*.18,.09,.05,DARK);
+    }
+    box(root,0,.28,-l*.495,w*.72,.045,.14,DARK);
+    box(root,0,.36,l*.485,w*.6,.15,.04,DARK);
+  }
+  wheels(root, spec); sensors(root, spec);
+  const jets = new T.Group(); jets.name = 'jets'; jets.visible = false;
+  if (spec.airThrusters) for (const side of [-1, 1]) {
+    const nozzle = box(root, side * w * .32, .28, l * .28, .22, .14, .24, DARK); nozzle.name = side < 0 ? 'jet_left' : 'jet_right';
+    const jet = new T.Mesh(jetGeometry, jetMaterial); jet.rotation.z = Math.PI; jet.position.set(side * w * .32, -.55, l * .28); jets.add(jet);
+  }
+  root.add(jets);
+  const seat = new T.Object3D(); seat.name = 'seat_driver'; seat.position.set(-w * .2, belt + .2, 0); root.add(seat);
   return root;
 }

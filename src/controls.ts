@@ -5,15 +5,15 @@ export class Controls {
   private keys = new Set<string>();
   private pointers = new Map<number, string>();
   enabled = false;
-  onAction: (action: 'interact' | 'reset' | 'camera' | 'menu') => void = () => {};
+  onAction: (action: 'interact' | 'reset' | 'camera' | 'menu' | 'autopilot' | 'fleet') => void = () => {};
   constructor() {
     window.addEventListener('keydown', e => {
-      if ((e.target as HTMLElement).matches('input,textarea')) return;
+      if ((e.target as HTMLElement).matches('input,textarea,select')) return;
       if (!this.enabled) return;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
       if (!e.repeat) {
-        const action = {KeyF:'interact',KeyR:'reset',KeyC:'camera',Escape:'menu'}[e.code];
+        const action = {KeyF:'interact',KeyR:'reset',KeyC:'camera',KeyV:'autopilot',KeyG:'fleet',Escape:'menu'}[e.code];
         if (action) this.onAction(action as 'interact');
       }
     });
