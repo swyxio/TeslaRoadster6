@@ -185,7 +185,7 @@ test('both flight modes leave emergency braking in control when a large vehicle 
 test('a heavy Level 1 vehicle can launch either autonomous flight mode with a full tank',()=>{
   for(const mode of ['jump','sky'] as const)for(const economy of [false,true]){
     const {world,car,nav}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
-    Object.assign(car,{kind:'tesla-semi',speed:10,vx:10,tankLevel:1,air:100});
+    Object.assign(car,{kind:'tesla-semi',speed:11,vx:11,tankLevel:1,air:100});
     Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true,economy});
     if(mode==='jump'){
       const leader=makeEntity('leader','ducati-panigale-v4',-291,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
@@ -209,6 +209,44 @@ test('a heavy Level 1 vehicle can launch either autonomous flight mode with a fu
       assert.ok(car.x>leader!.x+6,'the Semi clears the stopped leader');
     }
   }
+});
+
+test('a stopped heavy car does not jump when it cannot clear a motorcycle on descent',()=>{
+  const {world,car}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
+  Object.assign(car,{kind:'tesla-semi',speed:0,vx:0,tankLevel:1,air:100});
+  Object.assign(car.upgrades,{rocket:true,autonomyJump:true});
+  const leader=makeEntity('leader','ducati-panigale-v4',-291,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
+  assert.equal(autonomousFlight(car,world,0,'jump',NEUTRAL,initialAutonomousFlight()).jump,false);
+  assert.equal(setDestination(world,'pilot',{x:-80,z:0},'jump'),true);
+  for(let i=0;i<60;i++){
+    step(world,new Map(),.05);
+    if(car.y<leader.y+dimensions(leader.kind).height&&leader.y<car.y+dimensions(car.kind).height)
+      assert.equal(contact(body(car),body(leader)),null,'the road fallback does not overlap the stopped motorcycle');
+  }
+  assert.equal(car.supportId,'ground');assert.equal(leader.x,-291);assert.equal(car.health,100);
+});
+
+test('sampled autonomous launches clear short and tall stopped leaders',()=>{
+  let accepted=0,rejected=0;
+  for(const mode of ['jump','sky'] as const)for(const kind of ['roadster','tesla-semi'] as const)
+    for(const obstacle of ['ducati-panigale-v4','model-3','robovan'] as const)
+      for(const speed of [0,2,5,10,12])for(const distance of [8,9,10,11,12,13])for(const economy of [false,true]){
+        const {world,car,nav}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
+        Object.assign(car,{kind,speed,vx:speed,tankLevel:1,air:100});
+        Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true,economy});
+        const leader=makeEntity('leader',obstacle,-300+distance,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
+        const label=`${mode} ${kind} ${obstacle} speed ${speed} distance ${distance} economy ${economy}`;
+        if(!autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight()).jump){rejected++;continue;}
+        accepted++;
+        const result=flight(world,car,nav,mode,0,()=>{
+          if(car.y<leader.y+dimensions(leader.kind).height&&leader.y<car.y+dimensions(car.kind).height)
+            assert.equal(contact(body(car),body(leader)),null,`${label}: sampled overlap`);
+        });
+        assert.equal(result.landed,true,`${label}: landed`);
+        assert.equal(leader.x,-300+distance,`${label}: leader stayed put`);
+        assert.equal(car.health,100,`${label}: no damage`);
+      }
+  assert.ok(accepted>0);assert.ok(rejected>0);
 });
 
 test('a heavy Level 1 vehicle does not launch into an uncleared car',()=>{

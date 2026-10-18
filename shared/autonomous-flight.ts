@@ -52,18 +52,21 @@ function jumpable(car:Entity,other:Entity,forward:{x:number;z:number},along:numb
   const cross=Math.abs(forward.x*otherForward.z-forward.z*otherForward.x);
   const footprint=size.length/2+(alignment*obstacle.length+cross*obstacle.width)/2;
   // Check ascent and descent with this vehicle's fictional flight load.
-  // Require clearance before the first ballistic descent, even if the car
-  // could instantly reach its flight speed target. The optimistic bound is
-  // not a collision-free guarantee.
+  // Require clearance before the first ballistic descent. The optimistic
+  // bound is a rejection check, not a collision-free guarantee.
   const height=obstacle.height+Math.max(0,other.y-car.y)+.5;
   const load=flightLoad(size.massKg),jumpSpeed=11/load,gravity=9.81*load;
   const discriminant=jumpSpeed*jumpSpeed-2*gravity*height;if(discriminant<=0)return false;
   const root=Math.sqrt(discriminant),time=(jumpSpeed-root)/gravity,fallTime=(jumpSpeed+root)/gravity;
   const speed=Math.max(0,car.speed+car.pushX*forward.x+car.pushZ*forward.z);
-  // The controller aims for 11 m/s in flight, not unlimited full thrust.
-  // Even an instant acceleration to that target must clear the rear edge.
+  // Approximate the controller's proportional throttle toward its 11 m/s
+  // target. This credits full air and a straight heading, so remains an
+  // optimistic rejection check, not a guarantee of clearance.
+  const rate=16/(12*load);
+  const possibleTravel=speed>=11?speed*fallTime:
+    11*fallTime-(11-speed)*(1-Math.exp(-rate*fallTime))/rate;
   return along>=footprint+(speed+1)*time+8/load*time*time+1&&
-    Math.max(speed,11)*fallTime>=along+footprint+1;
+    possibleTravel>=along+footprint+1;
 }
 
 /** A stopped leader is a plausible reason to spend air on a short jump. */
