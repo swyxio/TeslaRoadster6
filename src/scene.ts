@@ -5,8 +5,9 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
+import { DISTRICTS, LANDMARKS, MYSTERY_YACHT, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
+import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
@@ -33,6 +34,7 @@ export class GameScene {
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
   private objective=new T.Group();
+  private progressionGates=createProgressionGates();
   private dome=createRocketDome();
   private ballPosition=new T.Vector3();
   private ballReady=false;
@@ -81,6 +83,7 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    for(const gate of Object.values(this.progressionGates))scene.add(gate);
     scene.add(this.dome.group);
     const signal=BAY_BRIDGE_SIGNAL;
     // The meter is visual only: the same shared fixture controls NPCs and AVs.
@@ -113,6 +116,8 @@ export class GameScene {
     });
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
+    for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);scene.add(label);}
+    const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);scene.add(yachtLabel);
 
   }
   private label(text: string) {
@@ -134,6 +139,7 @@ export class GameScene {
     this.sun.intensity=.5+daylight*1.7;
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const player=world.players.find(p=>p.id===playerId);
+    for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}

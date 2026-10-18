@@ -1,6 +1,7 @@
 import * as T from 'three';
-import { BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, MAP_BOUNDS, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
+import { buildRouteSignage } from './route-signage';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
@@ -78,7 +79,13 @@ export function buildBay(scene:T.Scene) {
   });
   for(const p of PARKS)box(p.x,.025,p.z,p.w,.05,p.d,p.color);
   // The lake is an inset visual feature, not a separate traversable body of water.
-  const lake=new T.Mesh(new T.CircleGeometry(1,40),material(0x589ca5));lake.rotation.x=-Math.PI/2;lake.scale.set(18,21,1);lake.position.set(480,.055,150);scene.add(lake);
+  const lake=new T.Mesh(new T.CircleGeometry(1,40),material(0x589ca5));lake.rotation.x=-Math.PI/2;lake.scale.set(LAKE_MERRITT.rx,LAKE_MERRITT.rz,1);lake.position.set(LAKE_MERRITT.x,.055,LAKE_MERRITT.z);scene.add(lake);
+  // The miniature bird islands are decorative, like the lake itself; cars
+  // still drive across the same flat shared ground beneath them.
+  for(const island of LAKE_MERRITT.islands){
+    const ground=new T.Mesh(new T.CylinderGeometry(island.r,island.r*1.08,.15,10),material(0x91aa7b));ground.position.set(island.x,.12,island.z);scene.add(ground);
+    const tree=new T.Mesh(new T.ConeGeometry(island.r*.55,4,7),material(0x60865f));tree.position.set(island.x,2.2,island.z);scene.add(tree);
+  }
   const road=ROADS.filter(r=>r.kind!=='highway').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));batches(0x505e60,road);
   const highways=ROADS.filter(r=>r.kind==='highway');
   batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
@@ -133,6 +140,12 @@ export function buildBay(scene:T.Scene) {
     }
   }
   batches(0xd6d8ca,highwayEdges);batches(0xe9cd82,highwayCenter);batches(0xe4e6dd,highwayDashes);
+  // Airport paint is on supported land and follows the shared location; it is
+  // a playful driving area, not an aviation simulation.
+  const runway=AIRPORT_RUNWAY;
+  box(runway.x,.08,runway.z,runway.w,.08,runway.d,0x515e60);
+  for(let z=runway.z-runway.d/2+5;z<runway.z+runway.d/2-4;z+=12)box(runway.x,.13,z,.35,.02,6,0xe6e9d9);
+  for(const side of [-1,1])for(let n=0;n<4;n++)box(runway.x+side*(3+n*1.8),.14,runway.z+runway.d/2-6,1,.02,6,0xe6e9d9);
   // Sloped deck, sides and underside follow the same piecewise-linear heights
   // as the authoritative overpass. The center crossing stays clear below.
   for(const [a,b] of [[OVERPASS.start,OVERPASS.deckStart],[OVERPASS.deckStart,OVERPASS.deckEnd],[OVERPASS.deckEnd,OVERPASS.end]]){
@@ -185,8 +198,43 @@ export function buildBay(scene:T.Scene) {
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
-    if(!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
-    if(b.style==='pyramid'){
+    const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
+    if(!landmark&&!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
+    if(b.style==='campanile'||b.style==='hoover'){
+      const berkeley=b.style==='campanile',stone=berkeley?0xdad6c7:0xd5c2a0;
+      box(b.x,(b.h-10)/2,b.z,b.w*.8,b.h-10,b.d*.8,stone);
+      box(b.x,b.h-12,b.z,b.w*.94,2,b.d*.94,berkeley?0xe5e2d3:0xc6a883);
+      box(b.x,b.h-7.5,b.z,b.w*.72,5,b.d*.72,berkeley?0xf0e9d8:0xd8c7a9);
+      for(const side of [-1,1])box(b.x+side*b.w*.22,b.h-7.5,b.z+b.d*.365,1,3,.05,0x536b68);
+      if(berkeley){
+        for(const side of [-1,1]){
+          const clock=new T.Mesh(new T.CircleGeometry(1.7,24),new T.MeshBasicMaterial({color:0xf5ead2,side:T.DoubleSide}));clock.position.set(b.x,b.h-15,b.z+side*b.d*.405);scene.add(clock);
+          box(b.x,b.h-15,b.z+side*b.d*.41,.14,2,.05,0x4c5d58);
+          box(b.x+.45,b.h-15,b.z+side*b.d*.41,1,.14,.05,0x4c5d58);
+        }
+      }
+      const roof=new T.Mesh(new T.ConeGeometry(b.w*.55,5,4),material(berkeley?0xa8aaa0:0xa85243));roof.rotation.y=Math.PI/4;roof.position.set(b.x,b.h-2.5,b.z);scene.add(roof);
+    }else if(b.style==='airport'){
+      box(b.x,5,b.z,b.w,10,b.d,0xd8dfd8);
+      const shaft=new T.Mesh(new T.CylinderGeometry(5,3.5,29,10),material(0xe3e9e2));shaft.position.set(b.x,24.5,b.z);scene.add(shaft);
+      const cab=new T.Mesh(new T.CylinderGeometry(8,6,6,10),material(0x527985));cab.position.set(b.x,42,b.z);scene.add(cab);
+      box(b.x,45.5,b.z,12,1,12,0xe3e9e2);
+    }else if(b.style==='mission'){
+      box(b.x,5,b.z,b.w,10,b.d,0xe8dfc8);
+      const roof=new T.Mesh(new T.ConeGeometry(1,3,4),material(0xab624e));roof.rotation.y=Math.PI/4;roof.scale.set(b.w*.7,1,b.d*.7);roof.position.set(b.x,11.5,b.z);scene.add(roof);
+      for(const side of [-1,1]){
+        box(b.x+side*8,12,b.z,4,16,4,0xe8dfc8);
+        box(b.x+side*8,17,b.z+2.02,1.4,2,.04,0x5a6259);
+        box(b.x+side*8,19,b.z,5,2,5,0xb96b51);
+      }
+      box(b.x,6,b.z+b.d/2+.02,3,6,.04,0x705d50);
+      const arch=new T.Mesh(new T.CircleGeometry(1.5,16),material(0x705d50));arch.position.set(b.x,9,b.z+b.d/2+.05);scene.add(arch);
+      box(b.x,15.7,b.z+b.d/2+.08,.35,5,.16,0xc8b08e);box(b.x,16.5,b.z+b.d/2+.08,2.4,.35,.16,0xc8b08e);
+    }else if(b.style==='rotunda'){
+      const hall=new T.Mesh(new T.CylinderGeometry(10,10,14,20),material(0x83a4a4));hall.position.set(b.x,7,b.z);scene.add(hall);
+      const dome=new T.Mesh(new T.SphereGeometry(9,20,10,0,Math.PI*2,0,Math.PI/2),material(0xb7cdca));dome.position.set(b.x,14,b.z);scene.add(dome);
+      for(let angle=0;angle<Math.PI*2;angle+=Math.PI/4)box(b.x+Math.sin(angle)*9.8,7,b.z+Math.cos(angle)*9.8,.45,14,.45,0xe8e4d6);
+    }else if(b.style==='pyramid'){
       const pyramid=new T.Mesh(new T.ConeGeometry(b.w*.72,b.h,4),material(0xe8e7d9));pyramid.rotation.y=Math.PI/4;pyramid.position.set(b.x,b.h/2,b.z);scene.add(pyramid);
       box(b.x,b.h+.7,b.z,.25,2,.25,0xd6e2d8);
     }else if(b.style==='salesforce'||b.style==='coit'){
@@ -306,4 +354,12 @@ export function buildBay(scene:T.Scene) {
   // A ferry and a few wakes provide scale and movement cues without collision obstacles.
   box(128,-.7,-95,28,2,8,0xd7e4df);box(128,1,-95,12,2,6,0xe7ece1);box(128,2.2,-95,6,.7,5,0x4e777b);
   const wakes:BoxItem[]=[];for(let i=0;i<7;i++)wakes.push({x:146+i*4,y:-3.96,z:-95,w:2,h:.02,d:8+i*1.7});batches(0x86b7b7,wakes);
+  // A fictional billionaire-sized yacht, safely offshore and decorative.
+  const yacht=MYSTERY_YACHT;
+  box(yacht.x,-2.3,yacht.z,42,3.4,12,0xe8e8de);
+  box(yacht.x-2,.2,yacht.z,24,2.2,9,0xcbd8d4);
+  box(yacht.x-5,2,yacht.z,14,1.5,7,0x4e7480);
+  box(yacht.x-8,4,yacht.z,.4,4,.4,0xd5ded6);
+  box(yacht.x-6,5.4,yacht.z,4,1.2,.06,0xe9ba65);
+  buildRouteSignage(scene);
 }

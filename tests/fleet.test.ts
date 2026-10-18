@@ -19,7 +19,7 @@ test('every sourced family has parked and autonomous instances; only Teslas are 
 });
 test('every parked family can be taken from the street',()=>{
   for(const id of VEHICLE_IDS){
-    const world=createWorld(),player=addPlayer(world,'p','P');interact(world,'p');
+    const world=createWorld(),player=addPlayer(world,'p','P');player.delivery.level=3;interact(world,'p');
     const person=world.entities.find(e=>e.id===player.entityId)!,car=world.entities.find(e=>e.kind===id&&!e.npc&&!e.driver)!;
     world.entities=[person,car];Object.assign(person,{x:car.x+2,z:car.z,y:car.y,supportId:car.supportId});
     interact(world,'p');assert.equal(player.entityId,car.id,id);assert.equal(car.driver,'p');

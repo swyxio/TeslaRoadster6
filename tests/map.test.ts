@@ -1,13 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {BAY_CIRCUIT,BRIDGES,BUILDINGS,HIGHWAYS,isLand,isSurface,nearbyBuildings} from '../shared/map';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,HIGHWAYS,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,isLand,isSurface,nearbyBuildings} from '../shared/map';
 import {STATIONS} from '../shared/stations';
 import {body,contact} from '../shared/physics';
 
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
  const car=world.entities.find(e=>e.id===player.entityId)!;
+ player.delivery.level=3;
  world.entities=[car];world.pickups=[];Object.assign(car,{x,z,yaw});
  for(let i=0;i<650&&!goal(car.x,car.z);i++)step(world,new Map([['crossing',{...NEUTRAL,throttle:1}]]),.05);
  assert.ok(goal(car.x,car.z),`crossing stopped at ${car.x.toFixed(1)}, ${car.z.toFixed(1)}`);
@@ -55,9 +56,24 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
  assert.deepEqual(HIGHWAYS[0].points.at(-1),HIGHWAYS[1].points[0]);
 });
 
+test('landmarks and their delivery arrivals share supported, collision-clear geography',()=>{
+ assert.equal(LANDMARKS.length,5);
+ for(const landmark of LANDMARKS){
+  assert.ok(BUILDINGS.some(b=>b.x===landmark.x&&b.z===landmark.z&&b.style===landmark.style),landmark.id);
+  for(const sx of [-1,1])for(const sz of [-1,1])assert.ok(isLand(landmark.x+sx*landmark.w/2,landmark.z+sz*landmark.d/2),landmark.id);
+  const {x,z}=landmark.arrival,truck=makeEntity('landmark','waymo-peterbilt',x,z);
+  assert.ok(isSurface(x,z),landmark.id);
+  assert.ok(!nearbyBuildings(x,z,12).some(b=>contact(body(truck),{...b,yaw:0})),landmark.id);
+ }
+ for(let x=AIRPORT_RUNWAY.x-AIRPORT_RUNWAY.w/2;x<=AIRPORT_RUNWAY.x+AIRPORT_RUNWAY.w/2;x+=10)
+  for(let z=AIRPORT_RUNWAY.z-AIRPORT_RUNWAY.d/2;z<=AIRPORT_RUNWAY.z+AIRPORT_RUNWAY.d/2;z+=10)assert.ok(isSurface(x,z),'runway');
+ for(const island of LAKE_MERRITT.islands)assert.ok(isLand(island.x,island.z),'decorative island');
+ assert.ok(!isSurface(MYSTERY_YACHT.x,MYSTERY_YACHT.z),'fictional yacht is offshore');
+});
+
 test('autopilot can cross the Bay and return without teleporting',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
- world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
+ player.delivery.level=3;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
  for(let i=0;i<2400;i++){const x=car.x,z=car.z;step(world,new Map(),.05);assert.ok(Math.hypot(car.x-x,car.z-z)<2);furthest=Math.max(furthest,car.x);}
  assert.ok(furthest>330);assert.ok(car.x<100);assert.equal(car.autopilot,true);
 });
