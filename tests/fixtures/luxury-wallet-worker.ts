@@ -104,6 +104,7 @@ async function rejectionTimerSimulation(scenario:'same'|'order'|'renewal',discon
 export class DriverProfile extends ProductionDriverProfile {
   private fault: Fault = 'none';
   private held = false;
+  private heldAction:EconomyIntent['action'] | undefined;
   private releaseHeld: (() => void) | undefined;
   private started = 0;
   private compactFault:'none'|'before'|'after'='none';
@@ -126,12 +127,13 @@ export class DriverProfile extends ProductionDriverProfile {
   }
 
   /** Called only with the driver disconnected; simulates an established wallet. */
-  async seedFunds() {
+  async seedFunds(cash=FUNDS) {
+    if(!Number.isSafeInteger(cash)||cash<0)throw new Error('Invalid fixture cash');
     return this.ctx.storage.transaction(async txn => {
       const record = await txn.get<{progress:DriverProgress}>('driver');
       if (!record) throw new Error('No profile to fund');
-      record.progress.cash = FUNDS;
-      record.progress.level = levelForCash(FUNDS);
+      record.progress.cash = cash;
+      record.progress.level = levelForCash(cash);
       await txn.put('driver', record);
       return record.progress;
     });
@@ -142,7 +144,7 @@ export class DriverProfile extends ProductionDriverProfile {
     this.fault = fault;
     return { started:this.started };
   }
-  async faultState() { return { started:this.started, held:this.held }; }
+  async faultState() { return { started:this.started, held:this.held, heldAction:this.heldAction }; }
   async releaseFault() { this.releaseHeld?.(); }
   async inspect() { return this.ctx.storage.get('driver'); }
   async fixtureKeys() { return [...(await this.ctx.storage.list()).keys()]; }
@@ -160,15 +162,17 @@ export class DriverProfile extends ProductionDriverProfile {
     this.fault = 'none';
     if (fault === 'hold-before') {
       this.held = true;
+      this.heldAction=structuredClone(intent.action);
       try { await new Promise<void>(resolve => { this.releaseHeld = resolve; }); }
-      finally { this.held = false; this.releaseHeld = undefined; }
+      finally { this.held = false; this.heldAction=undefined; this.releaseHeld = undefined; }
     }
     if (fault === 'fail-before') throw new Error('Injected profile write failure');
     const result = await super.commit(intent);
     if (fault === 'hold-lost-reply') {
       this.held = true;
+      this.heldAction=structuredClone(intent.action);
       try { await new Promise<void>(resolve => { this.releaseHeld = resolve; }); }
-      finally { this.held = false; this.releaseHeld = undefined; }
+      finally { this.held = false; this.heldAction=undefined; this.releaseHeld = undefined; }
       throw new Error('Injected held lost profile reply');
     }
     if (fault === 'lost-reply') throw new Error('Injected lost profile reply');
@@ -272,8 +276,9 @@ export class GameRoom extends ProductionGameRoom {
     void refresh.call(this);
     return {ok:true};
   }
-  async fixtureWorkshop(playerId:string) {
-    return this.fixturePlace(playerId,SHOPS[4].x,SHOPS[4].z);
+  async fixtureWorkshop(playerId:string,shopIndex=4) {
+    const shop=SHOPS[shopIndex];if(!shop)throw new Error('Unknown test workshop');
+    return this.fixturePlace(playerId,shop.x,shop.z);
   }
   async fixtureDeliveryPickup(playerId:string) {
     const world = Reflect.get(this, 'world') as World;
@@ -295,7 +300,7 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/__wallet-test/')) return worker.fetch(request, env as never, ctx);
     if (request.method !== 'POST') return new Response('POST required', { status:405 });
-    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number};
+    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
     const driver = env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId || 'unused'));
     const economy = env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room || 'fixture'));
     switch (url.pathname) {
@@ -323,7 +328,7 @@ export default {
       }
       case '/__wallet-test/workshop': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
-        return Response.json(await room.fixtureWorkshop(body.playerId));
+        return Response.json(await room.fixtureWorkshop(body.playerId,body.shopIndex));
       }
       case '/__wallet-test/delivery-pickup': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
@@ -357,7 +362,7 @@ export default {
         await room.fixtureSetLive(body.driverId,body.fence,true);
         return Response.json(acquired);
       }
-      case '/__wallet-test/fund': return Response.json(await driver.seedFunds());
+      case '/__wallet-test/fund': return Response.json(await driver.seedFunds(body.seedCash));
       case '/__wallet-test/inspect': return Response.json(await driver.inspect() ?? null);
       case '/__wallet-test/profile-keys': return Response.json(await driver.fixtureKeys());
       case '/__wallet-test/economy-keys': return Response.json(await economy.fixtureKeys());

@@ -65,7 +65,7 @@ async function rpc<T>(method:string,body:object,timeout=15_000):Promise<T> {
 }
 type RecordState={revision:number;sequence:number;fence:string;progress:DriverProgress};
 type Acquisition={revision:number;sequence:number;progress:DriverProgress;resumed:boolean};
-type FaultState={started:number;held:boolean};
+type FaultState={started:number;held:boolean;heldAction?:EconomyIntent['action']};
 const driver=()=>randomUUID();
 const acquire=(driverId:string,fence:string,room='fixture')=>rpc<Acquisition>('acquire',{driverId,fence,room});
 const inspect=(driverId:string)=>rpc<RecordState>('inspect',{driverId});
@@ -99,24 +99,32 @@ function connect(path:string) {
   return {socket,messages,last(type:string){return messages.filter(message=>message.type===type).at(-1);}};
 }
 function send(client:ReturnType<typeof connect>,message:object){client.socket.send(JSON.stringify(message));}
-type TimingSample={elapsedMs:number;worldSeconds:number;maxSnapshotGapMs:number;maxAckGapMs:number;snapshots:number;acks:number;lastSeq:number};
+type TimingSample={elapsedMs:number;worldSeconds:number;worldRate:number;maxSnapshotGapMs:number;maxAckGapMs:number;maxInputLatencyMs:number;inputLatenciesMs:number[];snapshots:number;acks:number;lastSeq:number};
 /** Sample the actual observer socket and input acknowledgements at 10 Hz. */
 async function measureRoom(client:ReturnType<typeof connect>,startSeq:number,durationMs=1250):Promise<TimingSample> {
   const start=performance.now(),startIndex=client.messages.length,startWorld=client.last('state')!.world.time as number;
+  const sent=new Map<number,number>();
   let seq=startSeq;
-  const timer=setInterval(()=>send(client,{type:'input',seq:++seq,input:NEUTRAL}),100);
+  const timer=setInterval(()=>{sent.set(++seq,performance.now());send(client,{type:'input',seq,input:NEUTRAL});},100);
   try { await pause(durationMs); } finally { clearInterval(timer); }
   const end=performance.now();
   await until(()=>client.last('state')?.inputAck>=seq,'sample input acknowledgements');
-  const states=client.messages.slice(startIndex).filter(message=>message.type==='state'&&message._receivedAt<=end);
+  const allStates=client.messages.slice(startIndex).filter(message=>message.type==='state');
+  const states=allStates.filter(message=>message._receivedAt<=end);
   const gaps=(times:number[])=>Math.max(...times.slice(1).map((value,index)=>value-times[index]));
   const snapshotTimes=[start,...states.map(state=>state._receivedAt as number),end];
   let lastAck=startSeq;
   const ackTimes=[start];
   for(const state of states)if(state.inputAck>lastAck){lastAck=state.inputAck;ackTimes.push(state._receivedAt as number);}
   ackTimes.push(end);
-  return {elapsedMs:end-start,worldSeconds:(states.at(-1)?.world.time??startWorld)-startWorld,
-    maxSnapshotGapMs:gaps(snapshotTimes),maxAckGapMs:gaps(ackTimes),snapshots:states.length,acks:ackTimes.length-2,lastSeq:seq};
+  const inputLatenciesMs=[...sent].map(([sentSeq,sentAt])=>{
+    const acknowledged=allStates.find(state=>state.inputAck>=sentSeq);
+    assert.ok(acknowledged,`input ${sentSeq} has an acknowledgement`);
+    return (acknowledged._receivedAt as number)-sentAt;
+  });
+  const elapsedMs=end-start,worldSeconds=(states.at(-1)?.world.time??startWorld)-startWorld;
+  return {elapsedMs,worldSeconds,worldRate:worldSeconds/(elapsedMs/1000),
+    maxSnapshotGapMs:gaps(snapshotTimes),maxAckGapMs:gaps(ackTimes),maxInputLatencyMs:Math.max(...inputLatenciesMs),inputLatenciesMs,snapshots:states.length,acks:ackTimes.length-2,lastSeq:seq};
 }
 async function savedCode(name:string) {
   const chat=connect('/api/chat');
@@ -200,6 +208,24 @@ try {
   assert.equal(resumed.resumed,true);assert.equal(resumed.progress.cash,winning.progress.cash);
   assert.deepEqual(await commit(winner),winning,'a lost receipt remains replayable after a fence changes');
   assert.deepEqual(await commit(intent(a,fenceA,1,'bugatti-chiron',4)),{ok:false,reason:'superseded'},'stale fence cannot buy');
+
+  // Independent constants check the design's first, model, and collection
+  // awards as cash, without deriving the expectation from production helpers.
+  const awardsDriver=driver(),awardsFence=randomUUID();await acquire(awardsDriver,awardsFence);
+  const awardCases=[
+    {vehicle:'ducati-panigale-v4',cash:18_545_000,awards:['luxury-first','luxury-panigale']},
+    {vehicle:'kawasaki-ninja-h2-carbon',cash:16_620_000,awards:['luxury-ninja','luxury-collection-2']},
+    {vehicle:'lamborghini-temerario',cash:13_660_000,awards:['luxury-temerario']},
+    {vehicle:'lamborghini-revuelto',cash:9_320_000,awards:['luxury-revuelto','luxury-collection-4']},
+    {vehicle:'bugatti-chiron',cash:2_420_000,awards:['luxury-chiron']},
+    {vehicle:'bugatti-tourbillon',cash:8_400_000,awards:['luxury-tourbillon','luxury-collection-6']},
+  ] as const;
+  for(const [index,test] of awardCases.entries()){
+    if(index===5)await rpc('fund',{driverId:awardsDriver}); // Local fixture seed before the final $12m purchase.
+    const result=await commit(intent(awardsDriver,awardsFence,index,test.vehicle,index+1));success(result);
+    assert.equal(result.progress.cash,test.cash,`${test.vehicle}: price and one-off cash awards`);
+    assert.deepEqual(result.awards,test.awards,`${test.vehicle}: exact achievement IDs`);
+  }
 
   // A rejected head must not leave its higher speculative revision frozen forever.
   const orphan=driver(), orphanFence=randomUUID(), orphanRoom=`orphan-${randomUUID()}`;
@@ -429,6 +455,28 @@ try {
   assert.ok(otaAfter>0&&otaAfter<=otaBefore+1,'OTA time is retained rather than renewed for free');
   assert.equal(restoredGuest.last('wallet')!.cash,guestCash-5,'first-time identity retains guest cash and OTA debit');
 
+  // An earned guest cannot silently overwrite its progress with an already
+  // bound different driver; reconnecting makes the requested switch explicit.
+  const switchRoom=`switch-${randomUUID().slice(0,8)}`,switchGuest=connect(`/api/room/${switchRoom}`);
+  await until(()=>!!switchGuest.last('welcome')&&!!switchGuest.last('wallet'),'switching guest joins');
+  const switchPlayer=switchGuest.last('welcome')!.id as string;
+  await rpc('delivery-pickup',{room:switchRoom,playerId:switchPlayer});
+  await until(()=>switchGuest.last('wallet')?.earned>0,'switching guest earns a pickup');
+  await barrier(switchGuest,220);
+  const switchSessions=await rpc<{playerId:string;driverId:string}[]>('players',{room:switchRoom});
+  const switchId=switchSessions.find(session=>session.playerId===switchPlayer)!.driverId;
+  const different=await savedDriver(`Different${randomUUID().slice(0,6)}`);
+  const beforeGuest=await inspect(switchId),beforeDifferent=await inspect(different.id);
+  send(switchGuest,{type:'identity',code:different.code,requestId:221});
+  await until(()=>switchGuest.messages.some(message=>message.type==='identityResult'&&message.requestId===221),'earned guest switch is rejected');
+  assert.equal(switchGuest.messages.find(message=>message.type==='identityResult'&&message.requestId===221)!.ok,false);
+  await barrier(switchGuest,222);
+  assert.deepEqual((await inspect(switchId)).progress,beforeGuest.progress,'guest progress remains intact');
+  assert.deepEqual((await inspect(different.id)).progress,beforeDifferent.progress,'other saved wallet remains intact');
+  switchGuest.socket.close();await until(()=>switchGuest.socket.readyState===WebSocket.CLOSED,'earned guest leaves before switching');
+  const switched=await join(switchRoom,different.code);
+  assert.ok(switched.messages.some(message=>message.type==='wallet'&&message.cash===beforeDifferent.progress.cash),'rejoining successfully restores the different wallet');
+
   // Two recoveries race after the first fence was installed but its reply was delayed.
   const racing=await savedDriver(`Race${randomUUID().slice(0,6)}`),racingRecord=await inspect(racing.id);
   success(await commit(intent(racing.id,racingRecord.fence,racingRecord.revision,'ducati-panigale-v4',racingRecord.sequence+1)));
@@ -450,9 +498,19 @@ try {
     assert.equal(usable.length,1);
     const winner=usable[0],stale=winner===firstRecovery?secondRecovery:firstRecovery;
     if(stale.socket.readyState===WebSocket.OPEN){
+      const staleRoom=new URL(stale.socket.url).pathname.split('/').at(-1)!;
+      await rpc('position',{room:staleRoom,playerId:stale.last('welcome')!.id,side:-1});
+      await until(()=>stale.last('wallet')?.unlocked?.includes('luxury-visit'),'superseded session reaches the Vault');
+      await barrier(stale,300);
+      const staleCash=stale.last('wallet')!.cash,staleOwned=structuredClone(stale.last('wallet')!.ownedLuxury);
       assert.equal((await luxury(stale,'collect','ducati-panigale-v4',90)).ok,false,'superseded session cannot collect');
       await pause(450);
       assert.equal((await luxury(stale,'buy','kawasaki-ninja-h2-carbon',91)).ok,false,'superseded session cannot buy');
+      await barrier(stale,302);
+      assert.equal(stale.last('wallet')!.cash,staleCash);
+      assert.deepEqual(stale.last('wallet')!.ownedLuxury,staleOwned);
+    }else{
+      assert.ok(!stale.messages.some(message=>message.type==='wallet'&&message.ownedLuxury?.includes('ducati-panigale-v4')),'the closed loser never receives the recovered collection');
     }
     const winnerRoom=new URL(winner.socket.url).pathname.split('/').at(-1)!;
     await rpc('position',{room:winnerRoom,playerId:winner.last('welcome')!.id,side:-1});
@@ -463,6 +521,32 @@ try {
     await pause(450);
     assert.equal((await luxury(winner,'buy','kawasaki-ninja-h2-carbon',93)).ok,true,'current owner can make a new purchase');
   } finally { await rpc('release-acquire',{driverId:racing.id}).catch(()=>{}); }
+
+  // A late-game purchase can lower the cash-based level. After reconnecting,
+  // the owned vehicle remains collectable at an ordinary level-zero workshop.
+  const levelDriver=await savedDriver(`Level${randomUUID().slice(0,6)}`),levelRoom=`level-${randomUUID().slice(0,8)}`;
+  await rpc('fund',{driverId:levelDriver.id,seedCash:1_550_000});
+  const beforeLevelClient=await join(levelRoom,levelDriver.code),levelPlayer=beforeLevelClient.last('welcome')!.id as string;
+  await rpc('position',{room:levelRoom,playerId:levelPlayer,side:-1});
+  await until(()=>beforeLevelClient.last('wallet')?.unlocked?.includes('luxury-visit'),'level-drop driver visits the Vault');
+  await barrier(beforeLevelClient,350);await pause(450);
+  const startingLevel=beforeLevelClient.last('wallet')!.level as number;
+  assert.ok(startingLevel>=5&&beforeLevelClient.last('wallet')!.cash>=1_500_000);
+  assert.equal((await luxury(beforeLevelClient,'buy','ducati-panigale-v4',351)).ok,true);
+  await barrier(beforeLevelClient,352);
+  const droppedLevel=beforeLevelClient.last('wallet')!.level as number;
+  assert.ok(droppedLevel<startingLevel,'the purchase lowers the current cash-based level');
+  beforeLevelClient.socket.close();await until(()=>beforeLevelClient.socket.readyState===WebSocket.CLOSED,'level-drop driver disconnects');
+  const levelRejoined=await join(levelRoom,levelDriver.code),levelRejoinedId=levelRejoined.last('welcome')!.id as string;
+  assert.equal(levelRejoined.last('wallet')!.level,droppedLevel);
+  assert.ok(levelRejoined.last('wallet')!.ownedLuxury.includes('ducati-panigale-v4'));
+  await rpc('workshop',{room:levelRoom,playerId:levelRejoinedId,shopIndex:0});
+  await pause(450);
+  assert.equal((await luxury(levelRejoined,'collect','ducati-panigale-v4',353)).ok,true,'owned car can be collected at the SF workshop after the level drop');
+  await until(()=>{
+    const world=levelRejoined.last('state')?.world,player=world?.players.find((item:Message)=>item.id===levelRejoinedId);
+    return world?.entities.some((entity:Message)=>entity.id===player?.entityId&&entity.kind==='ducati-panigale-v4'&&entity.owner===levelRejoinedId&&entity.driver===levelRejoinedId);
+  },'collected car is owned and driven after reconnect');
 
   // Hold a profile until the per-driver outage queue reaches its bound. Accepted
   // income ticks must drain even after the overflow closes the player's socket.
@@ -505,6 +589,7 @@ try {
   send(aliceRoom,{type:'luxury',action:'buy',vehicle:'ducati-panigale-v4',requestId:11});
   try {
     await until(async()=>(await faultState(alice.id)).held,'live purchase is held at profile write');
+    assert.deepEqual((await faultState(alice.id)).heldAction,{kind:'luxury',vehicle:'ducati-panigale-v4'},'the held operation is the requested purchase');
     const sample=measureRoom(bobRoom,baseline.lastSeq);
     void sample.catch(()=>{});
     assert.equal(aliceRoom.messages.some(message=>message.type==='luxuryResult'&&message.requestId===11),false,'no purchase success before the write');
@@ -521,17 +606,38 @@ try {
     assert.equal(independent.ok,true,'other driver can buy while the first writer is held');
     const heldSample=await sample;
     assert.equal((await faultState(alice.id)).held,true,'the held write remained blocked for the full sample');
-    assert.ok(heldSample.elapsedMs>=1200&&heldSample.snapshots>=5&&heldSample.acks>=5&&heldSample.worldSeconds>0.5,'room and input continue for the 1,200 ms write hold');
-    assert.ok(heldSample.maxSnapshotGapMs<Math.max(700,baseline.maxSnapshotGapMs*2+100),'held write does not cause a long snapshot stall');
-    assert.ok(heldSample.maxAckGapMs<Math.max(700,baseline.maxAckGapMs*2+100),'held write does not cause a long input acknowledgement stall');
     console.log('Real GameRoom isolation sample (milliseconds; 10 Hz input):',JSON.stringify({baseline,held:heldSample}));
+    assert.ok(heldSample.elapsedMs>=1200&&heldSample.snapshots>=5&&heldSample.acks>=5,'room and input continue for the 1,200 ms write hold');
+    assert.ok(baseline.worldRate>0.6&&heldSample.worldRate>baseline.worldRate*0.7,'world time continues at a rate comparable to the baseline');
+    const limit=(normal:number)=>Math.min(650,Math.max(300,normal*2+100));
+    assert.ok(heldSample.maxSnapshotGapMs<limit(baseline.maxSnapshotGapMs),'held write does not cause a long snapshot stall');
+    assert.ok(heldSample.maxAckGapMs<limit(baseline.maxAckGapMs),'held write does not cause a long acknowledgement stall');
+    assert.ok(heldSample.maxInputLatencyMs<limit(baseline.maxInputLatencyMs),'individual inputs are acknowledged without a long stall');
     await release(alice.id);
     await until(()=>aliceRoom.messages.some(message=>message.type==='luxuryResult'&&message.requestId===11&&message.ok),'held purchase completes');
   } finally { await release(alice.id).catch(()=>{}); }
   await barrier(aliceRoom,103);
   assert.equal(aliceRoom.last('wallet')!.cash,purchaseCash(cashBefore,'ducati-panigale-v4'));
   assert.ok(aliceRoom.last('wallet')!.ownedLuxury.includes('ducati-panigale-v4'));
-  assert.ok(!bobRoom.last('wallet')!.ownedLuxury.includes('ducati-panigale-v4'),'ownership is private and per-driver');
+  assert.ok(!bobRoom.last('wallet')!.ownedLuxury.includes('ducati-panigale-v4'),'Bob does not own Alice’s purchase');
+  await until(()=>{
+    const other=bobRoom.last('state')?.world.players.find((player:Message)=>player.id===alicePlayer);
+    return other?.delivery.cash===aliceRoom.last('wallet')!.cash&&other.achievements.unlocked.includes('luxury-panigale');
+  },'observer sees the other player’s public cash and achievements');
+  const publicWorld=bobRoom.last('state')!.world,publicAlice=publicWorld.players.find((player:Message)=>player.id===alicePlayer);
+  assert.equal(publicAlice.delivery.cash,aliceRoom.last('wallet')!.cash,'room snapshots expose player cash');
+  assert.ok(publicAlice.achievements.unlocked.includes('luxury-panigale'),'room snapshots expose achievements');
+  assert.ok(!JSON.stringify(publicWorld).includes('"ownedLuxury"'),'room snapshots omit private owned-luxury lists');
+  assert.ok(!JSON.stringify(publicWorld).includes(alice.id),'room snapshots omit wallet IDs');
+  assert.ok(!JSON.stringify(publicWorld).includes(alice.code),'room snapshots omit recovery codes');
+  await pause(450);await barrier(bobRoom,105);
+  const bobBefore=await inspect(bob.id),bobControlled=bobRoom.last('state')!.world.players.find((player:Message)=>player.id===bobPlayer).entityId;
+  assert.equal((await luxury(bobRoom,'collect','ducati-panigale-v4',23)).ok,false,'Bob cannot collect the model after Alice owns it');
+  await barrier(bobRoom,106);
+  assert.equal(bobRoom.last('state')!.world.players.find((player:Message)=>player.id===bobPlayer).entityId,bobControlled,'denied collection leaves Bob’s controlled entity unchanged');
+  const bobAfter=await inspect(bob.id);
+  assert.equal(bobAfter.progress.cash,bobBefore.progress.cash,'denied collection leaves Bob’s cash unchanged');
+  assert.deepEqual(bobAfter.progress.ownedLuxury,bobBefore.progress.ownedLuxury,'denied collection leaves Bob’s collection unchanged');
   await pause(450);
   assert.equal((await luxury(aliceRoom,'buy','ducati-panigale-v4',12)).ok,false,'a duplicate in-room purchase is rejected');
   await pause(450);
@@ -540,6 +646,20 @@ try {
     const world=aliceRoom.last('state')?.world,player=world?.players.find((item:Message)=>item.id===alicePlayer);
     return world?.entities.some((entity:Message)=>entity.id===player?.entityId&&entity.kind==='ducati-panigale-v4');
   },'collected model is drivable in the room');
+  const collectedWorld=aliceRoom.last('state')!.world,collectedId=collectedWorld.players.find((player:Message)=>player.id===alicePlayer).entityId;
+  const collected=collectedWorld.entities.find((entity:Message)=>entity.id===collectedId);
+  assert.equal(collected.owner,alicePlayer);assert.equal(collected.driver,alicePlayer);
+  await until(()=>bobRoom.last('state')?.world.entities.some((entity:Message)=>entity.id===collectedId&&entity.owner===alicePlayer&&entity.driver===alicePlayer),'observer sees the owned, driven model');
+  send(aliceRoom,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
+  await until(()=>{
+    const car=aliceRoom.last('state')?.world.entities.find((entity:Message)=>entity.id===collectedId);
+    return car&&Math.hypot(car.x-collected.x,car.z-collected.z)>0.3;
+  },'owner drives the collected model',5_000);
+  send(aliceRoom,{type:'input',seq:2,input:NEUTRAL});
+  await until(()=>{
+    const car=bobRoom.last('state')?.world.entities.find((entity:Message)=>entity.id===collectedId);
+    return car&&Math.hypot(car.x-collected.x,car.z-collected.z)>0.3;
+  },'observer sees the collected car move',5_000);
 
   // Finish and tune this owned model at a workshop; both must follow the owner.
   await rpc('workshop',{room:liveRoom,playerId:alicePlayer});
