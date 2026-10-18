@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,step,type Input} from '../shared/game';
 import {isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {body,contact} from '../shared/physics';
-import {updateHighwayTraffic} from '../shared/traffic';
+import {engageAutopilot, updateHighwayTraffic} from '../shared/traffic';
 import {snapshotFor} from '../worker/snapshot';
 
 const neutral:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
@@ -80,5 +80,56 @@ test('the staged drive encounters oncoming traffic sooner without a visible tele
   }
   assert.ok(firstForward1200<=20,`first forward car at ${firstForward1200}s`);
   assert.ok(nearestForward<900,`closest forward car ${nearestForward}m`);
+  assert.equal(car.health,100);
+});
+
+test('two hidden oncoming entries on the same road keep a safe gap',()=>{
+  const {world,player,car}=stagedWorld();
+  world.entities=[car];
+  const entries=[];
+  for(const time of [5,10]){
+    const before=new Set(world.entities.map(entity=>entity.id));
+    world.time=time;updateHighwayTraffic(world,5,makeEntity);
+    const entry=world.entities.find(entity=>entity.id.startsWith('ambient-')&&!before.has(entity.id));
+    assert.ok(entry);
+    const dx=entry.x-car.x,dz=entry.z-car.z,fx=-Math.sin(car.yaw),fz=-Math.cos(car.yaw);
+    assert.ok(dx*fx+dz*fz>0,'the car approaches from ahead');
+    assert.ok(-Math.sin(entry.yaw)*fx-Math.cos(entry.yaw)*fz<-.5,'the car faces the observer');
+    assert.ok(Math.hypot(dx,dz)>1600);
+    assert.ok(!snapshotFor(world,player.id).entities.includes(entry));
+    entries.push(entry);
+  }
+  assert.equal(entries[0].routeId,entries[1].routeId);
+  assert.ok(Math.hypot(entries[0].x-entries[1].x,entries[0].z-entries[1].z)>=150);
+  for(let i=0;i<400;i++){
+    step(world,new Map(),.05);
+    assert.equal(contact(body(entries[0]),body(entries[1])),null);
+  }
+  assert.ok(entries.every(entry=>entry.health===100));
+});
+
+test('a fresh highway drive fills in traffic without stopping or visible spawns',()=>{
+  const {world,car}=stagedWorld();
+  assert.ok(engageAutopilot(car));
+  const known=new Set(world.entities.map(entity=>entity.id)),seen=new Set<string>();
+  let distance=0;
+  for(let tick=0;tick<1400;tick++){
+    const x=car.x,z=car.z;step(world,new Map(),.05);distance+=Math.hypot(car.x-x,car.z-z);
+    for(const other of world.entities){
+      if(!other.id.startsWith('ambient-')||other.driver)continue;
+      if(!known.has(other.id)){
+        assert.ok(world.players.every(player=>{
+          const viewer=world.entities.find(entity=>entity.id===player.entityId)!;
+          return Math.hypot(other.x-viewer.x,other.z-viewer.z)>1600;
+        }),'each newly added car is beyond every player');
+        known.add(other.id);
+      }
+      const dx=other.x-car.x,dz=other.z-car.z,ahead=dx*-Math.sin(car.yaw)+dz*-Math.cos(car.yaw);
+      const side=Math.abs(dx*Math.cos(car.yaw)-dz*Math.sin(car.yaw));
+      if(ahead>0&&side<=ahead*Math.tan(35*Math.PI/180)&&Math.hypot(dx,dz)<=600)seen.add(other.id);
+    }
+  }
+  assert.ok(distance>1400,`the car travels ${distance} m`);
+  assert.ok(seen.size>=4,`${seen.size} cars enter the forward cone`);
   assert.equal(car.health,100);
 });

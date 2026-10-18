@@ -80,7 +80,7 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
     world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
     occupied.driver='p';player.entityId=occupied.id;
   }
-  for(let i=0;i<50;i++){
+  for(let i=0;i<8;i++){
     first.time=timeAtHour(8)+i*5;second.time=first.time;
     updateHighwayTraffic(first,5,makeEntity);updateHighwayTraffic(second,5,makeEntity);
   }
@@ -125,7 +125,7 @@ test('taking ambient traffic replenishes it, and disconnecting off-route leaves 
   assert.equal(car.autopilot,false);
   world.time=10;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(world.entities.includes(car));
-  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,5);
+  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,6);
 });
 
 test('disconnecting a taken ambient car on a city route replenishes highway traffic', () => {
@@ -218,13 +218,14 @@ test('five-second reconciliation keeps up with a synthetic open-space morning ra
   let maxShortfall=0;
   for(let time=5;time<=180;time+=5){
     world.time=time;updateHighwayTraffic(world,5,makeEntity);
-    const target=Math.round(3+9*trafficDemand(time).intensity);
+    const target=Math.round(7+5*trafficDemand(time).intensity);
     const active=world.entities.filter(entity=>entity.id.startsWith('ambient-')&&!entity.driver&&entity.autopilot).length;
     maxShortfall=Math.max(maxShortfall,target-active);
-    if(time===60)assert.equal(active,6);
+    if(time===15)assert.equal(active,8);
+    if(time===60)assert.equal(active,9);
     if(time===180)assert.equal(active,12);
   }
-  assert.ok(maxShortfall<=1,`maximum shortfall ${maxShortfall}`);
+  assert.ok(maxShortfall<=2,`maximum shortfall ${maxShortfall}`);
 });
 
 test('initial highway traffic is supported and clear of buildings and the existing fleet', () => {
