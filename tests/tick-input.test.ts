@@ -4,7 +4,7 @@ import { NEUTRAL, type Input } from '../shared/game';
 import { EDGE_LATE_TICKS, FUTURE_TICKS, HOLD_TICKS, INPUT_TIMEOUT_MS, ScheduledInput, type InputCommand } from '../shared/tick-input';
 
 const input=(value:Partial<Input>={}):Input=>({...NEUTRAL,...value});
-const command=(seq:number,targetTick:number,value:Partial<Input>={},controlRevision=0):InputCommand=>({seq,targetTick,controlRevision,input:input(value)});
+const command=(seq:number,targetTick:number,value:Partial<Input>={},controlRevision=0,actionSeq=0):InputCommand=>({seq,targetTick,controlRevision,actionSeq,input:input(value)});
 
 test('ticks apply queued commands once and held controls expire after six ticks',()=>{
   const scheduler=new ScheduledInput(input());
@@ -17,21 +17,23 @@ test('ticks apply queued commands once and held controls expire after six ticks'
   const state=scheduler.snapshot();assert.equal(state.receivedSeq,1);assert.equal(state.appliedSeq,1);assert.deepEqual(state.queued,[]);
 });
 
-test('newer commands supersede the same or later tick without reviving older held input',()=>{
+test('newer level commands supersede slots while distinct edges keep their order',()=>{
   const scheduler=new ScheduledInput(input());
   scheduler.receive(command(1,3,{throttle:1,jump:1}),0,0);
   const superseded=scheduler.receive(command(2,3,{throttle:-1,jump:2}),0,1);
-  assert.deepEqual(superseded.outcomes,[{kind:'jump',id:1,targetTick:3,status:'superseded'}]);
+  assert.deepEqual(superseded.outcomes,[{kind:'jump',id:2,targetTick:4,status:'rescheduled'}]);
   scheduler.receive(command(3,5,{throttle:.7,flip:1}),0,2);
   const before=scheduler.receive(command(4,4,{throttle:.4,flip:2}),0,3);
-  assert.deepEqual(before.outcomes,[{kind:'flip',id:1,targetTick:5,status:'superseded'}]);
+  assert.deepEqual(before.outcomes,[{kind:'flip',id:2,targetTick:6,status:'rescheduled'}]);
   assert.deepEqual(scheduler.snapshot().queued.map(item=>item.seq),[2,4]);
   scheduler.advance(1,10);scheduler.advance(2,20);
-  const a=scheduler.advance(3,30);assert.equal(a.input.throttle,-1);assert.equal(a.input.jump,2);
-  assert.deepEqual(a.outcomes,[{kind:'jump',id:2,targetTick:3,status:'processed'}]);
-  const b=scheduler.advance(4,40);assert.equal(b.input.throttle,.4);assert.equal(b.input.flip,2);
-  assert.deepEqual(b.outcomes,[{kind:'flip',id:2,targetTick:4,status:'processed'}]);
-  assert.equal(scheduler.advance(5,50).input.throttle,.4);assert.equal(scheduler.snapshot().appliedSeq,4);
+  const a=scheduler.advance(3,30);assert.equal(a.input.throttle,-1);assert.equal(a.input.jump,1);
+  assert.deepEqual(a.outcomes,[{kind:'jump',id:1,targetTick:3,status:'processed'}]);
+  const b=scheduler.advance(4,40);assert.equal(b.input.throttle,.4);assert.equal(b.input.jump,2);
+  assert.deepEqual(b.outcomes,[{kind:'jump',id:2,targetTick:4,status:'processed'}]);
+  assert.deepEqual(scheduler.advance(5,50).outcomes,[{kind:'flip',id:1,targetTick:5,status:'processed'}]);
+  assert.deepEqual(scheduler.advance(6,60).outcomes,[{kind:'flip',id:2,targetTick:6,status:'processed'}]);
+  assert.equal(scheduler.snapshot().appliedSeq,4);
 });
 
 test('bounded tick window rejects continuous late or far-future input; near-late edge reschedules',()=>{
@@ -87,20 +89,20 @@ test('control invalidation clears queued inputs, preserves consumed/seen edges, 
   const scheduler=new ScheduledInput(input());
   scheduler.receive(command(1,1,{jump:1}),0,0);scheduler.advance(1,10);
   scheduler.receive(command(2,3,{jump:2,flip:1,throttle:1}),1,11);
-  const outcomes=scheduler.invalidate(input({jump:1}));
+  const outcomes=scheduler.invalidate(input({jump:1}),{type:'relocation'});
   assert.deepEqual(outcomes,[{kind:'jump',id:2,targetTick:3,status:'superseded'},{kind:'flip',id:1,targetTick:3,status:'superseded'}]);
   assert.equal(scheduler.snapshot().revision,1);
   assert.deepEqual(scheduler.receive(command(3,2,{jump:3}),1,12),{rejection:'revision',outcomes:[{kind:'jump',id:3,targetTick:2,status:'expired'}]});
-  scheduler.receive(command(3,2,{jump:2,flip:1},1),1,13);
+  scheduler.receive(command(4,2,{jump:2,flip:1},1),1,13);
   assert.deepEqual(scheduler.advance(2,20).input,input({jump:1}),'old seen counters do not fire on a new vehicle');
-  scheduler.receive(command(4,3,{jump:4,flip:2},1),2,21);
+  scheduler.receive(command(5,3,{jump:4,flip:2},1),2,21);
   const active=scheduler.advance(3,30);
   assert.equal(active.input.jump,4);assert.equal(active.input.flip,2);assert.equal(active.outcomes.length,2);
 });
 
 test('an old-revision press expires and does not reappear after a reset',()=>{
   const scheduler=new ScheduledInput(input());
-  scheduler.invalidate(input());
+  scheduler.invalidate(input(),{type:'relocation'});
   assert.deepEqual(scheduler.receive(command(1,1,{jump:1}),0,10),{
     rejection:'revision',outcomes:[{kind:'jump',id:1,targetTick:1,status:'expired'}],
   });
@@ -163,19 +165,20 @@ test('release applies on its target tick and older future intents cannot restore
   assert.equal(scheduler.snapshot().appliedSeq,3);
 });
 
-test('newer near-late event supersedes a same-kind future press before it can fire',()=>{
+test('a newer near-late event follows an already queued future press',()=>{
   const scheduler=new ScheduledInput(input());
   scheduler.receive(command(1,5,{jump:1}),0,0);
   const result=scheduler.receive(command(2,0,{jump:2}),0,1);
-  assert.deepEqual(result,{rejection:'late',outcomes:[{kind:'jump',id:1,targetTick:5,status:'superseded'},{kind:'jump',id:2,targetTick:1,status:'rescheduled'}]});
-  assert.deepEqual(scheduler.advance(1,10).outcomes,[{kind:'jump',id:2,targetTick:1,status:'processed'}]);
-  assert.deepEqual(scheduler.advance(5,50).outcomes,[]);
+  assert.deepEqual(result,{rejection:'late',outcomes:[{kind:'jump',id:2,targetTick:6,status:'rescheduled'}]});
+  assert.deepEqual(scheduler.advance(1,10).outcomes,[]);
+  assert.deepEqual(scheduler.advance(5,50).outcomes,[{kind:'jump',id:1,targetTick:5,status:'processed'}]);
+  assert.deepEqual(scheduler.advance(6,60).outcomes,[{kind:'jump',id:2,targetTick:6,status:'processed'}]);
   assert.equal(scheduler.snapshot().jump.processed,2);
 });
 
 test('old-revision traffic cannot refresh an expired watchdog',()=>{
   const scheduler=new ScheduledInput(input());
-  scheduler.invalidate(input());
+  scheduler.invalidate(input(),{type:'relocation'});
   scheduler.receive(command(1,1,{throttle:1},1),0,0);
   scheduler.advance(1,20);
   assert.equal(scheduler.receive(command(2,2,{},0),1,INPUT_TIMEOUT_MS+1).rejection,'revision');
@@ -206,7 +209,7 @@ test('reconstructed invalidation preserves revision and seen/processed baselines
   const server=new ScheduledInput(input());
   server.receive(command(1,1,{jump:1}),0,0);server.advance(1,10);
   server.receive(command(2,4,{jump:2}),1,20);
-  server.invalidate(input({jump:1}));
+  server.invalidate(input({jump:1}),{type:'relocation'});
   const prediction=ScheduledInput.fromSnapshot(server.snapshot(),30);
   assert.equal(prediction.snapshot().revision,1);assert.equal(prediction.snapshot().receivedSeq,2);
   assert.equal(prediction.snapshot().jump.seen,2);assert.equal(prediction.snapshot().jump.processed,1);
@@ -225,4 +228,78 @@ test('snapshot reconstruction starts an approximate local watchdog at the suppli
   const expired=prediction.advance(2,1301);
   assert.deepEqual(expired.outcomes,[{kind:'jump',id:1,targetTick:3,status:'expired'}]);
   assert.equal(server.snapshot().jump.pending.length,1,'prediction timeout is not authoritative');
+});
+
+test('accepted action consumes its baseline; rejected overlapping action retains two later presses',()=>{
+  const scheduler=new ScheduledInput(input());
+  assert.equal(scheduler.beginAction(1,{jump:1,flip:0}),true);
+  scheduler.invalidate(input(),{type:'action',edgeBaseline:{jump:1,flip:0}});
+  const first=scheduler.receive(command(1,1,{jump:2,throttle:1},0,1),0,25);
+  assert.deepEqual(first,{rejection:'revision',outcomes:[{kind:'jump',id:2,targetTick:1,status:'accepted'}]});
+  // The second reset is cooldown-rejected; recording its fence must not
+  // consume the new baseline or cancel the already queued press.
+  assert.equal(scheduler.beginAction(2,{jump:2,flip:0}),true);
+  const second=scheduler.receive(command(2,1,{jump:3,throttle:1},0,2),0,85);
+  assert.deepEqual(second,{rejection:'revision',outcomes:[{kind:'jump',id:3,targetTick:2,status:'rescheduled'}]});
+  assert.deepEqual(scheduler.advance(1,90),{input:input({jump:2}),outcomes:[{kind:'jump',id:2,targetTick:1,status:'processed'}]});
+  assert.deepEqual(scheduler.advance(2,100),{input:input({jump:3}),outcomes:[{kind:'jump',id:3,targetTick:2,status:'processed'}]});
+  scheduler.receive(command(3,3,{jump:3},1,2),2,110);
+  assert.deepEqual(scheduler.advance(3,120).outcomes,[],'held counter cannot repeat either press');
+});
+
+test('an unseen pre-action press is consumed by an accepted action and cannot replay',()=>{
+  const scheduler=new ScheduledInput(input());
+  assert.equal(scheduler.beginAction(1,{jump:1,flip:0}),true);
+  scheduler.invalidate(input(),{type:'action',edgeBaseline:{jump:1,flip:0}});
+  assert.deepEqual(scheduler.receive(command(1,1,{jump:1},0,1),0,10),{rejection:'revision',outcomes:[]});
+  assert.deepEqual(scheduler.receive(command(2,1,{jump:1},1,1),0,20),{outcomes:[]});
+  assert.deepEqual(scheduler.advance(1,30),{input:input(),outcomes:[]});
+});
+
+test('an autonomous relocation closes the stale bridge even after later actions',()=>{
+  const scheduler=new ScheduledInput(input());
+  assert.equal(scheduler.beginAction(1,{jump:0,flip:0}),true);
+  scheduler.invalidate(input(),{type:'action',edgeBaseline:{jump:0,flip:0}});
+  scheduler.invalidate(input(),{type:'relocation'});
+  assert.equal(scheduler.snapshot().edgeFloorRevision,2);
+  assert.equal(scheduler.beginAction(2,{jump:0,flip:0}),true);
+  scheduler.invalidate(input(),{type:'action',edgeBaseline:{jump:0,flip:0}});
+  const old=scheduler.receive(command(1,1,{jump:1},0,2),0,10);
+  assert.deepEqual(old,{rejection:'revision',outcomes:[{kind:'jump',id:1,targetTick:1,status:'expired'}]});
+  const eligible=scheduler.receive(command(2,1,{jump:2},2,2),0,20);
+  assert.deepEqual(eligible,{rejection:'revision',outcomes:[{kind:'jump',id:2,targetTick:1,status:'accepted'}]});
+  assert.deepEqual(scheduler.advance(1,30).outcomes,[{kind:'jump',id:2,targetTick:1,status:'processed'}]);
+});
+
+test('action fences and modular baselines reject backward, ambiguous and duplicate values',()=>{
+  const max=2**31-1,scheduler=new ScheduledInput(input({jump:max}));
+  assert.equal(scheduler.beginAction(1,{jump:0,flip:0}),true,'wrap forward is valid');
+  scheduler.invalidate(input({jump:max}),{type:'action',edgeBaseline:{jump:0,flip:0}});
+  assert.equal(scheduler.beginAction(1,{jump:0,flip:0}),false,'duplicate sequence');
+  assert.equal(scheduler.beginAction(2,{jump:max,flip:0}),false,'backward baseline');
+  assert.equal(scheduler.beginAction(2,{jump:2**30,flip:0}),false,'half-range is ambiguous');
+  assert.equal(scheduler.beginAction(2,{jump:0,flip:0}),true);
+  const mismatch=scheduler.receive(command(1,1,{jump:1},1,1),0,10);
+  assert.deepEqual(mismatch,{rejection:'action',outcomes:[{kind:'jump',id:1,targetTick:1,status:'expired'}]});
+  assert.deepEqual(scheduler.receive(command(1,1,{jump:2},1,2),0,11),{rejection:'order',outcomes:[]});
+  assert.deepEqual(scheduler.receive(command(2,1,{jump:1},1,2),0,12),{outcomes:[]});
+});
+
+test('each queued edge has a bounded age even while duplicate level frames arrive',()=>{
+  const scheduler=new ScheduledInput(input());
+  scheduler.receive(command(1,5,{jump:1}),0,0);
+  scheduler.receive(command(2,5,{jump:1,throttle:1}),0,200);
+  const result=scheduler.receive(command(3,5,{jump:1,throttle:1}),0,301);
+  assert.deepEqual(result.outcomes,[{kind:'jump',id:1,targetTick:5,status:'expired'}]);
+  assert.equal(scheduler.snapshot().jump.pending.length,0);
+});
+
+test('same-tick edge bursts reserve at most eight ticks and expire overflow',()=>{
+  const scheduler=new ScheduledInput(input());
+  for(let id=1;id<=FUTURE_TICKS;id++){
+    const result=scheduler.receive(command(id,1,{jump:id}),0,id);
+    assert.deepEqual(result.outcomes,id===1?[]:[{kind:'jump',id,targetTick:id,status:'rescheduled'}]);
+  }
+  assert.deepEqual(scheduler.receive(command(9,1,{jump:9}),0,9).outcomes,[{kind:'jump',id:9,targetTick:1,status:'expired'}]);
+  assert.equal(scheduler.snapshot().jump.pending.length,FUTURE_TICKS);
 });

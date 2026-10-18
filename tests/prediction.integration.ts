@@ -58,7 +58,10 @@ try{
   const late=send(NEUTRAL,{targetTick:Math.max(1,driver.input.tick-4)});await waitReject(late,'late');
   const future=send(NEUTRAL,{targetTick:driver.input.tick+100});await waitReject(future,'future');
   const badRevision=send(NEUTRAL,{controlRevision:driver.input.control!.revision+1});await waitReject(badRevision,'revision');
+  const badFence=send(NEUTRAL,{actionSeq:driver.input.lastActionSeq+1});await waitReject(badFence,'action');
   const wrongEpoch=send(NEUTRAL,{roomEpoch:'00000000-0000-0000-0000-000000000000'});await waitReject(wrongEpoch,'epoch');
+  const correctEpoch=send(NEUTRAL,{seq:wrongEpoch});
+  await until(()=>(driver.input.control?.appliedSeq??0)>=correctEpoch,'wrong epoch did not consume the input sequence');
   send(NEUTRAL,{seq:c});await waitReject(c,'order');
   assert.equal(observer.input.rejectionCount,0,'rejections are private to the sender');
 
@@ -86,52 +89,49 @@ try{
   await until(()=>(driver.input.control?.appliedSeq??0)>=repeatedExpired,'repeated expired counter frame applied');
   assert.equal(edge('jump',2,'processed').length,0,'expired edge cannot fire later');
 
-  // Action and sync invalidate future controls before the tagged snapshot.
+  // The reset carries an unsampled press as its baseline. The server consumes
+  // that baseline atomically, while newer presses can cross the old revision.
   const revision=driver.input.control!.revision;
   const pending=send({...NEUTRAL,steer:1},{targetTick:driver.input.tick+7});
-  driver.socket.send(JSON.stringify({type:'reset'}));
+  const resetAction=driver.input.action({type:'reset'},{jump:3,flip:0});
   const oldPress=send({...NEUTRAL,jump:3},{controlRevision:revision});
+  await delay(25);
+  const firstAfter=send({...NEUTRAL,jump:4,throttle:1},{controlRevision:revision});
+  const rejectedReset=driver.input.action({type:'reset'});
+  await delay(60);
+  const secondAfter=send({...NEUTRAL,jump:5,throttle:1},{controlRevision:revision});
   driver.socket.send(JSON.stringify({type:'sync',token:17}));
   await until(()=>driver.state.sync===17&&driver.input.control!.revision>revision,'post-reset barrier and control revision');
   await waitReject(oldPress,'revision');
-  await until(()=>edge('jump',3,'expired').length===1,'old-revision press expires');
+  await waitReject(firstAfter,'revision');await waitReject(secondAfter,'revision');
+  assert.equal(rejectedReset,resetAction+1);
+  assert.equal(driver.input.control!.revision,revision+1,'cooldown-rejected reset did not invalidate again');
+  assert.equal(driver.input.control!.actionSeq,rejectedReset,'the rejected action still advances the fence');
   assert.ok(!driver.input.control!.queued.some(slot=>slot.seq===pending),'reset clears pending controls');
-  const after=driver.state.world!.entities.find(entity=>entity.driver===driver.state.id)!;
-  assert.equal(after.supportId,'ground');assert.equal(after.speed,0);
-  const repeatOldPress=send({...NEUTRAL,jump:3});
+  assert.equal(edge('jump',3,'processed').length,0,'unsampled pre-action baseline cannot replay');
+  for(const [seq,id] of [[firstAfter,4],[secondAfter,5]] as const){
+    await until(()=>edge('jump',id,'processed').length===1,`post-reset press ${id} processed once`);
+    const acknowledgement=timeline.findIndex(item=>item.type==='inputEdge'&&item.id===id&&(item.status==='accepted'||item.status==='rescheduled'));
+    assert.ok(acknowledgement>=0&&acknowledgement<timeline.findIndex(item=>item.type==='inputRejected'&&item.seq===seq),'bridge acknowledgement precedes level rejection');
+  }
+  const repeatOldPress=send({...NEUTRAL,jump:5});
   await until(()=>(driver.input.control?.appliedSeq??0)>=repeatOldPress,'current-revision frame applied');
-  assert.equal(edge('jump',3,'processed').length,0,'expired old-revision press does not recur');
-  assert.equal(driver.state.world?.entities.find(entity=>entity.driver===driver.state.id)?.lastJump,after.lastJump);
+  await delay(100);
+  assert.equal(edge('jump',4,'processed').length,1);assert.equal(edge('jump',5,'processed').length,1);
   const staleRevision=send(NEUTRAL,{controlRevision:revision});await waitReject(staleRevision,'revision');
   const before=driver.state.states;
   for(let token=100;token<120;token++)driver.socket.send(JSON.stringify({type:'sync',token}));
   await until(()=>driver.state.sync===119,'coalesced barriers');
   assert.ok(driver.state.states-before<10,'barriers do not force snapshots or ticks');
 
-  // A client action barrier sends its exact counter baseline before reset,
-  // then withholds a genuinely later press until the confirmed revision.
-  // Same-socket ordering makes the unsampled pre-action edge cancellable.
-  await delay(500);
-  const beforeBarrier=driver.input.control!.revision;
-  send({...NEUTRAL,jump:4},{targetTick:driver.input.tick+7});
-  driver.socket.send(JSON.stringify({type:'reset'}));driver.socket.send(JSON.stringify({type:'sync',token:120}));
-  await until(()=>driver.state.sync===120&&driver.input.control!.revision>beforeBarrier,'second reset barrier');
-  await until(()=>edge('jump',4,'superseded').length===1,'pre-action baseline edge cancelled');
-  const baselineRepeat=send({...NEUTRAL,jump:4});
-  await until(()=>(driver.input.control?.appliedSeq??0)>=baselineRepeat,'baseline repeat applied');
-  assert.equal(edge('jump',4,'processed').length,0,'pre-action press cannot reappear');
-  const afterBarrierPress=send({...NEUTRAL,jump:5});
-  await until(()=>(driver.input.control?.appliedSeq??0)>=afterBarrierPress&&edge('jump',5,'processed').length===1,'post-action buffered press processed');
-  send({...NEUTRAL,jump:5});await delay(200);
-  assert.equal(edge('jump',5,'processed').length,1,'held or repeated counter does not trigger twice');
   await until(()=>driver.state.world?.entities.find(entity=>entity.driver===driver.state.id)?.supportId==='ground','post-action jump lands');
 
   // Autopilot changes control ownership, not pose. Two immediate attempts
   // also verify that the cooldown-rejected second action adds no revision.
   await delay(500);
   const beforeAutopilot=driver.input.control!.revision,poseBeforeAutopilot=driver.input.poseRevision;
-  driver.socket.send(JSON.stringify({type:'autopilot'}));
-  driver.socket.send(JSON.stringify({type:'autopilot'}));
+  driver.input.action({type:'autopilot'});
+  driver.input.action({type:'autopilot'});
   driver.socket.send(JSON.stringify({type:'sync',token:121}));
   await until(()=>driver.state.sync===121,'autopilot and cooldown barrier');
   assert.equal(driver.input.control!.revision,beforeAutopilot+1,'only successful autopilot invalidates controls');
@@ -139,7 +139,7 @@ try{
   assert.equal(driver.state.world?.entities.find(entity=>entity.driver===driver.state.id)?.autopilot,true,'the immediate cooldown-rejected toggle did not undo autopilot');
 
   const beforeDome=driver.input.control!.revision,poseBeforeDome=driver.input.poseRevision;
-  driver.socket.send(JSON.stringify({type:'dome'}));driver.socket.send(JSON.stringify({type:'sync',token:122}));
+  driver.input.action({type:'dome'});driver.socket.send(JSON.stringify({type:'sync',token:122}));
   await until(()=>driver.state.sync===122,'dome travel barrier');
   assert.equal(driver.input.control!.revision,beforeDome+1);
   assert.equal(driver.input.poseRevision,poseBeforeDome+1,'dome teleport changes pose and control revisions');
@@ -150,7 +150,7 @@ try{
   await delay(500);
   const beforeNoop=driver.input.control!.revision,poseBeforeNoop=driver.input.poseRevision;
   const entityBeforeNoop=structuredClone(driver.state.world!.entities.find(entity=>entity.driver===driver.state.id));
-  driver.socket.send(JSON.stringify({type:'reset'}));driver.socket.send(JSON.stringify({type:'sync',token:123}));
+  driver.input.action({type:'reset'});driver.socket.send(JSON.stringify({type:'sync',token:123}));
   await until(()=>driver.state.sync===123,'idle dome reset barrier');
   assert.equal(driver.input.control!.revision,beforeNoop+1);
   assert.equal(driver.input.poseRevision,poseBeforeNoop,`same-pose reset preserves the pose revision: ${JSON.stringify({before:entityBeforeNoop,after:driver.state.world!.entities.find(entity=>entity.driver===driver.state.id)})}`);
@@ -166,5 +166,20 @@ try{
   assert.equal(again.input.control!.receivedSeq,0);assert.equal(again.input.control!.appliedSeq,0);assert.equal(again.input.control!.revision,0);
   const first=again.input.send({...NEUTRAL,steer:1});
   await until(()=>again.input.control?.appliedSeq===first,'reconnected input applied');
-  console.log('PASS: v32 owner-only queued controls, tick application, late/future/revision/epoch/order rejection, late/deduplicated/expired edges, reset/control-vs-pose revisions, cooldown, coalesced sync and fresh reconnect. Local two-client protocol test, not a load or latency test.');
+  again.socket.close();await until(()=>again.state.closed!==undefined,'close reconnected client');
+
+  const duplicate=connect();sockets.push(duplicate.socket);
+  await until(()=>duplicate.input.ready,'duplicate-action test client');
+  duplicate.input.action({type:'reset'});
+  await until(()=>duplicate.input.control?.actionSeq===1,'first action sequence recorded');
+  duplicate.socket.send(JSON.stringify({type:'reset',actionSeq:1,edgeBaseline:{jump:0,flip:0}}));
+  await until(()=>duplicate.state.closed===1008,'duplicate action sequence closes only that client');
+
+  const backward=connect();sockets.push(backward.socket);
+  await until(()=>backward.input.ready,'backward-baseline test client');
+  backward.input.send({...NEUTRAL,jump:1});
+  await until(()=>backward.input.control?.jump.seen===1,'new jump counter observed');
+  backward.socket.send(JSON.stringify({type:'reset',actionSeq:1,edgeBaseline:{jump:0,flip:0}}));
+  await until(()=>backward.state.closed===1008,'backward action baseline closes only that client');
+  console.log('PASS: v32 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.');
 }finally{for(const socket of sockets)if(socket.readyState===WebSocket.OPEN)socket.close();}

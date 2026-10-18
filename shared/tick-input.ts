@@ -5,14 +5,16 @@ export const HOLD_TICKS = 6;
 export const EDGE_LATE_TICKS = 3;
 export const INPUT_TIMEOUT_MS = 300;
 
-export type InputCommand = { seq:number; targetTick:number; controlRevision:number; input:Input };
-export type EdgeOutcome = { kind:'jump'|'flip'; id:number; targetTick:number; status:'rescheduled'|'processed'|'expired'|'superseded' };
+export type InputCommand = { seq:number; targetTick:number; controlRevision:number; actionSeq:number; input:Input };
+export type EdgeBaseline = Pick<Input,'jump'|'flip'>;
+export type EdgeOutcome = { kind:'jump'|'flip'; id:number; targetTick:number; status:'accepted'|'rescheduled'|'processed'|'expired'|'superseded' };
 type PendingEdge = { id:number; targetTick:number };
-type EdgeState = { seen:number; processed:number; pending:PendingEdge[] };
+type TimedEdge = PendingEdge & { receivedAtMs:number };
+type EdgeState = { seen:number; processed:number; pending:TimedEdge[] };
 type Slot = { seq:number; targetTick:number; input:Input };
 export type ControlSnapshot = {
-  revision:number; receivedSeq:number; appliedSeq:number; held:Input; heldUntilTick:number;
-  queued:Slot[]; jump:EdgeState; flip:EdgeState;
+  revision:number; actionSeq:number; edgeFloorRevision:number; receivedSeq:number; appliedSeq:number; held:Input; heldUntilTick:number;
+  queued:Slot[]; jump:{seen:number;processed:number;pending:PendingEdge[]}; flip:{seen:number;processed:number;pending:PendingEdge[]};
 };
 
 const COUNTER_MODULUS = 2 ** 31;
@@ -28,6 +30,8 @@ function neutral(jump:number,flip:number):Input { return {...NEUTRAL,jump,flip};
 /** Pure per-connection control scheduler. Call advance exactly once per room tick. */
 export class ScheduledInput {
   private revision=0;
+  private actionSeq=0;
+  private edgeFloorRevision=0;
   private receivedSeq=0;
   private appliedSeq=0;
   private held:Input;
@@ -36,7 +40,6 @@ export class ScheduledInput {
   private jump:EdgeState;
   private flip:EdgeState;
   private lastControlInputMs:number|null=null;
-  private lastEdgeInputMs:number|null=null;
 
   constructor(initial:Input) {
     this.held={...initial};
@@ -49,72 +52,63 @@ export class ScheduledInput {
   static fromSnapshot(snapshot:ControlSnapshot,nowMs:number):ScheduledInput {
     const scheduler=new ScheduledInput(snapshot.held);
     scheduler.revision=snapshot.revision;
+    scheduler.actionSeq=snapshot.actionSeq;
+    scheduler.edgeFloorRevision=snapshot.edgeFloorRevision;
     scheduler.receivedSeq=snapshot.receivedSeq;
     scheduler.appliedSeq=snapshot.appliedSeq;
     scheduler.held={...snapshot.held};
     scheduler.heldUntilTick=snapshot.heldUntilTick;
     scheduler.queued=snapshot.queued.map(slot=>({...slot,input:{...slot.input}}));
-    scheduler.jump={...snapshot.jump,pending:snapshot.jump.pending.map(edge=>({...edge}))};
-    scheduler.flip={...snapshot.flip,pending:snapshot.flip.pending.map(edge=>({...edge}))};
+    scheduler.jump={...snapshot.jump,pending:snapshot.jump.pending.map(edge=>({...edge,receivedAtMs:nowMs}))};
+    scheduler.flip={...snapshot.flip,pending:snapshot.flip.pending.map(edge=>({...edge,receivedAtMs:nowMs}))};
     scheduler.lastControlInputMs=snapshot.heldUntilTick>0||snapshot.queued.length>0?nowMs:null;
-    scheduler.lastEdgeInputMs=snapshot.jump.pending.length>0||snapshot.flip.pending.length>0?nowMs:null;
     return scheduler;
   }
 
-  receive(command:InputCommand,currentTick:number,nowMs:number):{rejection?:'late'|'future'|'revision'|'order';outcomes:EdgeOutcome[]} {
-    const outcomes:EdgeOutcome[]=[];
-    if(command.controlRevision!==this.revision){
-      // A press sent before the client learned of an action's new revision
-      // must not be resurrected by the same counter on its next valid frame.
-      if(command.controlRevision<this.revision&&command.seq>this.receivedSeq){
-        for(const kind of ['jump','flip'] as const){
-          const state=this[kind],id=command.input[kind];
-          if(newer(id,state.seen)){
-            state.seen=id;
-            outcomes.push({kind,id,targetTick:command.targetTick,status:'expired'});
-          }
-        }
-      }
-      return {rejection:'revision',outcomes};
+  // The fence advances even when the action itself is rejected. A baseline
+  // behind an already observed press is not a valid serial-number snapshot.
+  beginAction(seq:number,baseline:EdgeBaseline):boolean {
+    if(seq<=this.actionSeq)return false;
+    for(const kind of ['jump','flip'] as const){
+      const seen=this[kind].seen,id=baseline[kind];
+      if(id!==seen&&!newer(id,seen))return false;
     }
-    if(command.seq<=this.receivedSeq)return {rejection:'order',outcomes};
-    outcomes.push(...this.expireTimedOut(nowMs));
+    this.actionSeq=seq;
+    return true;
+  }
+
+  receive(command:InputCommand,currentTick:number,nowMs:number):{rejection?:'late'|'future'|'revision'|'order'|'action';outcomes:EdgeOutcome[]} {
+    if(command.seq<=this.receivedSeq)return {rejection:'order',outcomes:[]};
+    const outcomes=this.expireTimedOut(nowMs);
     this.receivedSeq=command.seq;
-    const rejection=command.targetTick<=currentTick?'late':command.targetTick>currentTick+FUTURE_TICKS?'future':undefined;
-    // Distinct counters are events, not a property of the continuous slot.
-    // A slightly late press can reach the next step while its held input is
-    // rejected; far-future and excessively late presses are terminal.
-    let acceptedLateEdge=false;
+    const actionMismatch=command.actionSeq!==this.actionSeq;
+    const stale=command.controlRevision<this.revision;
+    const bridge=stale&&!actionMismatch&&command.controlRevision>=this.edgeFloorRevision;
+    const invalidRevision=command.controlRevision!==this.revision;
+    const rejection=actionMismatch?'action':invalidRevision?'revision':
+      command.targetTick<=currentTick?'late':command.targetTick>currentTick+FUTURE_TICKS?'future':undefined;
+    const canSchedule=!actionMismatch&&(!invalidRevision||bridge);
     for(const kind of ['jump','flip'] as const){
       const state=this[kind],id=command.input[kind];
       if(!newer(id,state.seen))continue;
       state.seen=id;
-      const targetTick=rejection==='late'&&currentTick-command.targetTick<=EDGE_LATE_TICKS?currentTick+1:command.targetTick;
-      // A later sequence aimed earlier must not cause older presses to fire
-      // after the newer event, even if the new event itself expires.
-      const retained:PendingEdge[]=[];
-      for(const edge of state.pending){
-        if(edge.targetTick>=targetTick)outcomes.push({kind,...edge,status:'superseded'});
-        else retained.push(edge);
-      }
-      state.pending=retained;
-      if(rejection==='future'||(rejection==='late'&&currentTick-command.targetTick>EDGE_LATE_TICKS)){
+      const late=command.targetTick<=currentTick;
+      if(!canSchedule||command.targetTick>currentTick+FUTURE_TICKS||(late&&currentTick-command.targetTick>EDGE_LATE_TICKS)){
         outcomes.push({kind,id,targetTick:command.targetTick,status:'expired'});
-      }else{
-        if(rejection==='late'){
-          acceptedLateEdge=true;
-          outcomes.push({kind,id,targetTick,status:'rescheduled'});
-        }
-        state.pending.push({id,targetTick});
-        state.pending.sort((a,b)=>a.targetTick-b.targetTick);
+        continue;
       }
+      const last=state.pending.at(-1)?.targetTick??currentTick;
+      const targetTick=Math.max(command.targetTick,currentTick+1,last+1);
+      if(targetTick>currentTick+FUTURE_TICKS){
+        outcomes.push({kind,id,targetTick:command.targetTick,status:'expired'});
+        continue;
+      }
+      state.pending.push({id,targetTick,receivedAtMs:nowMs});
+      if(targetTick!==command.targetTick)outcomes.push({kind,id,targetTick,status:'rescheduled'});
+      else if(bridge)outcomes.push({kind,id,targetTick,status:'accepted'});
     }
-    if(rejection){
-      if(acceptedLateEdge)this.lastEdgeInputMs=nowMs;
-      return {rejection,outcomes};
-    }
+    if(rejection)return {rejection,outcomes};
     this.lastControlInputMs=nowMs;
-    this.lastEdgeInputMs=nowMs;
     // If target ticks move backwards, a later-tick slot from an older sequence
     // must not reinstate obsolete held controls after this one has run.
     this.queued=this.queued.filter(slot=>slot.targetTick<command.targetTick);
@@ -135,14 +129,14 @@ export class ScheduledInput {
       this.held=neutral(this.jump.processed,this.flip.processed);
     }
     for(const kind of ['jump','flip'] as const){
-      const state=this[kind],pending:PendingEdge[]=[];
+      const state=this[kind],pending:TimedEdge[]=[];
       for(const edge of state.pending){
         if(edge.targetTick>tick)pending.push(edge);
-        else if(edge.targetTick<tick)outcomes.push({kind,...edge,status:'expired'});
+        else if(edge.targetTick<tick)outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'expired'});
         else{
           state.processed=edge.id;
           this.held[kind]=edge.id;
-          outcomes.push({kind,...edge,status:'processed'});
+          outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'processed'});
         }
       }
       state.pending=pending;
@@ -158,37 +152,39 @@ export class ScheduledInput {
       this.heldUntilTick=0;
       this.lastControlInputMs=null;
     }
-    if(this.lastEdgeInputMs!==null&&nowMs-this.lastEdgeInputMs>INPUT_TIMEOUT_MS){
-      for(const kind of ['jump','flip'] as const){
-        for(const edge of this[kind].pending)outcomes.push({kind,...edge,status:'expired'});
-        this[kind].pending=[];
+    for(const kind of ['jump','flip'] as const){
+      const retained:TimedEdge[]=[];
+      for(const edge of this[kind].pending){
+        if(nowMs-edge.receivedAtMs>INPUT_TIMEOUT_MS)outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'expired'});
+        else retained.push(edge);
       }
-      this.lastEdgeInputMs=null;
+      this[kind].pending=retained;
     }
     return outcomes;
   }
 
-  invalidate(baseline:Input):EdgeOutcome[] {
+  invalidate(baseline:Input,reason:{type:'action';edgeBaseline:EdgeBaseline}|{type:'relocation'}):EdgeOutcome[] {
     const outcomes:EdgeOutcome[]=[];
     this.revision++;
+    if(reason.type==='relocation')this.edgeFloorRevision=this.revision;
     this.queued=[];
     for(const kind of ['jump','flip'] as const){
       const state=this[kind];
-      for(const edge of state.pending)outcomes.push({kind,...edge,status:'superseded'});
+      for(const edge of state.pending)outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'superseded'});
       state.pending=[];
       state.processed=baseline[kind];
       if(newer(baseline[kind],state.seen))state.seen=baseline[kind];
+      if(reason.type==='action'&&newer(reason.edgeBaseline[kind],state.seen))state.seen=reason.edgeBaseline[kind];
     }
     this.held=neutral(baseline.jump,baseline.flip);
     this.heldUntilTick=0;
     this.lastControlInputMs=null;
-    this.lastEdgeInputMs=null;
     return outcomes;
   }
 
   snapshot():ControlSnapshot {
-    const edge=(state:EdgeState):EdgeState=>({...state,pending:state.pending.map(item=>({...item}))});
-    return {revision:this.revision,receivedSeq:this.receivedSeq,appliedSeq:this.appliedSeq,
+    const edge=(state:EdgeState)=>({seen:state.seen,processed:state.processed,pending:state.pending.map(({id,targetTick})=>({id,targetTick}))});
+    return {revision:this.revision,actionSeq:this.actionSeq,edgeFloorRevision:this.edgeFloorRevision,receivedSeq:this.receivedSeq,appliedSeq:this.appliedSeq,
       held:{...this.held},heldUntilTick:this.heldUntilTick,
       queued:this.queued.map(slot=>({...slot,input:{...slot.input}})),jump:edge(this.jump),flip:edge(this.flip)};
   }

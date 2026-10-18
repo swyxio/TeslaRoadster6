@@ -71,7 +71,7 @@ try {
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
   await delay(450);
   assert.equal(two.state.world!.parking.rounds.length,0,'remote parking intent cannot join from outside a lot');
-  one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
+  one.input.action({type:'race',action:'join',courseId:'short'});
   await delay(450);
   assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
   const initialTime=two.state.world!.time;
@@ -91,7 +91,7 @@ try {
   one.input.send({...NEUTRAL,throttle:1,boost:true});
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_REAR),'remote boost exhaust replicated');
   one.input.send(NEUTRAL);
-  one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
+  one.input.action({type:'reset'});await delay(500);
   // The press is counted, so a complete tap between input frames is retained.
   one.input.send({...NEUTRAL,jump:1});
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>.5&&e.air<100&&(e.thrusters&(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT))===(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT);},'jump exhaust and air use replicated');
@@ -111,12 +111,12 @@ try {
   // if it occupies the Bay approach, then retry around traffic or our own car.
   const otherCar=two.state.world?.entities.find(e=>e.driver===two.state.id);
   if(otherCar&&Math.hypot(otherCar.x-40,otherCar.z-60)<8){
-    two.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+    two.input.action({type:'reset'});await delay(700);
   }
   let laneSpawn=false;
   const spawnAttempts:unknown[]=[];
   for(let attempt=0;attempt<8&&!laneSpawn;attempt++){
-    one.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+    one.input.action({type:'reset'});await delay(700);
     const e=two.state.world?.entities.find(e=>e.id===entityId);
     laneSpawn=!!e&&e.supportId==='ground'&&Math.abs(e.speed)<=1&&currentAt({...e,y:12,supportId:null})?.id==='market';
     spawnAttempts.push(e&&{x:e.x,y:e.y,z:e.z,supportId:e.supportId,speed:e.speed});
@@ -129,12 +129,12 @@ try {
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&currentAt(e)?.id==='market';},'remote car enters shared sky lane');
   const streamAir=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.air>streamAir+2&&e.vx>2;},'server applies sky-lane speed and air');
-  one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
-  await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
+  one.input.action({type:'reset'});await delay(500);
+  await delay(500);one.input.action({type:'dome'});
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'arena entry replicated');
-  one.socket.send(JSON.stringify({type:'dome'}));
+  one.input.action({type:'dome'});
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'immediate arena exit replicated');
-  one.socket.send(JSON.stringify({type:'dome'}));
+  one.input.action({type:'dome'});
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'immediate arena re-entry replicated');
   assert.equal(two.state.world!.soccer.blueScore,0);assert.equal(two.state.world!.soccer.orangeScore,0);
   for(let i=0;i<70;i++){one.input.send({...NEUTRAL,throttle:1});await delay(50);}
@@ -145,7 +145,7 @@ try {
   assert.ok(!one.state.world!.players.find(p=>p.id===id)!.achievements.unlocked.includes('rocket-rookie'),'playing award waits for the completed match');
   for(let score=2;score<=5;score++){
     await eventually(()=>two.state.world?.soccer.phase==='play','next kickoff',15000);
-    one.socket.send(JSON.stringify({type:'reset'}));
+    one.input.action({type:'reset'});
     await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&Math.abs(e.x-(DOME.x-30))<1&&Math.abs(e.z-DOME.z)<1;},'dome reset to shooting position',8000);
     for(let i=0;i<70;i++){one.input.send({...NEUTRAL,throttle:1});await delay(50);}
     one.input.send(NEUTRAL);
@@ -157,7 +157,7 @@ try {
   },'match winner and both Roadster awards replicated');
   assert.deepEqual(two.state.world!.players.find(p=>p.id===two.state.id)!.achievements.unlocked,[],'nonparticipant receives no Dome award');
   // Drive from the kickoff onto a wall; the room must refill air for both clients.
-  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));
+  await delay(500);one.input.action({type:'reset'});
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.inDome&&Math.abs(e.x-(DOME.x-30))<.1&&e.y<.1;},'arena reset for wall charge');
   const reset=two.state.world!.entities.find(e=>e.id===entityId)!;
   const beforeCharge=reset.air,jump=reset.lastJump,flip=reset.lastFlip;
@@ -172,21 +172,21 @@ try {
     if(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3)break;
   }
   assert.ok(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3,`moving wall refill replicated to both clients: ${JSON.stringify({beforeCharge,maxOne,maxTwo,maxHeight,wallSeen,car:two.state.world?.entities.find(e=>e.id===entityId)})}`);
-  await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
+  await delay(500);one.input.action({type:'dome'});
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
   // Leave ample network margin around the server's 400 ms action cooldown.
   await delay(1000);
   const beforeReset=two.state.world!.entities.find(e=>e.id===entityId)!;
   const resetOrigin={x:beforeReset.x,z:beforeReset.z};
-  one.socket.send(JSON.stringify({type:'reset'}));
+  one.input.action({type:'reset'});
   await eventually(()=>{
     const e=two.state.world?.entities.find(e=>e.id===entityId);
     return !!e&&!e.inDome&&e.supportId==='ground'&&Math.abs(e.speed)<=1&&Math.hypot(e.x-resetOrigin.x,e.z-resetOrigin.z)>1;
   },'reset to a stationary ground spawn replicated');
-  await delay(1000);one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));await delay(1000);
+  await delay(1000);one.input.action({type:'selectVehicle',kind:'zoox'});await delay(1000);
   assert.ok(!two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox'),'non-Tesla selection rejected by room');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.driver===id);return !!e&&e.supportId==='ground'&&Math.abs(e.speed)<=1;},'car stationary and grounded before Tesla selection');
-  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'model-3'}));
+  one.input.action({type:'selectVehicle',kind:'model-3'});
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='model-3')??false,'Tesla fleet change visible to remote player');
   await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket',requestId:1}));
   one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket',requestId:2}));
@@ -204,19 +204,19 @@ try {
   assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled,true,'rate-limited cancellation did not alter subscription');
   await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:5}));
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
-  await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
+  await delay(500);one.input.action({type:'autopilot'});
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
-  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(700);
-  one.socket.send(JSON.stringify({type:'destination',x:-120,z:60,requestId:9}));
+  await delay(500);one.input.action({type:'reset'});await delay(700);
+  one.input.action({type:'destination',x:-120,z:60,requestId:9});
   await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9&&r.ok)??false,'destination is accepted by the room');
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
   assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
-  await delay(500);one.socket.send(JSON.stringify({type:'minigame',game:'short'}));
+  await delay(500);one.input.action({type:'minigame',game:'short'});
   one.socket.send(JSON.stringify({type:'race',action:'start',courseId:'short'}));
   await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.phase==='countdown'&&r.entrants.some(e=>e.playerId===id))??false,'race starts immediately after direct entry');
   assert.ok(two.state.world?.entities.some(e=>e.driver===id&&e.z< -1200&&!e.autopilot),'car is placed at the island race start');
   one.socket.send(JSON.stringify({type:'race',action:'leave',courseId:'short'}));
-  one.socket.send(JSON.stringify({type:'minigame',game:'queue'}));
+  one.input.action({type:'minigame',game:'queue'});
   one.socket.send(JSON.stringify({type:'parking',action:'start'}));
   await eventually(()=>!!two.state.world&&!two.state.world.races.rounds.some(r=>r.entrants.some(e=>e.playerId===id))&&two.state.world.parking.rounds.some(r=>r.mode==='queue'&&r.phase==='active'&&r.entrants.some(e=>e.playerId===id)),'immediate switch and parking start are replicated');
   one.socket.send(JSON.stringify({type:'parking',action:'leave'}));

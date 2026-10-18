@@ -71,9 +71,9 @@ test('cached snapshots retain a distant dome player and ferry passenger',()=>{
 
 test('cached snapshots include owner-only controls and optional sync metadata',()=>{
   const world=createWorld(),player=addPlayer(world,'viewer','Viewer'),prepare=prepareSnapshots(world,4,'epoch',2);
-  const own=new ScheduledInput(NEUTRAL);own.receive({seq:3,targetTick:5,controlRevision:0,input:{...NEUTRAL,steer:1}},4,0);
+  const own=new ScheduledInput(NEUTRAL);own.receive({seq:3,targetTick:5,controlRevision:0,actionSeq:0,input:{...NEUTRAL,steer:1}},4,0);
   const initial=JSON.parse(prepare(player.id,own.snapshot(),1));
-  assert.equal(initial.control.receivedSeq,3);assert.equal(initial.control.queued[0].seq,3);assert.ok(!('sync' in initial));
+  assert.equal(initial.control.receivedSeq,3);assert.equal(initial.control.queued[0].seq,3);assert.equal(initial.control.actionSeq,0);assert.equal(initial.control.edgeFloorRevision,0);assert.ok(!('sync' in initial));
   const ordered=JSON.parse(prepare(player.id,new ScheduledInput(NEUTRAL).snapshot(),1,7));
   assert.equal(ordered.control.receivedSeq,0);assert.deepEqual(ordered.control.queued,[]);assert.equal(ordered.sync,7);
 });

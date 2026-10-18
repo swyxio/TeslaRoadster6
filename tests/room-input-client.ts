@@ -1,10 +1,15 @@
 // Small protocol-v32 input helper for local integration tests and benchmarks.
 // The owning script parses each socket message once and passes it to observe().
 import type { Input } from '../shared/game';
-import type { ControlSnapshot, EdgeOutcome } from '../shared/tick-input';
+import type { ControlSnapshot, EdgeBaseline, EdgeOutcome } from '../shared/tick-input';
 
 type Rejection = {seq:number;targetTick:number;reason:string};
-type Options = {seq?:number;targetTick?:number;roomEpoch?:string;controlRevision?:number; preserveCounters?:boolean};
+type Options = {seq?:number;targetTick?:number;roomEpoch?:string;controlRevision?:number;actionSeq?:number;preserveCounters?:boolean};
+type FencedAction = {type:'interact'|'reset'|'autopilot'|'dome'}
+  | {type:'selectVehicle';kind:string}
+  | {type:'minigame';game:'park'|'queue'|'short'|'oval'}
+  | {type:'destination';x:number;z:number;requestId:number}
+  | {type:'race';action:'join';courseId:'short'|'oval'};
 const newer=(id:number,previous:number)=>{const delta=(id-previous+2**31)%2**31;return delta>0&&delta<2**30;};
 
 export class RoomInputClient {
@@ -14,6 +19,7 @@ export class RoomInputClient {
   control?:ControlSnapshot;
   private observedAt=0;
   private nextSeq=0;
+  private nextActionSeq=0;
   private jump=0;
   private flip=0;
   readonly rejections:Rejection[]=[];
@@ -26,6 +32,7 @@ export class RoomInputClient {
     }else if(message.type==='state'){
       this.tick=message.tick;this.roomEpoch=message.roomEpoch;this.control=message.control;this.poseRevision=message.poseRevision;this.observedAt=performance.now();
       if(this.control){
+        this.nextActionSeq=Math.max(this.nextActionSeq,message.control.actionSeq);
         if(newer(this.control.jump.seen,this.jump))this.jump=this.control.jump.seen;
         if(newer(this.control.flip.seen,this.flip))this.flip=this.control.flip.seen;
       }
@@ -40,6 +47,14 @@ export class RoomInputClient {
   }
   get ready():boolean {return this.socket.readyState===WebSocket.OPEN&&this.tick>=0&&!!this.roomEpoch&&!!this.control;}
   get lastSeq():number{return this.nextSeq;}
+  get lastActionSeq():number{return this.nextActionSeq;}
+  action(message:FencedAction,baseline?:EdgeBaseline):number {
+    if(!this.ready)throw new Error('Cannot send before the room state is received');
+    if(baseline){if(newer(baseline.jump,this.jump))this.jump=baseline.jump;if(newer(baseline.flip,this.flip))this.flip=baseline.flip;}
+    const actionSeq=++this.nextActionSeq;
+    this.socket.send(JSON.stringify({...message,actionSeq,edgeBaseline:{jump:this.jump,flip:this.flip}}));
+    return actionSeq;
+  }
   send(input:Input, options:Options={}):number {
     if(!this.ready)throw new Error('Cannot send before the room state is received');
     const seq=options.seq??this.nextSeq+1;
@@ -56,7 +71,7 @@ export class RoomInputClient {
     const elapsedTicks=Math.min(2,Math.max(0,Math.floor((performance.now()-this.observedAt)/50)));
     const targetTick=options.targetTick??this.tick+3+elapsedTicks;
     this.socket.send(JSON.stringify({type:'input',seq,targetTick,roomEpoch:options.roomEpoch??this.roomEpoch,
-      controlRevision:options.controlRevision??this.control!.revision,input:value}));
+      controlRevision:options.controlRevision??this.control!.revision,actionSeq:options.actionSeq??this.nextActionSeq,input:value}));
     return seq;
   }
 }

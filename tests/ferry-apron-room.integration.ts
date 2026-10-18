@@ -29,10 +29,10 @@ try{
   assert.equal(staged.world.ferry.phase,'island');
   assert.ok(staged.world.ferry.arrivals.includes(car.id));
   assert.equal(staged.control.revision,0);assert.equal(staged.poseRevision,0);
-  const target=input.tick+6;
+  const target=input.tick+4;
   const seq=input.send({...NEUTRAL,jump:1,throttle:1},{targetTick:target});
   await until(()=>states.some(state=>state.tick<target&&state.control.queued.some(slot=>slot.seq===seq&&slot.targetTick===target)&&state.control.jump.pending.some(edge=>edge.id===1&&edge.targetTick===target)),'frame and edge queued before due tick');
-  // Refresh the watchdog without replacing the frame or adding a second edge.
+  // Keep a later level frame queued without replacing the frame under test.
   const heartbeat=input.send({...NEUTRAL,jump:1},{targetTick:target+1});
   await until(()=>states.some(state=>state.tick===target&&state.poseRevision===1),'apron relocation on the queued tick');
   const at=states.find(state=>state.tick===target)!;
@@ -58,5 +58,16 @@ try{
   await until(()=>(input.control?.appliedSeq??0)>=repeated,'same-counter frame applied after relocation');
   assert.equal(states.at(-1)!.world.entities.find(entity=>entity.driver===id)!.lastJump,0,'superseded jump cannot replay');
   assert.equal(input.edges.filter(edge=>edge.kind==='jump'&&edge.id===1).length,1);
+  assert.equal(input.control!.edgeFloorRevision,1,'autonomous relocation closes the old-revision edge bridge');
+  const stale=input.send({...NEUTRAL,jump:2},{controlRevision:0});
+  await until(()=>input.rejections.some(item=>item.seq===stale&&item.reason==='revision')&&input.edges.some(edge=>edge.kind==='jump'&&edge.id===2&&edge.status==='expired'),'pre-relocation revision expires a new press');
+  input.action({type:'reset'});
+  await until(()=>input.control!.revision===2,'later explicit reset invalidates controls');
+  assert.equal(input.control!.edgeFloorRevision,1,'explicit action cannot reopen an older relocation');
+  const tooOld=input.send({...NEUTRAL,jump:3},{controlRevision:0});
+  await until(()=>input.rejections.some(item=>item.seq===tooOld&&item.reason==='revision')&&input.edges.some(edge=>edge.kind==='jump'&&edge.id===3&&edge.status==='expired'),'later action leaves the older revision closed');
+  const afterRelocation=input.send({...NEUTRAL,jump:4},{controlRevision:1});
+  await until(()=>input.rejections.some(item=>item.seq===afterRelocation&&item.reason==='revision')&&input.edges.some(edge=>edge.kind==='jump'&&edge.id===4&&(edge.status==='accepted'||edge.status==='rescheduled')),'post-relocation revision bridges the later action');
+  await until(()=>input.edges.some(edge=>edge.kind==='jump'&&edge.id===4&&edge.status==='processed'),'eligible post-relocation press is processed');
   console.log(`PASS: real local room superseded the jump and cleared throttle on ferry-apron relocation at tick ${target}; revisions advanced and the car remained safely grounded. Ferry pose and deadline were synthetically staged.`);
 }finally{if(socket.readyState===WebSocket.OPEN)socket.close(1000,'Test complete');}

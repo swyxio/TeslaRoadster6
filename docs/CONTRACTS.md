@@ -42,13 +42,13 @@ Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowerca
 Client messages:
 
 ```json
-{"type":"input","seq":1,"targetTick":3,"roomEpoch":"00000000-0000-0000-0000-000000000000","controlRevision":0,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
+{"type":"input","seq":1,"targetTick":3,"roomEpoch":"00000000-0000-0000-0000-000000000000","controlRevision":0,"actionSeq":0,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
 {"type":"sync","token":1}
-{"type":"interact"}
-{"type":"reset"}
-{"type":"autopilot"}
-{"type":"dome"}
-{"type":"selectVehicle","kind":"model-3"}
+{"type":"interact","actionSeq":1,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"reset","actionSeq":2,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"autopilot","actionSeq":3,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"dome","actionSeq":4,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"selectVehicle","kind":"model-3","actionSeq":5,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
 {"type":"ota","enabled":true,"requestId":2}
 {"type":"name","name":"Driver"}
@@ -56,11 +56,11 @@ Client messages:
 {"type":"parking","action":"queue"}
 {"type":"parking","action":"start"}
 {"type":"parking","action":"leave"}
-{"type":"race","action":"join","courseId":"short"}
+{"type":"race","action":"join","courseId":"short","actionSeq":6,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"race","action":"start","courseId":"oval"}
 {"type":"race","action":"leave","courseId":"short"}
-{"type":"minigame","game":"park"}
-{"type":"destination","x":-120,"z":60,"requestId":3}
+{"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"mars","action":"contribute","amount":50,"requestId":4}
 {"type":"mars","action":"board","requestId":5}
 ```
@@ -70,8 +70,8 @@ Server messages:
 ```text
 {type:"welcome", id:string, version:32, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
-{type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"order"|"late"|"future"}
-{type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"rescheduled"|"processed"|"expired"|"superseded"}
+{type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
+{type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
@@ -80,13 +80,13 @@ Server messages:
 
 Welcome precedes the initial snapshot. The room simulates one fixed 50 ms outer step per completed tick and sends snapshots every two ticks. `tick=T` is the world *after* step T; it advances only when a step completes, independent of wall time. `roomEpoch` identifies one room incarnation: it changes after the room empties and resets, not when a single driver reconnects. The WebSocket is that driver's connection generation. `substeps` is the count used by the most recently completed step (1 at tick zero). The authoritative room retains the adaptive global maximum-speed substep policy. Presentation replay may override its local count, but a last-known count cannot predict unseen traffic, collisions or changing physics.
 
-Input frames carry a strictly increasing positive `seq`, the room epoch, the driver's current `controlRevision`, and the intended `targetTick`. The server accepts continuous controls only for T+1 through T+8. A newer sequence replaces the same slot and supersedes older slots at later ticks, preventing old acceleration from returning after a newer release. A missing slot holds the last controls for at most six completed ticks, then neutralizes. A 300 ms wall-clock watchdog also clears stale queued and held controls on the next callback; a rejected late edge cannot refresh the continuous-control watchdog. The rejected frame gets `inputRejected`; a sequence is receipt ordering, not elapsed time or an execution acknowledgement. `sync` tags the next regular snapshot after preceding socket messages, with requests coalesced.
+Input frames carry a strictly increasing positive `seq`, the room epoch, the driver's current `controlRevision`, the latest sent `actionSeq` (initially zero), and the intended `targetTick`. The server accepts continuous controls only for T+1 through T+8. A newer sequence replaces the same slot and supersedes older slots at later ticks, preventing old acceleration from returning after a newer release. A missing slot holds the last controls for at most six completed ticks, then neutralizes. A 300 ms wall-clock watchdog also clears stale queued and held controls on the next callback; an edge-only frame cannot refresh the continuous-control watchdog. The rejected frame gets `inputRejected`; a sequence is receipt ordering, not elapsed time or an execution acknowledgement. `sync` tags the next regular snapshot after preceding socket messages, with requests coalesced.
 
-Jump and flip are modulo-2^31 monotonic per-connection press counters. The scheduler recognizes new counters separately from held levels; repeated counters cannot fire again. A new edge in a slightly late frame (up to three ticks) is scheduled at T+1 even though that frame's continuous controls are rejected. Before that rejection, an `inputEdge` with status `rescheduled` reports its accepted ID and new target tick; a later terminal outcome reports whether it was processed, expired or superseded. Older and far-future edges expire. Newer same-kind edges for the same or an earlier target supersede the affected older pending edges. New presses in an ordered stale-revision frame expire, so the same counter cannot reappear after the action. `inputEdge` is private to the owner; multiple presses collapsed between input samples become one observed edge. The simulation consumes the edge even if the car is secured on the ferry or the action is otherwise ineffective; an edge invalidated before the relocated car consumes it is superseded. Counter baselines survive control revision changes so cancellation or expiry cannot synthesize a jump or flip.
+Jump and flip are modulo-2^31 monotonic per-connection press counters. The scheduler recognizes new counters separately from held levels; repeated or backward counters cannot fire again. It reserves successive ticks for distinct same-kind edges, within T+1 through T+8. A slightly late edge (up to three ticks) may be rescheduled even though its continuous controls are rejected; older, far-future and overflow edges expire. Each pending edge expires after 300 ms wall time, independently of later input. `inputEdge` is private to the owner: `accepted` or `rescheduled` reports an edge bridged across an old revision before its level rejection, and a later terminal outcome reports whether it was processed, expired or superseded. Counter gaps do not invent intermediate presses. The simulation consumes an edge even if the car is secured on the ferry or the action is otherwise ineffective; an edge invalidated before the relocated car consumes it is superseded.
 
-Before an action that can change the control revision, the client sends an ordered input frame with the current jump and flip counters, then the action and a `sync` request. It holds newer counter values locally until the snapshot tagged for the latest such action arrives, including when that action is rejected; continuous controls can still be sent while waiting. This makes a press made after reset available on the confirmed revision without replaying an unseen pre-action press. A stalled snapshot clock uses a bounded older target for the baseline, which the server can expire before processing the action.
+Every potentially invalidating action carries a strictly increasing positive `actionSeq` and a synchronous `edgeBaseline` of the current counters; an invalid or backward baseline closes the socket. The server records the sequence even when cooldown or game rules reject the action, but only an accepted action cancels pending controls and marks its baseline seen. Input continues while `sync` waits. After an accepted action, an input with an older revision may still schedule new edges if its action sequence matches the latest processed action and its revision is at least `edgeFloorRevision`; its levels are rejected. Autonomous water or ferry relocation raises the floor to the new revision, closing that bridge even after later actions. A wrong room epoch is rejected before modifying the scheduler. Clients capture separate presses in a bounded queue rather than inferring them from a counter gap.
 
-The owner-only `control` field has `revision`, `receivedSeq`, `appliedSeq`, `held`, `heldUntilTick`, `queued` (at most eight `{seq,targetTick,input}` slots) and `jump`/`flip` (`seen`, `processed` and at most eight pending `{id,targetTick}` entries). `receivedSeq` means a same-revision ordered frame was received, including late/future rejections; `appliedSeq` identifies the most recent continuous slot actually run. It is not a duration. The snapshot's T makes all steps through T final; clients replay only later ticks. Reset attempts, accepted teleport/minigame/race placement, vehicle takeover or replacement, autopilot/destination changes, water recovery and forced ferry-apron relocation clear that driver's queue and increment `control.revision`. The separate top-level `poseRevision` increments when the controlled entity changes or its pose changes by more than 1 mm or 0.0001 radians, or on a reported water/ferry relocation. This prevents an autopilot change or floating-point noise during a no-op reset from forcing a camera cut. A revision change for one driver never resets another's. Socket closure clears only that driver's session.
+The owner-only `control` field has `revision`, `actionSeq`, `edgeFloorRevision`, `receivedSeq`, `appliedSeq`, `held`, `heldUntilTick`, `queued` (at most eight `{seq,targetTick,input}` slots) and `jump`/`flip` (`seen`, `processed` and at most eight pending `{id,targetTick}` entries). `receivedSeq` means an ordered frame for this epoch was received, including rejected frames; `appliedSeq` identifies the most recent continuous slot actually run. It is not a duration. The snapshot's T makes all steps through T final; clients replay only later ticks. Reset attempts, accepted teleport/minigame/race placement, vehicle takeover or replacement, autopilot/destination changes, water recovery and forced ferry-apron relocation clear that driver's queue and increment `control.revision`. The separate top-level `poseRevision` increments when the controlled entity changes or its pose changes by more than 1 mm or 0.0001 radians, or on a reported water/ferry relocation. This prevents an autopilot change or floating-point noise during a no-op reset from forcing a camera cut. A revision change for one driver never resets another's. Socket closure clears only that driver's session.
 
 Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Command queues and edge metadata are sent only to their owner. The server alone owns collisions, position, pickups, races, cash and HUD state. Prediction is presentation only and must reconcile authoritative snapshots, including unknown contacts and special surfaces. The client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, a version bump and integration tests; do not add compatibility shims for this prototype.
 

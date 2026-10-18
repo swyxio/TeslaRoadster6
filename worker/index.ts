@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
-import { ScheduledInput, type EdgeOutcome } from '../shared/tick-input';
+import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -110,11 +110,16 @@ export class GameRoom extends DurableObject<Env> {
       if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
       return;
     }
+    // Fence every potentially invalidating action, including cooldown and
+    // simulation rejections. Only accepted actions consume its baseline.
+    if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
+      this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
+    }
     // Joining and controlling a mini-game are often consecutive clicks. The
     // simulation checks membership, host and position; the socket rate limit
     // still applies, but the unrelated action cooldown must not drop them.
-    if(message.type==='dome'){if(travelDome(this.world,session.id))this.invalidate(socket,session,true);return;}
-    if(message.type==='minigame'){const before=this.pose(session);if(enterMinigame(this.world,session.id,message.game))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));return;}
+    if(message.type==='dome'){if(travelDome(this.world,session.id))this.invalidate(socket,session,true,message.edgeBaseline);return;}
+    if(message.type==='minigame'){const before=this.pose(session);if(enterMinigame(this.world,session.id,message.game))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);return;}
     if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if (now - session.lastAction < 400) {
@@ -128,16 +133,16 @@ export class GameRoom extends DurableObject<Env> {
     if (message.type === 'interact') {
       const before=this.world.players.find(player=>player.id===session.id)?.entityId;
       interact(this.world,session.id);
-      if(before!==this.world.players.find(player=>player.id===session.id)?.entityId)this.invalidate(socket,session,true);
+      if(before!==this.world.players.find(player=>player.id===session.id)?.entityId)this.invalidate(socket,session,true,message.edgeBaseline);
     }
-    if (message.type === 'reset') {const before=this.pose(session);resetPlayer(this.world, session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));}
-    if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session);
-    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind))this.invalidate(socket,session,true);
+    if (message.type === 'reset') {const before=this.pose(session);resetPlayer(this.world, session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
+    if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session,false,message.edgeBaseline);
+    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind))this.invalidate(socket,session,true,message.edgeBaseline);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
-    if(message.type==='race'){const before=this.pose(session);if(raceAction(this.world,session.id,message.action,message.courseId)&&message.action==='join')this.invalidate(socket,session,this.poseChanged(before,this.pose(session)));}
+    if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
     if(message.type==='destination'){
       const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
-      if(ok)this.invalidate(socket,session);
+      if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
@@ -225,12 +230,12 @@ export class GameRoom extends DurableObject<Env> {
     return (['yaw','pitch','roll'] as const).some(key=>Math.abs(Math.atan2(Math.sin(before[key]-after[key]),Math.cos(before[key]-after[key])))>.0001);
   }
 
-  private invalidate(socket:WebSocket,session:Session,relocated=false):void {
+  private invalidate(socket:WebSocket,session:Session,relocated=false,edgeBaseline?:EdgeBaseline):void {
     const player=this.world.players.find(item=>item.id===session.id);
     const entity=this.world.entities.find(item=>item.id===player?.entityId);
     this.inputs.delete(session.id);
     if(relocated)session.poseRevision++;
-    this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0}));
+    this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0},edgeBaseline?{type:'action',edgeBaseline}:{type:'relocation'}));
   }
 
   private disconnect(socket: WebSocket, code = 1000, reason = 'Session ended'): void {
