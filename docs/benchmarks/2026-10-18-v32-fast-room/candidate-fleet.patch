@@ -1,0 +1,85 @@
+diff --git a/shared/game.ts b/shared/game.ts
+--- a/shared/game.ts
++++ b/shared/game.ts
+@@ -51,17 +51,20 @@
+ export function createEmptyWorld():World {
+   return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,launchAt:null},pickups:[]};
+ }
+-export function createWorld():World {
++export function createWorld(fleetSeed=0):World {
+   const world=createEmptyWorld();
+   world.pickups=Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-300+(i%6)*60,z:i<6?-55:113,kind:i%2?'air':'repair',active:true}));
+   world.pickups.push({id:'rocket-island',x:0,z:-1160,kind:'rocket',active:true});
+   for(const lot of PARKING_LOTS)world.pickups.push({id:`rocket-${lot.id}`,...lot.pickup,kind:'rocket',active:true});
+   for(const [i,[x,z]] of [[0,60],[390,0],[510,120],[-240,180],[-1200,2080],[-40,6080],[1580,6070],[1530,8860]].entries())world.pickups.push({id:`rocket-${i}`,x,z,kind:'rocket',active:true});
+-  VEHICLE_IDS.forEach((kind,i)=>{
+-    const pose=routePose(i,VEHICLE_IDS.length);
++  // Sample the catalog, rather than simulating two permanent copies of every
++  // model. An explicit seed keeps simulation fixtures repeatable.
++  const cohort=(offset:number)=>Array.from({length:8},(_,i)=>VEHICLE_IDS[(Math.floor(i*VEHICLE_IDS.length/8)+Math.abs(Math.trunc(fleetSeed))+offset)%VEHICLE_IDS.length]);
++  cohort(0).forEach((kind,i)=>{
++    const pose=routePose(i,8);
+     world.entities.push({...makeEntity(`traffic-${i}`,kind,pose.x,pose.z),...pose,npc:true,autopilot:true});
+   });
+-  VEHICLE_IDS.forEach((kind,i)=>{
++  cohort(13).forEach((kind,i)=>{
+     const roads=[-240,-180,-120,-60,0,60,330,390,450,510],zSlots=[-165,-135,-105,-75,-45,-15,15,45,75,105,135,165];
+     for(let n=0;n<roads.length*zSlots.length;n++){
+       const slot=(i*7+n)%(roads.length*zSlots.length),x=roads[Math.floor(slot/zSlots.length)]+10,z=zSlots[slot%zSlots.length];
+diff --git a/shared/traffic.ts b/shared/traffic.ts
+--- a/shared/traffic.ts
++++ b/shared/traffic.ts
+@@ -201,12 +201,12 @@
+ }
+ 
+ type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
+-const AMBIENT_MAX=34; // Target for unattended traffic, in addition to catalog NPCs and police.
+-const AMBIENT_POOL_MAX=68; // Also bounds taken and abandoned optional cars.
++const AMBIENT_MAX=4; // Alongside eight city cars and four police.
++const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
+ const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
+ const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
+ 
+-function desiredAmbient(time:number):number{return Math.round(5+29*trafficDemand(time).intensity);}
++function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
+ function observers(world:World):Entity[]{
+   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
+ }
+@@ -231,7 +231,7 @@
+   return false;
+ }
+ 
+-/** Called after the permanent 26 NPCs and parked fleet have been created. */
++/** Called after the small city and parked cohorts have been created. */
+ export function seedHighwayTraffic(world:World,make:EntityFactory):void {
+   const target=desiredAmbient(world.time);
+   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
+diff --git a/worker/index.ts b/worker/index.ts
+--- a/worker/index.ts
++++ b/worker/index.ts
+@@ -7,6 +7,7 @@
+ import { chooseAvailableName } from './global-chat-core';
+ import { radioFeed } from './radio';
+ import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
++import { VEHICLE_IDS } from '../shared/vehicles';
+ 
+ export { GlobalChat };
+ 
+@@ -35,7 +36,7 @@
+ 
+ // Physics and player cash are session-only. The room's Mars fund is durable.
+ export class GameRoom extends DurableObject<Env> {
+-  private world = createWorld();
++  private world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
+   private sessions = new Map<WebSocket, Session>();
+   private inputs = new Map<string, Input>();
+   private timer: ReturnType<typeof setInterval> | null = null;
+@@ -241,7 +242,7 @@
+     if (!this.sessions.size) {
+       if (this.timer) clearInterval(this.timer);
+       const fund=this.world.mars.fund;
+-      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(); this.world.mars.fund=fund;
++      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length)); this.world.mars.fund=fund;
+     }
+   }
+ }

@@ -1,0 +1,68 @@
+{
+  "version": 32,
+  "players": 1,
+  "mode": "straight",
+  "staged": "Roadster x=-300 z=1500, ground, speed 56 m/s, heading +z; full throttle after join",
+  "inputSchedule": "20 Hz full throttle, steer 0",
+  "fixtureWallSeconds": 10.006,
+  "simulatedSeconds": 9.3,
+  "simToWall": 0.929,
+  "ticks": 186,
+  "tickRate": 18.59,
+  "substeps": {
+    "6": 186
+  },
+  "entitiesMin": 68,
+  "entitiesMax": 68,
+  "driverSpeedMin": 56,
+  "driverSpeedMax": 56,
+  "maxOtherSpeed": 27.81,
+  "ticksWithOtherAbove50": 0,
+  "elapsedCallbackWall": {
+    "all": {
+      "count": 186,
+      "p50Ms": 2,
+      "p95Ms": 3,
+      "maxMs": 36
+    },
+    "simulationOnly": {
+      "count": 93,
+      "p50Ms": 2,
+      "p95Ms": 3,
+      "maxMs": 36
+    },
+    "snapshot": {
+      "count": 93,
+      "p50Ms": 2,
+      "p95Ms": 3,
+      "maxMs": 4
+    }
+  },
+  "finalObserved": {
+    "x": -300,
+    "z": 2126.65,
+    "speed": 56,
+    "support": "ground"
+  },
+  "appliedSeq": 233,
+  "inputRejections": 0,
+  "workerdProcessCpu": {
+    "pid": 68282,
+    "seconds": 0.49,
+    "observationWallSeconds": 10.197
+  },
+  "host": {
+    "logicalCpus": 18,
+    "loadBefore": [
+      13.86474609375,
+      14.9580078125,
+      18.71875
+    ],
+    "loadAfter": [
+      12.75439453125,
+      14.68017578125,
+      18.57568359375
+    ]
+  },
+  "note": "Local fixture, one driver and normal ambient entities. Initial pose and speed are staged; later motion, input scheduling, substeps and snapshots are production logic. Callback numbers are integer-ms local elapsed wall time, not CPU; instrumentation and contention affect them. workerd process CPU, when supplied, covers the entire local process and slightly wider interval, not just room ticks. No production, WAN, device, multiplayer-capacity or sustained claim."
+}
