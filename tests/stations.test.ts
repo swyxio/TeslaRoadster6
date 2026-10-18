@@ -75,3 +75,14 @@ test('the mini-game menu uses the current station, including its queue approach'
     assert.ok(Math.abs(car.x-lot.approach.x)<=lot.approach.width/2&&Math.abs(car.z-lot.approach.z)<=lot.approach.length/2);
   }
 });
+
+test('joining a local parking game stops a moving car before it can leave the lot',()=>{
+  const lot=PARKING_LOTS.find(l=>l.id==='charger-sf-16th')!;
+  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  Object.assign(car,{x:lot.area.x+17,z:lot.area.z,y:0,yaw:-Math.PI/2,supportId:'ground',speed:30,vx:30,pushX:30});
+  assert.equal(enterMinigame(world,'p','park'),true);
+  assert.equal(car.speed,0);assert.equal(car.vx,0);assert.equal(car.pushX,0);
+  for(let i=0;i<10;i++)step(world,new Map(),.05);
+  assert.equal(world.parking.rounds[0]?.lotId,lot.id);
+});

@@ -320,7 +320,7 @@ export function enterMinigame(world:World,id:string,game:'park'|'queue'|'short'|
   const currentLot=car.supportId==='ground'&&ground!==null&&Math.abs(car.y-ground)<=.5
     ? PARKING_LOTS.find(l=>insideParkingArea(l.area,car.x,car.z)||insideParkingArea(l.approach,car.x,car.z)) : undefined;
   if(currentLot&&parkingAction(world,id,game)){
-    car.autopilot=false;car.navigation=null;return true;
+    placeEntity(car,{x:car.x,z:car.z,yaw:car.yaw},false);resetAchievementFlight(player);return true;
   }
   const lots=currentLot?[currentLot]:PARKING_LOTS.filter(l=>l.id==='sf-playground'||l.id==='island-playground');
   for(const lot of lots){

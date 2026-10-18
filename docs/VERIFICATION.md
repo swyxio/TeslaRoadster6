@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Bay charging lots and Tesland monuments · protocol v26 branch · 2026-10-18 Pacific
 
+- Automated review identified moving cars leaving a newly joined local parking game and outdated protocol examples. After the fixes, `pnpm test` passed 354 tests, including a moving-car regression, and `pnpm build` passed with the existing Vite chunk warning.
 - After integrating the economy article and simulations, `pnpm test` passed 353 tests and `pnpm build` passed; Vite retained its large-chunk warning. That integration changed documentation, public assets and planning scripts rather than game or room behavior.
 - After integrating the Tesland landmarks and relocating the conflicting Marin lot and storefront, `pnpm test` reported 347 passed and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v26 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
 - After a further small lot move to clear the monument visually, the focused map, station and billboard tests, `pnpm build`, and the two-client room integration passed. Those tests cover monument, road, building and lot clearance. Chrome desktop joined a local shared room using a temporary server spawn fixture, showed the fictional Mill Valley lot and started Park It at its local stall; the fixture was removed. No physical device was tested.

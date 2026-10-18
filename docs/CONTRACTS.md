@@ -1,4 +1,4 @@
-# Implementation contracts · v25
+# Implementation contracts · v26
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -37,7 +37,7 @@ Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`
 
 ## Wire protocol v26
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:25,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:26,capacity:number}`.
 
 Client messages:
 
@@ -65,7 +65,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:25, capacity:number}
+{type:"welcome", id:string, version:26, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
