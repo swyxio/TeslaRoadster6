@@ -4,7 +4,7 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { ISLAND_BANK, ISLAND_CLIFF } from '../shared/island-stunts';
 import { DOME_PERIMETER, MAP_BOUNDS, OVERPASS, STUNT_LOOP, STUNT_RAMP, nearbyBuildings, terrainHeight } from '../shared/map';
 import { ovalBankSurface } from '../shared/oval-bank';
-import { dimensions } from '../shared/physics';
+import { contact, dimensions } from '../shared/physics';
 
 // Snapshots normally arrive every two 50 ms room ticks. Keep enough history
 // for a delayed playback clock without retaining an unbounded room history.
@@ -31,10 +31,29 @@ function perimeter(a:number,b:number,t:number):number {
   return ((a+delta*t)%DOME_PERIMETER+DOME_PERIMETER)%DOME_PERIMETER;
 }
 
+// Each interval is enclosed by the midpoint body expanded by the greatest
+// possible centre translation and rotation of any corner. A disjoint shared
+// physics body proves the entire interval clear, not just the sample itself.
+// Subdivision can only reduce false positives; uncertain intervals stay blocked.
+function buildingSweepClear(a:Pose,b:Pick<Entity,'x'|'z'|'yaw'>,building:ReturnType<typeof nearbyBuildings>[number]):boolean {
+  const spec=dimensions(a.kind),delta=Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw));
+  const distance=Math.hypot(b.x-a.x,b.z-a.z),halfDiagonal=Math.hypot(spec.width,spec.length)/2;
+  const obstacle={...building,yaw:0};
+  const clear=(start:number,end:number,depth:number):boolean=>{
+    const mid=(start+end)/2,span=(end-start)/2;
+    const padding=span*(distance+halfDiagonal*Math.abs(delta))+.001;
+    const enclosing={x:a.x+(b.x-a.x)*mid,z:a.z+(b.z-a.z)*mid,
+      yaw:a.yaw+delta*mid,w:spec.width+2*padding,d:spec.length+2*padding};
+    if(!contact(enclosing,obstacle))return true;
+    return depth<8&&clear(start,mid,depth+1)&&clear(mid,end,depth+1);
+  };
+  return clear(0,1,0);
+}
+
 // Interpolated or extrapolated remote poses must not pass through a solid or
 // cross a ground-to-water boundary. Conservative bounds deliberately cut to
 // the latest authoritative pose near complex surfaces.
-function clearPath(a:Pose,b:Pick<Entity,'x'|'y'|'z'>):boolean {
+function clearPath(a:Pose,b:Pick<Entity,'x'|'y'|'z'>&Partial<Pick<Entity,'yaw'|'pitch'|'roll'>>):boolean {
   const distance=Math.hypot(b.x-a.x,b.z-a.z);
   // A corrupt coordinate or a teleport must cut, never turn the sample loop
   // into an unbounded per-frame traversal.
@@ -47,10 +66,29 @@ function clearPath(a:Pose,b:Pick<Entity,'x'|'y'|'z'>):boolean {
   if(minX<MAP_BOUNDS.minX||maxX>MAP_BOUNDS.maxX||minZ<MAP_BOUNDS.minZ||maxZ>MAP_BOUNDS.maxZ)return false;
   const overlaps=(left:number,right:number,near:number,far:number)=>right>=minX&&left<=maxX&&far>=minZ&&near<=maxZ;
   const midX=(a.x+b.x)/2,midZ=(a.z+b.z)/2;
+  // A ground car's yaw-swept rectangle is narrower than its circumcircle
+  // beside a parallel wall. Each intermediate angle is at most half the
+  // yaw interval from one endpoint; the half diagonal bounds how fast each
+  // projected extent can change. Keep the circle for tilted or unknown poses.
+  let buildingX=radius,buildingZ=radius;
+  if(a.supportId==='ground'&&Number.isFinite(b.yaw)&&a.pitch===0&&a.roll===0&&b.pitch===0&&b.roll===0){
+    const yaw=b.yaw!,delta=Math.abs(Math.atan2(Math.sin(yaw-a.yaw),Math.cos(yaw-a.yaw)));
+    const halfDiagonal=Math.hypot(spec.width,spec.length)/2;
+    const bound=halfDiagonal*delta/2+.01;
+    const extentX=(heading:number)=>Math.abs(Math.cos(heading))*spec.width/2+Math.abs(Math.sin(heading))*spec.length/2;
+    const extentZ=(heading:number)=>Math.abs(Math.sin(heading))*spec.width/2+Math.abs(Math.cos(heading))*spec.length/2;
+    buildingX=Math.min(radius,Math.max(extentX(a.yaw),extentX(yaw))+bound);
+    buildingZ=Math.min(radius,Math.max(extentZ(a.yaw),extentZ(yaw))+bound);
+  }
+  const overlapsBuilding=(left:number,right:number,near:number,far:number)=>
+    right>=Math.min(a.x,b.x)-buildingX&&left<=Math.max(a.x,b.x)+buildingX&&
+    far>=Math.min(a.z,b.z)-buildingZ&&near<=Math.max(a.z,b.z)+buildingZ;
   if(nearbyBuildings(midX,midZ,Math.hypot(maxX-minX,maxZ-minZ)/2).some(building=>{
     const roof=building.style==='rotunda'?Math.max(building.h,23):
       building.style==='salesforce'||building.style==='coit'?building.h+building.w*.46*.38:building.h;
-    return minY<roof&&maxY>0&&overlaps(building.x-building.w/2,building.x+building.w/2,building.z-building.d/2,building.z+building.d/2);
+    if(minY>=roof||maxY<=0||!overlapsBuilding(building.x-building.w/2,building.x+building.w/2,building.z-building.d/2,building.z+building.d/2))return false;
+    return a.supportId!=='ground'||!Number.isFinite(b.yaw)||a.pitch!==0||a.roll!==0||b.pitch!==0||b.roll!==0||
+      !buildingSweepClear(a,{x:b.x,z:b.z,yaw:b.yaw!},building);
   }))return false;
   if(maxY>=0&&(
     minY<=OVERPASS.height&&overlaps(OVERPASS.start,OVERPASS.end,OVERPASS.z-OVERPASS.width/2,OVERPASS.z+OVERPASS.width/2)||
@@ -100,7 +138,7 @@ function extrapolate(e:Entity,pose:Pose,ticks:number):Entity {
   const seconds=Math.min(MAX_EXTRAPOLATION_TICKS,Math.max(0,ticks))*TICK_SECONDS;
   const x=pose.x+pose.vx*seconds,y=pose.y+pose.vy*seconds,z=pose.z+pose.vz*seconds;
   const yaw=pose.yaw+pose.yawRate*seconds,pitch=pose.pitch+pose.pitchRate*seconds,roll=pose.roll+pose.rollRate*seconds;
-  if(!clearPath(pose,{x,y,z}))return e;
+  if(!clearPath(pose,{x,y,z,yaw,pitch,roll}))return e;
   if(x===e.x&&y===e.y&&z===e.z&&yaw===e.yaw&&pitch===e.pitch&&roll===e.roll)return e;
   return {...e,x,y,z,yaw,pitch,roll};
 }

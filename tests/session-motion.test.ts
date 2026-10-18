@@ -216,3 +216,58 @@ test('head-on contact reconciles against authoritative shared physics',()=>{
   assert.ok(Math.hypot(previous!.x-local.x,previous!.z-local.z)<12,'display returns near confirmed authority');
   session.disconnect();
 });
+
+for(const gap of [7,10])test(`a ${gap} m braking convoy remains on one visual timeline after contact`,()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];
+  Object.assign(local,{x:-310,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  Object.assign(peer,{x:-310+gap,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const packet=(tick:number)=>{const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=inputs.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
+  socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,new Map([['p',input],['q',input]]),.05,{substeps:5});socket.message(packet(14));
+  const queue:{when:number;packet:unknown}[]=[];let consecutive=0,longest=0,depth=0,last:Entity|undefined;
+  for(let frame=0;frame<=600;frame++){
+    now=frame*1000/120;
+    if(frame&&frame%6===0){const other=now>=400?{...NEUTRAL,brake:true}:input;
+      step(world,new Map([['p',input],['q',other]]),.05,{substeps:5});}
+    if(frame&&frame%12===0)queue.push({when:now+75,packet:packet(14+frame/6)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld()),hit=contact(body(shown.local),body(shown.peer));
+    consecutive=hit?consecutive+1:0;longest=Math.max(longest,consecutive);depth=Math.max(depth,hit?.depth??0);
+    if(last)assert.ok(Math.hypot(shown.local.x-last.x,shown.local.y-last.y,shown.local.z-last.z)<1,`frame ${frame}`);
+    assert.equal(session.takePresentationSnap(),false,`frame ${frame}`);last=shown.local;
+  }
+  assert.ok(local.health<100,'authoritative contact occurred');
+  assert.ok(longest<=3,`displayed overlap lasted ${longest} consecutive frames`);
+  assert.ok(depth<.05,`displayed penetration reached ${depth} m`);
+  session.disconnect();
+});
+
+test('a convoy remains smooth while travelling parallel to a nearby building',()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];
+  Object.assign(local,{x:-351.5,z:0,y:0,yaw:0,speed:30,vx:0,vz:-30,supportId:'ground'});
+  Object.assign(peer,{x:-351.5,z:-7,y:0,yaw:0,speed:30,vx:0,vz:-30,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const packet=(tick:number)=>{const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=inputs.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
+  socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,new Map([['p',input],['q',input]]),.05,{substeps:5});socket.message(packet(14));
+  const queue:{when:number;packet:unknown}[]=[];let previous:Entity|undefined;
+  for(let frame=0;frame<=600;frame++){
+    now=frame*1000/120;if(frame&&frame%6===0)step(world,new Map([['p',input],['q',input]]),.05,{substeps:5});
+    if(frame&&frame%12===0)queue.push({when:now+75,packet:packet(14+frame/6)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld());
+    assert.equal(contact(body(shown.local),body(shown.peer)),null,`frame ${frame}`);
+    if(previous)assert.ok(Math.hypot(shown.peer.x-previous.x,shown.peer.y-previous.y,shown.peer.z-previous.z)<1,`peer frame ${frame}`);
+    previous=shown.peer;
+  }
+  session.disconnect();
+});

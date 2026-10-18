@@ -288,7 +288,11 @@ export class TickPrediction {
         const distance=Math.min(Math.hypot(entity.x-car.x,entity.z-car.z),Math.hypot(actual.x-car.x,actual.z-car.z));
         if(distance>=35){this.peerOffsets.delete(entity.id);continue;}
         const forecast=interpolate(a,b,alpha);
-        if(!remotePathClear(actual,forecast)||!remotePathClear(entity,forecast)){this.peerOffsets.delete(entity.id);continue;}
+        // Health can change in speculative contact; it is not geometry and
+        // must not leave the displayed peer on a different time base.
+        if(!remotePathClear({...actual,health:forecast.health},forecast)||!remotePathClear({...entity,health:forecast.health},forecast)){
+          this.peerOffsets.delete(entity.id);continue;
+        }
         // Fade onto the common replay timeline near the controlled vehicle.
         // Unknown peer controls may still create a temporary visual overlap.
         const amount=Math.max(0,Math.min(1,(35-distance)/15));

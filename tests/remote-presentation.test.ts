@@ -168,3 +168,47 @@ test('does not sample a corrupt or teleport-length geometry path',()=>{
   assert.equal(remotePathClear(car,{...car,x:Infinity}),false);
   assert.equal(remotePathClear(car,{...car,x:car.x+101}),false);
 });
+
+test('a ground car can move parallel to a wall without crossing it',()=>{
+  const {remote:car}=setup();
+  Object.assign(car,{kind:'roadster',x:-351.5,z:-25,y:0,yaw:0,pitch:0,roll:0,supportId:'ground'});
+  const straight={...car,z:-29};
+  assert.equal(remotePathClear(car,straight),true,'the projected footprint clears the wall');
+  assert.equal(remotePathClear(car,{...straight,x:-348}),false,'crossing the wall stays blocked');
+  assert.equal(remotePathClear(car,{...straight,yaw:.01}),true,'gentle steering clears the wall');
+  assert.equal(remotePathClear(car,{...straight,x:-351.3,yaw:.8}),false,'turning into the wall stays blocked');
+  assert.equal(remotePathClear(car,{...straight,roll:.01}),false,'tilted cars retain the conservative bound');
+});
+
+test('building sweep clears a diagonal corner but catches crossings between endpoints',()=>{
+  const {remote:car}=setup();
+  Object.assign(car,{kind:'roadster',x:-354,z:-42,y:0,yaw:0,pitch:0,roll:0,supportId:'ground'});
+  assert.equal(remotePathClear(car,{...car,x:-345,z:-52,yaw:.1}),true,'a clear diagonal may pass the corner');
+  Object.assign(car,{x:-354,z:-30});
+  assert.equal(remotePathClear(car,{...car,x:-326}),false,'translation through the building is blocked');
+  Object.assign(car,{x:-350.5});
+  const end={...car,yaw:Math.PI},wall=BUILDINGS.find(item=>item.x===-340&&item.z===-30)!;
+  assert.equal(contact(body(car),{...wall,yaw:0}),null);
+  assert.equal(contact(body(end),{...wall,yaw:0}),null);
+  assert.ok(contact(body({...car,yaw:Math.PI/2}),{...wall,yaw:0}),'rotation crosses the wall between clear endpoints');
+  assert.equal(remotePathClear(car,end),false,'intermediate rotation remains blocked');
+});
+
+test('accepted ground sweeps never intersect the shared building body at sampled poses',()=>{
+  const {remote:car}=setup(),wall=BUILDINGS.find(item=>item.x===-340&&item.z===-30)!;
+  Object.assign(car,{kind:'roadster',y:0,pitch:0,roll:0,supportId:'ground'});
+  let seed=0x9e3779b9,accepted=0;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};
+  for(let i=0;i<256;i++){
+    Object.assign(car,{x:-358+36*random(),z:-50+40*random(),yaw:(random()-.5)*Math.PI*2});
+    const end={...car,x:-358+36*random(),z:-50+40*random(),yaw:(random()-.5)*Math.PI*2};
+    if(!remotePathClear(car,end))continue;
+    accepted++;
+    const delta=Math.atan2(Math.sin(end.yaw-car.yaw),Math.cos(end.yaw-car.yaw));
+    for(let sample=0;sample<=64;sample++){
+      const t=sample/64,pose={...car,x:car.x+(end.x-car.x)*t,z:car.z+(end.z-car.z)*t,yaw:car.yaw+delta*t};
+      assert.equal(contact(body(pose),{...wall,yaw:0}),null,`path ${i}, sample ${sample}`);
+    }
+  }
+  assert.ok(accepted>0,'the fixture includes accepted paths');
+});
