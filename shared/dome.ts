@@ -1,4 +1,7 @@
 /** Fictional Alcatraz Rocket Dome, in game meters; shared by physics and rendering. */
+import type { Entity } from './game';
+import { hasRockets } from './upgrades';
+
 export const DOME = {
   x: 300, z: -850,
   halfLength: 75,
@@ -8,3 +11,10 @@ export const DOME = {
   goalHeight: 10,
   ballRadius: 2.5,
 } as const;
+
+// Keep the bright wall markings, HUD and authoritative recharge in agreement.
+export const DOME_CHARGE_HEIGHT=8, DOME_CHARGE_SPEED=5, DOME_CHARGE_RATE=24;
+export function chargingDomeWall(e:Entity):boolean {
+  return e.inDome && e.supportId==='dome' && e.domeS!==null && e.y>=DOME_CHARGE_HEIGHT &&
+    Math.abs(e.speed)>=DOME_CHARGE_SPEED && hasRockets(e);
+}

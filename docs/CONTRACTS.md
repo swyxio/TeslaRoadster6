@@ -1,4 +1,4 @@
-# Implementation contracts · v12
+# Implementation contracts · v14
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `buyUpgrade`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v13
+## Wire protocol v14
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:13,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:14,capacity:number}`.
 
 Client messages:
 
@@ -55,7 +55,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:13, capacity:number}
+{type:"welcome", id:string, version:14, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 ```
@@ -126,6 +126,8 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 ## Rocket Dome soccer
 
 `shared/dome.ts` defines the fictional Alcatraz arena; `shared/map.ts` supplies its capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay spawn, preserving health and air. A vehicle arriving from the island or air joins in place once its upright body fits inside the capsule; the exterior shell is passable on entry, while the interior contains cars. Above-roof overflights remain outside. No ferry is implemented. The arena is enclosed, has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact.
+
+The gold arrows mark a fictional air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. This also works on the ceiling and while boosting; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change, and clients display the replicated air and eligibility. Protocol v14 distinguishes this gameplay behavior from earlier builds.
 
 `shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first side to five wins; after a six-second winner display, both scores and the ball reset. Physics, scoring and timing are authoritative in solo and online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 

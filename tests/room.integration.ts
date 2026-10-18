@@ -65,6 +65,23 @@ try {
   await eventually(()=>!!two.state.world&&two.state.world.soccer.ball.x>DOME.x+2,'car impact moves the shared ball');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
   await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000);
+  // Reset to the arena kickoff, turn toward a side wall, and keep driving.
+  // The room, not the client, must refill air and both snapshots must show it.
+  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.inDome&&Math.abs(e.x-(DOME.x-30))<.1&&e.y<.1;},'arena reset');
+  const reset=two.state.world!.entities.find(e=>e.id===entityId)!;
+  const beforeCharge=reset.air,jump=reset.lastJump,flip=reset.lastFlip;
+  assert.ok(beforeCharge<90,'prior jump and boost leave room to observe a refill');
+  let maxOne=beforeCharge,maxTwo=beforeCharge,wallSeen=false;
+  for(let i=0;i<100;i++){
+    one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump,flip,throttle:1,steer:i<20?1:0}}));
+    await delay(50);
+    const a=one.state.world?.entities.find(e=>e.id===entityId),b=two.state.world?.entities.find(e=>e.id===entityId);
+    if(a)maxOne=Math.max(maxOne,a.air);
+    if(b){maxTwo=Math.max(maxTwo,b.air);wallSeen||=b.supportId==='dome'&&b.y>=8;}
+    if(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3)break;
+  }
+  assert.ok(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3,'moving wall refill replicated to both clients');
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
@@ -84,5 +101,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, arena entry, shared ball impact, replicated goal and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, arena entry, shared ball impact, replicated goal, wall recharge and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
 } finally { one.socket.close(); two.socket.close(); }

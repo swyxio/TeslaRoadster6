@@ -10,7 +10,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
-**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay. The ferry and the rest of Rocket Island remain a proposal.
+**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Use Leave Dome to return to the Bay. The ferry and the rest of Rocket Island remain a proposal.
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 

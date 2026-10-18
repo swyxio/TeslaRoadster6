@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { DOME } from '../shared/dome';
+import { addDomeStadium } from './dome-stadium';
 
 export type DomeBallPose = { x:number; y:number; z:number };
 
@@ -12,11 +13,11 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
 
   // The flat playing surface occupies the level portion of the shared capsule.
   // Alternating panels share one draw call and never extend up the curved walls.
-  const turf=new T.InstancedMesh(new T.PlaneGeometry(2*L/10,2*W),new T.MeshStandardMaterial({color:0xffffff,roughness:1}),10);
+  const turf=new T.InstancedMesh(new T.PlaneGeometry(2*L/10,2*W),new T.MeshBasicMaterial({color:0xffffff}),10);
   const matrix=new T.Matrix4(),rotation=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
   for(let i=0;i<10;i++){
     matrix.compose(new T.Vector3(-L+(i+.5)*2*L/10,.035,0),rotation,new T.Vector3(1,1,1));
-    turf.setMatrixAt(i,matrix);turf.setColorAt(i,new T.Color(i%2?0x427e6b:0x4b8a71));
+    turf.setMatrixAt(i,matrix);turf.setColorAt(i,new T.Color(i%2?0x326c60:0x3a7869));
   }
   turf.name='dome-pitch';turf.computeBoundingSphere();group.add(turf);
 
@@ -103,6 +104,8 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
   }
   const gridGeometry=new T.BufferGeometry();gridGeometry.setAttribute('position',new T.Float32BufferAttribute(grid,3));
   const gridLines=new T.LineSegments(gridGeometry,new T.LineBasicMaterial({color:0xb5e9e5,transparent:true,opacity:.32,depthWrite:false}));gridLines.name='dome-grid';group.add(gridLines);
+
+  addDomeStadium(group);
 
   // Colored frames sit at the physics goal planes; recessed nets are decorative.
   const frameGeometry=new T.BoxGeometry(1,1,1);

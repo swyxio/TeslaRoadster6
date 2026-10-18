@@ -44,3 +44,7 @@ Rocket nozzle reference: [Tesla reveal](https://www.youtube.com/live/qt5p-_tE8d0
 ## Audio
 
 The original procedural soundtrack and sound effects are synthesized locally and MIT licensed. See [AUDIO.md](AUDIO.md) for the cue contract, mix and replacement guidance. Do not add recordings or music without documenting their origin and license.
+
+## Rocket Dome stadium
+
+`src/dome-stadium.ts` builds original procedural stands, lights, goal signs, structural ribs and wall markings. Canvas lettering is generated locally; no third-party artwork is bundled. Repeated crowd and structural elements are instanced. The colored wall panels follow `domeSurface`, are decorative and have no independent collision. Gold markings indicate the shared wall-charge threshold in `shared/dome.ts`.

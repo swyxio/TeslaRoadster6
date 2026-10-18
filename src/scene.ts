@@ -202,7 +202,9 @@ export class GameScene {
     }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
       const distance=this.cameraMode==='wide'?30:portrait?18:15;
-      const lookAhead=portrait?-6:5;
+      // Give the narrow arena view enough horizon to show the goal and the
+      // wall-charge markings while keeping the car clear of touch controls.
+      const lookAhead=portrait?(e.inDome?-4:-6):5;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const back=new T.Vector3(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
       const position=new T.Vector3(e.x,e.y,e.z),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
