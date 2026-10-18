@@ -58,6 +58,7 @@ try{
   for(let i=0;i<30;i++)assert.ok((await post('/seed',{driverId:`legacy-${i}`,total:100})).ok);
   const nameResponse=await post('/name',{driverId:'legacy-a',name:'Ada'});
   assert.ok(nameResponse.ok,await nameResponse.text());
+  assert.equal(await (await fetch(base+'/name?driver=legacy-a')).json(),'Ada');
   assert.equal((await credit('guest-a',100,true)).status,503);
   assert.ok((await credit('guest-a',100)).ok);
   assert.ok((await credit('guest-a',300)).ok);
@@ -96,6 +97,7 @@ try{
   assert.ok((await credit('legacy-a',10_500)).ok);
   assert.equal((await status()).total,restarted.total,'retry after restart remains a no-op');
   assert.equal(restarted.launchTotal,completed.total,'later income does not change the completed season');
+  assert.equal(await (await fetch(base+'/name?driver=legacy-a')).json(),null,'opt-out survives restart');
   assert.ok((await post('/seed?instance=prior',{driverId:'prior-driver',total:STARSHIP_GOAL})).ok);
   const prior=await (await fetch(base+'/status?instance=prior')).json() as StarshipStatus;
   assert.equal(prior.launchTotal,STARSHIP_GOAL,'an already-complete existing counter is recognized once');

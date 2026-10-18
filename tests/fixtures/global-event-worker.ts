@@ -1,5 +1,6 @@
 // Isolated test-only HTTP adapter for RPC. This is not a deployed entry point.
 import { GlobalEarningsEvent } from '../../worker/global-earnings-event';
+import { scheduleGlobalEarnings } from '../../worker/global-earnings-admin';
 
 export class TestGlobalEarningsEvent extends GlobalEarningsEvent {
   private fakeNow?:number;
@@ -7,11 +8,12 @@ export class TestGlobalEarningsEvent extends GlobalEarningsEvent {
   setTime(now:number):void { this.fakeNow=now; }
 }
 
-type FixtureEnv={ EVENTS:DurableObjectNamespace<TestGlobalEarningsEvent> };
+type FixtureEnv={ EVENTS:DurableObjectNamespace<TestGlobalEarningsEvent>; STARSHIP_ADMIN_TOKEN?:string };
 export default {
   async fetch(request:Request,env:FixtureEnv):Promise<Response> {
     const url=new URL(request.url);
     if(url.pathname==='/health')return Response.json({ok:true});
+    if(url.pathname==='/admin')return scheduleGlobalEarnings(request,{GLOBAL_EVENTS:env.EVENTS,STARSHIP_ADMIN_TOKEN:env.STARSHIP_ADMIN_TOKEN});
     if(request.method!=='POST')return new Response('POST required',{status:405});
     const data=await request.json() as {object?:string;op:string;now?:number;id?:string;start?:number;from?:number;to?:number;cursor?:number;count?:number};
     const stub=env.EVENTS.get(env.EVENTS.idFromName(data.object??'test'));

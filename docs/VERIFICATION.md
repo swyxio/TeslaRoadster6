@@ -855,3 +855,5 @@ After deployment, both production endpoints advertised v29, and the deployed Jav
 
 The unbound Starship ledger extension was tested against isolated local Wrangler Durable Object storage using the wallet candidate's existing `income:<driverId>` and `total` keys. The focused test covered pre-existing balances, duplicate and out-of-order cumulative credits, a lost reply, concurrent threshold crossings, a frozen paginated launch roll, opt-out, post-launch credits and a Wrangler restart. It is not yet connected to the game's canonical `GlobalIncome` class. The new panel and launch playback are not yet integrated or visually verified; these checks do not establish production behavior or capacity.
 
+The unbound developer scheduling handler passed focused Node tests and a lightweight isolated Wrangler test for missing or invalid credentials, successful scheduling, duplicate requests, overlap and minimum lead time. The handler is not yet routed or configured in the game. The construction-stage thresholds, event arithmetic and launch-clock helpers passed focused tests; the staged spaceport model has not been visually inspected.
+

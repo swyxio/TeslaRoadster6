@@ -8,6 +8,7 @@ export class GlobalIncome extends DurableObject {
   status(driverId?:string){return this.ledger.status(driverId);}
   contributors(cursor?:string){return this.ledger.contributors(cursor);}
   setName(driverId:string,name:string|null){return this.ledger.setPublicName(driverId,name);}
+  publicName(driverId:string){return this.ledger.publicName(driverId);}
   async seed(driverId:string,total:number){
     await this.ctx.storage.transaction(async txn=>{
       const key=`income:${driverId}`,previous=await txn.get<number>(key)??0,overall=await txn.get<number>('total')??0;
@@ -32,6 +33,7 @@ export default {
       if(url.pathname==='/name'&&request.method==='POST'){
         const input=await request.json() as {driverId:string;name:string|null};return Response.json(await income.setName(input.driverId,input.name));
       }
+      if(url.pathname==='/name')return Response.json(await income.publicName(url.searchParams.get('driver')??''));
       if(url.pathname==='/status')return Response.json(await income.status(url.searchParams.get('driver')??undefined));
       if(url.pathname==='/contributors')return Response.json(await income.contributors(url.searchParams.get('cursor')??undefined));
       return new Response('Not found',{status:404});

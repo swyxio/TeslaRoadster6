@@ -68,6 +68,11 @@ export class StarshipLedger {
   }
 
   /** Names are private by default and can be hidden again after the launch. */
+  async publicName(driverId:string):Promise<string|null> {
+    validId(driverId);
+    return await this.storage.get<string>(nameKey(driverId))??null;
+  }
+
   async setPublicName(driverId:string,name:string|null):Promise<string|null> {
     validId(driverId);
     if(name!==null && (typeof name!=='string'||name.length>256))throw new Error('Invalid public name');

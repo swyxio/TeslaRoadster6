@@ -1,9 +1,9 @@
 import './starship-panel.css';
-import { STARSHIP_GOAL, type StarshipContributor, type StarshipStatus } from '../shared/starship';
+import { MARS_LAUNCH_SECONDS } from '../shared/mars';
+import { STARSHIP_GOAL, STARSHIP_STAGE_PERCENTAGES, type StarshipContributor, type StarshipStatus } from '../shared/starship';
 import type { StarshipClock } from './starship-timeline';
 
-const LAUNCH_DURATION_MS=12_000;
-const stages=[10,25,50,75,90];
+const LAUNCH_DURATION_MS=MARS_LAUNCH_SECONDS*1000;
 const dollars=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
 
 export type StarshipContributorPage = {
@@ -111,9 +111,9 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     if(valid){
       const actual=confirmed!.launchTotal??confirmed!.total;
       text(total,`${money(actual)} / ${money(STARSHIP_GOAL)}`);progress.value=Math.min(actual,STARSHIP_GOAL);
-      text(personal,`Your confirmed contribution: ${money(confirmed!.personal)}`);
+      text(personal,`Your confirmed lifetime earnings: ${money(confirmed!.personal)}`);
       text(pending,amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
-      const next=stages.find(percent=>actual<STARSHIP_GOAL*percent/100);
+      const next=STARSHIP_STAGE_PERCENTAGES.find(percent=>actual<STARSHIP_GOAL*percent/100);
       text(stage,next?`Next construction milestone: ${next}% · ${money(STARSHIP_GOAL*next/100)}.`:'All construction milestones reached.');
     }else{
       text(total,'Unavailable');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');text(stage,'');
