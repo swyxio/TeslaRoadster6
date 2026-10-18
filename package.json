@@ -1,6 +1,6 @@
 {
   "name": "tesland",
-  "version": "0.0.26-alpha",
+  "version": "0.0.27-alpha",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -14,6 +14,7 @@
     "preview": "wrangler dev --port 8787",
     "deploy": "pnpm build && wrangler deploy",
     "perf:baseline": "node scripts/performance-baseline.mjs",
+    "perf:report": "node scripts/performance-report.mjs",
     "playtest:record": "tsx scripts/playtest-record.ts"
   },
   "dependencies": {

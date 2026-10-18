@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, [performance baselines](docs/PERFORMANCE_BASELINES.md) for selective regression reports, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
@@ -12,7 +12,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Research tour:** Find the blue rings at UCSF Parnassus in SF, the Berkeley Campanile, Stanford’s Hoover Tower and SFO’s control tower; the map labels each landmark. Stop in each ring for a one-time award: UCSF pays $250; Berkeley pays $400 and gives 20% off efficient nozzles; Stanford pays $600 and gives 20% off sport motors; SFO pays $600 and gives 20% off air tanks. Complete a delivery to SFO for an additional $1,000 achievement. Open **Actions → Awards** to see each goal.
 
-**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. Once funded, reach level 2, stop in the gold ring at the fictional Fremont spaceport and board for the To Mars achievement and victory. You can keep exploring afterwards.
+**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 2, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
 
 **Sound and radio:** Use **♫** to choose the original 8-bit soundtrack or a random episode from the last two months of Latent Space or ThursdAI. Play, pause and skip episodes while driving; master, music/radio and effects levels are separate. The station and sound preferences stay on this browser. Podcast audio streams from the publisher. See [audio design](docs/AUDIO.md).
 

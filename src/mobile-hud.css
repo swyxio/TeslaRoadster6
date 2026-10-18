@@ -7,7 +7,7 @@
  .mission-head>#mission-label{grid-column:1;grid-row:1}
  .mission-head>#mission{grid-column:1;grid-row:2;line-height:1.25}
  .mission-head>.mobile-panel-toggle{grid-column:2;grid-row:1/3}
- .mission.mobile-compact>*:not(.mission-head):not(#police-status):not(#ferry-status):not(#parking-status):not(#race-status):not(.minigames-context){display:none}
+ .mission.mobile-compact>*:not(.mission-head):not(#mars-quick):not(#police-status):not(#ferry-status):not(#parking-status):not(#race-status):not(.minigames-context){display:none}
  .mission.mobile-compact>#police-status:not(.chased),.mission.mobile-compact>#parking-status:not(.activity-active),.mission.mobile-compact>#race-status:not(.activity-active){display:none}
  .mission.mobile-compact #mission-label{display:none}
  .mission.mobile-compact #mission{grid-row:1/3}

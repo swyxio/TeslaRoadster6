@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Build Starship together',
+    intro: 'Watch the Fremont launch site grow as Tesland earns.',
+    sections: [
+      { title: 'A mission in the making', items: [
+        'The Starship rises with confirmed game-wide earnings, while workers, vehicles and rocket parts bring the construction yard to life.',
+        'Find the Fremont mission sign or open the nearby mission shortcut to learn how to board for Mars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.26-alpha',
+    label: '0.0.26 Alpha',
+    date: '2026-10-18',
     title: 'More room to drive',
     intro: 'Bring more drivers together in the Bay.',
     sections: [
