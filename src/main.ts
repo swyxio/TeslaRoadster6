@@ -659,7 +659,7 @@ scene.start(dt=>{
   const skyId=skyCurrent?.id??'';
   if(skyId&&skyId!==lastSkyCurrent&&!menu)notice(skyCurrent!.kind==='thermal'?'THERMAL · Lift + air refilling':'SKY LANE · Speed + air refilling');
   lastSkyCurrent=skyId;
-  $('station-status').textContent=skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name} · ${refilling.venue}`:distance<24?`ϟ ${nearest.name} · ${nearest.venue}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').textContent=skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name} · ${refilling.venue}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:distance<24?`ϟ ${nearest.name} · ${nearest.venue}`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').title=`${nearest.venue} · ${nearest.address??'Fictional game location'}`;
   $('station-status').classList.toggle('refilling',!!refilling||!!skyCurrent);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);

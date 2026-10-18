@@ -6,7 +6,14 @@ These entries describe separate historical builds. Check the version and scope i
 
 - After integrating main's v21 driving changes, `pnpm test` passed 316 tests and `pnpm build` passed both typechecks and production generation; Vite retained its large-chunk warning. Local Wrangler advertised v22 and passed the two-client room and global-chat integrations. An earlier v20 room run timed out on its post-Dome reset check; the subsequent v22 run passed. These are local checks, not production or load evidence.
 - Shared simulation tests checked at least two lots per represented area, site provenance and fictional labels, charging at every bay, Park It completion and queue start at every lot, and clearance for lots and venue-building collision footprints.
-- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in the portrait emulation. An attempted emulated touch Drive hold did not produce observed movement, so this is not touch-driving or physical-device proof. No browser console errors were captured during the fixture pass.
+- After integrating main’s economy simulations, `pnpm test` passed 322 tests. Review prompted the low-air warning to stay visible near a station until the car can refill.
+- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in portrait. Touch Drive accelerated to 57 km/h in portrait; after reversing away from a building, touch Drive moved the car in landscape. An initial touch attempt hit the wrong control because of the emulator coordinate mapping. No browser console errors were captured during the fixture pass; no physical device was tested.
+## Economy progression simulations · 2026-10-18 Pacific
+
+- On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `6456933`, `pnpm test` passed 310 tests and `pnpm build` passed, with the same warning.
+- Automated review found an omitted level-six contract in the modeled option count; after correcting it, `pnpm test` passed 311 tests, `pnpm build` passed and the standalone TypeScript check and 250-seed run passed. The reported median option samples did not change.
+- Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
 
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
