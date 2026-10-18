@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Service-area release preparation · protocol v45 candidate · 2026-10-18 Pacific
+
+- The pre-release combined branch passed 970 tests and the build at `1997116`. Following the on-foot and walking fixes, `131a053` passed typecheck, 14 focused rooftop/scheduler tests and local Wrangler restore, switch, ticket, rejected-write replay, geographic relock and on-foot cab, paint, contribution and luxury spending checks. The delivery journal/fenced recovery and cybercab reroute tests also passed on the same runtime before the final walking change. No final v45 release verification is claimed yet.
+- After integrating the staged-playtest tooling at `3727166`, local Wrangler confirmed authenticated seeded rooms start at the same paused pose and fleet, reject unauthorized starts, start once, and resume ticks and input. The performance pair uses that exact game candidate; the following benchmark-script and release-metadata commits are separate changes. Final performance findings are pending.
+- Earlier local Chrome checks exercised desktop and emulated portrait/landscape multiplayer controls, map access and locked-area feedback. No physical phone or new production deployment has been tested for this release.
+
 ## Service areas with flight and rooftop eligibility · integration candidate · 2026-10-18 Pacific
 
 - On `6423e82`, after integrating flight candidate `94024ac` and main `ea960db`, all 964 tests and the build passed. The existing Vite large-chunk warning remains. The later rooftop guard required additional checks below; this is not final release evidence.
