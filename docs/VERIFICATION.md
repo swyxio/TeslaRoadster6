@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Island, shared Bay and device playtests · 2026-10-18 Pacific
 
+- After integrating the charging-lot update at `5d454c9` and the mini-game, navigation and arena fixes, protocol v27 passed 401 tests and `pnpm build`. Vite retains its large-chunk warning.
 - After integrating main at `6c05ae0`, `pnpm test` passed 381 tests and `pnpm build` passed. The existing Vite large-chunk warning remains.
 - On the combined protocol v26 Tesland build, `pnpm test` passed 375 tests and `pnpm build` passed both TypeScript checks, Vite and public-page generation. Vite retains its large-chunk warning. Local Wrangler two-client room, prediction/barrier, chat, two-seat full-room recovery and blocked-spawn fixtures passed; a staged two-client ramp run observed support, launch and landing at a 5.12 m peak. These are functional tests, not capacity or production measurements.
 - Chrome desktop on that v26 local build autojoined a unique room, drove and steered, opened the map, changed from Roadster to Model S while retaining the room, and showed rejection feedback when a moving player requested Model 3. Explicit solo then drove a Model 3. HUD and world geometry were readable and no warning or error logs were observed.

@@ -39,6 +39,9 @@ try{
   await delay(500);
   socket.send(JSON.stringify({type:'minigame',game:'short'}));socket.send(JSON.stringify({type:'sync',token:120}));
   await until(()=>sync===120&&!!world?.races.rounds.some(round=>round.courseId==='short'&&round.entrants.some(entrant=>entrant.playerId===id)),'barrier follows mini-game entry');
+  // Mini-game entry bypasses the action cooldown; reset starts a fresh one so
+  // the following destination is rejected and the barrier still follows it.
+  socket.send(JSON.stringify({type:'reset'}));
   socket.send(JSON.stringify({type:'destination',x:-120,z:60,requestId:42}));socket.send(JSON.stringify({type:'sync',token:121}));
   await until(()=>sync===121&&destinationResult?.requestId===42,'barrier follows rejected action');
   assert.equal(destinationResult!.ok,false,'action cooldown rejects the immediate destination request');
