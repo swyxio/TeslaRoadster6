@@ -5,7 +5,7 @@ import { updateFerry } from '../shared/ferry';
 import { terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { newPolice, updatePolice } from '../shared/police';
-import { hasRocket } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { parseMessage } from '../worker/protocol';
 
@@ -74,15 +74,15 @@ test('mini-game entry is immediate, safe and preserves the existing game on fail
   }
 });
 
-test('mini-game entry from the dome preserves temporary rocket time and resources',()=>{
+test('mini-game entry from the dome preserves the rocket kit and resources',()=>{
   for(const game of ['park','queue','short','oval'] as const){
-    const {world,car}=drivingWorld();car.kind='model-3';car.rocketUntil=world.time+45;
+    const {world,car}=drivingWorld();car.kind='model-3';car.upgrades.rocket=true;
     car.health=72;car.air=41;
     assert.equal(travelDome(world,'driver'),true);
     assert.equal(car.inDome,true);assert.equal(car.supportId,'dome');
     assert.equal(enterMinigame(world,'driver',game),true,game);
     assert.equal(car.inDome,false);assert.equal(car.supportId,'ground');
-    assert.equal(car.rocketUntil,45);assert.equal(hasRocket(car,world.time),true);
+    assert.equal(hasRockets(car),true);
     assert.equal(car.health,72);assert.equal(car.air,41);
   }
 });

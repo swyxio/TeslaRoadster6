@@ -4,7 +4,6 @@ import { addPlayer, createWorld, NEUTRAL, step, travelDome } from '../shared/gam
 import { DOME, DOME_CHARGE_HEIGHT, DOME_CHARGE_RATE, chargingDomeWall } from '../shared/dome';
 import { DOME_PERIMETER, domeSurface } from '../shared/map';
 import { airCost, type TankLevel } from '../shared/air-tank';
-import { hasRocket } from '../shared/rocket';
 import { hasRockets } from '../shared/upgrades';
 
 function setup(){
@@ -43,22 +42,7 @@ test('wall charge requires a moving, attached Rocket above the marked height',()
     car.inDome=true;placeWall(car,side,4);assert.equal(chargingDomeWall(car,hasRockets(car)),false);
     placeWall(car,side,12);car.kind='model-3';assert.equal(chargingDomeWall(car,hasRockets(car)),false);
     car.upgrades.rocket=true;assert.equal(chargingDomeWall(car,hasRockets(car)),true);
-    world.time+=120;assert.equal(chargingDomeWall(car,hasRockets(car)),true,'a purchased kit does not expire');
-  }
-});
-
-test('a temporary Rocket pickup charges on either wall until expiry',()=>{
-  for(const side of [-1,1]){
-    const {world,car}=setup();car.kind='model-3';car.rocketUntil=world.time+.15;placeWall(car,side,12);
-    assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),true);
-    const before=car.air;step(world,new Map([['p',NEUTRAL]]),.05);
-    assert.equal(car.supportId,'dome');assert.ok(car.air>before,'an active pickup refills air');
-    world.time=car.rocketUntil-.01;const charged=car.air;
-    step(world,new Map([['p',NEUTRAL]]),.02);
-    assert.equal(hasRocket(car,world.time),false);
-    assert.equal(car.supportId,null,'the car releases from the wall at expiry');
-    assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    assert.equal(car.air,charged,'the expired pickup does not refill air');
+    world.time+=120;assert.equal(chargingDomeWall(car,hasRockets(car)),true,'the session kit does not expire');
   }
 });
 

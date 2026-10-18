@@ -1,6 +1,7 @@
 import './map-dialog.css';
 import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
 import { requiredLevelAt, type Level } from '../shared/delivery';
+import { ISLAND_JUMPS } from '../shared/island-jumps';
 
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
 export function createMapDialog({ onDestination }: { onDestination: (point: MapPoint) => string | void }) {
@@ -67,6 +68,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const a = bridge.axis === 'x' ? screen({ x: bridge.start, z: bridge.center }) : screen({ x: bridge.center, z: bridge.start });
       const b = bridge.axis === 'x' ? screen({ x: bridge.end, z: bridge.center }) : screen({ x: bridge.center, z: bridge.end });
       c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    }
+    // Show the actual launch-ramp footprints on Rocket Island.
+    c.fillStyle = '#eac188';
+    for (const jump of ISLAND_JUMPS) {
+      const p = screen({x:(jump.start+jump.end)/2,z:jump.z});
+      c.fillRect(p.x-(jump.end-jump.start)*scale/2,p.y-jump.width*scale/2,(jump.end-jump.start)*scale,jump.width*scale);
     }
     // Match the minimap's unlocked-world masking without moving the shared geometry.
     c.fillStyle = '#193b48e8';
