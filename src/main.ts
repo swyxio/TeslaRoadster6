@@ -117,6 +117,7 @@ function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   lastRewardId=0;lastTicketCount=0;resetCelebration();audio.reset();void audio.unlock();
+  pendingShop=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   controls.resetSequences();if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
@@ -124,7 +125,7 @@ function begin(solo:boolean){
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
 $('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
-$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();session.solo();toggleMenu(true);};
+$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;shopBusyUntil=0;session.solo();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
   $('camera').textContent=`C · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;
@@ -279,16 +280,28 @@ $('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===
 
 const shopDialog=$<HTMLDialogElement>('shop-dialog');
 let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false;
+let pendingShop:{requestId:number;upgrade:UpgradeId;sentAt:number}|null=null;
 for(const id of Object.keys(UPGRADES) as UpgradeId[]){
   const item=UPGRADES[id],row=document.createElement('div');row.className='shop-item';
   const copy=document.createElement('div'),title=document.createElement('strong'),description=document.createElement('p');
   title.textContent=item.name;description.textContent=item.description;copy.append(title,description);
   const button=document.createElement('button');button.dataset.upgrade=id;button.onclick=()=>{
-    shopBusyUntil=performance.now()+800;session.buyUpgrade(id);$('shop-feedback').textContent='Upgrade requested. Installed items are marked below.';updateShop();
+    const now=performance.now();shopBusyUntil=now+800;
+    pendingShop={requestId:session.buyUpgrade(id),upgrade:id,sentAt:now};
+    $('shop-feedback').textContent='Checking purchase…';updateShop();
   };
   row.append(copy,button);$('shop-items').append(row);
 }
 function updateShop(){
+  if(pendingShop){
+    const result=session.upgradeResult;
+    if(result?.requestId===pendingShop.requestId){
+      $('shop-feedback').textContent=result.ok?`${UPGRADES[pendingShop.upgrade].name} ${pendingShop.upgrade==='service'?'complete':'installed'}.`:'Purchase declined. Check your cash, vehicle and position, then try again.';
+      pendingShop=null;session.upgradeResult=null;
+    }else if(performance.now()-pendingShop.sentAt>5000){
+      $('shop-feedback').textContent='No reply yet. Check your cash and installed items before trying again.';pendingShop=null;
+    }
+  }
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car)return;
   const place=shopFor(car),rocket=hasRockets(car);
@@ -301,7 +314,7 @@ function updateShop(){
     const needsRocket=id==='economy'&&!rocket;
     button.textContent=installed?(id==='service'?'FULL':'INSTALLED'):needsRocket?'NEEDS ROCKET':money(UPGRADES[id].price);
     button.setAttribute('aria-label',`${UPGRADES[id].name}: ${button.textContent}`);
-    button.disabled=!place||installed||needsRocket||player.delivery.cash<UPGRADES[id].price||performance.now()<shopBusyUntil;
+    button.disabled=!place||installed||needsRocket||player.delivery.cash<UPGRADES[id].price||!!pendingShop||performance.now()<shopBusyUntil;
   }
 }
 function openShop(){
@@ -309,7 +322,9 @@ function openShop(){
   if(!car||car.kind==='person'){notice('Get into a vehicle to visit a shop.');return;}
   const nearest=SHOPS.reduce((a,b)=>Math.hypot(car.x-a.x,car.z-a.z)<Math.hypot(car.x-b.x,car.z-b.z)?a:b);
   if(!shopFor(car)){notice(`Stop inside a purple shop ring. Nearest: ${nearest.name} · ${Math.round(Math.hypot(car.x-nearest.x,car.z-nearest.z))} m.`);return;}
-  controls.clear();controls.enabled=false;shopBusyUntil=0;updateShop();shopDialog.showModal();
+  controls.clear();controls.enabled=false;
+  if(!pendingShop)$('shop-feedback').textContent='Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.';
+  updateShop();shopDialog.showModal();
 }
 function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
 $('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
