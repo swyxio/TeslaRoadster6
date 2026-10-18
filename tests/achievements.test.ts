@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, resetPlayer } from '../shared/game';
+import { addPlayer, createWorld, resetPlayer, step, NEUTRAL } from '../shared/game';
 import { updateAchievements } from '../shared/achievements';
 import { BUILDINGS } from '../shared/map';
 
@@ -31,4 +31,14 @@ test('roof and completed-order achievements are independent and unlock once',()=
   assert.deepEqual(player.achievements.unlocked,['roof-rider']);
   player.delivery.completed=3;updateAchievements(player,car,true);
   assert.deepEqual(player.achievements.unlocked,['roof-rider','sky-delivery','regular']);
+});
+
+// Exercise the actual Roadster's air budget and motion, not just the trigger coordinates.
+test('the Roadster can earn Bay Hopper with a continuous two-jump flight',()=>{
+  const {world,player,car}=setup();world.entities=[car];world.pickups=[];
+  Object.assign(car,{x:50,z:60,y:0,yaw:-Math.PI/2,speed:0});
+  step(world,new Map([['p',NEUTRAL]]),.05);car.speed=68;
+  for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
+    step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
+  assert.ok(player.achievements.unlocked.includes('bay-hopper'));assert.ok(car.air>0);
 });

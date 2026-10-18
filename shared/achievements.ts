@@ -1,5 +1,5 @@
 import type { Entity, Player } from './game';
-import { REGIONS, insidePolygon, isLand, nearbyBuildings } from './map';
+import { REGIONS, insidePolygon, isLand, nearbyBuildings, rampHeight } from './map';
 
 export const ACHIEVEMENTS = {
   'bay-hopper': { name:'Bay Hopper', description:'Fly from San Francisco to Oakland, or back, without landing on a bridge or island.' },
@@ -25,7 +25,8 @@ export function onRoof(e:Entity):boolean {
     Math.abs(e.y-b.h)<.05 && Math.abs(e.x-b.x)<b.w/2 && Math.abs(e.z-b.z)<b.d/2);
 }
 export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean):void {
-  const state=player.achievements, region=shore(e), roof=onRoof(e), grounded=e.y<=.05||roof||e.loopAngle!==null;
+  const state=player.achievements, region=shore(e), roof=onRoof(e), ramp=rampHeight(e.x,e.z);
+  const grounded=e.y<=.05||roof||e.loopAngle!==null||(ramp!==null&&Math.abs(e.y-ramp)<.08);
   // A recovery or a vehicle switch is not a flight across the Bay.
   if(state.lastPosition&&Math.hypot(e.x-state.lastPosition.x,e.z-state.lastPosition.z)>15)resetAchievementFlight(player);
   if(state.crossing&&state.crossing.entityId!==e.id)resetAchievementFlight(player);
