@@ -12,6 +12,10 @@ export const RELEASES = [
         'Play Park It or Cut the Queue at any registered parking lot. Rocket pickups give any car 90 seconds of flight.',
         'The Rocket Dome moves to the China Basin ballpark area, with car soccer to five goals and wall charging.',
         'Join the shared Bay automatically or choose a solo drive from the menu.'
+      ] },
+      { title: 'Play and explore', items: [
+        'Start or leave a mini-game immediately after joining, with confirmation while the room responds.',
+        'Self-driving can recover from some opposite-facing street positions, and the map explains where your car will stop.'
       ] }
     ]
   },

@@ -9,7 +9,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   dialog.setAttribute('aria-labelledby', 'map-lightbox-title');
   dialog.innerHTML = `
     <header class="map-lightbox-header"><div><span>EXPLORE THE BAY</span><h2 id="map-lightbox-title">Where to?</h2></div><button type="button" class="map-close" aria-label="Close map">✕</button></header>
-    <p class="map-lightbox-help" id="map-lightbox-help">Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. The car heads for a nearby supported road; locked or disconnected areas may be unavailable.</p>
+    <p class="map-lightbox-help" id="map-lightbox-help">Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. The car stops at a connected road up to 100 m from your pin; locked or disconnected areas may be unavailable.</p>
     <div class="map-lightbox-view"><canvas class="map-lightbox-canvas" tabindex="0" role="application" aria-label="Bay map. Use arrow keys to move the destination pin; press Enter to drive there." aria-describedby="map-lightbox-help">Interactive map of the Bay.</canvas>
       <div class="map-lightbox-zoom" aria-label="Map controls"><button type="button" data-map-zoom="in" aria-label="Zoom in">+</button><button type="button" data-map-zoom="out" aria-label="Zoom out">−</button><button type="button" data-map-center aria-label="Center on your car">◎</button></div>
       <div class="map-lightbox-legend"><span><i></i> YOU</span><span><i></i> DESTINATION</span><span><i></i> LOCKED</span></div>

@@ -5,6 +5,7 @@ import { playerRace } from '../shared/race';
 
 type Game = 'dome' | 'park' | 'queue' | 'short' | 'oval';
 type Pending = { game:Game; leavingDome:boolean; sentAt:number };
+type Starting = { game:'queue' | 'short' | 'oval'; openedAt:number; sentAt:number };
 
 /** A game is one choice; controls for an active round live beside its status. */
 export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
@@ -38,6 +39,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
   const leave=context.querySelector<HTMLButtonElement>('[data-command="leave"]')!;
   const leaveCurrent=dialog.querySelector<HTMLButtonElement>('.minigames-leave')!;
   let pending:Pending|null=null;
+  let starting:Starting|null=null;
   let leaving:Game|null=null,leavingAt=0;
   let playerId=session.id,room=session.room,soloWorld=session.status==='solo'?session.world:null;
 
@@ -57,7 +59,15 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
     const currentParking=parking();if(currentParking)return currentParking.mode;
     const currentRace=race();return currentRace?.entrant.status==='entered'?currentRace.round.courseId as 'short'|'oval':null;
   }
-  function setBusy(){for(const button of gameButtons)button.disabled=!!pending||!!leaving;leaveCurrent.disabled=!!pending||!!leaving;}
+  function setBusy(){
+    const busy=!!pending||!!starting||!!leaving;
+    for(const button of gameButtons)button.disabled=busy;
+    leaveCurrent.disabled=busy;start.disabled=busy;leave.disabled=busy;domeLeave.disabled=busy;
+    start.textContent=starting?'Starting…':'Start now';
+    leave.textContent=leaving?'Leaving…':'Leave game';
+    leaveCurrent.textContent=leaving?'Leaving…':'Leave current game';
+    domeLeave.textContent=pending?.leavingDome?'Leaving…':'↩ Leave Rocket Dome';
+  }
   function setPending(value:Pending|null){pending=value;setBusy();}
   function failed(message:string){
     setPending(null);
@@ -69,7 +79,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
     const currentSoloWorld=session.status==='solo'?session.world:null;
     if(playerId!==session.id||room!==session.room||soloWorld!==currentSoloWorld){
       playerId=session.id;room=session.room;soloWorld=currentSoloWorld;
-      pending=null;leaving=null;leavingAt=0;feedback.textContent='';setBusy();
+      pending=null;starting=null;leaving=null;leavingAt=0;feedback.textContent='';setBusy();
     }
     const park=parking(),racing=race();
     const raceActive=racing?.entrant.status==='entered';
@@ -88,6 +98,17 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
         if(dialog.open)feedback.textContent='Could not confirm leaving. Please try again.';else notice('Could not confirm leaving. Please try again.');
       }
     }
+    if(starting){
+      const round=starting.game==='queue'?park:racing?.round;
+      const sameRound=!!round&&round.openedAt===starting.openedAt&&
+        (starting.game==='queue'?park?.mode==='queue':racing?.round.courseId===starting.game&&raceActive);
+      const started=sameRound&&(starting.game==='queue'?park?.phase!=='waiting':racing?.round.phase!=='lobby');
+      if(started){
+        starting=null;setBusy();notice('Game started.');
+      }else if(!sameRound||session.status==='disconnected'||performance.now()-starting.sentAt>4000){
+        starting=null;setBusy();notice('Could not confirm the start. Please try again.');
+      }
+    }
     if(!pending)return;
     const entity=car();
     const entered=pending.leavingDome?!!entity&&!entity.inDome:playing(pending.game);
@@ -100,7 +121,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
     }
   }
   function enter(game:Game){
-    if(pending||leaving)return;
+    if(pending||starting||leaving)return;
     const entity=car();
     if(!entity||entity.kind==='person'){
       feedback.textContent='Hop into a car first, then choose a game.';return;
@@ -120,16 +141,26 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
   dialog.querySelector<HTMLButtonElement>('.minigames-close')!.onclick=()=>dialog.close();
   dialog.addEventListener('close',()=>{controls.clear();controls.enabled=canDrive()&&!document.querySelector('dialog[open]');});
   for(const button of gameButtons)button.onclick=()=>enter(button.dataset.game as Game);
-  start.onclick=()=>{if(parking())session.parkingAction('start');else {const active=race();if(active)session.raceAction('start',active.round.courseId as 'short'|'oval');}};
-  leave.onclick=()=>{if(parking())session.parkingAction('leave');else {const active=race();if(active)session.raceAction('leave',active.round.courseId as 'short'|'oval');}};
-  leaveCurrent.onclick=()=>{
-    const active=activeGame();if(!active||leaving||pending)return;
-    leaving=active;leavingAt=performance.now();setBusy();feedback.textContent='Leaving your game…';
-    if(active==='dome')session.action('dome');else if(active==='park'||active==='queue')session.parkingAction('leave');else session.raceAction('leave',active);
+  start.onclick=()=>{
+    if(pending||starting||leaving)return;
+    const park=parking(),racing=race();
+    if(park?.mode==='queue'&&park.phase==='waiting'&&park.hostId===session.id){
+      starting={game:'queue',openedAt:park.openedAt,sentAt:performance.now()};setBusy();session.parkingAction('start');
+    }else if(racing?.entrant.status==='entered'&&racing.round.phase==='lobby'&&racing.round.hostId===session.id){
+      const game=racing.round.courseId as 'short'|'oval';
+      starting={game,openedAt:racing.round.openedAt,sentAt:performance.now()};setBusy();session.raceAction('start',game);
+    }
     update();
   };
+  function leaveGame(){
+    const active=activeGame();if(!active||leaving||starting||pending)return;
+    leaving=active;leavingAt=performance.now();setBusy();if(dialog.open)feedback.textContent='Leaving your game…';
+    if(active==='dome')session.action('dome');else if(active==='park'||active==='queue')session.parkingAction('leave');else session.raceAction('leave',active);
+    update();
+  }
+  leave.onclick=leaveGame;leaveCurrent.onclick=leaveGame;
   domeLeave.onclick=()=>{
-    if(pending)return;
+    if(pending||starting||leaving)return;
     setPending({game:'dome',leavingDome:true,sentAt:performance.now()});controls.clear();session.action('dome');update();
   };
   return {update,close:()=>{if(dialog.open)dialog.close();}};

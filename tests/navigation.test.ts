@@ -30,6 +30,22 @@ test('every Tesla can follow a chosen connected destination through city turns',
   }
 });
 
+test('a Tesla facing against its current lane can continue to an intersection and navigate',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-120,z:-177,yaw:Math.PI/2,speed:0});
+  assert.equal(setDestination(world,'driver',{x:-120,z:-60}),true);
+  assert.ok(car.navigation!.path[0].x<=car.x+.5,'the first waypoint stays ahead of the car');
+  simulate(world,()=>!car.autopilot,180);
+  assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.health,100);
+});
+
+test('navigation rejects an excessive directed detour to a nearby destination',()=>{
+  const {world,player,car}=drivingWorld();player.delivery.level=3;
+  Object.assign(car,{x:-210,z:177,yaw:-Math.PI/2,speed:0});
+  assert.equal(setDestination(world,'driver',{x:-120,z:-60}),false);
+});
+
 test('invalid, locked and disconnected destinations are rejected; manual input takes over',()=>{
   const {world,player,car}=drivingWorld();
   assert.equal(setDestination(world,'driver',{x:180,z:-300}),false,'water is not a road');
