@@ -1,5 +1,13 @@
 # Verification · 2026-10-18 Pacific
 
+## Recent podcast radio and loaded-build label · local candidate · 2026-10-18 Pacific
+
+- On the isolated candidate based on `e99fc0b` (protocol v41), `pnpm test` passed 841 tests and `pnpm build` passed with the existing large-chunk warning. The radio checks cover two-calendar-month boundaries, month-end/leap-year clamping, missing/future dates, cached shuffle expiry, delayed Play and existing playback/race behavior.
+- The real RSS integration against isolated local Wrangler returned 16 Latent Space and 11 ThursdAI episodes, all with publication timestamps inside the rolling window and valid HTTPS stream/page links; unknown station and method rejection checks passed. This checks metadata/parser behavior, not audible browser playback or production availability.
+- The frontend title and in-game changelog badge use the `CURRENT_RELEASE` bundled in the loaded JavaScript. They do not read a newer server version into an old tab. Desktop and portrait/landscape visual checks remain pending while the user's gameplay recording is active.
+- This candidate is not deployed. Its final release number, changelog entry and combined checks follow the pending economy release; no production room or saved identity was touched by these checks.
+
+
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
 ## Self-driving upgrades and recovery candidate · protocol v41 · 2026-10-18 Pacific

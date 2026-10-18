@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { Radio } from '../src/radio';
+import { isRecentRadioEpisode, radioCutoff } from '../shared/radio';
 
 class FakeAudio extends EventTarget {
   src = ''; preload = ''; volume = 1; muted = false; paused = true; ended = false; blocked = false;
@@ -9,9 +10,9 @@ class FakeAudio extends EventTarget {
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
 }
 const episodes = [
-  { title: 'One', audio: 'https://example.com/1.mp3', link: 'https://example.com/1' },
-  { title: 'Two', audio: 'https://example.com/2.mp3', link: 'https://example.com/2' },
-  { title: 'Three', audio: 'https://example.com/3.mp3', link: 'https://example.com/3' },
+  { title: 'One', audio: 'https://example.com/1.mp3', link: 'https://example.com/1', publishedAt:Date.now()-86400000 },
+  { title: 'Two', audio: 'https://example.com/2.mp3', link: 'https://example.com/2', publishedAt:Date.now()-86400000 },
+  { title: 'Three', audio: 'https://example.com/3.mp3', link: 'https://example.com/3', publishedAt:Date.now()-86400000 },
 ];
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -86,7 +87,7 @@ test('an ended episode advances automatically and long-lived tabs refresh their 
   let calls = 0;
   const env = setup(async () => Response.json({ episodes: ++calls === 1 ? episodes : [{ ...episodes[0], title: 'New episode' }] }));
   const realNow = Date.now;
-  let now = 100_000;
+  let now = Date.now();
   Date.now = () => now;
   try {
     const radio = new Radio(() => {}); radio.select('latent-space'); await tick(); await radio.play();
@@ -111,4 +112,60 @@ test('a stale response cannot replace a newer catalog for the same station', asy
     resolveOld(Response.json({ episodes })); await tick(); await radio.next(false);
     assert.equal(radio.episode?.title, 'Fresh');
   } finally { env.cleanup(); }
+});
+
+test('radio uses two calendar months including the boundary, with month-end clamping', () => {
+  const now=Date.parse('2026-10-18T19:45:00Z'),cutoff=Date.parse('2026-08-18T19:45:00Z');
+  assert.equal(radioCutoff(now),cutoff);
+  assert.equal(isRecentRadioEpisode(cutoff,now),true);
+  assert.equal(isRecentRadioEpisode(cutoff-1,now),false);
+  assert.equal(isRecentRadioEpisode(now,now),true);
+  assert.equal(isRecentRadioEpisode(now+1,now),false);
+  assert.equal(isRecentRadioEpisode(NaN,now),false);
+  assert.equal(isRecentRadioEpisode(undefined as unknown as number,now),false);
+  assert.equal(new Date(radioCutoff(Date.parse('2026-04-30T12:00:00Z'))).toISOString(),'2026-02-28T12:00:00.000Z');
+  assert.equal(new Date(radioCutoff(Date.parse('2024-04-30T12:00:00Z'))).toISOString(),'2024-02-29T12:00:00.000Z');
+  assert.equal(new Date(radioCutoff(Date.parse('2026-01-31T12:00:00Z'))).toISOString(),'2025-11-30T12:00:00.000Z');
+});
+
+test('catalogs exclude old, undated and future episodes instead of falling back to the archive', async () => {
+  const now=Date.now();
+  const env=setup(async()=>Response.json({episodes:[
+    {...episodes[0],title:'Recent',publishedAt:now-1000},
+    {...episodes[0],title:'Old',publishedAt:radioCutoff(now)-86400000},
+    {...episodes[0],title:'Future',publishedAt:now+86400000},
+    {...episodes[0],title:'Undated',publishedAt:undefined},
+  ]}));
+  try {
+    const radio=new Radio(()=>{});radio.select('latent-space');await tick();
+    assert.equal(radio.episode?.title,'Recent');
+    await radio.next(false);assert.equal(radio.episode?.title,'Recent');
+  } finally {env.cleanup();}
+});
+
+test('a cached shuffle discards episodes as they leave the rolling window', async () => {
+  const realNow=Date.now;let now=realNow(),calls=0;
+  const env=setup(async()=>{calls++;return Response.json({episodes:[{...episodes[0],publishedAt:radioCutoff(now)+1000}]});});
+  Date.now=()=>now;
+  try {
+    const radio=new Radio(()=>{});radio.select('latent-space');await tick();await radio.play();
+    now+=2000;
+    await radio.next(true);
+    assert.equal(calls,1,'reuses the hour-long catalog but rechecks publication dates');
+    assert.equal(radio.episode,null);assert.equal(radio.playing,false);
+    assert.match(radio.status,/No episodes from the last two months/);
+  } finally {Date.now=realNow;env.cleanup();}
+});
+
+test('an episode prepared before the cutoff is rechecked when Play is pressed', async () => {
+  const realNow=Date.now;let now=realNow();
+  const env=setup(async()=>Response.json({episodes:[{...episodes[0],publishedAt:radioCutoff(now)+1000}]}));
+  Date.now=()=>now;
+  try {
+    const radio=new Radio(()=>{});radio.select('thursdai');await tick();
+    assert.ok(radio.episode);now+=2000;
+    await radio.play();
+    assert.equal(radio.episode,null);assert.equal(radio.playing,false);
+    assert.match(radio.status,/No episodes from the last two months/);
+  } finally {Date.now=realNow;env.cleanup();}
 });
