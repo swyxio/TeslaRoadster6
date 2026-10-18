@@ -102,6 +102,40 @@ test('a close 50 m/s convoy stays smooth through real physics and 10 Hz snapshot
   session.disconnect();
 });
 
+test('a close convoy stays co-timed when the room runs at half speed',()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];
+  Object.assign(local,{x:-310,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  Object.assign(peer,{x:-300,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const drive=new Map([['p',input],['q',input]]);
+  const packet=(tick:number)=>{const sent=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=sent.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
+  socket.message(packet(10));now=0;for(let i=0;i<2;i++)step(world,drive,.05,{substeps:5});socket.message(packet(12));
+  const queue:{when:number;packet:unknown}[]=[];let previous:{local:Entity;peer:Entity}|undefined,start=0;
+  for(let frame=0;frame<=240;frame++){
+    now=frame*1000/120;
+    if(frame&&frame%12===0)step(world,drive,.05,{substeps:5});
+    if(frame&&frame%24===0)queue.push({when:now+75,packet:packet(12+frame/12)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld());
+    assert.equal(session.localPresentationActive,true,`frame ${frame}`);
+    assert.equal(session.takePresentationSnap(),false,`frame ${frame}`);
+    assert.equal(contact(body(shown.local),body(shown.peer)),null,`frame ${frame}`);
+    if(!previous)start=shown.local.x;
+    else if(frame>24){
+      assert.ok(Math.abs(shown.local.x-previous.local.x)<.4,`local frame ${frame}`);
+      assert.ok(Math.abs(shown.peer.x-previous.peer.x)<.4,`peer frame ${frame}`);
+    }
+    previous=shown;
+  }
+  assert.ok(previous!.local.x-start>30,'the displayed convoy keeps moving');
+  session.disconnect();
+});
+
 test('independent fades do not draw two following peers through each other',()=>{
   let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});

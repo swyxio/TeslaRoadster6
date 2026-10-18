@@ -23,6 +23,39 @@ test('tick prediction is presentation only and rebases a new input without a pos
   assert.deepEqual(world,original,'prediction does not mutate the authoritative world');
 });
 
+for(const {name,target,alpha,tickDelta} of [
+  {name:'a slow presentation clock',target:103,alpha:.95,tickDelta:.05},
+  {name:'a 1.5x clock crossing a tick boundary',target:104,alpha:.15,tickDelta:.25},
+  {name:'an abrupt two-tick clock jump',target:105,alpha:.9,tickDelta:.25},
+])test(`a rebase follows ${name}`,()=>{
+  const {world,car,control}=setup(),prediction=new TickPrediction();
+  Object.assign(car,{x:-300,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  prediction.snapshot(world,'p',100,control,0,5,0);
+  const before=prediction.renderWorld(0,103,100,.9)!.entities[0];
+  prediction.input({seq:1,targetTick:103,controlRevision:0,actionSeq:0,input:{...NEUTRAL}});
+  const after=prediction.renderWorld(1000/120,target,100,alpha)!.entities[0];
+  assert.ok(Math.abs(after.x-before.x-before.vx*tickDelta*.05)<.002,'rebase uses elapsed presentation ticks');
+  assert.equal(prediction.takeSnap(),false);
+});
+
+test('a close peer and the local car rebase on the same 1.5x timeline',()=>{
+  const {world,car,control}=setup(),other=addPlayer(world,'q','Other');
+  const peer=world.entities.find(entity=>entity.id===other.entityId)!;
+  for(const [entity,x] of [[car,-300],[peer,-290]] as const)
+    Object.assign(entity,{x,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  const prediction=new TickPrediction();prediction.snapshot(world,'p',100,control,0,5,0);
+  const first=prediction.renderWorld(0,103,100,.9)!;
+  const before=first.entities.find(entity=>entity.driver==='p')!,beforePeer=first.entities.find(entity=>entity.driver==='q')!;
+  const next=structuredClone(world);
+  for(const entity of next.entities)entity.x+=2.5;
+  prediction.snapshot(next,'p',101,control,0,5,1000/120);
+  const second=prediction.renderWorld(1000/120,104,101,.15)!;
+  const after=second.entities.find(entity=>entity.driver==='p')!,afterPeer=second.entities.find(entity=>entity.driver==='q')!;
+  assert.ok(Math.abs(after.x-before.x-before.vx*.0125)<.002,'local car uses presentation time');
+  assert.ok(Math.abs(afterPeer.x-beforePeer.x-beforePeer.vx*.0125)<.002,'nearby peer uses the same time');
+  assert.ok(Math.abs((afterPeer.x-after.x)-(beforePeer.x-before.x))<.1,'the following gap stays nearly steady');
+});
+
 test('confirmed relocations or entity changes cut the camera',()=>{
   const {world,control}=setup(),prediction=new TickPrediction();
   prediction.snapshot(world,'p',0,control,0,1,0);prediction.renderWorld(0,3,0);

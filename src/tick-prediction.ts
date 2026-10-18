@@ -136,6 +136,7 @@ export class TickPrediction {
   private presented:Entity|null=null;
   private presentedWorld:World|null=null;
   private presentedAt=0;
+  private presentedTick:number|null=null;
   private presentationHeld=false;
   private peerOffsets=new Map<string,Offset>();
   private peerRebase=false;
@@ -144,7 +145,7 @@ export class TickPrediction {
   reset():void {
     this.world=null;this.playerId='';this.tick=0;this.control=null;this.substeps=1;this.snapshotAt=0;
     this.pending=[];this.suppressed={jump:new Set(),flip:new Set()};this.rescheduled=[];this.peerObservations.clear();this.peerInputs.clear();this.poseRevision=0;this.overflow=false;this.unsafeReplay=false;this.snap=false;this.cameraSnap=false;this.invalidated=true;
-    this.segment=null;this.cache=null;this.rebase=false;this.presented=null;this.presentedWorld=null;this.presentedAt=0;this.presentationHeld=false;this.peerOffsets.clear();this.peerRebase=false;
+    this.segment=null;this.cache=null;this.rebase=false;this.presented=null;this.presentedWorld=null;this.presentedAt=0;this.presentedTick=null;this.presentationHeld=false;this.peerOffsets.clear();this.peerRebase=false;
     this.offset={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};
   }
 
@@ -159,7 +160,7 @@ export class TickPrediction {
     const revisionChanged=!!this.control&&control.revision!==this.control.revision;
     const relocated=!!this.control&&poseRevision!==this.poseRevision;
     const identityChanged=!!this.playerId&&(!prior||!current||prior.id!==current.id||prior.kind!==current.kind);
-    if(identityChanged||relocated){this.snap=true;this.cameraSnap=true;this.presented=null;this.presentedWorld=null;this.peerOffsets.clear();this.offset={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};}
+    if(identityChanged||relocated){this.snap=true;this.cameraSnap=true;this.presented=null;this.presentedWorld=null;this.presentedTick=null;this.peerOffsets.clear();this.offset={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};}
     // A control revision invalidates old queued input. It may also represent
     // an autopilot change, so it is not by itself proof of a teleport.
     if(revisionChanged)this.invalidated=true;
@@ -245,11 +246,16 @@ export class TickPrediction {
     }
     const alpha=Math.max(0,Math.min(1,phase??estimate-Math.floor(estimate)));
     const goal=interpolate(this.segment.previous,this.segment.next,alpha);
+    const presentationTick=target-1+alpha;
+    // Match the clock used to interpolate the replay; bound abrupt clock
+    // jumps to the clock's normal 1.5x slew and never advance a held pose.
+    const elapsed=this.presentationHeld||this.presentedTick===null?0:
+      Math.min(.05,1.5*Math.max(0,(now-this.presentedAt)/1000),Math.max(0,(presentationTick-this.presentedTick)*TICK));
     let rebased=false,cut=false,cutCamera=false;
     if(this.rebase&&this.presented){
       // A held pose did not travel while frozen. Extrapolating its old
       // velocity over the outage creates a large kick on reconnection.
-      const dt=this.presentationHeld?0:Math.min(.05,Math.max(0,(now-this.presentedAt)/1000));
+      const dt=elapsed;
       const expected={...this.presented,x:this.presented.x+this.presented.vx*dt,y:this.presented.y+this.presented.vy*dt,z:this.presented.z+this.presented.vz*dt,
         yaw:this.presented.yaw+this.presented.yawRate*dt,pitch:this.presented.pitch+this.presented.pitchRate*dt,roll:this.presented.roll+this.presented.rollRate*dt};
       // A confirmed impact changes health, but does not itself require a
@@ -289,7 +295,7 @@ export class TickPrediction {
       const {peersBefore,peersAfter,unsafePeers}=this.segment;
       const authoritative=new Map(world.entities.map(entity=>[entity.id,entity]));
       const prior=this.presentedWorld&&new Map(this.presentedWorld.entities.map(entity=>[entity.id,entity]));
-      const result=shown.entities.slice(),elapsed=this.presented?Math.min(.05,Math.max(0,(now-this.presentedAt)/1000)):0;
+      const result=shown.entities.slice(),peerElapsed=this.presented?Math.min(.05,Math.max(0,(now-this.presentedAt)/1000)):0;
       for(let i=0;i<result.length;i++){
         const entity=result[i];if(entity.id===car.id)continue;
         const actual=authoritative.get(entity.id),a=peersBefore.get(entity.id),b=peersAfter.get(entity.id);
@@ -311,7 +317,8 @@ export class TickPrediction {
         const goal={...actual,x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,pitch:pose.pitch,roll:pose.roll,steering:pose.steering};
         const old=prior?.get(entity.id);
         if(this.peerRebase&&old){
-          const expected={...old,x:old.x+old.vx*elapsed,y:old.y+old.vy*elapsed,z:old.z+old.vz*elapsed,health:goal.health};
+          const dt=amount===1?elapsed:peerElapsed;
+          const expected={...old,x:old.x+old.vx*dt,y:old.y+old.vy*dt,z:old.z+old.vz*dt,health:goal.health};
           if(Math.hypot(expected.x-goal.x,expected.y-goal.y,expected.z-goal.z)<12&&remotePathClear(expected,goal)){
             this.peerOffsets.set(entity.id,{x:expected.x-goal.x,y:expected.y-goal.y,z:expected.z-goal.z,
               yaw:Math.atan2(Math.sin(expected.yaw-goal.yaw),Math.cos(expected.yaw-goal.yaw)),
@@ -321,7 +328,7 @@ export class TickPrediction {
         }
         const offset=this.peerOffsets.get(entity.id);
         if(offset){
-          if(!this.peerRebase){const decay=Math.exp(-6*elapsed);for(const key of ['x','y','z','yaw','pitch','roll'] as const)offset[key]*=decay;}
+          if(!this.peerRebase){const decay=Math.exp(-6*peerElapsed);for(const key of ['x','y','z','yaw','pitch','roll'] as const)offset[key]*=decay;}
           const corrected={...goal,x:goal.x+offset.x,y:goal.y+offset.y,z:goal.z+offset.z,
             yaw:goal.yaw+offset.yaw,pitch:goal.pitch+offset.pitch,roll:goal.roll+offset.roll};
           if(remotePathClear(goal,corrected)&&(!old||remotePathClear({...old,health:corrected.health},corrected)))result[i]=corrected;
@@ -333,7 +340,7 @@ export class TickPrediction {
     this.peerRebase=false;
     if(cut)this.snap=true;
     if(cutCamera)this.cameraSnap=true;
-    this.presented=car;this.presentedAt=now;this.presentationHeld=false;
+    this.presented=car;this.presentedAt=now;this.presentedTick=presentationTick;this.presentationHeld=false;
     const result={...peers,entities:peers.entities.map(entity=>entity.id===car.id?car:entity)};
     this.presentedWorld=result;return result;
   }
