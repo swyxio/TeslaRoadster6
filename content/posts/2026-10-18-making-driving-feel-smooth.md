@@ -60,7 +60,7 @@ We recorded a manual drive in the older preview and another in the newer build. 
 **Left: older preview · Right: newer build.**
 
 <video controls preload="none" width="1600" poster="/blog/smooth-driving/manual-driving-poster.png" style="max-width:100%;height:auto" aria-label="Two real Tesland playtests side by side: the older preview on the left and the newer build on the right">
-  <source src="/blog/smooth-driving/manual-driving-comparison.mp4" type="video/mp4">
+  <source src="https://raw.githubusercontent.com/swyxio/TeslaRoadster6/f2a5799092d612b6624e0f00a51d11714f369b77/public/blog/smooth-driving/manual-driving-comparison.mp4" type="video/mp4">
   <a href="/blog/smooth-driving/manual-driving-comparison.mp4">Download the playtest comparison</a>.
 </video>
 
