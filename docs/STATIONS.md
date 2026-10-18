@@ -1,6 +1,6 @@
 # Bay charging lots
 
-Checked against Tesla's own listings on 2026-10-18. The registry in `shared/stations.ts` is the source of truth for names, venue, addresses and game placement. There are 20 Tesla-listed identities and two explicitly fictional Berkeley air stations. We could not verify a Tesla-listed Supercharger in Berkeley; the Emeryville sites retain their actual city names. Marin's two lots represent nearby Mill Valley and Corte Madera rather than two sites in either individual town.
+Checked against Tesla's own listings on 2026-10-18. The registry in `shared/stations.ts` is the source of truth for names, venue, addresses and game placement. There are 20 Tesla-listed identities and four explicitly fictional air stations. We could not verify a Tesla-listed Supercharger in Berkeley or a second Tesla-listed site in either Mill Valley or Corte Madera; the Emeryville sites retain their actual city names.
 
 All game coordinates, approach roads, four playable bays per lot, shop facades and surrounding scenery are compressed stylized interpretations, not surveyed replicas. They do not assert the real number of stalls, exact appearance, hours, live availability or service. Refilling compressed air is fictional. No affiliation or endorsement is implied.
 
@@ -16,6 +16,8 @@ All game coordinates, approach roads, four playable bays per lot, shop facades a
 | Emeryville · Christie Avenue | Powell Street Plaza | 5795 Christie Avenue, Emeryville, CA 94608 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/emeryvillecapowellstreetplazasupercharger) |
 | Mill Valley · Strawberry Village | Strawberry Village | 800 Strawberry Village, Mill Valley, CA 94941 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/407682) |
 | Corte Madera · The Village | The Village | 1618 Redwood Highway, Corte Madera, CA 94925 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/cortemaderasupercharger) |
+| Mill Valley · Arcade (fictional) | Arcade air station | Fictional game location | Fictional |
+| Corte Madera · Arcade (fictional) | Arcade air station | Fictional game location | Fictional |
 | San Mateo · Park Place | Park Place | 1200 Park Place, San Mateo, CA 94403 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/sanmateosupercharger) |
 | San Mateo · Bridgepointe | Target · Bridgepointe | 2220 Bridgepointe Pkwy, San Mateo, CA 94404 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/sanmbridgepointepkwysupercharger) |
 | Palo Alto · Bryant Street | Lytton/Bryant Garage | 445 Bryant Street, Palo Alto, CA 94301 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/PaloAltoCASupercharger2) |

@@ -7,7 +7,7 @@ import {body,contact} from '../shared/physics';
 import {STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
 
 test('each represented Bay area has two uniquely identified and honestly sourced lots',()=>{
-  for(const area of ['San Francisco','Oakland','Berkeley','Emeryville','Marin','San Mateo','Palo Alto','Mountain View','East Bay','Fremont','San Jose'])
+  for(const area of ['San Francisco','Oakland','Berkeley','Emeryville','Mill Valley','Corte Madera','San Mateo','Palo Alto','Mountain View','Hayward','Fremont','San Jose'])
     assert.ok(STATIONS.filter(s=>s.area===area).length>=2,area);
   assert.equal(new Set(STATIONS.map(s=>s.id)).size,STATIONS.length);
   for(const station of STATIONS){

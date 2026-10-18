@@ -326,7 +326,7 @@ BUILDINGS.push(...landmarkBuildings);
 // rendering all use the same footprint; the facades are stylized, not surveys.
 export const STATION_VENUES:Building[]=STATIONS.filter(s=>s.frontage).map(s=>({
  x:s.x+s.frontage!.x,z:s.z+s.frontage!.z,w:20,d:18,h:s.setting==='garage'?12:8,
- district:s.area==='Marin'||s.area==='San Francisco'?'sf':s.area==='San Jose'?'south-bay':s.area==='East Bay'||s.area==='Fremont'?'east-bay':'peninsula',
+ district:s.area==='Mill Valley'||s.area==='Corte Madera'||s.area==='San Francisco'?'sf':s.area==='San Jose'?'south-bay':s.area==='Hayward'||s.area==='Fremont'?'east-bay':'peninsula',
  style:'station-venue',stationId:s.id,
 }));
 for(let i=BUILDINGS.length-1;i>=0;i--){

@@ -18,7 +18,7 @@ export function addStationArt(scene:T.Scene,station:Station) {
   ctx.fillStyle='#243c3e';ctx.fillRect(0,0,1024,256);
   ctx.fillStyle=station.sourceUrl?'#c64e42':'#75b7a6';ctx.fillRect(0,0,1024,42);
   ctx.textAlign='center';ctx.fillStyle='#fff4df';ctx.font='bold 28px system-ui';
-  ctx.fillText(station.sourceUrl?'SUPERCHARGER · FICTIONAL AIR REFILL':'FICTIONAL BERKELEY AIR STATION',512,30,980);
+  ctx.fillText(station.sourceUrl?'SUPERCHARGER · FICTIONAL AIR REFILL':'FICTIONAL AIR STATION',512,30,980);
   ctx.font='bold 48px system-ui';ctx.fillText(station.venue.toUpperCase(),512,102,970);
   ctx.font='30px system-ui';ctx.fillText(station.name.toUpperCase(),512,154,970);
   ctx.font='27px system-ui';ctx.fillText(station.address??'Fictional game location',512,208,970);

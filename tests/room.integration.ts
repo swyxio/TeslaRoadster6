@@ -4,8 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
-// This build combines the relocated Dome and match awards with expanded Bay charging lots.
-assert.equal(PROTOCOL_VERSION, 23);
+// This build combines the shared-room protocol and relocated Dome with expanded Bay charging lots.
+assert.equal(PROTOCOL_VERSION, 24);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

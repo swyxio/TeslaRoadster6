@@ -8,7 +8,7 @@
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }, { "name": "CHAT", "class_name": "GlobalChat" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }, { "tag": "v2", "new_sqlite_classes": ["GlobalChat"] }],
   "previews": {
-    "vars": { "MAX_PLAYERS": "64" },
+    "vars": { "MAX_PLAYERS": "128" },
     "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }, { "name": "CHAT", "class_name": "GlobalChat" }] }
   },
   "observability": { "enabled": true }
