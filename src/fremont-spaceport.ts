@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { FREMONT_SPACEPORT as site } from '../shared/map';
 import { box, material } from './vehicles';
 
@@ -59,7 +60,7 @@ export function buildFremontSpaceport(scene:T.Scene) {
   const ring=new T.Mesh(new T.RingGeometry(12,12.7,64),new T.MeshBasicMaterial({color:0xffc76e,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(site.entrance.x,.13,site.entrance.z);scene.add(ring);
   return {update(time:number,launchAt:number|null){
     const elapsed=launchAt===null?-1:time-launchAt;
-    const launching=elapsed>=0&&elapsed<12;
+    const launching=elapsed>=0&&elapsed<MARS_LAUNCH_SECONDS;
     rocket.position.y=site.pad.h+(launching?Math.max(0,elapsed-1)**2*3:0);
     flame.visible=launching;
   }};

@@ -6,6 +6,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 - After integrating main at `5d454c9`, `pnpm test` passed 358 tests and `pnpm build` passed with Vite's existing large-chunk warning. Focused follow-up checks verified that all spaceport collision envelopes clear the expanded charging and parking lots, other buildings and roads.
 - The combined local Wrangler v27 two-client room integration passed. A separate isolated Wrangler test used endgame cash and Fremont positioning fixtures: simultaneous contributions debited each player's cash once, both players boarded, and the room fund survived last disconnect and a full local Worker restart while another room stayed empty. These are functional checks, not load measurements.
+- Cloudflare's preview of `65e23f1` passed its build and the two-client room integration. A subsequent review fix prevents repeat boarding or another driver from restarting an active launch; focused Mars tests, the isolated restart integration and the build passed after that fix.
 - Chrome displayed the factory and rocket/tower from a temporary Fremont test spawn on the combined map. The contribution, boarding and victory screens and emulated portrait/landscape controls were reviewed on the preceding Mars build; landscape requires scrolling. No physical mobile device was tested, and current delivery payouts are not sufficient to practically reach the final goal.
 
 ## Fremont Mars mission · pre-integration protocol v26 · 2026-10-18 Pacific

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld } from '../shared/game';
 import { BUILDINGS, FREMONT_SPACEPORT, ROADS, isLand, terrainHeight } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { MARS_GOAL, applyMarsContribution, atMarsBoarding, boardMars, marsContribution } from '../shared/mars';
+import { MARS_GOAL, MARS_LAUNCH_SECONDS, applyMarsContribution, atMarsBoarding, boardMars, marsContribution } from '../shared/mars';
 import { parseMessage } from '../worker/protocol';
 import { PARKING_LOTS } from '../shared/parking-lots';
 
@@ -29,9 +29,11 @@ test('each player must be stopped at the spaceport with a fully funded mission t
   car.speed=2;assert.equal(boardMars(world,'a'),false);car.speed=0;car.supportId=null;assert.equal(boardMars(world,'a'),false);
   car.supportId='ground';world.time=123;assert.ok(boardMars(world,'a'));
   assert.equal(world.mars.launchAt,123);assert.deepEqual(a.achievements.unlocked,['to-mars']);
-  assert.deepEqual(b.achievements.unlocked,[]);assert.ok(boardMars(world,'a'));assert.deepEqual(a.achievements.unlocked,['to-mars']);
+  assert.deepEqual(b.achievements.unlocked,[]);world.time=124;assert.equal(boardMars(world,'a'),false);assert.equal(world.mars.launchAt,123);assert.deepEqual(a.achievements.unlocked,['to-mars']);
   const carB=world.entities.find(e=>e.id===b.entityId)!;Object.assign(carB,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
-  assert.ok(boardMars(world,'b'));assert.deepEqual(b.achievements.unlocked,['to-mars']);
+  assert.ok(boardMars(world,'b'));assert.deepEqual(b.achievements.unlocked,['to-mars']);assert.equal(world.mars.launchAt,123,'a second driver joins the launch without restarting it');
+  const c=addPlayer(world,'c','C'),carC=world.entities.find(e=>e.id===c.entityId)!;Object.assign(carC,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
+  world.time=123+MARS_LAUNCH_SECONDS;assert.ok(boardMars(world,'c'));assert.equal(world.mars.launchAt,world.time,'a later driver starts a new launch');
 });
 
 test('spaceport collision footprints and boarding ring occupy supported, clear Fremont ground',()=>{
