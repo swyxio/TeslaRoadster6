@@ -40,6 +40,7 @@ export class GameScene {
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
   private pickups = new Map<string,T.Group>();
+  private pickupLabels = new Map<string,T.SpriteMaterial>();
   private ferry = new T.Group();
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
@@ -257,7 +258,7 @@ export class GameScene {
     for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
-    this.skyCurrents.update(world.time);
+    this.skyCurrents.update(world.time,controlled);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
@@ -307,7 +308,18 @@ export class GameScene {
           const body=new T.Mesh(new T.CylinderGeometry(.37,.48,1.6,8),new T.MeshStandardMaterial({color:0xf6eaff,emissive:0x56377a}));mesh.add(body);
           const tip=new T.Mesh(new T.ConeGeometry(.37,.65,8),new T.MeshStandardMaterial({color:0xc47aff,emissive:0x43215d}));tip.position.y=1.1;mesh.add(tip);
           for(const side of [-1,1])box(mesh,side*.52,-.55,0,.3,.5,.18,0xb96ff7);
-        }else mesh.add(new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024})));
+        }else{
+          mesh.add(new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024})));
+          let label=this.pickupLabels.get(pickup.kind);
+          if(!label){
+            const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;const ctx=canvas.getContext('2d')!;
+            ctx.fillStyle='#17383de8';ctx.fillRect(0,4,512,88);ctx.fillStyle=pickup.kind==='repair'?'#b3f5c2':'#ffe0a0';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 42px system-ui';
+            ctx.fillText(pickup.kind==='repair'?'REPAIR + $5':'AIR REFILL + $5',256,49);
+            const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+            label=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});this.pickupLabels.set(pickup.kind,label);
+          }
+          const sign=new T.Sprite(label);sign.position.y=2.4;sign.scale.set(6,1.15,1);mesh.add(sign);
+        }
         mesh.position.set(pickup.x,(terrainHeight(pickup.x,pickup.z)??0)+1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);
       }
       mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=(terrainHeight(pickup.x,pickup.z)??0)+1.7+Math.sin(performance.now()*.002)*.3;
