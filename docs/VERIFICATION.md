@@ -5,6 +5,8 @@ These entries describe separate historical builds. Check the version and scope i
 ## Island controls with economy research integration · protocol v26 · 2026-10-18 Pacific
 
 - After integrating the mini-game control fix and the separate economy research materials, `pnpm test` passed 394 tests and `pnpm build` passed. Vite retains its large-chunk warning. The latest local room, chat, capacity, jump and browser checks are recorded under the v26 entries below; the economy merge changed no gameplay or wire code.
+- A two-client natural-input car crossing passed on an isolated local Wrangler snapshot at `59a8225`, the same gameplay and wire code as this integration: both clients observed SF boarding at 154.50 s, secured departure at 180.20 s, island arrival at 225.20 s and drive-off onto ground at 227.90 s. Both sockets closed normally. This is not a full-deck, load or production test.
+- The Cloudflare preview for `59a8225` passed the two-client room integration, including five-goal soccer and immediate parking start/leave. The later integration changed research and public content, not gameplay or wire code. This is not a load test.
 
 ## Integrated Tesland and island playground · protocol v26 · 2026-10-18 Pacific
 
