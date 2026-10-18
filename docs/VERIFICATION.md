@@ -3,7 +3,15 @@
 ## Pickup rewards and minimap · 2026-10-17 Pacific
 
 - After integrating the Rocket stunt update, `pnpm run ci` passed 37 tests and both typechecks/build; the existing Vite chunk-size warning remains. Local Wrangler two-client integration passed with protocol v6, pickup-clock replication and the stunt checks. This is not a load test.
+- After also integrating nozzle effects, `pnpm run ci` passed 39 tests and the build; the local two-client integration passed with protocol v7, pickup-clock replication and remote thruster effects.
 - Chrome desktop and emulated 390×844 portrait / 844×390 landscape showed the larger heading marker, pickup timer and available bonus alongside the updated stunt controls. A separate browser preview of the actual reward component showed the cash card and confetti; simulation tests cover awarding and preventing duplicate payments. A complete positive pickup and its animation were not manually observed together, and no physical device was tested.
+
+## Roadster nozzle visuals · 2026-10-17 Pacific
+
+- `pnpm test` (37 tests) and `pnpm build` passed. Tests cover ten nozzle mounts, independent visual clones, actual boost/jump/flip/depleted-air signals and the existing fleet. The Vite chunk-size warning remains.
+- Local Wrangler two-client integration passed, including remote rear, corner and side effect flags. An earlier run timed out waiting for autonomous mode; the later run passed after the build and code changes completed. Neither run is a load test.
+- Local Chrome desktop playtest showed four rear nozzle rings, rear vapor during boost and downward vapor while hovering. Portrait 390×844 and touch-emulated landscape 844×390 layouts were inspected. Side plumes were checked through model/simulation tests and multiplayer state, not directly seen in a browser playtest. Real device and multi-touch testing remain unverified. A narrow landscape desktop viewport with a fine pointer showed existing HUD overlap; the touch-emulated landscape layout did not.
+- No new production deployment is implied by these local checks. The ten-port layout is based on event reporting; exact hardware geometry and firing sequences remain artistic approximations.
 
 ## Rocket stunt implementation · 2026-10-17 Pacific
 

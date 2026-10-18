@@ -1,4 +1,4 @@
-# Implementation contracts · v6
+# Implementation contracts · v7
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -27,7 +27,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count and loop attachment, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, and `delivery` (session cash, active time, order, completed runs and ticket state). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v6
+## Wire protocol v7
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:6,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:7,capacity:number}`.
 
 Client messages:
 
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:6, capacity:number}
+{type:"welcome", id:string, version:7, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -69,7 +69,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
-`GameScene.render(world,playerId,dt,menu,boost)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
+`GameScene.render(world,playerId,dt,menu)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
 
 ## UI continuity and acceptance
 
@@ -96,7 +96,7 @@ Autonomy uses deterministic right-lane loops, including a cross-Bay route, and o
 
 Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 
-Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` remains the flight effect group. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.
+Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` contains independent rear, corner and side cold-gas vapor groups. The simulation publishes a thruster bitmask so remote effects follow actual boost, jump, hover and roll events; firing patterns are arcade interpretations, not prototype control logic. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.
 
 ## Delivery and police contract
 

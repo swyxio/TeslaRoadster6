@@ -2,6 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
 import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
 // Geometry and materials belong to the fleet, not individual entities: never dispose
 // them when removing a single car. No external models, textures, or brand logos.
@@ -11,10 +12,18 @@ const cube = new T.BoxGeometry(1, 1, 1);
 const tire = new T.CylinderGeometry(1, 1, 1, 32);
 const hub = new T.CylinderGeometry(1, 1, 1, 24);
 const head = new T.SphereGeometry(.25, 8, 6);
-const jetGeometry = new T.ConeGeometry(.22, 1.8, 8);
+const nozzleRing = new T.TorusGeometry(.095,.018,8,20);
+const nozzleCore = new T.CylinderGeometry(.078,.078,.022,20);
 const paintCache=new Map<number,T.MeshPhysicalMaterial>();
 function paint(color:number){if(!paintCache.has(color))paintCache.set(color,new T.MeshPhysicalMaterial({color,metalness:.42,roughness:.28,clearcoat:1,clearcoatRoughness:.16}));return paintCache.get(color)!;}
-const jetMaterial = new T.MeshBasicMaterial({ color: 0x8feaff, transparent: true, opacity: .75 });
+// A soft translucent cloud rather than a combustion flame. Shared across clones.
+const vaporPixels=new Uint8Array(32*32*4);
+for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+  const i=(y*32+x)*4,r=Math.hypot((x-15.5)/15.5,(y-15.5)/15.5);
+  vaporPixels[i]=226;vaporPixels[i+1]=243;vaporPixels[i+2]=248;vaporPixels[i+3]=Math.round(150*Math.pow(Math.max(0,1-r),2));
+}
+const vaporTexture=new T.DataTexture(vaporPixels,32,32,T.RGBAFormat);vaporTexture.needsUpdate=true;
+const vaporMaterial=new T.SpriteMaterial({map:vaporTexture,transparent:true,depthWrite:false,opacity:.9});
 const DARK = 0x17272f, GLASS = 0x284954, WHITE = 0xe6eeeb;
 
 export function material(color: number, metalness = .1) {
@@ -25,6 +34,30 @@ export function material(color: number, metalness = .1) {
 export function box(parent: T.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, color: number) {
   const mesh = new T.Mesh(cube, material(color));
   mesh.scale.set(w, h, d); mesh.position.set(x, y, z); parent.add(mesh); return mesh;
+}
+
+function nozzle(root:T.Group,jets:T.Group,name:string,x:number,y:number,z:number,direction:T.Vector3){
+  const mount=new T.Group();mount.name=`nozzle_${name}`;mount.position.set(x,y,z);
+  mount.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);
+  const rim=new T.Mesh(nozzleRing,material(0xb2c2c6,.8));rim.rotation.x=Math.PI/2;mount.add(rim);
+  const core=new T.Mesh(nozzleCore,material(0x10191e,.35));mount.add(core);root.add(mount);
+  const plume=new T.Group();plume.name=`plume_${name}`;plume.position.copy(mount.position);plume.quaternion.copy(mount.quaternion);plume.visible=false;
+  for(let i=0;i<4;i++){
+    const cloud=new T.Sprite(vaporMaterial);cloud.position.y=.2+i*.38;cloud.scale.setScalar(.35+i*.17);plume.add(cloud);
+  }
+  jets.add(plume);
+}
+
+/** Snapshot flags describe arcade effects, not the prototype's real control law. */
+export function setThrusterEffects(root:T.Object3D,mask:number,time:number){
+  const jets=root.getObjectByName('jets');if(!jets)return;
+  jets.visible=mask!==0;
+  for(const child of jets.children){
+    const name=child.name;
+    const flag=name.startsWith('plume_rear')?THRUSTER_REAR:name.startsWith('plume_down_l')?THRUSTER_DOWN_LEFT:name.startsWith('plume_down_r')?THRUSTER_DOWN_RIGHT:name==='plume_side_l'?THRUSTER_SIDE_LEFT:THRUSTER_SIDE_RIGHT;
+    child.visible=!!(mask&flag);
+    child.scale.setScalar(.92+.08*Math.sin(time*19+child.position.z*3));
+  }
 }
 
 /** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
@@ -181,7 +214,10 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   if (id.includes('ioniq')) {
     for (const side of [-1, 1]) for (const pixel of [-1, 1]) box(root, side * w * .31 + pixel * .09, belt, -l / 2 - .025, .13, .13, .03, WHITE);
   } else if (!firefly && shape !== 'pickup' && shape !== 'roadster') for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), -l / 2 - .025, w * .22, .09, .03, WHITE);
-  for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), l / 2 + .025, w * .23, .09, .03, 0xe9483c);
+  if(id==='roadster'){
+    box(root,0,h*.56,l*.493,w*.78,.055,.035,0xe9483c);
+    box(root,0,h*.72,l*.39,w*.84,.045,.28,DARK);
+  }else for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), l / 2 + .025, w * .23, .09, .03, 0xe9483c);
   if(shape==='roadster'){
     for(const side of [-1,1]){
       const lamp=box(root,side*w*.25,h*.49,-l*.47,w*.18,.025,.1,WHITE);lamp.rotation.y=side*.24;
@@ -193,17 +229,19 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   wheels(root, spec); sensors(root, spec);
   const jets = new T.Group(); jets.name = 'jets'; jets.visible = false;
   if (spec.airThrusters) {
-    // Stylized fan and nozzle locations make the two systems distinct; these
-    // are original game art, not a representation of prototype hardware.
+    // The four rear, four corner and two front lateral nozzles follow the
+    // reported arrangement. Shapes and activation are artistic estimates.
     for(const z of [-l*.18,l*.18]){
       const fan=new T.Mesh(hub,material(DARK));fan.scale.set(.38,.035,.38);fan.position.set(0,.12,z);root.add(fan);
       for(const angle of [0,Math.PI/2]){const blade=box(root,0,.075,z,.6,.025,.045,0x82969a);blade.rotation.y=angle;}
     }
-    for (const side of [-1, 1]) {
-      const nozzle = box(root, side * w * .32, .28, l * .28, .22, .14, .24, DARK); nozzle.name = side < 0 ? 'jet_left' : 'jet_right';
-      const jet = new T.Mesh(jetGeometry, jetMaterial); jet.rotation.z = Math.PI; jet.position.set(side * w * .32, -.55, l * .28); jets.add(jet);
-      for(const z of [-l*.35,l*.35])box(root,side*w*.5,.3,z,.04,.11,.15,DARK);
-      for(const z of [-l*.495,l*.495])box(root,side*w*.17,.3,z,.15,.11,.04,DARK);
+    box(root,0,.32,l*.498,w*.76,.24,.035,0x10191e);
+    for(let i=0;i<4;i++)nozzle(root,jets,`rear_${i}`,(i-1.5)*w*.16,.33,l*.51,new T.Vector3(0,0,1));
+    for(const side of [-1,1]){
+      const label=side<0?'l':'r';
+      for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
+        nozzle(root,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
+      nozzle(root,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
     }
   }
   root.add(jets);
