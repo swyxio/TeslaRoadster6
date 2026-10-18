@@ -2,7 +2,7 @@
  * Deterministic motion trace, not a browser frame-rate or collision benchmark.
  * Run: pnpm exec tsx scripts/motion-benchmark.ts [--adapter path] [--trace path]
  *       [--scenario drive|fast-turn|fast-slalom|flight-turn|fast-turn-npc|jump|flight|release|teleport|reset|network-stall|focus-loss|server-overload]
- *       [--profile zero|steady150|bunched150] [--tank-level 1|2|3|4|5]
+ *       [--profile zero|steady150|bunched150]
  * An adapter module exports createMotionAdapter(context). Payloads are opaque;
  * the fixture schedules server ticks, client frames, and ordered transport.
  */
@@ -11,7 +11,6 @@ import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { addPlayer, createWorld, NEUTRAL, resetPlayer, step, type Input, type World } from '../shared/game';
-import type { TankLevel } from '../shared/air-tank';
 
 export type Pose={x:number;y:number;z:number;q:[number,number,number,number];debug?:{supportId:string|null;yaw:number;pitch:number;roll:number;normal:{x:number;y:number;z:number}|null;speedMps?:number;timeline?:Record<string,unknown>}};
 export type Frame={nowMs:number;dtMs:number};
@@ -76,13 +75,13 @@ function inputAt(s:Scenario,ms:number,excluded:string):Input {
     jump:s==='jump'&&excluded!=='jump'&&ms>=3500?1:0};
 }
 
-function worldFor(s:Scenario,tankLevel:TankLevel):World {
+function worldFor(s:Scenario):World {
   const world=createWorld(),player=addPlayer(world,id,'Benchmark');
   const npc=s==='fast-turn-npc'?world.entities.find(e=>e.id==='traffic-0'):undefined;
   world.entities=world.entities.filter(e=>e.id===player.entityId);world.pickups=[];
   const flight=s==='flight'||s==='flight-turn';
   const e=world.entities[0];Object.assign(e,{x:-300,z:flight?-1850:-2050,y:flight?100:0,yaw:Math.PI,
-    speed:0,vx:0,vy:0,vz:0,supportId:flight?null:'ground',tankLevel});
+    speed:0,vx:0,vy:0,vz:0,supportId:flight?null:'ground'});
   if(npc){
     Object.assign(npc,{x:-292,y:0,z:-2020,yaw:Math.PI,vx:0,vy:0,vz:0,speed:0,supportId:'ground',npc:true,autopilot:true,
       navigation:{destination:{x:-292,z:-1200},path:[{x:-292,z:-1200}],index:0,status:'driving'}});
@@ -91,8 +90,8 @@ function worldFor(s:Scenario,tankLevel:TankLevel):World {
   return world;
 }
 
-export function runTrace(factory:Factory,scenario:Scenario,profile:Profile,excluded='',tankLevel:TankLevel=1):Trace {
-  const world=worldFor(scenario,tankLevel),idealWorld=worldFor(scenario,tankLevel),up:Packet[]=[],down:Packet[]=[];
+export function runTrace(factory:Factory,scenario:Scenario,profile:Profile,excluded=''):Trace {
+  const world=worldFor(scenario),idealWorld=worldFor(scenario),up:Packet[]=[],down:Packet[]=[];
   const initialNpc=world.entities.find(entity=>entity.id==='traffic-0'),npcOrigin=initialNpc?{x:initialNpc.x,z:initialNpc.z}:null;
   let upLast=0,downLast=0,upIndex=0,downIndex=0,sent=0,received=0,batched=0;
   const enqueue=(direction:'up'|'down',payload:unknown,timeMs:number)=>{
@@ -230,23 +229,21 @@ async function main(){
   const args=process.argv.slice(2);
   const option=(key:string)=>{const i=args.indexOf(key);return i<0?undefined:args[i+1];};
   const selectedScenario=option('--scenario'),selectedProfile=option('--profile'),adapterPath=option('--adapter'),tracePath=option('--trace');
-  const tankLevel=Number(option('--tank-level')??1);
   if(selectedScenario&&!scenarios.includes(selectedScenario as Scenario))throw new Error(`Unknown scenario: ${selectedScenario}`);
   if(selectedProfile&&!profiles.includes(selectedProfile as Profile))throw new Error(`Unknown profile: ${selectedProfile}`);
-  if(!Number.isInteger(tankLevel)||tankLevel<1||tankLevel>5)throw new Error(`Unknown tank level: ${tankLevel}`);
   const factory:Factory=adapterPath?(await import(pathToFileURL(resolve(adapterPath)).href)).createMotionAdapter:(await import('./motion-adapter-ticks')).createMotionAdapter;
   if(typeof factory!=='function')throw new Error('Adapter must export createMotionAdapter(context)');
   const results:unknown[]=[],traces:Record<string,Trace>={};
   for(const scenario of selectedScenario?[selectedScenario as Scenario]:scenarios)for(const profile of selectedProfile?[selectedProfile as Profile]:profiles){
-    const trace=runTrace(factory,scenario,profile,'',tankLevel as TankLevel),responses=[];
+    const trace=runTrace(factory,scenario,profile),responses=[];
     if(tracePath)traces[`${scenario}/${profile}`]=trace;
     for(const event of events(scenario)){
-      const control=runTrace(factory,scenario,profile,event.name,tankLevel as TankLevel);responses.push(measureResponse(trace,control,event));
+      const control=runTrace(factory,scenario,profile,event.name);responses.push(measureResponse(trace,control,event));
       if(tracePath)traces[`${scenario}/${profile}/without-${event.name}`]=control;
     }
     results.push({scenario,profile,motion:traceMotion(trace),responses,network:trace.packets,adapter:trace.diagnostics});
   }
-  const report={fixture:{renderHz:120,serverTickHz:20,tankLevel,durationMs:rounded(durationFrames*frameMs),
+  const report={fixture:{renderHz:120,serverTickHz:20,durationMs:rounded(durationFrames*frameMs),
     transport:'FIFO, 0 or 75 ms one-way; bunched profile adds deterministic 125 ms spikes and -16.667 ms jitter',
     setup:'one controlled Roadster, starting at x=-300 and z=-2050 (ground) or z=-1850, y=100 (flight); initial ambient entities and pickups removed except one autonomous nearby NPC in fast-turn-npc; production traffic replenishment may spawn distant ambient vehicles after 5 s; no remote players or collision coverage; routes can cross the island oval and its banked surface',
     fastTurns:'full throttle from start; steer 0.7 at 3000 ms through 7000 ms; slalom alternates 0.7 and -0.7 every 500 ms from 3000 ms; flight-turn hovers at altitude',
