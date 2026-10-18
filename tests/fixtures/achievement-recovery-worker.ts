@@ -3,11 +3,12 @@
 import fixture, { GameRoom as FixtureGameRoom, DriverProfile, GlobalChat, RoomEconomy as FixtureRoomEconomy, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
 import { MarketService } from '../../worker/market-service';
 import { BUILDINGS } from '../../shared/map';
-import { NEUTRAL, type World } from '../../shared/game';
+import { makeEntity, NEUTRAL, type World } from '../../shared/game';
 import { resetAchievementFlight, type AchievementState } from '../../shared/achievements';
 import type { AchievementTierProgress } from '../../shared/achievement-tiers';
 import { RACE_COURSES } from '../../shared/race-courses';
 import type { ScheduledInput } from '../../shared/tick-input';
+import type { VehicleCollections } from '../../shared/vehicle-collections';
 
 export { DriverProfile, GlobalChat, GlobalIncome, GlobalEarningsEvent, MarketService };
 export class RoomEconomy extends FixtureRoomEconomy {
@@ -92,6 +93,47 @@ export class GameRoom extends FixtureGameRoom {
       draft().achievementTiers['races-finished'].count===finishedBefore+1&&draft().achievementTiers['races-won'].count===wonBefore+1&&
       draft().achievements.unlocked.includes('race-winner')};
   }
+  async fixtureDriveCollection(playerId:string){
+    const {world,session,player,car}=this.fixtureDriver(playerId);
+    const oldCar=structuredClone(car),oldEntities=world.entities,oldPickups=world.pickups;
+    const draft=()=>Reflect.get(session.economy,'draft') as {vehicleCollections:VehicleCollections};
+    const reset=()=>Reflect.apply(Reflect.get(session.economy,'resetVehicleDrive') as ()=>void,session.economy,[]);
+    const tick=()=>Reflect.apply(Reflect.get(this,'tick') as ()=>void,this,[]);
+    world.entities=[car];world.pickups=[];
+    Object.assign(car,{x:0,z:100,y:0,yaw:0,speed:20,vx:0,vy:0,vz:0,pushX:0,pushZ:0,
+      supportId:'ground',inDome:false,autopilot:false,navigation:null});
+    reset();
+    try{
+      for(let i=0;i<160&&!draft().vehicleCollections.driven.includes('roadster');i++){
+        const control=session.control.snapshot(),currentTick=Reflect.get(this,'tickCount') as number;
+        const result=session.control.receive({seq:control.receivedSeq+1,targetTick:currentTick+1,
+          controlRevision:control.revision,actionSeq:control.actionSeq,input:{...NEUTRAL,throttle:1,jump:control.jump.seen,flip:control.flip.seen}},currentTick,Date.now());
+        if(result.rejection)throw new Error(`Fixture drive rejected: ${result.rejection}`);
+        tick();
+      }
+      return {observed:draft().vehicleCollections.driven.includes('roadster'),distance:Math.hypot(car.x,car.z-100)};
+    }finally{
+      world.entities=oldEntities;world.pickups=oldPickups;Object.assign(car,oldCar);
+      reset();resetAchievementFlight(player);
+    }
+  }
+  async fixturePlaceNpc(playerId:string){
+    const {world,car:person}=this.fixtureDriver(playerId);
+    if(person.kind!=='person'||!person.supportId)throw new Error('Fixture requires an on-foot player');
+    const npc=makeEntity('fixture-ambient','waymo-ipace',person.x+3,person.z);
+    Object.assign(npc,{y:person.y,supportId:person.supportId,inDome:person.inDome,npc:true,autopilot:false});
+    world.entities=[person,npc];
+    return {id:npc.id,kind:npc.kind};
+  }
+  async fixturePlaceParked(playerId:string){
+    const {world,car:person}=this.fixtureDriver(playerId);
+    if(person.kind!=='person'||!person.supportId)throw new Error('Fixture requires an on-foot player');
+    const parked=world.entities.find(entity=>entity.id==='parked-0');
+    if(!parked)throw new Error('Missing server-seeded parked car');
+    Object.assign(parked,{x:person.x+3,z:person.z,y:person.y,supportId:person.supportId,inDome:person.inDome});
+    world.entities=[person,parked];
+    return {id:parked.id,kind:parked.kind};
+  }
 }
 
 type FixtureEnv={ROOMS:DurableObjectNamespace<GameRoom>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
@@ -105,6 +147,9 @@ export default {
     const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
     if(path==='/__achievement-test/roof')return Response.json(await room.fixtureTransientRoof(body.playerId));
     if(path==='/__achievement-test/race')return Response.json(await room.fixtureTransientRace(body.playerId));
+    if(path==='/__achievement-test/drive')return Response.json(await room.fixtureDriveCollection(body.playerId));
+    if(path==='/__achievement-test/npc')return Response.json(await room.fixturePlaceNpc(body.playerId));
+    if(path==='/__achievement-test/parked')return Response.json(await room.fixturePlaceParked(body.playerId));
     return new Response('Unknown fixture route',{status:404});
   },
 };
