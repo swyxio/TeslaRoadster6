@@ -1,0 +1,23 @@
+{
+  // LOCAL ONLY: bind --ip 127.0.0.1 with isolated storage. Never deploy.
+  "name": "tesland-room-behavior-test",
+  "main": "./room-behavior-worker.ts",
+  "compatibility_date": "2026-10-17",
+  "vars": { "MAX_PLAYERS": "8" },
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "GameRoom" },
+    { "name": "CHAT", "class_name": "GlobalChat" },
+    { "name": "DRIVERS", "class_name": "DriverProfile" },
+    { "name": "ECONOMIES", "class_name": "RoomEconomy" },
+    { "name": "INCOME", "class_name": "GlobalIncome" },
+    { "name": "GLOBAL_EVENTS", "class_name": "GlobalEarningsEvent" },
+    { "name": "MARKET", "class_name": "MarketService" }
+  ] },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["GlobalChat"] },
+    { "tag": "v3", "new_sqlite_classes": ["DriverProfile", "RoomEconomy", "GlobalIncome"] },
+    { "tag": "v4", "new_sqlite_classes": ["GlobalEarningsEvent"] },
+    { "tag": "v5", "new_sqlite_classes": ["MarketService"] }
+  ]
+}

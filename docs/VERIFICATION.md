@@ -14,6 +14,15 @@
 - Local Wrangler recovery fixtures confirmed a real 100 m Roadster drive and a real on-foot NPC takeover, each with its saved model and $100 reward. A collected drive survived rejection of an earlier wallet action. Separate wallet tests covered legacy profiles, malformed progress, duplicate receipts, duplicate models, stale checkpoints and recovery of accepted collection evidence after a process kill. No prior driving or theft history was inferred.
 - Chrome showed the Awards collection on desktop and at emulated 390 × 844 portrait and 844 × 390 landscape sizes. These are browser emulations; no physical device was tested. The model arrays travel in the private wallet, but earned badge IDs remain visible under the existing player-snapshot contract. All 13 new IDs contribute 242 JSON bytes of array contents, plus a comma when appended to existing IDs; this is a serialization count, not a throughput measurement. The observer also builds an entity index once per room tick, so integrated driving-continuity and payload checks remain necessary.
 - This branch does not contain the sandbox implementation or a protocol bump. Sandbox isolation, the final integrated release and production verification belong to the combined candidate.
+## Recovered room-behavior fixture · protocol v43 · 2026-10-18 Pacific
+
+- On main `1ca0eeb`, the restored local-only Wrangler fixture passed a three-client staged ferry crossing: secured throttle and jump, a mid-crossing disconnect and manifest cleanup, a new guest session and activity cleanup, and island arrival. A separate staged collision in the same run gave two recipients identical vehicle state at the same room tick. The fixture sets player poses and shortens the dock countdown; it does not exercise natural boarding, production transport, load or playable capacity. The room advertised a test-only capacity of 8.
+- Both the integration script and its Worker fixture passed standalone strict TypeScript checks. Focused ferry and Dome tests passed 24 tests. No gameplay optimization, protocol change, browser or physical-device check was included.
+
+## Historical room performance follow-up · protocol v31 · 2026-10-18 Pacific
+
+- On the earlier PR #58 candidate based on `3307584`, 465 tests and the build passed, as did standalone script typechecks and the standard two-client local room integration. Its then-current staged fixture checked a ferry crossing and collision replication; natural boarding was not exercised in that fixture.
+- Deterministic baseline and experimental scenarios retained identical state hashes and recipient JSON, with lower simulation process CPU in two instrumented Node pairs. Local 32- and 64-client runs fell behind real time; the experimental 64-client sample was slower than its baseline. The measurement method, units and limitations are preserved in [the performance audit](PERFORMANCE_AUDIT.md). The experimental proximity changes were not carried forward, and the observations are not production or capacity results.
 
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
