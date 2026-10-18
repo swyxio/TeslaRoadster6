@@ -6,6 +6,23 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'The Bay opens up',
+    intro: 'Explore more neighborhoods and take deliveries across the Bay.',
+    sections: [
+      { title: 'More places to drive', items: [
+        'Unlock service areas with your current cash balance and find new fictional customers in 17 Bay towns.',
+        'Oakland traffic and navigation work around the stunt ramp and loop. Look for the new Hegenberger station signs.'
+      ] },
+      { title: 'Deliveries that keep moving', items: [
+        'Job searches run in small batches. If spending locks a destination, a replacement keeps your pickup progress.',
+        'Rooftop jobs require rockets and a Level 3 air tank. Leaving your car on foot keeps an accessible rooftop job.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.29-alpha',
+    label: '0.0.29 Alpha',
+    date: '2026-10-18',
     title: 'A little more gravity',
     intro: 'Flight takes more planning, especially in heavier vehicles.',
     sections: [

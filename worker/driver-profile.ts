@@ -4,7 +4,7 @@ import { isAchievementEvidence, type AchievementEvidence } from '../shared/achie
 import { normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
 import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
 import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
-import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
+import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import type { VehicleUpgrades } from '../shared/upgrades';
@@ -286,7 +286,7 @@ export class DriverProfile extends DurableObject<Env> {
         } else if(intent.action.kind==='ticket'){
           const evidence=intent.action.evidence;
           if(!evidence||![evidence.seconds,evidence.peakHeight,evidence.at,evidence.x,evidence.z].every(Number.isFinite)||
-            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean'||(evidence.roofEligible!==undefined&&typeof evidence.roofEligible!=='boolean'))error='invalid';
+            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean'||(evidence.roofEligible!==undefined&&typeof evidence.roofEligible!=='boolean')||(evidence.onFoot!==undefined&&typeof evidence.onFoot!=='boolean'))error='invalid';
           else {
             const delivery=initialDelivery(evidence);
             Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:structuredClone(next.order)});
@@ -296,7 +296,7 @@ export class DriverProfile extends DurableObject<Env> {
               order.elapsed=Math.max(order.elapsed,before.elapsed);
             const previousLevel=delivery.level;
             applyTicketEvidence(delivery,evidence);
-            if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,evidence.roofEligible===true);
+            if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,ticketRoofAccess(evidence));
             if(!validAmount(delivery.cash)||!validAmount(delivery.tickets))error='invalid';
             else {next.cash=delivery.cash;next.tickets=delivery.tickets;next.order=delivery.order;}
           }
