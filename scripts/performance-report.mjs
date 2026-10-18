@@ -84,12 +84,12 @@ async function command(command, args, cwd) {
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { 'target-root': { type: 'string', default: harness }, out: { type: 'string' }, gpu: { type: 'string', default: 'default' }, scenario: { type: 'string' } } });
+  const { values } = parseArgs({ options: { 'target-root': { type: 'string', default: harness }, out: { type: 'string' }, gpu: { type: 'string', default: 'default' } } });
   if (!values.out) throw new Error('Specify a new --out directory');
   if (!['default', 'metal', 'vulkan', 'swiftshader'].includes(values.gpu)) throw new Error('Unknown GPU mode');
   const root = resolve(values['target-root']), out = resolve(values.out);
   await mkdir(out, { mode: 0o700 });
-  const scenario = values.scenario ? resolve(values.scenario) : join(harness, 'scripts/playtests/performance-drive.json');
+  const scenario = join(harness, 'scripts/playtests/performance-drive.json');
   const startedAt = new Date().toISOString(), loadBefore = os.loadavg();
   const revision = run('git', ['rev-parse', 'HEAD'], root).trim();
   const dirty = !!run('git', ['status', '--porcelain'], root).trim();
@@ -160,7 +160,7 @@ async function main() {
     fixture: { scenarioSha256, recorderSha256, reporterSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, start: { x: -300, z: -2050, yaw: Math.PI }, captureVideo: false },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The room observation includes driving and time without held driving controls; inspect the scenario for durations.', 'One local client and live background traffic; the server and browser share this host. Paths and contacts can diverge.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The room observation includes a short drive followed by 54 seconds without held driving controls.', 'One local client and live background traffic; the server and browser share this host. Paths and contacts can diverge.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

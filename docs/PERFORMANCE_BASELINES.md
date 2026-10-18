@@ -9,20 +9,15 @@ measurements. The performance workflow records four recurring observations:
 | Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive, with movement, live render telemetry and no recorded browser errors. | A render-activity guard is not proof of correct pixels. Callback timing is not GPU completion or actual display presentation. Lower is better for this matched scenario. |
 | Modeled display/body speed p05–p95 (×) | Frame-to-frame modeled visual speed divided by predicted-body speed, when the latter exceeds 10 m/s. Ideally near 1. | Synthetic 120 Hz slalom and simulated network, not a live rendered car. Retain max movement per sample and traces too. |
 | Modeled steering onset (ms) | Left/right first modeled yaw response relative to a no-steer counterfactual. | Synthetic 120 Hz samples quantize response to 8.333 ms; not human input-to-photon latency. |
-| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives, then stays connected without held controls. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
+| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
 
 The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
-fresh local room, staged start and no video. The local desktop scenario uses
-1280 × 720 at DPR 1, driving for 8 seconds and then idling for 54 seconds.
-The CI software scenario uses 384 × 216 at DPR 1, waits for render telemetry,
-drives for 27 seconds and then idles for 36 seconds. Its longer frame sample
-and smaller viewport accommodate the hosted runner's slow software renderer;
-they do not represent desktop graphics performance at the larger resolution.
+fresh local room, staged start, 1280 × 720 viewport at DPR 1, and no video.
 Traffic and collisions still affect the route. Artifacts record the scenario,
 endpoint, browser, WebGL renderer, revisions and host load; inspect these
-before comparing. A SwiftShader run describes software rendering on that CI
-runner, not a phone or hardware GPU.
+before comparing. A hosted runner's paravirtual renderer describes that VM,
+not a phone or a physical desktop device.
 
 ## When CI runs
 
@@ -44,13 +39,14 @@ such diffs. Do not make this filtered workflow a required branch-protection
 check: GitHub may leave a skipped required check pending.
 
 The job builds both revisions and runs the candidate's harness against each in
-sequence on `ubuntu-24.04`, using Chromium with SwiftShader. Its summary and
+sequence on `macos-15`, using headless Chromium with the observed Apple
+paravirtual Metal renderer. Its summary and
 artifact include the paired observations and raw traces; artifacts expire after
 90 days. An incomplete measurement fails the job and is shown as `HOLD`, never
 as zero. Timing differences are descriptive: one shared-host pair is noisy,
 and no automatic performance threshold is inferred from it. Different renderer,
-viewport, fixture or route endpoints can make a comparison `HOLD`. The CI and
-desktop scenarios must not be compared directly. Review the
+viewport, fixture or route endpoints can make a comparison `HOLD`. Hosted
+VM and named local machine results must not be compared directly. Review the
 raw paths for divergence even when endpoints happen to be close.
 
 For local runs, build the candidate and target revisions and install the
@@ -85,6 +81,7 @@ targets and additional coverage remain in [performance release gates](PERFORMANC
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |
 | 2026-10-18 · same version and commit, repeat | Same scenario and machine | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Repeat report](performance-baselines/2026-10-18-v0.0.24-aeb5704/repeat-report.json) and browser traces in the same directory; same synthetic traces as the first run. |
+| 2026-10-18 · 0.0.25-alpha · `1a5a0479570f1bde7d33ed6218c0c0df670767d2` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.7 | 0.983–1.052 | 8.333 / 16.667 | 0.952 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.25-1a5a047/); one busy-host observation. |
 
 That browser run observed 360 intervals across six seconds of driving, and
 59.2 simulated seconds across 61.912 seconds of received room snapshots. The
@@ -104,3 +101,9 @@ report predates reporter-method hashing. The repeat predates the continuous
 snapshot coverage guard; rechecking the saved streams found 593 snapshots each,
 with maximum gaps of 122 ms and 110 ms. Deltas against a later reporter are
 `HOLD`; rerun both versions with the same current harness for a paired result.
+
+The 0.0.25 run observed 360 intervals in six seconds and 59 simulated seconds
+over 61.963 seconds of snapshots, with a maximum snapshot gap of 137 ms.
+One-minute load averages were 20.15 before and 13.66 after on 18 logical CPUs.
+The report predates the final reporter-method edit, so use the current harness
+for both sides of a new comparison.

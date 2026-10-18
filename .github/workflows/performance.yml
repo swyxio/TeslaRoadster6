@@ -69,7 +69,7 @@ jobs:
     name: Paired local performance observation
     needs: select
     if: ${{ needs.select.outputs.run == 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     concurrency:
       group: performance-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
@@ -98,7 +98,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm build
-          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright install chromium
       - name: Install and build base
         working-directory: base
         run: |
@@ -112,8 +112,7 @@ jobs:
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/base" \
-            --scenario "$GITHUB_WORKSPACE/candidate/scripts/playtests/performance-software-drive.json" \
-            --out "$RUNNER_TEMP/tesland-performance/base" --gpu swiftshader \
+            --out "$RUNNER_TEMP/tesland-performance/base" --gpu metal \
             > "$RUNNER_TEMP/tesland-performance/base.log" 2>&1
       - id: candidate
         name: Measure candidate
@@ -121,8 +120,7 @@ jobs:
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/candidate" \
-            --scenario "$GITHUB_WORKSPACE/candidate/scripts/playtests/performance-software-drive.json" \
-            --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu swiftshader \
+            --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu metal \
             > "$RUNNER_TEMP/tesland-performance/candidate.log" 2>&1
       - name: Summarize available observations
         if: ${{ always() }}
@@ -166,7 +164,7 @@ jobs:
                 m?.modeledMotion?.bunched150?.status === 'available' &&
                 m?.roomProgress?.status === 'available';
               const renderer = report.environment?.runner?.webgl?.renderer;
-              if (!complete || typeof renderer !== 'string' || !/swiftshader/i.test(renderer)) {
+              if (!complete || typeof renderer !== 'string' || !/ANGLE Metal Renderer/i.test(renderer) || /swiftshader|software/i.test(renderer)) {
                 console.error(`${path}: missing metrics or unexpected renderer: ${renderer ?? 'unavailable'}`);
                 missing = true;
               }

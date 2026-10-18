@@ -1183,6 +1183,10 @@ After incorporating that economy merge, `pnpm test` passed 889 tests and `pnpm b
 
 A second run of the same clean game revision and local workload gave 16.8 ms frame p95 and 59.2 simulated seconds over 61.928 seconds of received snapshots (0.956×), with the same synthetic values. One-minute host load averages were 7.95 before and 10.02 after; the two observations do not establish a performance threshold. The repeat report and raw browser observations are retained alongside the initial trace.
 
+The clean 0.0.25-alpha revision `1a5a0479570f1bde7d33ed6218c0c0df670767d2` on the same M5 Pro reported a 16.7 ms browser p95 across 360 intervals and 0.952 room sim/wall ratio, with 0.983–1.052× synthetic speed and 8.333/16.667 ms modeled steering onset. One-minute load was 20.15 before and 13.66 after on 18 logical CPUs. See the version log for the report and raw evidence. Different reporter hashes mean this is not a paired comparison with 0.0.24.
+
+A disposable GitHub-hosted `macos-15` probe ran the 720p scenario with headless Chromium reporting `ANGLE Metal Renderer: Apple Paravirtual device`. All four observations were available: 66.7 ms browser p95 across 165 intervals and 0.930 room sim/wall ratio, with the same synthetic metrics; one-minute VM load was 20.42 before and 8.47 after on three virtual CPUs. This is a single VM probe, not a physical-device or GPU-completion measurement. An earlier `ubuntu-24.04` SwiftShader run at 720p produced too few browser intervals for a result, so the selective CI uses the tested macOS runner and checks its renderer.
+
 ## 2026-10-18 · Goal and awards presentation candidate
 
 The independent UI candidate was rebased on achievement merge `5c3779d`: `pnpm test` passed 884 tests and `pnpm build` passed with the existing Vite large-chunk warning. The build was repeated after increasing the touch targets to 44 CSS pixels. No room or gameplay protocol changes are included in this UI candidate.
