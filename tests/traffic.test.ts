@@ -5,7 +5,7 @@ import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
+import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, trafficInput, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
 import { initialSoccer } from '../shared/soccer';
 
@@ -317,6 +317,20 @@ test('rush profiles peak separately and transition continuously', () => {
     const t=timeAtHour(hour);
     assert.ok(Math.abs(trafficDemand(t-.05).intensity-trafficDemand(t+.05).intensity)<.001);
   }
+});
+
+test('a turning car is detected across its full width while a parallel car stays clear', () => {
+  const world=createWorld();
+  const follower=makeEntity('follower','roadster',-220,-177);
+  const leader=makeEntity('leader','model-3',-208,-174.2,'p');
+  Object.assign(follower,{npc:true,autopilot:true,routeId:0,waypoint:1,yaw:-Math.PI/2,speed:6});
+  Object.assign(leader,{yaw:follower.yaw,speed:4.5});
+  world.entities=[follower,leader];
+  const parallel=trafficInput(follower,world);
+  assert.equal(parallel.brake,false,'the neighboring parallel lane remains clear');
+  assert.ok(parallel.throttle>0);
+  leader.yaw+=Math.PI/4;
+  assert.equal(trafficInput(follower,world).brake,true,'the turning body now overlaps the path');
 });
 
 test('a following car slows for a stopped leader and resumes after the obstruction clears', () => {

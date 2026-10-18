@@ -339,11 +339,18 @@ export function trafficInput(e:Entity,world:World):Input {
     if(e.y>=other.y+otherHeight||other.y>=e.y+spec.height)continue;
     const dx=other.x-e.x,dz=other.z-e.z;
     const along=dx*forward.x+dz*forward.z,side=Math.abs(dx*forward.z-dz*forward.x);
+    if(along<=0)continue;
     const size=other.kind==='person'?{length:.7,width:.7}:VEHICLES[other.kind];
-    if(along<=0||side>(spec.width+size.width)/2+.35)continue;
-    const gap=along-(spec.length+size.length)/2;
+    if(side>(spec.width+size.width+size.length)/2+.35)continue;
     const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
-    const leaderSpeed=Math.max(0,other.speed*(forward.x*otherForward.x+forward.z*otherForward.z));
+    // A turning vehicle's length projects across our lane; width alone can
+    // incorrectly clear it while its body still occupies the driving path.
+    const alignment=forward.x*otherForward.x+forward.z*otherForward.z;
+    const crosswise=forward.x*otherForward.z-forward.z*otherForward.x;
+    const lateralReach=(spec.width+size.width*Math.abs(alignment)+size.length*Math.abs(crosswise))/2+.35;
+    if(side>lateralReach)continue;
+    const gap=along-(spec.length+size.length)/2;
+    const leaderSpeed=Math.max(0,other.speed*alignment);
     if(gap<hazardGap){hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);}
     // Occupied cars start slowing earlier, leaving room to follow smoothly.
     // Ambient traffic retains its existing 1.5-second headway.

@@ -27,7 +27,8 @@ async function observe(root:string){
     const a=route[index],b=route[(index+1)%route.length],t=(z-a.z)/(b.z-a.z);
     Object.assign(car,{x:a.x+(b.x-a.x)*t,z,y:0,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),
       npc:false,autopilot:true,routeId,waypoint:(index+1)%route.length,speed:15,supportId:'ground'});
-    player.delivery.cash=1_000_000;player.delivery.level=3;
+    // The full highway loop crosses the Level 6 San Jose checkpoint.
+    player.delivery.cash=2_000_000;player.delivery.level=6;
     world.time=240; // 08:00 in the game's accelerated day.
     const nearby=new Set<string>(),close=new Set<string>(),controls=new Map();
     let samples=0,nearbyCount=0,nearbySeconds=0,nearest=Infinity,distance=0;

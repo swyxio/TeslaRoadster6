@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step} from '../shared/game';
 import {HIGHWAYS} from '../shared/map';
 import {body,contact} from '../shared/physics';
@@ -191,7 +192,8 @@ test('a populated highway does not deadlock the player behind a merging car',()=
   const a=route[index],b=route[(index+1)%route.length],t=(z-a.z)/(b.z-a.z);
   Object.assign(car,{x:a.x+(b.x-a.x)*t,z,y:0,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),
     npc:false,autopilot:true,routeId,waypoint:index+1,speed:15,supportId:'ground'});
-  player.delivery.cash=1_000_000;player.delivery.level=3;world.time=240;
+  // The full loop now crosses the San Jose access gate at Level 6.
+  player.delivery.cash=LEVELS[6].cash;player.delivery.level=6;world.time=240;
   let distance=0,slow=0,longestSlow=0;
   for(let tick=0;tick<240*20;tick++){
     const x=car.x,previousZ=car.z;step(world,new Map(),.05);

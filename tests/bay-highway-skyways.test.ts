@@ -20,11 +20,13 @@ test('Bay skyways are directional, clear of buildings, and obey region gates',()
     const world=createWorld(),player=addPlayer(world,'skyway','Skyway');
     const car=world.entities.find(e=>e.id===player.entityId)!;
     world.entities=[car];world.pickups=[];
-    player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2500;
+    const level=lane.id.startsWith('101-')?4:5;
+    player.delivery.level=level;player.delivery.cash=LEVELS[level].cash+2500;
     Object.assign(car,{x:(lane.start.x+lane.end.x)/2,z:(lane.start.z+lane.end.z)/2,y:lane.height,air:0,supportId:null,vx:0,vy:0,vz:0});
     assert.equal(currentAt(car)?.id,lane.id);
     assert.ok(currentBlockedByProgression(lane,car,0));
-    assert.equal(currentBlockedByProgression(lane,car,2),false);
+    assert.ok(currentBlockedByProgression(lane,car,level-1 as 3|4));
+    assert.equal(currentBlockedByProgression(lane,car,level),false);
     for(let i=0;i<20;i++)step(world,new Map([[player.id,NEUTRAL]]),.05);
     assert.ok((car.vx*dx+car.vz*dz)/length>2.9,`${lane.id} pushes in the marked direction`);
     assert.ok(car.air>3.9,`${lane.id} refills air`);
