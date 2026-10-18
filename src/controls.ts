@@ -18,7 +18,9 @@ export class Controls {
       this.keys.add(e.code);
       if (!e.repeat) {
         if(e.code==='KeyE'||e.code==='KeyJ')this.jump=(this.jump+1)%2147483648;
-        if(e.code==='KeyX'||(e.code==='Space'&&this.airborne))this.flip=(this.flip+1)%2147483648;
+        // Send the edge even during takeoff; the simulation decides whether
+        // the car is airborne rather than relying on the slower HUD update.
+        if(e.code==='KeyX'||e.code==='Space')this.flip=(this.flip+1)%2147483648;
         const action = {KeyF:'interact',KeyK:'reset',KeyC:'camera',KeyV:'autopilot',KeyG:'fleet',KeyL:'scores',KeyT:'awards',KeyB:'shop',Escape:'menu'}[e.code];
         if (action) this.onAction(action as 'interact');
       }

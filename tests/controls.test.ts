@@ -37,13 +37,27 @@ test('Space brakes on the road and flips in the air, E jumps, and touch brake co
   fakeWindow.dispatchEvent(key('keydown','Space'));assert.equal(controls.read().brake,true);assert.equal(controls.read().jump,0);
   fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().brake,false);
   fakeWindow.dispatchEvent(key('keydown','KeyE'));fakeWindow.dispatchEvent(key('keyup','KeyE'));assert.equal(controls.read().jump,1);assert.equal(controls.read().brake,false);
-  controls.airborne=true;fakeWindow.dispatchEvent(key('keydown','Space'));fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().flip,1);
-  fakeWindow.dispatchEvent(key('keydown','KeyX'));fakeWindow.dispatchEvent(key('keyup','KeyX'));assert.equal(controls.read().flip,2);
+  assert.equal(controls.read().flip,1,'road braking sends an edge that the simulation ignores on the ground');
+  controls.airborne=true;fakeWindow.dispatchEvent(key('keydown','Space'));fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().flip,2);
+  fakeWindow.dispatchEvent(key('keydown','KeyX'));fakeWindow.dispatchEvent(key('keyup','KeyX'));assert.equal(controls.read().flip,3);
   fakeWindow.dispatchEvent(key('keydown','KeyH'));fakeWindow.dispatchEvent(key('keydown','KeyW'));assert.equal(controls.read().hover,true);assert.equal(controls.read().throttle,1);
   fakeWindow.dispatchEvent(key('keyup','KeyH'));fakeWindow.dispatchEvent(key('keyup','KeyW'));assert.equal(controls.read().hover,false);
   steering.dispatchEvent(pointer('pointerdown',1));brake.dispatchEvent(pointer('pointerdown',2));
   assert.equal(controls.read().steer,1);assert.equal(controls.read().brake,true);
   brake.dispatchEvent(pointer('pointercancel',2));assert.equal(controls.read().brake,false);assert.equal(controls.read().steer,1);
+});
+
+test('a Space tap immediately after jump flips even before the HUD updates',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const car=makeEntity('car','roadster',0,0,'driver');
+  const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
+  for(const code of ['KeyE','Space']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
+  assert.equal(controls.airborne,false);
+  step(world,new Map([['driver',controls.read()]]),.05);
+  assert.equal(car.supportId,null);assert.ok(car.flipRemaining>0);assert.equal(car.air,83.5);
 });
 
 
