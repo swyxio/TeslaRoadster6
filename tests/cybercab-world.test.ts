@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, chooseVehicle, createWorld, dispatchCybercab, interact, MAX_DISPATCHED_CABS_PER_ROOM, removePlayer, step } from '../shared/game';
+import { addPlayer, chooseVehicle, createEmptyWorld, createWorld, dispatchCybercab, interact, makeEntity, MAX_DISPATCHED_CABS_PER_ROOM, removePlayer, step } from '../shared/game';
 import { snapshotFor } from '../worker/snapshot';
+import { routePose } from '../shared/traffic';
 
 test('owned cabs dispatch once, move autonomously and survive fleet selection', () => {
   const world=createWorld(),player=addPlayer(world,'owner','Owner');
@@ -39,6 +40,7 @@ test('disconnect removes unattended owned cabs; a borrowed cab remains until rel
   borrowed.driver=borrower.id;borrowed.autopilot=false;borrower.entityId=borrowed.id;
   removePlayer(world,owner.id);
   assert.ok(!world.entities.includes(unattended));assert.ok(world.entities.includes(borrowed));
+  assert.equal(borrowed.cab,undefined);assert.equal(borrowed.owner,null);assert.equal(borrowed.retiredCab,true);
   removePlayer(world,borrower.id);assert.ok(!world.entities.includes(borrowed));
 });
 
@@ -52,15 +54,23 @@ test('a borrowed cab is removed when its owner has left and the borrower changes
   assert.ok(!world.entities.includes(cab));
 });
 
-test('reconnect rebinds a borrowed cab in the same room without duplicating it', () => {
+test('reconnect retires a borrowed copy before dispatching the asset in the same or another room', () => {
   const world=createWorld(),owner=addPlayer(world,'old','Owner'),borrower=addPlayer(world,'borrower','Borrower');
   const cab=dispatchCybercab(world,owner.id,'asset-5')!;
   const old=world.entities.find(entity=>entity.id===borrower.entityId)!;
   world.entities=world.entities.filter(entity=>entity!==old);cab.driver=borrower.id;cab.autopilot=false;borrower.entityId=cab.id;
   assert.equal(dispatchCybercab(world,borrower.id,'asset-5'),null,'a connected owner cannot be replaced');
   removePlayer(world,owner.id);addPlayer(world,'new','Owner');
-  assert.equal(dispatchCybercab(world,'new','asset-5'),cab);assert.equal(cab.owner,'new');
+  assert.equal(cab.cab,undefined);assert.equal(cab.retiredCab,true);assert.equal(cab.driver,borrower.id);
+  const restored=dispatchCybercab(world,'new','asset-5')!;
+  assert.notEqual(restored,cab);assert.notEqual(restored.id,cab.id);assert.equal(restored.owner,'new');
   assert.equal(world.entities.filter(entity=>entity.cab?.assetId==='asset-5').length,1);
+
+  const otherRoom=createWorld();addPlayer(otherRoom,'other','Owner');
+  removePlayer(world,'new');
+  const moved=dispatchCybercab(otherRoom,'other','asset-5');assert.ok(moved);
+  assert.equal(world.entities.filter(entity=>entity.cab?.assetId==='asset-5').length,0);
+  assert.equal(otherRoom.entities.filter(entity=>entity.cab?.assetId==='asset-5').length,1);
 });
 
 test('the room bounds dispatch and rejects missing owners or invalid IDs', () => {
@@ -70,4 +80,13 @@ test('the room bounds dispatch and rejects missing owners or invalid IDs', () =>
   for(let i=0;i<MAX_DISPATCHED_CABS_PER_ROOM;i++)assert.ok(dispatchCybercab(world,'owner',`asset-${i}`),`cab ${i}`);
   assert.equal(dispatchCybercab(world,'owner','one-too-many'),null);
   assert.equal(world.entities.filter(entity=>entity.cab).length,MAX_DISPATCHED_CABS_PER_ROOM);
+});
+
+test('dispatch avoids the path of fast approaching traffic', () => {
+  const world=createEmptyWorld();addPlayer(world,'owner','Owner');
+  const first=routePose(0,192),approaching=makeEntity('approaching','model-3',first.x-10,first.z);
+  Object.assign(approaching,{yaw:-Math.PI/2,speed:30,vx:30});world.entities.push(approaching);
+  const cab=dispatchCybercab(world,'owner','safe-spawn')!;
+  assert.ok(cab);assert.ok(Math.hypot(cab.x-approaching.x,cab.z-approaching.z)>54);
+  step(world,new Map(),.05);assert.equal(approaching.health,100);assert.equal(cab.health,100);
 });

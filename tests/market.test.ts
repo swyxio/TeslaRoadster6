@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { decideMarket, type MarketAccount, type MarketAsset, type MarketCommand, type MarketListing, type MarketReceipt } from '../shared/market';
 
 const account=(id:string,cash:number,purchasedHomeAssetId:string|null=null):MarketAccount => ({id,cash,earned:100,purchasedHomeAssetId});
-const item=(id:string,kind:'cosmetic'|'collectible'='cosmetic'):MarketAsset => ({id,kind,ownerId:'seller',listingId:null,tradable:true});
-const property=(completedHome:boolean):MarketAsset => ({id:'property',kind:'property',ownerId:'seller',listingId:null,tradable:true,completedHome});
+const item=(id:string,kind:'cosmetic'|'collectible'='cosmetic'):MarketAsset => ({id,kind,ownerId:'seller',listingId:null,tradable:true,revision:1});
+const property=(completedHome:boolean):MarketAsset => ({id:'property',kind:'property',ownerId:'seller',listingId:null,tradable:true,revision:1,completedHome});
 
 // The real authority must provide this same read/decide/write isolation durably.
 class Fixture {
@@ -91,6 +91,25 @@ test('property transfers require the pre-purchase balance and a free purchased-h
   assert.equal(plot.run(buy('property')).result.ok,true);
   assert.equal(plot.accounts.get('buyer')?.purchasedHomeAssetId,'home');
   assert.equal(plot.accounts.get('seller')?.purchasedHomeAssetId,'other-home');
+});
+
+test('a buyer cannot receive changed property terms, even if an external mutation forgot to advance the asset revision',()=>{
+  const f=new Fixture(property(false),2_000_000);
+  f.run(create('property','listing',0));
+  f.assets.set('property',{...property(true),listingId:'listing'});
+  assert.equal(reason(f.run(buy('property'))),'asset-changed');
+  assert.equal(f.accounts.get('buyer')?.purchasedHomeAssetId,null);
+  assert.equal(f.run({type:'cancel',assetId:'property',listingId:'listing',actorId:'seller',operationId:'cancel-changed',expectedRevision:1}).result.ok,true);
+  assert.equal(f.assets.get('property')?.listingId,null);
+});
+
+test('a revision change invalidates the offer, while the owner can release custody',()=>{
+  const f=new Fixture(item('paint'));
+  f.run(create('paint'));
+  f.assets.set('paint',{...f.assets.get('paint')!,revision:2});
+  assert.equal(reason(f.run(buy('paint'))),'asset-changed');
+  assert.equal(reason(f.run({type:'reprice',assetId:'paint',listingId:'listing',actorId:'seller',operationId:'reprice-changed',expectedRevision:1,price:10})),'asset-changed');
+  assert.equal(f.run({type:'cancel',assetId:'paint',listingId:'listing',actorId:'seller',operationId:'cancel-changed',expectedRevision:1}).result.ok,true);
 });
 
 test('safe-integer prices round the seller payment down exactly, including at the maximum',()=>{

@@ -1,7 +1,7 @@
 /** Marketplace rules for use inside one authoritative durable transaction. */
 export const PROPERTY_MARKET_GATE = 2_000_000;
 
-type AssetBase = { id:string; ownerId:string; listingId:string|null; tradable:boolean };
+type AssetBase = { id:string; ownerId:string; listingId:string|null; tradable:boolean; revision:number };
 export type MarketAsset = AssetBase & (
   | { kind:'cosmetic'|'collectible' }
   | { kind:'property'; completedHome:boolean }
@@ -9,6 +9,7 @@ export type MarketAsset = AssetBase & (
 export type MarketAccount = { id:string; cash:number; earned:number; purchasedHomeAssetId:string|null };
 export type MarketListing = {
   id:string; assetId:string; sellerId:string; price:number; revision:number;
+  assetRevision:number; assetKind:MarketAsset['kind']; completedHome:boolean|null;
   status:'open'|'cancelled'|'sold'; buyerId:string|null;
 };
 
@@ -19,7 +20,7 @@ export type MarketCommand = CommandBase & (
   | { type:'cancel'|'buy'; expectedRevision:number }
 );
 type Failure = 'invalid'|'not-owner'|'not-tradable'|'asset-locked'|'listing-exists'|'listing-unavailable'|
-  'stale-listing'|'self-purchase'|'insufficient-funds'|'property-gate'|'home-slot-occupied'|'balance-overflow'|'operation-conflict';
+  'stale-listing'|'asset-changed'|'self-purchase'|'insufficient-funds'|'property-gate'|'home-slot-occupied'|'balance-overflow'|'operation-conflict';
 export type MarketResult =
   | { ok:true; type:'create'|'cancel'|'reprice'; listingId:string }
   | { ok:true; type:'buy'; listingId:string; buyerId:string; sellerId:string; price:number; sellerCredit:number; fee:number }
@@ -51,9 +52,10 @@ function sameCommand(a:MarketCommand,b:MarketCommand):boolean {
  * The caller authenticates actorId and loads these records, including the prior
  * receipt keyed by actorId + operationId, within the same durable transaction.
  * Persist the returned receipt with all writes, even for a rejected request.
- * A non-null asset.listingId is custody: other operations must not transfer or
- * consume that asset until the listing is cancelled or sold. Never expose a
- * result before the transaction commits; a replay returns no writes.
+ * A non-null asset.listingId is custody: other operations must not transfer,
+ * consume or change sale-relevant state until cancellation or sale. Every
+ * sale-relevant change must advance asset.revision. Never expose a result
+ * before the transaction commits; a replay returns no writes.
  */
 export function decideMarket(command:MarketCommand,records:MarketRecords):MarketDecision {
   if(records.receipt){
@@ -67,7 +69,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   if((command.type==='create'||command.type==='reprice')&&!price(command.price))return reject('invalid');
   if(command.type!=='create'&&!revision(command.expectedRevision))return reject('invalid');
   const asset=records.asset, listing=records.listing;
-  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!['cosmetic','collectible','property'].includes(asset.kind)||
+  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!revision(asset.revision)||typeof asset.tradable!=='boolean'||!['cosmetic','collectible','property'].includes(asset.kind)||
     (asset.kind==='property'&&typeof asset.completedHome!=='boolean'))return reject('invalid');
 
   if(command.type==='create'){
@@ -75,7 +77,8 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
     if(!asset.tradable)return reject('not-tradable');
     if(asset.listingId!==null)return reject('asset-locked');
     if(listing!==null)return reject('listing-exists');
-    const next:MarketListing={id:command.listingId,assetId:asset.id,sellerId:asset.ownerId,price:command.price,revision:1,status:'open',buyerId:null};
+    const next:MarketListing={id:command.listingId,assetId:asset.id,sellerId:asset.ownerId,price:command.price,revision:1,
+      assetRevision:asset.revision,assetKind:asset.kind,completedHome:asset.kind==='property'?asset.completedHome:null,status:'open',buyerId:null};
     return finish({ok:true,type:'create',listingId:next.id},{asset:{...asset,listingId:next.id},listing:next});
   }
   if(!listing||listing.id!==command.listingId||listing.assetId!==asset.id||listing.status!=='open'||
@@ -83,16 +86,20 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   if(command.expectedRevision!==listing.revision)return reject('stale-listing');
   if(command.type==='cancel'||command.type==='reprice'){
     if(command.actorId!==listing.sellerId)return reject('not-owner');
+    if(command.type==='cancel')return finish({ok:true,type:'cancel',listingId:listing.id},
+      {asset:{...asset,listingId:null},listing:{...listing,status:'cancelled',revision:listing.revision+1}});
+    if(asset.revision!==listing.assetRevision||asset.kind!==listing.assetKind||
+      (asset.kind==='property'?asset.completedHome:null)!==listing.completedHome)return reject('asset-changed');
     if(command.type==='reprice'){
       // Leave one safe revision available to cancel or sell the open listing.
       if(listing.revision===Number.MAX_SAFE_INTEGER-1)return reject('invalid');
       return finish({ok:true,type:'reprice',listingId:listing.id},
         {listing:{...listing,price:command.price,revision:listing.revision+1}});
     }
-    return finish({ok:true,type:'cancel',listingId:listing.id},
-      {asset:{...asset,listingId:null},listing:{...listing,status:'cancelled',revision:listing.revision+1}});
   }
   if(command.type!=='buy')return reject('invalid');
+  if(asset.revision!==listing.assetRevision||asset.kind!==listing.assetKind||
+    (asset.kind==='property'?asset.completedHome:null)!==listing.completedHome)return reject('asset-changed');
   if(!asset.tradable)return reject('not-tradable');
   if(command.actorId===listing.sellerId)return reject('self-purchase');
   const buyer=records.buyer,seller=records.seller;
