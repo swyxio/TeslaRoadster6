@@ -126,6 +126,8 @@ pair is a first observation to repeat, not a regression verdict or budget.
 
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 2026-10-18 · 0.0.30-alpha · `c691730ed04841bfda0a702e3eda93b321df680c` | One delivery and flight; CI Apple M1 virtual / paravirtual Metal | 116.6 | 0.983–1.052 | 8.333 / 16.667 | 0.922 | [Service-area boost pair](performance-baselines/2026-10-18-boost-hosted-530/); one loaded virtual runner. |
+| 2026-10-18 · 0.0.31-alpha · `530f2f707f7ad41abd9f356ac21b141ff870e53a` | Same paired one-delivery scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.925 | [Service-area boost pair](performance-baselines/2026-10-18-boost-hosted-530/); predates sandbox integration. |
 | 2026-10-18 · 0.0.29-alpha · `0b27e97cfd4bab8f1b66b286f139e0d85e3a47bb` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.926 | [Boost hosted pair](performance-baselines/2026-10-18-boost-hosted-ff2/); one loaded virtual runner. |
 | 2026-10-18 · 0.0.30-alpha · `ff2e7a34570f7fa7ab9473cc307be1ffcb0f355c` | Same paired scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.929 | [Boost hosted pair](performance-baselines/2026-10-18-boost-hosted-ff2/); differing load; predates final fixes and service areas. |
 | 2026-10-18 · 0.0.28-alpha · `009af539404082d5d5da4c3947bd013a6c2e3209` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.914 | [Boost and landing CI pair](performance-baselines/2026-10-18-boost-landing-ci/); single run, high host load. |
