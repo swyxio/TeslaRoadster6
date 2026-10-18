@@ -8,6 +8,8 @@ The next restaurant and fare appear at the top left; the gold ring on the minima
 
 A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to zero. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
 
+Every third completed delivery also pays a repeatable $750 checkpoint, even when the late fare is zero. The mission card shows progress toward the next checkpoint and identifies the bonus when it is paid. It is separate from one-off achievements. The completed order, bonus and wallet are saved together for a saved driver.
+
 ## Unlocking the Bay
 
 Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it.

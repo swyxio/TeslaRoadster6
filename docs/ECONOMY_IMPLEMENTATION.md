@@ -20,9 +20,9 @@ The exact level thresholds, fares, award sizes, cab rates, property tiers, floor
 
 ## What exists today
 
-The wallet and showroom implementation adds saved driver progress and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the implemented rules. See [VERIFICATION.md](VERIFICATION.md) for testing and release evidence.
+The wallet and showroom implementation adds saved driver progress and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. Every third completed delivery also pays a repeatable $750 checkpoint. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the implemented rules. See [VERIFICATION.md](VERIFICATION.md) for testing and release evidence.
 
-Property, income-producing cabs, city-specific delivery chains, expanded research programs, event multipliers and season retirement remain design work. In particular, the candidate groups Oakland with Berkeley and the Peninsula with the East Bay; it does not yet implement the separate city gates described below.
+Property, income-producing cabs, city-specific delivery chains, expanded research programs, event multipliers for future activities and season retirement remain design work. Delivery fares use the implemented room and global event rates. In particular, the candidate groups Oakland with Berkeley and the Peninsula with the East Bay; it does not yet implement the separate city gates described below.
 
 Saved-driver persistence must remain isolated from room responsiveness as new persistent features ship. A prototype exposed room-wide stalls when a profile write was slow or failed; the implemented transaction boundary and its checks are documented in [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) and [VERIFICATION.md](VERIFICATION.md). Keep the existing game playable while integrating each layer.
 
@@ -58,7 +58,7 @@ The first meaningful choices should arrive well before property: take the next d
 - **Ownership and building:** reward the first Cybercab and subsequent fleet milestones, the first plot, constructing homes, and the 1 / 5 / 10 / 20-story building milestones. The candidate fleet chain counts currently owned cabs and pays each tier once. Record unique plot and build IDs so reacquiring the same property cannot repay a one-off award. The user rejected a generic “homes owned” count. Cab resale and repurchase pricing still need rules.
 - **Guidance:** the Awards UI should show progress, the next reward and a map destination where useful. Complete several achievements from one action without turning each into a separate interrupting popup.
 
-Awards and one-time check-ins pay once per player. The proposed repeatable delivery checkpoint is separate from an achievement; it pays every three deliveries. The exact schedule is in [ECONOMY.md](ECONOMY.md#cash-sources-and-awards). Protect completion events against retries and invalid or repeated participation.
+Awards and one-time check-ins pay once per player. The repeatable delivery checkpoint is separate from an achievement; it pays every three deliveries. The exact schedule is in [ECONOMY.md](ECONOMY.md#cash-sources-and-awards). Protect completion events against retries and invalid or repeated participation.
 
 The current model's early achievement target is still unmet: some sessions get too many awards at once, and hours two through eight have long gaps. Measure gross money, wallet change and meaningful achievements per five minutes, plus longer zero-award stretches. Keep progress toward a visible next goal even when a reward is not due in the current window.
 

@@ -923,6 +923,21 @@ In Chrome against isolated local Workers, the mission and launch viewer were che
 
 A final local v36 Chrome playtest bought, collected and drove the Lamborghini Revuelto (86 km/h), Bugatti Chiron (83 km/h) and Bugatti Tourbillon (86 km/h). Ownership and the remaining $16,897,995 balance survived reload. A separate $5 room contribution survived reload, reduced the wallet by $5 and did not change the displayed global earnings. Portrait showroom and portrait/landscape Mars dialogs rendered and scrolled with no console warnings or errors. Emulated pointer clicks were mis-targeted in this session, so this check did not establish touch interaction; the earlier v35 touch-drive check is recorded above. No physical device was tested. Vehicle shapes are stylized low-poly representations.
 
+## 2026-10-18 · Delivery checkpoints
+
+On the isolated v36 checkpoint branch, `pnpm test` passed 684 tests and `pnpm build` passed both TypeScript checks and the production build, with the existing Vite large-chunk warning. Focused simulation checks cover every third delivery, a zero-fare completion, combined fare and achievement awards, deferred pickup and dropoff, another driver's progress during deferral, and the ordering and detached payload of a verified Dome win. The new payout hook does not itself persist event-component records or enable multipliers.
+
+After integrating wallet recovery merge `ce844b5`, the 684-test suite, build, checkpoint lost-reply integration and focused unavailable-bind retry integration passed again.
+
+A local-only Wrangler fixture completed three actual room deliveries, held a lost profile-commit reply on the third, and verified that the other driver continued receiving room ticks. Retrying and recovering the saved driver preserved one checkpoint payment, and the global-income outbox caught up without duplicating it. This is local test evidence, not production recovery verification.
+
+The standard two-client room integration also passed against local Wrangler, including driving, delivery, a five-goal Dome match and invalid-input isolation. Its advertised capacity of eight is not a load-test result.
+
+The branch Preview advertised v36 and capacity eight; two fresh guest clients joined and one saw the other's movement. Two inputs were rejected in the first short sample; their reasons were not captured. A second short sample reported no rejections. Neither sample measures sustained capacity.
+
+Chrome against the local fixture showed checkpoint progress at 2/3 and the paid $750 after the third and sixth deliveries. Desktop and emulated 390×844 portrait and 844×390 landscape layouts were inspected. Holding the emulated Drive control accelerated the car to approximately 30 km/h in each orientation; touch emulation was used for landscape. The local changelog rendered at desktop and those narrow sizes. No browser warnings or errors were observed in this check. These were desktop emulations, not physical-device tests.
+## 2026-10-18 · Production wallet recovery
+
 The v36 production build from merge `8e6581e` completed at 12:10 UTC. A guest drove, opened the 46-achievement list and viewed the separate global and room Mars totals in Chrome. Initial saved-driver binding failed for both an existing browser identity and a newly created identity, while the same new-driver check succeeded in Preview. A redacted diagnostic deployed at 12:14 UTC reported `The RPC receiver does not implement the method "bindWallet"` at the chat bind operation; the latest Worker was configured at 100%. Binding began succeeding several minutes later, after a filtered live tail was enabled. A temporarily older chat object is consistent with the error, but the cause of its eventual update was not established.
 
 In the subsequent Chrome production retest, a newly saved disposable driver connected, drove to 91 km/h, and restored the same driver ID, $2,500 and an in-progress delivery timer after reload. The remembered canonical-origin wallet drove and restored its delivery timer after reload; the identity panel reported that the driver was connected elsewhere, so this tab did not independently verify chat identity. No browser console warnings or errors appeared. These were desktop checks.
