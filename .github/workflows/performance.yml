@@ -49,10 +49,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       run: ${{ steps.select.outputs.run }}
+      candidate_sha: ${{ steps.revisions.outputs.candidate_sha }}
+      base_sha: ${{ steps.revisions.outputs.base_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref || github.sha }}
           path: candidate
           fetch-depth: 0
           persist-credentials: false
@@ -63,6 +65,22 @@ jobs:
         name: Classify changed files and size
         working-directory: candidate
         run: node scripts/performance-select.mjs
+      - name: Resolve base revision
+        if: ${{ steps.select.outputs.run == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base_ref || 'main' }}
+          path: base
+          persist-credentials: false
+      - id: revisions
+        name: Pin candidate and base revisions
+        if: ${{ steps.select.outputs.run == 'true' }}
+        run: |
+          candidate_sha=$(git -C candidate rev-parse HEAD)
+          base_sha=$(git -C base rev-parse HEAD)
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "Selected revisions: base $base_sha, candidate $candidate_sha." >> "$GITHUB_STEP_SUMMARY"
       - name: Explain selection
         env:
           REASON: ${{ steps.select.outputs.reason }}
@@ -79,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          ref: ${{ needs.select.outputs.candidate_sha }}
           path: candidate
           persist-credentials: false
       - uses: pnpm/action-setup@v4
@@ -90,7 +108,10 @@ jobs:
           node-version-file: candidate/.nvmrc
       - name: Install and test candidate
         working-directory: candidate
+        env:
+          EXPECTED_CANDIDATE: ${{ needs.select.outputs.candidate_sha }}
         run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
           pnpm install --frozen-lockfile
           pnpm test
 
@@ -107,15 +128,22 @@ jobs:
       - name: Check out candidate and measurement harness
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          ref: ${{ needs.select.outputs.candidate_sha }}
           path: candidate
           persist-credentials: false
       - name: Check out base game
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.base.ref) || inputs.base_ref || 'main' }}
+          ref: ${{ needs.select.outputs.base_sha }}
           path: base
           persist-credentials: false
+      - name: Verify selected revisions
+        env:
+          EXPECTED_CANDIDATE: ${{ needs.select.outputs.candidate_sha }}
+          EXPECTED_BASE: ${{ needs.select.outputs.base_sha }}
+        run: |
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          test "$(git -C base rev-parse HEAD)" = "$EXPECTED_BASE"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.1

@@ -170,6 +170,12 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   // A later trigger bounds the first jump even when that later burst is invalid.
   assert.equal(check(poses.map(p => p.tick === 48 || p.tick === 50 ? { ...p, supported: true, thrusters: 0, vy: 0 } : p.tick === 54 ? { ...p, jumpBurstUntil: 2 } : p)), 'unavailable');
   assert.equal(check(poses.map(p => p.tick === 64 ? { ...p, lastJump: 3, jumpBurstUntil: 4 } : p)), 'unavailable');
+  // A completed pair must not hide a later unfinished jump, or a route cut
+  // short in the air when no additional trigger was observable.
+  const thirdJump = { ...poses.at(-1)!, atMs: 3300, tick: 66, lastJump: 3, jumpBurstUntil: 4, supported: false, thrusters: 6, vy: 5 };
+  assert.equal(check([...poses, thirdJump]), 'unavailable');
+  assert.equal(check([...poses, { ...thirdJump, lastJump: 2, jumpBurstUntil: 3 }]), 'unavailable');
+  assert.equal(check([...poses, thirdJump, { ...thirdJump, atMs: 3400, tick: 68, supported: true, thrusters: 0, vy: 0 }]), 'available');
   // Driving before or after a stationary airborne phase cannot count as flight.
   assert.equal(check(poses.map(p => p.tick >= 48 && p.tick <= 62 ? { ...p, x: 20 } : p.tick === 64 ? { ...p, x: 80 } : p)), 'unavailable');
   assert.equal(check(poses.map(p => p.tick >= 48 && p.tick <= 62 ? { ...p, x: p.tick === 52 ? 80 : 20 } : p)), 'unavailable');

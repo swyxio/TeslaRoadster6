@@ -178,7 +178,8 @@ export function deliveryRoute(poses, initialOrder, stageRepeat) {
     flightSnapshots = Math.max(flightSnapshots, longest.length);
     if (longest.length && displacement > 5 && (!selected || longest.length > selected.powered.length)) selected = { interval, powered: longest, farthest, displacement };
   }
-  if (jumps.length < 2 || !selected) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight with airborne displacement were not observed', jumpCount: jumps.length, flightSnapshots };
+  if (jumps.length < 2 || jumps.length !== triggers.length || flight.at(-1)?.supported !== true || !selected)
+    return { status: 'unavailable', reason: 'two jumps, all observed landings and sustained forward-powered flight with airborne displacement were not observed', jumpCount: jumps.length, flightSnapshots };
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
