@@ -1,5 +1,10 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket Dome production · 2026-10-17 Pacific
+
+- The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
+- Chrome desktop opened the live solo game and the Rocket Dome; the field, ball and first-to-five scoreboard were visible. Local desktop and touch-emulated playtests are documented below; no physical-device or production frame-rate test was performed.
+
 ## Rocket Dome with cockpit · protocol v11, local build · 2026-10-17 Pacific
 
 - After integrating the cockpit update and correcting natural arena entry and long-vehicle wall clearance, `pnpm test` passed 147/147 and `pnpm build` passed; the main JavaScript is 697 kB (195 kB gzip) and Vite still reports its chunk-size warning. Simulation regressions cover first-person order eligibility, grounded and airborne entry, overflight, police/delivery policy and yaw-projected wall clearance.
