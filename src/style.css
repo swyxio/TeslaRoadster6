@@ -47,6 +47,51 @@
 @media(max-height:550px){.ticket-dialog{padding:16px;max-height:94dvh}.ticket-icon{width:36px;height:36px;font-size:24px;margin-bottom:5px}.ticket-dialog h2{font-size:26px;margin:5px}.ticket-dialog p{margin:5px 0;font-size:12px}.ticket-amount{font-size:35px;margin:5px}.ticket-detail{padding:6px}.ticket-dialog .primary{margin-top:8px;min-height:40px}}
 @media(prefers-reduced-motion:reduce){.mission #police-status.chased{animation:none}}
 
+/* Road-first HUD: keep the view open and put secondary actions on demand. */
+.mission{top:112px;left:24px;border:1px solid #c5dfd142;border-radius:12px;padding:14px 17px;max-width:360px;background:#142d34e8;gap:5px}
+.mission strong{font-size:15px;line-height:1.3}
+.action-drawer{position:fixed;top:112px;right:24px;z-index:12}
+.hud-toggle{min-height:42px;padding:0 15px;border:1px solid #c5dfd166;border-radius:10px;background:#142d34ed;color:#f7ecd6;font-size:12px;font-weight:700;box-shadow:0 5px 20px #071d2740}
+.hud-toggle span{margin-left:14px;color:#ffd095}
+.drive-actions{position:absolute;top:50px;right:0;left:auto;width:220px;max-width:min(220px,calc(100vw - 32px));max-height:calc(100dvh - 175px);overflow:auto;display:grid;grid-template-columns:1fr;gap:3px;padding:7px;background:#142d34f7;border:1px solid #c5dfd166;border-radius:12px;box-shadow:0 12px 35px #071d2780}
+.drive-actions[hidden],.keyboard-help[hidden]{display:none}
+.drive-actions button{text-align:left;font-size:12px;padding:10px 12px;border:0;background:transparent;border-radius:7px;min-height:40px}
+.drive-actions button:hover,.drive-actions button:focus-visible{background:#ffffff1c}
+.map-panel{left:24px;bottom:24px}
+.telemetry{right:24px;bottom:24px;width:270px;padding:16px}
+.control-guide{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:12}
+.keyboard-help{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);width:min(430px,calc(100vw - 32px));display:block;white-space:normal;background:#142d34f7;border:1px solid #c5dfd166;border-radius:12px;padding:16px 18px;box-shadow:0 12px 35px #071d2780;color:#e3eee4;font-size:12px;line-height:1.5}
+.keyboard-help strong{font:700 10px ui-monospace,monospace;letter-spacing:1px;color:#ffd095}
+.keyboard-help p{margin:10px 0}.keyboard-help small{color:#b9ccc4}.keyboard-help kbd{font-size:10px;margin:0 2px 0 0;padding:3px 5px}
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #ffdb9f;outline-offset:3px}
+@media(pointer:coarse),(max-width:800px){
+ .mission{top:78px;left:12px;max-width:calc(100vw - 124px);padding:10px 12px;gap:3px}
+ .mission strong{font-size:12px}.mission #hint,.mission #delivery-stats,.mission #police-status{font-size:9px}
+ .action-drawer{top:78px;right:12px}.hud-toggle{min-height:42px;padding:0 12px}.hud-toggle span{margin-left:7px}
+ .drive-actions{top:48px;right:0;left:auto;max-height:calc(100dvh - 145px);max-width:calc(100vw - 24px)}
+ .drive-actions button{font-size:12px;min-height:42px;padding:9px 12px}
+ .control-guide{display:none}
+ .touch-controls{bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:12px;align-items:end}
+ .touch-controls button{border:1px solid #fff3d590;color:#203c3b;background:#efdfc4e8;box-shadow:0 3px 0 #9a8a72aa,0 7px 20px #071d2740;border-radius:13px;height:54px;font-size:11px;font-weight:800}
+ .touch-controls button.pressed{background:#ffd08e;transform:translateY(2px);box-shadow:0 1px 0 #9a8a72aa}
+ .touch-controls button:disabled{opacity:.4}
+ .steering{grid-template-columns:repeat(2,62px);gap:7px}.steering button{min-width:62px}.steering button:nth-child(-n+2){font-size:19px}
+ .pedals{grid-template-columns:repeat(2,67px);gap:7px}.pedals button{min-width:67px}.pedals .accelerate{background:#ef8c72eb;color:#263a38}
+ .touch-flight{position:absolute;bottom:126px;left:0;margin:0;gap:7px}
+ .touch-flight button{min-width:49px;height:45px;font-size:19px}.touch-flight .hover-control{min-width:60px;font-size:10px}
+ .map-panel{left:12px;bottom:196px;width:132px;padding:7px}.map-panel #minimap{width:116px;height:116px}
+ .map-title{letter-spacing:.6px}.map-key{font-size:6px;margin-top:6px}
+ .telemetry{right:12px;bottom:196px;width:190px;padding:11px}.speed strong{font-size:42px}.speed{margin:0 0 4px}
+}
+@media(max-width:360px){.map-panel{width:115px}.map-panel #minimap{width:99px;height:99px}.telemetry{width:180px}.mission{max-width:calc(100vw - 118px)}}
+@media(max-height:550px) and (pointer:coarse){
+ .mission{top:62px;max-width:min(280px,calc(100vw - 130px))}.mission #hint{display:block}
+ .action-drawer{top:62px}.drive-actions{max-height:calc(100dvh - 118px)}
+ .touch-controls{bottom:10px}.touch-controls button{height:46px}.steering{grid-template-columns:repeat(2,55px)}.steering button{min-width:55px}.pedals{grid-template-columns:repeat(2,60px)}.pedals button{min-width:60px}
+ .touch-flight{position:absolute;left:50%;bottom:0;transform:translateX(-50%);margin:0}.touch-flight button{height:43px;min-width:43px}.touch-flight .hover-control{min-width:52px}
+ .map-panel{display:block;bottom:118px;left:12px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-key{display:none}
+ .telemetry{bottom:118px;right:12px;width:180px;padding:8px}.telemetry .vehicle-title,.telemetry #station-status{display:none}.speed strong{font-size:30px}.meter-row{margin-top:4px}
+}
 .sound-button{font-size:21px;line-height:1}.sound-dialog{width:min(460px,94vw)}
 .sound-sliders{display:grid;gap:16px;margin:20px 0}.sound-sliders label{display:grid;grid-template-columns:1fr auto;gap:6px;color:#e8ede3;font-size:13px;font-weight:600}.sound-sliders output{color:#ffcf85;font:11px ui-monospace,monospace}.sound-sliders input[type=range]{grid-column:1/-1;width:100%;margin:0;padding:0;min-height:24px;accent-color:#ffc77f;background:transparent;border:0;cursor:pointer}
 .sound-actions{display:flex;gap:10px}.sound-actions button{flex:1;min-height:44px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:13px}.sound-actions button[aria-pressed=true]{background:#ffc77f;color:#21373b}
@@ -56,11 +101,12 @@
 /* Cockpit chrome and the navigation card are local presentation only. */
 .cockpit-invitation{margin:-16px 0 20px;color:#c3dbcc;font-size:11px;line-height:1.5}
 .cockpit-trim{position:fixed;inset:0;pointer-events:none;border-left:clamp(8px,2vw,26px) solid #162a2bcc;border-right:clamp(8px,2vw,26px) solid #162a2bcc;border-bottom:18px solid #162a2bcc;box-shadow:inset 0 0 40px #142b2c55}
-.cockpit-dashboard{position:fixed;left:50%;bottom:58px;transform:translateX(-50%);width:min(490px,48vw);display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 18px;border:1px solid #b1d0c455;border-radius:12px;background:#102a30e8;box-shadow:0 8px 25px #091d2388;pointer-events:none}
+.cockpit-dashboard{position:fixed;left:50%;bottom:85px;transform:translateX(-50%);width:min(490px,48vw);display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 18px;border:1px solid #b1d0c455;border-radius:12px;background:#102a30e8;box-shadow:0 8px 25px #091d2388;pointer-events:none}
 .cockpit-route{display:grid;gap:3px;min-width:0}.cockpit-route span,.objective-sign span{font:700 9px ui-monospace,monospace;letter-spacing:1.5px;color:#ffc77f}.cockpit-route strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cockpit-route small{font-size:10px;color:#bbd0c6}.cockpit-speed{display:grid;text-align:center;color:#d6e6db}.cockpit-speed strong{font-size:28px;line-height:1}.cockpit-speed span{font:8px ui-monospace,monospace}
 .objective-sign{position:fixed;transform:translate(-50%,-100%);display:grid;gap:3px;max-width:210px;padding:7px 10px;text-align:center;border:1px solid #efcf9877;border-radius:6px;background:#173b40d9;box-shadow:0 4px 16px #0c1d2455;pointer-events:none}.objective-sign strong{font-size:11px;line-height:1.2}.objective-sign small{font:10px ui-monospace,monospace;color:#dbebdf}
 .cockpit-dashboard[hidden],.cockpit-trim[hidden],.objective-sign[hidden]{display:none}
 .cockpit-active .mission{background:none;border:0;box-shadow:none;backdrop-filter:none;padding:0}.cockpit-active .mission>*:not(#police-status),.cockpit-active .mission #police-status:not(.chased){display:none}
 .score-driver{display:grid;gap:3px;min-width:0}.scores-list li .score-driver>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.score-driver small{font:700 9px ui-monospace,monospace;color:#a8e5c3;white-space:normal;line-height:1.4}
-@media(pointer:coarse),(max-width:800px){.cockpit-dashboard{top:80px;bottom:auto;left:16px;transform:none;width:min(350px,calc(100vw - 32px));padding:9px 12px}.cockpit-route strong{font-size:12px}.cockpit-route small{font-size:9px}.cockpit-speed strong{font-size:22px}.cockpit-active .mission{top:160px;z-index:3}.cockpit-invitation{margin:-8px 0 14px}.score-driver small{font-size:8px}}
+@media(pointer:coarse),(max-width:800px){.cockpit-dashboard{top:80px;bottom:auto;left:16px;transform:none;width:min(300px,calc(100vw - 124px));padding:9px 12px}.cockpit-route strong{font-size:12px}.cockpit-route small{font-size:9px}.cockpit-speed strong{font-size:22px}.cockpit-active .mission{top:160px;z-index:3}.cockpit-invitation{margin:-8px 0 14px}.score-driver small{font-size:8px}}
 @media(max-height:550px){.cockpit-dashboard{top:60px;bottom:auto;left:16px;transform:none;width:min(300px,42vw);padding:6px 10px}.cockpit-active .mission{top:136px}.cockpit-route small{display:none}.cockpit-trim{border-bottom-width:8px}}
+@media(max-width:360px){.topbar{padding:0 10px}.brand{font-size:16px}.brand-icon{margin-right:4px}.top-actions{gap:4px}.pill{font-size:7px;letter-spacing:.4px;padding:6px;white-space:nowrap}.sound-button{width:38px;height:38px}}
