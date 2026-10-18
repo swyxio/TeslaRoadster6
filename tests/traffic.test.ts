@@ -5,11 +5,43 @@ import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
+import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
 import { initialSoccer } from '../shared/soccer';
 
 const timeAtHour = (hour:number) => (((hour * 60 - 360) + 1440) % 1440) * 2;
+
+test('city spawn poses follow the selected route segment and waypoint',()=>{
+  const oaklandSegments=new Set<number>();
+  for(const count of [8,60,192])for(let i=0;i<count;i++){
+    const pose=routePose(i,count),route=ROUTES[pose.routeId],segment=(pose.waypoint+route.length-1)%route.length;
+    const a=route[segment],b=route[pose.waypoint],dx=b.x-a.x,dz=b.z-a.z;
+    const length=Math.hypot(dx,dz),along=((pose.x-a.x)*dx+(pose.z-a.z)*dz)/(length*length);
+    assert.ok(along>=0&&along<=1,`route ${pose.routeId}, segment ${segment}: position`);
+    assert.ok(Math.abs((pose.x-a.x)*dz-(pose.z-a.z)*dx)<1e-6,`route ${pose.routeId}, segment ${segment}: on lane`);
+    assert.ok(Math.abs(Math.atan2(Math.sin(pose.yaw-Math.atan2(-dx,-dz)),Math.cos(pose.yaw-Math.atan2(-dx,-dz))))<1e-9);
+    if(pose.routeId===3)oaklandSegments.add(segment);
+  }
+  assert.equal(oaklandSegments.size,ROUTES[3].length,'spawn coverage includes every Oakland detour segment');
+});
+
+test('Oakland ambient traffic keeps driving around the stunt surfaces',()=>{
+  for(const kind of ['model-3','roadster'] as const){
+    const world=createWorld(),car=makeEntity('oakland-ambient',kind,507,139);
+    Object.assign(car,{yaw:Math.PI,npc:true,autopilot:true,routeId:3,waypoint:2,speed:0});
+    world.entities=[car];world.players=[];world.pickups=[];
+    let previous=car.waypoint,passes=0;
+    for(let i=0;i<7200&&passes<2;i++){
+      step(world,new Map(),.05);
+      assert.equal(car.autopilot,true,`${kind}: autopilot remains active`);
+      assert.equal(car.supportId,'ground',`${kind}: remains clear of stunt surfaces`);
+      if(previous===ROUTES[3].length-1&&car.waypoint===0)passes++;
+      previous=car.waypoint;
+    }
+    assert.equal(passes,2,`${kind}: completes the detour twice`);
+    assert.equal(car.health,100,`${kind}: no collision damage`);
+  }
+});
 
 test('autopilot attaches to a later highway segment without jumping to the first four points', () => {
   const route=ROUTES[HIGHWAY_ROUTE_IDS[0]],segment=8,a=route[segment],b=route[segment+1];

@@ -11,7 +11,7 @@ import { createWorld, NEUTRAL, PROTOCOL_VERSION, type Entity, type World } from 
 import { RoomInputClient } from './room-input-client';
 
 type Message = { type:string; [key:string]:any };
-type Status = { paused:boolean; started:boolean; ready:boolean; tick:number; poseRevision:number|null };
+type Status = { paused:boolean; started:boolean; ready:boolean; tick:number; poseRevision:number|null; initialOrder: {restaurant:{id:string;x:number;z:number};customer:{id:string;x:number;y:number;z:number;rooftop:boolean}}|null };
 const delay = (ms:number) => new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
 async function until(check:()=>boolean|Promise<boolean>, label:string, timeout=15_000) {
   const deadline=Date.now()+timeout;
@@ -90,6 +90,7 @@ try {
     const status=await getStatus(room),car=client.car();
     assert.deepEqual({paused:status.paused,started:status.started,tick:status.tick,revision:status.poseRevision},
       {paused:true,started:false,tick:2,revision:1});
+    assert.deepEqual(status.initialOrder,{restaurant:{id:'tartine',x:-180,z:120},customer:{id:'cable',x:0,y:0,z:-180,rooftop:false}});
     assert.ok(car);assert.deepEqual({x:car.x,y:car.y,z:car.z,yaw:car.yaw,speed:car.speed,supportId:car.supportId},
       {x:-190,y:0,z:120,yaw:-Math.PI/2,speed:0,supportId:'ground'});
   }

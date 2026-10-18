@@ -62,7 +62,7 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
 });
 
 test('an incompatible flight-physics protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,44);
+  assert.equal(PROTOCOL_VERSION,45);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:43,capacity:64});
   assert.equal(socket.readyState,3);

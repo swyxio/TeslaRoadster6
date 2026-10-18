@@ -44,7 +44,7 @@ import { playerRace } from '../shared/race';
 import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { OTA_FEE } from '../shared/ota';
 import { marketPaintColor } from '../shared/market-catalog';
-import { LEVELS, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
+import { canAssignDeliveryRoof, LEVELS, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
 import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUntilCheckpoint } from '../shared/delivery-checkpoint';
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
@@ -62,6 +62,7 @@ import { createEarningsBonusBadge } from './earnings-bonus-ui';
 import './earnings-bonus-ui.css';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
+import { drawLockedAreas } from './access-overlay';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
 import { CURRENT_RELEASE, releaseLabel } from '../content/version';
 import { browserStorage, readLastPlayed, writeLastPlayed } from './release-tracker';
@@ -508,7 +509,10 @@ const base=mapBase.getContext('2d')!;
 const mapExtents=[
   {minX:-530,maxX:700,minZ:MAP_BOUNDS.minZ,maxZ:430},
   {minX:-550,maxX:850,minZ:MAP_BOUNDS.minZ,maxZ:430},
-  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:7600},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:1450},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:3200},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:4900},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:7700},
   MAP_BOUNDS,
 ] as const;
 const localRoads=ROADS.filter(road=>road.kind!=='highway');
@@ -531,6 +535,8 @@ function driveToDelivery(){
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.kind==='person'){notice('Get into a car to self-drive to your delivery.');return;}
   if(car.supportId!=='ground'||car.inDome){notice('Land on the ground outside the Dome first.');return;}
+  if(player.delivery.order.search){notice('Finding a safe delivery route.');return;}
+  if(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,canAssignDeliveryRoof(car))){notice('Return to an open road to retry your delivery.');return;}
   const target=orderTarget(player.delivery.order);
   if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
@@ -558,8 +564,6 @@ function minimap(entity:Entity|undefined,level:Level){
   const scale=mapLocal?240/800:bayScale;
   const px=mapLocal?(x:number)=>120+(x-cx)*scale:(x:number)=>bayLeft+(x-extent.minX)*scale;
   const pz=mapLocal?(z:number)=>120+(z-cz)*scale:(z:number)=>bayTop+(z-extent.minZ)*scale;
-  const worldX=(x:number)=>mapLocal?cx+(x-120)/scale:extent.minX+(x-bayLeft)/scale;
-  const worldZ=(z:number)=>mapLocal?cz+(z-120)/scale:extent.minZ+(z-bayTop)/scale;
   const visible=(x:number,z:number)=>requiredLevelAt(x,z)<=level;
   const key=mapLocal?`${level},${drawLevel},${cx},${cz}`:`bay,${level},${drawLevel}`;
   if(key!==mapKey){
@@ -576,7 +580,7 @@ function minimap(entity:Entity|undefined,level:Level){
     base.strokeStyle='#d6c7a6';base.lineWidth=mapLocal?Math.max(2,24*scale):2;
     for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
     // Hide unreached districts instead of showing the complete Bay from the start.
-    base.fillStyle='#193b48ee';for(let z=0;z<240;z+=6)for(let x=0;x<240;x+=6){if(!visible(worldX(x+3),worldZ(z+3)))base.fillRect(x,z,6,6);}
+    drawLockedAreas(base,level,point=>({x:px(point.x),y:pz(point.z)}),'#193b48ee');
     base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('SF',px(-120)-12,pz(0));if(visible(385,-150))base.fillText('OAKLAND',px(385)+4,pz(-150));
     if(visible(200,-1650))base.fillText('NORTH BAY',px(200)-22,pz(-1650));
     for(const dock of Object.values(FERRY_DOCKS).filter(d=>visible(d.x,d.z))){
@@ -639,7 +643,7 @@ function minimap(entity:Entity|undefined,level:Level){
   SHOPS.filter(s=>visible(s.x,s.z)).forEach(s=>{map.save();map.translate(px(s.x),pz(s.z));map.rotate(Math.PI/4);map.fillStyle='#cf99ff';map.fillRect(-3,-3,6,6);map.restore();});
   session.world.pickups.filter(p=>p.kind==='rocket'&&p.active&&visible(p.x,p.z)).forEach(p=>{map.beginPath();map.arc(px(p.x),pz(p.z),2,0,Math.PI*2);map.fillStyle='#f1caff';map.fill();});
   session.world.entities.filter(e=>e.npc&&!e.driver&&visible(e.x,e.z)).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
-  const player=session.world.players.find(p=>p.id===session.id);if(player){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
+  const player=session.world.players.find(p=>p.id===session.id);if(player&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!entity||entity.kind==='person'||canAssignDeliveryRoof(entity)))){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
   if(entity?.navigation){const target=entity.navigation.destination;map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ff7771';map.lineWidth=2;map.stroke();}
   session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id||!visible(e.x,e.z))return;map.beginPath();map.arc(px(e.x),pz(e.z),3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
   if(entity){
@@ -1226,8 +1230,9 @@ scene.start(dt=>{
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
+    const searching=!!order.search,unavailable=d.lastReroute?.reason==='unavailable'&&!isOrderAccessible(order,d.level,e.kind==='person'||canAssignDeliveryRoof(e));
     const routeButton=$<HTMLButtonElement>('route-goal'),routeAdvice=$('route-advice');
-    const advice=session.status!=='online'||session.walletBlocked?'Connect your driver to self-drive.':e.kind==='person'?'Get in a car to self-drive.':target.rooftop?'Rooftop delivery · fly manually.':e.supportId!=='ground'||e.inDome?'Land on the ground outside the Dome to self-drive.':requiredLevelAt(target.x,target.z)>d.level?'This delivery is in a locked area.':'';
+    const advice=searching?'Finding a safe delivery route.':unavailable?'Return to an open road to retry.':session.status!=='online'||session.walletBlocked?'Connect your driver to self-drive.':e.kind==='person'?'Get in a car to self-drive.':target.rooftop?'Rooftop delivery · fly manually.':e.supportId!=='ground'||e.inDome?'Land on the ground outside the Dome to self-drive.':requiredLevelAt(target.x,target.z)>d.level?'This delivery is in a locked area.':'';
     const routeLabel=`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;
     routeButton.hidden=!!advice;routeAdvice.hidden=!advice;
     if(routeButton.textContent!==routeLabel)routeButton.textContent=routeLabel;
@@ -1242,26 +1247,27 @@ scene.start(dt=>{
     const awardLabel=goalTier?tierGoalLabel(goalTier):guestAward?`★ Next award · ${ACHIEVEMENTS[guestAward].description.split(' Reward:')[0]}`:'';
     awardButton.hidden=!nextAwardTarget;if(awardButton.textContent!==awardLabel)awardButton.textContent=awardLabel;
     awardButton.title=guestAward?ACHIEVEMENTS[guestAward].description:'View this award';
-    $('mission-label').textContent=order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
+    $('mission-label').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
-    $('mission').textContent=`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
+    $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
     const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
-    $('hint').textContent=(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
-    $('cockpit-phase').textContent=order.stage==='pickup'?'PICK UP':target.rooftop?'ROOFTOP DELIVERY':'DELIVER';
+    $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
+    $('cockpit-phase').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP':target.rooftop?'ROOFTOP DELIVERY':'DELIVER';
     $('cockpit-target').textContent=$('mission').textContent;$('cockpit-estimate').textContent=$('hint').textContent;
-    $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=target.name;$('objective-distance').textContent=`${distance} m`;
+    $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=searching?'Finding a safe route':unavailable?'Delivery unavailable':target.name;$('objective-distance').textContent=searching||unavailable?'':`${distance} m`;
+    $('delivery-drive').hidden=searching||unavailable;
     for(const reward of session.takeRewards())celebrateReward(reward);
     $('delivery-stats').textContent=`${money(d.cash)} cash · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
-    const next=LEVELS[d.level+1];
+    const next=d.level<6?LEVELS[d.level+1]:undefined;
     const checkpointProgress=`${DELIVERY_CHECKPOINT_INTERVAL-deliveriesUntilCheckpoint(d.completed)}/${DELIVERY_CHECKPOINT_INTERVAL}`;
     const checkpointPaid=d.lastPayout!==null&&d.completed%DELIVERY_CHECKPOINT_INTERVAL===0;
     $('region-progress').textContent=(next?`LEVEL ${d.level} · ${next.name}: ${money(Math.min(d.cash,next.cash))} / ${money(next.cash)} cash`:`LEVEL ${d.level} · The Bay is open`)+(checkpointPaid?` · bonus +${money(DELIVERY_CHECKPOINT_REWARD)} · next ${checkpointProgress}`:` · bonus ${checkpointProgress} (+${money(DELIVERY_CHECKPOINT_REWARD)})`);
     const levelEvent=levelEvents.update(d,session.snapshotVersion);
     if(levelEvent==='up')notice(`${LEVELS[d.level].name} unlocked!`);
     if(levelEvent==='down')notice(`Level ${d.level} · Your purchases stay yours.`);
-    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice('Your delivery was rerouted to an open area.');}
+    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice(d.lastReroute.reason==='searching'?'Finding a safe delivery route…':d.lastReroute.reason==='ready'?'Your next delivery is ready.':d.lastReroute.reason==='repeat'?'No new nearby route was available, so your last pickup is offered again.':d.lastReroute.reason==='ferry'?'Your delivery moved to an open area. Take the ferry to the mainland.':d.lastReroute.reason==='unavailable'?'No safe delivery route found. Return to an open road to retry.':'Your delivery was rerouted to an open area.');}
     if(d.lastBlocked&&d.lastBlocked.at>lastBlockedAt){lastBlockedAt=d.lastBlocked.at;if(session.world.time-lastBlockedNoticeAt>=5){lastBlockedNoticeAt=session.world.time;const goal=LEVELS[d.lastBlocked.level];notice(`${goal.name} opens at ${money(goal.cash)} cash.`);}}
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'North Bay Playground and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';

@@ -1,0 +1,148 @@
+{
+  "restaurants": [
+    {
+      "id": "tartine",
+      "x": -180,
+      "z": 120
+    },
+    {
+      "id": "tonys",
+      "x": -60,
+      "z": -180
+    },
+    {
+      "id": "burma",
+      "x": -300,
+      "z": -120
+    },
+    {
+      "id": "nanking",
+      "x": 0,
+      "z": -120
+    },
+    {
+      "id": "homeroom",
+      "x": 390,
+      "z": -120
+    },
+    {
+      "id": "comal",
+      "x": 510,
+      "z": 120
+    }
+  ],
+  "customers": [
+    {
+      "id": "poly",
+      "x": -120,
+      "y": 0,
+      "z": 60,
+      "rooftop": false
+    },
+    {
+      "id": "fog",
+      "x": -240,
+      "y": 0,
+      "z": 180,
+      "rooftop": false
+    },
+    {
+      "id": "cable",
+      "x": 0,
+      "y": 0,
+      "z": -180,
+      "rooftop": false
+    },
+    {
+      "id": "coast",
+      "x": -300,
+      "y": 0,
+      "z": 0,
+      "rooftop": false
+    },
+    {
+      "id": "oak",
+      "x": 450,
+      "y": 0,
+      "z": 0,
+      "rooftop": false
+    },
+    {
+      "id": "lake",
+      "x": 510,
+      "y": 0,
+      "z": -180,
+      "rooftop": false
+    },
+    {
+      "id": "port",
+      "x": 330,
+      "y": 0,
+      "z": 120,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-berkeley",
+      "x": 510,
+      "y": 0,
+      "z": -240,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-sfo",
+      "x": -710,
+      "y": 0,
+      "z": 1200,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-stanford",
+      "x": -940,
+      "y": 0,
+      "z": 4030,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-mission-san-jose",
+      "x": 1770,
+      "y": 0,
+      "z": 6035,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-san-jose-city-hall",
+      "x": 1705,
+      "y": 0,
+      "z": 8730,
+      "rooftop": false
+    },
+    {
+      "id": "landmark-ucsf",
+      "x": -330,
+      "y": 0,
+      "z": 120,
+      "rooftop": false
+    },
+    {
+      "id": "roof-sf--78--90",
+      "x": -78,
+      "y": 15.680000000000001,
+      "z": -90,
+      "rooftop": true
+    },
+    {
+      "id": "roof-sf-42-150",
+      "x": -160,
+      "y": 25,
+      "z": 150,
+      "rooftop": true
+    },
+    {
+      "id": "roof-oakland-350--30",
+      "x": 350,
+      "y": 23,
+      "z": -30,
+      "rooftop": true
+    }
+  ]
+}
