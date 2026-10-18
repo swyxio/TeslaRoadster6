@@ -6,6 +6,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 - After integrating main at `f54964e`, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning. The game retains room-only play.
 - Local Wrangler passed the standard two-client room integration and the island jump fixture with two real WebSockets. The isolated Mars fixture again verified simultaneous contributions, both drivers boarding, per-room isolation and fund survival after the last disconnect and a full Worker restart. These are functional checks, not load measurements.
+- Cloudflare's v28 preview passed its build and the standard two-client room integration; preview capacity was 128, which is not a load measurement.
 - Chrome desktop joined a local v28 room and showed the mission fund and room-only menu. Earlier Mars-screen observations below included phone portrait and landscape emulation; no physical mobile device was tested.
 
 ## Fremont Mars mission with Bay charging lots · protocol v27 · 2026-10-18 Pacific

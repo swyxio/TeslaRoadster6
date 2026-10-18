@@ -1,4 +1,4 @@
-# Implementation contracts · v27
+# Implementation contracts · v28
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
