@@ -92,7 +92,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .telemetry{right:12px;bottom:196px;width:190px;padding:11px}.speed strong{font-size:42px}.speed{margin:0 0 4px}
 }
 @media(max-width:360px){.map-panel{width:115px}.map-panel #minimap{width:99px;height:99px}.telemetry{width:180px}.mission{max-width:calc(100vw - 118px)}}
-@media(max-height:550px) and (pointer:coarse){
+@media(max-height:550px) and (pointer:coarse),(max-height:550px) and (max-width:600px) and (orientation:portrait){
  .mission{top:62px;max-width:min(280px,calc(100vw - 130px))}.mission #hint{display:block}
  .action-drawer{top:62px}.drive-actions{max-height:calc(100dvh - 118px)}
  .touch-controls{bottom:10px}.touch-controls button{height:46px}.steering{grid-template-columns:repeat(2,55px)}.steering button{min-width:55px}.pedals{grid-template-columns:repeat(2,60px)}.pedals button{min-width:60px}
@@ -104,6 +104,11 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .map-panel{left:calc(50% + 16px);bottom:70px;width:96px;padding:6px}
  .map-panel #minimap{width:82px;height:82px}.map-panel .map-title{font-size:7px;letter-spacing:.5px;margin-bottom:3px}.map-panel .map-title span{font-size:7px;white-space:nowrap}.map-panel .map-title span:first-child{white-space:normal}
  .map-panel .map-key,.map-panel .sky-key{display:none}
+}
+@media(max-height:550px) and (max-width:600px) and (orientation:portrait){
+ .topbar{height:52px}.menu{inset:52px 0 0}
+ .mission .eyebrow,.mission>span:last-child,.mission #police-status,.mission #delivery-stats{display:none}.mission #police-status.chased{display:block}
+ .map-panel{left:12px;bottom:118px}.touch-flight{bottom:106px}.telemetry{bottom:170px}
 }
 .sound-button{font-size:21px;line-height:1}.sound-dialog{width:min(460px,94vw)}
 .sound-sliders{display:grid;gap:16px;margin:20px 0}.sound-sliders label{display:grid;grid-template-columns:1fr auto;gap:6px;color:#e8ede3;font-size:13px;font-weight:600}.sound-sliders output{color:#ffcf85;font:11px ui-monospace,monospace}.sound-sliders input[type=range]{grid-column:1/-1;width:100%;margin:0;padding:0;min-height:24px;accent-color:#ffc77f;background:transparent;border:0;cursor:pointer}
