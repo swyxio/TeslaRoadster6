@@ -5,9 +5,11 @@ import {nearbyBuildings, terrainHeight} from '../shared/map';
 import {contact,body} from '../shared/physics';
 import {VEHICLE_IDS, VEHICLES} from '../shared/vehicles';
 import {SHOPS, UPGRADES, hasRockets} from '../shared/upgrades';
-import {hasRocket} from '../shared/rocket';
 import {parseMessage} from '../worker/protocol';
+import {cliffPose} from '../shared/island-stunts';
+import type {TankLevel} from '../shared/air-tank';
 import {Session} from '../src/session';
+import {PARKING_LOTS} from '../shared/parking-lots';
 
 function setup(kind:typeof VEHICLE_IDS[number]='model-3'){
   const world=createWorld(),player=addPlayer(world,'p','P'),car=makeEntity('car',kind,SHOPS[0].x,SHOPS[0].z,'p');
@@ -51,7 +53,8 @@ test('solo shop reports authoritative purchase and rejection results',()=>{
 });
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
   const world=createWorld(), rockets=world.pickups.filter(p=>p.kind==='rocket');
-  assert.ok(rockets.length>=8);
+  assert.equal(rockets.length,9+PARKING_LOTS.length);
+  for(const lot of PARKING_LOTS)assert.ok(rockets.some(p=>p.id===`rocket-${lot.id}`&&p.x===lot.pickup.x&&p.z===lot.pickup.z),lot.id);
   for(const pickup of rockets){
     assert.equal(terrainHeight(pickup.x,pickup.z),0,pickup.id);
     const car=makeEntity('test','tesla-semi' as typeof VEHICLE_IDS[number],pickup.x,pickup.z);
@@ -59,10 +62,19 @@ test('rocket pickups sit on clear ground without overlapping other pickups',()=>
     assert.ok(world.pickups.every(other=>other===pickup||Math.hypot(pickup.x-other.x,pickup.z-other.z)>8),pickup.id);
   }
 });
+test('every charger lot pickup installs the session kit',()=>{
+  for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
+    const {world,car}=setup(),pickup=createWorld().pickups.find(p=>p.id===`rocket-${lot.id}`)!;
+    Object.assign(car,{x:pickup.x,z:pickup.z,y:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0,air:20});
+    world.pickups=[pickup];step(world,new Map(),.05);
+    assert.equal(pickup.active,false,lot.id);assert.ok(hasRockets(car),lot.id);assert.equal(car.air,100,lot.id);
+    world.time+=100;step(world,new Map(),.05);assert.ok(hasRockets(car),`${lot.id}: kit persists`);
+  }
+});
 test('each family can collect a rocket pickup and use jump',()=>{
   for(const kind of VEHICLE_IDS){
     const {world,player,car}=setup(kind);car.x=0;car.z=60;car.y=0;world.pickups=[{id:'rocket',x:0,z:60,kind:'rocket',active:true}];
-    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRocket(car,world.time),kind);
+    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRockets(car),kind);
     step(world,new Map([[player.id,{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null,kind);assert.ok(car.y>0,kind);assert.ok(car.air<100,kind);
   }
 });
@@ -89,4 +101,36 @@ test('economy, motor and armor alter actual simulation outcomes',()=>{
   assert.ok(accelerate(true)>accelerate(false)*1.2);
   function land(armor:boolean){const {world,car}=setup();car.upgrades.armor=armor;Object.assign(car,{y:.5,vy:-20,supportId:null});step(world,new Map(),.05);return 100-car.health;}
   assert.ok(Math.abs(land(true)*2-land(false))<.001,'armor halves landing damage');
+});
+
+test('an island kit remains installed and enables the shop after crossing back',()=>{
+  const {world,player,car}=setup();
+  world.pickups=[{id:'island-kit',x:0,z:-1160,kind:'rocket',active:true}];
+  Object.assign(car,{x:0,z:-1160,y:0,supportId:'ground',air:10});
+  step(world,new Map(),.05);assert.ok(car.upgrades.rocket);assert.equal(car.air,100);
+  world.time+=120;Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0});
+  player.delivery.cash=200;
+  assert.equal(buyUpgrade(world,'p','rocket'),false);assert.equal(player.delivery.cash,200);
+  assert.equal(buyUpgrade(world,'p','economy'),true);assert.equal(player.delivery.cash,200-UPGRADES.economy.price);
+  car.supportId='ferry';assert.equal(buyUpgrade(world,'p','motor'),false);
+});
+
+test('rocket economy and sport motor affect real island-cliff physics',()=>{
+  function run(motor:boolean,economy:boolean,jump:boolean,tankLevel:TankLevel=1,throttle=1){
+    const {world,car}=setup(),pose=cliffPose(.4);
+    car.upgrades={rocket:true,motor,economy,armor:false};
+    Object.assign(car,{x:pose.point.x,y:pose.point.y,z:pose.point.z,yaw:-Math.PI/2,pitch:.4,
+      supportId:'island-cliff',loopAngle:.4,speed:20,vx:pose.tangent.x*20,vy:pose.tangent.y*20,vz:0,tankLevel});
+    step(world,new Map([['p',{...NEUTRAL,throttle,jump:jump?1:0}]]),.05);
+    return car;
+  }
+  assert.ok(run(true,false,false).speed>run(false,false,false).speed);
+  const jumpOnly=run(false,false,true,1,0),normal=run(false,false,true),economy=run(false,true,true);
+  const normalUse=100-normal.air,economyUse=100-economy.air;
+  assert.equal(jumpOnly.supportId,null);
+  assert.equal(jumpOnly.air,94,'the level-1 tank spends 6% on the jump');
+  assert.ok(normalUse>100-jumpOnly.air,'throttle consumes additional air after detaching');
+  assert.ok(Math.abs(economyUse-normalUse*.75)<1e-9,'efficient nozzles reduce both costs by 25%');
+  const largerTankUse=100-run(false,false,true,3).air;
+  assert.ok(Math.abs(largerTankUse*4-normalUse)<1e-9,'level 3 has four times the level-1 capacity');
 });

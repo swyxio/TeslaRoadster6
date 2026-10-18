@@ -4,6 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
+// This build combines the island world with flight and OTA protocol changes.
+assert.equal(PROTOCOL_VERSION, 20);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -31,6 +33,8 @@ function connect() {
 }
 const one = connect(), two = connect();
 try {
+  const health = await (await fetch(base + '/api/health')).json() as {version:number};
+  assert.equal(health.version, 20, 'server advertises the combined world protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
@@ -39,11 +43,14 @@ try {
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
+  assert.ok(two.state.world!.entities.every(e=>e.domeReturn==='sf'||e.domeReturn==='island'),'Dome return side is replicated');
   for(const state of [one.state,two.state]){
     assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
     assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);
-    assert.ok(state.world!.pickups.some(p=>p.kind==='rocket'),'Rocket pads are replicated');
-    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'vehicle capability expiry is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-island'&&p.kind==='rocket'),'island Rocket kit is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
+    assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
+    assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   }
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
   await delay(450);
@@ -51,8 +58,6 @@ try {
   one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
   await delay(450);
   assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
-  assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
-  assert.ok(two.state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
@@ -137,11 +142,14 @@ try {
   assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
   assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:true,requestId:3}));
+  one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
   await eventually(()=>one.state.otaResults?.some(r=>r.requestId===3&&r.ok)??false,'subscription receives an explicit result');
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled??false,'subscription state replicated');
   assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active,false,'unfunded subscription pauses');
   assert.equal(two.state.otaResults?.length??0,0,'subscription result goes only to requester');
-  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
+  await eventually(()=>one.state.otaResults?.some(r=>r.requestId===4&&!r.enabled&&!r.ok)??false,'rate-limited subscription receives an explicit result');
+  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled,true,'rate-limited cancellation did not alter subscription');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:5}));
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
@@ -149,5 +157,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, ferry and activity snapshots, Rocket pads, shared sky lane, dome, soccer, flight, movement, delivery, upgrades, fleet, invalid-input isolation and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client room, sky currents, ferry and activity snapshots, Rocket kits, dome, cockpit, movement, delivery, shop and OTA, traffic, autonomous mode, invalid-input isolation and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
 } finally { one.socket.close(); two.socket.close(); }

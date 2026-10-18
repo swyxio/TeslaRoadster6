@@ -1,10 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
+import { makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
+import { initialSoccer } from '../shared/soccer';
+import { createFerry } from '../shared/ferry';
+import { createParking } from '../shared/parking';
+import { createRace } from '../shared/race';
 import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { BUILDINGS, terrainHeight } from '../shared/map';
 
-const worldFor=(car:Entity):World=>({...createWorld(),entities:[car],players:[],pickups:[],time:0});
+const worldFor=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer(),ferry:createFerry(),parking:createParking(),races:createRace()});
 const tick=(world:World,n=1,input=NEUTRAL)=>{for(let i=0;i<n;i++)step(world,new Map([['p',input]]),.05);};
 
 test('jet lanes push in their marked direction and refill an empty tank, including a non-rocket car',()=>{

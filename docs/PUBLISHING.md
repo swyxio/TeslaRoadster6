@@ -1,6 +1,6 @@
 # Releases, changelog and development blog
 
-The human-facing release version is independent of `PROTOCOL_VERSION`: a release can change without changing the multiplayer wire contract. `content/releases.ts` is the release-note source of truth, newest first. `package.json` uses the matching semver (`0.0.1-alpha`); the build fails if it differs from the latest entry. Each release needs a stable version, a display label, a Pacific calendar date, and concise player-facing notes. The first entry summarizes the alpha as it stands; do not invent earlier release dates.
+The human-facing release version is independent of `PROTOCOL_VERSION`: a release can change without changing the multiplayer wire contract. `content/releases.ts` is the release-note source of truth, newest first. `package.json` uses the latest entry’s matching semver; the build fails if it differs from the latest entry. Each release needs a stable version, a display label, a Pacific calendar date, and concise player-facing notes. The first entry summarizes the alpha as it stands; do not invent earlier release dates.
 
 For a new release:
 

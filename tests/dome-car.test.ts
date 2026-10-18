@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, resetPlayer, step, travelDome } from '../shared/game';
 import { DOME } from '../shared/dome';
-import { domeSurface, DOME_PERIMETER, isLand } from '../shared/map';
+import { domeSurface, DOME_PERIMETER, isLand, isRocketIsland } from '../shared/map';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { body, contact } from '../shared/physics';
 
@@ -95,7 +95,7 @@ test('a grounded approach from the island joins the dome without teleporting and
   assert.equal(car.inDome,true);assert.ok(car.x<DOME.x-DOME.halfLength+10,'entry keeps the driven position');
   assert.ok(car.speed>0,'entry preserves motion');assert.equal(car.air,42);assert.equal(car.health,83);
   assert.ok(travelDome(world,'one'));assert.equal(car.inDome,false);
-  assert.ok(Math.hypot(car.x-DOME.x,car.z-DOME.z)>100,'the explicit leave action returns to the Bay');
+  assert.ok(isRocketIsland(car.x,car.z),'the explicit leave action returns to the island');
 });
 
 test('natural entry disables autonomy while preserving position and resources',()=>{
@@ -126,8 +126,13 @@ test('descent from above the roof enters and lands inside without resetting the 
   assert.equal(car.inDome,true);assert.equal(car.autopilot,false);assert.equal(car.supportId,null);
   assert.equal(car.x,DOME.x-15);assert.equal(car.air,42);assert.equal(car.health,83);
   for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
-  assert.equal(car.inDome,true);assert.equal(car.supportId,'ground');assert.equal(car.y,0);
+  // The landing substep selects ground; a later substep attaches the Rocket
+  // to the dome floor, possibly within the same public step.
+  assert.equal(car.inDome,true);assert.ok(car.supportId==='ground'||car.supportId==='dome');assert.equal(car.y,0);
   assert.equal(car.x,DOME.x-15,'landing remains inside the arena');
+  step(world,new Map(),.05);
+  assert.equal(car.supportId,'dome');assert.ok(Math.abs(car.domeS!-DOME.flatHalfWidth)<1e-9);
+  assert.equal(car.y,0);assert.equal(car.x,DOME.x-15);
 });
 
 test('passing above the roof or landing outside the capsule does not enter the dome',()=>{
