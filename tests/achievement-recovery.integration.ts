@@ -6,6 +6,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { NEUTRAL } from '../shared/game';
 import type { DriverProgress } from '../worker/driver-profile';
 import { RoomInputClient } from './room-input-client';
 
@@ -93,17 +94,31 @@ const inspect=(driverId:string)=>rpc<{progress:DriverProgress}>('wallet','inspec
 async function observedVehicleDrive(){
   const driver=await savedDriver('Collection driver'),room=`collection-${randomUUID().slice(0,8)}`;
   const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
+  const otherDriver=await savedDriver('Collection observer'),other=await joinSaved(room,otherDriver.code);
   await sync(client,301);
   const before=(await inspect(driver.driverId)).progress;
-  const drive=await rpc<{observed:boolean;distance:number}>('achievement','drive',{room,playerId});
-  assert.equal(drive.observed,true,'actual room physics must record the model');
-  assert.ok(drive.distance>=100,'the driven car must physically travel 100 m');
+  await rpc('wallet','arm',{driverId:driver.driverId,fault:'hold-before'});
+  try{
+    const drive=await rpc<{observed:boolean;distance:number}>('achievement','drive',{room,playerId});
+    assert.equal(drive.observed,true,'actual room physics must record the model');
+    assert.ok(drive.distance>=100,'the driven car must physically travel 100 m');
+    await until(async()=>(await rpc<{held:boolean}>('wallet','fault-state',{driverId:driver.driverId})).held,'collection write held');
+    const held=await rpc<{held:boolean;heldAction:unknown}>('wallet','fault-state',{driverId:driver.driverId});
+    assert.deepEqual(held.heldAction,{kind:'achievement',evidence:{kind:'vehicle-driven',vehicle:'roadster'}});
+    assert.ok(!(await inspect(driver.driverId)).progress.vehicleCollections?.driven.includes('roadster'),'held collection has not committed');
+    const initialTime=other.last('state')!.world.time as number;
+    const first=other.input.send(NEUTRAL);
+    await until(()=>other.input.control!.appliedSeq>=first,'other driver input during held collection');
+    const second=other.input.send(NEUTRAL);
+    await until(()=>other.input.control!.appliedSeq>=second&&other.last('state')!.world.time>initialTime,'world advances during held collection');
+    assert.equal((await rpc<{held:boolean}>('wallet','fault-state',{driverId:driver.driverId})).held,true);
+  }finally{await rpc('wallet','release',{driverId:driver.driverId});}
   await sync(client,302);
   const after=(await inspect(driver.driverId)).progress;
   assert.ok(after.vehicleCollections?.driven.includes('roadster'));
   assert.ok(after.unlocked.includes('tesla-drive-1'));
   assert.equal(after.cash,before.cash+100);assert.equal(after.eligibleIncome,before.eligibleIncome+100);
-  client.socket.close();
+  client.socket.close();other.socket.close();
   const restored=await joinSaved(`collection-return-${randomUUID().slice(0,8)}`,driver.code);
   await sync(restored,303);
   assert.ok((await inspect(driver.driverId)).progress.vehicleCollections?.driven.includes('roadster'));
