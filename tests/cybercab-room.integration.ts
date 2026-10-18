@@ -198,6 +198,12 @@ try {
   await delay(1_200);
   clearInterval(ownerDrive);ownerDrive=undefined;owner.input.send(NEUTRAL);
   await until(async()=>(await inspect(driverId)).progress.cybercabs!.assets[0].gross>occupied.cybercabs!.assets[0].gross,'active cab earnings resume after release',12_000);
+  await until(()=>{
+    const state=world(owner),player=state.players.find(item=>item.id===ownerId);
+    return !!player&&player.delivery.activeUntil<state.time;
+  },'owner active window ends before the offline baseline',12_000);
+  send(owner,{type:'sync',token:102});
+  await until(()=>owner.messages.some(message=>message.type==='state'&&message.sync===102),'final active income drains before the offline baseline');
   const idle=(await inspect(driverId)).progress;
 
   owner.socket.close();await until(()=>owner.socket.readyState===WebSocket.CLOSED,'owner disconnects');

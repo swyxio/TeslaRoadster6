@@ -1,0 +1,273 @@
+// Local-only Wrangler crash, retry, and fence tests for durable cab stages.
+// pnpm exec tsx tests/cybercab-stage.integration.ts
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
+import type { CabIncomeStage } from '../worker/room-economy';
+import { NEUTRAL } from '../shared/game';
+import { RoomInputClient } from './room-input-client';
+
+const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
+  const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await pause(50);}throw new Error(`Timed out: ${label}`);
+}
+async function port(){
+  const server=createServer();await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const address=server.address();assert.ok(address&&typeof address!=='string');
+  await new Promise<void>(resolve=>server.close(()=>resolve()));return address.port;
+}
+async function stop(child:ChildProcess){
+  if(child.exitCode!==null||child.signalCode!==null)return;
+  try{process.kill(-child.pid!,'SIGKILL');}catch{}
+  await until(()=>child.exitCode!==null||child.signalCode!==null,'Wrangler shutdown');
+}
+const dir=await mkdtemp(join(tmpdir(),'tesland-cab-stage-')),p=await port(),base=`http://127.0.0.1:${p}`,config=join(dir,'wrangler.json');
+await writeFile(config,JSON.stringify({
+  name:'tesland-cab-stage-test',main:resolve('tests/fixtures/cybercab-stage-worker.ts'),compatibility_date:'2026-10-17',
+  assets:{directory:resolve('dist'),binding:'ASSETS',run_worker_first:['/api/*','/__wallet-test/*','/__cab-stage/*']},
+  durable_objects:{bindings:[{name:'ROOMS',class_name:'GameRoom'},{name:'CHAT',class_name:'GlobalChat'},
+    {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'}]},
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}],
+}));
+let child:ChildProcess|undefined,logs='';
+const sockets:WebSocket[]=[];
+function start(){
+  const c=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(p),'--persist-to',join(dir,'storage'),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
+  const append=(data:Buffer)=>{logs=(logs+data.toString()).slice(-25_000);};c.stdout?.on('data',append);c.stderr?.on('data',append);return c;
+}
+async function ready(){try{await until(async()=>{if(child?.exitCode!==null)throw new Error(`Wrangler exited: ${logs}`);try{return (await fetch(base+'/api/health',{signal:AbortSignal.timeout(500)})).ok;}catch{return false;}},'Wrangler startup',60_000);}catch(error){throw new Error(`${String(error)}\n${logs}`);}}
+async function post<T>(path:string,body:object,timeout=5000):Promise<T>{
+  const response=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+  if(!response.ok)throw new Error(`${path}: ${response.status} ${await response.text()}\n${logs}`);return response.json() as Promise<T>;
+}
+const rpc=<T>(method:string,body:object,timeout=5000)=>post<T>(`/__wallet-test/${method}`,body,timeout);
+const stage=(item:CabIncomeStage)=>post<'accepted'|'superseded'|'conflict'|{threw:true}>('/__cab-stage/stage',{room:item.roomId,stage:item});
+type RecordState={revision:number;sequence:number;fence:string;progress:DriverProgress};
+const inspect=(driverId:string)=>rpc<RecordState>('inspect',{driverId});
+const keys=(room:string,driverId:string)=>rpc<string[]>('economy-keys',{room,driverId});
+function success(result:DriverOutcome|null):asserts result is Extract<DriverOutcome,{ok:true}>{assert.ok(result?.ok,JSON.stringify(result));}
+async function seed(inRoom?:string){
+  const driverId=randomUUID(),fence=randomUUID(),room=inRoom??`stage-${randomUUID().slice(0,8)}`;
+  await rpc('acquire',{driverId,fence,room});
+  const buy:EconomyIntent={eventId:randomUUID(),driverId,fence,roomId:room,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+  const result=await rpc<DriverOutcome>('commit',{driverId,intent:buy});success(result);
+  return {driverId,fence,room,progress:result.progress};
+}
+function batch(driverId:string,fence:string,roomId:string,sequence:number,startMs:number,endMs:number):CabIncomeStage{
+  return {eventId:randomUUID(),driverId,fence,roomId,sequence,intervals:[{assetId:'cab-a',startMs,endMs,multiplier:1}]};
+}
+function cabIntent(stage:CabIncomeStage,revision:number):EconomyIntent{
+  return {eventId:stage.eventId,driverId:stage.driverId,fence:stage.fence,roomId:stage.roomId,sequence:stage.sequence,revision,
+    action:{kind:'cab-income',intervals:stage.intervals}};
+}
+type Message={type:string;[key:string]:any};
+function connect(path:string,guest=false){
+  const socket=new WebSocket(base.replace(/^http/,'ws')+path),messages:Message[]=[];
+  const input=new RoomInputClient(socket);sockets.push(socket);
+  socket.addEventListener('message',event=>{
+    const message=JSON.parse(String(event.data)) as Message;input.observe(message);messages.push(message);
+    if(guest&&message.type==='welcome')socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));
+  });
+  return {socket,input,messages,last(type:string){return messages.filter(message=>message.type===type).at(-1);}};
+}
+
+try{
+  child=start();await ready();
+  const simulation=await post<{initial:DriverProgress;persisted:DriverProgress;writes:EconomyIntent[];stages:CabIncomeStage[];barrier:number;failedDrained:boolean;failedQueue:number}>('/__cab-stage/rejected-head',{});
+  assert.equal(simulation.stages.length,1);assert.equal(simulation.writes.length,2);
+  assert.equal(simulation.writes[1].action.kind,'cab-income');assert.equal(simulation.writes[1].revision,0);
+  assert.equal(simulation.writes[1].sequence,2);assert.equal(simulation.persisted.cash,simulation.initial.cash+1);
+  assert.equal(simulation.barrier,99,'discarded later drafts do not complete the barrier before the stage');
+  assert.equal(simulation.failedDrained,true);assert.equal(simulation.failedQueue,0,'failed cab income leaves no abandoned in-memory queue');
+
+  // A lost stage reply is retried by ID. Process death after acceptance drains
+  // the stage even though it was never submitted as a wallet intent.
+  const a=await seed(),first=batch(a.driverId,a.fence,a.room,2,0,4_800_000);
+  await until(async()=>(await post<{total:number}>('/__cab-stage/total',{})).total===5_000,'initial outbox delivery');
+  await post('/__cab-stage/lose-reply',{room:a.room});
+  assert.deepEqual(await stage(first),{threw:true});assert.equal(await stage(first),'accepted');
+  assert.equal(await stage({...first,intervals:[{...first.intervals[0],endMs:4_800_001}]}),'conflict');
+  assert.ok((await keys(a.room,a.driverId)).includes(`cab-stage:${a.driverId}:${first.eventId}`));
+  await stop(child);child=undefined;child=start();await ready();
+  await until(async()=>{const state=await inspect(a.driverId);return state.progress.cybercabs!.assets[0].gross===20_000;},'orphan stage recovery');
+  const recovered=await inspect(a.driverId);
+  assert.equal(recovered.progress.cash,a.progress.cash+22_000);assert.equal(recovered.progress.eligibleIncome,a.progress.eligibleIncome+22_000);
+  assert.deepEqual([recovered.progress.cybercabs!.assets[0].remainder,recovered.progress.cybercabs!.assets[0].lastEndMs,recovered.progress.cybercabs!.assets[0].revenueAwarded],[0,4_800_000,true]);
+  await until(async()=>(await post<{total:number}>('/__cab-stage/total',{})).total===27_000,'recovered income outbox delivery');
+  assert.equal(await stage(first),'superseded','a sealed fence cannot re-stage a compacted batch');
+  await pause(1100);assert.equal((await post<{total:number}>('/__cab-stage/total',{})).total,27_000,'recovery credits global income only once');
+
+  // Cross-room acquire must drain stages before sealing and handing off.
+  const b=await seed(),second=batch(b.driverId,b.fence,b.room,2,0,100);
+  assert.equal(await stage(second),'accepted');
+  const laterProgress=structuredClone(b.progress);laterProgress.cash-=10;
+  const later:EconomyIntent={eventId:randomUUID(),driverId:b.driverId,fence:b.fence,roomId:b.room,sequence:3,revision:1,
+    action:{kind:'progress',progress:laterProgress}};
+  assert.equal(await rpc<DriverOutcome|null>('submit',{room:b.room,driverId:b.driverId,intent:later}),null,'a later wallet write cannot pass an earlier stage');
+  assert.deepEqual(await rpc('ack',{room:b.room,driverId:b.driverId,intent:later}),{ok:false},'compaction cannot pass an earlier stage');
+  assert.equal((await inspect(b.driverId)).sequence,1);
+  const nextFence=randomUUID(),newRoom=`next-${randomUUID().slice(0,8)}`;
+  const moved=await rpc<{revision:number;sequence:number;progress:DriverProgress}>('acquire',{driverId:b.driverId,fence:nextFence,room:newRoom},15_000);
+  assert.equal(moved.progress.cash,b.progress.cash);assert.equal(moved.progress.cybercabs!.assets[0].lastEndMs,100);
+  assert.equal(moved.progress.cybercabs!.assets[0].remainder,3_000_000);
+  assert.equal(moved.sequence,2);assert.equal(await stage(second),'superseded');
+  const stale=cabIntent(second,moved.revision);
+  assert.deepEqual(await rpc<DriverOutcome>('commit',{driverId:b.driverId,intent:stale}),{ok:false,reason:'superseded'});
+  const resumed=batch(b.driverId,nextFence,newRoom,3,100,240);assert.equal(await stage(resumed),'accepted');
+  const resumedIntent=cabIntent(resumed,moved.revision);
+  const resumedOutcome=await rpc<DriverOutcome>('submit',{room:newRoom,driverId:b.driverId,intent:resumedIntent});success(resumedOutcome);
+  assert.equal(resumedOutcome.progress.cash,b.progress.cash+1);assert.equal(resumedOutcome.progress.cybercabs!.assets[0].remainder,0);
+  assert.deepEqual(await rpc('ack',{room:newRoom,driverId:b.driverId,intent:resumedIntent}),{ok:true});
+
+  // A committed profile result whose reply is lost is reconciled exactly once
+  // from the pending journal and receipt after a process restart.
+  const c=await seed(),third=batch(c.driverId,c.fence,c.room,2,0,240);
+  assert.equal(await stage(third),'accepted');await rpc('arm',{driverId:c.driverId,fault:'lost-reply'});
+  const submitted=cabIntent(third,1);
+  assert.equal(await rpc<DriverOutcome|null>('submit',{room:c.room,driverId:c.driverId,intent:submitted}),null);
+  await stop(child);child=undefined;child=start();await ready();
+  await until(async()=>{const state=await inspect(c.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'lost profile reply recovery');
+  const after=await inspect(c.driverId);assert.equal(after.progress.cash,c.progress.cash+1);
+  await pause(1200);assert.equal((await inspect(c.driverId)).progress.cash,after.progress.cash);
+  assert.equal((await inspect(c.driverId)).progress.cybercabs!.assets[0].lastEndMs,240);
+
+  // Staging is independent of a blocked preceding wallet write. A different
+  // driver can commit while both this predecessor and its later cab stage wait.
+  const d=await seed(),other=await seed(),fourth=batch(d.driverId,d.fence,d.room,3,0,240);
+  const earlierProgress=structuredClone(d.progress);earlierProgress.cash-=123;
+  const earlier:EconomyIntent={eventId:randomUUID(),driverId:d.driverId,fence:d.fence,roomId:d.room,revision:1,sequence:2,
+    action:{kind:'progress',progress:earlierProgress}};
+  await rpc('arm',{driverId:d.driverId,fault:'hold-before'});
+  const held=rpc('submit',{room:d.room,driverId:d.driverId,intent:earlier},30_000);void held.catch(()=>{});
+  await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:d.driverId})).held,'preceding profile write held');
+  assert.equal(await stage(fourth),'accepted');
+  assert.ok((await keys(d.room,d.driverId)).includes(`cab-stage:${d.driverId}:${fourth.eventId}`));
+  const independent:EconomyIntent={eventId:randomUUID(),driverId:other.driverId,fence:other.fence,roomId:other.room,revision:1,sequence:2,
+    action:{kind:'cab-paint',assetId:'cab-a',paint:'mint'}};
+  success(await rpc<DriverOutcome>('commit',{driverId:other.driverId,intent:independent}));
+  assert.equal((await inspect(other.driverId)).progress.cash,other.progress.cash-18);
+  await stop(child);child=undefined;child=start();await ready();
+  await until(async()=>{const state=await inspect(d.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'blocked predecessor and later stage recovery');
+  assert.equal((await inspect(d.driverId)).progress.cash,d.progress.cash-123+1);
+
+  // An alarm that finds a hung profile must return. A later alarm must find a
+  // different driver's orphaned stage that was added after the first scan.
+  const sharedRoom=`alarm-${randomUUID().slice(0,8)}`,slow=await seed(sharedRoom),orphan=await seed(sharedRoom);
+  const slowProgress=structuredClone(slow.progress);slowProgress.cash-=1;
+  const slowIntent:EconomyIntent={eventId:randomUUID(),driverId:slow.driverId,fence:slow.fence,roomId:sharedRoom,
+    revision:1,sequence:2,action:{kind:'progress',progress:slowProgress}};
+  await rpc('arm',{driverId:slow.driverId,fault:'hold-lost-reply'});
+  await post('/__cab-stage/inject-pending',{room:sharedRoom,intent:slowIntent});
+  await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:slow.driverId})).held,'slow profile RPC held');
+  type AlarmState={calls:number;active:boolean;recovering:string[]};
+  const alarmState=()=>post<AlarmState>('/__cab-stage/alarm-state',{room:sharedRoom});
+  await until(async()=>{const state=await alarmState();return state.calls>=1&&state.recovering.includes(slow.driverId);},'alarm reaches held profile');
+  const callsBeforeStage=(await alarmState()).calls;
+  const started=(await rpc<{started:number}>('fault-state',{driverId:slow.driverId})).started;
+  const orphanStage=batch(orphan.driverId,orphan.fence,sharedRoom,2,0,240);
+  assert.equal(await stage(orphanStage),'accepted');
+  await rpc('producer-gone',{room:sharedRoom,driverId:orphan.driverId,fence:orphan.fence});
+  await until(async()=>{const state=await inspect(orphan.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'later alarm recovers orphan while first profile hangs');
+  await until(async()=>!(await keys(sharedRoom,orphan.driverId)).some(key=>
+    ['cab-stage:','pending:','unacked:','cleanup:','frozen:'].some(prefix=>key.startsWith(`${prefix}${orphan.driverId}:`))),
+  'orphan settlement cleanup');
+  const settled=await inspect(orphan.driverId),stillHeld=await rpc<{held:boolean;started:number}>('fault-state',{driverId:slow.driverId});
+  assert.ok((await alarmState()).calls>callsBeforeStage,'the watchdog ran another alarm after the stage arrived');
+  assert.equal(stillHeld.held,true);assert.equal(stillHeld.started,started,'later alarms do not duplicate the held profile RPC');
+  assert.equal(settled.sequence,2);assert.equal(settled.progress.cash,orphan.progress.cash+1);
+  assert.equal(settled.progress.cybercabs!.assets[0].lastEndMs,240);
+  await until(async()=>(await alarmState()).calls>=callsBeforeStage+2,'successive watchdog wakes while profile remains held');
+  assert.equal((await inspect(orphan.driverId)).progress.cash,settled.progress.cash,'later alarms do not credit income twice');
+  assert.equal((await rpc<{started:number}>('fault-state',{driverId:slow.driverId})).started,started);
+  await rpc('release',{driverId:slow.driverId});
+  await until(async()=>!(await keys(sharedRoom,slow.driverId)).includes(`pending:${slow.driverId}:${slowIntent.eventId}`),
+    'detached rejection releases flight and watchdog retries');
+  assert.equal((await inspect(slow.driverId)).progress.cash,slowProgress.cash,'lost reply retry does not apply progress twice');
+  assert.equal((await rpc<{started:number}>('fault-state',{driverId:slow.driverId})).started,started+1);
+  await until(async()=>!(await alarmState()).recovering.includes(slow.driverId),'completed recovery flight is removed');
+
+  // Stop after the stage-to-intent transaction, before the profile commits.
+  const e=await seed(),fifth=batch(e.driverId,e.fence,e.room,2,0,240);
+  assert.equal(await stage(fifth),'accepted');await rpc('arm',{driverId:e.driverId,fault:'hold-before'});
+  const pending=rpc('submit',{room:e.room,driverId:e.driverId,intent:cabIntent(fifth,1)},30_000);void pending.catch(()=>{});
+  await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:e.driverId})).held,'cab profile write held');
+  const pendingKeys=await keys(e.room,e.driverId);
+  assert.ok(pendingKeys.includes(`pending:${e.driverId}:${fifth.eventId}`));
+  assert.ok(!pendingKeys.includes(`cab-stage:${e.driverId}:${fifth.eventId}`));
+  await stop(child);child=undefined;child=start();await ready();
+  await until(async()=>{const state=await inspect(e.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'converted stage before profile write');
+  assert.equal((await inspect(e.driverId)).progress.cash,e.progress.cash+1);
+
+  // If a stage and later journal entry somehow coexist, refuse handoff before
+  // compacting or committing the later sequence. The evidence remains durable.
+  const f=await seed(),sixth=batch(f.driverId,f.fence,f.room,2,0,240);assert.equal(await stage(sixth),'accepted');
+  const outOfOrder:EconomyIntent={eventId:randomUUID(),driverId:f.driverId,fence:f.fence,roomId:f.room,revision:1,sequence:3,
+    action:{kind:'progress',progress:f.progress}};
+  await post('/__cab-stage/inject-out-of-order',{room:f.room,intent:outOfOrder});
+  const outOfOrderCleanup={...outOfOrder,eventId:randomUUID(),sequence:4};
+  await post('/__cab-stage/inject-cleanup',{room:f.room,intent:outOfOrderCleanup});
+  const alarmsBefore=(await post<{calls:number}>('/__cab-stage/alarm-state',{room:f.room})).calls;
+  await assert.rejects(rpc('acquire',{driverId:f.driverId,fence:randomUUID(),room:`blocked-${randomUUID().slice(0,8)}`},15_000));
+  await until(async()=>(await post<{calls:number}>('/__cab-stage/alarm-state',{room:f.room})).calls>=alarmsBefore+2,
+    'alarm retries quarantined out-of-order cleanup');
+  assert.equal((await inspect(f.driverId)).fence,f.fence);
+  assert.equal((await inspect(f.driverId)).sequence,1,'alarm cleanup cannot advance the watermark past a stage');
+  const quarantined=await keys(f.room,f.driverId);
+  assert.ok(quarantined.includes(`cab-stage:${f.driverId}:${sixth.eventId}`));
+  assert.ok(quarantined.includes(`pending:${f.driverId}:${outOfOrder.eventId}`));
+  assert.ok(quarantined.includes(`cleanup:${f.driverId}:${outOfOrderCleanup.eventId}`));
+
+  // A rejected income event retains its receipt and blocks fence handoff; it
+  // must not be compacted into an apparent success or silently abandoned.
+  const g=await seed(),bad=batch(g.driverId,g.fence,g.room,2,0,240);
+  bad.intervals[0].assetId='missing-cab';assert.equal(await stage(bad),'accepted');
+  assert.deepEqual(await rpc<DriverOutcome>('submit',{room:g.room,driverId:g.driverId,intent:cabIntent(bad,1)}),{ok:false,reason:'invalid'});
+  assert.deepEqual(await rpc('ack',{room:g.room,driverId:g.driverId,intent:cabIntent(bad,1)}),{ok:false},'a rejected income receipt cannot be compacted');
+  await assert.rejects(rpc('acquire',{driverId:g.driverId,fence:randomUUID(),room:`blocked-${randomUUID().slice(0,8)}`},15_000));
+  assert.equal((await inspect(g.driverId)).fence,g.fence);
+  const failedKeys=await keys(g.room,g.driverId);
+  assert.ok(failedKeys.includes(`unacked:${g.driverId}:${bad.eventId}`));
+  assert.ok(failedKeys.includes(`intent:${bad.eventId}`));
+
+  // A held stage response affects this wallet only; real room snapshots and
+  // input acknowledgements continue for a second connected driver.
+  const chat=connect('/api/chat');await until(()=>chat.socket.readyState===WebSocket.OPEN,'chat opens');
+  chat.socket.send(JSON.stringify({type:'hello',name:'Stage driver'}));await until(()=>!!chat.last('ready'),'chat ready');
+  chat.socket.send(JSON.stringify({type:'save'}));await until(()=>!!chat.last('recovery'),'saved code');
+  const code=chat.last('recovery')!.code as string;chat.socket.close();
+  await until(()=>chat.socket.readyState===WebSocket.CLOSED,'chat closes');
+  const liveId=randomUUID(),liveRoom=`live-${randomUUID().slice(0,8)}`;
+  await rpc('associate',{driverId:liveId,code});await rpc('acquire',{driverId:liveId,fence:randomUUID()});
+  await rpc('fund',{driverId:liveId,seedCash:25_000});
+  const owner=connect(`/api/room/${liveRoom}`),observer=connect(`/api/room/${liveRoom}`,true);
+  await until(()=>!!owner.last('welcome')&&!!owner.last('wallet'),'owner joins');
+  owner.socket.send(JSON.stringify({type:'identity',code,requestId:1}));
+  await until(()=>owner.messages.some(message=>message.type==='identityResult'&&message.ok)&&owner.input.active,'owner saved identity');
+  await until(()=>observer.input.active&&!!observer.last('state'),'observer joins');
+  owner.socket.send(JSON.stringify({type:'cab',action:'buy',requestId:2}));
+  await until(()=>owner.messages.some(message=>message.type==='cabResult'&&message.requestId===2&&message.ok),'cab purchased');
+  const assetId=(await inspect(liveId)).progress.cybercabs!.assets[0].id;
+  await until(()=>owner.last('state')?.world.entities.some((entity:{cab?:{assetId:string}})=>entity.cab?.assetId===assetId),'cab dispatched');
+  await post('/__cab-stage/hold-reply',{room:liveRoom});
+  owner.input.send({...NEUTRAL,steer:1});await pause(500);owner.input.send(NEUTRAL);
+  await until(async()=>(await post<{held:boolean}>('/__cab-stage/hold-state',{room:liveRoom})).held,'cab stage reply held',15_000);
+  const beforeTick=observer.input.tick,sequence=observer.input.send({...NEUTRAL,steer:1});
+  await until(()=>observer.input.tick>=beforeTick+8&&(observer.input.control?.appliedSeq??0)>=sequence,'other driver keeps receiving snapshots and input acknowledgements');
+  assert.equal((await post<{held:boolean}>('/__cab-stage/hold-state',{room:liveRoom})).held,true);
+  await rpc('arm',{driverId:liveId,fault:'hold-before'});
+  await post('/__cab-stage/release',{room:liveRoom});
+  await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:liveId})).held,'live cab profile RPC held');
+  const profileHeldTick=observer.input.tick,profileHeldSequence=observer.input.send(NEUTRAL);
+  await until(()=>observer.input.tick>=profileHeldTick+8&&(observer.input.control?.appliedSeq??0)>=profileHeldSequence,
+    'room physics continues while profile RPC is held');
+  assert.equal((await rpc<{held:boolean}>('fault-state',{driverId:liveId})).held,true);
+  await rpc('release',{driverId:liveId});
+  await until(async()=>(await inspect(liveId)).progress.cybercabs!.assets[0].gross>0,'cab income commits after held stage reply');
+
+  console.log('PASS: cab stage rebase, stalled writers, lost replies, process restart, exactly-once settlement, and cross-room fencing.');
+}finally{for(const socket of sockets)try{socket.close();}catch{}if(child)await stop(child);await rm(dir,{recursive:true,force:true});}
