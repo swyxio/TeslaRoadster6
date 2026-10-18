@@ -6,7 +6,7 @@ That idea became Poly AV, now called [Tesland](/): an open-source Bay Area drivi
 
 *A gameplay capture from the alpha: the next stop is Tartine, and the purple rocket collectible ahead can temporarily equip a car for flight.*
 
-## From the Roadster to a food run
+## From the Roadster to a food run {#from-the-roadster-to-a-food-run}
 
 My original pitch was basically “GTA 6, but lite”: a place to drive around the Bay with other people, bump into each other, steal a car, and play with a Roadster that could jump and fly. I kept thinking about the possibilities: getting out of traffic, escaping a parking lot, finding a shortcut nobody on the road could take.
 
@@ -18,9 +18,9 @@ The first run sends you to Tartine Bakery. Reach the pickup quickly and you earn
 
 ![Diagram of the delivery loop: pick up a meal, deliver it for cash, and upgrade your ride; flight is an optional shortcut that uses air and may attract police.](/blog/building-poly-av/delivery-loop.svg)
 
-The money makes the next decision interesting. Do I save it, repair my car, buy a better motor, or spend it on more air capacity so I can take a riskier route next time? The loop is intentionally small: get a job, go somewhere, get paid, and use the reward to make the next trip more fun.
+The money makes the next decision interesting. Do I save it, repair my car, buy a better motor, or spend it on more air capacity so I can take a riskier route next time? The loop is intentionally small: get a job, go somewhere, get paid, and use the reward to make the next trip more fun. We later explored how that loop could grow into [a wider economy](/blog/planning-the-economy/).
 
-## The Bay has to feel like the Bay
+## The Bay has to feel like the Bay {#the-bay-has-to-feel-like-the-bay}
 
 I wanted this to be a love letter to the Bay Area, not just a city grid with San Francisco names attached. The first version had a square map and a Golden Gate Bridge on land. That was an easy correction to articulate: if I’m making a Bay Area driving game, the bridge needs water underneath it, and Oakland needs to be on the other side of the Bay.
 
@@ -28,7 +28,7 @@ Now the Golden Gate heads toward Marin, and the Bay Bridge connects San Francisc
 
 The world is still a deliberately compressed, stylized remix, not an exact recreation or navigation map. It includes more than 100 low-poly landmarks, from Coit Tower and the Transamerica Pyramid to Salesforce Tower and SFO, along with fictional tech billboards. Some highway shapes use [OpenStreetMap data](https://www.openstreetmap.org/copyright); the game’s positions and distances are artistic choices. Restaurant and Tesla Supercharger identities are real, but their in-game placements and the compressed-air refill service are fictional. Tesland isn’t affiliated with the named businesses.
 
-## Flight needs both shortcuts and consequences
+## Flight needs both shortcuts and consequences {#flight-needs-both-shortcuts-and-consequences}
 
 The Roadster Rocket starts with thrusters, but I didn’t want flight to be exclusive to one car. On a keyboard, tap E to jump, hold it to hover, and use the driving controls to move through the air. Find a purple rocket collectible and any vehicle can fly temporarily; fictional SpaceX shops also sell rocket kits that last for the session, along with upgrades, repairs and air. The shops are placed around the map as game locations, not real SpaceX services.
 
@@ -44,7 +44,7 @@ Flight can also attract police. Fly low near a patrol car and it can chase you; 
 
 *A citation from a play session. The amount is fictional game cash.*
 
-## What you can do in the alpha
+## What you can do in the alpha {#what-you-can-do-in-the-alpha}
 
 Those tradeoffs gave the game a direction. Around them, we added cars, places and ways to play. Here’s what is playable today:
 
@@ -59,12 +59,12 @@ Those tradeoffs gave the game a direction. Around them, we added cars, places an
 
 *Cockpit view keeps the pickup information in the scene while the camera follows the car.*
 
-## A small multiplayer game on Cloudflare
+## A small multiplayer game on Cloudflare {#a-small-multiplayer-game-on-cloudflare}
 
-I also wanted to see whether we could make the shared driving part work with Cloudflare and WebSockets. A Cloudflare Durable Object runs each room's shared simulation: players send controls over WebSockets, and the room sends the resulting world state back. That means the room, rather than each browser independently, decides where cars are and what happens when they collide or complete a delivery. Cloudflare documents the [Durable Object WebSocket model](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) behind this setup.
+I also wanted to see whether we could make the shared driving part work with Cloudflare and WebSockets. A Cloudflare Durable Object runs each room's shared simulation: players send controls over WebSockets, and the room sends the resulting world state back. That means the room, rather than each browser independently, decides where cars are and what happens when they collide or complete a delivery. Cloudflare documents the [Durable Object WebSocket model](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) behind this setup. A later post explains [how we made the driving feel smoother](/blog/making-driving-feel-smooth/).
 
 I’ve been building this in layers with coding agents: get a drive working, try it, then add the next mechanic. After trying the controls, I asked for sharper steering and a simpler way to fly. Now a tap of E jumps and holding the same key hovers. The code and [contributor contracts](https://github.com/swyxio/TeslaRoadster6) are public under MIT, so other coding agents and contributors can change the visuals or build on the gameplay without each inventing a different simulation.
 
-This is an alpha, not a persistent MMO. Delivery progress and personal cash are session-based; the newer shared Mars fund persists per room. There’s no shooting or permanent personal economy yet.
+At this stage of the alpha, delivery progress and personal cash were session-based, while the newer shared Mars fund persisted per room. There was no shooting or permanent personal economy yet.
 
 I started with a flying-car daydream. Now I can pick up dinner, chase a bonus across a condensed version of the Bay, and find out whether the shortcut was worth the ticket. If that sounds fun, [take a drive](/).

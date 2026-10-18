@@ -6,7 +6,8 @@ export const POSTS = [
     date: '2026-10-18',
     release: '0.0.15 Alpha',
     description: 'The work behind a smoother drive: frame pacing, multiplayer prediction, distant detail and the limits we still need to measure.',
-    file: '2026-10-18-making-driving-feel-smooth.md'
+    file: '2026-10-18-making-driving-feel-smooth.md',
+    related: ['building-poly-av']
   },
   {
     slug: 'planning-the-economy',
@@ -14,7 +15,8 @@ export const POSTS = [
     date: '2026-10-18',
     release: '0.0.14 Alpha',
     description: 'An interactive look at deliveries, Cybercabs, property and the long road to a shared Starship launch.',
-    file: '2026-10-18-planning-the-economy.md'
+    file: '2026-10-18-planning-the-economy.md',
+    related: ['building-poly-av']
   },
   {
     slug: 'building-poly-av',
@@ -22,6 +24,7 @@ export const POSTS = [
     date: '2026-10-18',
     release: '0.0.1 Alpha',
     description: 'How a flying-car idea became an open-source Bay Area game about food deliveries, shortcuts, upgrades and friends.',
-    file: '2026-10-18-building-poly-av.md'
+    file: '2026-10-18-building-poly-av.md',
+    related: ['planning-the-economy', 'making-driving-feel-smooth']
   }
 ] as const;
