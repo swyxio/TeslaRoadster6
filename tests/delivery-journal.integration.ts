@@ -116,6 +116,23 @@ try{
     assert.equal(result.progress.order.stage,'dropoff');
   }
 
+  // A speeding stop uses the same durable journal and is charged only once,
+  // including when the room has to replay a lost response.
+  {
+    const driver=entry(),acquired=await acquire(driver);
+    const ticket:TicketStage={eventId:randomUUID(),driverId:driver.driverId,fence:driver.fence,roomId:driver.room,walletOrder:1,clock:0,
+      action:{kind:'ticket',evidence:{seconds:0,peakHeight:0,at:1,x:-800,z:3300,canFly:true,cause:'speeding',speedKph:150},orderBefore:acquired.progress.order,completedBefore:0}};
+    assert.equal(await rpc('stage-ticket',{...driver,stage:ticket}),'accepted');
+    const submitted:EconomyIntent={...ticket,revision:0,sequence:1,action:ticket.action};
+    const result=await rpc<DriverOutcome>('submit',{...driver,intent:submitted});success(result);
+    assert.equal(result.progress.cash,acquired.progress.cash-100);
+    assert.equal(result.progress.tickets,1);
+    assert.deepEqual(await rpc('submit',{...driver,intent:submitted}),result,'replay cannot charge the speeding fine twice');
+    await rpc('freeze',driver,15_000);
+    const saved=await rpc<Profile>('profile',driver);
+    assert.equal(saved.progress.cash,acquired.progress.cash-100);assert.equal(saved.progress.tickets,1);
+  }
+
   // On-foot evidence survives durable replay: preserve accessible roofs, but
   // still reroute a destination that the balance drop locks geographically.
   for(const locked of [false,true]){

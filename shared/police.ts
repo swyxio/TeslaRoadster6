@@ -1,14 +1,31 @@
 import type { Entity, Input, Player, World } from './game';
 import { NEUTRAL } from './game';
-import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
-import { engageAutopilot, ROUTES } from './traffic';
+import { HIGHWAYS, OVERPASS, ROADS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
+import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
 import { canAssignDeliveryRoof, updateLevel, type DeliveryState } from './delivery';
 import { hasRockets } from './upgrades';
+import { body, contact, dimensions } from './physics';
 
-export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
+export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[]; highwayPatrol?:true; airPatrol?:true; nextFlightAt?:number; cause?:'flight'|'speeding'; peakSpeedKph?:number };
 type Point = { x:number; z:number };
 const SIGHT=85, PURSUIT_RANGE=110, ESCAPE_SECONDS=10;
+// Fictional arcade limits; normal highway NPCs and self-driving modes cruise
+// below the trigger. An officer must see the actual car to start a chase.
+export const HIGHWAY_SPEED_LIMIT_KPH=110;
+export const HIGHWAY_SPEED_TRIGGER_KPH=125;
+const PATROL_HIDDEN_DISTANCE=1600, PATROL_INTERVAL=15;
+const highwayRects=ROADS.filter(road=>road.kind==='highway').map(road=>{
+  const c=Math.cos(road.angle??0),s=Math.sin(road.angle??0);
+  return {...road,c,s,rx:Math.abs(c)*road.w/2+Math.abs(s)*road.d/2,rz:Math.abs(s)*road.w/2+Math.abs(c)*road.d/2};
+});
+export function onHighway(x:number,z:number):boolean {
+  for(const r of highwayRects){
+    const dx=x-r.x,dz=z-r.z;if(Math.abs(dx)>r.rx||Math.abs(dz)>r.rz)continue;
+    if(Math.abs(dx*r.c-dz*r.s)<=r.w/2&&Math.abs(dx*r.s+dz*r.c)<=r.d/2)return true;
+  }
+  return false;
+}
 const points:Point[]=[];
 const rows=[-240,-180,-120,-60,0,60,120,180,240];
 for(const x of [-360,-300,-240,-180,-120,-60,0,60,330,390,450,510,570]) for(const z of rows)
@@ -34,9 +51,10 @@ function route(from:Point,to:Point):Point[]{
   while(result.length>1&&lineClear(from,result[1]))result.shift();
   return result;
 }
-export function newPolice():PoliceState{return {targetId:null,lastSeen:0,nextPlan:0,path:[]};}
+export function newPolice(highwayPatrol=false):PoliceState{return {targetId:null,lastSeen:0,nextPlan:0,path:[],...(highwayPatrol?{highwayPatrol:true as const}:{})};}
 function resumePatrol(cop:Entity){
   const state=cop.police!;state.targetId=null;state.path=[];
+  delete state.cause;delete state.peakSpeedKph;
   if(engageAutopilot(cop))return;
   // A pursuit may end beyond the normal patrol grid or on the upper road.
   // Return to an existing route rather than leaving a marked car stranded.
@@ -62,60 +80,184 @@ function heightAboveSurface(e:Entity){
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
 /** Immutable physical proof of one police stop; the fine depends on the wallet at application time. */
-export type TicketEvidence={seconds:number;peakHeight:number;at:number;x:number;z:number;canFly:boolean;roofEligible?:boolean;onFoot?:boolean};
+export type TicketEvidence={seconds:number;peakHeight:number;at:number;x:number;z:number;canFly:boolean;roofEligible?:boolean;onFoot?:boolean;cause?:'flight'|'speeding';speedKph?:number};
 /** Unknown vehicle capability on foot preserves an accessible existing roof. */
 export function ticketRoofAccess(evidence:TicketEvidence):boolean|null {
   return evidence.onFoot===true?null:evidence.roofEligible===true;
 }
 export function applyTicketEvidence(delivery:DeliveryState,evidence:TicketEvidence):void {
   const durationFine=Math.min(120,Math.floor(evidence.seconds/2)*8),heightFine=Math.min(80,Math.floor(evidence.peakHeight/10)*10),repeatFine=delivery.tickets*35;
-  const amount=60+durationFine+heightFine+repeatFine;
-  delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(evidence.seconds),peakHeight:Math.round(evidence.peakHeight),durationFine,heightFine,repeatFine};
+  const cause=evidence.cause??'flight',speedKph=cause==='speeding'?Math.round(evidence.speedKph??0):0;
+  const speedFine=cause==='speeding'?Math.min(120,Math.max(0,Math.floor((speedKph-HIGHWAY_SPEED_LIMIT_KPH)/10)*10)):0;
+  const amount=60+durationFine+heightFine+speedFine+repeatFine;
+  delivery.tickets++;
+  // The persisted ticket carries its reason and recorded speed so the client
+  // can explain the same fine the authoritative wallet applied.
+  const ticket={amount,offense:delivery.tickets,flightSeconds:Math.floor(evidence.seconds),peakHeight:Math.round(evidence.peakHeight),durationFine,heightFine,repeatFine,cause,speedKph,speedFine};
+  delivery.lastTicket=ticket;
   delivery.cash-=amount;updateLevel(delivery);delivery.ticketGraceUntil=evidence.at+20;delivery.flight.seconds=0;delivery.flight.peakHeight=0;
+}
+
+type PatrolRoute={id:number;points:Point[];lengths:number[];starts:number[];total:number};
+const patrolRoutes:PatrolRoute[]=HIGHWAY_ROUTE_IDS.map(id=>{
+  const points=ROUTES[id],lengths=points.map((a,i)=>distance(a,points[(i+1)%points.length]));
+  let total=0;const starts=lengths.map(length=>{const start=total;total+=length;return start;});
+  return {id,points,lengths,starts,total};
+});
+function patrolPose(route:PatrolRoute,at:number){
+  at=((at%route.total)+route.total)%route.total;
+  let i=route.lengths.findIndex((length,index)=>at<route.starts[index]+length);
+  if(i<0)i=route.points.length-1;
+  const a=route.points[i],b=route.points[(i+1)%route.points.length],length=route.lengths[i],t=length?(at-route.starts[i])/length:0;
+  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),routeId:route.id,waypoint:(i+1)%route.points.length};
+}
+/** Supply a checked-by-caller starting pose on the existing connected Bay loop. */
+export function highwayPolicePose(index:number,attempt=0){
+  const route=patrolRoutes[index%2],fraction=(.06+(index%2)*.45+attempt*.013)%1;
+  return patrolPose(route,route.total*fraction);
+}
+
+// Find a lane heading toward the player, then place the patrol well ahead of
+// them on that same continuous lane. It can meet an approaching player without
+// teleporting into sight or spawning a new vehicle.
+function approachingRoute(target:Entity):{route:PatrolRoute;at:number}|null {
+  const direction=target.speed< -1?-1:1,fx=-Math.sin(target.yaw)*direction,fz=-Math.cos(target.yaw)*direction;
+  let best=24,result:{route:PatrolRoute;at:number}|null=null;
+  for(const route of patrolRoutes)for(let i=0;i<route.points.length;i++){
+    const a=route.points[i],b=route.points[(i+1)%route.points.length],length=route.lengths[i];if(!length)continue;
+    const dx=b.x-a.x,dz=b.z-a.z;if((dx*fx+dz*fz)/length>-.5)continue;
+    const t=Math.max(0,Math.min(1,((target.x-a.x)*dx+(target.z-a.z)*dz)/(length*length)));
+    const d=Math.hypot(target.x-a.x-t*dx,target.z-a.z-t*dz);
+    if(d<best){best=d;result={route,at:route.starts[i]+length*t};}
+  }
+  return result;
+}
+function patrolSpawnClear(world:World,cop:Entity,pose:ReturnType<typeof patrolPose>):boolean {
+  const y=terrainHeight(pose.x,pose.z);if(y===null||!onHighway(pose.x,pose.z))return false;
+  const size=dimensions(cop.kind),fx=-Math.sin(pose.yaw),fz=-Math.cos(pose.yaw),rx=Math.cos(pose.yaw),rz=-Math.sin(pose.yaw);
+  for(const ahead of [-size.length/2,size.length/2])for(const side of [-size.width/2,size.width/2])
+    if(!isSurface(pose.x+fx*ahead+rx*side,pose.z+fz*ahead+rz*side))return false;
+  const candidate=body({...cop,...pose,y});
+  if(nearbyBuildings(pose.x,pose.z,size.length+4).some(building=>contact(candidate,{...building,yaw:0})))return false;
+  return !world.entities.some(entity=>entity!==cop&&Math.hypot(entity.x-pose.x,entity.z-pose.z)<14);
+}
+function redistributePatrol(world:World,dt:number,entities:Map<string,Entity>):void {
+  const tick=Math.floor((world.time+1e-7)/PATROL_INTERVAL);
+  if(tick<=0||tick===Math.floor((world.time-dt+1e-7)/PATROL_INTERVAL))return;
+  const viewers=world.players.map(player=>entities.get(player.entityId)).filter((entity):entity is Entity=>!!entity);
+  const patrols=world.entities.filter(entity=>entity.police?.highwayPatrol);
+  if(!viewers.length||!patrols.length)return;
+  const hidden=(point:Point)=>viewers.every(viewer=>distance(point,viewer)>PATROL_HIDDEN_DISTANCE);
+  const roadViewers=viewers.filter(viewer=>viewer.kind!=='person'&&viewer.supportId==='ground'&&!viewer.inDome&&!islandProtected(viewer)&&onHighway(viewer.x,viewer.z));
+  // A hidden officer who is already the only nearby patrol for another
+  // player is still serving that player; do not bounce it between drivers.
+  const available=patrols.filter(cop=>!cop.police!.targetId&&!cop.driver&&cop.supportId==='ground'&&hidden(cop)&&
+    !roadViewers.some(viewer=>distance(cop,viewer)<2100&&!patrols.some(other=>other!==cop&&distance(other,viewer)<2100)));
+  if(!available.length)return;
+  const targets=roadViewers
+    .map(viewer=>({viewer,nearest:Math.min(...patrols.map(cop=>distance(viewer,cop)))}))
+    .filter(item=>item.nearest>2100).sort((a,b)=>b.nearest-a.nearest);
+  for(const {viewer} of targets){
+    const lane=approachingRoute(viewer);if(!lane)continue;
+    for(const cop of available)for(const ahead of [1750,2000,2400,2900,3500]){
+      const pose=patrolPose(lane.route,lane.at-ahead);
+      if(!hidden(pose)||distance(pose,viewer)>2100||!patrolSpawnClear(world,cop,pose))continue;
+      Object.assign(cop,pose,{y:terrainHeight(pose.x,pose.z)!,supportId:'ground',autopilot:true,navigation:null,pauseUntil:0,
+        speed:0,vx:0,vy:0,vz:0,pushX:0,pushZ:0,steering:0,pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0});
+      cop.police!.path=[];return; // At most one relocation per interval.
+    }
+  }
+}
+
+/** Follow shared highway vertices around curves instead of the city-only graph. */
+function highwayPath(from:Point,to:Point):Point[]|null {
+  let best=Infinity,result:Point[]|null=null;
+  for(const highway of HIGHWAYS){
+    const closest=(p:Point)=>{
+      let found={index:0,distance:Infinity};
+      for(let i=1;i<highway.points.length;i++){
+        const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z,l=dx*dx+dz*dz;
+        const t=l?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/l)):0;
+        const d=Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz);if(d<found.distance)found={index:i-1,distance:d};
+      }
+      return found;
+    };
+    const a=closest(from),b=closest(to),score=a.distance+b.distance,margin=(highway.width??32)/2+6;
+    if(a.distance>margin||b.distance>margin||score>=best)continue;
+    const path:Point[]=[];
+    if(a.index<b.index)for(let i=a.index+1;i<=b.index;i++)path.push(highway.points[i]);
+    if(a.index>b.index)for(let i=a.index;i>b.index;i--)path.push(highway.points[i]);
+    path.push({x:to.x,z:to.z});
+    // Skip intermediate vertices only when the whole shortcut stays on the
+    // shared road and avoids authoritative buildings.
+    while(path.length>1){
+      const end=path[1],count=Math.ceil(distance(from,end)/6);let road=true;
+      for(let i=0;i<=count;i++){const t=count?i/count:0;if(!onHighway(from.x+(end.x-from.x)*t,from.z+(end.z-from.z)*t)){road=false;break;}}
+      if(!road||!lineClear(from,end))break;path.shift();
+    }
+    best=score;result=path;
+  }
+  return result;
 }
 export function updatePolice(world:World,dt:number,onTicket?:(player:Player,apply:()=>void,evidence:TicketEvidence)=>void):void {
   const entities=new Map(world.entities.map(entity=>[entity.id,entity]));
   const players=new Map(world.players.map(player=>[player.id,player]));
+  redistributePatrol(world,dt,entities);
   const pursuits=new Set(world.entities.flatMap(entity=>entity.police?.targetId?[entity.police.targetId]:[]));
-  const flyers:{player:Player;entity:Entity}[]=[];
+  const racers=new Set(world.races.rounds.flatMap(round=>round.entrants.filter(entrant=>entrant.status==='entered').map(entrant=>entrant.playerId)));
+  const suspects:{player:Player;entity:Entity;cause:'flight'|'speeding';speedKph:number}[]=[];
   for (const player of world.players) {
     const e=entities.get(player.entityId), flight=player.delivery.flight;
     // The fictional arena is a no-police playground, including its ceiling.
-    const protectedArea=!!e&&(e.inDome||islandProtected(e));
+    const protectedArea=!!e&&(e.inDome||islandProtected(e)||racers.has(player.id));
     const height=e&&!protectedArea?flightHeight(e):0;
     if(protectedArea){flight.seconds=0;flight.peakHeight=0;}
     if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
     else if(world.time-flight.lastAirborneAt>3&&!pursuits.has(player.id)){flight.seconds=0;flight.peakHeight=0;}
-    if(e&&height>3&&height<=80)flyers.push({player,entity:e});
+    if(e&&!protectedArea){
+      const speedKph=Math.abs(e.speed)*3.6;
+      if(height>3&&height<=80)suspects.push({player,entity:e,cause:'flight',speedKph});
+      else if(e.kind!=='person'&&e.supportId==='ground'&&speedKph>HIGHWAY_SPEED_TRIGGER_KPH&&onHighway(e.x,e.z))
+        suspects.push({player,entity:e,cause:'speeding',speedKph});
+    }
   }
   for(const cop of world.entities){
     const state=cop.police;if(!state)continue;
     let player=state.targetId?players.get(state.targetId):undefined;
     let target=player?entities.get(player.entityId):undefined;
-    if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
+    if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target)||racers.has(player.id))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      // Select the nearest eligible flyer in player order; strict comparison
+      // Select the nearest eligible suspect in player order; strict comparison
       // preserves the previous stable-sort tie break without repeated scans.
-      let nearest=SIGHT;
-      for(const candidate of flyers){
+      let nearest=SIGHT,chosen:typeof suspects[number]|undefined;
+      for(const candidate of suspects){
         if(world.time<candidate.player.delivery.ticketGraceUntil)continue;
         const distance=separation(cop,candidate.entity);
-        if(distance<nearest){nearest=distance;player=candidate.player;target=candidate.entity;}
+        if(distance<nearest){nearest=distance;chosen=candidate;player=candidate.player;target=candidate.entity;}
       }
-      if(player&&target){state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
+      if(player&&target&&chosen){state.targetId=player.id;state.cause=chosen.cause;state.peakSpeedKph=chosen.cause==='speeding'?chosen.speedKph:undefined;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target){
       if(state.path.length&&cop.supportId==='ground'&&engageAutopilot(cop))state.path=[];
       continue;
     }
     const d=separation(cop,target);
-    if(d<PURSUIT_RANGE)state.lastSeen=world.time;
-    if(world.time-state.lastSeen>ESCAPE_SECONDS){resumePatrol(cop);continue;}
+    // The closing distance on a highway is much larger than in a city. Keep
+    // the same time and distance limits for the original airborne pursuit.
+    const pursuitRange=state.cause==='speeding'?300:PURSUIT_RANGE;
+    const escapeSeconds=state.cause==='speeding'?20:ESCAPE_SECONDS;
+    if(d<pursuitRange)state.lastSeen=world.time;
+    if(world.time-state.lastSeen>escapeSeconds){resumePatrol(cop);continue;}
+    if(state.cause==='speeding'&&target.supportId==='ground'&&onHighway(target.x,target.z))state.peakSpeedKph=Math.max(state.peakSpeedKph??0,Math.abs(target.speed)*3.6);
     if(cop.supportId!==null&&target.supportId===cop.supportId&&d<12){
       target.speed*=Math.exp(-2.2*dt);
-      if(d<7&&Math.abs(target.speed)<4){
+      // A pursuing car can keep nudging a suspect forward at low speed. A
+      // slightly wider stop threshold prevents a permanent bumper-to-bumper
+      // crawl while still requiring a physical slowdown before the ticket.
+      if(d<7&&Math.abs(target.speed)<(state.cause==='speeding'?6:4)){
         const evidence:TicketEvidence={seconds:player.delivery.flight.seconds,peakHeight:player.delivery.flight.peakHeight,
-          at:world.time,x:target.x,z:target.z,canFly:hasRockets(target),roofEligible:canAssignDeliveryRoof(target),onFoot:target.kind==='person'};
+          at:world.time,x:target.x,z:target.z,canFly:hasRockets(target),roofEligible:canAssignDeliveryRoof(target),onFoot:target.kind==='person',
+          cause:state.cause??'flight',speedKph:state.peakSpeedKph};
         const applyTicket=()=>applyTicketEvidence(player!.delivery,evidence);
         if(onTicket)onTicket(player,applyTicket,evidence);else applyTicket();
         // The stop and patrol reset are immediate physical effects; the fine is committed separately.
@@ -125,7 +267,7 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
         continue;
       }
     }
-    if(world.time>=state.nextPlan){state.path=route(cop,target);state.nextPlan=world.time+3;}
+    if(world.time>=state.nextPlan){state.path=onHighway(cop.x,cop.z)&&onHighway(target.x,target.z)?highwayPath(cop,target)??route(cop,target):route(cop,target);state.nextPlan=world.time+3;}
   }
 }
 export function policeInput(cop:Entity,world:World):Input {
@@ -138,11 +280,43 @@ export function policeInput(cop:Entity,world:World):Input {
     next={x:-Math.sin(cop.yaw)>=0?OVERPASS.end+10:OVERPASS.start-10,z:OVERPASS.z};
   }else if(cop.supportId==='ground'){
     while(state.path.length>1&&distance(cop,state.path[0])<8)state.path.shift();
-    const destination=state.path[0]??target;if(!destination)return NEUTRAL;next=destination;
+    // The final waypoint was sampled at the last route refresh. Following the
+    // live car avoids braking for a stale point behind a moving suspect.
+    const liveHighwayTarget=state.cause==='speeding'&&target&&state.path.length===1&&onHighway(cop.x,cop.z)&&onHighway(target.x,target.z);
+    const destination=liveHighwayTarget?target:state.path[0]??target;if(!destination)return NEUTRAL;next=destination;
   }else return NEUTRAL;
   const angle=Math.atan2(Math.sin(Math.atan2(-(next.x-cop.x),-(next.z-cop.z))-cop.yaw),Math.cos(Math.atan2(-(next.x-cop.x),-(next.z-cop.z))-cop.yaw));
   const reversing=Math.abs(angle)>2.25&&cop.speed<1;
   const steer=Math.max(-1,Math.min(1,angle*1.6))*(reversing?-1:1);
-  const cruise=Math.abs(angle)>.65?6:15;
+  const chaseSpeed=state.cause==='speeding'&&onHighway(cop.x,cop.z)?42:15;
+  const cruise=Math.abs(angle)>.65?6:Math.abs(angle)>.3?Math.min(18,chaseSpeed):chaseSpeed;
   return {...NEUTRAL,steer,throttle:reversing?-.7:cop.speed<cruise?.8:0,brake:!reversing&&cop.speed>cruise+2};
+}
+
+/** A tagged rocket officer may make a bounded, physical hop while pursuing a
+ * flying driver. The caller consumes `jump` as an NPC physics pulse; neither
+ * positions nor air are changed here. Ground pursuit resumes after landing. */
+export function policeFlight(cop:Entity,world:World,groundInput:Input):{input:Input;jump:boolean} {
+  const ground={input:groundInput,jump:false},state=cop.police;
+  if(!state?.airPatrol||cop.driver||state.cause!=='flight'||!state.targetId||!hasRockets(cop))return ground;
+  const player=world.players.find(p=>p.id===state.targetId),target=world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!target||target.inDome||islandProtected(target)||world.races.rounds.some(round=>round.entrants.some(e=>e.playerId===player.id&&e.status==='entered')))return ground;
+  const dx=target.x-cop.x,dz=target.z-cop.z,d=Math.hypot(dx,dz);
+  const heading=Math.atan2(-dx,-dz),angle=Math.atan2(Math.sin(heading-cop.yaw),Math.cos(heading-cop.yaw));
+  if(cop.supportId===null){
+    const fx=-Math.sin(cop.yaw),fz=-Math.cos(cop.yaw),forward=cop.vx*fx+cop.vz*fz;
+    const speed=d>15?Math.min(24,4+d*.4):0;
+    const throttle=cop.air>0?Math.max(-1,Math.min(1,(speed-forward)/12)):0;
+    const height=cop.y-(terrainHeight(cop.x,cop.z)??0);
+    const hover=flightHeight(target)>3&&height>3&&height<18&&cop.vy< -1&&d>10&&cop.air>35&&world.time<(state.nextFlightAt??0)-7;
+    return {input:{...NEUTRAL,throttle,steer:Math.max(-1,Math.min(1,angle*1.2-cop.yawRate*.3)),hover},jump:false};
+  }
+  if(cop.supportId!=='ground'||flightHeight(target)<=3||cop.air<50||world.time<(state.nextFlightAt??0)||
+     d<12||d>85||Math.abs(angle)>.4||cop.speed<0||cop.speed>20)return ground;
+  // Reject jumps across unsupported terrain or a building; the hop starts in
+  // the direction the vehicle is already travelling and has a clear landing.
+  const travel=Math.min(70,Math.max(d,cop.speed*3+25)),end={x:cop.x+dx/d*travel,z:cop.z+dz/d*travel};
+  if(!lineClear(cop,end))return ground;
+  state.nextFlightAt=world.time+12;
+  return {input:{...groundInput,throttle:Math.max(.35,groundInput.throttle),brake:false},jump:true};
 }

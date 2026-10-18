@@ -16,7 +16,7 @@ import { upgradePrice } from './research';
 import { setOta, updateOta } from './ota';
 import { awardDomeMatchAchievements, updateGameAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
 import type { AchievementEvidence } from './achievement-evidence';
-import { newPolice, policeInput, updatePolice, type PoliceState, type TicketEvidence } from './police';
+import { highwayPolicePose, newPolice, onHighway, policeFlight, policeInput, updatePolice, type PoliceState, type TicketEvidence } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, initialVehicleUpgrades, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
@@ -34,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=44;
+export const PROTOCOL_VERSION=45;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -84,8 +84,10 @@ export function createWorld(fleetSeed=0):World {
   });
   for(let i=0;i<4;i++){
     for(let n=0;n<60;n++){
-      const pose=routePose(i*7+n,60),cop={...makeEntity(`police-${i}`,'model-3',pose.x,pose.z),...pose,npc:true,autopilot:true,police:newPolice()};
-      if(fits(world,cop)){world.entities.push(cop);break;}
+      const highway=i>=2,pose=highway?highwayPolicePose(i-2,n):routePose(i*7+n,60);
+      const cop={...makeEntity(`police-${i}`,'model-3',pose.x,pose.z),...pose,npc:true,autopilot:true,police:newPolice(highway)};
+      if(i===3){cop.upgrades.rocket=true;cop.tankLevel=5;cop.police.airPatrol=true;}
+      if((!highway||onHighway(pose.x,pose.z))&&fits(world,cop)){world.entities.push(cop);break;}
     }
   }
   seedHighwayTraffic(world,makeEntity);
@@ -846,7 +848,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.boost||manual.hover||manual.roll||manualJump||flip)){e.autopilot=false;e.navigation=null;}
     if(e.driver&&(manualJump||flip))stuntPlayers.add(e.driver);
     let input:Input,autoJump=false;
-    if(e.police&&(e.police.targetId||e.police.path.length))input=policeInput(e,world);
+    if(e.police&&(e.police.targetId||e.police.path.length)){
+      const flight=policeFlight(e,world,policeInput(e,world));input=flight.input;autoJump=flight.jump;
+    }
     else if(e.autopilot){
       const nav=e.navigation,player=e.driver?world.players.find(p=>p.id===e.driver):undefined;
       if(nav&&player&&nav.mode&&nav.mode!=='road'){

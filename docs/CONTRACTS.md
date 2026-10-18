@@ -35,11 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v44
+## Wire protocol v45 (local highway-life candidate)
 
-Protocol v44 fences the rebalanced flight physics from v43 clients. The message shapes and 20 Hz world step are unchanged; incompatible clients must reload before joining.
+The local v45 candidate fences the shared highway scenery, traffic and police changes from earlier clients. The 20 Hz world step is unchanged; incompatible clients must reload before joining.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:44,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:45,capacity:number}`.
 
 Client messages:
 
@@ -90,7 +90,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:44, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:45, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -294,7 +294,7 @@ Before settling an accepted cab interval, the room-owned history barrier checks 
 
 ## Citations, rooftops and achievements
 
-`shared/police.ts` measures airborne duration and peak height in the authoritative simulation. When a pursuit ends in a citation, `delivery.lastTicket` records the amount, offense number, flight duration, height and duration, height and repeat components. The stop and grace period are immediate; the candidate economy flow publishes the fine after its durable result. Presentation must make a citation conspicuous and require an accessible acknowledgement; clearing controls does not stop server heartbeats. A room continues running while a dialog is open. Session-local UI may not create tickets or alter their amount.
+`shared/police.ts` measures airborne duration and peak height in the authoritative simulation. Highway patrols can also pursue a grounded driver observed above the fictional 125 km/h trigger; citations record the cause, measured speed and speed component as well as flight and repeat components. The stop and grace period are immediate; the candidate economy flow publishes the fine after its durable result. Presentation must make a citation conspicuous and require an accessible acknowledgement; clearing controls does not stop server heartbeats. A room continues running while a dialog is open. Session-local UI may not create tickets or alter their amount. The candidate's protocol number must be advanced again if an intervening release consumes it.
 
 Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. After Oakland unlocks, an eligible non-exploration order after every third completed run starting with the first may select a rooftop only when the vehicle has rockets and at least a Level 3 tank. Other vehicles receive ground orders. A saved or active roof job is rerouted to a ground customer if the driver enters a less capable vehicle; leaving the car on foot alone does not reroute it. A collected order retains its stage, elapsed time and fare ceiling. The room captures roof eligibility at delivery and citation event time; citations also capture whether the driver was on foot, deferring the vehicle check while still rerouting newly locked regions. Older staged evidence without these fields is conservatively ineligible. Repair waits while a prior delivery decision is unresolved.
 

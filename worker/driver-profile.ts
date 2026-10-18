@@ -4,7 +4,7 @@ import { isAchievementEvidence, type AchievementEvidence } from '../shared/achie
 import { normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
 import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
 import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
-import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../shared/police';
+import { applyTicketEvidence, HIGHWAY_SPEED_TRIGGER_KPH, ticketRoofAccess, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import type { VehicleUpgrades } from '../shared/upgrades';
@@ -221,7 +221,10 @@ export class DriverProfile extends DurableObject<Env> {
         } else if(intent.action.kind==='ticket'){
           const evidence=intent.action.evidence;
           if(!evidence||![evidence.seconds,evidence.peakHeight,evidence.at,evidence.x,evidence.z].every(Number.isFinite)||
-            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean'||(evidence.roofEligible!==undefined&&typeof evidence.roofEligible!=='boolean')||(evidence.onFoot!==undefined&&typeof evidence.onFoot!=='boolean'))error='invalid';
+            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean'||(evidence.roofEligible!==undefined&&typeof evidence.roofEligible!=='boolean')||(evidence.onFoot!==undefined&&typeof evidence.onFoot!=='boolean')||
+            (evidence.cause!==undefined&&evidence.cause!=='flight'&&evidence.cause!=='speeding')||
+            (evidence.speedKph!==undefined&&(!Number.isFinite(evidence.speedKph)||evidence.speedKph<0))||
+            (evidence.cause==='speeding'&&(evidence.speedKph===undefined||evidence.speedKph<=HIGHWAY_SPEED_TRIGGER_KPH)))error='invalid';
           else {
             const delivery=initialDelivery(evidence);
             Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:{...next.order}});

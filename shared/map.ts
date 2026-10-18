@@ -12,6 +12,9 @@ import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
+import { PARKING_LOTS } from './parking-lots';
+import { SHOPS } from './upgrades';
+import { generateRoadsideBuildings, type RoadsideExclusion } from './roadside-buildings';
 import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
@@ -392,6 +395,17 @@ if(vaultBlock<0)throw new Error('The Vault background block is missing');
 BUILDINGS.splice(vaultBlock,1,{...vault,district:'peninsula',style:'luxury-showroom'});
 BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
 BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
+// Ordinary freeway buildings use the same authoritative envelopes as the
+// rest of the city. Keep every activity, approach and landmark arrival clear.
+const pointExclusion=(p:{x:number;z:number}):RoadsideExclusion=>({x:p.x,z:p.z,w:40,d:40});
+const hillExclusion=(h:{minX:number;maxX:number;minZ:number;maxZ:number}):RoadsideExclusion=>({x:(h.minX+h.maxX)/2,z:(h.minZ+h.maxZ)/2,w:h.maxX-h.minX,d:h.maxZ-h.minZ});
+export const ROADSIDE_EXCLUSIONS:RoadsideExclusion[]=[AIRPORT_RUNWAY,...[HILL,...NATURAL_HILLS].map(hillExclusion),
+ ...PARKING_LOTS.flatMap(lot=>[{x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw},{x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw},pointExclusion(lot.pickup)]),
+ ...CALTRAIN_STOPS.map(stop=>({x:stop.platform.x,z:stop.platform.z,w:44,d:8})),
+ ...[...STATIONS,...SHOPS,...LANDMARKS.map(place=>place.arrival),FREMONT_SPACEPORT.entrance,LUXURY_SHOWROOM.arrival].map(pointExclusion)];
+export const ROADSIDE_BUILDINGS=generateRoadsideBuildings({highways:HIGHWAYS,buildings:BUILDINGS,roads:ROADS,
+ exclusions:ROADSIDE_EXCLUSIONS,rail:CALTRAIN_TRACK,regions:REGIONS,isLand,terrainHeight});
+BUILDINGS.push(...ROADSIDE_BUILDINGS);
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){
