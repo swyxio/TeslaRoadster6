@@ -9,15 +9,32 @@ measurements. The performance workflow records four recurring observations:
 | Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive, with movement, live render telemetry and no recorded browser errors. | A render-activity guard is not proof of correct pixels. Callback timing is not GPU completion or actual display presentation. Lower is better for this matched scenario. |
 | Modeled display/body speed p05–p95 (×) | Frame-to-frame modeled visual speed divided by predicted-body speed, when the latter exceeds 10 m/s. Ideally near 1. | Synthetic 120 Hz slalom and simulated network, not a live rendered car. Retain max movement per sample and traces too. |
 | Modeled steering onset (ms) | Left/right first modeled yaw response relative to a no-steer counterfactual. | Synthetic 120 Hz samples quantize response to 8.333 ms; not human input-to-photon latency. |
-| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
+| Room simulation / wall time (×) | Authoritative world-time advance divided by elapsed snapshot-arrival time during the route. Requires at least 58 seconds and 200 snapshots with no gap over two seconds. | One local player; browser and Worker share a host. It is not a production capacity or WAN-latency measurement. |
 
 The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
 fresh local room, staged start, 1280 × 720 viewport at DPR 1, and no video.
-Traffic and collisions still affect the route. Artifacts record the scenario,
-endpoint, browser, WebGL renderer, revisions and host load; inspect these
-before comparing. A hosted runner's paravirtual renderer describes that VM,
-not a phone or a physical desktop device.
+The local fixture seeds the traffic cohort and pauses the room until the guest
+and recorder are ready, then resumes the normal room clock. The scenario opts
+out of automatically saving the disposable driver using `freshGuest`. The player uses
+Street Pilot to reach four authoritative milestones: pickup and drop-off for
+each of two deliveries. Two observed jump bursts, a landing between jumps, and
+sustained airborne thrust with forward power follow. Keyboard presses are retried a bounded number
+of times if the room does not process them. The report requires the delivery
+milestones, two separate upward bursts and sustained flight; a keypress by
+itself does not prove a jump or delivery occurred. A respawn holds the route.
+
+The report saves four delivery legs and a flight leg from received room poses.
+Each three-dimensional path is sampled at 41 evenly spaced fractions of its own
+traveled distance, including flight altitude.
+The pair must have every leg, differ in leg length by at most the greater of
+20 m or 25% of the base leg. Each leg must have p95 sampled-point separation
+at most 25 m and maximum separation at most 50 m. Missing or
+divergent paths hold frame and room deltas. These are comparability tolerances,
+not gameplay or performance targets; traffic, contacts, network scheduling and
+changed simulation may still make a run diverge. Artifacts retain the scenario,
+paths, browser, WebGL renderer, revisions and host load. A hosted runner's
+paravirtual renderer describes that VM, not a phone or physical desktop device.
 
 ## When CI runs
 
@@ -30,7 +47,8 @@ for a small relevant change that could affect performance, add the
 **Actions → Performance observations → Run workflow**, choosing a workflow
 branch and optionally explicit base and candidate refs. The default base is
 `main`; a blank candidate means the selected workflow ref. Choose distinct refs
-for a meaningful comparison.
+for a meaningful comparison. The optional `record_video` input also records
+each revision in a separate run after the no-video measurements.
 
 Keep the workflow's path filter in sync with `performance-select.mjs`. GitHub's
 [path-filter limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons)
@@ -42,14 +60,16 @@ The job builds both revisions and runs the candidate's harness against each in
 sequence on `macos-15`, using headless Chromium with the observed Apple
 paravirtual Metal renderer. Its summary and
 artifact include the paired observations and raw traces; artifacts expire after
-90 days. An incomplete measurement fails the job and is shown as `HOLD`, never
-as zero. Timing differences are descriptive: one shared-host pair is noisy,
-and no automatic performance threshold is inferred from it. Different renderer,
-viewport, fixture or route endpoints can make a comparison `HOLD`. Hosted
-VM and named local machine results must not be compared directly. Review the
-raw paths for divergence even when endpoints happen to be close.
+90 days, including when the comparison is held. An incomplete measurement,
+different environment or fixture, or divergent route fails the job and is
+shown as `HOLD`, never as zero. If video was requested, both recordings must
+complete and their routes must also be comparable to each other; their summary
+is separate from the no-video measurements. Timing differences are
+descriptive: one shared-host pair is noisy, and no automatic performance
+threshold is inferred from it. Hosted VM and named local machine results must
+not be compared directly.
 
-For local runs, build the candidate and target revisions and install the
+For local runs, install the
 candidate's matching Playwright Chromium browser. Then use a new output
 directory for each target:
 
@@ -59,12 +79,20 @@ node scripts/performance-report.mjs --target-root /path/to/candidate --out /tmp/
 node scripts/performance-compare.mjs /tmp/perf-base/report.json /tmp/perf-candidate/report.json
 ```
 
+For separately recorded evidence, run the same commands with new output
+directories and `--video`, for example `--out /tmp/perf-base-video --video`.
+The comparison uses the no-video reports: recording and encoding change the
+workload. Review the WebM files and trajectories together.
+Every report builds its selected checkout before capture so an old ignored
+`dist` directory cannot be attributed to the wrong revision.
+
 Run sequentially on an otherwise quiet, named machine, and verify the actual
 renderer in the report. `metal` is appropriate only where available; the
 runner accepts `default`, `metal`, `vulkan` or `swiftshader`. The target must
-support the local staging fixture and motion benchmark; incompatibility is a
-missing observation, not a zero. Use [headless playtesting](HEADLESS_PLAYTESTING.md)
-for separate video evidence. Capturing video changes the workload.
+support the candidate's local staging fixture and motion benchmark;
+incompatibility is a missing observation, not a zero. See
+[headless playtesting](HEADLESS_PLAYTESTING.md) for the isolated fixture and
+recording controls.
 
 ## Version log
 
@@ -76,6 +104,10 @@ Keep software-rendered CI and physical-device or named-GPU observations in
 separate rows. Repeated, comparable paired runs are needed before treating a
 change as a regression or proposing a numerical budget. Existing aspirational
 targets and additional coverage remain in [performance release gates](PERFORMANCE_RELEASE_GATES.md).
+
+The historical rows below used the earlier short drive and idle room scenario,
+not the two-delivery route. Compare new observations by rerunning both versions
+with the same current harness rather than treating these rows as matched pairs.
 
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
