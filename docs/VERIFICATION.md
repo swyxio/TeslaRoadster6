@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
+
+- After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.
+- Local Wrangler room integration passed two-client play on protocol v20, including five goals, the authoritative winner and Roadster awards, spectator exclusion, wall refill visible to both clients, and exit. Local chat integration also passed. These are functional checks, not a load test.
+- Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. Gold wall markings and the refill hint were visible in desktop solo. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
+
 ## Economy progression simulations · 2026-10-18 Pacific
 
 - On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
@@ -444,6 +450,11 @@ In Chrome local solo play, the level-zero objective pointed into SF, attempting 
 
 After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.
 
+## 2026-10-18 · Rocket Dome match achievements
+
+After integrating current main, `pnpm test` passed 205 tests and `pnpm build` passed, including client and Worker typechecks; Vite's existing large-chunk warning remains. Simulation tests cover real ball collisions, Roadster/retrofit/stock classification, goals at either end, tied winners, spectators, leaving, disconnects, car switches, match resets and all five award rules. The local Wrangler room and chat integrations passed.
+
+The two-client Wrangler test played five goals, replicated the winner and both Roadster awards, and confirmed that the observing nonparticipant received none. An earlier run timed out because the observer exceeded the server's 30-second inactivity limit; the test now sends neutral input to keep it connected. Before the main integration, a Chrome solo five-goal Roadster match displayed both earned awards. After integrating main, the dome scoreboard was inspected on desktop and in 390×844 portrait and 844×390 landscape touch emulation; an emulated landscape touch on Drive accelerated the car. No console errors were observed. These are local checks, not physical-device or multiplayer load evidence.
 ## 2026-10-18 · More Bay landmarks and billboards
 
 In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` passed, including TypeScript checks. The local Wrangler two-client room integration passed on protocol v18, which versions the new collision and terrain data; this is not a load test. Tests cover the 100 new landmark identities, physical envelopes, highway clearance, billboard placement, and driving over the three authored hills. The room landing check was updated to accept a supported landing on terrain or a roof rather than requiring sea-level ground.
@@ -464,10 +475,20 @@ In Chrome solo play, temporary spawn fixtures showed a supply pickup restoring a
 
 After integrating main's island, ferry and permanent Rocket kit changes, all 313 tests and the build passed. The local two-client Wrangler room integration passed on protocol v21; it is not a ferry-crossing or load test. Chrome showed the integrated solo game on desktop and in emulated portrait and landscape layouts, with landscape touch controls visible. No physical device was tested.
 
+## 2026-10-18 · China Basin Dome integrated with permanent kits
+
+After integrating main's flight, parking, island and permanent Rocket kit changes, `pnpm test` passed 328 tests and `pnpm build` passed both TypeScript checks; the existing Vite large-chunk warning remains. Rocket kits acquired by pickup or purchase both count as retrofits for Dome achievements. Regression tests cover the stadium approach, all vehicle gate sizes, clear ambient traffic routes and permanent-kit awards. A local Wrangler two-client room test passed on protocol v22, including a five-goal match, replicated awards, spectator exclusion and wall refill; local chat integration also passed. This is not a load test.
+
+Chrome solo play showed the integrated arena and score on desktop and emulated 390×844 portrait and 844×390 landscape. In landscape, the wall-refill hint remained visible and an emulated touch on Drive accelerated the car. No physical device was tested.
+
+After integrating the economy simulation proposal from main, all 334 tests passed; it does not change the playable simulation.
+
 ## 2026-10-18 · Self-driving, map and social play
 
 After integrating the concurrent driving and economy changes, `pnpm test` passed 323 tests and `pnpm build` passed, including both TypeScript checks; Vite reports its existing large-chunk warning. The local Wrangler two-client room and global-chat integrations passed on protocol v22. One room run timed out while the local server was reloading during the build; the subsequent run passed. These checks do not measure capacity or a ferry crossing.
 
 Shared-simulation tests drove every selectable Tesla through a connected city route to arrival without damage in an otherwise clear world, rejected water, locked and disconnected destinations, and checked manual takeover and direct entry into each parking and race game. This does not establish smoothness or safe routing for every traffic and road situation.
 
-In Chrome local solo play on the pre-integration build, the large map opened at desktop and emulated 390×844 portrait and 844×390 landscape sizes; zoom and destination selection worked, the map closed and self-driving started. Landscape had coarse-pointer emulation, but selection used automated mouse input; pinch and physical touch were not tested. A desktop parking-game shortcut joined Park It and showed an assigned stall and leave control. An integrated local session changed the driver name, sent a chat message under it, and showed that name on Scores and progress on Awards. No physical device or complete manual destination arrival was verified.
+In Chrome local solo play on the pre-integration build, the large map opened at desktop and emulated 390×844 portrait and 844×390 landscape sizes; zoom and destination selection worked, the map closed and self-driving started. Landscape had coarse-pointer emulation, but selection used automated mouse input; pinch and physical touch were not tested. A desktop parking-game shortcut joined Park It and showed an assigned stall and leave control. A local session before the Dome integration changed the driver name, sent a chat message under it, recovered a saved test identity, and showed that name on Scores and progress on Awards. Phone chat and identity were also inspected in emulated portrait and landscape, and the local 0.0.3 changelog was reviewed. No physical device or complete manual destination arrival was verified.
+
+After integrating the relocated China Basin Dome, `pnpm test` passed 338 tests and `pnpm build` passed. The local Wrangler global-chat integration passed on protocol v23. In Chrome desktop solo, the Mini-games shortcut entered the new Dome, showed the China Basin score and leave control, and returned to the Bay and delivery HUD when leaving.

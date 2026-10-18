@@ -16,7 +16,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
   dialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow">TAKE A DETOUR / PLAY TOGETHER</span><h2 id="minigames-title">Pick a mini-game</h2></div><button type="button" class="minigames-close" aria-label="Close mini-games">✕</button></div>
     <p class="minigames-intro">Choose a game and we’ll take you there in your car. You can play solo or with your room.</p>
     <div class="minigames-grid">
-      <button type="button" data-game="dome"><span class="game-icon" aria-hidden="true">⚽</span><span><strong>Rocket Dome</strong><small>Car soccer! Knock the ball into either goal. First to five wins.</small></span><b>Play ↗</b></button>
+      <button type="button" data-game="dome"><span class="game-icon" aria-hidden="true">⚽</span><span><strong>Rocket Dome</strong><small>Car soccer! Score in either goal. First color to five ends the match.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="park"><span class="game-icon" aria-hidden="true">🅿</span><span><strong>Park It</strong><small>Find your assigned space and park neatly against the clock.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="queue"><span class="game-icon" aria-hidden="true">🚙</span><span><strong>Cut the Queue</strong><small>Race for an open parking space when the queue starts.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="short"><span class="game-icon" aria-hidden="true">🏁</span><span><strong>Short Circuit</strong><small>Race through the checkpoints on Rocket Island’s short course.</small></span><b>Play ↗</b></button>
