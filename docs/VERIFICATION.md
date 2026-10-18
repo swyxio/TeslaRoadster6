@@ -910,6 +910,8 @@ A local-only Wrangler fixture completed three actual room deliveries, held a los
 
 The standard two-client room integration also passed against local Wrangler, including driving, delivery, a five-goal Dome match and invalid-input isolation. Its advertised capacity of eight is not a load-test result.
 
+The branch Preview advertised v36 and capacity eight; two fresh guest clients joined and one saw the other's movement. Two inputs were rejected in the first short sample; their reasons were not captured. A second short sample reported no rejections. Neither sample measures sustained capacity.
+
 Chrome against the local fixture showed checkpoint progress at 2/3 and the paid $750 after the third and sixth deliveries. Desktop and emulated 390×844 portrait and 844×390 landscape layouts were inspected. Holding the emulated Drive control accelerated the car to approximately 30 km/h in each orientation; touch emulation was used for landscape. The local changelog rendered at desktop and those narrow sizes. No browser warnings or errors were observed in this check. These were desktop emulations, not physical-device tests.
 ## 2026-10-18 · Production wallet recovery
 
