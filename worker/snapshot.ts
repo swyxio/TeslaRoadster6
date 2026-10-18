@@ -5,6 +5,12 @@ import type { ControlSnapshot } from '../shared/tick-input';
 // This exceeds the renderer's fog distance and includes owned/unoccupied cars.
 export const AMBIENT_INTEREST_METERS = 1400;
 
+// Flight rearm is transient authority state; clients do not need the running
+// samples. Keep the schema's neutral value without broadcasting the tracker.
+function snapshotPlayers(world:World):World['players'] {
+  return world.players.map(player=>({...player,achievements:{...player.achievements,roofFlight:null}}));
+}
+
 function visible(e: Entity, current: Entity, playerId: string, playerEntities: Set<string>): boolean {
   return e.supportId==='ferry' || playerEntities.has(e.id) || e.driver !== null || e.owner === playerId ||
     (e.x-current.x)**2+(e.z-current.z)**2 <= AMBIENT_INTEREST_METERS**2;
@@ -13,10 +19,11 @@ function visible(e: Entity, current: Entity, playerId: string, playerEntities: S
 export function snapshotFor(world: World, playerId: string): World {
   const player = world.players.find(p => p.id === playerId);
   const current = world.entities.find(e => e.id === player?.entityId);
-  if (!current) return world;
+  if (!current) return {...world,players:snapshotPlayers(world)};
   const playerEntities = new Set(world.players.map(p => p.entityId));
   return {
     ...world,
+    players:snapshotPlayers(world),
     entities: world.entities.filter(e => visible(e,current,playerId,playerEntities)),
   };
 }
@@ -30,7 +37,7 @@ export function prepareSnapshots(world: World, tick:number, roomEpoch:string, su
   const byId = new Map(world.entities.map(entity=>[entity.id,entity]));
   const controlled = new Map(world.players.map(player=>[player.id,byId.get(player.entityId)]));
   const common = Object.entries(world).filter(([key,value])=>key!=='entities'&&value!==undefined)
-    .map(([key,value])=>`${JSON.stringify(key)}:${JSON.stringify(value)}`).join(',');
+    .map(([key,value])=>`${JSON.stringify(key)}:${JSON.stringify(key==='players'?snapshotPlayers(world):value)}`).join(',');
   const metadata=`"tick":${tick},"roomEpoch":${JSON.stringify(roomEpoch)},"substeps":${substeps}`;
   return (playerId,control,poseRevision,sync) => {
     const current=controlled.get(playerId);

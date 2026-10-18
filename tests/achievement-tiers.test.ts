@@ -16,7 +16,8 @@ function at(id:AchievementTierId,count:number):AchievementTierProgress {
 test('every family has the common thresholds and correct next tier',()=>{
   for(const id of ACHIEVEMENT_TIER_IDS){
     const expected=id==='deliveries'?[0,0,0,50_000,200_000]:
-      ['pickups','early-pickups','early-deliveries','supply-pickups'].includes(id)?[100,350,1_500,5_000,20_000]:[0,350,1_500,5_000,20_000];
+      ['pickups','early-pickups','early-deliveries','supply-pickups','parking-successes','queue-successes',
+        'races-finished','races-won','dome-matches','dome-wins'].includes(id)?[100,350,1_500,5_000,20_000]:[0,350,1_500,5_000,20_000];
     for(const [index,target] of ACHIEVEMENT_TIER_LADDER.entries()){
       const before=at(id,target-1),row=selectAchievementTiers(before).find(item=>item.id===id)!;
       assert.equal(row.count,target-1);assert.equal(row.rank,index);

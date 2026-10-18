@@ -1,4 +1,4 @@
-// Expected to fail until qualifying physical stops are durably replayed.
+// Qualifying physical stops survive rollback and deferred rate resolution.
 // pnpm exec tsx tests/delivery-recovery.integration.ts
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -37,19 +37,29 @@ try{
   assert.equal(speculative.draft.delivery.completed,1,'the speculative target was actually visited');
   assert.equal(speculative.saved.completed,0,'a visit that does not match the restored order is a no-op');
   assert.equal(speculative.saved.cash,speculative.initial.cash);
+  assert.equal(speculative.saved.achievementTiers?.deliveries.count,0,'an unmatched stop does not advance tiers');
   assert.equal(committed.saved.completed,1,'a physical visit to the restored target must survive the rejected predecessor');
   assert.equal(committed.saved.earned,committed.expectedFare,'fare uses 40 + 5.05 active seconds and the rate at the visit');
-  assert.equal(committed.saved.cash,committed.initial.cash+committed.expectedFare+2_500,'the rejected contribution is not resurrected');
+  const earlyCommitted=45.05<committed.initial.order.estimate;
+  assert.equal(committed.saved.achievementTiers?.deliveries.count,1);
+  assert.equal(committed.saved.achievementTiers?.['early-deliveries'].count,Number(earlyCommitted));
+  assert.equal(committed.saved.cash,committed.initial.cash+committed.expectedFare+2_500+(earlyCommitted?100:0),'the rejected contribution is not resurrected');
   const unknownResponse=await fetch(base+'/unknown',{signal:AbortSignal.timeout(5_000)});
   if(!unknownResponse.ok)throw new Error(`${await unknownResponse.text()}\n${logs}`);
-  const unknown=await unknownResponse.json() as {saved:DriverProgress;initial:DriverProgress;writes:EconomyIntent[];expectedFare:number;expectedPickup:number;deferredSpend:boolean;driverMoved:boolean;otherMoved:boolean;health:number};
+  const unknown=await unknownResponse.json() as {saved:DriverProgress;initial:DriverProgress;writes:EconomyIntent[];expectedFare:number;expectedPickup:number;earlyDelivery:boolean;earlyPickup:boolean;deferredSpend:boolean;driverMoved:boolean;otherMoved:boolean;health:number};
   assert.equal(unknown.writes[0].action.kind,'delivery');
   assert.equal(unknown.writes[0].action.kind==='delivery'&&unknown.writes[0].action.multiplier,null,'the first stop uses historical rate lookup');
   assert.deepEqual(unknown.writes.map(item=>item.action.kind),['delivery','supply','delivery'],'physical pickup and later stop remain ordered behind the unresolved arrival');
   assert.equal(unknown.saved.completed,1);
   assert.equal(unknown.saved.order.stage,'dropoff','the later stop was re-evaluated against the newly committed pickup target');
   assert.equal(unknown.saved.earned,unknown.expectedFare+unknown.expectedPickup);
-  assert.equal(unknown.saved.cash,unknown.initial.cash+unknown.expectedFare+unknown.expectedPickup+2_505);
+  assert.equal(unknown.saved.achievementTiers?.deliveries.count,1);
+  assert.equal(unknown.saved.achievementTiers?.pickups.count,1);
+  assert.equal(unknown.saved.achievementTiers?.['early-deliveries'].count,Number(unknown.earlyDelivery));
+  assert.equal(unknown.saved.achievementTiers?.['early-pickups'].count,Number(unknown.earlyPickup));
+  assert.equal(unknown.saved.achievementTiers?.['supply-pickups'].count,1);
+  assert.equal(unknown.saved.cash,unknown.initial.cash+unknown.expectedFare+unknown.expectedPickup+2_505+200+
+    (unknown.earlyDelivery?100:0)+(unknown.earlyPickup?100:0));
   assert.equal(unknown.deferredSpend,true,'a spend cannot use an uncertain draft balance');
   assert.equal(unknown.driverMoved,true,'the affected driver continues moving while the rate is held');
   assert.equal(unknown.otherMoved,true,'another player continues moving independently');

@@ -125,11 +125,17 @@ async function barrier(client:Client,token:number) {
   await until(()=>client.messages.some(message=>message.type==='state'&&message.sync===token),`wallet barrier ${token}`);
 }
 type FaultState={started:number;held:boolean;heldAction?:EconomyIntent['action']};
-type RecordState={progress:DriverProgress};
+type RecordState={fence:string;progress:DriverProgress};
 const faultState=(driverId:string)=>rpc<FaultState>('fault-state',{driverId});
 const release=(driverId:string)=>rpc('release',{driverId});
 const inspect=(driverId:string)=>rpc<RecordState>('inspect',{driverId});
 const awardCount=(awards:string[])=>awards.filter(award=>award==='park-it').length;
+function assertDomeEvidence(action:EconomyIntent['action']|undefined){
+  assert.ok(action?.kind==='achievement'&&action.evidence.kind==='dome','the write contains Dome evidence');
+  assert.equal(action.evidence.touches.roadster,true);
+  assert.ok(action.evidence.goals.roadster>0);
+  assert.equal(action.evidence.won,true);
+}
 
 try {
   child=start();await ready();
@@ -148,6 +154,7 @@ try {
     return queues.some(item=>item.playerId===ownerId&&item.queued===0&&!item.processing);
   },'owner wallet queue drains before the test');
   assert.equal(awardCount(owner.last('wallet')!.unlocked),0);
+  const ownerBaseline=(await inspect(driver.id)).progress;
   await rpc('arm',{driverId:driver.id,fault:'hold-before'});
   try {
     const assigned=entrant().targetId as string;
@@ -157,8 +164,7 @@ try {
     assert.equal(round()?.phase,'results');
     await until(async()=>(await faultState(driver.id)).held,'award write is held');
     const held=await faultState(driver.id);
-    assert.equal(held.heldAction?.kind,'progress');
-    assert.ok(held.heldAction?.kind==='progress'&&held.heldAction.progress.unlocked.includes('park-it'),'the held write contains the earned award');
+    assert.deepEqual(held.heldAction,{kind:'achievement',evidence:{kind:'parking',mode:'park',finished:true}},'the held write contains the observed completion');
     assert.equal(awardCount(owner.last('wallet')!.unlocked),0,'uncommitted award is absent from wallet');
     const ownerBefore=owner.last('state')!.world.players.find((player:Message)=>player.id===ownerId);
     assert.equal(awardCount(ownerBefore.achievements.unlocked),0,'uncommitted award is absent from room state');
@@ -179,6 +185,8 @@ try {
   await until(()=>awardCount(owner.last('state')!.world.players.find((player:Message)=>player.id===ownerId).achievements.unlocked)===1,'committed award reaches room state');
   await barrier(owner,102);await barrier(observer,103);
   assert.equal(awardCount((await inspect(driver.id)).progress.unlocked),1,'profile stores award exactly once');
+  assert.equal((await inspect(driver.id)).progress.achievementTiers?.['parking-successes'].count,1);
+  assert.equal((await inspect(driver.id)).progress.cash,ownerBaseline.cash+100,'the first parking tier credits once');
   assert.equal(awardCount((await inspect(spectator.id)).progress.unlocked),0,'spectator profile never inherits award');
   assert.ok(!observer.messages.some(message=>message.type==='wallet'&&message.unlocked.includes('park-it')),'owner wallet is never sent to spectator');
   assert.ok(!JSON.stringify(observer.messages).includes(driver.code),'spectator never receives owner recovery code');
@@ -279,8 +287,10 @@ try {
   const afterReplay=(await inspect(replay.driverId)).progress;
   assert.equal(afterReplay.unlocked.filter(id=>id==='rocket-rookie').length,1,'Dome award survives rollback exactly once');
   assert.equal(afterReplay.unlocked.filter(id=>id==='roadster-champion').length,1,'Dome win survives rollback exactly once');
-  assert.equal(afterReplay.cash,baseline.cash+4_000,'replay credits only the two game-award rewards');
-  assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+4_000,'rejected and speculative income are not replayed');
+  assert.equal(afterReplay.achievementTiers?.['dome-matches'].count,1);
+  assert.equal(afterReplay.achievementTiers?.['dome-wins'].count,1);
+  assert.equal(afterReplay.cash,baseline.cash+4_200,'replay credits the two game awards and first Dome tiers');
+  assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+4_200,'rejected and speculative income are not replayed');
   let starshipRequest=700;
   await until(async()=>{
     const requestId=starshipRequest++;
@@ -290,46 +300,48 @@ try {
     return status.status.personal===afterReplay.eligibleIncome;
   },'replayed game awards reach the global ledger without speculative income');
 
-  // Reject the award's own first commit, then hold its replay. A barrier may
-  // only settle after that replay commits, and unrelated queued income drops.
-  for(const [index,reason] of ['invalid','revision'].entries()){
-    const attempt=await prepareDomeGuest();
-    await barrier(attempt.client,201+index);
-    await until(async()=>{
-      const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:attempt.room});
-      return queues.some(item=>item.playerId===attempt.playerId&&item.queued===0&&!item.processing);
-    },`${reason} award queue drains`);
-    const before=(await inspect(attempt.driverId)).progress;
-    const armed=await rpc<{started:number}>('arm',{driverId:attempt.driverId,fault:[reason==='invalid'?'hold-reject':'hold-revision','hold-before']});
-    const token=211+index;
-    try {
-      await rpc('dome-score',{room:attempt.room});
-      await until(async()=>(await faultState(attempt.driverId)).held,`${reason} award write held`);
-      const first=await faultState(attempt.driverId);
-      assert.ok(first.heldAction?.kind==='progress'&&first.heldAction.progress.unlocked.includes('rocket-rookie'),'rejected head contains the actual game award');
-      await rpc('queue-income',{room:attempt.room,playerId:attempt.playerId,count:1});
-      send(attempt.client,{type:'sync',token});
-      await pause(100);
-      assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'barrier waits for the first award write');
-      await release(attempt.driverId);
-      await until(async()=>{const state=await faultState(attempt.driverId);return state.held&&state.started>=armed.started+2;},`${reason} award replay held`);
-      const second=await faultState(attempt.driverId);
-      assert.ok(second.heldAction?.kind==='progress'&&second.heldAction.progress.unlocked.includes('rocket-rookie'),'replay retains award evidence');
-      assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'barrier waits for the replayed award');
-      assert.ok(!(await inspect(attempt.driverId)).progress.unlocked.includes('rocket-rookie'),'held replay is not reported as committed');
-    } finally { await release(attempt.driverId).catch(()=>{}); }
-    await until(()=>attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),`${reason} barrier settles after award replay`);
-    const recovered=(await inspect(attempt.driverId)).progress;
-    assert.equal(recovered.unlocked.filter(id=>id==='rocket-rookie').length,1,`${reason} award is stored exactly once`);
-    assert.equal(recovered.unlocked.filter(id=>id==='roadster-champion').length,1,`${reason} winning award is stored exactly once`);
-    assert.equal(recovered.cash,before.cash+4_000,`${reason} replay excludes speculative income`);
-    assert.equal(recovered.eligibleIncome,before.eligibleIncome+4_000);
-  }
+  // Lose a committed receipt, then hold its retry. The barrier waits for the
+  // same evidence, and its awards and tier cash must not be credited twice.
+  const lost=await prepareDomeGuest();
+  await barrier(lost.client,201);
+  await until(async()=>{
+    const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:lost.room});
+    return queues.some(item=>item.playerId===lost.playerId&&item.queued===0&&!item.processing);
+  },'lost-reply award queue drains');
+  const lostBefore=(await inspect(lost.driverId)).progress;
+  const lostArmed=await rpc<{started:number}>('arm',{driverId:lost.driverId,fault:['hold-lost-reply','hold-before']});
+  try {
+    await rpc('dome-score',{room:lost.room});
+    await until(async()=>(await faultState(lost.driverId)).held,'committed receipt held before reply');
+    const first=await faultState(lost.driverId);assertDomeEvidence(first.heldAction);
+    const committed=(await inspect(lost.driverId)).progress;
+    assert.equal(committed.cash,lostBefore.cash+4_200);
+    send(lost.client,{type:'sync',token:211});
+    await pause(100);
+    assert.ok(!lost.client.messages.some(message=>message.type==='state'&&message.sync===211),'barrier waits for the lost reply');
+    await release(lost.driverId);
+    await until(async()=>{const state=await faultState(lost.driverId);return state.held&&state.started>=lostArmed.started+2;},'same achievement retried');
+    const second=await faultState(lost.driverId);assertDomeEvidence(second.heldAction);
+    assert.deepEqual(second.heldAction,first.heldAction,'retry carries the identical observation');
+    assert.ok(!lost.client.messages.some(message=>message.type==='state'&&message.sync===211),'barrier waits for the retried receipt');
+  } finally { await release(lost.driverId).catch(()=>{}); }
+  await until(()=>lost.client.messages.some(message=>message.type==='state'&&message.sync===211),'barrier settles after receipt retry');
+  const lostRecovered=(await inspect(lost.driverId)).progress;
+  assert.equal(lostRecovered.unlocked.filter(id=>id==='rocket-rookie').length,1);
+  assert.equal(lostRecovered.unlocked.filter(id=>id==='roadster-champion').length,1);
+  assert.equal(lostRecovered.achievementTiers?.['dome-matches'].count,1);
+  assert.equal(lostRecovered.achievementTiers?.['dome-wins'].count,1);
+  assert.equal(lostRecovered.cash,lostBefore.cash+4_200,'receipt retry does not credit twice');
+  assert.equal(lostRecovered.eligibleIncome,lostBefore.eligibleIncome+4_200);
 
-  // A permanently rejected award receives one retry, then fails closed rather
-  // than falsely acknowledging its barrier or retrying forever.
+  // A rejected physical evidence write fails closed without acknowledging the
+  // barrier or allowing later speculative income to become committed.
   for(const [index,reason] of ['invalid','revision'].entries()){
     const attempt=await prepareDomeGuest();
+    const attemptCode=await newRecoveryCode(`Rejected ${reason}`);
+    send(attempt.client,{type:'identity',code:attemptCode,requestId:2});
+    await until(()=>attempt.client.last('identityResult')?.requestId===2,`${reason} wallet saved`);
+    assert.equal(attempt.client.last('identityResult')!.ok,true);
     await barrier(attempt.client,221+index);
     await until(async()=>{
       const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:attempt.room});
@@ -337,23 +349,35 @@ try {
     },`${reason} permanent-failure queue drains`);
     let closed:CloseEvent|undefined;
     attempt.client.socket.addEventListener('close',event=>{closed=event;},{once:true});
-    const armed=await rpc<{started:number}>('arm',{driverId:attempt.driverId,fault:reason==='invalid'?['hold-reject','reject']:['hold-revision','revision']});
+    const beforeRecord=await inspect(attempt.driverId),before=beforeRecord.progress;
+    const armed=await rpc<{started:number}>('arm',{driverId:attempt.driverId,fault:reason==='invalid'?'hold-reject':'hold-revision'});
     const token=231+index;
     try {
       await rpc('dome-score',{room:attempt.room});
       await until(async()=>(await faultState(attempt.driverId)).held,`${reason} permanent award write held`);
       const first=await faultState(attempt.driverId);
-      assert.ok(first.heldAction?.kind==='progress'&&first.heldAction.progress.unlocked.includes('rocket-rookie'));
+      assertDomeEvidence(first.heldAction);
+      await rpc('queue-income',{room:attempt.room,playerId:attempt.playerId,count:1});
       send(attempt.client,{type:'sync',token});
       await pause(100);
       assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token));
     } finally { await release(attempt.driverId).catch(()=>{}); }
     await until(()=>!!closed,`${reason} failed wallet closes`,15_000);
     assert.equal(closed!.code,1011);
-    assert.match(closed!.reason,/Award could not be saved/);
+    assert.match(closed!.reason,/Achievement interrupted/);
     assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'failed award barrier is never acknowledged');
-    assert.equal((await faultState(attempt.driverId)).started,armed.started+2,'the award is attempted exactly twice');
-    assert.ok(!(await inspect(attempt.driverId)).progress.unlocked.includes('rocket-rookie'),'uncommitted award is not claimed as saved');
+    assert.equal((await faultState(attempt.driverId)).started,armed.started+1,'a rejected physical event fails closed without retries');
+    const failed=(await inspect(attempt.driverId)).progress;
+    assert.ok(!failed.unlocked.includes('rocket-rookie'),'uncommitted award is not claimed as saved');
+    assert.equal(failed.cash,before.cash,'later speculative income is not credited');
+    assert.equal(failed.achievementTiers?.['dome-matches'].count,0);
+    const reconnect=connect(`/api/room/failed-return-${randomUUID().slice(0,8)}`);
+    await until(()=>!!reconnect.last('welcome')&&!!reconnect.last('wallet'),`${reason} reconnect guest ready`);
+    send(reconnect,{type:'identity',code:attemptCode,requestId:1});
+    await until(()=>reconnect.last('identityResult')?.requestId===1,`${reason} rejected evidence handoff resolves`);
+    assert.equal(reconnect.last('identityResult')!.ok,false,'a rejected physical outcome blocks the handoff');
+    assert.equal(reconnect.last('identityResult')!.message,'Could not load driver. Rejoin to retry.');
+    assert.equal((await inspect(attempt.driverId)).fence,beforeRecord.fence,'a failed handoff does not install a new fence');
   }
 
   // Two real room clients start a race. The first finisher disconnects while
@@ -375,6 +399,7 @@ try {
     const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:raceRoom});
     return queues.some(item=>item.playerId===racerId&&item.queued===0&&!item.processing);
   },'winner wallet queue drains before the race finish');
+  const raceBaseline=(await inspect(raceDriver.id)).progress;
   await rpc('arm',{driverId:raceDriver.id,fault:'hold-before'});
   try {
     for(let index=0;index<5;index++){
@@ -386,7 +411,7 @@ try {
     assert.equal(raceEntrant(racerId).rank,1);assert.equal(raceEntrant(challengerId).status,'entered');
     await until(async()=>(await faultState(raceDriver.id)).held,'winner award commit held');
     const raceHeld=await faultState(raceDriver.id);
-    assert.ok(raceHeld.heldAction?.kind==='progress'&&raceHeld.heldAction.progress.unlocked.includes('race-winner'));
+    assert.deepEqual(raceHeld.heldAction,{kind:'achievement',evidence:{kind:'race',status:'finished',phase:'active',rank:1,starterCount:2}});
     assert.ok(!(await inspect(raceDriver.id)).progress.unlocked.includes('race-winner'),'uncommitted win is not exposed');
     racer.socket.close();
     await until(()=>challenger.last('state')?.world.players.every((player:Message)=>player.id!==racerId),'winner disconnects before the challenger finishes');
@@ -395,6 +420,9 @@ try {
   await until(async()=>(await inspect(raceDriver.id)).progress.unlocked.includes('race-winner'),'disconnected winner award commits');
   const recoveredRacer=await join(`race-return-${randomUUID().slice(0,8)}`,raceDriver.code);
   assert.equal(recoveredRacer.last('wallet')!.unlocked.filter((id:string)=>id==='race-winner').length,1,'First Across survives disconnect and recovery');
+  assert.equal(recoveredRacer.last('wallet')!.achievementTiers['races-finished'].count,1);
+  assert.equal(recoveredRacer.last('wallet')!.achievementTiers['races-won'].count,1);
+  assert.equal(recoveredRacer.last('wallet')!.cash,raceBaseline.cash+200,'the first contested finish credits both tiers once');
   assert.ok(!challenger.last('wallet')!.unlocked.includes('race-winner'),'other racer does not inherit the win');
 
   // A successful switch before the result must also discard the old driver's

@@ -32,13 +32,17 @@ export type AchievementTierRow = {
   count:number;
   rank:AchievementTierRank;
   nextTarget:number|null;
+  /** Extra tier cash; existing one-off awards can pay on the same event. */
   nextCash:number|null;
 };
 
 const commonRewards = [0, 350, 1_500, 5_000, 20_000] as const;
 const newFamilyRewards = [100, 350, 1_500, 5_000, 20_000] as const;
 const deliveryRewards = [0, 0, 0, 50_000, 200_000] as const;
-const newFamilies = new Set<AchievementTierId>(['pickups','early-pickups','early-deliveries','supply-pickups']);
+// These families have no guaranteed cash-bearing legacy award for their first
+// event (a stock-car Dome touch, for example, has no old badge).
+const newFamilies = new Set<AchievementTierId>(['pickups','early-pickups','early-deliveries','supply-pickups',
+  'parking-successes','queue-successes','races-finished','races-won','dome-matches','dome-wins']);
 
 function rewards(id:AchievementTierId):readonly number[] {
   return id==='deliveries'?deliveryRewards:newFamilies.has(id)?newFamilyRewards:commonRewards;
