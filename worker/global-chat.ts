@@ -4,18 +4,19 @@ import { chooseAvailableName, createRecoveryCode, hashRecoverySecret, normalizeC
 /**
  * One global object, shared across rooms. WebSocket client sends:
  *   {type:'hello',name:string,code?:string}, {type:'message',text:string},
- *   {type:'save'}, or {type:'ping'} (a client heartbeat; no response).
+ *   {type:'rename',name:string,requestId:number}, {type:'save'}, or {type:'ping'}.
  * Server sends:
  *   {type:'ready',playerId,name,messages}, {type:'message',message},
- *   {type:'recovery',code}, or {type:'error',message}.
+ *   {type:'renamed',playerId,name,requestId}, {type:'recovery',code}, or {type:'error',message}.
  * Recovery codes are bearer credentials: never broadcast or include in history.
  */
 export type ChatMessage = { id: string; playerId: string; name: string; text: string; time: number };
 export type ChatServerMessage =
   | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[] }
   | { type: 'message'; message: ChatMessage }
+  | { type: 'renamed'; playerId: string; name: string; requestId: number }
   | { type: 'recovery'; code: string }
-  | { type: 'error'; message: string; code?: 'identity_active' };
+  | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed'; requestId?: number };
 
 type StoredIdentity = { hash: string; name: string };
 type Session = {
@@ -25,6 +26,8 @@ type Session = {
   lastActivity: number;
   authenticating: boolean;
   saving: boolean;
+  updates: Promise<void>;
+  pendingName?: string;
   issuedCode?: string;
   authFailures: number;
   inboundStart: number;
@@ -56,6 +59,7 @@ const IP_BUCKET_LIMIT = 1000;
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
   private sessions = new Map<WebSocket, Session>();
+  private drainingIds = new Set<string>();
   private history: ChatMessage[] = [];
   private ipBuckets = new Map<string, Bucket>();
   private identityBuckets = new Map<string, Bucket>();
@@ -73,7 +77,7 @@ export class GlobalChat extends DurableObject {
     const [client, server] = Object.values(pair);
     server.accept();
     const session: Session = {
-      ip, lastActivity: Date.now(), authenticating: false, saving: false, authFailures: 0,
+      ip, lastActivity: Date.now(), authenticating: false, saving: false, updates: Promise.resolve(), authFailures: 0,
       inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null,
     };
     this.sessions.set(server, session);
@@ -158,10 +162,18 @@ export class GlobalChat extends DurableObject {
     if (data.type === 'ping') return;
     if (data.type === 'save') {
       if (session.issuedCode) { this.send(socket, { type: 'recovery', code: session.issuedCode }); return; }
-      if (session.saving) { this.error(socket, 'Generating your code; please wait.'); return; }
-      if (!this.allowIdentityCreation(session.ip)) { this.error(socket, 'Saved drivers are temporarily limited. Try again later.'); return; }
+      if (session.saving) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Generating your code; please wait.' }); return; }
+      if (!this.allowIdentityCreation(session.ip)) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Saved drivers are temporarily limited. Try again later.' }); return; }
       session.saving = true;
-      void this.save(socket, session);
+      session.updates = session.updates.then(() => this.save(socket, session));
+      return;
+    }
+    if (data.type === 'rename') {
+      if (!Number.isSafeInteger(data.requestId) || (data.requestId as number) < 1) { this.error(socket, 'Invalid name change request.'); return; }
+      const requestId = data.requestId as number;
+      if (typeof data.name !== 'string' || data.name.length > 512) { this.send(socket, { type: 'error', code: 'rename_failed', requestId, message: 'Enter a valid driver name.' }); return; }
+      const name = data.name;
+      session.updates = session.updates.then(() => this.rename(socket, session, name, requestId));
       return;
     }
     if (data.type === 'message') {
@@ -171,10 +183,13 @@ export class GlobalChat extends DurableObject {
       session.messageTimes = session.messageTimes.filter(time => now - time < CHAT_WINDOW);
       if (session.messageTimes.length >= CHAT_LIMIT) { this.error(socket, 'Please wait before sending more messages.'); return; }
       session.messageTimes.push(now);
-      const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: now };
-      this.history.push(chat);
-      if (this.history.length > HISTORY_LIMIT) this.history.shift();
-      for (const [recipient, active] of this.sessions) if (active.playerId) this.send(recipient, { type: 'message', message: chat });
+      session.updates = session.updates.then(() => {
+        if (!session.playerId || !session.name) return;
+        const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: Date.now() };
+        this.history.push(chat);
+        if (this.history.length > HISTORY_LIMIT) this.history.shift();
+        for (const [recipient, active] of this.sessions) if (active.playerId) this.send(recipient, { type: 'message', message: chat });
+      });
       return;
     }
     this.error(socket, 'Unknown chat request.');
@@ -198,14 +213,14 @@ export class GlobalChat extends DurableObject {
         knownCode = `poly-${parsed.playerId}.${parsed.secret}`;
         name = saved.name;
         if (!this.sessions.has(socket)) return;
-        if ([...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
+        if (this.drainingIds.has(playerId) || [...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
           this.send(socket, { type: 'error', code: 'identity_active', message: 'That saved driver is already connected elsewhere.' }); return;
         }
       } else {
         playerId = crypto.randomUUID();
       }
       if (!this.sessions.has(socket)) return;
-      const used = [...this.sessions.values()].flatMap(active => active.name ? [active.name] : []);
+      const used = [...this.sessions.values()].flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
       session.playerId = playerId;
       session.name = chooseAvailableName(name, used);
       session.issuedCode = knownCode;
@@ -225,6 +240,28 @@ export class GlobalChat extends DurableObject {
     if (session.authFailures >= 4) this.disconnect(socket, 1008, 'Too many recovery attempts');
   }
 
+  private async rename(socket: WebSocket, session: Session, desiredName: string, requestId: number): Promise<void> {
+    if (!session.playerId) return;
+    const used = [...this.sessions.values()].filter(active => active !== session)
+      .flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
+    const name = chooseAvailableName(desiredName, used);
+    session.pendingName = name;
+    try {
+      if (session.issuedCode) {
+        const key = `identity:${session.playerId}`;
+        const saved = await this.ctx.storage.get<StoredIdentity>(key);
+        if (!saved) throw new Error('Saved identity unavailable');
+        await this.ctx.storage.put(key, { ...saved, name } satisfies StoredIdentity);
+      }
+      session.name = name;
+      if (this.sessions.has(socket)) this.send(socket, { type: 'renamed', playerId: session.playerId, name, requestId });
+    } catch {
+      this.send(socket, { type: 'error', code: 'rename_failed', requestId, message: 'Could not change your name. Please try again.' });
+    } finally {
+      session.pendingName = undefined;
+    }
+  }
+
   private async save(socket: WebSocket, session: Session): Promise<void> {
     try {
       if (!session.playerId || !session.name) return;
@@ -240,7 +277,7 @@ export class GlobalChat extends DurableObject {
         this.send(socket, { type: 'recovery', code });
       }
     } catch {
-      this.error(socket, 'Could not save this driver. Please try again.');
+      this.send(socket, { type: 'error', code: 'save_failed', message: 'Could not save this driver. Please try again.' });
     } finally {
       session.saving = false;
     }
@@ -254,6 +291,13 @@ export class GlobalChat extends DurableObject {
     const session = this.sessions.get(socket);
     if (!session) return;
     this.sessions.delete(socket);
+    if (session.playerId) {
+      const id = session.playerId;
+      this.drainingIds.add(id);
+      // Finish accepted writes/messages before allowing this saved identity to
+      // reconnect, so a new socket cannot race the old one's pending rename.
+      void session.updates.then(() => this.drainingIds.delete(id), () => this.drainingIds.delete(id));
+    }
     if (session.handshakeTimer) clearTimeout(session.handshakeTimer);
     if (!this.sessions.size && this.reapTimer) { clearInterval(this.reapTimer); this.reapTimer = null; }
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }

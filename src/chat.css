@@ -27,7 +27,16 @@ dialog.chat-dialog::backdrop { background: #071d2729; backdrop-filter: none; }
 .chat-status-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #c96655; }
 .chat-connection[data-status='online'] .chat-status-dot { background: #398f66; }
 .chat-connection[data-status='connecting'] .chat-status-dot { background: #b77b2a; }
-.chat-identity { overflow: hidden; padding: 0 16px; margin: 1px 0 9px; color: #678077; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-identity-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px 4px 16px; }
+.chat-identity { flex: 1; min-width: 0; overflow: hidden; margin: 0; color: #678077; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-edit-name { min-height: 40px; padding: 5px 9px; border: 0; border-radius: 14px; background: #e3e9df; color: #315e4e; font-size: 11px; font-weight: 700; cursor: pointer; }
+.chat-edit-name:disabled { opacity: .5; cursor: default; }
+.chat-name-form:not([hidden]) { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.chat-name-form input { box-sizing: border-box; min-width: 90px; flex: 1; min-height: 40px; padding: 8px 10px; border: 1px solid #b8cec0; border-radius: 12px; background: #fffdfa; color: #19353a; font: 16px system-ui, sans-serif; }
+.chat-name-form button { min-height: 40px; padding: 6px 9px; border: 0; border-radius: 12px; background: #315e4e; color: #fff; cursor: pointer; }
+.chat-name-form button[type='button'] { background: #e3e9df; color: #315e4e; }
+.chat-name-feedback { flex-basis: 100%; margin: 0; color: #8d4b3f; font-size: 11px; }
+.chat-name-feedback:empty { display: none; }
 .chat-history { flex: 1; min-height: 0; padding: 14px 14px; overflow-y: auto; overscroll-behavior: contain; border-block: 1px solid #dce5db; background: #edf1e9; }
 .chat-empty { margin: 20px 4px; color: #527067; font-size: 13px; line-height: 1.5; }
 .chat-messages { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
@@ -57,8 +66,8 @@ dialog.chat-dialog::backdrop { background: #071d2729; backdrop-filter: none; }
   .chat-phone-speaker { height: 3px; }
   .chat-header { padding: 2px 13px 0; }
   .chat-header h2 { font-size: 18px; }
-  .chat-connection, .chat-identity { padding-inline: 13px; }
-  .chat-identity { margin: 0 0 4px; }
+  .chat-connection { padding-inline: 13px; }
+  .chat-identity-row { padding: 0 10px 2px 13px; }
   .chat-history { padding: 7px 12px; }
   .chat-messages { gap: 8px; }
   .chat-compose { padding: 6px 10px 2px; }

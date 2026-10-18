@@ -65,6 +65,14 @@ try {
   assert.equal(received.message.playerId, first.playerId);
   assert.equal(received.message.name, first.name);
 
+  // A guest can rename without changing its ID, including collision suffixes.
+  send(one.socket, { type: 'rename', name: name.toLowerCase(), requestId: 1 });
+  await eventually(() => one.events.some(event => event.type === 'renamed'), 'guest renamed');
+  const guestRename = one.events.find(event => event.type === 'renamed')!;
+  assert.equal(guestRename.playerId, first.playerId);
+  assert.equal(guestRename.requestId, 1);
+  assert.equal(guestRename.name, name.toLowerCase(), 'the player does not collide with their own name');
+
   send(one.socket, { type: 'save' });
   await eventually(() => one.events.some(event => event.type === 'recovery'), 'private recovery code');
   const code = one.events.find(event => event.type === 'recovery')!.code as string;
@@ -73,6 +81,21 @@ try {
   send(one.socket, { type: 'save' });
   await eventually(() => one.events.filter(event => event.type === 'recovery').length === 2, 'repeated save returns a code');
   assert.equal(one.events.filter(event => event.type === 'recovery')[1].code, code, 'repeated save does not rotate the code');
+  const finalName = `Renamed${randomUUID().slice(0, 8)}`;
+  send(one.socket, { type: 'rename', name: second.name, requestId: 2 });
+  send(one.socket, { type: 'rename', name: finalName, requestId: 3 });
+  const renamedText = `Renamed ${name}`;
+  send(one.socket, { type: 'message', text: renamedText });
+  await eventually(() => one.events.filter(event => event.type === 'renamed').length === 3, 'multiple saved renames');
+  const renames = one.events.filter(event => event.type === 'renamed');
+  assert.notEqual(renames[1].name.toLowerCase(), second.name.toLowerCase(), 'active names remain distinct');
+  assert.equal(renames[2].name, finalName);
+  assert.deepEqual(renames.map(event => event.requestId), [1, 2, 3]);
+  assert.ok(renames.every(event => event.playerId === first.playerId), 'renames retain the driver ID');
+  await eventually(() => two.events.some(event => event.type === 'message' && event.message?.text === renamedText), 'renamed message');
+  const renamedMessage = two.events.find(event => event.type === 'message' && event.message?.text === renamedText)!;
+  assert.equal(renamedMessage.message.playerId, first.playerId);
+  assert.equal(renamedMessage.message.name, finalName);
   await delay(200);
   assert.ok(!two.events.some(event => event.type === 'recovery' || JSON.stringify(event).includes(code)), 'recovery code is not broadcast');
 
@@ -92,7 +115,7 @@ try {
   const restored = resumed.events.find(event => event.type === 'ready');
   assert.ok(restored, 'valid recovery succeeds');
   assert.equal(restored.playerId, first.playerId);
-  assert.equal(restored.name, first.name);
+  assert.equal(restored.name, finalName);
   send(resumed.socket, { type: 'save' });
   await eventually(() => resumed.events.some(event => event.type === 'recovery'), 'saving after recovery returns a code');
   assert.equal(resumed.events.find(event => event.type === 'recovery')!.code, code, 'save after recovery retains the code');
@@ -117,7 +140,7 @@ try {
   await eventually(() => roomOne.events.some(event => event.type === 'state' && event.world?.players?.some((player: Event) => player.id === roomIdOne && player.name === name)), 'first room name');
   send(roomTwo.socket, { type: 'name', name: name.toLowerCase() });
   await eventually(() => roomTwo.events.some(event => event.type === 'state' && event.world?.players?.some((player: Event) => player.id === roomIdTwo && player.name === `${name.toLowerCase()} #2`)), 'room name collision resolved');
-  console.log('PASS: global chat delivery, name collisions, private saved identity and recovery, invalid-code isolation, cross-origin rejection, and room name collisions.');
+  console.log('PASS: global chat delivery, repeat renames with stable identity, name collisions, private recovery, invalid-code isolation, cross-origin rejection, and room name collisions.');
 } finally {
   for (const socket of sockets) socket.close();
 }
