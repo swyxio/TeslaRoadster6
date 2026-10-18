@@ -11,9 +11,10 @@ export class Controls {
   onAction: (action: 'interact' | 'reset' | 'camera' | 'menu' | 'autopilot' | 'fleet' | 'scores' | 'awards') => void = () => {};
   constructor() {
     window.addEventListener('keydown', e => {
-      if ((e.target as HTMLElement).matches('input,textarea,select')) return;
+      const target=e.target as HTMLElement;
+      if (target.matches('input,textarea,select') || (e.code==='Space' && target.matches('button,a'))) return;
       if (!this.enabled) return;
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
       if (!e.repeat) {
         if(e.code==='KeyJ')this.jump=(this.jump+1)%2147483648;
