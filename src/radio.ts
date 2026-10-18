@@ -4,6 +4,7 @@ export type RadioStation = 'chiptune' | 'latent-space' | 'thursdai';
 type PodcastStation = Exclude<RadioStation, 'chiptune'>;
 type Episode = { title: string; audio: string; link: string };
 const STORAGE_KEY = 'tesland.radio.station';
+const CATALOG_TTL_MS = 60 * 60 * 1000;
 const isStation = (value: string | null): value is RadioStation => value === 'chiptune' || value === 'latent-space' || value === 'thursdai';
 
 /** Local-only radio. The Worker supplies episode metadata, never the audio bytes. */
@@ -14,6 +15,7 @@ export class Radio {
   loading = false;
   private media = new Audio();
   private catalogs = new Map<PodcastStation, Episode[]>();
+  private fetchedAt = new Map<PodcastStation, number>();
   private remaining = new Map<PodcastStation, Episode[]>();
   private generation = 0;
   private resumeOnVisible = false;
@@ -48,13 +50,15 @@ export class Radio {
     this.loading = true; this.status = 'Loading episodes…'; this.changed();
     try {
       let episodes = this.catalogs.get(station);
-      if (!episodes) {
+      if (!episodes || Date.now() - (this.fetchedAt.get(station) ?? 0) >= CATALOG_TTL_MS) {
         const response = await fetch(`/api/radio/${station}`, { signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error('Feed unavailable');
         const data = await response.json() as { episodes?: Episode[] };
         episodes = data.episodes?.filter(e => typeof e.title === 'string' && typeof e.audio === 'string' && e.audio.startsWith('https://'));
         if (!episodes?.length) throw new Error('No episodes');
         this.catalogs.set(station, episodes);
+        this.fetchedAt.set(station, Date.now());
+        this.remaining.delete(station);
       }
       if (generation !== this.generation) return;
       this.episode = this.draw(station, episodes);
@@ -87,7 +91,7 @@ export class Radio {
     const station = this.station, generation = ++this.generation;
     this.media.pause(); this.media.removeAttribute('src');
     const episodes = this.catalogs.get(station);
-    if (!episodes) { this.episode = null; this.loading = false; await this.prepare(); }
+    if (!episodes || Date.now() - (this.fetchedAt.get(station) ?? 0) >= CATALOG_TTL_MS) { this.episode = null; this.loading = false; await this.prepare(); }
     else { this.episode = this.draw(station, episodes); this.status = 'Ready — press Play to listen.'; this.changed(); }
     if (autoplay && generation === this.generation) await this.play();
   }

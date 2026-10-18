@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Podcast radio with predictive driving · protocol v29 · 2026-10-18 Pacific
+
+- After integrating main at `6b85df1`, `pnpm test` passed 435 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler passed the two-client room, global chat, prediction/barrier and radio integrations. The Cloudflare preview passed its build, radio and prediction integrations. These are functional checks, not load measurements.
+- A subsequent focused radio test verified episode-end playback and refreshing a long-lived tab's catalog. Earlier v28 Chrome playback and emulated layout observations are recorded below; no physical mobile device was tested.
+
 ## Podcast radio · protocol v28 · 2026-10-18 Pacific
 
 - After merging main at `a34248b`, the combined `pnpm run ci` output reported 412 passing tests and a successful build, with Vite's existing large-chunk warning. The local two-client room integration passed when run without concurrent test load, and global chat integration passed. Two earlier room runs under simultaneous CPU-heavy tests timed out at different gameplay assertions; these are functional checks, not load measurements.

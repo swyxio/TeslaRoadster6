@@ -4,7 +4,7 @@ import { Radio } from '../src/radio';
 
 class FakeAudio extends EventTarget {
   src = ''; preload = ''; volume = 1; muted = false; paused = true; ended = false; blocked = false;
-  play() { if (this.blocked) return Promise.reject(new Error('blocked')); this.paused = false; this.dispatchEvent(new Event('playing')); return Promise.resolve(); }
+  play() { if (this.blocked) return Promise.reject(new Error('blocked')); this.paused = false; this.ended = false; this.dispatchEvent(new Event('playing')); return Promise.resolve(); }
   pause() { this.paused = true; this.dispatchEvent(new Event('pause')); }
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
 }
@@ -79,4 +79,22 @@ test('a failed feed can be retried without changing stations', async () => {
     assert.match(radio.status, /Could not load/); assert.equal(radio.episode, null);
     await radio.play(); assert.equal(attempts, 2); assert.equal(radio.playing, true);
   } finally { env.cleanup(); }
+});
+
+
+test('an ended episode advances automatically and long-lived tabs refresh their catalog', async () => {
+  let calls = 0;
+  const env = setup(async () => Response.json({ episodes: ++calls === 1 ? episodes : [{ ...episodes[0], title: 'New episode' }] }));
+  const realNow = Date.now;
+  let now = 100_000;
+  Date.now = () => now;
+  try {
+    const radio = new Radio(() => {}); radio.select('latent-space'); await tick(); await radio.play();
+    const first = radio.episode!.title;
+    env.media.ended = true; env.media.paused = true; env.media.dispatchEvent(new Event('ended')); await tick();
+    assert.equal(radio.playing, true); assert.notEqual(radio.episode!.title, first);
+    now += 60 * 60 * 1000;
+    await radio.next();
+    assert.equal(calls, 2); assert.equal(radio.episode!.title, 'New episode'); assert.equal(radio.playing, true);
+  } finally { Date.now = realNow; env.cleanup(); }
 });
