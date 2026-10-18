@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 630" role="img" aria-labelledby="title desc">
+  <title id="title">From a playtest to a published video</title>
+  <desc id="desc">Scenario and local room to Chromium pixels, to MP4 and poster, to the dev blog. Run evidence remains private.</desc>
+  <rect width="560" height="630" rx="16" fill="#f7f7f5"/>
+  <g font-family="Arial, sans-serif" fill="#222b2d" text-anchor="middle">
+    <rect x="30" y="25" width="350" height="95" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
+    <text x="205" y="62" font-size="21" font-weight="bold">Scenario + local room</text><text x="205" y="94" font-size="18">Timed inputs, fresh start</text>
+    <rect x="30" y="165" width="350" height="95" rx="12" fill="#ddf4d2" stroke="#4f9a51" stroke-width="2"/>
+    <text x="205" y="202" font-size="21" font-weight="bold">Chromium renders</text><text x="205" y="234" font-size="18">WebGL pixels → WebM</text>
+    <rect x="30" y="305" width="350" height="95" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
+    <text x="205" y="342" font-size="21" font-weight="bold">Prepare the clip</text><text x="205" y="374" font-size="18">MP4 + poster</text>
+    <rect x="30" y="445" width="350" height="95" rx="12" fill="#ffd5d5" stroke="#d84b4b" stroke-width="2"/>
+    <text x="205" y="482" font-size="21" font-weight="bold">Publish with the blog</text><text x="205" y="514" font-size="18">Repository video + site post</text>
+    <rect x="395" y="170" width="145" height="85" rx="10" fill="#ffe7b2" stroke="#c88419" stroke-width="2"/>
+    <text x="467" y="198" font-size="16" font-weight="bold">Private run</text><text x="467" y="221" font-size="16">manifest +</text><text x="467" y="242" font-size="16">trajectory</text>
+  </g>
+  <g stroke="#5e646b" stroke-width="3" fill="none" marker-end="url(#arrow)"><path d="M205 120v36"/><path d="M205 260v36"/><path d="M205 400v36"/><path d="M380 212h8" stroke-dasharray="5 4"/></g>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5e646b"/></marker></defs>
+</svg>

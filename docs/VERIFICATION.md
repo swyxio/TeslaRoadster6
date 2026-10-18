@@ -563,6 +563,11 @@ On v32 the corrected fixture used eight idle synthetic players and valid tick, e
 - The reproducible local load harness sends inputs and parses every snapshot from all headless clients. On the main baseline, 64 clients saw all peers with no disconnects over 10 seconds, but the room advanced only 4.9 simulated seconds and delivered 5.05 snapshots per client per second (p95 gap 283 ms). The clients parsed 452.83 MiB of decoded JSON; this is not measured wire traffic. The load-generator event-loop p95 was 24.3 ms. These are evidence of slowdown on that same host, not a safe room limit or a production-capacity measurement.
 - An experimental common-snapshot serialization approach reduced isolated construction CPU in a synthetic batch, but a later 64-client run advanced only 0.6–0.7 simulated seconds in 10.31 wall seconds, with client event-loop p95 168.3 ms and heavy concurrent system load. Different host contention prevents attributing the discrepancy to the change. The experiment was removed pending representative Worker/send-path and network measurements; there is no validated capacity improvement here.
 
+## Rocket Island production deployment · protocol v20 · 2026-10-18 Pacific
+
+- Cloudflare Workers Builds deployed merge commit `a138abc5ec193f3598a1f71868fe5b73e80242af` successfully. Both `bay-drive.swyxio.workers.dev` and `polyav.swyx.io` reported protocol v20 and capacity 64, and served the locally built `index-D95rBsxU.js` and `index-C4HCFfI4.css` assets.
+- The live two-client room integration passed movement, traffic, deliveries, sky currents, ferry and activity snapshots, Rocket kits, the Dome, cockpit, shop and OTA, invalid-input isolation and disconnect cleanup. It did not complete a ferry crossing or measure production load. That build's local scripted two-client ferry and Island–Dome trips are recorded below; physical-device play and sustained peak-traffic capacity remain unverified.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
@@ -1298,6 +1303,13 @@ The mobile HUD candidate passed 890 tests and `pnpm build`. In local Chrome agai
 - `pnpm test` passed 895 tests, including validation of contextual links and release IDs; `pnpm build` passed with the existing Vite large-chunk warning.
 - A local static build was inspected in desktop Chrome and emulated 320, 375, 390, 430, 768, 1280 and 1600 CSS-pixel widths. Keyboard and touch disclosures, heading permalinks, article/release links, `?since=`, no-JavaScript expansion and horizontal overflow were checked. This is not a physical-device test.
 
+## WebGL playtest article and recording · 2026-10-18 Pacific
+
+- The automated publishing helper built revision `1ca0eeb` with uncommitted article/tooling changes, started a fresh loopback-only staged room, and recorded the scripted drive with Playwright Chromium on an Apple M5 Pro reporting the Metal renderer. The 1280×720 silent MP4 is 10.43 seconds and 1,272,110 bytes; the run received 151 authoritative trajectory samples and recorded no page or console errors. The visible video was inspected; it is an automated run, not a frame-rate benchmark or human/physical-device playtest.
+- `pnpm test` passed 899 tests, and the focused blog-content suite passed all five cases after the local-video integrity check was added. The capture helper's refusal to overwrite an existing clip was also checked.
+- The local article played the MP4 in Chrome at 1440 px and emulated 390 px widths. The player, poster, article rail, section links and responsive flow diagram were inspected; there was no horizontal overflow or page error. No physical mobile device was tested.
+- Tesland's production static host returned 200 rather than 206 for a video byte-range request. The immutable GitHub raw copy returned 206; local Chrome loaded it and successfully sought to 8 seconds. The article uses that source with the site-hosted MP4 as a download.
+
 
 ## 2026-10-18 · Starship construction candidate
 
@@ -1308,3 +1320,25 @@ After rebasing onto production merge `5c3779d` (protocol v43), the normal `pnpm 
 After integrating capacity merge `0ebecaa` and the compact mobile HUD, the 0.0.27 candidate passed `pnpm run ci`: 891 tests and the production build. In a disposable local Wrangler room at $0, the Fremont mission shortcut was absent away from the spaceport, then appeared in the compact mission panel after placing the driver nearby. It opened the mission directions in requested 390×844 portrait and 844×390 landscape views; landscape used emulated touch capability. Desktop also showed the shortcut, and the checked tabs reported no console warnings or errors. These are browser checks, not a physical-device test. The provisional 64-player limit was inherited; this check did not measure capacity. No launch or contribution was triggered.
 
 After rebasing onto changelog merge `dad912e`, `pnpm run ci` passed 892 tests and the production build. The game runtime was unchanged from the preceding candidate.
+
+## Historical Rocket Dome playtests · 2026-10-18 Pacific
+
+These observations and screenshots describe the former Alcatraz arena before the Dome moved to China Basin. They do not verify the current game.
+
+## Rocket Dome with flight tanks and global chat · protocol v16 · 2026-10-18 Pacific
+
+- After merging the flight and OTA changes, `pnpm test` passed 177/177 and `pnpm build` passed both typechecks and the production build. Vite's existing large-chunk warning remains (729 kB / 206 kB gzip main JavaScript). Wall-charge simulation checks cover all five tank levels, capacity-scaled boost consumption and the 100% cap.
+- The local Wrangler two-client room integration passed, including protocol health and welcome, flight, dome entry, a shared goal and wall recharge seen by both clients. The local global-chat integration also passed, including saved identity recovery. These are not load tests.
+- The browser and touch observations below predate this integration; the combined v16 build has not been checked in a browser or on a physical device. No new deployment was performed.
+
+## Rocket Dome with global chat · protocol v14 · 2026-10-18 Pacific
+
+- After integrating global chat, `pnpm test` passed 167/167 and `pnpm build` passed both typechecks and the production build. Vite's existing chunk-size warning remains (725 kB / 205 kB gzip main JavaScript).
+- Local Wrangler room and chat integrations passed, including the two-client wall refill and saved-driver recovery. A room run during concurrent chat testing and Wrangler reload timed out waiting for a goal; a stable rerun passed. These are not load tests.
+- Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the combined dome, score, guidance, chat button and controls. Portrait global chat opened and showed a connection to the local server. Screenshots: [desktop](screenshots/rocket-dome/desktop.jpg), [portrait](screenshots/rocket-dome/portrait.jpg), [landscape](screenshots/rocket-dome/landscape.jpg). The wall drive and touch limitations below still apply; no physical device or frame-rate measurement was made.
+
+## Rocket Dome stadium and wall charge · protocol v14 · 2026-10-18 Pacific
+
+- `pnpm test` passed 160/160 and `pnpm build` passed both typechecks and the production build after rebasing onto the shop fixes. Vite still warns about the 710 kB main JavaScript chunk (199 kB gzip). Shared-simulation tests cover both walls, charge eligibility, retrofit rockets, the ceiling, boost and the tank cap.
+- Local Wrangler two-client room integration passed, including driving from the floor onto a wall and observing the air increase in both clients' snapshots. This is not a load test.
+- Chrome desktop solo showed the stadium and drove a Rocket up a wall to 27 m with the field and ball visible before the shop-fix rebase. After rebasing, Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the stadium, car, controls, score and wall-charge guidance. Simulated touch and mouse presses on Drive did not register in this browser session; touch driving, physical devices, frame rate and motion comfort remain unverified. No deployment was performed for this change. Screenshots: [desktop](screenshots/rocket-dome/desktop-before-chat.jpg), [portrait](screenshots/rocket-dome/portrait-before-chat.jpg), [landscape](screenshots/rocket-dome/landscape-before-chat.jpg).

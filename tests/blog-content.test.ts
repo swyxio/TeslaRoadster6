@@ -24,6 +24,23 @@ test('related posts refer to distinct public articles', async () => {
   }
 });
 
+test('blog videos have controls, descriptions and checked-in local media', async () => {
+  const [{ POSTS }, { access, readFile }] = await Promise.all([import('../content/posts'), import('node:fs/promises')]);
+  for (const post of POSTS) {
+    const body = await readFile(`content/posts/${post.file}`, 'utf8');
+    for (const [video] of body.matchAll(/<video\b[\s\S]*?<\/video>/g)) {
+      assert.match(video, /\bcontrols\b/);
+      assert.match(video, /aria-label="[^"]+"/);
+      assert.match(video, /poster="\/blog\/[^"]+"/);
+      assert.match(video, /<source\b[^>]*src="[^"]+"/);
+      assert.match(video, /<a\b[^>]*href="[^"]+"/);
+      for (const [, path] of video.matchAll(/(?:src|poster|href)="(\/blog\/[^"]+)"/g)) {
+        await access(`public${path}`);
+      }
+    }
+  }
+});
+
 test('explicit fragments survive a heading rename and duplicate explicit IDs fail the build', async () => {
   const renamed = await renderPost('## A new title {#original-section}\n');
   assert.equal(renamed.headings[0].id, 'original-section');
