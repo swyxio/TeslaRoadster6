@@ -8,6 +8,7 @@ import { RESTAURANTS, CUSTOMERS } from '../shared/delivery';
 import { SHOPS } from '../shared/upgrades';
 import { contact } from '../shared/physics';
 import { buildNorthLandmarks } from '../src/north-landmarks';
+import { addPlayer, createWorld, step } from '../shared/game';
 
 test('100 additional researched landmarks are distinct, supported and have appropriate collision',()=>{
  assert.equal(NEW_LANDMARKS.length,100);
@@ -22,7 +23,9 @@ test('100 additional researched landmarks are distinct, supported and have appro
   }
   const matches=nearbyBuildings(place.x,place.z,2).filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
   assert.equal(matches.length,place.solid?1:0,place.id);
-  if(place.solid)assert.equal(matches[0].h,place.h,place.id);
+  if(place.solid){
+   assert.equal(matches[0].h,place.h,`${place.id}: broad-phase visual extent`);
+  }
   const bounds={...place,yaw:0};
   for(const other of BUILDINGS)if(other!==matches[0])assert.equal(contact(bounds,{...other,yaw:0}),null,`${place.id} overlaps ${other.style}`);
  }
@@ -40,7 +43,7 @@ test('new landmark footprints keep roads, lots and existing gameplay targets cle
  }
 });
 
-test('new model parts stay inside their shared collision envelopes',()=>{
+test('new model parts stay inside their authored visual bounds',()=>{
  const originalDocument=globalThis.document;
  Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>({fillRect(){},fillText(){}})})}});
  try{
@@ -58,12 +61,66 @@ test('new model parts stay inside their shared collision envelopes',()=>{
      for(let j=0;j<vertices.count;j++){
       vertex.fromBufferAttribute(vertices,j).applyMatrix4(matrix);
       assert.ok(Math.abs(vertex.x-place.x)<=place.w/2+.001&&Math.abs(vertex.z-place.z)<=place.d/2+.001&&vertex.y>=-.001&&vertex.y<=place.h+.001,
-       `${place.id} part at ${vertex.x.toFixed(2)},${vertex.y.toFixed(2)},${vertex.z.toFixed(2)} exceeds its envelope`);
+       `${place.id} part at ${vertex.x.toFixed(2)},${vertex.y.toFixed(2)},${vertex.z.toFixed(2)} exceeds its visual bounds`);
      }
     }
    }
   }
   assert.equal(seen.size,100);
+ }finally{
+  if(originalDocument===undefined)Reflect.deleteProperty(globalThis,'document');
+  else Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:originalDocument});
+ }
+});
+
+test('vehicles land on the rendered ship, fields, terraces and curved roofs',()=>{
+ const originalDocument=globalThis.document;
+ Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>({fillRect(){},fillText(){}})})}});
+ try{
+  // These points deliberately avoid paint, trim and miniature aircraft. The
+  // ground truth is a ray through the actual instanced render geometry, not
+  // the collision profile, and the full simulation performs each landing.
+  const points=[
+   ['new-uss-hornet',0,.10,6.175],           // flight deck
+   ['new-uss-hornet',.17,-.10,11.78],        // offset island roof
+   ['new-oakland-coliseum',0,0,4.41],        // field
+   ['new-oakland-coliseum',.37,0,8.925],     // side stand
+   ['new-lawrence-hall',.12,-.15,9.44],      // upper terrace
+   ['new-lawrence-hall',-.28,0,7.68],        // lower roof
+   ['new-oakland-arena',.20,0,15.275],       // faceted dome away from apex
+   ['pigeon-point',.12,0,25],                // narrow lighthouse
+   ['new-tilden-merry-go-round',.15,0,9.9612], // open canopy
+  ] as const;
+  const landingIds=new Map<string,string>();
+  for(const [id,dx,dz,expected] of points){
+   const place=NEW_LANDMARKS.find(p=>p.id===id)!;
+   assert.ok(place?.solid,id);
+   const building=BUILDINGS.find(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
+   assert.ok(building,id);
+   const scene=new THREE.Scene();buildNorthLandmarks(scene,[place],[]);scene.updateMatrixWorld(true);
+   const x=place.x+dx*place.w,z=place.z+dz*place.d;
+   const ray=new THREE.Raycaster(new THREE.Vector3(x,place.h+2,z),new THREE.Vector3(0,-1,0));
+   const surfaces=scene.children.filter(child=>child instanceof THREE.InstancedMesh);
+   const hit=ray.intersectObjects(surfaces)[0];
+   assert.ok(hit,`${id}: no visible surface at ${dx}, ${dz}`);
+   assert.ok(Math.abs(hit.point.y-expected)<.02,`${id}: unexpected visual surface ${hit.point.y}`);
+   const world=createWorld(),player=addPlayer(world,'one','One');
+   const car=world.entities.find(entity=>entity.id===player.entityId)!;
+   world.entities=[car];world.pickups=[];
+   Object.assign(car,{x,z,y:place.h+2,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+   for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
+   const prefix=`roof:${BUILDINGS.indexOf(building)}:`;
+   assert.ok(car.supportId?.startsWith(prefix),`${id} ${dx}, ${dz}: support ${car.supportId}`);
+   assert.ok(Math.abs(car.y-hit.point.y)<.12,`${id} ${dx}, ${dz}: landed at ${car.y}, rendered ${hit.point.y}`);
+   const landing=car.y,landingId=car.supportId!;
+   landingIds.set(`${id}:${dx}:${dz}`,landingId);
+   for(let i=0;i<5;i++)step(world,new Map(),.05);
+   assert.ok(Math.abs(car.y-landing)<.12,`${id}: landing did not remain supported`);
+   assert.equal(car.supportId,landingId,`${id}: support identity changed while stationary`);
+  }
+  assert.notEqual(landingIds.get('new-uss-hornet:0:0.1'),landingIds.get('new-uss-hornet:0.17:-0.1'));
+  assert.notEqual(landingIds.get('new-oakland-coliseum:0:0'),landingIds.get('new-oakland-coliseum:0.37:0'));
+  assert.notEqual(landingIds.get('new-lawrence-hall:0.12:-0.15'),landingIds.get('new-lawrence-hall:-0.28:0'));
  }finally{
   if(originalDocument===undefined)Reflect.deleteProperty(globalThis,'document');
   else Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:originalDocument});

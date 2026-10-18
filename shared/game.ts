@@ -4,6 +4,8 @@ export { BUILDINGS } from './map';
 import { refillStationFor } from './charging';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
+import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
+import { newLandmarkPrimitives, sampleLandmarkPrimitive } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
@@ -105,7 +107,7 @@ function solid(e:Entity):boolean {
   const b=body(e),radius=Math.abs(Math.cos(e.yaw))*b.w/2+Math.abs(Math.sin(e.yaw))*b.d/2;
   const rz=Math.abs(Math.sin(e.yaw))*b.w/2+Math.abs(Math.cos(e.yaw))*b.d/2;
   const islandJump=e.supportId==='island-jump'?null:islandJumpHeight(e.x,e.z);
-  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||(islandJump!==null&&e.y<islandJump-.001)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>e.y<buildingRoofHeight(building,e.x,e.z)-.001&&!!contact(b,{...building,yaw:0}));
+  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||(islandJump!==null&&e.y<islandJump-.001)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>building.landmarkId?landmarkBlocksPose(building,e):e.y<buildingRoofHeight(building,e.x,e.z)-.001&&!!contact(b,{...building,yaw:0}));
 }
 function fits(world:World,e:Entity,ignore?:Entity,cleanupOwner?:string):boolean{return e.supportId!==null&&!solid(e)&&!world.entities.some(other=>other!==ignore&&other!==e&&!(cleanupOwner&&other.owner===cleanupOwner&&!other.driver&&!other.cab)&&e.y<other.y+dimensions(other.kind).height&&other.y<e.y+dimensions(e.kind).height&&!!contact(body(e),body(other)));}
 function sideSpawn(world:World,kind:Entity['kind'],side:FerrySide,ignore?:Entity,cleanupOwner?:string):{x:number;z:number;yaw:number}|null {
@@ -667,6 +669,13 @@ function followSupport(world:World,e:Entity,old:PreviousPose):void {
   if((rampEnd||stuntStart||islandJumpStart||e.supportId==='island-bank'||e.supportId==='island-oval')&&ground!==null&&Math.abs(old.y-ground)<.5){e.supportId='ground';e.y=ground;e.vy=0;}
   else if(e.supportId==='overpass'&&contact(body(e),deckBody)){e.y=deckTopAt(e.x);e.vy=0;}
   else if(e.supportId.startsWith('roof:')){
+    const [index,partIndex]=e.supportId.slice(5).split(':').map(Number);
+    if(partIndex!==undefined){
+      const building=BUILDINGS[index],part=building?.landmarkId&&newLandmarkPrimitives(building.landmarkId)[partIndex];
+      const edge=part&&landmarkPartContact(building,part,e);
+      if(edge){e.y=edge.top;e.vy=0;}else{e.supportId=null;e.vy=0;}
+      return;
+    }
     const roof=BUILDINGS[Number(e.supportId.slice(5))];
     if(roof&&contact(body(e),{...roof,yaw:0})){e.y=buildingRoofHeight(roof,e.x,e.z);e.vy=0;}
     else {e.supportId=null;e.vy=0;}
@@ -717,8 +726,21 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
   for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
-    const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
-    if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};
+    if(b.landmarkId){
+      const base=b.landmarkBase??0,parts=newLandmarkPrimitives(b.landmarkId);
+      for(let i=0;i<parts.length;i++){
+        const part=parts[i],surface=sampleLandmarkPrimitive(part,e.x-b.x,e.z-b.z);
+        // The body can meet a roof while its pivot is still outside its edge.
+        const edge=surface?null:landmarkPartContact(b,part,e);
+        if(!surface&&!edge)continue;
+        const height=surface?base+surface.top:edge!.top,previous=sampleLandmarkPrimitive(part,old.x-b.x,old.z-b.z);
+        const oldHeight=previous?base+previous.top:height;
+        if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
+      }
+    }else{
+      const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
+      if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};
+    }
   }
   if(landing){
     const impact=-e.vy;if(impact>12)e.health=Math.max(5,e.health-(impact-12)*.5*(e.upgrades.armor?.5:1)*damageFactor(e));
@@ -733,6 +755,18 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
     if(!spawn){Object.assign(e,{x:old.x,y:old.y,z:old.z,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0});return;}
     Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
     if(e.driver)onRelocation?.(e.driver);
+  }
+  // An elevated roof or deck has a real underside: upward motion stops there
+  // without filling the air below it with an invisible building.
+  if(e.supportId===null&&e.vy>0){
+    const height=dimensions(e.kind).height;
+    for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
+      if(!b.landmarkId)continue;
+      for(const part of newLandmarkPrimitives(b.landmarkId)){
+        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y});
+        if(surface&&previous&&old.y+height<=previous.bottom+.001&&e.y+height>surface.bottom){e.y=surface.bottom-height;e.vy=0;}
+      }
+    }
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
     const bottom=deckTopAt(e.x)-OVERPASS.thickness,height=dimensions(e.kind).height;

@@ -2,9 +2,9 @@ import * as T from 'three';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS, type NorthLandmarkShape } from '../shared/north-landmarks';
 import { terrainHeight } from '../shared/map';
 import { material } from './vehicles';
-import { buildSfNorthLandmark } from './new-landmarks-sf-north-models';
-import { buildPeninsulaSouthLandmark } from './new-landmarks-peninsula-south-models';
-import { buildEastBayLandmark } from './new-landmarks-east-bay-models';
+import { buildSfNorthLandmark } from '../shared/new-landmarks-sf-north-models';
+import { buildPeninsulaSouthLandmark } from '../shared/new-landmarks-peninsula-south-models';
+import { buildEastBayLandmark } from '../shared/new-landmarks-east-bay-models';
 
 /** Original low-poly silhouettes; footprints are shared with the simulation. */
 type LandmarkModel = {id:string;name:string;x:number;z:number;w:number;d:number;h:number;shape:NorthLandmarkShape};

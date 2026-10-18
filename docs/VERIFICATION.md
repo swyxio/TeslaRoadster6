@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Boost and landing · 0.0.32 / protocol v46 · 2026-10-18 Pacific
+
+- Production merge `1f722dd` built as `e4983c05`. Production health reported protocol v46 and capacity setting 64; served JS and CSS matched the tested assets and the 0.0.32 changelog was live. Desktop and emulated touch playchecks observed boost and jumping without captured browser errors. These checks do not establish physical-device, audio, room-throughput or playable-capacity results.
+
 ## Sandbox and collections · 0.0.31 / protocol v46 · 2026-10-18 Pacific
 
 - The release candidate passed 992 tests and the build, plus local ordinary-room, persistence and isolated sandbox/practice integrations. Production merge `26fc934` built as `091e1a4c`; the deployed health reported v46 and capacity setting 64. The served JS and CSS matched the tested local assets and the 0.0.31 changelog was live.
@@ -7,6 +11,11 @@
 - The hosted three-leg pair had 1.254 m p95 path separation, browser callback p95 of 116.8 / 116.7 ms, and simulated/wall ratios of 0.925 / 0.925, both below the room-progress target. A corrected local five-driver wallet sample kept the cars moving and the candidate advanced 0.95319 simulated seconds per wall second. These observations are descriptive, not proof of smooth play at capacity; callback intervals are not display or GPU timings.
 
 ## 100 more Bay landmarks · integration and release preparation · 2026-10-18 Pacific
+
+- A review of the earlier candidate found oversized invisible collision envelopes above open fields and decks. The revised candidate shares 337 authored, cached structural parts across 89 solid sites (one to eight each), preserving volume bottoms and part-level roof identities; eleven decorative sites do not collide. An independent Three.js ray audit sampled 148,617 points on those parts with no off-boundary footprint mismatches and maximum top-height difference 1.03e-6 m. Nine staged full-simulation drops were compared with the actual instanced renderer, including the Hornet deck and island, Coliseum field and stand, terrace, dome, lighthouse and carousel canopy. Focused checks also cover ship and stadium sides, normal ground movement, leaving a deck and the open underside of the canopy. These are sampled functional observations, not a general collision or performance guarantee. Reproduce the broad geometry screen with `pnpm exec tsx scripts/audit-landmark-surfaces.ts`.
+- The structural candidate passed 80 focused landmark, gameplay, roof-achievement, building-sweep, remote-presentation and tick-collision tests plus `tsc --noEmit`. A full suite, build, room integrations, final visual playtest and integrated performance gates remain pending.
+- A radius-20 broad-phase screen sampled 34,331 grid points within 30 m of the new sites. New-landmark envelope counts had p50/p90/p95/p99/max 1/2/3/5/5; structural-part candidate counts were 4/9/11/15/18. All-building candidates peaked at 15. These are sampled counts, not global bounds or tick timings; final candidate performance remains unmeasured.
+- The user has prioritized integrated driving continuity and room throughput; this feature is held pending those release gates and the final integrated candidate. Earlier 0.0.33/v47 preparation below is provisional, not a reserved version or a release claim.
 
 - After integrating boost release `1f722dd`, the landmark release moved to 0.0.33 / protocol v47. The earlier Cloudflare preview `66c645f6` failed because the session test still asserted protocol v46; updating it to expect v47 and reject v46 was followed by 1,010 passing tests and `pnpm build`. The existing Vite large-chunk warning remains.
 - On the combined local build, an isolated sandbox guest drove from the SF spawn, with the San Francisco Museum of Modern Art sign visible. Desktop acceleration moved the pickup from 228 m to 182 m. In Chrome emulation, held Drive reached 98 km/h at 390 × 844 and 86 km/h at 844 × 390; release cleared its pressed class. Touch targeting required correcting this session's 0.9 coordinate scaling. No console errors were captured; touch and viewport overrides were restored. This is browser emulation, not physical-device, performance or production evidence.
