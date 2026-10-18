@@ -1,9 +1,10 @@
 import type { Entity, Player, World } from './game';
-import { updateLevel } from './delivery';
+import { updateLevel, type DeliveryState } from './delivery';
 import { LUXURY_DISCOVERY, atLuxuryShowroom } from './luxury';
 import { BUILDINGS, LANDMARKS, REGIONS, insidePolygon, isLand, terrainHeight } from './map';
 import { RESEARCH_SITES, researchArrival } from './research';
 import type { DomeParticipant } from './soccer';
+import type { AchievementAward, AchievementEvidence } from './achievement-evidence';
 
 export const ACHIEVEMENTS = {
   'bay-hopper': { name:'Bay Hopper', description:'Fly from San Francisco to Oakland, or back, without landing on a bridge or island. Reward: $1,000.' },
@@ -85,7 +86,7 @@ function unlock(state:AchievementState,achievement:AchievementId):boolean {
   state.unlocked.push(achievement);state.lastUnlock={id:(state.lastUnlock?.id??0)+1,achievement};
   return true;
 }
-function creditAwards(player:Player,amount:number,sameTickReward=false):void {
+function creditAwards(player:Pick<Player,'delivery'>,amount:number,sameTickReward=false):void {
   if(!amount)return;
   player.delivery.cash+=amount;
   player.delivery.lifetimeIncome+=amount;
@@ -94,6 +95,40 @@ function creditAwards(player:Player,amount:number,sameTickReward=false):void {
   if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery'||reward.kind==='pickup-research'||reward.kind==='delivery-research')){
     player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'||reward.kind==='pickup-research'?'pickup-research':'delivery-research',amount:reward.amount+amount};
   }else player.delivery.lastReward={id:(reward?.id??0)+1,kind:'research',amount};
+}
+function deliveryAwards(state:AchievementState,completed:number,rooftopDelivered:boolean):number {
+  let cash=0;
+  if(rooftopDelivered&&unlock(state,'sky-delivery'))cash+=2_000;
+  for(const milestone of DELIVERY_MILESTONES)
+    if(completed>=milestone.count&&unlock(state,milestone.id))cash+=milestone.reward;
+  return cash;
+}
+function sfoDeliveryAward(state:AchievementState,deliveredCustomerId:string|undefined):number {
+  return deliveredCustomerId==='landmark-sfo'&&unlock(state,'sfo-express')?2_500:0;
+}
+function regionAwards(state:AchievementState,cash:number,pending:number):number {
+  let awarded=0;
+  for(const milestone of REGION_MILESTONES)
+    if(cash+pending+awarded>=milestone.cash&&unlock(state,milestone.id))awarded+=milestone.reward;
+  return awarded;
+}
+/** Apply only awards whose prerequisites are a committed delivery and balance. */
+export function applyDeliveryAwards(delivery:DeliveryState,state:AchievementState,rooftopDelivered:boolean,
+  deliveredCustomerId:string|undefined,sameTickReward:boolean):AchievementId[] {
+  const before=state.unlocked.length;
+  let cash=deliveryAwards(state,delivery.completed,rooftopDelivered)+sfoDeliveryAward(state,deliveredCustomerId);
+  cash+=regionAwards(state,delivery.cash,cash);
+  creditAwards({delivery},cash,sameTickReward);
+  return state.unlocked.slice(before);
+}
+/** Apply validated physical or match awards against the committed balance. */
+export function applyAchievementAwards(delivery:DeliveryState,state:AchievementState,awards:readonly AchievementAward[]):AchievementId[] {
+  const before=state.unlocked.length;
+  let cash=0;
+  for(const award of awards)if(unlock(state,award.id))cash+=award.reward;
+  cash+=regionAwards(state,delivery.cash,cash);
+  creditAwards({delivery},cash);
+  return state.unlocked.slice(before);
 }
 export function awardMarsAchievement(player:Player):void { if(unlock(player.achievements,'to-mars'))creditAwards(player,10_000); }
 /** Award completed Dome matches from server-owned touches and goal credits. */
@@ -134,7 +169,8 @@ function shore(e:Entity):Shore|null {
 export function onRoof(e:Entity):boolean {
   return e.kind!=='person' && e.supportId?.startsWith('roof:')===true;
 }
-export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string,sameTickReward=false):void {
+export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string,sameTickReward=false,
+  evidence?:AchievementEvidence[],physicalOnly=false):void {
   const state=player.achievements, region=shore(e), roof=onRoof(e);
   let researchCash=0;
   const grounded=e.supportId!==null;
@@ -143,52 +179,56 @@ export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boole
   if(state.crossing&&state.crossing.entityId!==e.id)resetAchievementFlight(player);
   if(e.kind==='person'){state.groundShore=null;state.crossing=null;}
   else if(grounded){
-    if(roof&&unlock(state,'roof-rider'))researchCash+=1_000;
-    if(roof){
+    if(roof&&evidence){
+      const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
+      evidence.push({kind:'roof',roof:style==='coit'?'coit':style==='salesforce'?'salesforce':'ordinary'});
+    }else if(roof&&unlock(state,'roof-rider'))researchCash+=1_000;
+    if(roof&&!evidence){
       const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
       if(style==='coit'&&unlock(state,'coit-landing'))researchCash+=2_000;
       if(style==='salesforce'&&unlock(state,'salesforce-landing'))researchCash+=2_000;
     }
-    if(state.crossing?.crossedWater&&region&&region!==state.crossing.origin&&unlock(state,'bay-hopper'))researchCash+=1_000;
+    if(state.crossing?.crossedWater&&region&&region!==state.crossing.origin){
+      if(evidence)evidence.push({kind:'crossing',origin:state.crossing.origin,destination:region,crossedWater:true});
+      else if(unlock(state,'bay-hopper'))researchCash+=1_000;
+    }
     state.crossing=null;state.groundShore=region;
   } else {
     if(!state.crossing&&state.groundShore)state.crossing={origin:state.groundShore,entityId:e.id,crossedWater:false};
     if(state.crossing){
       if(!isLand(e.x,e.z))state.crossing.crossedWater=true;
-      if(state.crossing.crossedWater&&region&&region!==state.crossing.origin){if(unlock(state,'bay-hopper'))researchCash+=1_000;state.crossing=null;state.groundShore=null;}
-    }
-  }
-  if(rooftopDelivered&&unlock(state,'sky-delivery'))researchCash+=2_000;
-  for(const milestone of DELIVERY_MILESTONES){
-    if(player.delivery.completed>=milestone.count&&!state.unlocked.includes(milestone.id)){
-      unlock(state,milestone.id);researchCash+=milestone.reward;
-    }
-  }
-  if(e.kind!=='person'&&!e.inDome&&e.supportId==='ground'&&Math.abs(e.speed)<=4&&Math.abs(e.vy)<.1){
-    for(const visit of LANDMARK_VISITS){
-      if(state.unlocked.includes(visit.id))continue;
-      const height=terrainHeight(visit.arrival.x,visit.arrival.z);
-      if(height!==null&&Math.hypot(e.x-visit.arrival.x,e.y-height,e.z-visit.arrival.z)<=9&&unlock(state,visit.id))researchCash+=1_000;
-    }
-    for(const site of RESEARCH_SITES){
-      const target=researchArrival(site),height=terrainHeight(target.x,target.z);
-      if(height!==null&&Math.hypot(e.x-target.x,e.y-height,e.z-target.z)<=9&&!state.unlocked.includes(site.achievement)){
-        unlock(state,site.achievement);researchCash+=site.cash;
+      if(state.crossing.crossedWater&&region&&region!==state.crossing.origin){
+        if(evidence)evidence.push({kind:'crossing',origin:state.crossing.origin,destination:region,crossedWater:true});
+        else if(unlock(state,'bay-hopper'))researchCash+=1_000;
+        state.crossing=null;state.groundShore=null;
       }
     }
   }
-  if(deliveredCustomerId==='landmark-sfo'&&!state.unlocked.includes('sfo-express')){
-    unlock(state,'sfo-express');researchCash+=2_500;
-  }
-  if(atLuxuryShowroom(e)&&!state.unlocked.includes(LUXURY_DISCOVERY.id)){
-    unlock(state,LUXURY_DISCOVERY.id);researchCash+=LUXURY_DISCOVERY.reward;
-  }
-  // Evaluate awards in ascending order so one award can open the next region.
-  for(const milestone of REGION_MILESTONES){
-    if(player.delivery.cash+researchCash>=milestone.cash&&!state.unlocked.includes(milestone.id)){
-      unlock(state,milestone.id);researchCash+=milestone.reward;
+  if(!physicalOnly)researchCash+=deliveryAwards(state,player.delivery.completed,rooftopDelivered);
+  if(e.kind!=='person'&&!e.inDome&&e.supportId==='ground'&&Math.abs(e.speed)<=4&&Math.abs(e.vy)<.1){
+    for(const visit of LANDMARK_VISITS){
+      if(!evidence&&state.unlocked.includes(visit.id))continue;
+      const height=terrainHeight(visit.arrival.x,visit.arrival.z);
+      if(height!==null&&Math.hypot(e.x-visit.arrival.x,e.y-height,e.z-visit.arrival.z)<=9){
+        if(evidence)evidence.push({kind:'site',site:visit.landmark});
+        else if(unlock(state,visit.id))researchCash+=1_000;
+      }
+    }
+    for(const site of RESEARCH_SITES){
+      const target=researchArrival(site),height=terrainHeight(target.x,target.z);
+      if(height!==null&&Math.hypot(e.x-target.x,e.y-height,e.z-target.z)<=9&&(evidence||!state.unlocked.includes(site.achievement))){
+        if(evidence)evidence.push({kind:'site',site:site.landmark});
+        else {unlock(state,site.achievement);researchCash+=site.cash;}
+      }
     }
   }
+  if(!physicalOnly)researchCash+=sfoDeliveryAward(state,deliveredCustomerId);
+  if(atLuxuryShowroom(e)&&(evidence||!state.unlocked.includes(LUXURY_DISCOVERY.id))){
+    if(evidence)evidence.push({kind:'site',site:'luxury-showroom'});
+    else {unlock(state,LUXURY_DISCOVERY.id);researchCash+=LUXURY_DISCOVERY.reward;}
+  }
+  // Evaluate awards in ascending order so one award can open the next region.
+  if(!physicalOnly)researchCash+=regionAwards(state,player.delivery.cash,researchCash);
   creditAwards(player,researchCash,sameTickReward);
   state.lastPosition={x:e.x,z:e.z};
 }

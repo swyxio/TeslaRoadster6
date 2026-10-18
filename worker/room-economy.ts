@@ -6,21 +6,29 @@ import type { CybercabInterval } from '../shared/cybercabs';
 import { RoomEarningsEvents, type RoomEventCursor } from './room-earnings-events';
 import type { GlobalEarningsEvent } from './global-earnings-event';
 import type { EarningsEvents, EarningsWindow } from '../shared/earnings-events';
+import { isAchievementEvidence } from '../shared/achievement-evidence';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>;GLOBAL_EVENTS:DurableObjectNamespace<GlobalEarningsEvent>};
-type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null;cabEvents?:EarningsEvents;stageSequence?:number};
+type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null;cabEvents?:EarningsEvents;stageSequence?:number;walletOrder?:number};
 type Acknowledged={fence:string;sequence:number};
 type PickupReservation={eventId:string|null;generation:number;readyAt:number};
 type RoomFund={balance:number;reserved:number};
 /** sequence orders stages within a fence; wallet sequence is assigned at settlement. */
 export type CabIncomeStage={eventId:string;driverId:string;fence:string;roomId:string;sequence:number;intervals:CybercabInterval[]};
-export type TicketStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;action:Extract<DriverAction,{kind:'ticket'}>};
+export type TicketStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;clock?:number;action:Extract<DriverAction,{kind:'ticket'}>};
+export type DeliveryStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;clock:number;action:Extract<DriverAction,{kind:'delivery'}>};
+export type AchievementStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;clock:number;action:Extract<DriverAction,{kind:'achievement'}>};
+export type PickupStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;clock:number;action:Extract<DriverAction,{kind:'supply'}>;pickup:{id:string;generation:number}};
 const stageKey=(stage:CabIncomeStage)=>`cab-stage:${stage.driverId}:${stage.eventId}`;
 const ticketKey=(stage:Pick<TicketStage,'driverId'|'eventId'>)=>`ticket-stage:${stage.driverId}:${stage.eventId}`;
+const deliveryKey=(stage:Pick<DeliveryStage,'driverId'|'eventId'>)=>`delivery-stage:${stage.driverId}:${stage.eventId}`;
+const achievementKey=(stage:Pick<AchievementStage,'driverId'|'eventId'>)=>`achievement-stage:${stage.driverId}:${stage.eventId}`;
+const supplyKey=(stage:Pick<PickupStage,'driverId'|'eventId'>)=>`supply-stage:${stage.driverId}:${stage.eventId}`;
 const cabOrderKey=(stage:Pick<CabIncomeStage,'driverId'|'eventId'>)=>`cab-order:${stage.driverId}:${stage.eventId}`;
 const walletOrderKey=(stage:Pick<TicketStage,'driverId'|'fence'>,order:number)=>`wallet-stage:${stage.driverId}:${stage.fence}:${order}`;
 const stageEventsKey=(stage:Pick<CabIncomeStage,'driverId'|'eventId'>)=>`cab-events:${stage.driverId}:${stage.eventId}`;
 const stageHighKey=(stage:Pick<CabIncomeStage,'driverId'|'fence'>)=>`cab-stage-high:${stage.driverId}:${stage.fence}`;
+const submittedHighKey=(driverId:string,fence:string)=>`wallet-submitted-high:${driverId}:${fence}`;
 const closedFenceKey=(driverId:string,fence:string)=>`closed-fence:${driverId}:${fence}`;
 const matchesStage=(stage:CabIncomeStage,intent:EconomyIntent)=>intent.action.kind==='cab-income' &&
   stage.eventId===intent.eventId&&stage.driverId===intent.driverId&&stage.fence===intent.fence&&stage.roomId===intent.roomId&&
@@ -41,6 +49,15 @@ export class RoomEconomy extends DurableObject<Env> {
   }
   private async tickets(driverId:string):Promise<TicketStage[]>{
     return [...(await this.ctx.storage.list<TicketStage>({prefix:`ticket-stage:${driverId}:`})).values()];
+  }
+  private async deliveries(driverId:string):Promise<DeliveryStage[]>{
+    return [...(await this.ctx.storage.list<DeliveryStage>({prefix:`delivery-stage:${driverId}:`})).values()];
+  }
+  private async achievements(driverId:string):Promise<AchievementStage[]>{
+    return [...(await this.ctx.storage.list<AchievementStage>({prefix:`achievement-stage:${driverId}:`})).values()];
+  }
+  private async supplies(driverId:string):Promise<PickupStage[]>{
+    return [...(await this.ctx.storage.list<PickupStage>({prefix:`supply-stage:${driverId}:`})).values()];
   }
 
   /** Trusted room RPCs; pending wins fence later payout and cab observations. */
@@ -113,6 +130,7 @@ export class RoomEconomy extends DurableObject<Env> {
       if((owner&&owner!==stage.eventId)||(previous!==undefined&&previous!==walletOrder))return 'conflict';
       if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
       if(!existing)return owner===stage.eventId?'accepted':'conflict';
+      if(previous===undefined&&(await txn.get<number>(submittedHighKey(stage.driverId,stage.fence))??0)>=walletOrder)return 'conflict';
       await txn.put({[orderKey]:stage.eventId,[cabOrderKey(stage)]:walletOrder});
       return 'accepted';
     });
@@ -120,19 +138,21 @@ export class RoomEconomy extends DurableObject<Env> {
 
   /** Persist one immutable police stop before it enters the profile. */
   async stageTicket(stage:TicketStage):Promise<'accepted'|'superseded'|'conflict'> {
-    if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1)return 'conflict';
+    if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1||
+      (stage.clock!==undefined&&(!Number.isFinite(stage.clock)||stage.clock<0)))return 'conflict';
     if(!await this.profile(stage.driverId).checkFence(stage.fence))return 'superseded';
     const result=await this.ctx.storage.transaction(async txn=>{
       const existing=await txn.get<TicketStage>(ticketKey(stage));
       if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
       const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
       if(intent)return intent.intent.action.kind==='ticket'&&intent.intent.driverId===stage.driverId&&intent.intent.fence===stage.fence&&intent.intent.roomId===stage.roomId&&
-        JSON.stringify(intent.intent.action)===JSON.stringify(stage.action)&&await txn.get<string>(walletOrderKey(stage,stage.walletOrder))===stage.eventId?'accepted':'conflict';
+        JSON.stringify(intent.intent.action)===JSON.stringify(stage.action)&&intent.intent.clock===stage.clock&&await txn.get<string>(walletOrderKey(stage,stage.walletOrder))===stage.eventId?'accepted':'conflict';
       if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
       const key=walletOrderKey(stage,stage.walletOrder),owner=await txn.get<string>(key);
       // An order whose stage and intent are gone was already acknowledged.
       // Never resurrect it when a delayed stage reply is retried.
       if(owner)return owner===stage.eventId?'superseded':'conflict';
+      if((await txn.get<number>(submittedHighKey(stage.driverId,stage.fence))??0)>=stage.walletOrder)return 'conflict';
       await txn.put({[ticketKey(stage)]:stage,[key]:stage.eventId});
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
       if(alarm===null||alarm>next)await txn.setAlarm(next);
@@ -146,6 +166,92 @@ export class RoomEconomy extends DurableObject<Env> {
         await txn.delete(ticketKey(stage));
         const key=walletOrderKey(stage,stage.walletOrder);
         if(await txn.get<string>(key)===stage.eventId)await txn.delete(key);
+      }
+    });
+    return 'superseded';
+  }
+
+  /** Journal a qualifying physical stop independently of the speculative order. */
+  async stageDelivery(stage:DeliveryStage):Promise<'accepted'|'superseded'|'conflict'> {
+    const action=stage.action,stop=action?.stop;
+    if(action?.kind!=='delivery'||!stop||![stop.x,stop.y,stop.z,stop.vy,stop.speed].every(Number.isFinite)||
+      typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||
+      !Number.isSafeInteger(action.atMs)||action.atMs<0||action.atMs>Date.now()||![null,1,1.5,2,3].includes(action.multiplier))return 'conflict';
+    return this.stageObservation(stage,deliveryKey(stage));
+  }
+  /** Journal immutable room-verified physical or match achievement evidence. */
+  async stageAchievement(stage:AchievementStage):Promise<'accepted'|'superseded'|'conflict'> {
+    if(stage.action?.kind!=='achievement'||!isAchievementEvidence(stage.action.evidence))return 'conflict';
+    return this.stageObservation(stage,achievementKey(stage));
+  }
+  private async stageObservation(stage:DeliveryStage|AchievementStage,stageKey:string):Promise<'accepted'|'superseded'|'conflict'> {
+    if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1||
+      !Number.isFinite(stage.clock)||stage.clock<0)return 'conflict';
+    if(!await this.profile(stage.driverId).checkFence(stage.fence))return 'superseded';
+    const result=await this.ctx.storage.transaction(async txn=>{
+      const existing=await txn.get<DeliveryStage|AchievementStage>(stageKey);
+      if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
+      const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
+      if(intent)return intent.intent.action.kind===stage.action.kind&&intent.intent.driverId===stage.driverId&&intent.intent.fence===stage.fence&&intent.intent.roomId===stage.roomId&&
+        intent.intent.clock===stage.clock&&JSON.stringify(intent.intent.action)===JSON.stringify(stage.action)&&
+        await txn.get<string>(walletOrderKey(stage,stage.walletOrder))===stage.eventId?'accepted':'conflict';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
+      const key=walletOrderKey(stage,stage.walletOrder),owner=await txn.get<string>(key);
+      if(owner)return owner===stage.eventId?'superseded':'conflict';
+      if((await txn.get<number>(submittedHighKey(stage.driverId,stage.fence))??0)>=stage.walletOrder)return 'conflict';
+      await txn.put({[stageKey]:stage,[key]:stage.eventId});
+      const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
+      if(alarm===null||alarm>next)await txn.setAlarm(next);
+      return 'accepted';
+    });
+    if(result!=='accepted')return result;
+    if(await this.profile(stage.driverId).checkFence(stage.fence))return result;
+    await this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<DeliveryStage|AchievementStage>(stageKey);
+      if(current&&JSON.stringify(current)===JSON.stringify(stage)){
+        await txn.delete(stageKey);
+        const key=walletOrderKey(stage,stage.walletOrder);
+        if(await txn.get<string>(key)===stage.eventId)await txn.delete(key);
+      }
+    });
+    return 'superseded';
+  }
+
+  /** Claim a physical supply contact and its pickup generation atomically. */
+  async stageSupply(stage:PickupStage):Promise<'accepted'|'reserved'|'superseded'|'conflict'> {
+    if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1||
+      !Number.isFinite(stage.clock)||stage.clock<0||stage.action?.kind!=='supply'||!['repair','air'].includes(stage.action.type)||
+      !stage.pickup||typeof stage.pickup.id!=='string'||!stage.pickup.id||!Number.isSafeInteger(stage.pickup.generation)||stage.pickup.generation<0)return 'conflict';
+    if(!await this.profile(stage.driverId).checkFence(stage.fence))return 'superseded';
+    const result=await this.ctx.storage.transaction(async txn=>{
+      const existing=await txn.get<PickupStage>(supplyKey(stage));
+      if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
+      const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
+      if(intent)return intent.intent.action.kind==='supply'&&intent.intent.driverId===stage.driverId&&intent.intent.fence===stage.fence&&intent.intent.roomId===stage.roomId&&
+        intent.intent.clock===stage.clock&&JSON.stringify(intent.intent.action)===JSON.stringify(stage.action)&&JSON.stringify(intent.intent.pickup)===JSON.stringify(stage.pickup)&&
+        await txn.get<string>(walletOrderKey(stage,stage.walletOrder))===stage.eventId?'accepted':'conflict';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
+      const orderKey=walletOrderKey(stage,stage.walletOrder),owner=await txn.get<string>(orderKey);
+      if(owner)return owner===stage.eventId?'superseded':'conflict';
+      if((await txn.get<number>(submittedHighKey(stage.driverId,stage.fence))??0)>=stage.walletOrder)return 'conflict';
+      const pickupKey=`pickup:${stage.pickup.id}`;
+      const pickup=await txn.get<PickupReservation>(pickupKey)??{eventId:null,generation:0,readyAt:0};
+      if(pickup.eventId!==null||pickup.readyAt>Date.now()||pickup.generation!==stage.pickup.generation)return 'reserved';
+      await txn.put({[supplyKey(stage)]:stage,[orderKey]:stage.eventId,[pickupKey]:{...pickup,eventId:stage.eventId} satisfies PickupReservation});
+      const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
+      if(alarm===null||alarm>next)await txn.setAlarm(next);
+      return 'accepted';
+    });
+    if(result!=='accepted')return result;
+    if(await this.profile(stage.driverId).checkFence(stage.fence))return result;
+    await this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<PickupStage>(supplyKey(stage));
+      if(current&&JSON.stringify(current)===JSON.stringify(stage)){
+        await txn.delete(supplyKey(stage));
+        const orderKey=walletOrderKey(stage,stage.walletOrder);
+        if(await txn.get<string>(orderKey)===stage.eventId)await txn.delete(orderKey);
+        const pickupKey=`pickup:${stage.pickup.id}`,pickup=await txn.get<PickupReservation>(pickupKey);
+        if(pickup?.eventId===stage.eventId&&pickup.generation===stage.pickup.generation)await txn.put(pickupKey,{...pickup,eventId:null});
       }
     });
     return 'superseded';
@@ -190,6 +296,7 @@ export class RoomEconomy extends DurableObject<Env> {
   async submit(intent:EconomyIntent):Promise<DriverOutcome|null>{
     if(!Number.isSafeInteger(intent.sequence)||intent.sequence<1)return {ok:false,reason:'invalid'};
     if(intent.action.kind==='contribute'&&intent.pickup)return {ok:false,reason:'invalid'};
+    if(intent.action.kind==='supply'&&!intent.pickup)return {ok:false,reason:'invalid'};
     const key=`intent:${intent.eventId}`;
     const result=await this.ctx.storage.transaction(async txn=>{
       const existing=await txn.get<IntentRecord>(key);
@@ -201,6 +308,25 @@ export class RoomEconomy extends DurableObject<Env> {
       if(acknowledged?.fence===intent.fence && intent.sequence<=acknowledged.sequence)return {outcome:{ok:false,reason:'revision'} as DriverOutcome};
       if(await txn.get<boolean>(`frozen:${intent.driverId}:${intent.fence}`)||await txn.get<boolean>(closedFenceKey(intent.driverId,intent.fence))){
         return {outcome:{ok:false,reason:'superseded'} as DriverOutcome};
+      }
+      // Every kind of submission waits behind earlier assigned physical work,
+      // not just another physical event. Unassigned cab observations have not
+      // yet acquired a wallet position.
+      const physicalTickets=await txn.list<TicketStage>({prefix:`ticket-stage:${intent.driverId}:`});
+      const physicalDeliveries=await txn.list<DeliveryStage>({prefix:`delivery-stage:${intent.driverId}:`});
+      const physicalAchievements=await txn.list<AchievementStage>({prefix:`achievement-stage:${intent.driverId}:`});
+      const physicalSupplies=await txn.list<PickupStage>({prefix:`supply-stage:${intent.driverId}:`});
+      const physicalCabs=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
+      const ownTicket=physicalTickets.get(ticketKey(intent)),ownDelivery=physicalDeliveries.get(deliveryKey(intent)),ownAchievement=physicalAchievements.get(achievementKey(intent)),ownSupply=physicalSupplies.get(supplyKey(intent));
+      const ownCab=physicalCabs.get(`cab-stage:${intent.driverId}:${intent.eventId}`);
+      const order=ownTicket?.walletOrder??ownDelivery?.walletOrder??ownAchievement?.walletOrder??ownSupply?.walletOrder??(ownCab?await txn.get<number>(cabOrderKey(ownCab)):undefined)??intent.sequence;
+      const orderOwner=await txn.get<string>(walletOrderKey(intent,order));
+      if(orderOwner&&orderOwner!==intent.eventId)return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+      if([...physicalTickets.values(),...physicalDeliveries.values(),...physicalAchievements.values(),...physicalSupplies.values()].some(stage=>stage.eventId!==intent.eventId&&stage.fence===intent.fence&&stage.walletOrder<order))
+        return {outcome:null,blocked:true as const};
+      for(const stage of physicalCabs.values())if(stage.eventId!==intent.eventId&&stage.fence===intent.fence){
+        const assigned=await txn.get<number>(cabOrderKey(stage));
+        if(assigned!==undefined&&assigned<order)return {outcome:null,blocked:true as const};
       }
       let cabEvents:EarningsEvents|undefined,stageSequence:number|undefined;
       if(intent.action.kind==='cab-income'){
@@ -218,7 +344,7 @@ export class RoomEconomy extends DurableObject<Env> {
         await txn.delete(cabOrderKey(stage));
       } else if(intent.action.kind==='ticket'){
         const ticket=await txn.get<TicketStage>(ticketKey(intent));
-        if(!ticket||ticket.fence!==intent.fence||ticket.roomId!==intent.roomId||JSON.stringify(ticket.action)!==JSON.stringify(intent.action))return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        if(!ticket||ticket.fence!==intent.fence||ticket.roomId!==intent.roomId||ticket.clock!==intent.clock||JSON.stringify(ticket.action)!==JSON.stringify(intent.action))return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
         const tickets=await txn.list<TicketStage>({prefix:`ticket-stage:${intent.driverId}:`});
         if([...tickets.values()].some(other=>other.fence===ticket.fence&&other.walletOrder<ticket.walletOrder))return {outcome:null,blocked:true as const};
         const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
@@ -227,7 +353,23 @@ export class RoomEconomy extends DurableObject<Env> {
           if(order!==undefined&&order<ticket.walletOrder)return {outcome:null,blocked:true as const};
         }
         await txn.delete(ticketKey(ticket));
+      } else if(intent.action.kind==='delivery'||intent.action.kind==='achievement'){
+        const stageKey=intent.action.kind==='delivery'?deliveryKey(intent):achievementKey(intent);
+        const stage=await txn.get<DeliveryStage|AchievementStage>(stageKey);
+        if(!stage||stage.fence!==intent.fence||stage.roomId!==intent.roomId||stage.clock!==intent.clock||JSON.stringify(stage.action)!==JSON.stringify(intent.action))
+          return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        await txn.delete(stageKey);
+      } else if(intent.action.kind==='supply'){
+        const stage=await txn.get<PickupStage>(supplyKey(intent));
+        if(!stage||stage.fence!==intent.fence||stage.roomId!==intent.roomId||stage.clock!==intent.clock||
+          JSON.stringify(stage.action)!==JSON.stringify(intent.action)||JSON.stringify(stage.pickup)!==JSON.stringify(intent.pickup))
+          return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        const pickup=await txn.get<PickupReservation>(`pickup:${stage.pickup.id}`);
+        if(!pickup||pickup.eventId!==intent.eventId||pickup.generation!==stage.pickup.generation)return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        await txn.delete(supplyKey(stage));
       }
+      const highKey=submittedHighKey(intent.driverId,intent.fence),high=await txn.get<number>(highKey)??0;
+      if(intent.sequence>high)await txn.put(highKey,intent.sequence);
       if(intent.action.kind==='contribute'){
         const fund=await txn.get<RoomFund>('room-fund'),amount=intent.action.amount;
         if(!fund)throw new Error('Room fund not initialized');
@@ -244,7 +386,9 @@ export class RoomEconomy extends DurableObject<Env> {
       if(intent.pickup){
         const pickupKey=`pickup:${intent.pickup.id}`;
         const pickup=await txn.get<PickupReservation>(pickupKey)??{eventId:null,generation:0,readyAt:0};
-        if(pickup.eventId!==null||pickup.readyAt>Date.now()||pickup.generation!==intent.pickup.generation){
+        if(intent.action.kind==='supply'){
+          if(pickup.eventId!==intent.eventId||pickup.generation!==intent.pickup.generation)throw new Error('Missing staged pickup reservation');
+        }else if(pickup.eventId!==null||pickup.readyAt>Date.now()||pickup.generation!==intent.pickup.generation){
           const denied:IntentRecord={intent,outcome:{ok:false,reason:'reserved'}};
           await txn.put(key,denied);
           await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
@@ -252,9 +396,9 @@ export class RoomEconomy extends DurableObject<Env> {
           if(alarm===null||alarm>next)await txn.setAlarm(next);
           return denied;
         }
-        await txn.put(pickupKey,{...pickup,eventId:intent.eventId} satisfies PickupReservation);
+        if(intent.action.kind!=='supply')await txn.put(pickupKey,{...pickup,eventId:intent.eventId} satisfies PickupReservation);
       }
-      const pending:IntentRecord={intent,outcome:null,...(cabEvents?{cabEvents}:{}),...(stageSequence!==undefined?{stageSequence}:{})};
+      const pending:IntentRecord={intent,outcome:null,walletOrder:order,...(cabEvents?{cabEvents}:{}),...(stageSequence!==undefined?{stageSequence}:{})};
       await txn.put(key,pending);
       await txn.put(`pending:${intent.driverId}:${intent.eventId}`,intent);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
@@ -275,6 +419,17 @@ export class RoomEconomy extends DurableObject<Env> {
   private async resolveDriverOnce(driverId:string):Promise<void>{
     const pending=(await this.pending(driverId)).sort((a,b)=>a.sequence-b.sequence);
     for(const intent of pending){
+      const record=await this.ctx.storage.get<IntentRecord>(`intent:${intent.eventId}`);
+      if(!record)throw new Error('Missing pending intent');
+      const order=record.walletOrder??intent.sequence;
+      const [tickets,deliveries,achievements,supplies,cabs]=await Promise.all([this.tickets(driverId),this.deliveries(driverId),this.achievements(driverId),this.supplies(driverId),this.stages(driverId)]);
+      if([...tickets,...deliveries,...achievements,...supplies].some(stage=>stage.fence===intent.fence&&stage.eventId!==intent.eventId&&stage.walletOrder<order))break;
+      let blocked=false;
+      for(const stage of cabs)if(stage.fence===intent.fence&&stage.eventId!==intent.eventId){
+        const assigned=await this.ctx.storage.get<number>(cabOrderKey(stage));
+        if(assigned!==undefined&&assigned<order){blocked=true;break;}
+      }
+      if(blocked)break;
       const result=await this.resolveOnce(intent);
       if(!result.ok && result.reason==='not-ready')break;
     }
@@ -293,6 +448,19 @@ export class RoomEconomy extends DurableObject<Env> {
         const updated={...current,cabEvents:events} satisfies IntentRecord;
         await txn.put(key,updated);
         return updated;
+      });
+    }
+    if(intent.action.kind==='delivery'&&intent.action.multiplier===null&&!record.cabEvents){
+      // Query a half-open millisecond containing the physical observation.
+      // Both history services reject pending wins and incomplete pages.
+      const at=intent.action.atMs;
+      const events=await this.cabHistory(intent.roomId,[{assetId:'delivery',startMs:at,endMs:at+1}]);
+      record=await this.ctx.storage.transaction(async txn=>{
+        const current=await txn.get<IntentRecord>(key);
+        if(!current||JSON.stringify(current.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
+        if(current.cabEvents)return current;
+        const updated={...current,cabEvents:events} satisfies IntentRecord;
+        await txn.put(key,updated);return updated;
       });
     }
     const outcome=await this.profile(intent.driverId).commit(intent,record.cabEvents);
@@ -331,7 +499,7 @@ export class RoomEconomy extends DurableObject<Env> {
       // A mismatched event ID must never delete another producer's result.
       if(!record || JSON.stringify(record.intent)!==JSON.stringify(intent))return 'done' as const;
       if(!record.outcome)return 'pending' as const;
-      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket')&&!record.outcome.ok)return 'blocked' as const;
+      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket'||intent.action.kind==='delivery'||intent.action.kind==='achievement'||intent.action.kind==='supply')&&!record.outcome.ok)return 'blocked' as const;
       await txn.put(cleanupKey,intent);
       const ackKey=`ack:${intent.driverId}`,previous=await txn.get<Acknowledged>(ackKey);
       if(previous?.fence!==intent.fence || intent.sequence>previous.sequence)
@@ -375,60 +543,74 @@ export class RoomEconomy extends DurableObject<Env> {
       return true;
     });
     if(!started)return;
-    await this.resolveDriver(driverId);
-    const pending=(await this.pending(driverId)).filter(intent=>intent.fence===fence);
-    const revision=pending.length?await this.profile(driverId).currentRevision(fence):null;
-    if(pending.length && revision===null){
+    // Merge pending writes and assigned physical stages in wallet order. A
+    // later speculative snapshot must never jump ahead of an accepted stop.
+    for(;;){
       await this.resolveDriver(driverId);
-      if((await this.pending(driverId)).some(intent=>intent.fence===fence))throw new Error('Unable to reconcile fenced wallet event');
-    }
-    if(revision!==null && pending.some(intent=>intent.revision<=revision))throw new Error('Unable to reconcile wallet event');
-    // The room is closed and has no more submissions. A missing predecessor
-    // means later speculative drafts must not be applied to the wallet.
-    for(const intent of revision===null?[]:pending)await this.ctx.storage.transaction(async txn=>{
-      const key=`intent:${intent.eventId}`,record=await txn.get<IntentRecord>(key);
-      if(!record||record.outcome)return;
-      await txn.put(key,{intent,outcome:{ok:false,reason:'revision'}} satisfies IntentRecord);
-      await txn.delete(`pending:${intent.driverId}:${intent.eventId}`);
-      await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
-      if(intent.pickup){const pickupKey=`pickup:${intent.pickup.id}`,pickup=await txn.get<PickupReservation>(pickupKey);if(pickup?.eventId===intent.eventId)await txn.put(pickupKey,{...pickup,eventId:null});}
-      if(intent.action.kind==='contribute'){
-        const fund=await txn.get<RoomFund>('room-fund');
-        if(!fund||fund.reserved<intent.action.amount)throw new Error('Missing room fund reservation');
-        await txn.put('room-fund',{...fund,reserved:fund.reserved-intent.action.amount} satisfies RoomFund);
+      const remainingStages=(await this.stages(driverId)).filter(stage=>stage.fence===fence);
+      const ticketStages=(await this.tickets(driverId)).filter(stage=>stage.fence===fence);
+      const deliveryStages=(await this.deliveries(driverId)).filter(stage=>stage.fence===fence);
+      const achievementStages=(await this.achievements(driverId)).filter(stage=>stage.fence===fence);
+      const supplyStages=(await this.supplies(driverId)).filter(stage=>stage.fence===fence);
+      const work=[...await Promise.all(remainingStages.map(async stage=>({kind:'cab' as const,stage,order:await this.ctx.storage.get<number>(cabOrderKey(stage))}))),
+        ...ticketStages.map(stage=>({kind:'ticket' as const,stage,order:stage.walletOrder})),
+        ...deliveryStages.map(stage=>({kind:'delivery' as const,stage,order:stage.walletOrder})),
+        ...achievementStages.map(stage=>({kind:'achievement' as const,stage,order:stage.walletOrder})),
+        ...supplyStages.map(stage=>({kind:'supply' as const,stage,order:stage.walletOrder}))]
+        .sort((a,b)=>(a.order??Number.MAX_SAFE_INTEGER)-(b.order??Number.MAX_SAFE_INTEGER)||
+          (a.kind==='cab'&&b.kind==='cab'?a.stage.sequence-b.stage.sequence:0));
+      const pending=(await this.pending(driverId)).filter(intent=>intent.fence===fence);
+      const orderedPending=await Promise.all(pending.map(async intent=>({intent,record:await this.ctx.storage.get<IntentRecord>(`intent:${intent.eventId}`)})));
+      orderedPending.sort((a,b)=>(a.record?.walletOrder??a.intent.sequence)-(b.record?.walletOrder??b.intent.sequence));
+      const first=orderedPending[0],stageOrder=work[0]?.order??Number.MAX_SAFE_INTEGER;
+      if(first&&(!work.length||(first.record?.walletOrder??first.intent.sequence)<stageOrder)){
+        const cursor=await this.profile(driverId).currentCursor(fence);
+        if(!cursor||first.intent.revision<=cursor.revision)throw new Error('Unable to reconcile fenced wallet event');
+        const intent=first.intent;
+        if(intent.action.kind==='cab-income'||intent.action.kind==='ticket'||intent.action.kind==='delivery'||intent.action.kind==='achievement'||intent.action.kind==='supply'){
+          // A missing speculative predecessor cannot invalidate physical work.
+          // No profile receipt exists for a not-ready intent, so rebase it.
+          const rebased={...intent,revision:cursor.revision,sequence:cursor.sequence+1};
+          await this.ctx.storage.transaction(async txn=>{
+            const key=`intent:${intent.eventId}`,record=await txn.get<IntentRecord>(key);
+            if(!record||record.outcome||JSON.stringify(record.intent)!==JSON.stringify(intent))throw new Error('Physical intent changed');
+            await txn.put(key,{...record,intent:rebased});await txn.put(`pending:${driverId}:${intent.eventId}`,rebased);
+          });
+        }else await this.ctx.storage.transaction(async txn=>{
+          const key=`intent:${intent.eventId}`,record=await txn.get<IntentRecord>(key);
+          if(!record||record.outcome)return;
+          await txn.put(key,{...record,outcome:{ok:false,reason:'revision'}} satisfies IntentRecord);
+          await txn.delete(`pending:${driverId}:${intent.eventId}`);
+          await txn.put(`unacked:${driverId}:${intent.eventId}`,intent);
+          if(intent.pickup){const pickupKey=`pickup:${intent.pickup.id}`,pickup=await txn.get<PickupReservation>(pickupKey);if(pickup?.eventId===intent.eventId)await txn.put(pickupKey,{...pickup,eventId:null});}
+          if(intent.action.kind==='contribute'){
+            const fund=await txn.get<RoomFund>('room-fund');
+            if(!fund||fund.reserved<intent.action.amount)throw new Error('Missing room fund reservation');
+            await txn.put('room-fund',{...fund,reserved:fund.reserved-intent.action.amount} satisfies RoomFund);
+          }
+        });
+        continue;
       }
-    });
-    // No old producer remains. Consume abandoned outcomes while the room is
-    // frozen so the profile records even room-only rejected sequences.
-    const abandoned=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`unacked:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
-    for(const intent of abandoned){
-      const record=await this.ctx.storage.get<IntentRecord>(`intent:${intent.eventId}`);
-      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket')&&(!record?.outcome||!record.outcome.ok))throw new Error('Unable to settle staged physical work');
-      if(!await this.acknowledge(intent))throw new Error('Wallet cleanup pending');
-    }
-    const cleanup=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`cleanup:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
-    for(const intent of cleanup)await this.finishCleanup(intent);
-    const remainingStages=[...(await this.ctx.storage.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()]
-      .filter(stage=>stage.fence===fence).sort((a,b)=>a.sequence-b.sequence);
-    const ticketStages=(await this.tickets(driverId)).filter(stage=>stage.fence===fence);
-    const work=[...await Promise.all(remainingStages.map(async stage=>({kind:'cab' as const,stage,order:await this.ctx.storage.get<number>(cabOrderKey(stage))}))),
-      ...ticketStages.map(stage=>({kind:'ticket' as const,stage,order:stage.walletOrder}))]
-      .sort((a,b)=>(a.order??Number.MAX_SAFE_INTEGER)-(b.order??Number.MAX_SAFE_INTEGER));
-    for(const entry of work){
-      const stage=entry.stage;
-      const cursor=await this.profile(driverId).currentCursor(fence);
+      const entry=work[0];
+      if(!entry){if(first)throw new Error('Unable to reconcile fenced wallet event');break;}
+      const stage=entry.stage,cursor=await this.profile(driverId).currentCursor(fence);
       if(!cursor)throw new Error('Unable to settle fenced physical work');
       const intent:EconomyIntent={eventId:stage.eventId,driverId,fence,roomId:stage.roomId,sequence:cursor.sequence+1,revision:cursor.revision,
+        ...('clock' in stage&&stage.clock!==undefined?{clock:stage.clock}:{}),
+        ...(entry.kind==='supply'?{pickup:entry.stage.pickup}:{}),
         action:entry.kind==='cab'?{kind:'cab-income',intervals:entry.stage.intervals}:entry.stage.action};
       const converted=await this.ctx.storage.transaction(async txn=>{
-        const key=entry.kind==='cab'?stageKey(entry.stage):ticketKey(entry.stage);
-        const current=await txn.get<CabIncomeStage|TicketStage>(key);
+        const key=entry.kind==='cab'?stageKey(entry.stage):entry.kind==='ticket'?ticketKey(entry.stage):entry.kind==='delivery'?deliveryKey(entry.stage):entry.kind==='achievement'?achievementKey(entry.stage):supplyKey(entry.stage);
+        const current=await txn.get<CabIncomeStage|TicketStage|DeliveryStage|AchievementStage|PickupStage>(key);
         if(!current)return false;
         if(JSON.stringify(current)!==JSON.stringify(stage)||await txn.get(`intent:${stage.eventId}`))throw new Error('Physical stage mismatch');
+        if(entry.kind==='supply'){
+          const pickup=await txn.get<PickupReservation>(`pickup:${entry.stage.pickup.id}`);
+          if(!pickup||pickup.eventId!==stage.eventId||pickup.generation!==entry.stage.pickup.generation)throw new Error('Missing staged pickup reservation');
+        }
         const cabEvents=entry.kind==='cab'?await txn.get<EarningsEvents>(stageEventsKey(entry.stage)):undefined;
-        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null,...(entry.kind==='cab'?{stageSequence:entry.stage.sequence}:{}),...(cabEvents?{cabEvents}:{})} satisfies IntentRecord);
-        await txn.put(`pending:${driverId}:${stage.eventId}`,intent);
-        await txn.delete(key);
+        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null,walletOrder:entry.order??Number.MAX_SAFE_INTEGER,...(entry.kind==='cab'?{stageSequence:entry.stage.sequence}:{}),...(cabEvents?{cabEvents}:{})} satisfies IntentRecord);
+        await txn.put(`pending:${driverId}:${stage.eventId}`,intent);await txn.delete(key);
         if(entry.kind==='cab'){await txn.delete(stageEventsKey(entry.stage));await txn.delete(cabOrderKey(entry.stage));}
         const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
         if(alarm===null||alarm>next)await txn.setAlarm(next);
@@ -440,6 +622,16 @@ export class RoomEconomy extends DurableObject<Env> {
       if(!outcome?.ok)throw new Error('Unable to settle staged physical work');
       if(!await this.acknowledge(intent))throw new Error('Physical work cleanup pending');
     }
+    // No old producer remains. Consume abandoned outcomes while the room is
+    // frozen so the profile records even room-only rejected sequences.
+    const abandoned=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`unacked:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
+    for(const intent of abandoned){
+      const record=await this.ctx.storage.get<IntentRecord>(`intent:${intent.eventId}`);
+      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket'||intent.action.kind==='delivery'||intent.action.kind==='achievement'||intent.action.kind==='supply')&&(!record?.outcome||!record.outcome.ok))throw new Error('Unable to settle staged physical work');
+      if(!await this.acknowledge(intent))throw new Error('Wallet cleanup pending');
+    }
+    const cleanup=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`cleanup:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
+    for(const intent of cleanup)await this.finishCleanup(intent);
     // The durable seal prevents stale requests after the room marker is gone.
     await this.profile(driverId).sealFence(driverId,fence);
     // Keep a durable closed marker: a stale producer may have passed the
@@ -448,7 +640,7 @@ export class RoomEconomy extends DurableObject<Env> {
     await this.ctx.storage.transaction(async txn=>{
       const orders=await txn.list({prefix:`wallet-stage:${driverId}:${fence}:`});
       await txn.put(closedFenceKey(driverId,fence),true);
-      await txn.delete([`frozen:${driverId}:${fence}`,stageHighKey({driverId,fence}),...orders.keys()]);
+      await txn.delete([`frozen:${driverId}:${fence}`,stageHighKey({driverId,fence}),submittedHighKey(driverId,fence),...orders.keys()]);
     });
   }
   async pickupStates(ids:string[]):Promise<Record<string,PickupReservation>>{
@@ -475,9 +667,9 @@ export class RoomEconomy extends DurableObject<Env> {
       .sort((a,b)=>a.sequence-b.sequence);
     for(const intent of cleanup)await this.finishCleanup(intent);
     const unacked=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`unacked:${driverId}:`})).values()];
-    const stages=await this.stages(driverId),tickets=await this.tickets(driverId);
+    const stages=await this.stages(driverId),tickets=await this.tickets(driverId),deliveries=await this.deliveries(driverId),achievements=await this.achievements(driverId),supplies=await this.supplies(driverId);
     const producers=new Map<string,{roomId:string;fence:string}>();
-    for(const item of [...unacked,...stages,...tickets])producers.set(JSON.stringify([item.roomId,item.fence]),item);
+    for(const item of [...unacked,...stages,...tickets,...deliveries,...achievements,...supplies])producers.set(JSON.stringify([item.roomId,item.fence]),item);
     for(const {roomId,fence} of producers.values()){
       // An unavailable room is not evidence that its producer has gone away.
       const room=this.env.ROOMS.get(this.env.ROOMS.idFromName(roomId));
@@ -496,20 +688,23 @@ export class RoomEconomy extends DurableObject<Env> {
       if(alarm!==null&&alarm<=watchdog)return false;
       await txn.setAlarm(watchdog);return true;
     });
-    const [intents,cleanup,unacked,stages,tickets,frozen]=await Promise.all([
+    const [intents,cleanup,unacked,stages,tickets,deliveries,achievements,supplies,frozen]=await Promise.all([
       this.pending(),this.ctx.storage.list<EconomyIntent>({prefix:'cleanup:'}),
       this.ctx.storage.list<EconomyIntent>({prefix:'unacked:'}),this.ctx.storage.list<CabIncomeStage>({prefix:'cab-stage:'}),
       this.ctx.storage.list<TicketStage>({prefix:'ticket-stage:'}),
+      this.ctx.storage.list<DeliveryStage>({prefix:'delivery-stage:'}),
+      this.ctx.storage.list<AchievementStage>({prefix:'achievement-stage:'}),
+      this.ctx.storage.list<PickupStage>({prefix:'supply-stage:'}),
       this.ctx.storage.list<boolean>({prefix:'frozen:'}),
     ]);
     const drivers=new Set(intents.map(intent=>intent.driverId));
-    for(const item of [...cleanup.values(),...unacked.values(),...stages.values(),...tickets.values()])drivers.add(item.driverId);
+    for(const item of [...cleanup.values(),...unacked.values(),...stages.values(),...tickets.values(),...deliveries.values(),...achievements.values(),...supplies.values()])drivers.add(item.driverId);
     for(const key of frozen.keys())drivers.add(key.split(':')[1]);
     if(!drivers.size){
       // Cancel only our own empty wakeup and recheck atomically with submissions.
       if(armed)await this.ctx.storage.transaction(async txn=>{
         if(await txn.getAlarm()!==watchdog)return;
-        const work=await Promise.all(['pending:','cleanup:','unacked:','frozen:','cab-stage:','ticket-stage:'].map(prefix=>txn.list({prefix,limit:1})));
+        const work=await Promise.all(['pending:','cleanup:','unacked:','frozen:','cab-stage:','ticket-stage:','delivery-stage:','achievement-stage:','supply-stage:'].map(prefix=>txn.list({prefix,limit:1})));
         if(!work.some(entries=>entries.size))await txn.deleteAlarm();
       });
       return;

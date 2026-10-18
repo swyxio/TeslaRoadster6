@@ -91,8 +91,9 @@ try{
   assert.deepEqual([afterCommit.progress.cybercabs!.assets[0].gross,afterCommit.progress.cybercabs!.assets[0].remainder,
     afterCommit.progress.cybercabs!.assets[0].lastEndMs,afterCommit.progress.cybercabs!.assets[0].revenueAwarded],
     [gross,remainder,endMs,true]);
-  assert.equal(afterCommit.progress.cash,bought.progress.cash+gross+2_000);
-  assert.equal(afterCommit.progress.eligibleIncome,5_000+gross+2_000);
+  assert.equal(afterCommit.progress.cash,bought.progress.cash+gross+2_000+8_000);
+  assert.equal(afterCommit.progress.eligibleIncome,5_000+gross+2_000+8_000);
+  assert.deepEqual(afterCommit.progress.unlocked,['region-oakland','region-peninsula','region-san-jose']);
   await until(async()=>await rpc<number>('income-failures')>0,'income outbox failure');
   assert.equal(await rpc<number>('total'),5_000,'failed outbox remains pending');
   await stop(child);child=undefined;child=start();await ready();
@@ -100,14 +101,38 @@ try{
   await until(async()=>!(await rpc<string[]>('keys',common)).some(key=>
     key===`intent:${stage.eventId}`||['pending:','unacked:','cleanup:','cab-stage:'].some(prefix=>key.startsWith(`${prefix}${driverId}:`))),
   'recovered journal cleanup');
-  await until(async()=>await rpc<number>('total')===5_000+gross+2_000,'recovered global outbox');
+  await until(async()=>await rpc<number>('total')===5_000+gross+2_000+8_000,'recovered global outbox');
   const recovered=await rpc<RecordState>('profile',common);
   assert.equal(recovered.progress.cash,afterCommit.progress.cash);
   assert.equal(recovered.progress.eligibleIncome,afterCommit.progress.eligibleIncome);
   assert.deepEqual(recovered.progress.cybercabs,afterCommit.progress.cybercabs);
   await pause(1_200);
   assert.equal((await rpc<RecordState>('profile',common)).progress.cash,afterCommit.progress.cash);
-  assert.equal(await rpc<number>('total'),5_000+gross+2_000,'retry does not double-credit global income');
+  assert.equal(await rpc<number>('total'),5_000+gross+2_000+8_000,'retry does not double-credit global income');
+
+  // An income batch crossing a cash threshold earns the region award before
+  // a later spend, and replaying its receipt cannot award it twice.
+  const thresholdRoom=`cab-threshold-${randomUUID().slice(0,8)}`,thresholdDriver=randomUUID(),thresholdFence=randomUUID();
+  const threshold={room:thresholdRoom,driverId:thresholdDriver,fence:thresholdFence};
+  await rpc('producer',{room:thresholdRoom,active:true});await rpc('acquire',threshold);
+  const thresholdBuy:EconomyIntent={eventId:randomUUID(),driverId:thresholdDriver,fence:thresholdFence,roomId:thresholdRoom,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-threshold'}};
+  const thresholdBought=await rpc<DriverOutcome>('buy',{...threshold,intent:thresholdBuy});success(thresholdBought);
+  const near={...thresholdBought.progress,cash:9_996,level:0 as const,unlocked:[]};
+  const thresholdSeed:EconomyIntent={eventId:randomUUID(),driverId:thresholdDriver,fence:thresholdFence,roomId:thresholdRoom,revision:1,sequence:2,action:{kind:'progress',progress:near}};
+  success(await rpc<DriverOutcome>('buy',{...threshold,intent:thresholdSeed}));
+  const thresholdStage:CabIncomeStage={eventId:randomUUID(),driverId:thresholdDriver,fence:thresholdFence,roomId:thresholdRoom,sequence:1,
+    intervals:[{assetId:'cab-threshold',startMs:0,endMs:1_000}]};
+  const thresholdIntent:EconomyIntent={eventId:thresholdStage.eventId,driverId:thresholdDriver,fence:thresholdFence,roomId:thresholdRoom,revision:2,sequence:3,
+    action:{kind:'cab-income',intervals:thresholdStage.intervals}};
+  assert.equal(await rpc('stage',{...threshold,stage:thresholdStage}),'accepted');
+  const thresholdPaid=await rpc<DriverOutcome>('submit',{...threshold,intent:thresholdIntent});success(thresholdPaid);
+  assert.equal(thresholdPaid.progress.cash,11_000);assert.equal(thresholdPaid.progress.eligibleIncome,6_004);
+  assert.deepEqual(thresholdPaid.awards,['region-oakland']);
+  const spend:EconomyIntent={eventId:randomUUID(),driverId:thresholdDriver,fence:thresholdFence,roomId:thresholdRoom,revision:3,sequence:4,action:{kind:'contribute',amount:2_000}};
+  const spent=await rpc<DriverOutcome>('buy',{...threshold,intent:spend});success(spent);
+  assert.equal(spent.progress.cash,9_000);assert.deepEqual(spent.progress.unlocked,['region-oakland']);
+  assert.deepEqual(await rpc('submit',{...threshold,intent:thresholdIntent}),thresholdPaid);
+  assert.equal((await rpc<RecordState>('profile',threshold)).progress.cash,9_000);
 
   // The actual session leaves its sub-checkpoint tail volatile. Once its stage
   // transaction is accepted, a crash before the reply must recover it once.
@@ -171,14 +196,14 @@ try{
   for(const entry of ordered){
     await rpc('freeze',entry,15_000);
     const saved=await rpc<RecordState>('profile',entry);
-    assert.equal(saved.progress.cash,10_001,`${entry.mode}: rejected debit stays absent and cab/fine settle once`);
+    assert.equal(saved.progress.cash,11_001,`${entry.mode}: rejected debit stays absent and cab/fine and region settle once`);
     assert.equal(saved.progress.tickets,1,`${entry.mode}: the physical stop survives restart`);
     assert.equal(saved.progress.cybercabs!.assets[0].gross,4);
     if(entry.mode==='cab-first')assert.equal(saved.progress.order.customer,4,'credit before the fine keeps the Oakland order eligible');
     else assert.notEqual(saved.progress.order.customer,4,'fine before the delayed credit reroutes the order');
     await rpc('acquire',{...entry,fence:randomUUID()});
     const replay=await rpc<RecordState>('profile',entry);
-    assert.equal(replay.progress.cash,10_001);assert.equal(replay.progress.tickets,1,'fence handoff cannot duplicate the stop');
+    assert.equal(replay.progress.cash,11_001);assert.equal(replay.progress.tickets,1,'fence handoff cannot duplicate the stop');
   }
 
   // A delayed retry after acknowledgement cannot recreate an already-paid

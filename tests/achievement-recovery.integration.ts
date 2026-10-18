@@ -26,6 +26,10 @@ async function stop(child:ChildProcess){
   for(let i=0;i<100&&child.exitCode===null&&child.signalCode===null;i++)await delay(50);
   if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid!,'SIGKILL');}catch{}
 }
+async function crash(child:ChildProcess){
+  process.kill(-child.pid!,'SIGKILL');
+  await until(()=>child.exitCode!==null||child.signalCode!==null,'Wrangler process killed',10_000);
+}
 const dir=await mkdtemp(join(tmpdir(),'tesland-achievement-recovery-'));
 const port=await freePort(),base=`http://127.0.0.1:${port}`,config=join(dir,'wrangler.json');
 await writeFile(config,JSON.stringify({
@@ -113,6 +117,37 @@ async function rejectedPredecessor(kind:'roof'|'race'){
   client.socket.close();
 }
 
+async function crashAfterAcceptedEvidence(){
+  const driver=await savedDriver('Regression crash'),room=`award-crash-${randomUUID().slice(0,8)}`;
+  const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
+  await delay(600);await sync(client,201);
+  const before=(await inspect(driver.driverId)).progress;
+  await rpc('wallet','arm',{driverId:driver.driverId,fault:'hold-before'});
+  await rpc('wallet','queue-income',{room,playerId,count:1});
+  await until(async()=>(await rpc<{held:boolean}>('wallet','fault-state',{driverId:driver.driverId})).held,'earlier wallet action held');
+  assert.equal((await rpc<{observed:boolean}>('achievement','roof',{room,playerId})).observed,true);
+  assert.equal((await rpc<{observed:boolean}>('achievement','race',{room,playerId})).observed,true);
+  // The fixture logs only RPCs for which the production stage method returned
+  // accepted; its marker is not itself the evidence journal.
+  await until(async()=>{
+    const accepted=await rpc<{action:{kind:string;evidence:{kind:string}}}[]>('achievement','accepted',{room,driverId:driver.driverId});
+    const kinds=accepted.filter(item=>item.action?.kind==='achievement').map(item=>item.action.evidence?.kind);
+    return kinds.includes('roof')&&kinds.includes('race');
+  },'roof and race evidence accepted by the durable journal',8_000);
+  const held=(await inspect(driver.driverId)).progress;
+  assert.ok(!held.unlocked.includes('roof-rider')&&!held.unlocked.includes('race-winner'),'staged awards have not committed before the crash');
+  await crash(child!);child=start();await ready();
+  const recovered=await joinSaved(`award-return-${randomUUID().slice(0,8)}`,driver.code);
+  await sync(recovered,202);
+  const after=(await inspect(driver.driverId)).progress;
+  assert.equal(after.unlocked.filter(id=>id==='roof-rider').length,1,'roof evidence settles exactly once after crash');
+  assert.equal(after.unlocked.filter(id=>id==='race-finisher').length,1,'race finish settles exactly once after crash');
+  assert.equal(after.unlocked.filter(id=>id==='race-winner').length,1,'race win settles exactly once after crash');
+  assert.equal(after.cash,before.cash+1_001,'the original accepted income and roof reward are applied once');
+  assert.equal(after.eligibleIncome,before.eligibleIncome+1_001);
+  recovered.socket.close();
+}
+
 try{
   child=start();await ready();
   const failures:string[]=[];
@@ -120,6 +155,8 @@ try{
     try{await rejectedPredecessor(kind);console.log(`PASS ${kind} after rejected predecessor`);}
     catch(error){failures.push(`${kind}: ${error instanceof Error?error.stack:String(error)}`);}
   }
+  try{await crashAfterAcceptedEvidence();console.log('PASS crash after accepted achievement evidence');}
+  catch(error){failures.push(`crash: ${error instanceof Error?error.stack:String(error)}`);}
   if(failures.length)throw new Error(failures.join('\n'));
 }catch(error){console.error(error);console.error(`Wrangler logs:\n${logs}`);process.exitCode=1;}
 finally{

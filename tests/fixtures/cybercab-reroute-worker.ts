@@ -2,13 +2,47 @@
 import { EconomySession } from '../../worker/economy-session';
 import { progressFrom, type DriverOutcome, type EconomyIntent } from '../../worker/driver-profile';
 import { createEmptyWorld, addPlayer, chooseVehicle, makeEntity, step } from '../../shared/game';
-import { CUSTOMERS, initialDelivery, levelForCash, rerouteInaccessibleOrder } from '../../shared/delivery';
-import { updateAchievements } from '../../shared/achievements';
+import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder } from '../../shared/delivery';
+import { applyAchievementAwards, applyDeliveryAwards, initialAchievements, updateAchievements, type AchievementId } from '../../shared/achievements';
+import { evaluateAchievementEvidence } from '../../shared/achievement-evidence';
 import { applyTicketEvidence, newPolice, updatePolice } from '../../shared/police';
 import { BUILDINGS, terrainHeight } from '../../shared/map';
 import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
 import type { CabIncomeStage } from '../../worker/room-economy';
 import type { DriverProgress } from '../../worker/driver-profile';
+
+function settledCab(progress:DriverProgress,result:Extract<ReturnType<typeof settleCybercabIntervals>,{ok:true}>){
+  const delivery=initialDelivery({x:0,z:0});
+  Object.assign(delivery,{cash:result.cash,lifetimeIncome:result.eligibleIncome,level:levelForCash(result.cash)});
+  const state=initialAchievements();state.unlocked=[...progress.unlocked];
+  const awards=applyAchievementAwards(delivery,state,[]);
+  return {progress:{...progress,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,level:delivery.level,
+    unlocked:state.unlocked,cybercabs:result.fleet},awards};
+}
+
+function advanceClock(progress:DriverProgress,intent:EconomyIntent):DriverProgress {
+  if(intent.clock===undefined)return progress;
+  const elapsed=intent.clock-(progress.deliveryClock??0);
+  if(elapsed<0)throw new Error('Fixture clock moved backwards');
+  return {...progress,deliveryClock:intent.clock,order:{...progress.order,elapsed:progress.order.elapsed+elapsed}};
+}
+
+function settledPhysical(progress:DriverProgress,action:Extract<EconomyIntent['action'],{kind:'delivery'|'achievement'}>){
+  const delivery=initialDelivery(action.kind==='delivery'?action.stop:{x:0,z:0});
+  Object.assign(delivery,{cash:progress.cash,lifetimeIncome:progress.eligibleIncome,earned:progress.earned,
+    completed:progress.completed,level:levelForCash(progress.cash),order:{...progress.order},tickets:progress.tickets});
+  const state=initialAchievements();state.unlocked=[...progress.unlocked];
+  let awards:AchievementId[]=[];
+  if(action.kind==='delivery'){
+    if(action.multiplier===null)throw new Error('Fixture requires a known delivery rate');
+    const dropoff=delivery.order.stage==='dropoff',customer=CUSTOMERS[delivery.order.customer]?.id;
+    const rooftop=dropoff&&orderTarget(delivery.order).rooftop;
+    const parts=applyDeliveryStop(delivery,action.stop,component=>Math.round(component.amount*action.multiplier!));
+    if(parts)awards=applyDeliveryAwards(delivery,state,rooftop,dropoff?customer:undefined,true);
+  }else awards=applyAchievementAwards(delivery,state,evaluateAchievementEvidence(state.unlocked,action.evidence));
+  return {progress:{...progress,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,earned:delivery.earned,
+    completed:delivery.completed,level:delivery.level,order:delivery.order,unlocked:state.unlocked},awards};
+}
 
 function ticketProgress(saved:DriverProgress,action:Extract<EconomyIntent['action'],{kind:'ticket'}>):DriverProgress{
   const delivery=initialDelivery(action.evidence);
@@ -38,17 +72,18 @@ async function scenario(mode:'history'|'profile'='profile'){
     async prepareCab(){if(mode==='history'){started();await held;}return {room:[],global:[]};},
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
+      let awards:AchievementId[]=[];
       if(intent.action.kind==='cab-income'){
         if(mode==='profile'){started();await held;}
         const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,{room:[],global:[]});
         if(!result.ok)throw new Error('Fixture settlement failed');
-        persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:persisted,awards}=settledCab(persisted,result));
       }else if(intent.action.kind==='contribute'){
         persisted={...persisted,cash:persisted.cash-intent.action.amount,
           order:intent.action.order?structuredClone(intent.action.order):persisted.order};
       }else throw new Error(`Unexpected action: ${intent.action.kind}`);
       persisted.level=levelForCash(persisted.cash);
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards};
     },
     async acknowledge(){return true;},
   };
@@ -76,19 +111,23 @@ async function transient(mode:'history'|'profile'){
   const stages:number[]=[];
   const ledger={
     async assignCab(){return 'accepted' as const;},async stageTicket(){return 'accepted' as const;},
+    async stageDelivery(){return 'accepted' as const;},async stageAchievement(){return 'accepted' as const;},
     async stageCab(stage:CabIncomeStage){stages.push(stage.sequence);return 'accepted' as const;},
     async prepareCab(){if(mode==='history'){started();await held;}return {room:[],global:[]};},
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+      let awards:AchievementId[]=[];
+      saved=advanceClock(saved,intent);
       if(intent.action.kind==='cab-income'){
         if(mode==='profile'){started();await held;}
         const result=settleCybercabIntervals(saved.cybercabs!,saved.cash,saved.eligibleIncome,intent.action.intervals,{room:[],global:[]});
         if(!result.ok)throw new Error('Fixture settlement failed');
-        saved={...saved,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:saved,awards}=settledCab(saved,result));
       }else if(intent.action.kind==='progress')saved={...structuredClone(intent.action.progress),cybercabs:saved.cybercabs};
       else if(intent.action.kind==='ticket')saved=ticketProgress(saved,intent.action);
+      else if(intent.action.kind==='delivery'||intent.action.kind==='achievement')({progress:saved,awards}=settledPhysical(saved,intent.action));
       else throw new Error('Unexpected action');
       saved.level=levelForCash(saved.cash);
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards};
     },
     async acknowledge(){return true;},
   };
@@ -132,14 +171,15 @@ async function rejected(){
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
       if(writes.length===1){started();await held;return {ok:false,reason:'invalid'};}
+      let awards:AchievementId[]=[];
       if(intent.action.kind==='cab-income'){
         const result=settleCybercabIntervals(saved.cybercabs!,saved.cash,saved.eligibleIncome,intent.action.intervals,{room:[],global:[]});
         if(!result.ok)throw new Error('Failed to re-project staged income');
-        saved={...saved,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:saved,awards}=settledCab(saved,result));
       }else if(intent.action.kind==='progress')saved={...structuredClone(intent.action.progress),cybercabs:saved.cybercabs};
       else throw new Error('Rejected speculative spending was resurrected');
       saved.level=levelForCash(saved.cash);
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards};
     },
     async acknowledge(){return true;},
   };
@@ -167,13 +207,16 @@ async function rejectedTransient(){
   let saved=structuredClone(initial),release=()=>{},started=()=>{};
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const writes:EconomyIntent[]=[];
-  const ledger={async stageTicket(){return 'accepted' as const;},async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+  const ledger={async stageTicket(){return 'accepted' as const;},async stageDelivery(){return 'accepted' as const;},
+    async stageAchievement(){return 'accepted' as const;},async submit(intent:EconomyIntent):Promise<DriverOutcome>{
     writes.push(structuredClone(intent));
     if(writes.length===1){started();await held;return {ok:false,reason:'invalid'};}
+    let awards:AchievementId[]=[];saved=advanceClock(saved,intent);
     if(intent.action.kind==='ticket')saved=ticketProgress(saved,intent.action);
     else if(intent.action.kind==='progress')saved=structuredClone(intent.action.progress);
+    else if(intent.action.kind==='delivery'||intent.action.kind==='achievement')({progress:saved,awards}=settledPhysical(saved,intent.action));
     else throw new Error('Speculative spending was replayed');
-    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards};
   },async acknowledge(){return true;}};
   const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
@@ -236,8 +279,8 @@ async function cadence(){
       if(intent.action.kind!=='cab-income')throw new Error('Unexpected action');
       const result=settleCybercabIntervals(saved.cybercabs!,saved.cash,saved.eligibleIncome,intent.action.intervals,{room:[],global:[]});
       if(!result.ok)throw new Error('Fixture settlement failed');
-      saved={...saved,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
-      return {ok:true as const,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+      const settled=settledCab(saved,result);saved=settled.progress;
+      return {ok:true as const,revision:intent.revision+1,progress:structuredClone(saved),awards:settled.awards};
     },async acknowledge(){return true;}};
   const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
@@ -263,14 +306,15 @@ async function marketHandoff(){
   const ledger={async assignCab(){return 'accepted' as const;},async stageCab(stage:CabIncomeStage){stages.push(structuredClone(stage));return 'accepted' as const;},
     async prepareCab(){return {room:[],global:[]};},async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       if(held){held=false;started();await blocked;}
+      let awards:AchievementId[]=[];
       if(intent.action.kind==='progress')saved={...structuredClone(intent.action.progress),cybercabs:saved.cybercabs};
       else if(intent.action.kind==='cab-income'){
         const result=settleCybercabIntervals(saved.cybercabs!,saved.cash,saved.eligibleIncome,intent.action.intervals,{room:[],global:[]});
         if(!result.ok)throw new Error('Handoff cab settlement failed');
-        saved={...saved,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:saved,awards}=settledCab(saved,result));
       }else throw new Error('Unexpected handoff action');
       saved.level=levelForCash(saved.cash);
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards};
     },async acknowledge(){return true;}};
   const socket={send(value:string){messages.push(JSON.parse(value));},close(){}} as unknown as WebSocket;
   const session=new EconomySession({} as never,ledger as never,world,player,socket,'driver','old','room',0,0,initial,new Map(),new Set(),

@@ -659,11 +659,15 @@ export class GameRoom extends DurableObject<Env> {
       this.inputs.delete(id);relocated.add(id);
     },economy:{
       canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
-      update:(player,apply,ticket)=>{const session=byId.get(player.id);if(session&&!session.attachPending){settlement=this.rate(Date.now());try{session.economy.update(player,apply,settlement,ticket);}finally{settlement=null;}}},
+      update:(player,apply,ticket)=>{const session=byId.get(player.id);if(session&&!session.attachPending){const atMs=Date.now();settlement=this.rate(atMs);try{session.economy.update(player,apply,settlement,ticket,atMs);}finally{settlement=null;}}},
+      deliveryStart:(player,entity,paused)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.deliveryStart(player,entity,paused);},
+      deliveryEnd:(player,active,payouts)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.deliveryEnd(player,active,payouts);},
       // A result can occur while binding (for example, a ball already in
       // motion). Commit it to the current wallet; a different incoming wallet
       // must then pass the unstarted check again before it can replace it.
       gameAward:(player,apply,capture)=>{byId.get(player.id)?.economy.gameAward(player,apply,capture);},
+      achievement:(player,evidence)=>{byId.get(player.id)?.economy.achievement(player,evidence);},
+      decisionsAvailable:player=>byId.get(player.id)?.economy.decisionsAvailable??false,
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
       resolveDeliveryPayout:(_player,component)=>settlement?activityPayout(component.amount,component.kind,settlement.atMs,settlement.events):null,
       onDomeWin:result=>{if(result.winners.length)this.recordWin();},

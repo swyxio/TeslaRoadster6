@@ -40,7 +40,28 @@ try{
   assert.equal(committed.saved.completed,1,'a physical visit to the restored target must survive the rejected predecessor');
   assert.equal(committed.saved.earned,committed.expectedFare,'fare uses 40 + 5.05 active seconds and the rate at the visit');
   assert.equal(committed.saved.cash,committed.initial.cash+committed.expectedFare+2_500,'the rejected contribution is not resurrected');
+  const unknownResponse=await fetch(base+'/unknown',{signal:AbortSignal.timeout(5_000)});
+  if(!unknownResponse.ok)throw new Error(`${await unknownResponse.text()}\n${logs}`);
+  const unknown=await unknownResponse.json() as {saved:DriverProgress;initial:DriverProgress;writes:EconomyIntent[];expectedFare:number;expectedPickup:number;deferredSpend:boolean;driverMoved:boolean;otherMoved:boolean;health:number};
+  assert.equal(unknown.writes[0].action.kind,'delivery');
+  assert.equal(unknown.writes[0].action.kind==='delivery'&&unknown.writes[0].action.multiplier,null,'the first stop uses historical rate lookup');
+  assert.deepEqual(unknown.writes.map(item=>item.action.kind),['delivery','supply','delivery'],'physical pickup and later stop remain ordered behind the unresolved arrival');
+  assert.equal(unknown.saved.completed,1);
+  assert.equal(unknown.saved.order.stage,'dropoff','the later stop was re-evaluated against the newly committed pickup target');
+  assert.equal(unknown.saved.earned,unknown.expectedFare+unknown.expectedPickup);
+  assert.equal(unknown.saved.cash,unknown.initial.cash+unknown.expectedFare+unknown.expectedPickup+2_505);
+  assert.equal(unknown.deferredSpend,true,'a spend cannot use an uncertain draft balance');
+  assert.equal(unknown.driverMoved,true,'the affected driver continues moving while the rate is held');
+  assert.equal(unknown.otherMoved,true,'another player continues moving independently');
+  assert.equal(unknown.health,100,'a supply pickup observed during the hold still applies after settlement');
+  const backlogResponse=await fetch(base+'/backlog',{signal:AbortSignal.timeout(5_000)});
+  if(!backlogResponse.ok)throw new Error(`${await backlogResponse.text()}\n${logs}`);
+  const backlog=await backlogResponse.json() as {closed:boolean;queued:number};
+  assert.equal(backlog.closed,true,'a stalled wallet eventually closes only the affected driver');
+  assert.equal(backlog.queued,32,'physical evidence backlog is bounded before closing');
   console.log('PASS: rejected predecessor preserves only matching physical arrivals and their event-time fare.');
+  console.log('PASS: historical-rate arrival reprojects a later stop and rejects uncertain spending.');
+  console.log('PASS: both drivers continue moving and a stalled evidence backlog is bounded.');
 }finally{
   if(child&&child.exitCode===null&&child.signalCode===null){try{process.kill(-child.pid!,'SIGKILL');}catch{}await until(()=>child!.exitCode!==null||child!.signalCode!==null,'Wrangler shutdown');}
   await rm(dir,{recursive:true,force:true});

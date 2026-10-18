@@ -63,30 +63,31 @@ try{
 
   const earning=intent('income-1',2,3,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000}]});
   const paid=await commit(earning);success(paid);
-  assert.equal(paid.progress.cash,27_000);assert.equal(paid.progress.eligibleIncome,27_000);
+  assert.equal(paid.progress.cash,28_000);assert.equal(paid.progress.eligibleIncome,28_000);
+  assert.deepEqual(paid.awards,['region-oakland']);
   assert.deepEqual(paid.progress.cybercabs!.assets.map(a=>[a.gross,a.remainder,a.lastEndMs,a.revenueAwarded]),[[20_000,0,4_800_000,true]]);
   assert.deepEqual(await commit(earning),paid);
   assert.deepEqual(await commit(intent('overlap',3,4,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000}]})),{ok:false,reason:'invalid'});
   const next=intent('income-2',3,5,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:4_800_000,endMs:4_800_240}]});
-  const paidAgain=await commit(next);success(paidAgain);assert.equal(paidAgain.progress.cash,27_001);assert.equal(paidAgain.progress.eligibleIncome,27_001);
+  const paidAgain=await commit(next);success(paidAgain);assert.equal(paidAgain.progress.cash,28_001);assert.equal(paidAgain.progress.eligibleIncome,28_001);
   const paint=intent('paint-1',4,6,{kind:'cab-paint',assetId:'cab-1',paint:'ember'});
   const painted=await commit(paint);success(painted);
-  assert.equal(painted.progress.cash,26_983);assert.equal(painted.progress.eligibleIncome,27_001);
+  assert.equal(painted.progress.cash,27_983);assert.equal(painted.progress.eligibleIncome,28_001);
   assert.deepEqual(painted.progress.cybercabs!.assets[0],{...paidAgain.progress.cybercabs!.assets[0],style:{paint:'ember',decal:'none'}});
   assert.deepEqual(await commit(paint),painted,'replaying a paint receipt does not charge again');
   assert.deepEqual(await commit({...paint,action:{kind:'cab-paint',assetId:'cab-1',paint:'mint'}}),{ok:false,reason:'conflict'});
   assert.deepEqual(await commit(intent('bad-paint',5,7,{kind:'cab-paint',assetId:'cab-1',paint:'unknown' as 'ember'})),{ok:false,reason:'invalid'});
-  await until(async()=>(await get<{total:number}>('/income')).total===27_001,'cab income delivered to global outbox');
+  await until(async()=>(await get<{total:number}>('/income')).total===28_001,'cab income delivered to global outbox');
 
   await stop(child);child=undefined;child=start();await ready();
   assert.deepEqual(await commit(earning),paid,'the receipt survives worker restart');
   assert.deepEqual(await commit(next),paidAgain,'the latest income receipt survives worker restart');
   assert.deepEqual(await commit(paint),painted,'the paint receipt survives worker restart');
   const restored=await post<Read>('/read',session);
-  assert.equal(restored.record.progress.cash,26_983);assert.equal(restored.record.progress.eligibleIncome,27_001);
+  assert.equal(restored.record.progress.cash,27_983);assert.equal(restored.record.progress.eligibleIncome,28_001);
   assert.equal(restored.record.progress.cybercabs!.assets[0].lastEndMs,4_800_240);
   assert.equal(restored.record.progress.cybercabs!.assets[0].style.paint,'ember');
-  assert.equal((await get<{total:number}>('/income')).total,27_001,'replay does not duplicate global income');
+  assert.equal((await get<{total:number}>('/income')).total,28_001,'replay does not duplicate global income');
 
   await post('/seed',legacy);
   const old=(await post<Read>('/read',legacy)).record.progress;

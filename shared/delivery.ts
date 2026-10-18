@@ -91,15 +91,24 @@ export function captureDeliveryStop(entity:Entity):DeliveryStop {
   const {x,y,z,vy,speed,supportId,kind}=entity;
   return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity)};
 }
-export function matchesDeliveryStop(order:Order,stop:DeliveryPose):boolean {
-  const target=orderTarget(order);
+function matchesTarget(stop:DeliveryPose,target:{x:number;y?:number;z:number;rooftop?:boolean}):boolean {
   if(stop.vy>.1||Math.abs(stop.speed)>4)return false;
   if(target.rooftop){
     return stop.kind!=='person'&&stop.supportId?.startsWith('roof:')===true&&
-      Math.abs(stop.y-target.y)<=.05&&Math.hypot(stop.x-target.x,stop.z-target.z)<=6;
+      Math.abs(stop.y-target.y!)<=.05&&Math.hypot(stop.x-target.x,stop.z-target.z)<=6;
   }
+  if(stop.supportId!=='ground'||Math.abs(stop.x-target.x)>9||Math.abs(stop.z-target.z)>9)return false;
   const targetHeight=terrainHeight(target.x,target.z);
-  return stop.supportId==='ground'&&targetHeight!==null&&Math.hypot(stop.x-target.x,stop.y-targetHeight,stop.z-target.z)<=9;
+  return targetHeight!==null&&Math.hypot(stop.x-target.x,stop.y-targetHeight,stop.z-target.z)<=9;
+}
+export function matchesDeliveryStop(order:Order,stop:DeliveryPose):boolean {return matchesTarget(stop,orderTarget(order));}
+/** Qualifying targets are independent of the currently projected order. */
+export function deliveryStopSignature(stop:DeliveryPose):string {
+  if(stop.vy>.1||Math.abs(stop.speed)>4)return '';
+  const matches:string[]=[];
+  for(let i=0;i<RESTAURANTS.length;i++)if(matchesTarget(stop,RESTAURANTS[i]))matches.push(`r${i}`);
+  for(let i=0;i<CUSTOMERS.length;i++)if(matchesTarget(stop,CUSTOMERS[i]))matches.push(`c${i}`);
+  return matches.join(',');
 }
 
 function orderFor(index: number, origin: { x: number; z: number }, level:Level, canFly = false): Order {

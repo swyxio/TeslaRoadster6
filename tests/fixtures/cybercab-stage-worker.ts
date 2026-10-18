@@ -6,6 +6,17 @@ import { progressFrom, type DriverOutcome, type DriverProgress, type EconomyInte
 import type { CabIncomeStage } from '../../worker/room-economy';
 import { addPlayer, createEmptyWorld, makeEntity } from '../../shared/game';
 import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
+import { initialDelivery, levelForCash } from '../../shared/delivery';
+import { applyAchievementAwards, initialAchievements, type AchievementId } from '../../shared/achievements';
+
+function settledCab(progress:DriverProgress,result:Extract<ReturnType<typeof settleCybercabIntervals>,{ok:true}>){
+  const delivery=initialDelivery({x:0,z:0});
+  Object.assign(delivery,{cash:result.cash,lifetimeIncome:result.eligibleIncome,level:levelForCash(result.cash)});
+  const state=initialAchievements();state.unlocked=[...progress.unlocked];
+  const awards=applyAchievementAwards(delivery,state,[]);
+  return {progress:{...progress,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,level:delivery.level,
+    unlocked:state.unlocked,cybercabs:result.fleet},awards};
+}
 
 export { DriverProfile, GlobalChat, GlobalIncome, GlobalEarningsEvent };
 export class GameRoom extends CabGameRoom {
@@ -101,14 +112,15 @@ async function rejectedHeadSimulation(){
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
       if(writes.length===1){headStarted();await head;return {ok:false,reason:'invalid'};}
+      let awards:AchievementId[]=[];
       if(intent.action.kind==='cab-income'){
         const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,{room:[],global:[]});
         if(!result.ok)throw new Error('Cab stage could not be rebased');
-        persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:persisted,awards}=settledCab(persisted,result));
       }else if(intent.action.kind==='progress'){
         persisted={...structuredClone(intent.action.progress),cybercabs:persisted.cybercabs};
       }else throw new Error('Dependent action was not discarded');
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards};
     },
     async acknowledge(){return true;},
   };
@@ -154,16 +166,17 @@ async function delayedCabSimulation(){
     async prepareCab(){return {room:[{startsAtMs:0,endsAtMs:600_000}],global:[{startsAtMs:0,endsAtMs:1_800_000}]};},
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
+      let awards:AchievementId[]=[];
       if(intent.action.kind==='cab-income'){
         started();await held;
         const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,
           {room:[{startsAtMs:0,endsAtMs:600_000}],global:[{startsAtMs:0,endsAtMs:1_800_000}]});
         if(!result.ok)throw new Error('Cab income failed');
-        persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+        ({progress:persisted,awards}=settledCab(persisted,result));
       }else if(intent.action.kind==='progress'){
         persisted={...structuredClone(intent.action.progress),cybercabs:persisted.cybercabs};
       }else throw new Error('Unexpected action');
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards};
     },
     async acknowledge(){return true;},
   };
@@ -200,8 +213,8 @@ async function stageOrderSimulation(){
       if(intent.action.kind!=='cab-income')throw new Error('Unexpected action');
       const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,{room:[],global:[]});
       if(!result.ok)throw new Error('Cab stage could not settle');
-      persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+      const settled=settledCab(persisted,result);persisted=settled.progress;
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:settled.awards};
     },
     async acknowledge(){return true;},
   };

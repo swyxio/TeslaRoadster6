@@ -11,7 +11,7 @@ export function createPropertyScene(){
   const sign=new T.Sprite(material);
   const home=BUILDINGS.find(building=>building.x===PROPERTY_HOME_SITE.x&&building.z===PROPERTY_HOME_SITE.z&&building.style==='house');
   if(!home)throw new Error('The property home site is missing from the shared map');
-  sign.position.set(home.x,home.h+8,home.z);sign.scale.set(28,5.25,1);group.add(sign);
+  sign.position.set(home.x,home.h*.65,home.z);sign.scale.set(16,3,1);group.add(sign);
   let shownName:string|null=null;
   return {
     group,

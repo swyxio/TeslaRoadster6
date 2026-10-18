@@ -1,11 +1,29 @@
 // LOCAL TEST ONLY: deterministic one-tick observations; all wallet work uses
 // the production GameRoom, EconomySession, RoomEconomy and DriverProfile.
-import fixture, { GameRoom as FixtureGameRoom, DriverProfile, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
+import fixture, { GameRoom as FixtureGameRoom, DriverProfile, GlobalChat, RoomEconomy as FixtureRoomEconomy, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
 import { MarketService } from '../../worker/market-service';
 import { BUILDINGS } from '../../shared/map';
 import type { World } from '../../shared/game';
 
-export { DriverProfile, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent, MarketService };
+export { DriverProfile, GlobalChat, GlobalIncome, GlobalEarningsEvent, MarketService };
+export class RoomEconomy extends FixtureRoomEconomy {
+  // Record only after the actual production method accepts the evidence; this
+  // avoids depending on the production journal's internal key names.
+  async stageAchievement(stage:unknown){
+    const method=Reflect.get(FixtureRoomEconomy.prototype,'stageAchievement');
+    if(typeof method!=='function')throw new Error('Achievement staging is not implemented');
+    const result=await Reflect.apply(method,this,[stage]);
+    if(result==='accepted'){
+      const item=stage as {driverId:string;eventId:string};
+      await this.ctx.storage.put(`fixture-achievement-accepted:${item.driverId}:${item.eventId}`,stage);
+    }
+    return result;
+  }
+  async fixtureAccepted(driverId:string){
+    const entries=await this.ctx.storage.list({prefix:`fixture-achievement-accepted:${driverId}:`});
+    return [...entries.values()];
+  }
+}
 export class GameRoom extends FixtureGameRoom {
   private fixtureDriver(playerId:string){
     const world=Reflect.get(this,'world') as World;
@@ -38,13 +56,14 @@ export class GameRoom extends FixtureGameRoom {
   }
 }
 
-type FixtureEnv={ROOMS:DurableObjectNamespace<GameRoom>};
+type FixtureEnv={ROOMS:DurableObjectNamespace<GameRoom>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
 export default {
   async fetch(request:Request,env:FixtureEnv,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(request.url).pathname;
     if(!path.startsWith('/__achievement-test/'))return fixture.fetch(request,env as never,ctx);
     if(request.method!=='POST')return new Response('POST required',{status:405});
-    const body=await request.json() as {room:string;playerId:string};
+    const body=await request.json() as {room:string;playerId:string;driverId:string};
+    if(path==='/__achievement-test/accepted')return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room)).fixtureAccepted(body.driverId));
     const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
     if(path==='/__achievement-test/roof')return Response.json(await room.fixtureTransientRoof(body.playerId));
     if(path==='/__achievement-test/race')return Response.json(await room.fixtureTransientRace(body.playerId));

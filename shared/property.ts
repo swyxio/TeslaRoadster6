@@ -6,7 +6,7 @@ export const PROPERTY_HOME_SITE = {x:-78,z:90} as const;
  * live traffic and players before spawning; fall back to its normal safe spawn
  * if none is available.
  */
-export const PROPERTY_HOME_SPAWNS = [0,-8,8,-16,16].map(dz=>({x:-60,z:90+dz,yaw:0}));
+export const PROPERTY_HOME_SPAWNS = [0,-8,8,-16,16].map(dz=>({x:-60,z:90+dz,yaw:Math.atan2(18,dz)}));
 
 /** Public room presentation only. Ownership authorization belongs to the registry. */
 export type PropertyView = {assetId:string;ownerName:string};

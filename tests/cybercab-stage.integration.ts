@@ -82,14 +82,16 @@ try{
   assert.equal(simulation.stages.length,1);assert.equal(simulation.writes.length,3);
   assert.equal(simulation.writes[1].action.kind,'cab-income');assert.equal(simulation.writes[1].revision,0);
   assert.equal(simulation.writes[1].sequence,5);assert.equal(simulation.writes[2].action.kind,'progress');
-  assert.equal(simulation.persisted.cash,simulation.initial.cash+1+100);
-  assert.equal(simulation.persisted.eligibleIncome,simulation.initial.eligibleIncome+1+100);
+  assert.equal(simulation.persisted.cash,simulation.initial.cash+1+100+1_000);
+  assert.equal(simulation.persisted.eligibleIncome,simulation.initial.eligibleIncome+1+100+1_000);
+  assert.ok(simulation.persisted.unlocked.includes('region-oakland'));
   assert.equal(simulation.barrier,99,'discarded later drafts do not complete the barrier before the stage');
   assert.equal(simulation.failedDrained,true);assert.equal(simulation.failedQueue,0,'failed cab income leaves no abandoned in-memory queue');
   const delayed=await post<{initial:DriverProgress;persisted:DriverProgress;writes:EconomyIntent[];barrier:number}>('/__cab-stage/delayed-income',{});
   assert.equal(delayed.writes.length,3);assert.equal(delayed.writes[0].action.kind,'cab-income');
-  assert.equal(delayed.persisted.cash,delayed.initial.cash+6-7+100);
-  assert.equal(delayed.persisted.eligibleIncome,delayed.initial.eligibleIncome+6+100);
+  assert.equal(delayed.persisted.cash,delayed.initial.cash+6-7+100+1_000);
+  assert.equal(delayed.persisted.eligibleIncome,delayed.initial.eligibleIncome+6+100+1_000);
+  assert.ok(delayed.persisted.unlocked.includes('region-oakland'));
   assert.equal(delayed.persisted.cybercabs!.assets[0].gross,6);
   assert.equal(delayed.persisted.cybercabs!.assets[0].lastEndMs,480);
   assert.equal(delayed.barrier,42,'later progress and independent awards retain the authoritative cab credit');
@@ -109,11 +111,12 @@ try{
   await stop(child);child=undefined;child=start();await ready();
   await until(async()=>{const state=await inspect(a.driverId);return state.progress.cybercabs!.assets[0].gross===20_000;},'orphan stage recovery');
   const recovered=await inspect(a.driverId);
-  assert.equal(recovered.progress.cash,a.progress.cash+22_000);assert.equal(recovered.progress.eligibleIncome,a.progress.eligibleIncome+22_000);
+  assert.equal(recovered.progress.cash,a.progress.cash+30_000);assert.equal(recovered.progress.eligibleIncome,a.progress.eligibleIncome+30_000);
+  assert.deepEqual(recovered.progress.unlocked.filter(id=>id.startsWith('region-')),['region-oakland','region-peninsula','region-san-jose']);
   assert.deepEqual([recovered.progress.cybercabs!.assets[0].remainder,recovered.progress.cybercabs!.assets[0].lastEndMs,recovered.progress.cybercabs!.assets[0].revenueAwarded],[0,4_800_000,true]);
-  await until(async()=>(await post<{total:number}>('/__cab-stage/total',{})).total===27_000,'recovered income outbox delivery');
+  await until(async()=>(await post<{total:number}>('/__cab-stage/total',{})).total===35_000,'recovered income outbox delivery');
   assert.equal(await stage(first),'superseded','a sealed fence cannot re-stage a compacted batch');
-  await pause(1100);assert.equal((await post<{total:number}>('/__cab-stage/total',{})).total,27_000,'recovery credits global income only once');
+  await pause(1100);assert.equal((await post<{total:number}>('/__cab-stage/total',{})).total,35_000,'recovery credits global income only once');
 
   // Cross-room acquire must drain stages before sealing and handing off.
   const b=await seed(),second=batch(b.driverId,b.fence,b.room,2,0,100);
@@ -126,7 +129,7 @@ try{
   assert.equal((await inspect(b.driverId)).sequence,2);
   const nextFence=randomUUID(),newRoom=`next-${randomUUID().slice(0,8)}`;
   const moved=await rpc<{revision:number;sequence:number;progress:DriverProgress}>('acquire',{driverId:b.driverId,fence:nextFence,room:newRoom},15_000);
-  assert.equal(moved.progress.cash,b.progress.cash-10);assert.equal(moved.progress.cybercabs!.assets[0].lastEndMs,100);
+  assert.equal(moved.progress.cash,b.progress.cash-10+8_000);assert.equal(moved.progress.cybercabs!.assets[0].lastEndMs,100);
   assert.equal(moved.progress.cybercabs!.assets[0].remainder,3_000_000);
   assert.equal(moved.sequence,3);assert.equal(await stage(second),'superseded');
   const stale=cabIntent(second,moved.revision);
@@ -134,7 +137,7 @@ try{
   const resumed=batch(b.driverId,nextFence,newRoom,3,100,240);assert.equal(await stage(resumed),'accepted');
   const resumedIntent=cabIntent(resumed,moved.revision);
   const resumedOutcome=await rpc<DriverOutcome>('submit',{room:newRoom,driverId:b.driverId,intent:resumedIntent});success(resumedOutcome);
-  assert.equal(resumedOutcome.progress.cash,b.progress.cash-9);assert.equal(resumedOutcome.progress.cybercabs!.assets[0].remainder,0);
+  assert.equal(resumedOutcome.progress.cash,b.progress.cash-9+8_000);assert.equal(resumedOutcome.progress.cybercabs!.assets[0].remainder,0);
   assert.deepEqual(await rpc('ack',{room:newRoom,driverId:b.driverId,intent:resumedIntent}),{ok:true});
 
   // A committed profile result whose reply is lost is reconciled exactly once
@@ -145,7 +148,7 @@ try{
   assert.equal(await rpc<DriverOutcome|null>('submit',{room:c.room,driverId:c.driverId,intent:submitted}),null);
   await stop(child);child=undefined;child=start();await ready();
   await until(async()=>{const state=await inspect(c.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'lost profile reply recovery');
-  const after=await inspect(c.driverId);assert.equal(after.progress.cash,c.progress.cash+1);
+  const after=await inspect(c.driverId);assert.equal(after.progress.cash,c.progress.cash+1+8_000);
   await pause(1200);assert.equal((await inspect(c.driverId)).progress.cash,after.progress.cash);
   assert.equal((await inspect(c.driverId)).progress.cybercabs!.assets[0].lastEndMs,240);
 
@@ -166,7 +169,7 @@ try{
   assert.equal((await inspect(other.driverId)).progress.cash,other.progress.cash-18);
   await stop(child);child=undefined;child=start();await ready();
   await until(async()=>{const state=await inspect(d.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'blocked predecessor and later stage recovery');
-  assert.equal((await inspect(d.driverId)).progress.cash,d.progress.cash-123+1);
+  assert.equal((await inspect(d.driverId)).progress.cash,d.progress.cash-123+1+8_000);
 
   // Overflow closes the observed tail and stages it behind 32 speculative
   // events, even while the first profile write remains blocked.
@@ -196,7 +199,7 @@ try{
   const overloadFence=randomUUID(),overloadRoom=`overload-next-${randomUUID().slice(0,8)}`;
   const overloadRecovered=await rpc<{sequence:number;progress:DriverProgress}>('acquire',
     {driverId:overloaded.driverId,fence:overloadFence,room:overloadRoom},15_000);
-  assert.equal(overloadRecovered.sequence,4);assert.equal(overloadRecovered.progress.cash,overloaded.progress.cash);
+  assert.equal(overloadRecovered.sequence,4);assert.equal(overloadRecovered.progress.cash,overloaded.progress.cash+8_000);
   assert.equal(overloadRecovered.progress.cybercabs!.assets[0].gross,1);
   assert.equal(overloadRecovered.progress.cybercabs!.assets[0].lastEndMs,1240);
   assert.equal(overloadRecovered.progress.cybercabs!.assets[0].remainder,3_840_000);
@@ -216,7 +219,7 @@ try{
   await rpc('producer-gone',{room:invalidOverload.room,driverId:invalidOverload.driverId,fence:invalidOverload.fence});
   const invalidRecovered=await rpc<{sequence:number;progress:DriverProgress}>('acquire',
     {driverId:invalidOverload.driverId,fence:randomUUID(),room:`overload-invalid-${randomUUID().slice(0,8)}`},15_000);
-  assert.equal(invalidRecovered.sequence,3);assert.equal(invalidRecovered.progress.cash,invalidOverload.progress.cash+1);
+  assert.equal(invalidRecovered.sequence,3);assert.equal(invalidRecovered.progress.cash,invalidOverload.progress.cash+1+8_000);
   assert.equal(invalidRecovered.progress.earned,invalidOverload.progress.earned);
   assert.equal(invalidRecovered.progress.cybercabs!.assets[0].gross,1);
 
@@ -247,7 +250,7 @@ try{
   const settled=await inspect(orphan.driverId),stillHeld=await rpc<{held:boolean;started:number}>('fault-state',{driverId:slow.driverId});
   assert.ok((await alarmState()).calls>callsBeforeStage,'the watchdog ran another alarm after the stage arrived');
   assert.equal(stillHeld.held,true);assert.equal(stillHeld.started,started,'later alarms do not duplicate the held profile RPC');
-  assert.equal(settled.sequence,2);assert.equal(settled.progress.cash,orphan.progress.cash+1);
+  assert.equal(settled.sequence,2);assert.equal(settled.progress.cash,orphan.progress.cash+1+8_000);
   assert.equal(settled.progress.cybercabs!.assets[0].lastEndMs,240);
   await until(async()=>(await alarmState()).calls>=callsBeforeStage+2,'successive watchdog wakes while profile remains held');
   assert.equal((await inspect(orphan.driverId)).progress.cash,settled.progress.cash,'later alarms do not credit income twice');
@@ -269,7 +272,7 @@ try{
   assert.ok(!pendingKeys.includes(`cab-stage:${e.driverId}:${fifth.eventId}`));
   await stop(child);child=undefined;child=start();await ready();
   await until(async()=>{const state=await inspect(e.driverId);return state.progress.cybercabs!.assets[0].gross===1;},'converted stage before profile write');
-  assert.equal((await inspect(e.driverId)).progress.cash,e.progress.cash+1);
+  assert.equal((await inspect(e.driverId)).progress.cash,e.progress.cash+1+8_000);
 
   // A later staged interval cannot settle before an earlier staged interval.
   const f=await seed(),sixth=batch(f.driverId,f.fence,f.room,2,0,240);assert.equal(await stage(sixth),'accepted');

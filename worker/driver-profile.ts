@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { AchievementId } from '../shared/achievements';
-import { initialDelivery, levelForCash, rerouteInaccessibleOrder, type DeliveryState, type Level, type Order } from '../shared/delivery';
+import { applyAchievementAwards, applyDeliveryAwards, initialAchievements, type AchievementId } from '../shared/achievements';
+import { evaluateAchievementEvidence, isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
+import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
 import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
@@ -12,7 +13,7 @@ import type { RoomEconomy } from './room-economy';
 import { StarshipLedger } from './starship';
 import { normalizeName } from './global-chat-core';
 import type { StarshipContributorGroup } from '../shared/starship';
-import type { EarningsEvents, SettledDeliveryEarning } from '../shared/earnings-events';
+import { earningsMultiplier, type EarningsEvents, type SettledDeliveryEarning } from '../shared/earnings-events';
 import { MARKET_LOCK_KEY, MarketWallet, type MarketWalletIntent, type MarketWalletPrepared } from './market-wallet';
 
 export type SavedVehicle = { upgrades:VehicleUpgrades; tankLevel:TankLevel; style:VehicleStyle };
@@ -24,15 +25,19 @@ export type DriverProgress = {
   ota:{enabled:boolean; active:boolean; remaining:number};
   /** Cumulative verified game-created income; player transfers never increase this. */
   eligibleIncome:number;
+  /** Cumulative active order time, independent of the current order. */
+  deliveryClock?:number;
   /** Omitted only by profiles written before fleets existed. */
   cybercabs?:CybercabFleet;
 };
 export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:SettledDeliveryEarning[]} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order}
   | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
-  | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order} | {kind:'ticket';evidence:TicketEvidence;orderBefore:Order;completedBefore:number};
-export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;action:DriverAction;pickup?:{id:string;generation:number}};
+  | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order} | {kind:'ticket';evidence:TicketEvidence;orderBefore:Order;completedBefore:number}
+  | {kind:'delivery';stop:DeliveryStop;atMs:number;multiplier:1|1.5|2|3|null}
+  | {kind:'achievement';evidence:AchievementEvidence} | {kind:'supply';type:'repair'|'air'};
+export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;clock?:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
-  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number}
+  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number;delivery?:{matched:boolean;earnings:SettledDeliveryEarning[];lastReward:DeliveryState['lastReward'];lastPayout:number|null};achievement?:{lastReward:DeliveryState['lastReward']}}
   | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready';available?:number};
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean;marketPaint?:import('../shared/market-protocol').MarketPaint|null};
 type Receipt = {payload:string;outcome:DriverOutcome;cabEvents?:EarningsEvents};
@@ -154,7 +159,7 @@ export class DriverProfile extends DurableObject<Env> {
     return this.ctx.storage.transaction(async txn=>{
       const key=`receipt:${intent.eventId}`;
       const receipt=await txn.get<Receipt>(key);
-      if(receipt)return receipt.payload===payload && (intent.action.kind!=='cab-income'||JSON.stringify(receipt.cabEvents)===JSON.stringify(cabEvents))?receipt.outcome:{ok:false,reason:'conflict'};
+      if(receipt)return receipt.payload===payload && (intent.action.kind!=='cab-income'&&intent.action.kind!=='delivery'||JSON.stringify(receipt.cabEvents)===JSON.stringify(cabEvents))?receipt.outcome:{ok:false,reason:'conflict'};
       const record=await txn.get<DriverRecord>('driver');
       let result:DriverOutcome;
       if(!record || record.driverId!==intent.driverId || record.fence!==intent.fence || record.roomId!==intent.roomId || record.sealed)return {ok:false,reason:'superseded'};
@@ -167,11 +172,25 @@ export class DriverProfile extends DurableObject<Env> {
         const next=structuredClone(record.progress);
         let awards:AchievementId[]=[];
         let error:'invalid'|'owned'|'unaffordable'|undefined;
-        if(intent.action.kind==='progress'){
+        let deliveryResult:Extract<DriverOutcome,{ok:true}>['delivery'];
+        let achievementResult:Extract<DriverOutcome,{ok:true}>['achievement'];
+        let deliveryEarnings:SettledDeliveryEarning[]|undefined;
+        if(intent.clock!==undefined){
+          const before=next.deliveryClock??0;
+          if(!Number.isFinite(intent.clock)||intent.clock<before||!Number.isFinite(before)||before<0)error='invalid';
+          else {next.order.elapsed+=intent.clock-before;next.deliveryClock=intent.clock;}
+        }
+        if(error){} else if(intent.action.kind==='progress'){
           const progress=intent.action.progress,earnings=intent.action.earnings;
           if(!validProgress(progress,record.progress)||(earnings!==undefined&&!validDeliveryEarnings(earnings,record.progress,progress)))error='invalid';
           else if(earnings?.length&&[...(await txn.get(earnings.map(part=>`earned-source:${part.sourceId}`))).values()].some(value=>value!==undefined))error='invalid';
-          else {Object.assign(next,structuredClone(progress)); next.cybercabs=structuredClone(record.progress.cybercabs);}
+          else {
+            const order=next.order,clock=next.deliveryClock;
+            const same=next.completed===progress.completed&&order.restaurant===progress.order.restaurant&&order.customer===progress.order.customer&&order.stage===progress.order.stage&&
+              order.pickupEstimate===progress.order.pickupEstimate&&order.estimate===progress.order.estimate&&order.base===progress.order.base;
+            Object.assign(next,structuredClone(progress));next.cybercabs=structuredClone(record.progress.cybercabs);next.deliveryClock=clock;
+            if(intent.clock!==undefined&&same)next.order.elapsed=order.elapsed;
+          }
         } else if(intent.action.kind==='cab-buy' || intent.action.kind==='cab-income' || intent.action.kind==='cab-paint'){
           const result=intent.action.kind==='cab-buy'
             ?purchaseCybercab(next.cybercabs!,next.cash,next.eligibleIncome,intent.action.assetId)
@@ -181,6 +200,14 @@ export class DriverProfile extends DurableObject<Env> {
           if(!result.ok)error=result.reason;
           else {
             next.cybercabs=result.fleet;next.cash=result.cash;next.eligibleIncome=result.eligibleIncome;
+            if(intent.action.kind==='cab-income'){
+              const delivery=initialDelivery({x:0,z:0});
+              Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,level:levelForCash(next.cash)});
+              const state=initialAchievements();state.unlocked=[...next.unlocked];
+              awards=applyAchievementAwards(delivery,state,[]);
+              if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
+              else {next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;}
+            }
             if(intent.action.kind!=='cab-income' && intent.action.order)next.order=structuredClone(intent.action.order);
           }
         } else if(intent.action.kind==='ticket'){
@@ -191,7 +218,7 @@ export class DriverProfile extends DurableObject<Env> {
             const delivery=initialDelivery(evidence);
             Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:{...next.order}});
             const before=intent.action.orderBefore,order=delivery.order;
-            if(before&&next.completed===intent.action.completedBefore&&before.restaurant===order.restaurant&&before.customer===order.customer&&before.stage===order.stage&&
+            if(intent.clock===undefined&&before&&next.completed===intent.action.completedBefore&&before.restaurant===order.restaurant&&before.customer===order.customer&&before.stage===order.stage&&
               before.pickupEstimate===order.pickupEstimate&&before.estimate===order.estimate&&before.base===order.base&&Number.isFinite(before.elapsed)&&before.elapsed>=0)
               order.elapsed=Math.max(order.elapsed,before.elapsed);
             const previousLevel=delivery.level;
@@ -199,6 +226,70 @@ export class DriverProfile extends DurableObject<Env> {
             if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,evidence.canFly);
             if(!validAmount(delivery.cash)||!validAmount(delivery.tickets))error='invalid';
             else {next.cash=delivery.cash;next.tickets=delivery.tickets;next.order=delivery.order;}
+          }
+        } else if(intent.action.kind==='delivery'){
+          const {stop,atMs,multiplier}=intent.action;
+          if(!stop||![stop.x,stop.y,stop.z,stop.vy,stop.speed].every(Number.isFinite)||
+             typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||
+             !Number.isSafeInteger(atMs)||atMs<0||![null,1,1.5,2,3].includes(multiplier))error='invalid';
+          else {
+            let projected:DeliveryState|undefined,projectedAwards:AchievementId[]=[];
+            let projectedUnlocked:AchievementId[]|undefined,matched=false;
+            try{
+              const rate=multiplier??(cabEvents?earningsMultiplier(cabEvents,atMs).multiplier:null);
+              if(rate===null)return {ok:false,reason:'not-ready'};
+              const delivery=initialDelivery(stop);
+              Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,earned:next.earned,completed:next.completed,
+                level:levelForCash(next.cash),order:{...next.order},tickets:next.tickets});
+              const previous=delivery.order,wasDropoff=previous.stage==='dropoff',customer=CUSTOMERS[previous.customer]?.id,rooftop=wasDropoff&&orderTarget(previous).rooftop;
+              const rewardBefore=delivery.lastReward?.id??0;
+              const parts=applyDeliveryStop(delivery,stop,component=>{
+                const amount=(BigInt(component.amount)*BigInt(rate*2)+1n)/2n;
+                if(amount>BigInt(Number.MAX_SAFE_INTEGER))throw new RangeError('Delivery payout overflow');
+                return Number(amount);
+              });
+              if(parts===null)throw new Error('Missing delivery rate');
+              deliveryEarnings=parts?.map(({component,amount})=>({sourceId:component.sourceId,kind:component.kind,base:component.amount,amount,
+                atMs,multiplier:component.kind==='checkpoint'?1:rate}))??[];
+              if(parts){
+                const state=initialAchievements();state.unlocked=[...next.unlocked];
+                projectedAwards=applyDeliveryAwards(delivery,state,rooftop,wasDropoff?customer:undefined,(delivery.lastReward?.id??0)>rewardBefore);
+                projectedUnlocked=state.unlocked;
+              }
+              if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome)||!validAmount(delivery.earned)||!validAmount(delivery.completed))error='invalid';
+              else {projected=delivery;matched=!!parts;}
+            }catch{error='invalid';}
+            if(!error&&deliveryEarnings?.length&&[...(await txn.get(deliveryEarnings.map(part=>`earned-source:${part.sourceId}`))).values()].some(value=>value!==undefined))error='invalid';
+            if(!error&&projected&&deliveryEarnings){
+              awards=projectedAwards;if(projectedUnlocked)next.unlocked=projectedUnlocked;
+              Object.assign(next,{cash:projected.cash,eligibleIncome:projected.lifetimeIncome,earned:projected.earned,completed:projected.completed,order:projected.order});
+              deliveryResult={matched,earnings:deliveryEarnings,lastReward:projected.lastReward,lastPayout:projected.lastPayout};
+            }
+          }
+        } else if(intent.action.kind==='achievement'){
+          const evidence=intent.action.evidence;
+          if(!isAchievementEvidence(evidence))error='invalid';
+          else {
+            const delivery=initialDelivery({x:0,z:0});
+            Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,level:levelForCash(next.cash)});
+            const state=initialAchievements();state.unlocked=[...next.unlocked];
+            awards=applyAchievementAwards(delivery,state,evaluateAchievementEvidence(next.unlocked,evidence));
+            if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
+            else {
+              next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;
+              achievementResult={lastReward:delivery.lastReward};
+            }
+          }
+        } else if(intent.action.kind==='supply'){
+          if((intent.action.type!=='repair'&&intent.action.type!=='air')||!intent.pickup||typeof intent.pickup.id!=='string'||!intent.pickup.id||
+            !Number.isSafeInteger(intent.pickup.generation)||intent.pickup.generation<0||!validAmount(next.cash+5)||!validAmount(next.eligibleIncome+5))error='invalid';
+          else {
+            const delivery=initialDelivery({x:0,z:0});
+            Object.assign(delivery,{cash:next.cash+5,lifetimeIncome:next.eligibleIncome+5,level:levelForCash(next.cash+5)});
+            const state=initialAchievements();state.unlocked=[...next.unlocked];
+            awards=applyAchievementAwards(delivery,state,[]);
+            if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
+            else {next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;}
           }
         } else if(intent.action.kind==='contribute'){
           const amount=intent.action.amount;
@@ -228,12 +319,13 @@ export class DriverProfile extends DurableObject<Env> {
         else {
           next.level=levelForCash(next.cash);
           const revision=record.revision+1;
-          result={ok:true,revision,progress:next,awards};
+          result={ok:true,revision,progress:next,awards,...(deliveryResult?{delivery:deliveryResult}:{}),...(achievementResult?{achievement:achievementResult}:{})};
           await txn.put('driver',{...record,revision,sequence:intent.sequence,progress:next,incomeActivated:true} satisfies DriverRecord);
           if(intent.action.kind==='progress'&&intent.action.earnings?.length){
             const rows=Object.fromEntries(intent.action.earnings.map(part=>[`earned-source:${part.sourceId}`,part]));
             await txn.put(rows);
           }
+          if(deliveryEarnings?.length)await txn.put(Object.fromEntries(deliveryEarnings.map(part=>[`earned-source:${part.sourceId}`,part])));
           if(next.eligibleIncome>record.progress.eligibleIncome || (!record.incomeActivated && next.eligibleIncome>0)){
             await txn.put('income-pending',next.eligibleIncome);
             const alarm=await txn.getAlarm();
@@ -244,7 +336,7 @@ export class DriverProfile extends DurableObject<Env> {
         }
       }
       if(!result.ok)await txn.put('driver',{...record,sequence:intent.sequence} satisfies DriverRecord);
-      await txn.put(key,{payload,outcome:result,...(intent.action.kind==='cab-income'&&cabEvents?{cabEvents}:{} )} satisfies Receipt);
+      await txn.put(key,{payload,outcome:result,...((intent.action.kind==='cab-income'||intent.action.kind==='delivery')&&cabEvents?{cabEvents}:{} )} satisfies Receipt);
       return result;
     });
   }

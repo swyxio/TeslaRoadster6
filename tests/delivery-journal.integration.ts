@@ -1,0 +1,201 @@
+// Durable delivery stops, real local Durable Objects and fault injection.
+// pnpm exec tsx tests/delivery-journal.integration.ts
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { CUSTOMERS, initialDelivery, payoutFor, type DeliveryStop } from '../shared/delivery';
+import { terrainHeight } from '../shared/map';
+import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
+import type { AchievementStage, DeliveryStage, TicketStage } from '../worker/room-economy';
+
+const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
+  const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await pause(50);}throw new Error(`Timed out: ${label}`);
+}
+async function port(){
+  const server=createServer();await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const address=server.address();assert.ok(address&&typeof address!=='string');
+  await new Promise<void>(resolve=>server.close(()=>resolve()));return address.port;
+}
+async function stop(child:ChildProcess){
+  if(child.exitCode!==null||child.signalCode!==null)return;
+  try{process.kill(-child.pid!,'SIGKILL');}catch{}
+  await until(()=>child.exitCode!==null||child.signalCode!==null,'Wrangler shutdown');
+}
+const dir=await mkdtemp(join(tmpdir(),'tesland-delivery-journal-')),p=await port(),base=`http://127.0.0.1:${p}`,config=join(dir,'wrangler.json');
+await writeFile(config,JSON.stringify({name:'tesland-delivery-journal-test',main:resolve('tests/fixtures/delivery-journal-worker.ts'),compatibility_date:'2026-10-17',
+  durable_objects:{bindings:[{name:'ROOMS',class_name:'GameRoom'},{name:'ECONOMIES',class_name:'RoomEconomy'},
+    {name:'DRIVERS',class_name:'DriverProfile'},{name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'}]},
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','RoomEconomy','DriverProfile','GlobalIncome','GlobalEarningsEvent']}]}));
+let child:ChildProcess|undefined,logs='';
+function start(){
+  const c=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(p),'--persist-to',join(dir,'storage'),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
+  const append=(data:Buffer)=>{logs=(logs+data.toString()).slice(-25_000);};c.stdout?.on('data',append);c.stderr?.on('data',append);return c;
+}
+async function ready(){await until(async()=>{if(child?.exitCode!==null)throw new Error(`Wrangler exited: ${logs}`);try{return (await fetch(base+'/health',{signal:AbortSignal.timeout(500)})).ok;}catch{return false;}},'Wrangler startup',60_000);}
+async function rpc<T>(op:string,fields:Record<string,unknown>={},timeout=5000):Promise<T>{
+  const response=await fetch(base,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op,...fields}),signal:AbortSignal.timeout(timeout)});
+  const body=await response.text();if(!response.ok)throw new Error(`${op}: ${response.status} ${body}\n${logs}`);return JSON.parse(body) as T;
+}
+type Profile={revision:number;sequence:number;progress:DriverProgress};
+function success(result:DriverOutcome|null):asserts result is Extract<DriverOutcome,{ok:true}>{assert.ok(result?.ok,JSON.stringify(result));}
+function pose(customer:number):DeliveryStop {
+  const {x,z}=CUSTOMERS[customer],y=terrainHeight(x,z);assert.notEqual(y,null);
+  return {x,y:y!,z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false};
+}
+function entry(){return {room:`delivery-${randomUUID().slice(0,8)}`,driverId:randomUUID(),fence:randomUUID()};}
+function order(){return {...initialDelivery({x:0,z:0}).order,stage:'dropoff' as const,customer:4,elapsed:40,base:1000,estimate:60};}
+function stage(e:ReturnType<typeof entry>,walletOrder:number,clock:number,stop:DeliveryStop,multiplier:1|1.5|2|3|null=1,atMs=Date.now()-2_000):DeliveryStage {
+  return {eventId:randomUUID(),driverId:e.driverId,fence:e.fence,roomId:e.room,walletOrder,clock,action:{kind:'delivery',stop,atMs,multiplier}};
+}
+function intent(s:DeliveryStage,revision:number,sequence:number):EconomyIntent {
+  return {eventId:s.eventId,driverId:s.driverId,fence:s.fence,roomId:s.roomId,revision,sequence,clock:s.clock,action:s.action};
+}
+async function acquire(e:ReturnType<typeof entry>){
+  await rpc('producer',{...e,active:true});
+  return rpc<{revision:number;sequence:number;progress:DriverProgress}>('acquire',{...e,progress:{cash:10_120,level:1,order:order(),deliveryClock:0,unlocked:['region-oakland']}});
+}
+
+try{
+  child=start();await ready();
+  // A rejected spend displayed a different target. A physical visit there is
+  // a no-op, while the restored target pays once with all 45 active seconds.
+  const e=entry(),initial=await acquire(e);
+  const bad={...structuredClone(initial.progress),earned:-1};
+  const rejected:EconomyIntent={eventId:randomUUID(),driverId:e.driverId,fence:e.fence,roomId:e.room,revision:0,sequence:1,clock:0,action:{kind:'progress',progress:bad}};
+  const denied=await rpc<DriverOutcome>('commit',{...e,intent:rejected});assert.deepEqual(denied,{ok:false,reason:'invalid'});
+  const wrong=stage(e,2,3,pose(0)),right=stage(e,3,5,pose(4));
+  assert.equal(await rpc('stage',{...e,stage:wrong}),'accepted');assert.equal(await rpc('stage',{...e,stage:right}),'accepted');
+  const later=intent(right,1,3),earlier=intent(wrong,0,2);
+  assert.equal(await rpc('submit',{...e,intent:later}),null,'later delivery cannot overtake a staged stop');
+  const noMatch=await rpc<DriverOutcome>('submit',{...e,intent:earlier});success(noMatch);
+  assert.equal(noMatch.delivery?.matched,false);assert.equal(noMatch.progress.order.elapsed,43);
+  assert.deepEqual(await rpc('sources',e),[],'nonmatching observations consume no source IDs');
+  assert.equal(await rpc('ack',{...e,intent:earlier}),true);
+  const paid=await rpc<DriverOutcome>('submit',{...e,intent:later});success(paid);
+  const baseFare=payoutFor({...order(),elapsed:45});
+  assert.equal(paid.delivery?.matched,true);assert.equal(paid.delivery?.earnings[0].amount,baseFare);
+  assert.equal(paid.progress.completed,1);assert.ok(paid.awards.includes('deliveries-1'));
+  assert.equal(paid.progress.cash,10_120+baseFare+2_500);
+  assert.deepEqual(await rpc('sources',e),['earned-source:delivery:1:dropoff']);
+  assert.deepEqual(await rpc('submit',{...e,intent:later}),paid,'a lost response cannot pay twice');
+
+  // Every ordinary submission waits behind an accepted physical stage. Freeze
+  // resolves the observation and a later ticket in order with the same clock.
+  const ordered=entry(),saved=await acquire(ordered),candidate=stage(ordered,1,5,pose(0));
+  assert.equal(await rpc('stage',{...ordered,stage:candidate}),'accepted');
+  const ticket:TicketStage={eventId:randomUUID(),driverId:ordered.driverId,fence:ordered.fence,roomId:ordered.room,walletOrder:2,clock:7,
+    action:{kind:'ticket',evidence:{seconds:8,peakHeight:20,at:1,x:0,z:0,canFly:false},orderBefore:saved.progress.order,completedBefore:0}};
+  assert.equal(await rpc('stage-ticket',{...ordered,stage:ticket}),'accepted');
+  const ticketIntent:EconomyIntent={...ticket,sequence:2,revision:1,action:ticket.action};
+  assert.equal(await rpc('submit',{...ordered,intent:ticketIntent}),null);
+  const ordinary:EconomyIntent={eventId:randomUUID(),driverId:ordered.driverId,fence:ordered.fence,roomId:ordered.room,revision:2,sequence:3,clock:8,action:{kind:'progress',progress:saved.progress}};
+  assert.equal(await rpc('submit',{...ordered,intent:ordinary}),null,'ordinary progress cannot overtake stages');
+  await rpc('freeze',ordered,15_000);
+  const orderedResult=await rpc<Profile>('profile',ordered);
+  assert.equal(orderedResult.progress.order.elapsed,47);assert.equal(orderedResult.progress.deliveryClock,7);assert.equal(orderedResult.progress.tickets,1);
+
+  // A buggy concurrent producer cannot insert an earlier physical stage after
+  // a later write already entered the journal. The late stage fails closed.
+  const concurrent=entry(),concurrentProfile=await acquire(concurrent);
+  const ahead:EconomyIntent={eventId:randomUUID(),driverId:concurrent.driverId,fence:concurrent.fence,roomId:concurrent.room,
+    revision:99,sequence:3,clock:8,action:{kind:'progress',progress:concurrentProfile.progress}};
+  assert.equal(await rpc('submit',{...concurrent,intent:ahead}),null);
+  const tooLate=stage(concurrent,2,5,pose(4));
+  assert.equal(await rpc('stage',{...concurrent,stage:tooLate}),'conflict');
+  await rpc('freeze',concurrent,15_000);
+  assert.equal((await rpc<Profile>('profile',concurrent)).progress.completed,0);
+
+  // Unknown event-time rate remains pending behind a room win reservation.
+  const rate=entry();await acquire(rate);const at=Date.now()-2_000;
+  await rpc('room-pending',{...rate,eventId:'delayed-win',at:at-1_000});
+  const timed=stage(rate,1,5,pose(4),null,at),timedIntent=intent(timed,0,1);
+  assert.equal(await rpc('stage',{...rate,stage:timed}),'accepted');
+  assert.equal(await rpc('submit',{...rate,intent:timedIntent}),null);
+  assert.equal((await rpc<Profile>('profile',rate)).progress.completed,0);
+  await rpc('room-resolve',{...rate,eventId:'delayed-win'});
+  const boosted=await rpc<DriverOutcome>('submit',{...rate,intent:timedIntent});success(boosted);
+  assert.equal(boosted.delivery?.earnings[0].multiplier,1.5);
+  assert.equal(boosted.delivery?.earnings[0].amount,Math.round(baseFare*1.5));
+
+  // Multiple overlapping wins require every room-history page. A failed
+  // second page cannot be cached as complete or produce any payout.
+  const pages=entry();await acquire(pages);const firstWin=Date.now()-100_000;
+  for(let i=0;i<101;i++)await rpc('room-win',{...pages,eventId:`win-${i}`,at:firstWin+i*10});
+  await rpc('history-fault',{...pages,enabled:true});
+  const pageStage=stage(pages,1,5,pose(4),null,firstWin+2_000),pageIntent=intent(pageStage,0,1);
+  assert.equal(await rpc('stage',{...pages,stage:pageStage}),'accepted');
+  assert.equal(await rpc('submit',{...pages,intent:pageIntent}),null);
+  assert.ok(await rpc<number>('history-failures',pages)>0);
+  assert.equal((await rpc<Profile>('profile',pages)).progress.completed,0);
+  assert.equal((await rpc<{cabEvents?:unknown}>('record',{...pages,eventId:pageStage.eventId})).cabEvents,undefined);
+  await rpc('history-fault',{...pages,enabled:false});
+  const complete=await rpc<DriverOutcome>('submit',{...pages,intent:pageIntent});success(complete);
+  assert.equal(complete.delivery?.earnings[0].multiplier,1.5);
+  assert.equal((await rpc<{cabEvents:{room:unknown[]}}>('record',{...pages,eventId:pageStage.eventId})).cabEvents.room.length,101);
+
+  // Kill the process after profile commit but before the room receives its
+  // reply; cached history and receipt must replay without a duplicate payout.
+  const lost=entry();await acquire(lost);const lostAt=Date.now()-2_000;
+  await rpc('room-win',{...lost,eventId:'published-win',at:lostAt-1_000});
+  const observation=stage(lost,1,5,pose(4),null,lostAt),lostIntent=intent(observation,0,1);
+  assert.equal(await rpc('stage',{...lost,stage:observation}),'accepted');await rpc('hold-profile',lost);
+  const flight=rpc('submit',{...lost,intent:lostIntent},30_000);void flight.catch(()=>{});
+  await until(()=>rpc<boolean>('profile-held',lost),'profile committed before lost reply');
+  const before=await rpc<Profile>('profile',lost),journal=await rpc<{cabEvents?:unknown}>('record',{...lost,eventId:observation.eventId});
+  assert.ok(journal.cabEvents,'complete event history is saved before commit');
+  assert.equal(before.progress.completed,1);assert.equal((await rpc<string[]>('sources',lost)).length,1);
+  await stop(child);child=undefined;child=start();await ready();
+  await rpc('freeze',lost,15_000);
+  const after=await rpc<Profile>('profile',lost);
+  assert.equal(after.progress.cash,before.progress.cash);assert.equal(after.progress.eligibleIncome,before.progress.eligibleIncome);
+  assert.deepEqual(await rpc('sources',lost),['earned-source:delivery:1:dropoff']);
+  const newFence=randomUUID();await rpc('acquire',{...lost,fence:newFence});
+  assert.equal((await rpc<Profile>('profile',lost)).progress.cash,before.progress.cash);
+
+  // Acceptance survives a lost stage reply; a late stale producer cannot
+  // insert after freeze sealed the old profile fence.
+  const held=entry();await acquire(held);const staged=stage(held,1,5,pose(4));
+  await rpc('hold-stage',held);const stagedFlight=rpc('stage',{...held,stage:staged},30_000);void stagedFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('stage-held',held),'stage accepted before lost reply');
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',held,15_000);
+  assert.equal((await rpc<Profile>('profile',held)).progress.completed,1);
+  const stale=entry();await acquire(stale);const staleStage=stage(stale,1,5,pose(4));
+  await rpc('hold-fence',stale);const late=rpc<string>('stage',{...stale,stage:staleStage},20_000);
+  await until(()=>rpc<boolean>('fence-held',stale),'stale fence check held');
+  await rpc('freeze',stale,15_000);await rpc('release-fence',stale);
+  assert.equal(await late,'superseded');
+  assert.ok(!(await rpc<string[]>('keys',stale)).some(key=>key.startsWith(`delivery-stage:${stale.driverId}:`)));
+
+  // A physical achievement after a rejected predecessor survives a crash at
+  // accepted-stage reply. Replaying on a new fence cannot credit it twice.
+  const achievement=entry();await rpc('producer',{...achievement,active:true});
+  const achievementInitial=await rpc<{progress:DriverProgress}>('acquire',{...achievement,progress:{cash:49_500,level:1,order:order(),deliveryClock:0,unlocked:['region-oakland']}});
+  const invalid:EconomyIntent={eventId:randomUUID(),driverId:achievement.driverId,fence:achievement.fence,roomId:achievement.room,
+    revision:0,sequence:1,clock:0,action:{kind:'progress',progress:{...achievementInitial.progress,earned:-1}}};
+  assert.deepEqual(await rpc('commit',{...achievement,intent:invalid}),{ok:false,reason:'invalid'});
+  const evidence:AchievementStage={eventId:randomUUID(),driverId:achievement.driverId,fence:achievement.fence,roomId:achievement.room,
+    walletOrder:2,clock:5,action:{kind:'achievement',evidence:{kind:'roof',roof:'ordinary'}}};
+  await rpc('hold-stage',achievement);const evidenceFlight=rpc('stage-achievement',{...achievement,stage:evidence},30_000);void evidenceFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('stage-held',achievement),'achievement stage accepted before lost reply');
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',achievement,15_000);
+  const awarded=await rpc<Profile>('profile',achievement);
+  assert.equal(awarded.progress.cash,52_500);assert.equal(awarded.progress.eligibleIncome,3_000);
+  assert.equal(awarded.progress.order.elapsed,45);assert.ok(awarded.progress.unlocked.includes('roof-rider'));
+  assert.ok(awarded.progress.unlocked.includes('region-peninsula'),'achievement unlocks the balance cascade');
+  const nextFence=randomUUID(),reattached=await rpc<Profile>('acquire',{...achievement,fence:nextFence});
+  const repeated:AchievementStage={...evidence,eventId:randomUUID(),fence:nextFence,walletOrder:reattached.sequence+1,clock:6};
+  assert.equal(await rpc('stage-achievement',{...achievement,stage:repeated}),'accepted');
+  const repeatedIntent:EconomyIntent={eventId:repeated.eventId,driverId:repeated.driverId,fence:repeated.fence,roomId:repeated.roomId,
+    revision:reattached.revision,sequence:reattached.sequence+1,clock:repeated.clock,action:repeated.action};
+  const repeatedResult=await rpc<DriverOutcome>('submit',{...achievement,intent:repeatedIntent});success(repeatedResult);
+  assert.deepEqual(repeatedResult.awards,[]);assert.equal(repeatedResult.progress.cash,52_500);
+  console.log('delivery and achievement journal rejection, ordering, rate, crash and fencing integration passed');
+}finally{
+  if(child)await stop(child);
+  await rm(dir,{recursive:true,force:true});
+}
