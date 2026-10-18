@@ -1,4 +1,4 @@
-import { CURRENT_RELEASE } from '../content/releases';
+import { CURRENT_RELEASE } from '../content/version';
 
 export const LAST_PLAYED_KEY = 'polyav:last-played';
 export type LastPlayed = { version: string; playedAt: string };

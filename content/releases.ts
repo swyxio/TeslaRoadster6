@@ -1,8 +1,10 @@
+import { CURRENT_RELEASE } from './version';
+export { CURRENT_RELEASE } from './version';
+
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.13-alpha',
-    label: '0.0.13 Alpha',
+    ...CURRENT_RELEASE,
     date: '2026-10-18',
     title: 'The Peninsula local',
     intro: 'Explore Caltrain-inspired stops, local roads and Silicon Valley landmarks.',
@@ -12,6 +14,20 @@ export const RELEASES = [
         'Find short northbound and southbound sky lanes above the stations. They refill air and are optional to enter.',
         'Explore stylized Stripe, Meta, Google, NVIDIA and Apple campuses, plus NASA Ames, Chabot, Oakland Zoo and Levi’s Stadium.',
         'Visit Redwood City’s clock-tower station, redwoods and downtown landmarks.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.13-alpha',
+    label: '0.0.13 Alpha',
+    date: '2026-10-18',
+    title: 'A smoother shared Bay',
+    intro: 'Less work per simulation tick and more consistent input in shared rooms.',
+    sections: [
+      { title: 'Drive together', items: [
+        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
+        'The changelog stays on its own page instead of downloading with the game.'
       ] }
     ]
   },
@@ -204,5 +220,3 @@ export const RELEASES = [
     ]
   }
 ] as const;
-
-export const CURRENT_RELEASE = RELEASES[0];

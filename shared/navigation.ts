@@ -15,35 +15,42 @@ const projection=(p:Point,s:Segment)=>{
   return {t,point:point(s,t)};
 };
 
-// Break the existing one-way traffic lanes at their shared intersections. The
-// resulting graph has no invented streets or player-supplied road geometry.
-const segments:Segment[]=ROUTES.flatMap(route=>route.map((a,i)=>({a,b:route[(i+1)%route.length],cuts:[0,1]})));
-for(let i=0;i<segments.length;i++)for(let j=i+1;j<segments.length;j++){
-  const a=segments[i],b=segments[j],ax=a.b.x-a.a.x,az=a.b.z-a.a.z,bx=b.b.x-b.a.x,bz=b.b.z-b.a.z;
-  const denominator=cross(ax,az,bx,bz),dx=b.a.x-a.a.x,dz=b.a.z-a.a.z;
-  if(Math.abs(denominator)>1e-6){
-    const t=cross(dx,dz,bx,bz)/denominator,u=cross(dx,dz,ax,az)/denominator;
-    if(t>=0&&t<=1&&u>=0&&u<=1){a.cuts.push(t);b.cuts.push(u);}
-  }else{
-    // Connect coincident parts of overlapping city loops at their endpoints.
-    for(const t of [0,1]){const p=point(a,t),q=projection(p,b);if(distance(p,q.point)<.01){a.cuts.push(t);b.cuts.push(q.t);}}
-    for(const t of [0,1]){const p=point(b,t),q=projection(p,a);if(distance(p,q.point)<.01){b.cuts.push(t);a.cuts.push(q.t);}}
+type RoadGraph={segments:Segment[];nodes:Point[];edges:Edge[][];nodeIds:Map<string,number>;segmentNodes:{t:number;id:number}[][]};
+let roadGraph:RoadGraph|undefined;
+function navigationGraph():RoadGraph {
+  if(roadGraph)return roadGraph;
+  // Build only when a route is requested. The browser predicts driving but
+  // does not plan destinations, so it need not build this server-side graph.
+  // Break the one-way traffic lanes at their shared intersections.
+  const segments:Segment[]=ROUTES.flatMap(route=>route.map((a,i)=>({a,b:route[(i+1)%route.length],cuts:[0,1]})));
+  for(let i=0;i<segments.length;i++)for(let j=i+1;j<segments.length;j++){
+    const a=segments[i],b=segments[j],ax=a.b.x-a.a.x,az=a.b.z-a.a.z,bx=b.b.x-b.a.x,bz=b.b.z-b.a.z;
+    const denominator=cross(ax,az,bx,bz),dx=b.a.x-a.a.x,dz=b.a.z-a.a.z;
+    if(Math.abs(denominator)>1e-6){
+      const t=cross(dx,dz,bx,bz)/denominator,u=cross(dx,dz,ax,az)/denominator;
+      if(t>=0&&t<=1&&u>=0&&u<=1){a.cuts.push(t);b.cuts.push(u);}
+    }else{
+      // Connect coincident parts of overlapping city loops at their endpoints.
+      for(const t of [0,1]){const p=point(a,t),q=projection(p,b);if(distance(p,q.point)<.01){a.cuts.push(t);b.cuts.push(q.t);}}
+      for(const t of [0,1]){const p=point(b,t),q=projection(p,a);if(distance(p,q.point)<.01){b.cuts.push(t);a.cuts.push(q.t);}}
+    }
   }
-}
-const nodes:Point[]=[],edges:Edge[][]=[],nodeIds=new Map<string,number>();
-function node(p:Point):number{
-  const key=`${Math.round(p.x*100)},${Math.round(p.z*100)}`;
-  let id=nodeIds.get(key);if(id===undefined){id=nodes.length;nodeIds.set(key,id);nodes.push(p);edges.push([]);}return id;
-}
-const segmentNodes=segments.map(s=>{
-  const cuts=[...new Set(s.cuts.map(t=>Math.round(t*1e7)/1e7))].sort((a,b)=>a-b);
-  return cuts.map(t=>({t,id:node(point(s,t))}));
-});
-for(let i=0;i<segments.length;i++){
-  const cuts=segmentNodes[i];
-  for(let j=0;j<cuts.length-1;j++){
-    const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to])});
+  const nodes:Point[]=[],edges:Edge[][]=[],nodeIds=new Map<string,number>();
+  function node(p:Point):number{
+    const key=`${Math.round(p.x*100)},${Math.round(p.z*100)}`;
+    let id=nodeIds.get(key);if(id===undefined){id=nodes.length;nodeIds.set(key,id);nodes.push(p);edges.push([]);}return id;
   }
+  const segmentNodes=segments.map(s=>{
+    const cuts=[...new Set(s.cuts.map(t=>Math.round(t*1e7)/1e7))].sort((a,b)=>a-b);
+    return cuts.map(t=>({t,id:node(point(s,t))}));
+  });
+  for(let i=0;i<segments.length;i++){
+    const cuts=segmentNodes[i];
+    for(let j=0;j<cuts.length-1;j++){
+      const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to])});
+    }
+  }
+  return roadGraph={segments,nodes,edges,nodeIds,segmentNodes};
 }
 function allowed(a:Point,b:Point,level:Level):boolean{
   const count=Math.max(1,Math.ceil(distance(a,b)/30));
@@ -54,6 +61,7 @@ function allowed(a:Point,b:Point,level:Level):boolean{
 /** Find a directed route to the nearest connected lane, respecting progress. */
 export function planNavigation(car:Entity,destination:Point,level:Level):Navigation|null {
   if(car.kind==='person'||car.supportId!=='ground'||car.inDome||!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return null;
+  const {segments,nodes,edges,nodeIds,segmentNodes}=navigationGraph();
   const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);
   const starts=candidates(car,30),ends=candidates(destination,100);
   if(!starts.length||!ends.length)return null;

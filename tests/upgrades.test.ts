@@ -9,7 +9,6 @@ import {parseMessage} from '../worker/protocol';
 import {cliffPose} from '../shared/island-stunts';
 import type {TankLevel} from '../shared/air-tank';
 import {PARKING_LOTS} from '../shared/parking-lots';
-import {Session} from '../src/session';
 
 function setup(kind:typeof VEHICLE_IDS[number]='model-3'){
   const world=createWorld(),player=addPlayer(world,'p','P'),car=makeEntity('car',kind,SHOPS[0].x,SHOPS[0].z,'p');
@@ -49,18 +48,6 @@ test('rocket pickups sit on clear ground without overlapping other pickups',()=>
     assert.ok(!nearbyBuildings(car.x,car.z,12).some(b=>contact(body(car),{...b,yaw:0})),pickup.id);
     assert.ok(world.pickups.every(other=>other===pickup||Math.hypot(pickup.x-other.x,pickup.z-other.z)>8),pickup.id);
   }
-});
-test('solo shop reports authoritative purchase and rejection results',()=>{
-  const session=new Session();session.solo('model-3');
-  const player=session.world.players.find(p=>p.id===session.id)!,car=session.world.entities.find(e=>e.id===player.entityId)!;
-  Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0,pushX:0,pushZ:0,vy:0});
-  player.delivery.cash=UPGRADES.rocket.price;
-  const first=session.buyUpgrade('rocket');assert.deepEqual(session.upgradeResult,{requestId:first,upgrade:'rocket',ok:true});
-  assert.equal(player.delivery.cash,0);assert.ok(car.upgrades.rocket);
-  const second=session.buyUpgrade('rocket');assert.ok(second>first);assert.deepEqual(session.upgradeResult,{requestId:second,upgrade:'rocket',ok:false});
-  player.delivery.cash=30;car.air=12;
-  const third=session.buyUpgrade('tank');assert.deepEqual(session.upgradeResult,{requestId:third,upgrade:'tank',ok:true});
-  assert.equal(car.tankLevel,2);assert.equal(car.air,100);assert.equal(player.delivery.cash,0);
 });
 test('shop purchases deduct funds once and refill a tank in the shared simulation',()=>{
   const {world,player,car}=setup();player.delivery.cash=UPGRADES.rocket.price;
