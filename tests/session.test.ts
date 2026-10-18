@@ -10,7 +10,7 @@ class Socket {
   readyState = Socket.OPEN;
   sent: string[] = [];
   onmessage?: (event: {data:string}) => void;
-  onclose?: (event: {code:number}) => void;
+  onclose?: (event: {code:number;reason:string}) => void;
   onerror?: () => void;
   constructor(public url:string) { Socket.last = this; }
   send(value:string) { this.sent.push(value); }
@@ -21,7 +21,7 @@ class Socket {
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
   }
-  closed(code=1000) { this.readyState = 3; this.onclose?.({code}); }
+  closed(code=1000,reason='') { this.readyState = 3; this.onclose?.({code,reason}); }
 }
 Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
 
@@ -45,6 +45,14 @@ test('a guest sends its decision before the starting vehicle request',()=>{
     {type:'identity',code:null,requestId:1},{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}},{type:'sync',token:1},
   ]);
   session.disconnect();
+});
+
+test('a failed award save is explained on disconnect',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  socket.closed(1011,'Award could not be saved. Rejoin.');
+  assert.equal(session.error,'Award could not be saved. Rejoin.');
+  assert.equal(session.status,'disconnected');
 });
 
 test('input cadence keeps fractional frame time without catching up in a burst',()=>{

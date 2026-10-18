@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Self-driving and driver awards · combined protocol v37 · 2026-10-18 Pacific
+
+- After integrating the released driver wallet and room-fund changes, `pnpm test` passed 699 tests and `pnpm build` passed; Vite still reported the existing large-chunk warning. A two-client local Wrangler room test passed, including the current-delivery action, replicated route, full Dome match and activity checks. The local client prediction integration also passed. These are functional checks, not capacity measurements.
+- Simulated delivery routes reached four central/western SF restaurants and Sunset Steps on the mapped pavement, completed pickup or dropoff, and avoided building damage in those scenarios. The route action uses the room's current order; rooftop or unsafe/unreachable routes are rejected. Separate tests cover steering changes, stopped traffic, following and resumption, all Tesla variants, and ordinary map pins.
+- A local isolated Wrangler fixture completed Park It and a contested race, held profile writes across a second driver's activity or the winner's disconnect, and recovered the committed awards with the same saved driver. Held Dome binding, acquisition and confirmation tests kept the result on the original driver. Rejected award writes retried once against committed state without duplicating rewards or replaying speculative income; repeated rejection closed the session without confirming the award. The restart check occurred after a successful commit: an abrupt room crash before an award is durably submitted can still lose that unconfirmed result. A different-driver recovery may reject after acquiring its profile and disconnecting an existing session; its wallet remains recoverable.
+- On the combined build, desktop Chrome double-tapped Shift, observed autonomous driving and opened the saved-driver Awards panel. Emulated touch/portrait/landscape checks on the earlier local v36 candidate are recorded below. They do not establish physical-device behavior or a controlled before/after frame-time measurement.
+
 ## Self-driving and driver awards · local protocol v36 integration · 2026-10-18 Pacific
 
 - On the local wallet-and-driving integration, `pnpm test` passed 683 tests and `pnpm build` passed both TypeScript checks; Vite retained its large-chunk warning. The two-client local Wrangler room integration passed, including the full five-goal Dome match, destination routing and activity checks. These are functional checks, not capacity measurements.
