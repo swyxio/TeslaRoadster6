@@ -4,7 +4,7 @@ A small optional arcade loop: pick up from a real restaurant identity, drive or 
 
 ## How to play
 
-The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; any rocket-equipped vehicle can fly shortcuts. After Oakland opens, some orders for rocket-equipped vehicles go to a flat rooftop: fly to the marked height, land, and stop near the center. Exploration orders to newly opened areas take priority over rooftop jobs. The marker sits on the physical roof. Use a rocket pickup, visit a shop, or select the Roadster in Fleet if you changed to a non-flying car before finishing a rooftop order.
+The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; any rocket-equipped vehicle can fly shortcuts. After Oakland opens, some orders go to a flat rooftop when the vehicle has rockets and a Level 3 or higher air tank: fly to the marked height, land, and stop near the center. Exploration orders to newly opened areas take priority over rooftop jobs. The marker sits on the physical roof. If you enter a less capable vehicle, the active rooftop order is rerouted to a ground customer; an already collected order stays collected.
 
 A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to half the quoted base fare, rounded up. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
 
@@ -12,21 +12,26 @@ Every third completed delivery also pays a repeatable $350 checkpoint. The missi
 
 ## Unlocking the Bay
 
-Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it.
+Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it. If no safe replacement is found, the order pauses and retries automatically when the driver returns to open ground.
 
 | Level | Cash | Areas opened |
 | --- | ---: | --- |
-| 0 | $0 | San Francisco |
-| 1 | $10,000 | Oakland and Berkeley |
-| 2 | $50,000 | Peninsula and East Bay, including SFO, Stanford and Fremont |
-| 3 | $250,000 | San Jose |
-| 4–8 | $500,000 / $1m / $2m / $4m / $8m | Higher fare tiers |
+| 0 | $0 | San Francisco and Marin |
+| 1 | $10,000 | Oakland, Berkeley and Emeryville |
+| 2 | $50,000 | South San Francisco and SFO |
+| 3 | $250,000 | San Mateo and Redwood City |
+| 4 | $500,000 | Menlo Park and Palo Alto |
+| 5 | $1m | Mountain View, Santa Clara, Hayward and Fremont |
+| 6 | $2m | San Jose and Cupertino |
+| 7–8 | $4m / $8m | Higher fare tiers |
 
 The next threshold appears on the mission card. Boundaries apply to flying and driving; Marin, Rocket Dome, North Bay Playground and the SF parking playground remain accessible from the start. The driver's saved wallet retains cash, completed deliveries, current order, achievements and owned luxury vehicles across rooms and reconnects. The active-time leaderboard remains room-local.
 
 Each new job starts with a level-based base fare of $1,200, $1,600, $2,500, $4,000, $5,500, $7,000, $9,000, $12,000 or $16,000 for levels 0–8. The route's distance scales that base between 0.5× and 2× before pickup and delivery timing adjustments. One-off delivery, region and research awards can add cash as the driver progresses.
 
-Orders only select locations already available to that driver. As the world opens, some runs go to the newly unlocked landmark destinations while other jobs stay local or use rooftops. These destinations are fictional deliveries to artistic, compressed versions of real places.
+The delivery catalog includes at least ten restaurant identities and ten fictional customer destinations in each of 17 towns, plus airport and preserved landmark stops. Rooftop destinations require rockets and a Level 3 air tank; the map and addresses are compressed fictional placements. Sources for the restaurant identities are in [delivery locations](DELIVERY_LOCATIONS.md).
+
+Orders only select locations already available to that driver. They favor nearby pickups and short local jobs, avoid repeating the previous venues when possible, and alternate exploration toward newly opened areas with local or rooftop runs. An existing order stays in place when a new area opens. Route selection runs in short batches, and the order clock pauses while a replacement is being found. Ground routes are checked against the shared road planner; a driver on a roof or off the road may need to approach the road manually before starting self-driving. A relocked driver at North Bay Playground can take the ferry to a mainland assignment. These destinations are fictional deliveries to artistic, compressed versions of real places.
 
 For a rough sense of scale, the complete loop is about 19.9 game km: at a steady 60 km/h it would take about 20 minutes, or about 10 minutes at 120 km/h, before traffic, turns and stops. The 48-minute day cycles at 30 game-clock minutes per real minute; driving physics and order timers remain in simulation seconds. These are design estimates, not measured travel times or real Bay geography.
 
@@ -55,7 +60,7 @@ Restaurant names and street addresses are real business identities verified agai
 | Homeroom To Go, 4007 Webster St, Oakland | [Homeroom](https://www.homeroom510.com/locations) |
 | Comal Next Door, 550 Grand Ave, Oakland | [Comal](https://www.comalnextdoor.com/location/comal-next-door-oakland/) |
 
-`shared/delivery.ts` is the content source. Ground locations must be on supported ground and clear of shared building collision; rooftop targets use the height and center of a shared flat-roof building and are offered only after a flight-capable vehicle completes an order. `tests/delivery.test.ts` verifies ground clearance and the core payment, timing, and police rules. Designers can change UI and marker art without changing simulation state or trust boundaries. See [CONTRACTS.md](CONTRACTS.md) before changing shared state.
+`shared/delivery.ts` is the content source. Ground locations must be on supported ground and clear of shared building collision; rooftop targets use the height and center of a shared flat-roof building and are offered only after a vehicle with rockets and a Level 3 air tank completes an order. `tests/delivery.test.ts` verifies ground clearance and the core payment, timing, and police rules. Designers can change UI and marker art without changing simulation state or trust boundaries. See [CONTRACTS.md](CONTRACTS.md) before changing shared state.
 
 ## Verification
 

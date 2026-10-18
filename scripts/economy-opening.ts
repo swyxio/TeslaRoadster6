@@ -3,7 +3,7 @@
 import { writeFileSync } from 'node:fs';
 import { initialAchievements } from '../shared/achievements';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
-import { applyDeliveryStop, initialDelivery, orderTarget } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, initialDelivery, orderTarget } from '../shared/delivery';
 import type { Player } from '../shared/game';
 import { terrainHeight } from '../shared/map';
 import { OTA_FEE, setOta, updateOta } from '../shared/ota';
@@ -35,11 +35,16 @@ function run(strategy:Strategy) {
     spent+=before-delivery.cash;
   }
   let nextEvent=strategy.pickup;
+  let waitingForOrder=false;
   const points:{minute:number;cash:number;gross:number;spent:number;deliveries:number;achievements:number;tiers:number}[]=[];
   for(let second=1;second<=300;second++) {
     const beforeOta=delivery.cash;
     updateOta(player,second);
     spent+=beforeOta-delivery.cash;
+    // A single driver advances one assignment batch per 50 ms room tick.
+    // Pickup travel begins after assignment, rounded to the next whole second.
+    for(let tick=0;tick<20&&delivery.order.search;tick++)advanceDeliverySearch(delivery,false);
+    if(waitingForOrder&&!delivery.order.search){waitingForOrder=false;nextEvent=second+strategy.pickup;}
     if(second===nextEvent) {
       const stage=delivery.order.stage;
       const target=orderTarget(delivery.order);
@@ -51,7 +56,8 @@ function run(strategy:Strategy) {
       const paid=applyDeliveryStop(delivery,{x:target.x,y,z:target.z,vy:0,speed:0,supportId:'ground',kind:'roadster',canFly:false});
       if(!paid)throw new Error(`Failed to apply ${stage} at ${target.name}`);
       tiers=applyAcceptedDelivery(delivery,achievements,tiers,orderBefore,false,undefined,(delivery.lastReward?.id??0)>previousRewardId).progress;
-      nextEvent=second+(stage==='pickup'?strategy.dropoff:strategy.pickup);
+      if(stage==='pickup')nextEvent=second+strategy.dropoff;
+      else {waitingForOrder=true;nextEvent=Infinity;}
     }
     if(second%60===0) {
       if(delivery.cash!==startingCash+delivery.lifetimeIncome-spent)throw new Error('Opening ledger does not balance');

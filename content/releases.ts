@@ -6,6 +6,36 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A playground for every car',
+    intro: 'Try the fleet freely, or collect driving and takeover awards in your regular game.',
+    sections: [
+      { title: 'Try it out', items: [
+        'Join the sandbox for unlimited cash, vehicle upgrades and map teleporting. Start a fresh practice room to try the early game. Progress in both modes is temporary.'
+      ] },
+      { title: 'Collect your favorites', items: [
+        'In a regular room, drive Tesla and Vault models and take over different street vehicles to earn new collection awards.',
+        'Saved drivers keep their completed collections; earlier drives and takeovers do not count retroactively.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.29-alpha',
+    label: '0.0.29 Alpha',
+    date: '2026-10-18',
+    title: 'A little more gravity',
+    intro: 'Flight takes more planning, especially in heavier vehicles.',
+    sections: [
+      { title: 'Earn your wings', items: [
+        'Early air tanks run out sooner in flight; tank upgrades and efficient nozzles open longer trips.',
+        'Sky currents give a smaller assist, while heavier vehicles jump lower and fall faster. Ground boost lasts as long as before.',
+        'Rooftop delivery jobs require rockets and a Level 3 air tank. An existing rooftop job reroutes to the ground if you switch to a less capable car.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.28-alpha',
+    label: '0.0.28 Alpha',
+    date: '2026-10-18',
     title: 'A better workshop',
     intro: 'Give your ride some attention in a new garage.',
     sections: [

@@ -11,6 +11,7 @@ import { MARS_GOAL } from '../shared/mars';
 import { playtestMode, prepareSandboxDriver, sandboxWallet, type PlaytestMode } from '../shared/playtest';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import { initialDelivery } from '../shared/delivery';
+import { prepareNavigationGraph } from '../shared/navigation';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom, type DriverProgress } from './driver-profile';
 import { RoomEconomy } from './room-economy';
@@ -225,6 +226,8 @@ export class GameRoom extends DurableObject<Env> {
     if(this.hasPendingWin){await this.ctx.storage.setAlarm(Date.now()+1000);await this.resumeWins();}
   }
   private async initializeRoom(world=this.world){
+    // Static route geometry is prepared before the room's first simulation tick.
+    prepareNavigationGraph();
     if(this.playtest)return;
     this.initWinStorage();
     if(this.pendingWins().length)this.ctx.waitUntil(this.resumeWins());

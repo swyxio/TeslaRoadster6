@@ -14,7 +14,10 @@ function setup(){
   world.entities=[car];world.pickups=[];return {world,player,car};
 }
 function completeGroundOrder(s:ReturnType<typeof setup>, late=false){
-  const {world,player,car}=s,order=player.delivery.order;
+  const {world,player,car}=s;
+  for(let i=0;player.delivery.order.search&&i<100;i++)updateDelivery(world,player,car,NEUTRAL,.05);
+  assert.equal(player.delivery.order.search,undefined,'the next assignment becomes ready');
+  const order=player.delivery.order;
   for(const stage of ['pickup','dropoff'] as const){
     const target=orderTarget(order);
     assert.equal(order.stage,stage);
@@ -43,6 +46,34 @@ test('a workshop purchase can lower level without erasing lifetime earnings',()=
   Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,speed:0,vy:0,vx:0,vz:0,pushX:0,pushZ:0,supportId:'ground'});
   assert.ok(buyUpgrade(world,'p','armor'));
   assert.equal(player.delivery.level,0);assert.equal(player.delivery.earned,12_000);
+});
+
+test('simulation without economy hooks reroutes a collected order after a purchase lowers its level',()=>{
+  const {world,player,car}=setup();car.kind='model-3';
+  player.delivery.cash=LEVELS[1].cash+10;player.delivery.level=1;player.delivery.earned=700;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,elapsed:8};
+  Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,speed:0,vy:0,vx:0,vz:0,pushX:0,pushZ:0,supportId:'ground'});
+  assert.ok(buyUpgrade(world,'p','armor'));assert.equal(player.delivery.level,0);
+  step(world,new Map(),.05);assert.ok(player.delivery.order.search,'a replacement is searched');
+  for(let i=0;player.delivery.order.search&&i<100;i++)step(world,new Map(),.05);
+  assert.equal(player.delivery.order.search,undefined,'the replacement completes');
+  assert.equal(player.delivery.order.stage,'dropoff','the collected order remains collected');
+  assert.equal(player.delivery.earned,700,'rerouting cannot pay another pickup bonus');
+  assert.ok(requiredLevelAt(orderTarget(player.delivery.order).x,orderTarget(player.delivery.order).z)<=player.delivery.level);
+});
+
+test('simulation without economy hooks retries an unavailable order after reaching open ground',()=>{
+  const {world,player,car}=setup();car.kind='model-3';
+  player.delivery.cash=0;player.delivery.level=0;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,elapsed:8};
+  player.delivery.lastReroute={id:1,reason:'unavailable',origin:{x:450,z:60},level:0};
+  Object.assign(car,{x:450,z:60,y:0,speed:0,vy:0,supportId:'ground'});
+  step(world,new Map(),.05);assert.equal(player.delivery.order.search,undefined,'closed ground does not restart a failed search');
+  Object.assign(car,{x:-120,z:60,y:0,speed:0,vy:0,supportId:'ground'});
+  step(world,new Map(),.05);assert.ok(player.delivery.order.search,'open ground starts a retry');
+  for(let i=0;player.delivery.order.search&&i<100;i++)step(world,new Map(),.05);
+  assert.equal(player.delivery.order.search,undefined);assert.equal(player.delivery.order.stage,'dropoff');
+  assert.ok(requiredLevelAt(orderTarget(player.delivery.order).x,orderTarget(player.delivery.order).z)<=player.delivery.level);
 });
 
 test('a late delivery minimum can open a region',()=>{
@@ -122,12 +153,12 @@ test('the SF playground has a connected, bounded level-zero pocket for driving a
   }
 });
 
-test('Peninsula and San Jose gates apply in the air and allow the next unlocked level',()=>{
-  for(const [level,z,boundary] of [[1,299.9,ACCESS_BOUNDARIES.bayMaxZ],[2,7599.9,ACCESS_BOUNDARIES.sanJoseMinZ]] as const){
+test('Peninsula gates apply in the air and allow the next unlocked level',()=>{
+  for(const [level,z,boundary] of [[1,299.9,ACCESS_BOUNDARIES.bayMaxZ],[5,6999.9,ACCESS_BOUNDARIES.cupertinoMinZ]] as const){
     const {world,player,car}=setup();player.delivery.cash=LEVELS[level].cash;player.delivery.level=level;
     Object.assign(car,{x:0,z,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
     step(world,new Map(),.05);assert.ok(car.z<=boundary);assert.equal(player.delivery.lastBlocked?.level,level+1);
-    player.delivery.level=(level+1) as 2|3;player.delivery.cash=LEVELS[player.delivery.level].cash;Object.assign(car,{speed:70,vx:0,vz:70,vy:0});
+    player.delivery.level=(level+1) as 2|6;player.delivery.cash=LEVELS[player.delivery.level].cash;Object.assign(car,{speed:70,vx:0,vz:70,vy:0});
     step(world,new Map(),.05);assert.ok(car.z>boundary);
   }
 });

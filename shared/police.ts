@@ -3,7 +3,7 @@ import { NEUTRAL } from './game';
 import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
-import { updateLevel, type DeliveryState } from './delivery';
+import { canAssignDeliveryRoof, updateLevel, type DeliveryState } from './delivery';
 import { hasRockets } from './upgrades';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
@@ -45,7 +45,9 @@ function resumePatrol(cop:Entity){
   cop.autopilot=true;
   if(cop.supportId==='overpass'){
     const exit=-Math.sin(cop.yaw)>=0?OVERPASS.end+10:OVERPASS.start-10;
-    state.path=[{x:exit,z:OVERPASS.z-OVERPASS.width/2-20},destination];
+    // Leave the ramp on the destination's side so the next leg cannot cut back through the deck.
+    const side=destination.z>=OVERPASS.z?1:-1;
+    state.path=[{x:exit,z:OVERPASS.z+side*(OVERPASS.width/2+20)},destination];
   }else state.path=route(cop,destination);
 }
 function heightAboveSurface(e:Entity){
@@ -62,7 +64,7 @@ function heightAboveSurface(e:Entity){
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
 /** Immutable physical proof of one police stop; the fine depends on the wallet at application time. */
-export type TicketEvidence={seconds:number;peakHeight:number;at:number;x:number;z:number;canFly:boolean};
+export type TicketEvidence={seconds:number;peakHeight:number;at:number;x:number;z:number;canFly:boolean;roofEligible?:boolean};
 export function applyTicketEvidence(delivery:DeliveryState,evidence:TicketEvidence):void {
   const durationFine=Math.min(120,Math.floor(evidence.seconds/2)*8),heightFine=Math.min(80,Math.floor(evidence.peakHeight/10)*10),repeatFine=delivery.tickets*35;
   const amount=60+durationFine+heightFine+repeatFine;
@@ -111,7 +113,7 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
       target.speed*=Math.exp(-2.2*dt);
       if(d<7&&Math.abs(target.speed)<4){
         const evidence:TicketEvidence={seconds:player.delivery.flight.seconds,peakHeight:player.delivery.flight.peakHeight,
-          at:world.time,x:target.x,z:target.z,canFly:hasRockets(target)};
+          at:world.time,x:target.x,z:target.z,canFly:hasRockets(target),roofEligible:canAssignDeliveryRoof(target)};
         const applyTicket=()=>applyTicketEvidence(player!.delivery,evidence);
         if(onTicket)onTicket(player,applyTicket,evidence);else applyTicket();
         // The stop and patrol reset are immediate physical effects; the fine is committed separately.

@@ -8,8 +8,8 @@
     "points": [
       {
         "minute": 1,
-        "cash": 4471,
-        "gross": 1971,
+        "cash": 4451,
+        "gross": 1951,
         "spent": 0,
         "deliveries": 1,
         "achievements": 1,
@@ -17,17 +17,17 @@
       },
       {
         "minute": 2,
-        "cash": 7199,
-        "gross": 4699,
+        "cash": 5199,
+        "gross": 2699,
         "spent": 0,
-        "deliveries": 3,
-        "achievements": 2,
+        "deliveries": 2,
+        "achievements": 1,
         "tiers": 4
       },
       {
         "minute": 3,
-        "cash": 8498,
-        "gross": 5998,
+        "cash": 7650,
+        "gross": 5150,
         "spent": 0,
         "deliveries": 4,
         "achievements": 2,
@@ -35,17 +35,17 @@
       },
       {
         "minute": 4,
-        "cash": 11621,
-        "gross": 9121,
+        "cash": 8990,
+        "gross": 6490,
         "spent": 0,
-        "deliveries": 6,
-        "achievements": 4,
+        "deliveries": 5,
+        "achievements": 3,
         "tiers": 4
       },
       {
         "minute": 5,
-        "cash": 14672,
-        "gross": 12172,
+        "cash": 11588,
+        "gross": 9088,
         "spent": 0,
         "deliveries": 7,
         "achievements": 4,
@@ -71,8 +71,8 @@
       },
       {
         "minute": 2,
-        "cash": 4113,
-        "gross": 1613,
+        "cash": 4108,
+        "gross": 1608,
         "spent": 0,
         "deliveries": 1,
         "achievements": 1,
@@ -80,8 +80,8 @@
       },
       {
         "minute": 3,
-        "cash": 5037,
-        "gross": 2537,
+        "cash": 4463,
+        "gross": 1963,
         "spent": 0,
         "deliveries": 2,
         "achievements": 1,
@@ -89,8 +89,8 @@
       },
       {
         "minute": 4,
-        "cash": 6395,
-        "gross": 3895,
+        "cash": 5701,
+        "gross": 3201,
         "spent": 0,
         "deliveries": 3,
         "achievements": 2,
@@ -98,10 +98,10 @@
       },
       {
         "minute": 5,
-        "cash": 7316,
-        "gross": 4816,
+        "cash": 5781,
+        "gross": 3281,
         "spent": 0,
-        "deliveries": 4,
+        "deliveries": 3,
         "achievements": 2,
         "tiers": 4
       }
@@ -125,8 +125,8 @@
       },
       {
         "minute": 2,
-        "cash": 3163,
-        "gross": 1613,
+        "cash": 3158,
+        "gross": 1608,
         "spent": 950,
         "deliveries": 1,
         "achievements": 1,
@@ -134,8 +134,8 @@
       },
       {
         "minute": 3,
-        "cash": 4087,
-        "gross": 2537,
+        "cash": 3513,
+        "gross": 1963,
         "spent": 950,
         "deliveries": 2,
         "achievements": 1,
@@ -143,8 +143,8 @@
       },
       {
         "minute": 4,
-        "cash": 5345,
-        "gross": 3895,
+        "cash": 4651,
+        "gross": 3201,
         "spent": 1050,
         "deliveries": 3,
         "achievements": 2,
@@ -152,10 +152,10 @@
       },
       {
         "minute": 5,
-        "cash": 6266,
-        "gross": 4816,
+        "cash": 4731,
+        "gross": 3281,
         "spent": 1050,
-        "deliveries": 4,
+        "deliveries": 3,
         "achievements": 2,
         "tiers": 4
       }
@@ -197,17 +197,17 @@
       },
       {
         "minute": 4,
-        "cash": 4231,
-        "gross": 1731,
+        "cash": 3688,
+        "gross": 1188,
         "spent": 0,
-        "deliveries": 2,
+        "deliveries": 1,
         "achievements": 1,
         "tiers": 3
       },
       {
         "minute": 5,
-        "cash": 4311,
-        "gross": 1811,
+        "cash": 3988,
+        "gross": 1488,
         "spent": 0,
         "deliveries": 2,
         "achievements": 1,

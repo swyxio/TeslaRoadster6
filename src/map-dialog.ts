@@ -6,6 +6,7 @@ import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
+import { drawLockedAreas } from './access-overlay';
 
 export type MapCab = { id: string; name: string; position: MapPoint | null };
 
@@ -45,8 +46,7 @@ export function createMapDialog({ onDestination, onTeleport, canTeleport }: { on
   const copy = (point: MapPoint): MapPoint => ({ x: point.x, z: point.z });
   const screen = (point: MapPoint) => ({ x: width / 2 + (point.x - center.x) * scale, y: height / 2 + (point.z - center.z) * scale });
   const world = (x: number, y: number): MapPoint => ({ x: center.x + (x - width / 2) / scale, z: center.z + (y - height / 2) / scale });
-  // Keep the surrounding region visible if spending lowers access mid-trip.
-  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= Math.max(level,requiredLevelAt(player.x,player.z));
+  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= level;
   const bounds = (point: MapPoint): MapPoint => ({ x: Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, point.x)), z: Math.max(MAP_BOUNDS.minZ, Math.min(MAP_BOUNDS.maxZ, point.z)) });
   const local = (event: PointerEvent | WheelEvent) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
   const cabPosition = (point: MapPoint | null): MapPoint | null => point && Number.isFinite(point.x) && Number.isFinite(point.z) ? copy(point) : null;
@@ -115,8 +115,7 @@ export function createMapDialog({ onDestination, onTeleport, canTeleport }: { on
       c.fillRect(p.x-(jump.end-jump.start)*scale/2,p.y-jump.width*scale/2,(jump.end-jump.start)*scale,jump.width*scale);
     }
     // Keep locked regions subdued while retaining their coastline silhouettes.
-    c.fillStyle = '#193b48b8';
-    for (let y = 0; y < height; y += 10) for (let x = 0; x < width; x += 10) if (!visible(world(x + 5, y + 5))) c.fillRect(x, y, 10, 10);
+    drawLockedAreas(c,level,screen,'#193b48b8');
     const placed: { left: number; top: number; right: number; bottom: number }[] = [];
     const playerScreen = screen(player);
     // Label actual shared routes in the part of the map the player can reach.

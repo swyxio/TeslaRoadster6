@@ -36,6 +36,14 @@ export class RoomEconomy extends BaseEconomy {
 export class DriverProfile extends BaseProfile {
   private holdDelivery=false;
   private deliveryHeld=false;
+  private holdAssignment=false;
+  private assignmentHeld=false;
+  fixtureHoldAssignment(){this.holdAssignment=true;}
+  fixtureAssignmentHeld(){return this.assignmentHeld;}
+  fixtureAssignment(eventId:string){return this.ctx.storage.get(`assignment:${eventId}`);}
+  protected override async assignmentCheckpointed(_eventId:string,done:boolean){
+    if(this.holdAssignment&&!done){this.holdAssignment=false;this.assignmentHeld=true;await new Promise<void>(()=>{});}
+  }
   fixtureHoldDelivery(){this.holdDelivery=true;}
   fixtureDeliveryHeld(){return this.deliveryHeld;}
   async fixtureSources(){return [...(await this.ctx.storage.list({prefix:'earned-source:'})).keys()];}
@@ -60,6 +68,7 @@ export default {
     try{
       switch(body.op){
         case 'producer':await room.fixtureProducer(body.active);return Response.json(true);
+        case 'persistent-producer':await room.fixturePersistentProducer(body.active);return Response.json(true);
         case 'acquire':{
           const initial=progressFrom(initialDelivery({x:0,z:0}),[],{},[],0,0);
           initial.cash=body.cash??35_000;initial.level=levelForCash(initial.cash);
@@ -79,6 +88,9 @@ export default {
         case 'sources':return Response.json(await driver.fixtureSources());
         case 'hold-stage':await economy.fixtureHoldDelivery();return Response.json(true);
         case 'stage-held':return Response.json(await economy.fixtureDeliveryHeld());
+        case 'hold-assignment':await driver.fixtureHoldAssignment();return Response.json(true);
+        case 'assignment-held':return Response.json(await driver.fixtureAssignmentHeld());
+        case 'assignment':return Response.json(await driver.fixtureAssignment(body.eventId)??null);
         case 'hold-profile':await driver.fixtureHoldDelivery();return Response.json(true);
         case 'profile-held':return Response.json(await driver.fixtureDeliveryHeld());
         case 'hold-fence':await driver.fixtureHoldFence(body.skip??0);return Response.json(true);
