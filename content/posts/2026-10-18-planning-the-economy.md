@@ -6,10 +6,10 @@ Deliveries, cash-based levels, saved vehicles, income-producing Cybercabs and a 
 
 A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The new tuning brings the first delivery award to $500, makes every third delivery worth a $350 checkpoint, and prices the remote OTA shop at $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
 
-The chart follows four opening paths through the actual delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes four deliveries and earns $4,516 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $5,966 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $11,872 in five minutes; route travel and driving skill will change these results.
+The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes four deliveries and earns $4,816 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $6,266 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $12,172 in five minutes; route travel and driving skill will change these results.
 
 <figure>
-<img src="/blog/economy/opening-wallet.svg" alt="Four modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">
+<img src="/blog/economy/opening-wallet.svg" alt="Five modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">
 <figcaption>Minute-by-minute wallet snapshots using the current delivery and award rules. Task times are assumptions; events, travel to a shop, landmarks and fines are excluded.</figcaption>
 </figure>
 
