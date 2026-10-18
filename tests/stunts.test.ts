@@ -102,6 +102,18 @@ test('Rocket reaches 60 mph near the requested arcade times',()=>{
     assert.ok(Math.abs(crossing-target)<.025,`${boost?'boost':'normal'} ${crossing}`);
   }
 });
+test('ground boost retains its prior tank consumption while airborne boost uses the flight budget',()=>{
+  for(const level of [1,2,5] as const)for(const economy of [false,true]){
+    const grounded=playground(),flying=playground();
+    for(const fixture of [grounded,flying]){fixture.car.tankLevel=level;fixture.car.upgrades.economy=economy;}
+    grounded.send({...NEUTRAL,throttle:1,boost:true});
+    const oldGroundCost=14*.05*100/(200*2**(level-1))*(economy?.75:1);
+    assert.ok(Math.abs(grounded.car.air-(100-oldGroundCost))<1e-8);
+    // Airborne forward thrust also uses air, so test boost without throttle.
+    Object.assign(flying.car,{y:100,supportId:null});flying.send({...NEUTRAL,boost:true});
+    assert.ok(Math.abs(flying.car.air-(100-oldGroundCost*4))<1e-8);
+  }
+});
 test('the visible ramp supports cars and launches their world velocity',()=>{
   const {car,send}=playground(STUNT_RAMP.start-2,STUNT_RAMP.z);car.yaw=-Math.PI/2;car.speed=18;
   let climbed=false,launched=false;

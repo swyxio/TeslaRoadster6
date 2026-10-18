@@ -891,7 +891,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     }
     if(flip&&rocket&&!grounded&&e.loopAngle===null&&e.air>=9*flightAirUse&&e.flipRemaining<=0){e.air-=9*flightAirUse;e.flipRemaining=Math.PI*2;}
     const boosting=rocket&&input.boost&&e.air>0&&(input.throttle!==0||!grounded);
-    const boostAirUse=grounded?airUse:flightAirUse;
+    // Preserve each tank level's previous ground-boost duration while
+    // airborne boost follows the shorter flight budget and vehicle load.
+    const boostAirUse=grounded?airUse*.25:flightAirUse;
     const boostFraction=boosting?Math.min(1,e.air/(14*boostAirUse*dt)):0;
     e.air=Math.max(0,e.air-14*boostAirUse*dt*boostFraction);
     const hoverFraction=rocket&&input.hover&&!grounded&&e.loopAngle===null?Math.min(1,e.air/(18*flightAirUse*dt)):0;

@@ -14,7 +14,7 @@ export const DOME = {
 } as const;
 
 // Recharge uses percentage points of the installed tank per simulation second.
-export const DOME_CHARGE_HEIGHT=8, DOME_CHARGE_SPEED=5, DOME_CHARGE_RATE=32;
+export const DOME_CHARGE_HEIGHT=8, DOME_CHARGE_SPEED=5, DOME_CHARGE_RATE=24;
 export function chargingDomeWall(e:Entity,rocket:boolean):boolean {
   return e.inDome && e.supportId==='dome' && e.domeS!==null && e.y>=DOME_CHARGE_HEIGHT &&
     Math.abs(e.speed)>=DOME_CHARGE_SPEED && rocket;
