@@ -194,8 +194,9 @@ the recording. These endpoints belong to the fixture, not the deployed game.
 Never expose or deploy this fixture.
 
 The script invokes the game's Street Pilot through keyboard input, waits for
-pickup and drop-off of two orders, then uses jump and hover controls. The saved
-trajectory and report must confirm the four delivery milestones, two separate
+pickup and drop-off of the initial order, then uses jump and hover controls.
+The saved trajectory and report must confirm that delivery, matching initial
+order IDs and coordinates across the pair, two separate
 jump bursts with upward movement and sustained airborne thrust. The scenario
 waits for the first landing, briefly accelerates during the second flight and
 waits to land again. A respawn invalidates the route. Identical setup and inputs do not ensure
