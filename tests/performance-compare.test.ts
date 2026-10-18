@@ -14,7 +14,7 @@ const routeEvidence = {
   firstCompletion: { tick: 15, x: 0, z: -180 }, staging: { stagedTick: 16, confirmedTick: 17, durationMs: null as number | null },
   milestones: [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']].map(([completed, stage], i) => ({ completed, stage, tick: i * 10, x: i, z: 0 })),
   jumpCount: 2, jumps: [{ tick: 42, liftTick: 43, landingTick: 44 }, { tick: 46, liftTick: 47, landingTick: 60 }],
-  flightSnapshots: 5, flight: { startTick: 46, endTick: 54, durationMs: 500, snapshots: 5, forwardThrustTick: 50 }, horizontalTravelM: 6, peakY: 5,
+  flightSnapshots: 5, flight: { startTick: 46, endTick: 54, durationMs: 500, snapshots: 5, forwardThrustTick: 50, airborneStartTick: 46, airborneEndTick: 58, airborneDisplacementTick: 58, airborneDisplacementM: 6 }, peakY: 5,
 };
 
 test('every route leg must meet p95 and maximum path tolerances', () => {
@@ -113,7 +113,11 @@ test('every route leg must meet p95 and maximum path tolerances', () => {
       ['too few flight snapshots', r => { r.flight.snapshots = r.flightSnapshots = 4; }],
       ['short flight', r => { r.flight.durationMs = 399; }],
       ['inconsistent flight ticks', r => { r.flight.endTick = 80; }],
-      ['missing travel', r => { delete r.horizontalTravelM; }],
+      ['missing airborne displacement', r => { delete r.flight.airborneDisplacementM; }],
+      ['insufficient airborne displacement', r => { r.flight.airborneDisplacementM = 5; }],
+      ['missing airborne origin', r => { delete r.flight.airborneStartTick; }],
+      ['powered flight outside airborne interval', r => { r.flight.airborneEndTick = 53; }],
+      ['displacement outside airborne interval', r => { r.flight.airborneDisplacementTick = 59; }],
     ];
     for (const [label, invalidate] of invalidEvidence) {
       const candidate = structuredClone(report);

@@ -36,8 +36,11 @@ Two observed jump bursts, a landing between jumps, a final landing and
 sustained airborne thrust with forward power follow. Keyboard presses are retried a bounded number
 of times if the room does not process them. Each reported jump needs its own upward
 lift before the next observed trigger, followed by ground contact before another
-trigger. The report retains trigger, lift and landing ticks and the continuous
-forward-powered flight interval; a keypress by itself does not prove a jump or
+trigger. The report retains trigger, lift and landing ticks. It also requires
+at least 400 ms of continuously observed downward thrust with some forward
+thrust, and more than 5 m of horizontal displacement within that same airborne
+interval. Ground travel cannot satisfy the flight requirement; forward thrust
+need not last the whole interval. A keypress by itself does not prove a jump or
 delivery occurred. A respawn holds the route.
 
 The report saves four delivery legs and a flight leg from received room poses.

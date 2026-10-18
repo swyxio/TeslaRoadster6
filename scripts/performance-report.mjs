@@ -150,23 +150,41 @@ export function deliveryRoute(poses, initialOrder, stageRepeat) {
     const landing = flight.slice(liftIndex + 1, end).find(p => p.supported === true && p.tick > lift.tick);
     return landing ? [{ tick: start.tick, liftTick: lift.tick, landingTick: landing.tick }] : [];
   });
-  // Require a continuous stream, not two isolated powered snapshots separated
-  // by a long gap. Bits 2 and 4 are the game's downward rocket thrusters.
-  let run = [], longest = [];
+  // Keep airborne intervals separate from ground travel and sampling gaps.
+  const intervals = [];
+  let airborne = [];
   for (const p of flight) {
-    const powered = p.supported === false && Number.isSafeInteger(p.thrusters) && (p.thrusters & 6) === 6;
-    const previous = run.at(-1);
-    if (!powered || (previous && (p.tick <= previous.tick || p.tick - previous.tick > 4 || p.atMs - previous.atMs > 500))) run = [];
-    if (powered) run.push(p);
-    if (run.length >= 5 && run.at(-1).atMs - run[0].atMs >= 400 && run.some(sample => (sample.thrusters & 7) === 7) && run.length > longest.length) longest = run.slice();
+    const previous = airborne.at(-1);
+    if (p.supported !== false || (previous && (p.tick <= previous.tick || p.tick - previous.tick > 4 || p.atMs - previous.atMs > 500))) {
+      if (airborne.length) intervals.push(airborne);
+      airborne = [];
+    }
+    if (p.supported === false) airborne.push(p);
   }
-  const horizontalTravel = Math.max(...flight.map(p => Math.hypot(p.x - flight[0].x, p.z - flight[0].z)));
-  if (jumps.length < 2 || !longest.length || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight were not observed', jumpCount: jumps.length, flightSnapshots: longest.length };
+  if (airborne.length) intervals.push(airborne);
+  let selected, flightSnapshots = 0;
+  for (const interval of intervals) {
+    // Bits 2 and 4 are downward thrusters. Forward thrust need only occur
+    // briefly within the continuous powered interval, not for its duration.
+    let run = [], longest = [];
+    for (const p of interval) {
+      if (!Number.isSafeInteger(p.thrusters) || (p.thrusters & 6) !== 6) run = [];
+      else run.push(p);
+      if (run.length >= 5 && run.at(-1).atMs - run[0].atMs >= 400 && run.some(sample => (sample.thrusters & 7) === 7) && run.length > longest.length) longest = run.slice();
+    }
+    const origin = interval[0];
+    const farthest = interval.reduce((best, p) => Math.hypot(p.x - origin.x, p.z - origin.z) > Math.hypot(best.x - origin.x, best.z - origin.z) ? p : best, origin);
+    const displacement = Math.hypot(farthest.x - origin.x, farthest.z - origin.z);
+    flightSnapshots = Math.max(flightSnapshots, longest.length);
+    if (longest.length && displacement > 5 && (!selected || longest.length > selected.powered.length)) selected = { interval, powered: longest, farthest, displacement };
+  }
+  if (jumps.length < 2 || !selected) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight with airborne displacement were not observed', jumpCount: jumps.length, flightSnapshots };
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
-  const flightEvidence = { startTick: longest[0].tick, endTick: longest.at(-1).tick, durationMs: round(longest.at(-1).atMs - longest[0].atMs), snapshots: longest.length, forwardThrustTick: longest.find(p => (p.thrusters & 7) === 7).tick };
-  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumps.length, jumps, flightSnapshots: longest.length, flight: flightEvidence, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
+  const { interval, powered, farthest, displacement } = selected;
+  const flightEvidence = { startTick: powered[0].tick, endTick: powered.at(-1).tick, durationMs: round(powered.at(-1).atMs - powered[0].atMs), snapshots: powered.length, forwardThrustTick: powered.find(p => (p.thrusters & 7) === 7).tick, airborneStartTick: interval[0].tick, airborneEndTick: interval.at(-1).tick, airborneDisplacementTick: farthest.tick, airborneDisplacementM: displacement };
+  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumps.length, jumps, flightSnapshots: powered.length, flight: flightEvidence, peakY: round(Math.max(...flight.map(p => p.y))), legs };
 }
 
 export function withStagingDuration(route, event) {

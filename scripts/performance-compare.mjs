@@ -74,7 +74,10 @@ function compareRoutes(before, after) {
       flight.endTick - flight.startTick >= flight.snapshots - 1 && flight.endTick - flight.startTick <= 4 * (flight.snapshots - 1) &&
       n(flight.durationMs) && flight.durationMs >= 400 && flight.durationMs <= 500 * (flight.snapshots - 1) &&
       Number.isSafeInteger(flight.forwardThrustTick) && flight.forwardThrustTick >= flight.startTick && flight.forwardThrustTick <= flight.endTick &&
-      n(route.horizontalTravelM) && route.horizontalTravelM >= 5 && n(route.peakY);
+      Number.isSafeInteger(flight.airborneStartTick) && flight.airborneStartTick >= finalDelivery && flight.airborneStartTick <= flight.startTick &&
+      Number.isSafeInteger(flight.airborneEndTick) && flight.airborneEndTick >= flight.endTick &&
+      Number.isSafeInteger(flight.airborneDisplacementTick) && flight.airborneDisplacementTick > flight.airborneStartTick && flight.airborneDisplacementTick <= flight.airborneEndTick &&
+      n(flight.airborneDisplacementM) && flight.airborneDisplacementM > 5 && n(route.peakY);
   };
   if (!validFlight(before) || !validFlight(after)) return { comparable: false, reason: 'independent jump, landing or sustained forward-flight evidence unavailable or invalid' };
   const errors = [];

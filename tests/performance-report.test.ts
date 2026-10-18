@@ -99,7 +99,7 @@ const routeEvidence = {
   firstCompletion: { tick: 15, x: 0, z: -180 }, staging: { stagedTick: 16, confirmedTick: 17 },
   milestones: [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']].map(([completed, stage], i) => ({ completed, stage, tick: i * 10, x: i, z: 0 })),
   jumpCount: 2, jumps: [{ tick: 42, liftTick: 43, landingTick: 44 }, { tick: 46, liftTick: 47, landingTick: 60 }],
-  flightSnapshots: 5, flight: { startTick: 46, endTick: 54, durationMs: 500, snapshots: 5, forwardThrustTick: 50 }, horizontalTravelM: 6, peakY: 5,
+  flightSnapshots: 5, flight: { startTick: 46, endTick: 54, durationMs: 500, snapshots: 5, forwardThrustTick: 50, airborneStartTick: 46, airborneEndTick: 58, airborneDisplacementTick: 58, airborneDisplacementM: 6 }, peakY: 5,
 };
 
 test('performance scenario drives two deliveries before flight', () => {
@@ -125,7 +125,7 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
     atMs: (i * 4 + j) * 100, tick: (i * 4 + j) * 2, poseRevision: 1, x, z, y: 0,
     deliveryCompleted, deliveryStage, deliveryRestaurant, deliveryCustomer, deliverySearching, lastJump: 0, jumpBurstUntil: 0, supported: true, thrusters: 0, vy: 0,
   })));
-  poses.push(...Array.from({ length: 9 }, (_, i) => ({ atMs: 2400 + i * 100, tick: 48 + i * 2, poseRevision: 1, x: 16 + i, z: -180, y: i === 2 || i === 8 ? 0 : i, deliveryCompleted: 2, deliveryStage: 'pickup' as const, deliveryRestaurant: 3, deliveryCustomer: 4, deliverySearching: true, lastJump: i < 3 ? 1 : 2, jumpBurstUntil: i < 3 ? 2 : 3, supported: i === 2 || i === 8, thrusters: i === 2 || i === 8 ? 0 : i < 3 ? 6 : 7, vy: i === 2 || i === 8 ? 0 : 5 })));
+  poses.push(...Array.from({ length: 9 }, (_, i) => ({ atMs: 2400 + i * 100, tick: 48 + i * 2, poseRevision: 1, x: 16 + 2 * i, z: -180, y: i === 2 || i === 8 ? 0 : i, deliveryCompleted: 2, deliveryStage: 'pickup' as const, deliveryRestaurant: 3, deliveryCustomer: 4, deliverySearching: true, lastJump: i < 3 ? 1 : 2, jumpBurstUntil: i < 3 ? 2 : 3, supported: i === 2 || i === 8, thrusters: i === 2 || i === 8 ? 0 : i < 3 ? 6 : 7, vy: i === 2 || i === 8 ? 0 : 5 })));
   const stageRepeat = { order: secondOrder, stagedTick: 22, confirmedTick: 24 };
   const route = deliveryRoute(poses, initialOrder, stageRepeat);
   assert.equal(route.status, 'available');
@@ -142,6 +142,7 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   assert.equal(route.jumpCount, 2);
   assert.deepEqual(route.jumps, [{ tick: 48, liftTick: 48, landingTick: 52 }, { tick: 54, liftTick: 54, landingTick: 64 }]);
   assert.equal(route.flight.forwardThrustTick >= route.flight.startTick, true);
+  assert.equal(route.flight.airborneDisplacementM, 8);
   assert.equal(route.legs.length, 5);
   const check = (samples: typeof poses, first = initialOrder, stage = stageRepeat) => deliveryRoute(samples, first, stage).status;
   assert.equal(deliveryRoute(poses, undefined, stageRepeat).status, 'unavailable');
@@ -169,6 +170,14 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   // A later trigger bounds the first jump even when that later burst is invalid.
   assert.equal(check(poses.map(p => p.tick === 48 || p.tick === 50 ? { ...p, supported: true, thrusters: 0, vy: 0 } : p.tick === 54 ? { ...p, jumpBurstUntil: 2 } : p)), 'unavailable');
   assert.equal(check(poses.map(p => p.tick === 64 ? { ...p, lastJump: 3, jumpBurstUntil: 4 } : p)), 'unavailable');
+  // Driving before or after a stationary airborne phase cannot count as flight.
+  assert.equal(check(poses.map(p => p.tick >= 48 && p.tick <= 62 ? { ...p, x: 20 } : p.tick === 64 ? { ...p, x: 80 } : p)), 'unavailable');
+  assert.equal(check(poses.map(p => p.tick >= 48 && p.tick <= 62 ? { ...p, x: p.tick === 52 ? 80 : 20 } : p)), 'unavailable');
+  const shortForwardPulse = poses.map(p => p.tick >= 54 && p.tick <= 62 ? { ...p, thrusters: p.tick === 58 ? 7 : 6 } : p);
+  assert.equal(check(shortForwardPulse), 'available', 'forward power need not last for the 400 ms sustained flight');
+  const airborneDistance = (distance: number) => shortForwardPulse.map(p => p.tick >= 54 && p.tick <= 62 ? { ...p, x: 22 + (p.tick - 54) * distance / 8 } : p);
+  assert.equal(check(airborneDistance(5)), 'unavailable', 'exactly five airborne meters is insufficient');
+  assert.equal(check(airborneDistance(5.001)), 'available', 'more than five airborne meters is sufficient');
 });
 
 test('current reporter accepts the four archived cross-version trajectories with distinct lift and landing evidence', () => {
@@ -192,6 +201,13 @@ test('current reporter accepts the four archived cross-version trajectories with
     assert.notEqual(route.jumps[0].liftTick, route.jumps[1].liftTick, prefix);
     assert.ok(route.flight.snapshots >= 5 && route.flight.durationMs >= 400, prefix);
     assert.ok(samples.some((p: any) => p.tick === route.flight.forwardThrustTick && p.supported === false && (p.thrusters & 7) === 7), prefix);
+    const start = samples.find((p: any) => p.tick === route.flight.airborneStartTick && p.supported === false);
+    const farthest = samples.find((p: any) => p.tick === route.flight.airborneDisplacementTick && p.supported === false);
+    assert.ok(start && farthest && route.flight.airborneDisplacementM > 5, prefix);
+    assert.ok(Math.abs(Math.hypot(farthest.x - start.x, farthest.z - start.z) - route.flight.airborneDisplacementM) < 1e-9, prefix);
+    const hoverThenDrive = samples.map((p: any) => p.tick >= route.flight.airborneStartTick && p.tick <= route.flight.airborneEndTick
+      ? { ...p, x: start.x, z: start.z } : p.tick > route.flight.airborneEndTick && p.supported === true ? { ...p, x: start.x + 50, z: start.z } : p);
+    assert.equal(deliveryRoute(hoverThenDrive, event('waitForRoomReady').sample.initialOrder, event('stageRepeatDelivery').sample).status, 'unavailable', `${prefix}: ground travel cannot establish flight`);
   }
 });
 
