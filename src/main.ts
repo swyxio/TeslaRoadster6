@@ -30,7 +30,9 @@ import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
 import { hasRocket } from '../shared/rocket';
-import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
+import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
+import { MARS_GOAL } from '../shared/mars';
+import { createMarsUI } from './mars-ui';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -49,7 +51,7 @@ document.querySelector('#app')!.innerHTML = `
  <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
  <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="bay" pattern="[a-z0-9-]+" value="${DEFAULT_ROOM}" autocapitalize="none" spellcheck="false"></label></div>
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
- <button id="join" class="primary">Join room <span>↗</span></button><button id="solo" class="secondary">Drive solo <span>→</span></button><p class="form-note" id="form-note" role="status">Your starting ride applies when starting a solo drive or joining a new room. To change rides here, use Actions → Fleet.</p>
+ <button id="join" class="primary">Join room <span>↗</span></button><p class="form-note" id="form-note" role="status">Your starting ride applies when joining a new room. To change rides here, use Actions → Fleet.</p>
  <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <div class="release-links"><span>${CURRENT_RELEASE.label}</span><a id="release-changelog" href="/changelog/">Changelog</a><a href="/blog/">Dev blog</a><a href="/lore/">The story</a></div><p id="last-played" class="last-played">No earlier play recorded on this browser.</p>
@@ -60,14 +62,14 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
- <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
+ <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div id="rocket-status" hidden></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant 90 seconds of flight or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for Rocket Island.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
@@ -82,7 +84,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
-<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><button id="error-solo" class="secondary">Drive solo</button><label class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="error-menu" class="text-button">Room settings</button></div>
+<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
 let selectedVehicle:VehicleId='roadster';
 const startingSelect=$<HTMLSelectElement>('starting-ride');
@@ -113,7 +115,7 @@ for(const event of ['pointerdown','keydown'] as const)window.addEventListener(ev
 refreshSoundSettings();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
-catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; $('error-join').hidden=true; $('error-room').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
+catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true;  $('error-join').hidden=true; $('error-room').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
 let lastLevel:Level|undefined,lastBlockedAt=-1,lastBlockedNoticeAt=-10;
 let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
@@ -252,11 +254,11 @@ function recordPlay(now:number){
 window.addEventListener('pagehide',()=>{if(playRecorded&&Date.now()-lastActiveAt<10000)recordPlay(Date.now());});
 if (roomParam && validRoom(roomParam)) $<HTMLInputElement>('room').value=roomParam;
 function toggleMenu(show: boolean) {menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started||session.status==='disconnected');$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
-function begin(mode:'online'|'solo'='online'){
+function begin(){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
-  if(mode==='online'&&!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
+  if(!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
-  if(mode==='online'&&session.status==='online'&&session.room===room){
+  if(session.status==='online'&&session.room===room){
     session.join(room,chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver',selectedVehicle);
     $('error').classList.add('hidden');toggleMenu(false);return;
   }
@@ -265,18 +267,16 @@ function begin(mode:'online'|'solo'='online'){
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   controls.resetSequences();
-  if(mode==='solo'){session.solo(selectedVehicle,$<HTMLInputElement>('name').value.trim()||'Driver');history.replaceState(null,'',location.pathname);}
-  else{$<HTMLInputElement>('room').value=room;session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
+  $<HTMLInputElement>('room').value=room;session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('join').onclick=()=>begin('online');$('retry').onclick=()=>begin('online');
-$('solo').onclick=()=>begin('solo');$('error-solo').onclick=()=>begin('solo');
+$('join').onclick=()=>begin();$('retry').onclick=()=>begin();
 $('error-join').onclick=()=>{
   const room=$<HTMLInputElement>('error-room').value.trim().toLowerCase();
   if(!validRoom(room)){ $('error-room-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
-  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin('online');
+  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin();
 };
 $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;shopBusyUntil=0;toggleMenu(true);};
@@ -304,7 +304,6 @@ const minigames=setupMinigames({session,controls,closeDrawer:()=>setDrawer(null)
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
 $('invite').onclick=async()=>{
-  if(session.status==='solo'){toggleMenu(true);notice('Join a room to invite friends.');return;}
   try{await navigator.clipboard.writeText(location.href);notice('Invite link copied. Send it to your crew.');}catch{notice('Copy the address in your browser to invite a friend.');}
 };
 const map=$<HTMLCanvasElement>('minimap').getContext('2d')!;
@@ -372,6 +371,7 @@ function minimap(entity:Entity|undefined,level:Level){
     for(const district of DISTRICTS.filter(d=>(d.id==='san-jose'||d.id==='fremont'||d.id==='palo-alto')&&visible(d.x,d.z)))base.fillText(district.name.toUpperCase(),px(district.x)+4,pz(district.z));
     for(const landmark of LANDMARKS.filter(l=>visible(l.arrival.x,l.arrival.z))){base.fillStyle='#fff2c6';base.beginPath();base.arc(px(landmark.arrival.x),pz(landmark.arrival.z),2.5,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(landmark.name,px(landmark.arrival.x)+4,pz(landmark.arrival.z)-4);}
     for(const monument of TESLAND_MONUMENTS.filter(p=>visible(p.x,p.z))){base.fillStyle='#ffd080';base.beginPath();base.arc(px(monument.x),pz(monument.z),3,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(monument.name.toUpperCase(),px(monument.x)+4,pz(monument.z)-4);}
+    if(visible(FREMONT_SPACEPORT.entrance.x,FREMONT_SPACEPORT.entrance.z)){base.fillStyle='#ffad70';base.beginPath();base.arc(px(FREMONT_SPACEPORT.entrance.x),pz(FREMONT_SPACEPORT.entrance.z),4,0,Math.PI*2);base.fill();if(mapLocal)base.fillText('MARS SPACEPORT',px(FREMONT_SPACEPORT.entrance.x)+5,pz(FREMONT_SPACEPORT.entrance.z)-5);}
     if(visible(STUNT_LOOP.x,STUNT_LOOP.z)){base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);}
     base.fillStyle='#91dfff';base.beginPath();base.arc(px(DOME.x),pz(DOME.z),3,0,Math.PI*2);base.fill();base.fillText('ROCKET DOME',px(DOME.x)+4,pz(DOME.z)-3);
   }
@@ -424,13 +424,15 @@ function minimap(entity:Entity|undefined,level:Level){
 
 const scoresDialog=$<HTMLDialogElement>('scores-dialog');
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
-const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount)}`;
+const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
+const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+$('mars-quick').onclick=()=>marsUi.open();$('mars-action').onclick=()=>marsUi.open();
 function updateScores(){
   const list=$('scores-list');list.replaceChildren();
-  const available=session.status==='solo'||session.status==='online';
+  const available=session.status==='online';
   const player=available?session.world.players.find(p=>p.id===session.id):undefined;
   $('score-head').classList.toggle('hidden',!available||session.world.players.length===0);
-  const summary=!available?'Scores will appear when your drive is connected.':!session.world.players.length?'No drivers in this session yet.':`${session.status==='solo'?'Solo drive':'This room'} · ${session.world.players.length} ${session.world.players.length===1?'driver':'drivers'}${player?` · ${player.delivery.completed} ${player.delivery.completed===1?'delivery':'deliveries'} completed by you`:''}`;
+  const summary=!available?'Scores will appear when your drive is connected.':!session.world.players.length?'No drivers in this session yet.':`This room · ${session.world.players.length} ${session.world.players.length===1?'driver':'drivers'}${player?` · ${player.delivery.completed} ${player.delivery.completed===1?'delivery':'deliveries'} completed by you`:''}`;
   if($('scores-summary').textContent!==summary)$('scores-summary').textContent=summary;
   if(!available)return;
   for(const p of [...session.world.players].sort((a,b)=>b.delivery.cash-a.delivery.cash||a.delivery.activeSeconds-b.delivery.activeSeconds)){
@@ -454,7 +456,7 @@ $('scores-close').onclick=closeScores;scoresDialog.addEventListener('cancel',()=
 const awardsDialog=$<HTMLDialogElement>('awards-dialog');
 const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
 function updateAwards(){
-  const player=(session.status==='solo'||session.status==='online')?session.world.players.find(p=>p.id===session.id):undefined,list=$('awards-list');list.replaceChildren();
+  const player=(session.status==='online')?session.world.players.find(p=>p.id===session.id):undefined,list=$('awards-list');list.replaceChildren();
   const summary=player?`${player.achievements.unlocked.length} of ${Object.keys(ACHIEVEMENTS).length} earned this drive`:'Your awards will appear when your drive is connected.';
   if($('awards-summary').textContent!==summary)$('awards-summary').textContent=summary;
   if(!player)return;
@@ -477,7 +479,7 @@ function announceAchievements(){
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
   setDrawer(null);
-  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();mapDialog.close();minigames.close();chatPanel.close();
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();marsUi.close();mapDialog.close();minigames.close();chatPanel.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;
   $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;
@@ -620,7 +622,7 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));scene.render(session.world,session.id,dt,menu);
+  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='online'));scene.render(session.world,session.id,dt,menu);
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;
@@ -630,7 +632,7 @@ scene.start(dt=>{
     if(result?.requestId===pendingDestination.requestId){notice(result.ok?'Self-driving to your destination. Use the controls to take over.':'No route found. Choose an unlocked nearby road and try again.');pendingDestination=null;}
     else if(performance.now()>pendingDestination.expires){notice('Could not confirm the route. Please try again.');pendingDestination=null;}
   }
-  if(started&&!menu&&!document.hidden&&(session.status==='solo'||session.status==='online')&&observedPlayer){
+  if(started&&!menu&&!document.hidden&&(session.status==='online')&&observedPlayer){
     const now=Date.now(),active=observedPlayer.delivery.activeSeconds;
     if(active>lastActiveSeconds)lastActiveAt=now;
     if(!playRecorded||(active>lastActiveSeconds&&now-lastPlayWrite>=10000))recordPlay(now);
@@ -642,11 +644,13 @@ scene.start(dt=>{
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
-  $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='solo'?'● SOLO PLAYGROUND':session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
-  $('connection').title=session.status==='solo'?'Solo drive':`Room: ${session.room}`;
+  $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
+  $('connection').title=`Room: ${session.room}`;
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
+  marsUi.update(e);
+  $('mars-quick').textContent=session.world.mars.fund>=MARS_GOAL?'🚀 Mars funded · board in Fremont':`🚀 Mars mission · ${money(session.world.mars.fund)} / $1B`;
   minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');
@@ -746,4 +750,4 @@ scene.start(dt=>{
 });
 
 // Invite links enter their named room; the public Bay room is the default.
-begin('online');
+begin();

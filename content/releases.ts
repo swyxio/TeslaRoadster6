@@ -1,6 +1,35 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.8-alpha',
+    label: '0.0.8 Alpha',
+    date: '2026-10-18',
+    title: 'The road to Mars',
+    intro: 'A new Fremont spaceport gives every room a wildly ambitious shared destination.',
+    sections: [
+      { title: 'Build the mission together', items: [
+        'Visit the fictional Tesla × SpaceX gigafactory and Starship/Super Heavy launch complex in Fremont, unlocked with the South Bay at level 2.',
+        'Contribute earned session cash to your room’s permanent $1 billion Mars fund. Other drivers in the same room can contribute too; every dollar counts once.',
+        'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
+        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.',
+        'Play always joins a shared room; if the Bay is full, retry or name another room.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.7-alpha',
+    label: '0.0.7 Alpha',
+    date: '2026-10-18',
+    title: 'Room for every control',
+    intro: 'The map and game controls fit more comfortably on short screens.',
+    sections: [
+      { title: 'Play and explore', items: [
+        'The minimap stays clear of mini-game and driving controls in compact portrait and landscape layouts.',
+        'Air-refill cues stay visible when they are active.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.6-alpha',
     label: '0.0.6 Alpha',
     date: '2026-10-18',
@@ -11,7 +40,7 @@ export const RELEASES = [
         'Try the two new launch ramps, speed oval, inverted cliff and island parking games.',
         'Play Park It or Cut the Queue at any registered parking lot. Rocket pickups give any car 90 seconds of flight.',
         'The Rocket Dome moves to the China Basin ballpark area, with car soccer to five goals and wall charging.',
-        'Join the shared Bay automatically or choose a solo drive from the menu.'
+        'Join the shared Bay automatically.'
       ] },
       { title: 'Play and explore', items: [
         'Start or leave a mini-game immediately after joining, with confirmation while the room responds.',

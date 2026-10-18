@@ -10,11 +10,13 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Deliveries and total earnings unlock more of the map for your session, with longer runs as it opens. Spending money or paying a ticket does not undo an unlock. The HUD shows the next milestone. Flying near police can lead to a citation; some rocket-equipped orders lead to rooftops. See [delivery design](docs/DELIVERY.md).
 
+**Mars mission:** Open 🚀 Mars mission and contribute session cash toward your room’s shared $1 billion fund. It persists when everyone leaves or the Worker restarts; named rooms have separate funds. Once funded, reach level 2, stop in the gold ring at the fictional Fremont spaceport and board for the To Mars achievement and victory. You can keep exploring afterwards. Current payouts make this a long-term target; higher-paying levels are planned, not yet implemented. Cash and personal achievements remain session-only.
+
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
 **Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose Rocket Dome in the Mini-games picker. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out to SF, or use Leave Dome to return to a checked SF or island spawn based on where you entered.
 
-**Global chat:** Pick a driver name and chat with players across rooms, including during solo play when connected. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+**Global chat:** Pick a driver name and chat with players across rooms, across the game. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 
 **Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. The Mini-games picker offers quick entry to the Dome, parking games and island races.
 
@@ -48,13 +50,14 @@ pnpm dev:server
 # http://localhost:8787 serves both client and WebSocket server
 ```
 
-For frontend hot reload, leave Wrangler running and start `pnpm dev` in another terminal. Vite proxies `/api` and WebSockets to port 8787. The room server runs the multiplayer simulation in local development and on Cloudflare; explicitly selected solo play uses the same simulation locally.
+For frontend hot reload, leave Wrangler running and start `pnpm dev` in another terminal. Vite proxies `/api` and WebSockets to port 8787. The room server runs the multiplayer simulation in local development and on Cloudflare.
 
 ```sh
 pnpm run ci # tests, TypeScript checks and production build
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
+pnpm exec tsx tests/mars-restart.integration.ts # isolated Worker with endgame test fixture
 pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
 ```
 
@@ -82,13 +85,13 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full equipped car leaves the pad for others.
 - Open **Actions → Mini-games** to enter the Dome, Park It, Cut the queue or an island race. Parking uses the current registered lot when you're there, or a checked playground otherwise; races use checked starting positions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code. The menu also offers an explicit Drive solo choice; connection failures do not silently start solo play.
+- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code. There is no offline mode.
 
 ## Boundaries
 
 This is a working foundation, not GTA-scale content or a persistent MMO. Twenty station identities are sourced from Tesla; four air stations in Berkeley, Mill Valley and Corte Madera are fictional. Their game positions and surroundings are compressed artistic placements; see [station sources](docs/STATIONS.md). Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
 
-Rooms are ephemeral and public-by-code. Delivery money is fictional and session-only; there is no persistent game progression, shooting, or death/respawn yet. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
+Rooms are public-by-code. Delivery money is fictional and session-only; shooting and death/respawn are not implemented. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room simulation resets on deployment, runtime restart, or last disconnect; only each room’s shared Mars fund persists. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
@@ -125,7 +128,7 @@ shared/race*.ts     Island courses and race rounds
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 worker/global-chat.ts  Global chat and optional saved identities
-src/session.ts     Solo/multiplayer transport adapter
+src/session.ts     Multiplayer transport adapter
 src/map-dialog.ts  Destination selection and autonomous driving controls
 src/minigames.ts   Quick entry to shared mini-games
 src/controls.ts    Keyboard, gamepad and multitouch intent adapter
