@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Driving-smoothness article lead visual · 2026-10-18 Pacific
+
+- The lead graphics plot all consecutive display-position steps from the archived 150 ms slalom traces and reproduce the reported maximum step, speed-ratio percentiles and steering-response threshold. Both SVGs parsed, and the local article and both assets returned HTTP 200.
+- The content worktree passed 734 tests and built successfully; Vite retained its existing large-chunk warning. Chrome displayed the lead graphic in the article at desktop and emulated 390×844 widths, with the mobile layout selected at the narrow size.
+
 ## Economy article Bay map · 2026-10-18 Pacific
 
 - After merging current main, `pnpm test` passed 734 tests and `pnpm build` passed. The regenerated SVG parsed, and the article retained the published research-reward text and OpenStreetMap attribution.
