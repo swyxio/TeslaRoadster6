@@ -5,6 +5,7 @@ import { initialAutonomousFlight, autonomousFlight, type AutonomousFlightState }
 import { currentAt } from '../shared/sky-currents';
 import { LEVELS, requiredLevelAt } from '../shared/delivery';
 import type { DriveMode } from '../shared/drive-mode';
+import { body, contact, dimensions } from '../shared/physics';
 
 function fixture(x:number,z:number,yaw:number,target:{x:number;z:number},level:0|1=0){
   const world=createWorld(),player=addPlayer(world,'pilot','Pilot'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -17,14 +18,14 @@ function fixture(x:number,z:number,yaw:number,target:{x:number;z:number},level:0
 
 // Drive the actual shared physics with the controller's pulses; held jump input
 // counters remain independent of the controller's internal state.
-function flight(world:World,car:Entity,nav:NonNullable<Entity['navigation']>,mode:DriveMode,level:0|1=0){
+function flight(world:World,car:Entity,nav:NonNullable<Entity['navigation']>,mode:DriveMode,level:0|1=0,onStep?:()=>void){
   const state:AutonomousFlightState=initialAutonomousFlight();let counter=0,jumps=0,airborne=false,peak=0,wind:string|null=null;
   for(let i=0;i<300;i++){
     car.navigation=nav;
     const throttle=Math.max(-1,Math.min(1,(8-car.speed)*.1));
     const result=autonomousFlight(car,world,level,mode,{...NEUTRAL,throttle},state);
     if(result.jump){jumps++;counter++;}
-    step(world,new Map([['pilot',{...result.input,jump:counter}]]),.05);
+    step(world,new Map([['pilot',{...result.input,jump:counter}]]),.05);onStep?.();
     peak=Math.max(peak,car.y);if(car.supportId===null)airborne=true;
     wind=currentAt(car)?.id??wind;
     if(airborne&&car.supportId!==null)return {state,jumps,peak,wind,landed:true};
@@ -184,10 +185,10 @@ test('both flight modes leave emergency braking in control when a large vehicle 
 test('a heavy Level 1 vehicle can launch either autonomous flight mode with a full tank',()=>{
   for(const mode of ['jump','sky'] as const)for(const economy of [false,true]){
     const {world,car,nav}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
-    Object.assign(car,{kind:'tesla-semi',speed:8,vx:8,tankLevel:1,air:100});
+    Object.assign(car,{kind:'tesla-semi',speed:10,vx:10,tankLevel:1,air:100});
     Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true,economy});
     if(mode==='jump'){
-      const leader=makeEntity('leader','model-3',-287,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
+      const leader=makeEntity('leader','ducati-panigale-v4',-291,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
     }
     const reserve=economy?81:90;
     car.air=reserve-.01;
@@ -195,10 +196,28 @@ test('a heavy Level 1 vehicle can launch either autonomous flight mode with a fu
     car.air=reserve;
     assert.equal(autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight()).jump,true,`${mode} can launch once its reserve is available`);
     car.air=100;
-    const result=flight(world,car,nav,mode);
+    const leader=world.entities.find(entity=>entity.id==='leader');
+    const result=flight(world,car,nav,mode,0,()=>{
+      if(leader&&car.y<leader.y+dimensions(leader.kind).height&&leader.y<car.y+dimensions(car.kind).height)
+        assert.equal(contact(body(car),body(leader)),null,'no sampled vehicle overlap');
+    });
     assert.ok(result.jumps>=1,`${mode} starts shared physics`);
     assert.equal(result.landed,true,`${mode} lands after the flight`);
     assert.equal(car.health,100,`${mode} completes the sampled flight without damage`);
+    if(mode==='jump'){
+      assert.equal(leader!.x,-291,'the stopped leader was not pushed');
+      assert.ok(car.x>leader!.x+6,'the Semi clears the stopped leader');
+    }
+  }
+});
+
+test('a heavy Level 1 vehicle does not launch into an uncleared car',()=>{
+  for(const mode of ['jump','sky'] as const){
+    const {world,car}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
+    Object.assign(car,{kind:'tesla-semi',speed:8,vx:8,tankLevel:1,air:100});
+    Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true});
+    const leader=makeEntity('leader','model-3',-287,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
+    assert.equal(autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight()).jump,false,`${mode} must not land inside the car`);
   }
 });
 
