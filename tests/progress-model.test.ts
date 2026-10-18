@@ -116,8 +116,8 @@ test('award groups cover the catalog and preserve actual milestone ordering and 
   assert.equal(awardTier('regular'),'Delivery milestone 2 / 14');
   assert.equal(awardTier('deliveries-250'),'Delivery milestone 14 / 14');
   assert.equal(awardTier('luxury-collection-4'),'Collection milestone 2 / 3');
-  assert.deepEqual(awardDetails('deliveries-1'),{description:'Complete your first delivery.',reward:'$2,500 cash'});
-  assert.deepEqual(awardDetails('berkeley-research'),{description:'Visit the Campanile.',reward:'$1,500 and 20% off efficient nozzles'});
+  assert.deepEqual(awardDetails('deliveries-1'),{description:'Complete your first delivery.',reward:'$500 cash'});
+  assert.deepEqual(awardDetails('berkeley-research'),{description:'Visit the Campanile.',reward:'$400 and 20% off efficient nozzles'});
   assert.deepEqual(awardDetails('park-it'),{description:'Complete a Park It challenge.',reward:'Award only'});
 });
 

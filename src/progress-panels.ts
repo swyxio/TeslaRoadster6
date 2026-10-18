@@ -210,7 +210,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     const details=target.querySelector<HTMLDetailsElement>('details[data-family]');
     if(details){details.open=true;expandedFamilies.add(targetId as AchievementTierId);}
     (details?.querySelector<HTMLElement>('summary')??target).focus({preventScroll:true});
-    target.scrollIntoView({block:'center'});
+    target.scrollIntoView({block:'start'});
   }
   return {scoresDialog,awardsDialog,update,openScores:()=>open(scoresDialog,renderScores),openAwards,close:()=>{if(scoresDialog.open)scoresDialog.close();if(awardsDialog.open)awardsDialog.close();}};
 }
