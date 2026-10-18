@@ -1,6 +1,20 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.9-alpha',
+    label: '0.0.9 Alpha',
+    date: '2026-10-18',
+    title: 'The scenic way around',
+    intro: 'A greener North Bay, more ways down the Peninsula and friendlier skies.',
+    sections: [
+      { title: 'Explore the Bay', items: [
+        'Explore the wooded Marin headlands and North Bay Playground; its races, ramps and ferry remain open.',
+        'At level 2, take US 101, I-280 or El Camino Real down the Peninsula. Drive the split yourself or place a map pin on the road you want to visit.',
+        'Skyline Express is much higher, its current is gentler, and fewer thermals fill the sky. Wind stops pushing you into locked areas so you can escape.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.8-alpha',
     label: '0.0.8 Alpha',
     date: '2026-10-18',

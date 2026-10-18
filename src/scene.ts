@@ -211,10 +211,10 @@ export class GameScene {
       box(scene,s.x,y+6,s.z-8,16,.45,.6,0x9e7bc5);
       const label=new T.Sprite(signMaterial);label.position.set(s.x,y+8,s.z-8);label.scale.set(9,2.25,1);this.shopLabels.push(label);scene.add(label);
     });
-    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
+    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['NORTH BAY PLAYGROUND FERRY',0,-230],['NORTH BAY PLAYGROUND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
-    for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.id==='colossus'?122:25,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+19,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }
@@ -252,11 +252,11 @@ export class GameScene {
     }
     const occupancy=world.entities.filter(e=>e.supportId==='ferry'&&e.kind!=='person').length;
     for(const sign of this.dockSigns){
-      const f=world.ferry,destination=sign.side==='sf'?'ROCKET ISLAND':'SAN FRANCISCO';
+      const f=world.ferry,destination=sign.side==='sf'?'NORTH BAY PLAYGROUND':'SAN FRANCISCO';
       const waiting=f.blocked==='ramp'?'CLEAR DECK':f.blocked==='capacity'?'DECK FULL':f.blocked==='apron'?'CLEAR ARRIVAL':null;
       const status=f.phase===sign.side?(waiting?`WAIT · ${waiting}`:`BOARDING · DEPARTS ${Math.ceil(f.remaining)}S`)
         :f.phase===(sign.side==='sf'?'to-sf':'to-island')?`ARRIVES ${Math.ceil(f.remaining)}S`
-        :f.phase==='sf'?'AT SAN FRANCISCO':f.phase==='island'?'AT ROCKET ISLAND':'EN ROUTE';
+        :f.phase==='sf'?'AT SAN FRANCISCO':f.phase==='island'?'AT NORTH BAY PLAYGROUND':'EN ROUTE';
       const text=`${destination}|${status} · ${occupancy}/${FERRY_DECK.vehicleCapacity} CARS`;
       if(text!==sign.text){
         sign.text=text;const ctx=sign.canvas.getContext('2d')!;ctx.clearRect(0,0,768,160);

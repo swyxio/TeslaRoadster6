@@ -1,5 +1,6 @@
 import type { Entity, Input, World } from './game';
 import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
+import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
@@ -27,8 +28,34 @@ function lane(points:Point[]):Point[]{
     return {x:point.x-4*tz/length,z:point.z+4*tx/length};
   });
 }
-export const HIGHWAY_ROUTE_IDS=[ROUTES.length,ROUTES.length+1] as const;
-ROUTES.push(lane(BAY_CIRCUIT),lane([...BAY_CIRCUIT].reverse()));
+const forward=BAY_CIRCUIT,reverse=[...BAY_CIRCUIT].reverse();
+const highwayLanes=[lane(forward),lane(reverse)];
+export const HIGHWAY_ROUTE_IDS:number[]=[ROUTES.length,ROUTES.length+1];
+ROUTES.push(...highwayLanes);
+
+// Reuse the exact main-circuit lane up to and after each junction. That lets
+// the directed navigation graph change roads at the split rather than treating
+// visually touching centerlines as disconnected lanes.
+function alternateCircuit(circuit:Point[],baseLane:Point[],road:Point[]):Point[]{
+  const matches=(a:Point,b:Point)=>a.x===b.x&&a.z===b.z;
+  const first=circuit.findIndex(point=>matches(point,road[0]));
+  const last=circuit.findIndex(point=>matches(point,road[road.length-1]));
+  if(first<0||last<=first)throw new Error('Alternate road does not join the Bay circuit');
+  return [...baseLane.slice(0,first+1),...lane(road).slice(1,-1),...baseLane.slice(last)];
+}
+for(const road of ALTERNATE_ROADS){
+  HIGHWAY_ROUTE_IDS.push(ROUTES.length,ROUTES.length+1);
+  ROUTES.push(alternateCircuit(forward,highwayLanes[0],road.points),
+    alternateCircuit(reverse,highwayLanes[1],[...road.points].reverse()));
+}
+// Each street's directed lanes intersect all three existing corridors.
+// Both ends turn inside the shared paved rectangle.
+for(const cross of PENINSULA_CROSS_STREETS)ROUTES.push([
+  {x:cross.x-cross.w/2+12,z:cross.z+3},
+  {x:cross.x+cross.w/2-12,z:cross.z+3},
+  {x:cross.x+cross.w/2-12,z:cross.z-3},
+  {x:cross.x-cross.w/2+12,z:cross.z-3},
+]);
 
 /** A fictional disabled-car vignette; timing uses real room seconds. */
 export const TRAFFIC_INCIDENT={entityId:'ambient-seed-0',cycleSeconds:360,startSeconds:180,endSeconds:240} as const;
@@ -184,7 +211,10 @@ function hidden(x:number,z:number,viewers:Entity[]):boolean{
   return viewers.every(viewer=>Math.hypot(viewer.x-x,viewer.z-z)>HIDDEN_DISTANCE);
 }
 function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):boolean {
-  const routeId=HIGHWAY_ROUTE_IDS[clockwise?0:1],viewers=observers(world);
+  // Spread the same bounded ambient fleet among the main route and both
+  // Peninsula alternatives. Preserve the incident's original main route.
+  const alternative=id==='ambient-seed-0'?0:hash(`road-${id}`)%(HIGHWAY_ROUTE_IDS.length/2);
+  const routeId=HIGHWAY_ROUTE_IDS[alternative*2+(clockwise?0:1)],viewers=observers(world);
   const kind=VEHICLE_IDS[hash(id)%VEHICLE_IDS.length];
   for(let attempt=0;attempt<36;attempt++){
     const fraction=(hash(`${id}:${attempt}`)%100000)/100000;

@@ -20,8 +20,8 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
       <button type="button" data-game="dome"><span class="game-icon" aria-hidden="true">⚽</span><span><strong>Rocket Dome</strong><small>Car soccer! Score in either goal. First color to five ends the match.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="park"><span class="game-icon" aria-hidden="true">🅿</span><span><strong>Park It</strong><small>Find your assigned space and park neatly against the clock.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="queue"><span class="game-icon" aria-hidden="true">🚙</span><span><strong>Cut the Queue</strong><small>Race for an open parking space when the queue starts.</small></span><b>Play ↗</b></button>
-      <button type="button" data-game="short"><span class="game-icon" aria-hidden="true">🏁</span><span><strong>Short Circuit</strong><small>Race through the checkpoints on Rocket Island’s short course.</small></span><b>Play ↗</b></button>
-      <button type="button" data-game="oval"><span class="game-icon" aria-hidden="true">🏎</span><span><strong>Speed Oval</strong><small>Take a fast lap around Rocket Island’s banked oval.</small></span><b>Play ↗</b></button>
+      <button type="button" data-game="short"><span class="game-icon" aria-hidden="true">🏁</span><span><strong>Short Circuit</strong><small>Race through the checkpoints on North Bay Playground’s short course.</small></span><b>Play ↗</b></button>
+      <button type="button" data-game="oval"><span class="game-icon" aria-hidden="true">🏎</span><span><strong>Speed Oval</strong><small>Take a fast lap around North Bay Playground’s banked oval.</small></span><b>Play ↗</b></button>
     </div><p class="minigames-feedback" role="status" aria-live="polite"></p><button type="button" class="minigames-leave" hidden>Leave current game</button>`;
   document.body.append(dialog);
 

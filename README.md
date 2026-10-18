@@ -20,7 +20,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. The Mini-games picker offers quick entry to the Dome, parking games and island races.
 
-**Tesland in 2050:** An enormous fictional Elon Musk colossus watches the Golden Gate from Marin; nearby, the First Delivery Monument celebrates the Bay’s most important cargo. Their bases are solid and landable. See [the setting](content/lore.md).
+**Tesland in 2050:** Cross the Golden Gate to the wooded Marin headlands, where the fictional First Delivery Monument celebrates the Bay’s most important cargo. Its base is solid and landable. See [the setting](content/lore.md).
 
 **Bay sights:** Explore 100 additional low-poly landmarks around San Francisco, Marin, Oakland, Berkeley, the Peninsula, Fremont and San Jose, plus Twin Peaks and Mount Tamalpais. Three small, drivable hills evoke those summits and Mission Peak. Locations, sizes and slopes are playful approximations. Roadside billboards advertise fictional parody tech companies. See [map details](docs/MAP.md) and the [northern](docs/BAY_LANDMARKS_NORTH.md) and [southern](docs/BAY_LANDMARKS_SOUTH.md) place references.
 
@@ -28,7 +28,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Rocket shops:** Collect a purple Rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, larger air tanks, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
-**Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
+**Sky currents:** Fly into blue lanes for free speed and air, or ride the golden thermal beside the Transamerica Pyramid for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
 
 **Release history:** The menu shows the current release and, after a successful drive starts, the last-played version and time saved in this browser. The changelog highlights known releases since that visit. History starts with 0.0.1 Alpha; earlier visits cannot be recovered. Browser storage is local to the origin and may be cleared or unavailable; it does not preserve game progress. See [publishing notes](docs/PUBLISHING.md).
 
@@ -36,7 +36,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 

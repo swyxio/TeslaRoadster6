@@ -7,7 +7,7 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // Version 28 combines the Rocket Island, charging-lot and Fremont Mars mission changes.
-assert.equal(PROTOCOL_VERSION, 28);
+assert.equal(PROTOCOL_VERSION, 29);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

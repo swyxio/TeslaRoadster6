@@ -1,6 +1,6 @@
-# Rocket Island and parking playgrounds · implementation status
+# North Bay Playground and parking playgrounds · implementation status
 
-This protocol v28 checkout combines the Rocket Island playground and cockpit view with the China Basin Rocket Dome, Rocket pickups, expanded charging lots and fictional shops. These are fictional, compressed game locations and do not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
+This protocol v29 checkout combines the North Bay Playground and cockpit view with the China Basin Rocket Dome, Rocket pickups, expanded charging lots and fictional shops. These are fictional, compressed game locations and do not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
 
 ## In the current checkout
 
@@ -11,9 +11,9 @@ This protocol v28 checkout combines the Rocket Island playground and cockpit vie
 - **Jump ramps:** Two orange eastbound ramps in the island infield launch ordinary and Rocket cars. Their shared 4 m lips preserve upward slope momentum and their swept surface contacts support landings; their approaches and fast landing corridors clear the other activities.
 - **Racing:** The short circuit and speed oval have optional, simulation-owned lobbies for up to eight drivers, a 15-second lobby, three-second countdown and directional 3D checkpoints. Joining assigns a checked start position; a host can start early. Cars remain physical and can bump. Results and timers are session-only.
 - **Parking:** The shared registry contains two playgrounds, one in SF and one on the island, and 24 charging lots. All 26 support Park It and Cut the queue through Actions → Mini-games. The picker uses the current lot when the driver is visiting one; queue entry can move the car to a checked approach if needed. Park It requires a complete car footprint, heading and speed to satisfy a stall for two seconds. Queue play records arrival order and awards eligible stalls. These games are opt-in and do not create persistent rewards.
-- **Rocket Dome:** The China Basin soccer arena is connected to SF streets by a drivable entrance and has direct, reversible travel from the Bay or Rocket Island. One shared ball and blue/orange goals serve all players without assigned teams; either side reaching five wins, followed by an automatic reset. Rocket-capable cars can adhere to its curved walls and ceiling. Delivery order time pauses and police pursuit clears in the dome.
+- **Rocket Dome:** The China Basin soccer arena is connected to SF streets by a drivable entrance and has direct, reversible travel from the Bay or North Bay Playground. One shared ball and blue/orange goals serve all players without assigned teams; either side reaching five wins, followed by an automatic reset. Rocket-capable cars can adhere to its curved walls and ceiling. Delivery order time pauses and police pursuit clears in the dome.
 
-The world clock accelerates the sky and traffic demand, not ferry travel, upgrades, physics or activity timers. Solo time advances while its simulation runs; an empty or restarted room does not accumulate simulation time.
+The world clock accelerates the sky and traffic demand, not ferry travel, upgrades, physics or activity timers. An empty or restarted room does not accumulate simulation time.
 
 ## Remaining work and evidence
 
