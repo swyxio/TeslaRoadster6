@@ -6,7 +6,7 @@ import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
-import { planNavigation, type Navigation } from './navigation';
+import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import { upgradePrice } from './research';
 import { setOta, updateOta } from './ota';
@@ -316,11 +316,19 @@ export function toggleAutopilot(world:World,id:string):boolean {
   if(!e||e.kind==='person'||e.supportId==='ferry')return false;
   if(e.autopilot){e.autopilot=false;e.navigation=null;return true;}e.navigation=null;return engageAutopilot(e);
 }
-export function setDestination(world:World,id:string,destination:{x:number;z:number}):boolean {
+function navigate(world:World,id:string,destination:{x:number;z:number},maxDestinationSnap?:number):boolean {
   const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.driver!==id||!Number.isFinite(destination.x)||!Number.isFinite(destination.z))return false;
-  const route=planNavigation(car,destination,player.delivery.level);if(!route)return false;
+  const route=planNavigation(car,destination,player.delivery.level,maxDestinationSnap);if(!route)return false;
   car.navigation=route;car.autopilot=true;car.pauseUntil=0;return true;
+}
+export function setDestination(world:World,id:string,destination:{x:number;z:number}):boolean {
+  return navigate(world,id,destination);
+}
+export function setDeliveryDestination(world:World,id:string):boolean {
+  const player=world.players.find(p=>p.id===id);if(!player)return false;
+  const target=orderTarget(player.delivery.order);
+  return !target.rooftop&&navigate(world,id,target,DELIVERY_DESTINATION_SNAP);
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e||!player)return;
@@ -732,6 +740,8 @@ function constrainDome(e:Entity,rocket:boolean):void {
 /** Optional authoritative transaction boundary. */
 export type EconomyHooks = {
   update(player:Player,apply:()=>void):void;
+  /** Attribute completed mini-games to the wallet driving at that moment. */
+  gameAward?(player:Player,apply:()=>void,capture?:()=>()=>void):void;
   pickup(player:Player,car:Entity,pickup:Pickup):void;
   canCollect?(driverId:string):boolean;
 };
@@ -753,6 +763,7 @@ export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{su
 }
 function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
   const update=(player:Player,apply:()=>void)=>economy?economy.update(player,apply):apply();
+  const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
   world.time+=dt;
   updateFerry(world,dt,(entity,side)=>{const moved=moveToSide(world,entity,side);if(moved&&entity.driver)onRelocation?.(entity.driver);return moved;});
   for(const e of world.entities){updateDomeReturn(world,e);enterDomeIfInside(e);}
@@ -1080,7 +1091,10 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     for(const participant of world.soccer.participants){
       const player=world.players.find(p=>p.id===participant.playerId);
       const entity=world.entities.find(e=>e.id===player?.entityId);
-      if(player&&entity?.inDome)update(player,()=>awardDomeMatchAchievements(player,participant,world.soccer.winningPlayers.includes(player.id)));
+      if(player&&entity?.inDome){
+        const evidence=structuredClone(participant),won=world.soccer.winningPlayers.includes(player.id);
+        gameAward(player,()=>awardDomeMatchAchievements(player,evidence,won));
+      }
     }
   }
   for(const player of world.players){
@@ -1110,7 +1124,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
   if(world.parking.rounds.length||world.races.rounds.length)for(const player of world.players){
     const finishedParking=world.parking.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.finishedAt!==null));
     const finishedRace=world.races.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.status==='finished'));
-    if(finishedParking||finishedRace)update(player,()=>updateGameAchievements(world,player));
+    if(finishedParking||finishedRace)gameAward(player,()=>updateGameAchievements(world,player),()=>{
+      // Capture only when a new award entered the wallet queue; these results
+      // expire before a delayed earlier transaction necessarily settles.
+      const evidence={...world,parking:structuredClone(world.parking),races:structuredClone(world.races)};
+      return ()=>updateGameAchievements(evidence,player);
+    });
   }
   for(const pickup of world.pickups){
     if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time,economy?.canCollect);continue;}

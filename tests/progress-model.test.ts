@@ -20,7 +20,7 @@ test('delivery standings prioritize completed runs and then total earnings, inde
 test('finished parking and race results remain visible after authoritative rounds expire',()=>{
   const {world,player}=setup(),history=new GameResultHistory();
   world.parking.rounds.push({lotId:'sf-playground',mode:'queue',phase:'results',hostId:player.id,openedAt:1,startedAt:2,endsAt:30,claimedStallIds:['sf-1'],entrants:[{playerId:player.id,entityId:player.entityId,joinedAt:1,targetId:'sf-1',hold:2,finishedAt:9.5,elapsed:7.5,overtakes:2}]});
-  world.races.rounds.push({courseId:'oval',phase:'results',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,entrants:[{playerId:player.id,entityId:player.entityId,status:'finished',nextGate:8,finishedAt:27.3,elapsed:23.3,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:27.3}}]});
+  world.races.rounds.push({courseId:'oval',phase:'results',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,starterCount:1,entrants:[{playerId:player.id,entityId:player.entityId,status:'finished',nextGate:8,finishedAt:27.3,elapsed:23.3,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:27.3}}]});
   const active=history.observe(world,player.id,'bay','driver',++snapshot);
   assert.equal(active.current.length,2);assert.equal(active.recent.length,0);
   assert.match(active.current[0].detail,/7\.5s · 2 overtakes/);
@@ -33,7 +33,7 @@ test('finished parking and race results remain visible after authoritative round
 
 test('race placement remains pending until final results',()=>{
   const {world,player}=setup(),history=new GameResultHistory();
-  world.races.rounds.push({courseId:'oval',phase:'active',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,entrants:[{playerId:player.id,entityId:player.entityId,status:'finished',nextGate:8,finishedAt:27.3,elapsed:23.3,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:27.3}}]});
+  world.races.rounds.push({courseId:'oval',phase:'active',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,starterCount:1,entrants:[{playerId:player.id,entityId:player.entityId,status:'finished',nextGate:8,finishedAt:27.3,elapsed:23.3,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:27.3}}]});
   assert.equal(history.observe(world,player.id,'bay','driver',++snapshot).current[0].detail,'Finished in 23.3s · standings pending');
   world.races.rounds[0].phase='results';
   assert.equal(history.observe(world,player.id,'bay','driver',++snapshot).current[0].detail,'Finished in 23.3s · #1');
@@ -42,7 +42,7 @@ test('race placement remains pending until final results',()=>{
 test('an unfinished race and unclaimed parking space are described without inventing results',()=>{
   const {world,player}=setup(),history=new GameResultHistory();
   world.parking.rounds.push({lotId:'sf-playground',mode:'park',phase:'results',hostId:player.id,openedAt:1,startedAt:1,endsAt:30,claimedStallIds:[],entrants:[{playerId:player.id,entityId:player.entityId,joinedAt:1,targetId:'sf-1',hold:0,finishedAt:null,elapsed:null,overtakes:null}]});
-  world.races.rounds.push({courseId:'short',phase:'results',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,entrants:[{playerId:player.id,entityId:player.entityId,status:'dnf',nextGate:2,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:30}}]});
+  world.races.rounds.push({courseId:'short',phase:'results',hostId:player.id,openedAt:3,startedAt:4,endsAt:50,starterCount:1,entrants:[{playerId:player.id,entityId:player.entityId,status:'dnf',nextGate:2,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:30}}]});
   const scores=history.observe(world,player.id,'bay','driver',++snapshot);
   assert.match(scores.current[0].detail,/ended before you parked/);
   assert.equal(scores.current[1].detail,'Did not finish');
@@ -65,6 +65,15 @@ test('award progress uses only known delivery and current match state',()=>{
   assert.equal(awardProgress('rocket-rookie',player,world),'Ball touched · finish the match');
   assert.equal(awardProgress('roadster-champion',player,world),'Goal credited · win the match');
   assert.equal(awardProgress('no-rockets-needed',player,world),'Try a stock car next match');
+});
+
+test('race win progress uses starters after green even if an opponent leaves',()=>{
+  const {world,player}=setup();
+  const entrant={playerId:player.id,entityId:player.entityId,status:'entered' as const,nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:1,endsAt:20,starterCount:2,entrants:[entrant]});
+  assert.match(awardProgress('race-winner',player,world),/Checkpoint/);
+  world.races.rounds[0].starterCount=1;
+  assert.match(awardProgress('race-winner',player,world),/Start a race with another driver/);
 });
 
 

@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, makeEntity, type Entity, type World } from '../shared/game';
+import { createWorld, makeEntity, removePlayer, type Entity, type World } from '../shared/game';
 import { initialDelivery } from '../shared/delivery';
-import { initialAchievements } from '../shared/achievements';
+import { initialAchievements, updateGameAchievements } from '../shared/achievements';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import {
   createRace, joinRace, leaveRace, playerRace, startRace, updateRace,
@@ -35,8 +35,9 @@ test('lobby, solo start and countdown are simulation-timed and bounded',()=>{
   assert.equal(startRace(state,course.id,w,'b'),false);
   assert.equal(startRace(state,course.id,w,'a'),true);
   assert.equal(state.rounds[0].phase,'countdown');assert.equal(state.rounds[0].startedAt,3);
+  assert.equal(state.rounds[0].starterCount,0,'starters are not fixed before green');
   assert.equal(joinRace(state,course,w,'ninth'),false,'no late entry');
-  tick(state,w,RACE_COUNTDOWN);assert.equal(state.rounds[0].phase,'active');assert.equal(state.rounds[0].endsAt,3+RACE_DURATION);
+  tick(state,w,RACE_COUNTDOWN);assert.equal(state.rounds[0].phase,'active');assert.equal(state.rounds[0].endsAt,3+RACE_DURATION);assert.equal(state.rounds[0].starterCount,8);
   const solo=world(),soloState=createRace();add(solo,'solo');start(soloState,solo,'solo');
   assert.equal(soloState.rounds[0].entrants.length,1);
   const auto=world(),autoState=createRace();add(auto,'auto');joinRace(autoState,course,auto,'auto');
@@ -99,7 +100,61 @@ test('simultaneous finishes rank deterministically by ID without modifying physi
     const entrants=state.rounds[0].entrants;
     assert.equal(entrants.find(e=>e.playerId==='a')!.rank,1);assert.equal(entrants.find(e=>e.playerId==='z')!.rank,2);
     assert.equal(entrants.find(e=>e.playerId==='a')!.elapsed,entrants.find(e=>e.playerId==='z')!.elapsed);
+    w.races=state;
+    for(const player of w.players)updateGameAchievements(w,player);
+    assert.ok(w.players.find(player=>player.id==='a')!.achievements.unlocked.includes('race-winner'));
+    assert.ok(!w.players.find(player=>player.id==='z')!.achievements.unlocked.includes('race-winner'));
   }
+});
+
+test('First Across uses drivers at green and counts an opponent who disconnects',()=>{
+  const w=world(),state=createRace(),a=add(w,'a');add(w,'b');add(w,'c');w.races=state;
+  for(const id of ['a','b','c'])assert.equal(joinRace(state,course,w,id),true);
+  assert.equal(startRace(state,course.id,w,'a'),true);
+  leaveRace(state,'c'); // Leaving during countdown means c never starts.
+  tick(state,w,RACE_COUNTDOWN);
+  const round=state.rounds[0];assert.equal(round.starterCount,2);
+  removePlayer(w,'b');
+  assert.equal(round.entrants.find(entrant=>entrant.playerId==='b')!.status,'dnf');
+  assert.equal(round.starterCount,2,'a departed starter still counts');
+  // A saved-driver switch removes the old entrant from the public round.
+  round.entrants=round.entrants.filter(entrant=>entrant.playerId!=='b');
+  a.z=-25;tick(state,w,1);
+  const winner=w.players.find(player=>player.id==='a')!;
+  updateGameAchievements(w,winner);
+  assert.ok(winner.achievements.unlocked.includes('race-winner'));
+  assert.equal(round.starterCount,2,'removing the old identity does not erase its start');
+});
+
+test('a lone starter cannot win the contested award, including after a countdown departure',()=>{
+  for(const countdownDeparture of [false,true]){
+    const w=world(),state=createRace(),a=add(w,'a');w.races=state;
+    assert.equal(joinRace(state,course,w,'a'),true);
+    if(countdownDeparture){add(w,'b');assert.equal(joinRace(state,course,w,'b'),true);}
+    assert.equal(startRace(state,course.id,w,'a'),true);
+    if(countdownDeparture)leaveRace(state,'b');
+    tick(state,w,RACE_COUNTDOWN);assert.equal(state.rounds[0].starterCount,1);
+    a.z=-25;tick(state,w,1);
+    const player=w.players.find(item=>item.id==='a')!;updateGameAchievements(w,player);
+    assert.ok(player.achievements.unlocked.includes('race-finisher'));
+    assert.ok(!player.achievements.unlocked.includes('race-winner'));
+  }
+});
+
+test('first place is awarded before remaining drivers finish and survives the winner leaving',()=>{
+  const w=world(),state=createRace(),a=add(w,'a'),b=add(w,'b');w.races=state;
+  assert.equal(joinRace(state,course,w,'a'),true);assert.equal(joinRace(state,course,w,'b'),true);
+  assert.equal(startRace(state,course.id,w,'a'),true);tick(state,w,RACE_COUNTDOWN);
+  a.z=-25;tick(state,w,1);
+  const winner=w.players.find(player=>player.id==='a')!,round=state.rounds[0];
+  assert.equal(round.phase,'active');assert.equal(round.entrants.find(entrant=>entrant.playerId==='a')!.rank,1);
+  updateGameAchievements(w,winner);
+  assert.ok(winner.achievements.unlocked.includes('race-winner'),'first place is earned before the other finisher');
+  removePlayer(w,'a');b.z=-25;tick(state,w,1);
+  const other=w.players.find(player=>player.id==='b')!;updateGameAchievements(w,other);
+  assert.equal(round.phase,'results');assert.equal(round.entrants.find(entrant=>entrant.playerId==='a')!.rank,1);
+  assert.equal(winner.achievements.unlocked.filter(id=>id==='race-winner').length,1);
+  assert.ok(!other.achievements.unlocked.includes('race-winner'));
 });
 
 test('lobby leave, out-of-range departure and active disconnect, reset or vehicle change clean up',()=>{

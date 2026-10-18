@@ -461,8 +461,8 @@ function driveToDelivery(){
   const target=orderTarget(player.delivery.order);
   if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
-  controls.clear();const requestId=session.setDestination(target.x,target.z);
-  pendingDestination={requestId,expires:performance.now()+5000,success:`Self-driving toward ${target.name}. Use the controls to take over.`,failure:'No road route to this delivery. Drive closer and try again.'};
+  controls.clear();const requestId=session.setDeliveryDestination();
+  pendingDestination={requestId,expires:performance.now()+5000,success:'Self-driving toward your delivery. Use the controls to take over.',failure:'No safe road route to this delivery from here. Try another starting point or drive manually.'};
   notice('Finding a route to your delivery…');
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};

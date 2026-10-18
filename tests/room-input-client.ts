@@ -9,6 +9,7 @@ type FencedAction = {type:'interact'|'reset'|'autopilot'|'dome'}
   | {type:'selectVehicle';kind:string}
   | {type:'minigame';game:'park'|'queue'|'short'|'oval'}
   | {type:'destination';x:number;z:number;requestId:number}
+  | {type:'deliveryDestination';requestId:number}
   | {type:'luxury';action:'collect';vehicle:string;requestId:number}
   | {type:'race';action:'join';courseId:'short'|'oval'};
 const newer=(id:number,previous:number)=>{const delta=(id-previous+2**31)%2**31;return delta>0&&delta<2**30;};

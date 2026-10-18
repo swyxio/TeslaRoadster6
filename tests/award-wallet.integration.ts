@@ -93,11 +93,38 @@ async function join(room:string,code:string) {
   await until(()=>client.messages.slice(resultIndex+1).some(message=>message.type==='state')&&client.input.active,'saved driver control snapshot');
   return client;
 }
+async function joinGuest(room:string) {
+  const client=connect(`/api/room/${room}`);
+  await until(()=>!!client.last('welcome')&&!!client.last('state'),'guest room ready');
+  send(client,{type:'identity',code:null,requestId:1});
+  await until(()=>client.last('identityResult')?.requestId===1&&client.input.active,'guest identity ready');
+  return client;
+}
+async function prepareDomeGuest() {
+  const room=`bind-${randomUUID().slice(0,8)}`,client=await joinGuest(room);
+  const playerId=client.last('welcome')!.id as string;
+  const players=await rpc<{playerId:string;driverId:string}[]>('players',{room});
+  const driverId=players.find(player=>player.playerId===playerId)!.driverId;
+  client.input.action({type:'dome'});
+  await until(()=>{
+    const world=client.last('state')?.world,player=world?.players.find((item:Message)=>item.id===playerId);
+    return world?.entities.find((entity:Message)=>entity.id===player?.entityId)?.inDome;
+  },'guest enters Rocket Dome');
+  await rpc('dome-participant',{room,playerId});
+  return {room,client,playerId,driverId};
+}
+async function newRecoveryCode(name:string) {
+  const chat=connect('/api/chat');
+  await until(()=>chat.socket.readyState===WebSocket.OPEN,`${name} chat opens`);
+  send(chat,{type:'hello',name});await until(()=>!!chat.last('ready'),`${name} chat ready`);
+  send(chat,{type:'save'});await until(()=>!!chat.last('recovery'),`${name} recovery code`);
+  return chat.last('recovery')!.code as string;
+}
 async function barrier(client:Client,token:number) {
   send(client,{type:'sync',token});
   await until(()=>client.messages.some(message=>message.type==='state'&&message.sync===token),`wallet barrier ${token}`);
 }
-type FaultState={held:boolean;heldAction?:EconomyIntent['action']};
+type FaultState={started:number;held:boolean;heldAction?:EconomyIntent['action']};
 type RecordState={progress:DriverProgress};
 const faultState=(driverId:string)=>rpc<FaultState>('fault-state',{driverId});
 const release=(driverId:string)=>rpc('release',{driverId});
@@ -156,17 +183,219 @@ try {
   assert.ok(!observer.messages.some(message=>message.type==='wallet'&&message.unlocked.includes('park-it')),'owner wallet is never sent to spectator');
   assert.ok(!JSON.stringify(observer.messages).includes(driver.code),'spectator never receives owner recovery code');
 
+  // A guest may save while a ball already in motion ends their Dome match.
+  // Hold the actual bind, not the award commit, and verify the old wallet owns
+  // the result before and after that same wallet becomes a saved driver.
+  const same=await prepareDomeGuest(),sameCode=await newRecoveryCode('Dome Guest');
+  await rpc('arm-bind',{});
+  send(same.client,{type:'identity',code:sameCode,requestId:2});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('bind-fault-state',{})).held,'guest save bind held');
+    await rpc('dome-score',{room:same.room});
+    await until(()=>same.client.last('state')?.world.soccer.phase==='win','Dome ends during guest save');
+    await until(async()=>(await inspect(same.driverId)).progress.unlocked.includes('rocket-rookie'),'pending-bind Dome award committed to guest wallet');
+  } finally { await rpc('release-bind',{}); }
+  await until(()=>same.client.last('identityResult')?.requestId===2,'guest save finishes');
+  assert.equal(same.client.last('identityResult')!.ok,true,'saving the same wallet succeeds');
+  await barrier(same.client,104);
+  assert.equal((await inspect(same.driverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,1,'the original driver receives the award exactly once');
+
+  // If an incoming different wallet is in flight, the result belongs to the
+  // old driver and makes the switch ineligible rather than transferring it.
+  const changed=await prepareDomeGuest(),incoming=await savedDriver('Incoming Driver');
+  await rpc('arm-bind',{});
+  send(changed.client,{type:'identity',code:incoming.code,requestId:2});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('bind-fault-state',{})).held,'different identity bind held');
+    await rpc('dome-score',{room:changed.room});
+    await until(async()=>(await inspect(changed.driverId)).progress.unlocked.includes('rocket-rookie'),'prior wallet owns result during different identity bind');
+  } finally { await rpc('release-bind',{}); }
+  await until(()=>changed.client.last('identityResult')?.requestId===2,'different identity bind resolves');
+  assert.equal(changed.client.last('identityResult')!.ok,false,'a played guest cannot switch wallets in place');
+  assert.equal((await inspect(changed.driverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,1);
+  assert.equal((await inspect(incoming.id)).progress.unlocked.filter(id=>id==='rocket-rookie').length,0,'incoming wallet does not inherit the old result');
+
+  // The second unstarted check also covers a result after the new profile
+  // acquired its fence but before the acquire RPC returned to this room.
+  const acquired=await prepareDomeGuest(),acquiredDriver=await savedDriver('Acquire Boundary');
+  await rpc('arm-acquire',{driverId:acquiredDriver.id});
+  send(acquired.client,{type:'identity',code:acquiredDriver.code,requestId:2});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:acquiredDriver.id})).held,'different identity held after acquire');
+    await rpc('dome-score',{room:acquired.room});
+    await until(async()=>(await inspect(acquired.driverId)).progress.unlocked.includes('rocket-rookie'),'original wallet owns result after incoming acquire');
+  } finally { await rpc('release-acquire',{driverId:acquiredDriver.id}); }
+  await until(()=>acquired.client.last('identityResult')?.requestId===2,'acquired identity decision resolves');
+  assert.equal(acquired.client.last('identityResult')!.ok,false,'post-acquire check rejects replacement after an award');
+  assert.equal((await inspect(acquiredDriver.id)).progress.unlocked.filter(id=>id==='rocket-rookie').length,0,'acquired wallet does not inherit the award');
+  const boundPlayers=await rpc<{playerId:string;driverId:string}[]>('players',{room:acquired.room});
+  assert.equal(boundPlayers.find(player=>player.playerId===acquired.playerId)?.driverId,acquired.driverId,'original wallet remains attached');
+
+  // The one-time win must survive rollback of a preceding rejected operation.
+  // A speculative income behind the rejected operation must not be replayed.
+  const replay=await prepareDomeGuest(),replayCode=await newRecoveryCode('Rejected Before Win');
+  send(replay.client,{type:'identity',code:replayCode,requestId:2});
+  await until(()=>replay.client.last('identityResult')?.requestId===2,'replay driver saved');
+  assert.equal(replay.client.last('identityResult')!.ok,true);
+  const baseline=(await inspect(replay.driverId)).progress;
+  await rpc('arm',{driverId:replay.driverId,fault:'hold-reject'});
+  try {
+    await rpc('queue-income',{room:replay.room,playerId:replay.playerId,count:1});
+    await until(async()=>(await faultState(replay.driverId)).held,'preceding operation held before rejection');
+    await rpc('queue-income',{room:replay.room,playerId:replay.playerId,count:1});
+    await rpc('dome-score',{room:replay.room});
+    await until(()=>replay.client.last('state')?.world.soccer.phase==='win','Dome ends behind held operation');
+    await until(async()=>{
+      const queues=await rpc<{playerId:string;queued:number}[]>('queues',{room:replay.room});
+      return (queues.find(item=>item.playerId===replay.playerId)?.queued??0)>=3;
+    },'both speculative income and game award are queued');
+    send(replay.client,{type:'sync',token:106});
+    await pause(100);
+    assert.ok(!replay.client.messages.some(message=>message.type==='state'&&message.sync===106),'barrier does not confirm before rollback');
+  } finally { await release(replay.driverId); }
+  await until(()=>replay.client.messages.some(message=>message.type==='state'&&message.sync===106),'barrier waits for recovered award');
+  const afterReplay=(await inspect(replay.driverId)).progress;
+  assert.equal(afterReplay.unlocked.filter(id=>id==='rocket-rookie').length,1,'Dome award survives rollback exactly once');
+  assert.equal(afterReplay.unlocked.filter(id=>id==='roadster-champion').length,1,'Dome win survives rollback exactly once');
+  assert.equal(afterReplay.cash,baseline.cash+4_000,'replay credits only the two game-award rewards');
+  assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+4_000,'rejected and speculative income are not replayed');
+
+  // Reject the award's own first commit, then hold its replay. A barrier may
+  // only settle after that replay commits, and unrelated queued income drops.
+  for(const [index,reason] of ['invalid','revision'].entries()){
+    const attempt=await prepareDomeGuest();
+    await barrier(attempt.client,201+index);
+    await until(async()=>{
+      const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:attempt.room});
+      return queues.some(item=>item.playerId===attempt.playerId&&item.queued===0&&!item.processing);
+    },`${reason} award queue drains`);
+    const before=(await inspect(attempt.driverId)).progress;
+    const armed=await rpc<{started:number}>('arm',{driverId:attempt.driverId,fault:[reason==='invalid'?'hold-reject':'hold-revision','hold-before']});
+    const token=211+index;
+    try {
+      await rpc('dome-score',{room:attempt.room});
+      await until(async()=>(await faultState(attempt.driverId)).held,`${reason} award write held`);
+      const first=await faultState(attempt.driverId);
+      assert.ok(first.heldAction?.kind==='progress'&&first.heldAction.progress.unlocked.includes('rocket-rookie'),'rejected head contains the actual game award');
+      await rpc('queue-income',{room:attempt.room,playerId:attempt.playerId,count:1});
+      send(attempt.client,{type:'sync',token});
+      await pause(100);
+      assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'barrier waits for the first award write');
+      await release(attempt.driverId);
+      await until(async()=>{const state=await faultState(attempt.driverId);return state.held&&state.started>=armed.started+2;},`${reason} award replay held`);
+      const second=await faultState(attempt.driverId);
+      assert.ok(second.heldAction?.kind==='progress'&&second.heldAction.progress.unlocked.includes('rocket-rookie'),'replay retains award evidence');
+      assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'barrier waits for the replayed award');
+      assert.ok(!(await inspect(attempt.driverId)).progress.unlocked.includes('rocket-rookie'),'held replay is not reported as committed');
+    } finally { await release(attempt.driverId).catch(()=>{}); }
+    await until(()=>attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),`${reason} barrier settles after award replay`);
+    const recovered=(await inspect(attempt.driverId)).progress;
+    assert.equal(recovered.unlocked.filter(id=>id==='rocket-rookie').length,1,`${reason} award is stored exactly once`);
+    assert.equal(recovered.unlocked.filter(id=>id==='roadster-champion').length,1,`${reason} winning award is stored exactly once`);
+    assert.equal(recovered.cash,before.cash+4_000,`${reason} replay excludes speculative income`);
+    assert.equal(recovered.eligibleIncome,before.eligibleIncome+4_000);
+  }
+
+  // A permanently rejected award receives one retry, then fails closed rather
+  // than falsely acknowledging its barrier or retrying forever.
+  for(const [index,reason] of ['invalid','revision'].entries()){
+    const attempt=await prepareDomeGuest();
+    await barrier(attempt.client,221+index);
+    await until(async()=>{
+      const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:attempt.room});
+      return queues.some(item=>item.playerId===attempt.playerId&&item.queued===0&&!item.processing);
+    },`${reason} permanent-failure queue drains`);
+    let closed:CloseEvent|undefined;
+    attempt.client.socket.addEventListener('close',event=>{closed=event;},{once:true});
+    const armed=await rpc<{started:number}>('arm',{driverId:attempt.driverId,fault:reason==='invalid'?['hold-reject','reject']:['hold-revision','revision']});
+    const token=231+index;
+    try {
+      await rpc('dome-score',{room:attempt.room});
+      await until(async()=>(await faultState(attempt.driverId)).held,`${reason} permanent award write held`);
+      const first=await faultState(attempt.driverId);
+      assert.ok(first.heldAction?.kind==='progress'&&first.heldAction.progress.unlocked.includes('rocket-rookie'));
+      send(attempt.client,{type:'sync',token});
+      await pause(100);
+      assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token));
+    } finally { await release(attempt.driverId).catch(()=>{}); }
+    await until(()=>!!closed,`${reason} failed wallet closes`,15_000);
+    assert.equal(closed!.code,1011);
+    assert.match(closed!.reason,/Award could not be saved/);
+    assert.ok(!attempt.client.messages.some(message=>message.type==='state'&&message.sync===token),'failed award barrier is never acknowledged');
+    assert.equal((await faultState(attempt.driverId)).started,armed.started+2,'the award is attempted exactly twice');
+    assert.ok(!(await inspect(attempt.driverId)).progress.unlocked.includes('rocket-rookie'),'uncommitted award is not claimed as saved');
+  }
+
+  // Two real room clients start a race. The first finisher disconnects while
+  // its award commit is held and the other driver is still on the course.
+  const [raceDriver,raceOtherDriver]=await Promise.all([savedDriver('Race Winner'),savedDriver('Race Challenger')]);
+  const raceRoom=`race-${randomUUID().slice(0,8)}`;
+  const racer=await join(raceRoom,raceDriver.code),challenger=await join(raceRoom,raceOtherDriver.code);
+  const racerId=racer.last('welcome')!.id as string,challengerId=challenger.last('welcome')!.id as string;
+  const raceRound=()=>challenger.last('state')?.world.races.rounds.find((round:Message)=>round.courseId==='short');
+  const raceEntrant=(id:string)=>raceRound()?.entrants.find((entrant:Message)=>entrant.playerId===id);
+  racer.input.action({type:'minigame',game:'short'});
+  await until(()=>!!raceEntrant(racerId),'first driver joins the race');
+  challenger.input.action({type:'minigame',game:'short'});
+  await until(()=>!!raceEntrant(challengerId),'second driver joins the race');
+  send(racer,{type:'race',action:'start',courseId:'short'});
+  await until(()=>raceRound()?.phase==='active'&&raceRound()?.starterCount===2,'contested race starts');
+  await barrier(racer,107);
+  await until(async()=>{
+    const queues=await rpc<{playerId:string;queued:number;processing:boolean}[]>('queues',{room:raceRoom});
+    return queues.some(item=>item.playerId===racerId&&item.queued===0&&!item.processing);
+  },'winner wallet queue drains before the race finish');
+  await rpc('arm',{driverId:raceDriver.id,fault:'hold-before'});
+  try {
+    for(let index=0;index<5;index++){
+      const gate=await rpc<{index:number}>('race-gate',{room:raceRoom,playerId:racerId});
+      assert.equal(gate.index,index);
+      await until(()=>(raceEntrant(racerId)?.nextGate??0)>index,`race checkpoint ${index+1}`);
+    }
+    assert.equal(raceRound().phase,'active','the other racer has not finished');
+    assert.equal(raceEntrant(racerId).rank,1);assert.equal(raceEntrant(challengerId).status,'entered');
+    await until(async()=>(await faultState(raceDriver.id)).held,'winner award commit held');
+    const raceHeld=await faultState(raceDriver.id);
+    assert.ok(raceHeld.heldAction?.kind==='progress'&&raceHeld.heldAction.progress.unlocked.includes('race-winner'));
+    assert.ok(!(await inspect(raceDriver.id)).progress.unlocked.includes('race-winner'),'uncommitted win is not exposed');
+    racer.socket.close();
+    await until(()=>challenger.last('state')?.world.players.every((player:Message)=>player.id!==racerId),'winner disconnects before the challenger finishes');
+    assert.equal(raceRound().phase,'active');assert.equal(raceEntrant(challengerId).status,'entered');
+  } finally { await release(raceDriver.id); }
+  await until(async()=>(await inspect(raceDriver.id)).progress.unlocked.includes('race-winner'),'disconnected winner award commits');
+  const recoveredRacer=await join(`race-return-${randomUUID().slice(0,8)}`,raceDriver.code);
+  assert.equal(recoveredRacer.last('wallet')!.unlocked.filter((id:string)=>id==='race-winner').length,1,'First Across survives disconnect and recovery');
+  assert.ok(!challenger.last('wallet')!.unlocked.includes('race-winner'),'other racer does not inherit the win');
+
+  // A successful switch before the result must also discard the old driver's
+  // touches: a later goal without any new touch cannot earn the new wallet it.
+  const beforeResult=await prepareDomeGuest(),replacement=await savedDriver('Replacement Driver');
+  await rpc('race-result',{room:beforeResult.room,playerId:beforeResult.playerId});
+  await until(()=>beforeResult.client.last('state')?.world.races.rounds.some((round:Message)=>round.entrants.some((entrant:Message)=>entrant.playerId===beforeResult.playerId)),'old driver race result visible');
+  send(beforeResult.client,{type:'identity',code:replacement.code,requestId:2});
+  await until(()=>beforeResult.client.last('identityResult')?.requestId===2,'switch before result completes');
+  assert.equal(beforeResult.client.last('identityResult')!.ok,true,'an unstarted guest can switch');
+  await until(()=>beforeResult.client.last('state')?.world.races.rounds.every((round:Message)=>round.entrants.every((entrant:Message)=>entrant.playerId!==beforeResult.playerId)),'replacement does not inherit old race result');
+  await rpc('dome-score',{room:beforeResult.room});
+  await until(()=>beforeResult.client.last('state')?.world.soccer.phase==='win','Dome ends after switch');
+  await barrier(beforeResult.client,105);
+  assert.equal((await inspect(replacement.id)).progress.unlocked.filter(id=>id==='rocket-rookie').length,0,'old touches cannot earn the replacement driver an award');
+
   // Restart Wrangler with the same Durable Object storage, then attach each
   // saved driver in a fresh room using its real recovery code.
   await stop(child);child=undefined;child=start();await ready();
   assert.equal(awardCount((await inspect(driver.id)).progress.unlocked),1,'award survives process restart');
+  assert.equal((await inspect(same.driverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,1,'guest-save Dome award survives process restart');
+  assert.equal((await inspect(replay.driverId)).progress.unlocked.filter(id=>id==='rocket-rookie').length,1,'recovered Dome award survives process restart');
   const restoredRoom=`restore-${randomUUID().slice(0,8)}`;
   const recovered=await join(restoredRoom,driver.code),recoveredObserver=await join(restoredRoom,spectator.code);
+  const recoveredDome=await join(restoredRoom,sameCode);
   assert.equal(awardCount(recovered.last('wallet')!.unlocked),1,'owner recovers saved award in a new room');
   assert.equal(awardCount(recoveredObserver.last('wallet')!.unlocked),0,'spectator recovers without owner award');
+  assert.equal(recoveredDome.last('wallet')!.unlocked.filter((id:string)=>id==='rocket-rookie').length,1,'saved guest recovers the Dome award');
   const recoveredId=recovered.last('welcome')!.id as string;
   assert.equal(awardCount(recovered.last('state')!.world.players.find((player:Message)=>player.id===recoveredId).achievements.unlocked),1);
-  console.log('PASS: real Park It award commits only after the held write, other driver continues independently, and saved-driver recovery survives Wrangler restart.');
+  console.log('PASS: held and rejected writes preserve only earned awards, identity binds keep awards on the original driver, and a contested race winner recovers after disconnect.');
 } catch(error) {
   console.error('Wrangler output:\n'+logs);
   throw error;

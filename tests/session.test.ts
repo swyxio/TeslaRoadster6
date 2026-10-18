@@ -118,6 +118,8 @@ test('joining the current room keeps its seat and may select a car',()=>{
 test('offline navigation requests fail without starting a local session',()=>{
   const session=new Session(), requestId=session.setDestination(-180,60);
   assert.deepEqual(session.destinationResult,{requestId,ok:false});
+  const deliveryRequest=session.setDeliveryDestination();
+  assert.deepEqual(session.destinationResult,{requestId:deliveryRequest,ok:false});
   assert.equal(session.world.players.length,0);
 });
 
@@ -305,9 +307,14 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'destinationResult',requestId,ok:true});
   assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
-  session.enterMinigame('park');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:2,edgeBaseline:{jump:0,flip:0}});
+  const deliveryRequest=session.setDeliveryDestination();
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'deliveryDestination',requestId:deliveryRequest,actionSeq:2,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  socket.message({type:'destinationResult',requestId:deliveryRequest,ok:true});
+  assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId:deliveryRequest,ok:true});
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:3,edgeBaseline:{jump:0,flip:0}});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:3});
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
   session.disconnect();

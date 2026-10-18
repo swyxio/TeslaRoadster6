@@ -54,7 +54,7 @@ export const ACHIEVEMENTS = {
   'park-it': { name:'Perfect Park', description:'Complete a Park It challenge.' },
   'queue-cutter': { name:'Queue Cutter', description:'Claim a space in Cut the Queue.' },
   'race-finisher': { name:'Checkered Flag', description:'Finish a race course.' },
-  'race-winner': { name:'First Across', description:'Win a race against another finisher.' },
+  'race-winner': { name:'First Across', description:'Finish first in a race that started with at least two drivers.' },
   'to-mars': { name:'To Mars', description:'Join the $1 billion global mission and board at the Fremont spaceport. Reward: $10,000.' },
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
@@ -117,7 +117,7 @@ export function updateGameAchievements(world:World,player:Player):void {
   for(const round of world.races.rounds)for(const entrant of round.entrants){
     if(entrant.playerId!==player.id||entrant.status!=='finished')continue;
     unlock(player.achievements,'race-finisher');
-    if(round.phase==='results'&&entrant.rank===1&&round.entrants.filter(other=>other.status==='finished').length>=2)
+    if((round.phase==='active'||round.phase==='results')&&entrant.rank===1&&round.starterCount>=2)
       unlock(player.achievements,'race-winner');
   }
 }

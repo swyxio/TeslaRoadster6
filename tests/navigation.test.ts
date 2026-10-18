@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, enterMinigame, makeEntity, NEUTRAL, parkingAction, setDestination, step, travelDome, type World } from '../shared/game';
+import { addPlayer, createWorld, enterMinigame, makeEntity, NEUTRAL, parkingAction, setDeliveryDestination, setDestination, step, travelDome, type World } from '../shared/game';
 import { updateFerry } from '../shared/ferry';
-import { HIGHWAYS, terrainHeight } from '../shared/map';
+import { HIGHWAYS, ROADS, terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { newPolice, updatePolice } from '../shared/police';
 import { hasRockets } from '../shared/upgrades';
@@ -10,7 +10,8 @@ import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { parseMessage } from '../worker/protocol';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { HIGHWAY_ROUTE_IDS, ROUTES } from '../shared/traffic';
-import { LEVELS, requiredLevelAt } from '../shared/delivery';
+import { CUSTOMERS, LEVELS, RESTAURANTS, requiredLevelAt } from '../shared/delivery';
+import { DELIVERY_DESTINATION_SNAP, planNavigation } from '../shared/navigation';
 
 function drivingWorld(){
   const world=createWorld(),player=addPlayer(world,'driver','Driver');
@@ -33,6 +34,68 @@ function peninsulaPavementEdge(point:{x:number;z:number}):number{
     edge=Math.min(edge,Math.max(Math.abs(point.x-street.x)-street.w/2,Math.abs(point.z-street.z)-street.d/2));
   return edge;
 }
+
+function cityPavementEdge(point:{x:number;z:number}):number{
+  let edge=Infinity;
+  for(const road of ROADS){
+    if(road.kind==='island')continue;
+    const dx=point.x-road.x,dz=point.z-road.z,angle=road.angle??0,c=Math.cos(angle),s=Math.sin(angle);
+    edge=Math.min(edge,Math.max(Math.abs(dx*c-dz*s)-road.w/2,Math.abs(dx*s+dz*c)-road.d/2));
+  }
+  return edge;
+}
+
+test('delivery navigation reaches western and central SF markers on the mapped streets',()=>{
+  const targets=[...RESTAURANTS.filter(place=>['burma','tartine','tonys','nanking'].includes(place.id)),
+    CUSTOMERS.find(place=>place.id==='coast')!];
+  for(const target of targets){
+    const {world,player,car}=drivingWorld();
+    player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
+    const restaurant=RESTAURANTS.findIndex(place=>place.id===target.id);
+    if(restaurant>=0)player.delivery.order.restaurant=restaurant;
+    else {player.delivery.order.stage='dropoff';player.delivery.order.customer=CUSTOMERS.findIndex(place=>place.id===target.id);}
+    assert.equal(setDeliveryDestination(world,'driver'),true,`${target.id}: connected`);
+    for(let i=0;i<4800&&car.autopilot;i++){
+      step(world,new Map(),.05);
+      if(i%5===0)assert.ok(cityPavementEdge(car)<.05,`${target.id}: stays on mapped pavement`);
+    }
+    assert.equal(car.navigation?.status,'arrived',target.id);
+    assert.ok(Math.hypot(car.x-target.x,car.z-target.z)<9,`${target.id}: inside delivery marker`);
+    assert.equal(car.health,100,`${target.id}: no building collision`);
+    if(restaurant>=0)assert.equal(player.delivery.order.stage,'dropoff',`${target.id}: pickup completed`);
+    else assert.equal(player.delivery.completed,1,`${target.id}: dropoff completed`);
+  }
+});
+
+test('delivery navigation uses the current server order and rejects rooftop goals',()=>{
+  const {world,player,car}=drivingWorld();
+  player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
+  player.delivery.order.restaurant=RESTAURANTS.findIndex(place=>place.id==='tartine');
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  const first=car.navigation!.destination;
+  player.delivery.order.restaurant=RESTAURANTS.findIndex(place=>place.id==='burma');
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  const next=car.navigation!.destination,target=RESTAURANTS[player.delivery.order.restaurant];
+  assert.ok(Math.hypot(next.x-target.x,next.z-target.z)<=DELIVERY_DESTINATION_SNAP);
+  assert.ok(Math.hypot(next.x-first.x,next.z-first.z)>DELIVERY_DESTINATION_SNAP);
+  player.delivery.order.stage='dropoff';player.delivery.order.customer=CUSTOMERS.findIndex(place=>place.rooftop);
+  car.navigation=null;car.autopilot=false;
+  assert.equal(setDeliveryDestination(world,'driver'),false);
+  assert.equal(car.navigation,null);
+});
+
+test('map pins can snap farther than delivery destinations and point turnarounds are rejected',()=>{
+  const {world,player,car}=drivingWorld();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
+  const pin={x:-330,z:-90};
+  assert.equal(planNavigation(car,pin,player.delivery.level,DELIVERY_DESTINATION_SNAP),null,'delivery too far from a connected lane');
+  assert.equal(setDestination(world,'driver',pin),true,'the same map pin can snap to a farther lane');
+  const snap=car.navigation!.destination;
+  assert.ok(Math.hypot(snap.x-pin.x,snap.z-pin.z)>DELIVERY_DESTINATION_SNAP);
+  assert.ok(Math.hypot(snap.x-pin.x,snap.z-pin.z)<=100);
+  car.autopilot=false;car.navigation=null;
+  assert.equal(setDestination(world,'driver',{x:390,z:-120}),false,'unsafe cross-Bay turn');
+  assert.equal(car.autopilot,false);
+});
 
 test('map pins reach either Peninsula alternative in both directions after the level two unlock',()=>{
   for(const road of ALTERNATE_ROADS)for(const direction of [0,1] as const){
@@ -231,6 +294,10 @@ test('destination and mini-game protocol accepts only finite bounded requests',(
   assert.deepEqual(parseMessage(JSON.stringify(valid)),valid);
   assert.equal(parseMessage(JSON.stringify({...valid,x:10001})),null);
   assert.equal(parseMessage(JSON.stringify({...valid,requestId:0})),null);
+  const delivery={type:'deliveryDestination',requestId:3,...fence};
+  assert.deepEqual(parseMessage(JSON.stringify(delivery)),delivery);
+  assert.equal(parseMessage(JSON.stringify({...delivery,requestId:0})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'deliveryDestination',requestId:3})),null);
   assert.equal(parseMessage(JSON.stringify({type:'minigame',game:'bogus',...fence})),null);
 });
 

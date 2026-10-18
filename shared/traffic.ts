@@ -114,7 +114,7 @@ export function trafficInput(e:Entity,world:World):Input {
   const progress=((e.x-previous.x)*incoming.x+(e.z-previous.z)*incoming.z)/(incoming.x*incoming.x+incoming.z*incoming.z||1);
   const lateral=Math.abs((e.x-previous.x)*incoming.z-(e.z-previous.z)*incoming.x)/(Math.hypot(incoming.x,incoming.z)||1);
   // On city corners, pause briefly; points along a straight road are not stops.
-  if(final&&distance<5&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
+  if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
     waypoint=(waypoint+1)%route.length;
     if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;

@@ -104,7 +104,8 @@ export function awardProgress(id:AchievementId,player:Player|undefined,world:Wor
     const race=playerRace(world.races,player.id);
     if(!race)return 'Join a race to start';
     const course=RACE_COURSES.find(item=>item.id===race.round.courseId);
-    return id==='race-winner'&&race.round.entrants.length<2?'Race another driver to compete for this award':course?`Checkpoint ${Math.min(race.entrant.nextGate,course.gates.length)} / ${course.gates.length}`:'Race in progress';
+    const starters=race.round.phase==='lobby'||race.round.phase==='countdown'?race.round.entrants.length:race.round.starterCount;
+    return id==='race-winner'&&starters<2?'Start a race with another driver to compete for this award':course?`Checkpoint ${Math.min(race.entrant.nextGate,course.gates.length)} / ${course.gates.length}`:'Race in progress';
   }
   if(id==='to-mars')return world.mars.fund>=MARS_GOAL?(player.delivery.level<2?'Funded · unlock level 2 and board at Fremont':'Funded · board at Fremont'):`Mission fund: $${world.mars.fund.toLocaleString('en-US')} / $${MARS_GOAL.toLocaleString('en-US')}`;
   if(id==='bay-hopper'&&player.achievements.crossing?.crossedWater)return 'Over the water · reach the opposite shore';

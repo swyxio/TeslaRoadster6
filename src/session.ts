@@ -228,6 +228,11 @@ export class Session {
     if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
+  setDeliveryDestination(){
+    const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
+    if(this.status!=='online'||!this.actionWithBarrier({type:'deliveryDestination',requestId}))this.destinationResult={requestId,ok:false};
+    return requestId;
+  }
   setName(name:string) {
     this.name = name;
     if (this.id) this.send({type:'name',name});
