@@ -4,8 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
-// Navigation and direct mini-game entry share the relocated Dome world protocol.
-assert.equal(PROTOCOL_VERSION, 23);
+// Navigation and mini-game entry share the relocated Dome and match-awards protocol.
+assert.equal(PROTOCOL_VERSION, 24);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

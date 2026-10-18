@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.3-alpha',
-    label: '0.0.3 Alpha',
+    version: '0.0.4-alpha',
+    label: '0.0.4 Alpha',
     date: '2026-10-18',
     title: 'Take the scenic route',
     intro: 'Pick a destination, settle in and enjoy the drive with friends.',
@@ -13,7 +13,21 @@ export const RELEASES = [
       ] },
       { title: 'Play together', items: [
         'Choose Rocket Dome, parking games or a race from the mini-games picker and jump straight into a round.',
-        'Scores and awards now explain your session progress and what resets when you leave.'
+        'Scores and awards now explain your session progress and what resets when you leave.',
+        'Choose Drive solo for a local session on your own, or join the shared Bay and named rooms.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.3-alpha',
+    label: '0.0.3 Alpha',
+    date: '2026-10-18',
+    title: 'One shared Bay',
+    intro: 'The game now starts in a shared room automatically.',
+    sections: [
+      { title: 'Play together', items: [
+        'Arrive in the public Bay room immediately, or follow an invite link into a named room.',
+        'If a room is full, retry or name another room. Connection errors do not start an offline game.'
       ] }
     ]
   },
