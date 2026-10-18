@@ -32,7 +32,7 @@ export function createParking():ParkingState { return { rounds:[] }; }
 function axes(yaw:number) {
   return { wx:Math.cos(yaw), wz:-Math.sin(yaw), dx:-Math.sin(yaw), dz:-Math.cos(yaw) };
 }
-function inside(area:ParkingArea, x:number, z:number):boolean {
+export function insideParkingArea(area:ParkingArea, x:number, z:number):boolean {
   const a=axes(area.yaw), dx=x-area.x, dz=z-area.z;
   return Math.abs(dx*a.wx+dz*a.wz)<=area.width/2 && Math.abs(dx*a.dx+dz*a.dz)<=area.length/2;
 }
@@ -85,8 +85,8 @@ export function joinParking(state:ParkingState,lot:ParkingLot,world:World,player
   const car=playerCar(world,playerId);
   const ground=car?terrainHeight(car.x,car.z):null;
   if((mode!=='park'&&mode!=='queue')||!car||car.supportId!=='ground'||ground===null||Math.abs(car.y-ground)>.5||!Number.isFinite(world.time)||
-    !(inside(lot.area,car.x,car.z)||(mode==='queue'&&inside(lot.approach,car.x,car.z)))||
-    (mode==='queue'&&!inside(lot.approach,car.x,car.z))||
+    !(insideParkingArea(lot.area,car.x,car.z)||(mode==='queue'&&insideParkingArea(lot.approach,car.x,car.z)))||
+    (mode==='queue'&&!insideParkingArea(lot.approach,car.x,car.z))||
     state.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===playerId)))return false;
   let round=state.rounds.find(round=>round.lotId===lot.id);
   if(round&&(round.mode!==mode||round.phase!==(mode==='queue'?'waiting':'active')||round.entrants.length>=PARKING_MAX_ENTRANTS||world.time>=round.endsAt))return false;
@@ -135,8 +135,8 @@ export function updateParking(state:ParkingState,lots:readonly ParkingLot[],worl
     if(!lot){round.entrants=[];continue;}
     round.entrants=round.entrants.filter(entrant=>{
       const car=playerCar(world,entrant.playerId);
-      return !!car&&car.id===entrant.entityId&&(inside(lot.area,car.x,car.z)||(round.mode==='queue'&&inside(lot.approach,car.x,car.z)))&&
-        (round.phase!=='waiting'||inside(lot.approach,car.x,car.z));
+      return !!car&&car.id===entrant.entityId&&(insideParkingArea(lot.area,car.x,car.z)||(round.mode==='queue'&&insideParkingArea(lot.approach,car.x,car.z)))&&
+        (round.phase!=='waiting'||insideParkingArea(lot.approach,car.x,car.z));
     });
     if(!round.entrants.length)continue;
     if(!round.entrants.some(e=>e.playerId===round.hostId))round.hostId=round.entrants[0].playerId;
