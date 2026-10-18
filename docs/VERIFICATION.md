@@ -5,6 +5,7 @@ These entries describe separate historical builds. Check the version and scope i
 ## Economy progression simulations · 2026-10-18 Pacific
 
 - On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `6456933`, `pnpm test` passed 310 tests and `pnpm build` passed, with the same warning.
 - Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
 
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
@@ -69,6 +70,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 - In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
 - This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
+
 ## Economy planning model · 2026-10-18 Pacific
 
 - On checkout `8625bf0`, `pnpm test` passed 273 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The standalone planning script also passed a separate TypeScript check.
