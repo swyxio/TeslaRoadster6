@@ -130,6 +130,8 @@ remains HOLD because its natural later assignment diverged. Compare new
 observations by rerunning both versions with the same current harness rather
 than treating historical rows as matched pairs.
 
+A [hosted same-game reproducibility check](performance-baselines/2026-10-18-two-delivery-fixture/) completed the controlled two-delivery route on `1f722dd` and `4d7cee4`. Its heavily loaded no-video pair is a fixture check, not a performance budget or game regression comparison.
+
 The [0.0.25/0.0.28 paired video proof](performance-baselines/2026-10-18-paired-video-route/)
 confirms delivery, jump and flight coverage with closely aligned paths. Video
 encoding and concurrent host work make its timings unsuitable as a no-video

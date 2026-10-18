@@ -1,9 +1,15 @@
 # Verification · 2026-10-18 Pacific
 
+## Production 0.0.32 readback and smoke · 2026-10-18 Pacific
+
+- Cloudflare [production build e4983c05-6e72-46fd-a8cd-a846d65fcffc](https://dash.cloudflare.com/2d017c943ff16e4c52783635ef05e535/workers/services/view/bay-drive/production/builds/e4983c05-6e72-46fd-a8cd-a846d65fcffc) is merge `1f722ddc8fe9e2950b2af8d866691d78af49bf4a`. The live entry bundle SHA-256 was `d50c340ce91e5de9db57a6ac405e6185270d3347087050f3295745847e364f13`; health reported protocol 46 and configured admission capacity 64, not measured capacity.
+- Fresh practice guests on Chromium/Metal returned HTTP 200, rendered, accelerated, boosted and jumped airborne at 1280 × 720 desktop and emulated 390 × 844 portrait and 844 × 390 landscape, with no page or console errors. Desktop boost and portrait jump were visually inspected. The [local screenshot record and checksums](benchmarks/2026-10-18-production-0.0.32/) preserve the evidence. Physical devices, audio and timing were not tested.
+
 ## Controlled two-delivery fixture · 2026-10-18 Pacific
 
 - The current fixture mounted against `26fc934` and historical `009af539` passed isolated local Wrangler checks for authenticated one-use staging, guest/identity/pose/access/catalog guards, waiting for a pending assignment, and preserving the car and delivery progress. The test confirms the committed second order appears in room snapshots and that the normal wallet processes its pickup and drop-off after test-only synthetic stops. These positions are test setup, not a driven route or video proof.
 - Twelve focused report and comparison tests and the recorder/fixture TypeScript checks passed. The two-delivery route, jumps and flight still require a newly coordinated paired recording and path comparison before interpreting frame or room deltas. No timed benchmark was run in this check.
+- A subsequent [hosted same-game reproducibility pair](performance-baselines/2026-10-18-two-delivery-fixture/) on `1f722dd` and `4d7cee4` completed both deliveries, jumps and flight, with all five paths aligned. The local staging commands took 207 / 131 ms. The no-video virtual runner was heavily loaded; this fixture check is not a performance budget or regression verdict.
 
 ## Boost and landing feedback candidate · 2026-10-18 Pacific
 
