@@ -39,7 +39,7 @@ function connect() {
   socket.addEventListener('message',event=>{
     const message=JSON.parse(String(event.data));
     input.observe(message);
-    if(message.type==='welcome'){state.id=message.id;state.version=message.version;}
+    if(message.type==='welcome'){state.id=message.id;state.version=message.version;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
     if(message.type==='state'){state.world=message.world;state.history.push(message.world);}
   });
   socket.addEventListener('close',event=>{state.closed=event.code;});
@@ -82,7 +82,7 @@ try {
   }),'the level-zero boundary remains enforced');
 
   // Face west and apply ordinary forward flight, without boost or hover.
-  inputTimer=setInterval(()=>{if(driver.input.ready)driver.input.send({...NEUTRAL,throttle:1});},50);
+  inputTimer=setInterval(()=>{if(driver.input.active)driver.input.send({...NEUTRAL,throttle:1});},50);
   await eventually(()=>observer.state.history.some(world=>{
     const car=world.entities.find(entity=>entity.id===pilot.entityId);
     return !!car&&car.x<ACCESS_BOUNDARIES.oaklandX-20&&car.vx<0;

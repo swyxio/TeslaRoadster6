@@ -6,6 +6,38 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Take the scenic ride',
+    intro: 'Settle in for smoother self-driving and keep your little victories.',
+    sections: [
+      { title: 'Cruise to your delivery', items: [
+        'Double-tap Shift or tap Self-drive to delivery to route toward your current pickup or drop-off.',
+        'Self-driving eases through turns and follows traffic with more room. Use the controls to take over.'
+      ] },
+      { title: 'Keep your victories', items: [
+        'Scores show delivery milestones, room standings and current or recent mini-game results.',
+        'Earn new parking and racing awards, and keep confirmed awards with your saved driver.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.16-alpha',
+    label: '0.0.16 Alpha',
+    date: '2026-10-18',
+    title: 'The Vault opens',
+    intro: 'Save your driver, build a collection and explore the Bay.',
+    sections: [
+      { title: 'Your collection', items: [
+        'Find the Vault to buy six luxury cars and motorcycles. Collect owned vehicles at a workshop.',
+        'Your saved driver keeps cash, delivery progress, achievements, vehicle upgrades, paint and decals.',
+        'Visit UCSF, UC Berkeley, Stanford and SFO for research awards and selected workshop discounts.',
+        'Explore the economy story for delivery and fleet simulations and a Bay landmark map.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.15-alpha',
+    label: '0.0.15 Alpha',
+    date: '2026-10-18',
     title: 'Keep the wheels moving',
     intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
     sections: [
@@ -49,7 +81,7 @@ export const RELEASES = [
     intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [
       { title: 'Drive together', items: [
-        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'The game always joins a shared room. If a room is full or unavailable, retry or choose another room.',
         'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
         'The changelog stays on its own page instead of downloading with the game.'
       ] }

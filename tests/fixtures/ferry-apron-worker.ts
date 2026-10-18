@@ -1,15 +1,15 @@
 // Local-only deterministic staging. The real room still receives and applies
 // the frames, runs the ferry/physics step, and emits its ordinary messages.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
 import { FERRY_DOCKS } from '../../shared/map';
 import type { World } from '../../shared/game';
 import type { ScheduledInput } from '../../shared/tick-input';
 
 export default worker;
-export { GlobalChat };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
 
 export class GameRoom extends ProductionGameRoom {
-  override fetch():Response {
+  override async fetch(request:Request):Promise<Response> {
     const world=Reflect.get(this,'world') as World;
     const first=world.players.length===0;
     if(first){
@@ -28,7 +28,7 @@ export class GameRoom extends ProductionGameRoom {
         runTick.call(this);
       });
     }
-    const response=super.fetch();
+    const response=await super.fetch(request);
     if(first&&response.status===101){
       const player=world.players[0],car=world.entities.find(entity=>entity.id===player?.entityId);
       if(!car)throw new Error('Fixture could not find the driver');

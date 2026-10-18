@@ -94,7 +94,7 @@ export function awardSaveView(online:boolean,status:AwardWalletStatus,wallet:rea
 export function awardProgress(id:AchievementId,player:Player|undefined,world:World):string {
   if(!player)return 'Connect to see this drive’s progress';
   const deliveryTarget=awardDeliveryTarget(id);
-  if(deliveryTarget)return `${Math.min(player.delivery.completed,deliveryTarget)} / ${deliveryTarget} deliveries`;
+  if(deliveryTarget)return `${Math.min(player.delivery.completed,deliveryTarget)} / ${deliveryTarget} ${deliveryTarget===1?'delivery':'deliveries'}`;
   if(id==='park-it'||id==='queue-cutter'){
     const round=world.parking.rounds.find(item=>item.mode===(id==='park-it'?'park':'queue')&&item.entrants.some(e=>e.playerId===player.id));
     const entrant=round?.entrants.find(e=>e.playerId===player.id);

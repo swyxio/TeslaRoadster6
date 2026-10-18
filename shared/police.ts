@@ -3,6 +3,7 @@ import { NEUTRAL } from './game';
 import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
+import { updateLevel } from './delivery';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -59,7 +60,7 @@ function heightAboveSurface(e:Entity){
   return e.y-floor;
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
-export function updatePolice(world:World,dt:number):void {
+export function updatePolice(world:World,dt:number,onTicket?:(player:Player,apply:()=>void)=>void):void {
   const entities=new Map(world.entities.map(entity=>[entity.id,entity]));
   const players=new Map(world.players.map(player=>[player.id,player]));
   const pursuits=new Set(world.entities.flatMap(entity=>entity.police?.targetId?[entity.police.targetId]:[]));
@@ -100,11 +101,17 @@ export function updatePolice(world:World,dt:number):void {
     if(cop.supportId!==null&&target.supportId===cop.supportId&&d<12){
       target.speed*=Math.exp(-2.2*dt);
       if(d<7&&Math.abs(target.speed)<4){
-        const delivery=player.delivery, flight=delivery.flight;
-        const durationFine=Math.min(120,Math.floor(flight.seconds/2)*8),heightFine=Math.min(80,Math.floor(flight.peakHeight/10)*10),repeatFine=delivery.tickets*35;
-        const amount=60+durationFine+heightFine+repeatFine;
-        delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(flight.seconds),peakHeight:Math.round(flight.peakHeight),durationFine,heightFine,repeatFine};
-        delivery.cash-=amount;delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
+        const measuredFlight={...player.delivery.flight};
+        const applyTicket=()=>{
+          const delivery=player!.delivery, flight=delivery.flight;
+          const durationFine=Math.min(120,Math.floor(measuredFlight.seconds/2)*8),heightFine=Math.min(80,Math.floor(measuredFlight.peakHeight/10)*10),repeatFine=delivery.tickets*35;
+          const amount=60+durationFine+heightFine+repeatFine;
+          delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(measuredFlight.seconds),peakHeight:Math.round(measuredFlight.peakHeight),durationFine,heightFine,repeatFine};
+          delivery.cash-=amount;updateLevel(delivery);delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
+        };
+        if(onTicket)onTicket(player,applyTicket);else applyTicket();
+        // The stop and patrol reset are immediate physical effects; the fine is committed separately.
+        player.delivery.ticketGraceUntil=world.time+20;player.delivery.flight.seconds=0;player.delivery.flight.peakHeight=0;
         target.autopilot=false;target.navigation=null;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
         for(const other of world.entities)if(other.police?.targetId===player.id)resumePatrol(other);
         continue;

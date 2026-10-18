@@ -1,22 +1,30 @@
-// Test-only entry point: grant the two drivers endgame cash and place them at
-// Fremont so the real room can exercise contributions/boarding without months
-// of deliveries. This file is never used by the deployed Wrangler config.
-import worker, { GameRoom, GlobalChat } from '../../worker/index';
-import { FREMONT_SPACEPORT } from '../../shared/map';
+// Local-only fixture: seed verified global income and place a player at Fremont.
+import worker, { GameRoom, GlobalChat, DriverProfile, GlobalIncome, RoomEconomy } from '../../worker/index';
+import { FREMONT_SPACEPORT, terrainHeight } from '../../shared/map';
 import type { World } from '../../shared/game';
-export { GlobalChat };
-export default worker;
-
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
 export class MarsTestRoom extends GameRoom {
-  override fetch():Response {
-    const response=super.fetch();
-    const world=(this as unknown as {world:World}).world;
-    const player=world.players.at(-1);
-    if(player){
-      player.delivery.cash=600_000_000;player.delivery.level=2;
-      const car=world.entities.find(e=>e.id===player.entityId)!;
-      Object.assign(car,{x:FREMONT_SPACEPORT.entrance.x+(world.players.length===1?-5:5),z:FREMONT_SPACEPORT.entrance.z,y:0,yaw:-Math.PI/2,speed:0,supportId:'ground'});
-    }
-    return response;
+  async fixturePlace(playerId:string,side:number){
+    const world=Reflect.get(this,'world') as World;
+    const player=world.players.find(p=>p.id===playerId),car=world.entities.find(e=>e.id===player?.entityId);
+    if(!car)throw new Error('Player missing');
+    const x=FREMONT_SPACEPORT.entrance.x+side*5,z=FREMONT_SPACEPORT.entrance.z;
+    Object.assign(car,{x,z,y:terrainHeight(x,z)??0,yaw:-Math.PI/2,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0,supportId:'ground'});
   }
 }
+type Env={ROOMS:DurableObjectNamespace<MarsTestRoom>;INCOME:DurableObjectNamespace<GlobalIncome>};
+export default {
+  async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
+    const url=new URL(request.url);
+    if(url.pathname==='/__mars-test/credit'){
+      const data=await request.json() as {id:string;amount:number};
+      return Response.json(await env.INCOME.get(env.INCOME.idFromName('global')).credit(data.id,data.amount));
+    }
+    if(url.pathname==='/__mars-test/place'){
+      const data=await request.json() as {room:string;id:string;side:number};
+      await env.ROOMS.get(env.ROOMS.idFromName(data.room)).fixturePlace(data.id,data.side);
+      return Response.json({ok:true});
+    }
+    return worker.fetch(request,env as never,ctx);
+  }
+};

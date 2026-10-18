@@ -32,7 +32,7 @@ function requirementMaterial(level:GateLevel):T.SpriteMaterial {
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='#ffcc83';ctx.font='bold 52px system-ui';ctx.fillText(`LEVEL ${level}  ·  ${goal.name.toUpperCase()}`,512,64,950);
   ctx.fillStyle='#fff7e7';ctx.font='bold 40px system-ui';
-  ctx.fillText(`${goal.deliveries} DELIVERIES  +  $${goal.earned} TOTAL EARNED`,512,137,950);
+  ctx.fillText(`$${goal.cash.toLocaleString()} AVAILABLE CASH`,512,137,950);
   ctx.fillStyle='#ffcc83';ctx.font='bold 33px system-ui';ctx.fillText('LOCKED ON THE ROAD AND IN THE AIR',512,205,950);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   return new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false});

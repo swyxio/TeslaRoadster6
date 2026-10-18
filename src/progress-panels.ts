@@ -7,6 +7,7 @@ import { awardDeliveryTarget, awardProgress, awardSaveView, deliveryStandings, G
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const plural=(number:number,word:string)=>`${number} ${word}${number===1?'':'s'}`;
+const gameAwards=new Set<AchievementId>(['rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner']);
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,text?:string):HTMLElementTagNameMap[K] {
   const item=document.createElement(tag);item.className=className;if(text!==undefined)item.textContent=text;return item;
 }
@@ -52,7 +53,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     }
     const player=session.world.players.find(item=>item.id===session.id);
     const personal=element('section','progress-section');
-    personal.append(element('h3','','Your delivery progress'),element('p','progress-note',awardSaveView(true,session.walletStatus,session.wallet?.unlocked??null,[]).text));
+    personal.append(element('h3','','Your delivery progress'),element('p','progress-note',session.walletStatus==='guest'?'Guest drive · save your driver to keep delivery progress.':'Delivery progress is saved to your driver.'));
     if(player){
       const stats=element('div','progress-stats');
       for(const [label,value] of [['Deliveries',String(player.delivery.completed)],['Delivery earnings',money(player.delivery.earned)],['Cash now',money(session.wallet?.cash??player.delivery.cash)]]){
@@ -104,9 +105,12 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     saveStatus.textContent=view.text;
     if(!available()){body.append(element('p','progress-empty','Awards will appear when your driver is connected.'));return;}
     body.append(element('p','progress-awards-count',`${all.size} / ${Object.keys(ACHIEVEMENTS).length} earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
+    const entries=Object.entries(ACHIEVEMENTS) as [AchievementId,typeof ACHIEVEMENTS[AchievementId]][];
+    for(const [heading,items] of [['Mini-game awards',entries.filter(([id])=>gameAwards.has(id))],['Explore and deliver',entries.filter(([id])=>!gameAwards.has(id))]] as const){
+    body.append(element('h3','progress-subheading',heading));
     const list=element('ul','progress-award-list');
-    for(const [key,award] of Object.entries(ACHIEVEMENTS)){
-      const id=key as AchievementId,isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
+    for(const [id,award] of items){
+      const isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
       const row=element('li',`progress-award${earned?' is-earned':''}`),icon=element('span','progress-award-icon',earned?'★':'◇');icon.setAttribute('aria-hidden','true');
       const copy=element('div','progress-award-copy');copy.append(element('strong','',award.name),element('p','',award.description));
       const status=isSaved?'Saved to your driver':isCurrent?(session.walletStatus==='guest'?'Earned · save your driver to keep':'Earned · awaiting wallet confirmation'):awardProgress(id,player,session.world);
@@ -115,6 +119,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       row.append(icon,copy);list.append(row);
     }
     body.append(list);
+    }
   }
   function update(){
     observe();

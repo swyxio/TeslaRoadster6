@@ -18,7 +18,7 @@ export type ChatServerMessage =
   | { type: 'recovery'; code: string }
   | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed'; requestId?: number };
 
-type StoredIdentity = { hash: string; name: string };
+type StoredIdentity = { hash: string; name: string; walletId?:string };
 type Session = {
   playerId?: string;
   name?: string;
@@ -58,6 +58,31 @@ const IP_BUCKET_LIMIT = 1000;
 // non-hibernating API, so an instance must remain awake while players are connected.
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
+  /** Bind a saved identity to a server-created guest wallet once, without copying earnings. */
+  async bindWallet(code:string,guestWalletId:string):Promise<{playerId:string;name:string;walletId:string|null}|null> {
+    const parsed=parseRecoveryCode(code);
+    if(!parsed || !/^[0-9a-f-]{36}$/i.test(guestWalletId))return null;
+    const givenHash=await hashRecoverySecret(parsed.secret);
+    return this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      const recordedHash=typeof saved?.hash==='string' && /^[0-9a-f]{64}$/.test(saved.hash)?saved.hash:'0'.repeat(64);
+      const valid=crypto.subtle.timingSafeEqual(new TextEncoder().encode(givenHash),new TextEncoder().encode(recordedHash));
+      if(!saved||!valid||typeof saved.name!=='string')return null;
+      if(saved.walletId){
+        const owner=await txn.get<string>(`wallet:${saved.walletId}`);
+        if(owner!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+        return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId};
+      }
+      const walletKey=`wallet:${guestWalletId}`,owner=await txn.get<string>(walletKey);
+      // The reverse claim and identity binding share one transaction: even a
+      // superseded request cannot attach a second identity to the same wallet.
+      if(owner && owner!==parsed.playerId)return {playerId:parsed.playerId,name:saved.name,walletId:null};
+      await txn.put(key,{...saved,walletId:guestWalletId} satisfies StoredIdentity);
+      await txn.put(walletKey,parsed.playerId);
+      return {playerId:parsed.playerId,name:saved.name,walletId:guestWalletId};
+    });
+  }
+
   private sessions = new Map<WebSocket, Session>();
   private drainingIds = new Set<string>();
   private history: ChatMessage[] = [];
@@ -249,9 +274,11 @@ export class GlobalChat extends DurableObject {
     try {
       if (session.issuedCode) {
         const key = `identity:${session.playerId}`;
-        const saved = await this.ctx.storage.get<StoredIdentity>(key);
-        if (!saved) throw new Error('Saved identity unavailable');
-        await this.ctx.storage.put(key, { ...saved, name } satisfies StoredIdentity);
+        await this.ctx.storage.transaction(async txn=>{
+          const saved=await txn.get<StoredIdentity>(key);
+          if(!saved)throw new Error('Saved identity unavailable');
+          await txn.put(key,{...saved,name} satisfies StoredIdentity);
+        });
       }
       session.name = name;
       if (this.sessions.has(socket)) this.send(socket, { type: 'renamed', playerId: session.playerId, name, requestId });

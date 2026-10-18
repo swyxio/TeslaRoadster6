@@ -5,22 +5,22 @@ import { profiles, simulate, summarize, type FiveMinuteWindow, type Profile, typ
 
 type Path = { name: string; profile: Profile; winChance?: number };
 const base: Profile = { ...profiles[0], sessionMinutes: 60, landmarkChance: .12, cabsBeforeHome: 0, cabsAfterHome: 0,
-  cosmetics: [], earlyUpgrades: [], propertyFirst: true, utilization: .75, travelAfterTasks: 12 };
+  cosmetics: [], earlyUpgrades: [], propertyFirst: true, utilization: .75, travelAfterTasks: 12, programs: ['Berkeley energy', 'Stanford speed'] };
 // The branches differ in spending, delivery style and active-session habits. Side games are occasional diversions.
 export const paths: Path[] = [
   { name: 'Delivery saver', profile: { ...base, name: 'Delivery saver' } },
   { name: 'First cab', profile: { ...base, name: 'First cab', cabsBeforeHome: 1, cabsAfterHome: 1 } },
   { name: 'Fleet reinvestor', profile: { ...base, name: 'Fleet reinvestor', cabsBeforeHome: 3, cabsAfterHome: 3 } },
   { name: 'Customizer', profile: { ...base, name: 'Customizer', cabsBeforeHome: 1, cabsAfterHome: 1, utilization: .7,
-    cosmetics: [2000, 5000, 15000], earlyUpgrades: [10000, 20000] } },
+    cosmetics: [2000, 5000, 15000], earlyUpgrades: [10000, 20000], programs: ['Stanford speed', 'SFO flight'] } },
   { name: 'Delivery explorer', profile: { ...base, name: 'Delivery explorer', cabsBeforeHome: 1, cabsAfterHome: 1,
-    utilization: .7, exploreChance: .12, landmarkChance: .45, speed: 1.1, travelAfterTasks: 10 } },
+    utilization: .7, exploreChance: .12, landmarkChance: .45, speed: 1.1, travelAfterTasks: 10, programs: ['SFO flight', 'Berkeley energy'] } },
   { name: '30-minute casual', profile: { ...base, name: '30-minute casual', sessionMinutes: 30, speed: 1.35,
     cabsBeforeHome: 1, cabsAfterHome: 1, utilization: .6, exploreChance: .05, landmarkChance: .2,
     domeChance: .03, activityChance: .05, cosmetics: [2000], travelAfterTasks: 10 } },
   { name: 'Mixed economy', profile: { ...base, name: 'Mixed economy', speed: 1.15, cabsBeforeHome: 2, cabsAfterHome: 2,
     utilization: .65, exploreChance: .07, landmarkChance: .25, domeChance: .05, activityChance: .08,
-    cosmetics: [2000, 5000], earlyUpgrades: [10000], travelAfterTasks: 10 } },
+    cosmetics: [2000, 5000], earlyUpgrades: [10000], travelAfterTasks: 10, programs: ['Berkeley energy', 'UCSF real estate'] } },
 ];
 
 function percentile(values: number[], q: number): number | null {
@@ -59,6 +59,7 @@ export function phaseSummary(results: Result[], startMinute: number, endMinute: 
     medianWalletChange5m: round(percentile(windows.map(w => w.cashChange), .5), 0),
     zeroGrossPct: percentage(w => w.gross === 0),
     meanAchievements5m: round(mean(windows.map(w => w.achievements)), 2),
+    meanAchievementNotifications5m: round(mean(windows.map(w => w.achievementNotifications)), 2),
     meanCityAchievements5m: round(mean(windows.map(w => w.cityAchievements)), 2), achievementWindowPct: percentage(w => w.achievements > 0),
     goalWindowPct: percentage(anyGoal), taskWindowPct: percentage(w => w.tasks > 0),
     median30mGrossPer5: round(percentile(blocks, .5), 0), p10_30mGrossPer5: round(percentile(blocks, .1), 0), p90_30mGrossPer5: round(percentile(blocks, .9), 0),
@@ -78,11 +79,18 @@ export function summarizePath(name: string, results: Result[]) {
   const early = results.map(r => r.windows.filter(w => w.endMinute <= 120));
   const dry = early.map(w => longestEmpty(w, x => x.achievements > 0));
   const goalDry = early.map(w => longestEmpty(w, x => x.achievements + x.checkins + x.unlocks + x.repeatableGoals > 0));
-  const achievementBlocks = early.flatMap(ws => {
-    const values: number[] = [];
-    for (let i = 0; i + 6 <= ws.length; i += 6) values.push(ws.slice(i, i + 6).reduce((n, w) => n + w.achievements, 0));
-    return values;
-  });
+  const blockStats = (start: number, end: number, key: 'achievements' | 'achievementNotifications') => {
+    const blocks = results.flatMap(r => {
+      const ws = r.windows.filter(w => w.endMinute > start && w.endMinute <= end);
+      const values: number[] = [];
+      for (let i = 0; i + 6 <= ws.length; i += 6) values.push(ws.slice(i, i + 6).reduce((n, w) => n + w[key], 0));
+      return values;
+    });
+    return { blocks: blocks.length, mean: round(mean(blocks), 2), p10: percentile(blocks, .1), median: percentile(blocks, .5), p90: percentile(blocks, .9),
+      below2Pct: round(blocks.filter(n => n < 2).length / blocks.length * 100),
+      between2And4Pct: round(blocks.filter(n => n >= 2 && n <= 4).length / blocks.length * 100),
+      above4Pct: round(blocks.filter(n => n > 4).length / blocks.length * 100) };
+  };
   return { name, players: results.length, deliveryRepeatablePayMedian: home.deliveryRepeatable, totalEarnedMedian: home.totalEarned, marketUnlockMedianHrs: home.marketUnlockHrs, plotMedianHrs: home.plotHrs, homeReached: home.homeReached, homeMedianHrs: home.homeP50, firstCabHrs: home.firstCabHrs,
     earlyAchievementDryMedianMin: round(percentile(dry, .5), 0), earlyAchievementDryP90Min: round(percentile(dry, .9), 0),
     earlyGoalDryMedianMin: round(percentile(goalDry, .5), 0), earlyGoalDryP90Min: round(percentile(goalDry, .9), 0),
@@ -90,11 +98,12 @@ export function summarizePath(name: string, results: Result[]) {
     hours2to8GoalDryP90Min: round(percentile(results.map(r => longestEmpty(r.windows.filter(w => w.endMinute > 120 && w.endMinute <= 480), x => x.achievements + x.checkins + x.unlocks + x.repeatableGoals > 0)), .9), 0),
     hours2to8ProgressDryP90Min: round(percentile(results.map(r => longestEmpty(r.windows.filter(w => w.endMinute > 120 && w.endMinute <= 480), x => x.achievements + x.checkins + x.unlocks + x.repeatableGoals + x.contractProgress > 0)), .9), 0),
     hours4to8AchievementDryP90Min: round(percentile(results.map(r => longestEmpty(r.windows.filter(w => w.endMinute > 240 && w.endMinute <= 480), x => x.achievements > 0)), .9), 0),
-    earlyAchievementBlocks30m: { blocks: achievementBlocks.length, mean: round(mean(achievementBlocks), 2),
-      p10: percentile(achievementBlocks, .1), median: percentile(achievementBlocks, .5), p90: percentile(achievementBlocks, .9),
-      below2Pct: round(achievementBlocks.filter(n => n < 2).length / achievementBlocks.length * 100),
-      between2And4Pct: round(achievementBlocks.filter(n => n >= 2 && n <= 4).length / achievementBlocks.length * 100),
-      above4Pct: round(achievementBlocks.filter(n => n > 4).length / achievementBlocks.length * 100) },
+    earlyAchievementBlocks30m: blockStats(0, 120, 'achievements'),
+    earlyNotificationBlocks30m: blockStats(0, 120, 'achievementNotifications'),
+    hours2to8AchievementBlocks30m: blockStats(120, 480, 'achievements'),
+    hours2to8NotificationBlocks30m: blockStats(120, 480, 'achievementNotifications'),
+    first8hProgramJobsMedian: round(percentile(results.map(r => r.windows.reduce((n, w) => n + (w.endMinute <= 480 ? w.programJobs : 0), 0)), .5), 0),
+    first8hProgramAwardsMedian: round(percentile(results.map(r => r.windows.reduce((n, w) => n + (w.endMinute <= 480 ? w.programAchievements : 0), 0)), .5), 0),
     phases: [[0, 60], [60, 240], [240, 480]].map(([a, b]) => phaseSummary(results, a, b)),
     samples: [30, 60, 120, 240, 480].map(sample) };
 }
@@ -109,23 +118,25 @@ function cli() {
   const landmarksPerCity = value('--landmarks-per-city', 3);
   const allActivityMultiplier = process.argv.includes('--all-activities');
   const cabRevenueLevels = process.argv.includes('--cab-revenue-levels');
+  const singleCabRevenue = process.argv.includes('--single-cab-revenue');
   const contracts = process.argv.includes('--contracts');
+  const programs = !process.argv.includes('--no-programs');
   if (allActivityMultiplier && !eventsEnabled) throw new Error('--all-activities requires --events');
   if (hours < 8) throw new Error('--hours must be at least 8 to compare all pacing phases');
-  const results = (['before', 'redesigned'] as const).flatMap(design => paths.map(path => {
+  const results = (['before', 'previous', 'redesigned'] as const).flatMap(design => paths.map(path => {
     const runs = Array.from({ length: players }, (_, i) => simulate({ ...path.profile, landmarksPerCity }, 'candidate', 1729 + i, hours,
-      { global: eventsEnabled, room: eventsEnabled, allActivityMultiplier, cityVisitAwards: design === 'redesigned',
-        coreMilestones: design === 'redesigned', cabRevenueLevels, contracts: design === 'redesigned' && contracts, branchBalance: true, winChance: path.winChance,
+      { global: eventsEnabled, room: eventsEnabled, allActivityMultiplier, cityVisitAwards: design !== 'before',
+        coreMilestones: design !== 'before', cadenceRedesign: design === 'redesigned', programs, cabRevenueLevels, singleCabRevenue, contracts: design !== 'before' && contracts, branchBalance: true, winChance: path.winChance,
         trackWindows: true, trackWindowsUntil: 480 }));
     return [{ design, ...summarizePath(path.name, runs) }];
   }).flat());
-  if (process.argv.includes('--json')) console.log(JSON.stringify({ players, hours, landmarksPerCity, eventsEnabled, allActivityMultiplier, cabRevenueLevels, contracts, results }, null, 2));
+  if (process.argv.includes('--json')) console.log(JSON.stringify({ players, hours, landmarksPerCity, eventsEnabled, allActivityMultiplier, cabRevenueLevels, singleCabRevenue, contracts, programs, results }, null, 2));
   else {
     console.log(`Hypothetical ${players}-seed delivery-led paths; ${hours} active hours, ${landmarksPerCity} landmarks/city, events ${eventsEnabled ? 'on' : 'off'}${allActivityMultiplier ? ' for all activities' : ''}.`);
     console.table(results.map(r => ({ design: r.design, path: r.name, homeReached: r.homeReached, homeMedianHrs: r.homeMedianHrs,
       firstCabHrs: r.firstCabHrs, firstHourGross5m: r.phases[0].meanGross5m, hours1to4Gross5m: r.phases[1].meanGross5m,
       firstHourAchievements5m: r.phases[0].meanAchievements5m,
-      earlyAchievementDryP90Min: r.earlyAchievementDryP90Min, pct30mBlocksInTarget: r.earlyAchievementBlocks30m.between2And4Pct })));
+      earlyAchievementDryP90Min: r.earlyAchievementDryP90Min, pct30mBlocksInTarget: r.earlyNotificationBlocks30m.between2And4Pct, lateDryP90: r.hours2to8AchievementDryP90Min })));
     console.log('See --json for distributions, gross and wallet changes, city and cab access. Achievements exclude repeatable goals and check-ins.');
   }
 

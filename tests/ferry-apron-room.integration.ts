@@ -15,7 +15,7 @@ const states:{tick:number;world:World;poseRevision:number;control:ControlSnapsho
 let id:string|undefined;
 socket.addEventListener('message',event=>{
   const message=JSON.parse(String(event.data));input.observe(message);
-  if(message.type==='welcome')id=message.id;
+  if(message.type==='welcome'){id=message.id;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
   if(message.type==='state')states.push(message);
 });
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -23,7 +23,7 @@ async function until(check:()=>boolean,label:string,timeout=6000){
   const end=Date.now()+timeout;while(Date.now()<end){if(check())return;await delay(5);}throw new Error(`Timed out: ${label}`);
 }
 try{
-  await until(()=>input.ready&&!!id&&states.some(({world})=>world.entities.some(car=>car.driver===id&&car.supportId==='ferry')),'staged arriving driver');
+  await until(()=>input.active&&!!id&&states.some(({world})=>world.entities.some(car=>car.driver===id&&car.supportId==='ferry')),'identified staged arriving driver');
   const staged=states.at(-1)!;
   const car=staged.world.entities.find(entity=>entity.driver===id)!;
   assert.equal(staged.world.ferry.phase,'island');

@@ -30,11 +30,21 @@ test('a shared room connects and a disconnect never starts a solo simulation',()
   const session=new Session();session.join(DEFAULT_ROOM,'Alex');const socket=Socket.last;
   assert.equal(socket.url,'wss://example.com/api/room/bay');
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'identity',code:null,requestId:1},'guest choice follows welcome');
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
   assert.equal(session.status,'online');assert.equal(session.id,'p');
   session.tick(.05,NEUTRAL);assert.equal(JSON.parse(socket.sent.at(-1)!).type,'input');
   socket.closed();assert.equal(session.status,'disconnected');const time=session.world.time;
   session.tick(1,{...NEUTRAL,throttle:1});assert.equal(session.world.time,time);
+});
+
+test('a guest sends its decision before the starting vehicle request',()=>{
+  const session=new Session();session.join('bay','Guest','model-3');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(socket.sent.slice(-3).map(value=>JSON.parse(value)),[
+    {type:'identity',code:null,requestId:1},{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}},{type:'sync',token:1},
+  ]);
+  session.disconnect();
 });
 
 test('input cadence keeps fractional frame time without catching up in a burst',()=>{
@@ -161,13 +171,102 @@ test('online Mars actions use an ordered sync barrier and clear stale results on
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const requestId=session.mars('contribute',10);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
+  const requestId=session.mars();
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'board',requestId});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
+  socket.message({type:'marsResult',requestId,action:'board',ok:true});
   assert.equal(session.marsResult?.ok,true);
   session.join('friends','Alex');assert.equal(session.marsResult,null);
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'board',ok:true});assert.equal(session.marsResult,null);
+  session.disconnect();
+});
+
+test('identity replies match the latest request and recovery is replayed on rejoin',()=>{
+  const session=new Session(),first=session.setIdentity('first-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'identity',code:'first-code',requestId:first});
+  const second=session.setIdentity('second-code');
+  socket.message({type:'identityResult',requestId:first,ok:true,message:'old'});
+  assert.equal(session.identityResult,null);
+  const cancelled=session.setIdentity();
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'identity',code:null,requestId:cancelled});
+  socket.message({type:'identityResult',requestId:second,ok:true,message:'superseded'});
+  assert.equal(session.identityResult,null);
+  const latest=session.setIdentity('second-code');
+  socket.message({type:'identityResult',requestId:latest,ok:true,message:'bound'});
+  assert.equal(session.identityResult?.message,'bound');
+  session.join('friends','Alex');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'second-code',requestId:latest});
+  session.disconnect();
+});
+
+test('identity confirmation captures its wallet baseline before later snapshots or earnings',()=>{
+  const session=new Session(),requestId=session.setIdentity('saved-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  socket.message({type:'wallet',level:2,eligibleIncome:200_000,cash:55_000,earned:200_000,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'wallet',level:3,eligibleIncome:260_000,cash:260_000,earned:260_000,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'state',world,inputAck:0});
+  assert.deepEqual(session.identityResult?.levelBaseline,{level:2,eligibleIncome:200_000,afterSnapshot:1});
+  assert.equal(session.snapshotVersion,2);
+  session.disconnect();
+});
+
+test('a saved driver cannot drive or spend until recovery and its following snapshot',()=>{
+  const session=new Session(),requestId=session.setIdentity('saved-code');
+  session.join('bay','Alex','model-3');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  socket.message({type:'wallet',level:0,eligibleIncome:0,cash:2_500,earned:0,unlocked:[],ownedLuxury:[]});
+  assert.equal(session.walletStatus,'connecting');assert.equal(session.walletBlocked,true);
+  const before=socket.sent.length;
+  session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');session.luxury('buy','ducati-panigale-v4');session.setOta(true);
+  assert.equal(socket.sent.length,before,'guest input and purchases are not sent');
+  socket.message({type:'wallet',level:8,eligibleIncome:14_000_000,cash:14_000_000,earned:14_000_000,unlocked:['luxury-visit'],ownedLuxury:[]});
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  assert.equal(session.walletStatus,'syncing');session.tick(.1,{...NEUTRAL,throttle:1});
+  assert.equal(socket.sent.length,before,'identity reply alone does not expose the guest snapshot');
+  world.players[0].delivery.cash=14_000_000;world.players[0].delivery.level=8;
+  socket.message({type:'state',world,inputAck:0});
+  assert.equal(session.walletStatus,'ready');assert.equal(session.walletBlocked,false);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}},'starting ride is requested after recovery');
+  session.tick(.1,{...NEUTRAL,throttle:1});assert.equal(JSON.parse(socket.sent.at(-1)!).type,'input');
+  session.disconnect();
+});
+
+test('a failed saved-driver lookup stays blocked until a deliberate guest rejoin',()=>{
+  const session=new Session(),requestId=session.setIdentity('bad-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  socket.message({type:'identityResult',requestId,ok:false,message:'Invalid recovery code.'});
+  assert.equal(session.walletStatus,'failed');assert.match(session.walletError,/Invalid recovery/);
+  const before=socket.sent.length;session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');
+  assert.equal(socket.sent.length,before);
+  session.setIdentity();assert.equal(session.walletBlocked,true,'selecting guest requires a new room session');
+  session.disconnect();session.join('bay','Guest');const guest=Socket.last;
+  guest.message({type:'welcome',id:'g',version:PROTOCOL_VERSION,capacity:64});
+  const guestWorld=createWorld();addPlayer(guestWorld,'g','Guest');guest.message({type:'state',world:guestWorld,inputAck:0});
+  assert.equal(session.walletStatus,'guest');assert.equal(session.walletBlocked,false);
+  session.tick(.1,{...NEUTRAL,throttle:1});assert.equal(JSON.parse(guest.sent.at(-1)!).type,'input');
+  session.disconnect();
+});
+
+test('a timed-out recovery never becomes playable on a late success',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const session=new Session(),requestId=session.setIdentity('slow-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  t.mock.timers.tick(15_000);
+  assert.equal(session.walletStatus,'failed');assert.match(session.walletError,/taking too long/);
+  assert.equal(socket.readyState,3,'the timed-out room is closed before a late recovery can start playing');
+  socket.message({type:'identityResult',requestId,ok:true,message:'late'});socket.message({type:'state',world,inputAck:0});
+  assert.equal(session.walletBlocked,true);assert.equal(session.walletStatus,'failed');
   session.disconnect();
 });
 

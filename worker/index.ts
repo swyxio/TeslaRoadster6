@@ -1,18 +1,22 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 import { radioFeed } from './radio';
-import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
+import { MARS_GOAL } from '../shared/mars';
 import { VEHICLE_IDS } from '../shared/vehicles';
+import { initialDelivery } from '../shared/delivery';
+import { EconomySession } from './economy-session';
+import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
+import { RoomEconomy } from './room-economy';
 
-export { GlobalChat };
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type Session = { id: string; lastMessage: number; windowStart: number; count: number; lastAction: number; control:ScheduledInput; poseRevision:number; pendingSync:number };
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
+type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
@@ -34,179 +38,255 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Physics and player cash are session-only. The room's Mars fund is durable.
+// Physics stays room-local; economy writes are isolated per player.
 export class GameRoom extends DurableObject<Env> {
-  private world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
-  private sessions = new Map<WebSocket, Session>();
-  private inputs = new Map<string, Input>();
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private tickCount = 0;
-  private roomEpoch = crypto.randomUUID();
-  private lastSubsteps = 1;
+  private world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
+  private sessions=new Map<WebSocket,Session>();
+  private inputs=new Map<string,Input>();
+  private draining=new Map<string,EconomySession>();
+  private timer:ReturnType<typeof setInterval>|null=null;
+  private tickCount=0;
+  private roomEpoch=crypto.randomUUID();
+  private lastSubsteps=1;
+  private roomId='';
+  private ready:Promise<void>|null=null;
+  private pickupGenerations=new Map<string,number>();
+  private pendingPickups=new Set<string>();
+  private nextRefresh=0;
+  private refreshing=false;
 
-  constructor(ctx:DurableObjectState,env:Env) {
-    super(ctx,env);
-    ctx.blockConcurrencyWhile(async()=>{
-      const fund=await ctx.storage.get<number>('mars-fund');
-      if(Number.isSafeInteger(fund) && fund!>=0 && fund!<=MARS_GOAL)this.world.mars.fund=fund!;
-    });
+  private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
+  private async refreshPickups(world=this.world){
+    const ids=world.pickups.filter(p=>p.kind!=='rocket').map(p=>p.id);
+    const states=await this.ledger().pickupStates(ids);
+    if(world!==this.world)return;
+    for(const pickup of world.pickups){
+      if(pickup.kind==='rocket'||this.pendingPickups.has(pickup.id))continue;
+      const state=states[pickup.id];if(!state)continue;
+      // A slow read must not undo a claim finalized since the read started.
+      const observed=this.pickupGenerations.get(pickup.id)??0;
+      if(state.generation<observed)continue;
+      this.pickupGenerations.set(pickup.id,state.generation);
+      if(state.eventId){pickup.active=false;pickup.readyAt=Infinity;}
+      else if(state.readyAt>Date.now()){pickup.active=false;pickup.readyAt=world.time+(state.readyAt-Date.now())/1000;}
+      else {pickup.active=true;pickup.readyAt=undefined;}
+    }
+  }
+  private refresh(){
+    if(this.refreshing||!this.roomId)return;
+    this.refreshing=true;const world=this.world;
+    void Promise.allSettled([
+      this.refreshPickups(world),
+      this.env.INCOME.get(this.env.INCOME.idFromName('global')).total().then(total=>{if(world===this.world)world.mars.fund=Math.min(MARS_GOAL,total);}),
+    ]).finally(()=>{this.refreshing=false;});
   }
 
-  fetch(): Response {
-    const capacity = roomCapacity(this.env.MAX_PLAYERS);
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-    // Browsers cannot inspect a rejected WebSocket upgrade's HTTP status.
-    if (this.sessions.size >= capacity) {
-      server.accept();
-      server.close(ROOM_FULL_CODE, 'Room full');
-      return new Response(null, { status: 101, webSocket: client });
-    }
-    const id = crypto.randomUUID();
-    const now = Date.now();
+  async fetch(request:Request):Promise<Response>{
+    const capacity=roomCapacity(this.env.MAX_PLAYERS);
+    const pair=new WebSocketPair();const [client,server]=Object.values(pair);
     server.accept();
-    try {
-      addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
-    } catch (error) {
-      if (!(error instanceof NoSpawnError)) { server.close(1011, 'Could not start session'); throw error; }
-      server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
-      return new Response(null, { status: 101, webSocket: client });
-    }
+    const close=(code:number,reason:string)=>{server.close(code,reason);return new Response(null,{status:101,webSocket:client});};
+    if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
+    const slug=roomSlug(new URL(request.url).pathname);
+    if(!slug)return close(1008,'Invalid room');
+    this.roomId=slug;
+    const world=this.world;
+    this.ready??=this.refreshPickups(world);
+    const walletId=crypto.randomUUID(),fence=crypto.randomUUID();
+    const initial=initialDelivery({x:0,z:0});
+    let acquired:Awaited<ReturnType<DriverProfile['acquire']>>;
+    try{
+      [acquired]=await Promise.all([
+        this.env.DRIVERS.get(this.env.DRIVERS.idFromName(walletId)).acquire(walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),slug),
+        this.ready,
+      ]);
+    }catch{this.ready=null;return close(1011,'Wallet unavailable. Rejoin to retry.');}
+    if(this.world!==world){this.ready=null;try{await(this.ready=this.refreshPickups(this.world));}catch{this.ready=null;return close(1011,'Room unavailable');}}
+    if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
+    const id=crypto.randomUUID(),now=Date.now();
+    let player;
+    try{player=addPlayer(this.world,id,chooseAvailableName('Driver',this.world.players.map(p=>p.name)));}
+    catch(error){if(!(error instanceof NoSpawnError))throw error;return close(ROOM_NO_SPAWN_CODE,'No safe starting space');}
+    const economy=new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups);
     const control=new ScheduledInput({...NEUTRAL});
-    this.sessions.set(server, { id, lastMessage: now, windowStart: now, count: 0, lastAction: 0, control, poseRevision:0, pendingSync:0 });
-    server.addEventListener('message', event => { void this.onMessage(server, event.data); });
-    server.addEventListener('close', () => this.disconnect(server));
-    server.addEventListener('error', () => this.disconnect(server));
-    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity, tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0 }));
-    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0, control:control.snapshot() }));
-    if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
-    return new Response(null, { status: 101, webSocket: client });
+    const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null};
+    this.sessions.set(server,session);
+    server.addEventListener('message',event=>{void this.onMessage(server,event.data);});
+    server.addEventListener('close',()=>this.disconnect(server));
+    server.addEventListener('error',()=>this.disconnect(server));
+    server.send(JSON.stringify({type:'welcome',id,version:PROTOCOL_VERSION,capacity,tick:this.tickCount,roomEpoch:this.roomEpoch,substeps:this.lastSubsteps,poseRevision:0}));
+    server.send(JSON.stringify({type:'state',world:snapshotFor(this.world,id),tick:this.tickCount,roomEpoch:this.roomEpoch,substeps:this.lastSubsteps,poseRevision:0,control:control.snapshot()}));
+    economy.initialWallet();this.refresh();
+    if(!this.timer)this.timer=setInterval(()=>this.tick(),50);
+    return new Response(null,{status:101,webSocket:client});
   }
 
-  private async onMessage(socket: WebSocket, raw: string | ArrayBuffer): Promise<void> {
-    const session = this.sessions.get(socket);
-    if (!session) return;
-    const now = Date.now();
-    if (now - session.windowStart >= 1000) { session.windowStart = now; session.count = 0; }
-    if (++session.count > 90) { this.disconnect(socket, 1008, 'Message rate exceeded'); return; }
-    if (typeof raw !== 'string' || raw.length > 1024) { this.disconnect(socket, 1009, 'Text messages up to 1024 characters required'); return; }
-    const message = parseMessage(raw);
-    if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
-    session.lastMessage = now;
-    if (message.type === 'input') {
+  /** Called by the driver's profile before replacing the old fence. */
+  async hasWallet(driverId:string,fence:string):Promise<boolean>{
+    return this.draining.has(`${driverId}:${fence}`)||[...this.sessions.values()].some(s=>
+      (s.economy.walletId===driverId&&s.economy.currentFence===fence)||
+      (s.pendingBind?.driverId===driverId&&s.pendingBind.fence===fence));
+  }
+  async freezeWallet(driverId:string,fence:string):Promise<void>{
+    const matches=[...this.sessions.entries()].filter(([,s])=>
+      (s.economy.walletId===driverId&&s.economy.currentFence===fence)||
+      (s.pendingBind?.driverId===driverId&&s.pendingBind.fence===fence));
+    for(const [socket] of matches)this.disconnect(socket,1008,'Driver opened in another room.');
+    const detached=this.draining.get(`${driverId}:${fence}`);
+    await Promise.all([...matches.map(([,s])=>s.economy.freeze()),...(detached?[detached.freeze()]:[])]);
+  }
+
+  private async attachIdentity(socket:WebSocket,session:Session,code:string|null,requestId:number,sequence:number):Promise<void>{
+    const current=()=>socket.readyState===1&&this.sessions.get(socket)===session&&session.identitySequence===sequence;
+    const send=(ok:boolean,message:string)=>{if(current())try{socket.send(JSON.stringify({type:'identityResult',requestId,ok,message}));}catch{}};
+    if(!current())return;
+    let accepted=false;
+    try{
+      if(code===null){send(false,'Rejoin to start a new guest driver.');return;}
+      const identity=await this.env.CHAT.get(this.env.CHAT.idFromName('global')).bindWallet(code,session.economy.walletId);
+      if(!current())return;
+      if(!identity){send(false,'Invalid recovery code.');return;}
+      if(!identity.walletId){send(false,'Rejoin before loading a different saved driver.');return;}
+      if(identity.walletId===session.economy.walletId){
+        const ok=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).activateIncome(session.economy.currentFence);
+        accepted=ok;send(ok,ok?'Saved driver connected.':'Session superseded. Rejoin to recover.');return;
+      }
+      if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      const fence=crypto.randomUUID(),initial=initialDelivery({x:0,z:0});
+      // Register the incoming lease before awaiting it: another acquisition can
+      // find and cancel this session even before replace() installs the wallet.
+      session.pendingBind={driverId:identity.walletId,fence};
+      const result=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).acquire(identity.walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),this.roomId);
+      if(!current())return;
+      if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress);
+      session.pendingBind=null;
+      session.economy.restoreCurrentVehicle();
+      this.invalidate(socket,session,true);
+      accepted=true;send(true,'Saved driver connected.');
+    }catch{send(false,'Could not load driver. Rejoin to retry.');}
+    finally{
+      session.pendingBind=null;
+      // A failed or superseded recovery stays paused until the driver makes a
+      // new identity choice; another request may already be queued.
+      if(current())session.attachPending=!accepted;
+    }
+  }
+
+  private async onMessage(socket:WebSocket,raw:string|ArrayBuffer):Promise<void>{
+    const session=this.sessions.get(socket);if(!session)return;
+    const now=Date.now();
+    if(now-session.windowStart>=1000){session.windowStart=now;session.count=0;}
+    if(++session.count>90){this.disconnect(socket,1008,'Message rate exceeded');return;}
+    if(typeof raw!=='string'||raw.length>1024){this.disconnect(socket,1009,'Text messages up to 1024 characters required');return;}
+    const message=parseMessage(raw);if(!message){this.disconnect(socket,1008,'Invalid message');return;}
+    session.lastMessage=now;
+    if(message.type==='identity'){
+      const sequence=++session.identitySequence;
+      // A new guest can start immediately; later identity choices must remain
+      // ordered behind any recovery already in progress.
+      if(message.code===null&&(sequence===1||(session.guest&&!session.attachPending))){session.guest=true;session.attachPending=false;socket.send(JSON.stringify({type:'identityResult',requestId:message.requestId,ok:true,message:'Guest driver ready.'}));return;}
+      if(message.code!==null)session.guest=false;
+      session.attachPending=true;this.invalidate(socket,session);
+      // Autonomous navigation is also a control source: suspend it while an
+      // identity is unresolved so the previous driver's route cannot continue.
+      const player=this.world.players.find(p=>p.id===session.id);
+      const car=this.world.entities.find(e=>e.id===player?.entityId);
+      if(car){car.autopilot=false;car.navigation=null;}
+      session.identityTail=session.identityTail.then(()=>this.attachIdentity(socket,session,message.code,message.requestId,sequence));
+      return;
+    }
+    if(message.type==='input'){
       if(message.roomEpoch!==this.roomEpoch){this.rejectInput(socket,message,'epoch');return;}
+      if(session.attachPending){this.rejectInput(socket,message,'revision');return;}
       const result=session.control.receive(message,this.tickCount,now);
       this.sendEdges(socket,result.outcomes);
       if(result.rejection&&this.sessions.has(socket))this.rejectInput(socket,message,result.rejection);
       return;
     }
-    // Coalesce barriers into the next regular snapshot. WebSocket ordering
-    // places it after preceding actions, including cooldown rejections.
-    if(message.type==='sync'){
-      session.pendingSync=Math.max(session.pendingSync,message.token);
-      return;
-    }
-    if (message.type === 'name') {
-      const player = this.world.players.find(p => p.id === session.id);
-      if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
-      return;
-    }
-    // Fence every potentially invalidating action, including cooldown and
-    // simulation rejections. Only accepted actions consume its baseline.
+    if(message.type==='sync'){session.economy.barrier(message.token);return;}
+    if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
+    // Even rejected actions advance the action fence so later inputs remain ordered.
     if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
       this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
     }
-    // Joining and controlling a mini-game are often consecutive clicks. The
-    // simulation checks membership, host and position; the socket rate limit
-    // still applies, but the unrelated action cooldown must not drop them.
+    if(session.attachPending){
+      if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
+      if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
+      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
+      if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'unavailable'}));
+      return;
+    }
+    if(session.economy.vehicleLocked && (message.type==='interact'||message.type==='reset'||message.type==='selectVehicle'||message.type==='dome'||message.type==='minigame'||(message.type==='race'&&message.action==='join')))return;
     if(message.type==='dome'){if(travelDome(this.world,session.id))this.invalidate(socket,session,true,message.edgeBaseline);return;}
     if(message.type==='minigame'){const before=this.pose(session);if(enterMinigame(this.world,session.id,message.game))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);return;}
     if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
-    if (now - session.lastAction < 400) {
+    if(now-session.lastAction<400){
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
       if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
+      if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'cooldown'}));
       return;
     }
-    session.lastAction = now;
-    if (message.type === 'interact') {
+    session.lastAction=now;
+    if(message.type==='interact'){
       const before=this.world.players.find(player=>player.id===session.id)?.entityId;
       interact(this.world,session.id);
       if(before!==this.world.players.find(player=>player.id===session.id)?.entityId)this.invalidate(socket,session,true,message.edgeBaseline);
     }
-    if (message.type === 'reset') {const before=this.pose(session);resetPlayer(this.world, session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
+    if(message.type==='reset'){const before=this.pose(session);resetPlayer(this.world,session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
     if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session,false,message.edgeBaseline);
-    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind))this.invalidate(socket,session,true,message.edgeBaseline);
+    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind)){session.economy.restoreCurrentVehicle();this.invalidate(socket,session,true,message.edgeBaseline);}
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
-    if(message.type==='destination'){
-      const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
-      if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
-      socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
+    if(message.type==='destination'){const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});if(ok)this.invalidate(socket,session,false,message.edgeBaseline);socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));}
+    if(message.type==='upgrade')session.economy.workshop('upgrade',message.requestId,message.upgrade);
+    if(message.type==='vehicleStyle')session.economy.workshop('vehicleStyle',message.requestId,message);
+    if(message.type==='ota')session.economy.ota(message.enabled,message.requestId);
+    if(message.type==='luxury'){
+      if(message.action==='collect')session.economy.luxury(message.action,message.vehicle,message.requestId,()=>this.invalidate(socket,session,true,message.edgeBaseline));
+      else session.economy.luxury(message.action,message.vehicle,message.requestId);
     }
-    if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
-    if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:subscribeOta(this.world,session.id,message.enabled)}));
-    if(message.type==='mars'){
-      if(message.action==='board'){
-        const ok=boardMars(this.world,session.id);
-        socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0}));
-      }else{
-        const amount=marsContribution(this.world,session.id,message.amount);
-        let ok=false;
-        if(amount>0){
-          let saved=false;
-          try {
-            // The storage input gate keeps later sync events behind this continuation;
-            // the output gate holds messages until the write is durable.
-            await this.ctx.storage.put('mars-fund',this.world.mars.fund+amount);
-            saved=true;
-          } catch { /* No cash is deducted if the contribution cannot be saved. */ }
-          if(saved){applyMarsContribution(this.world,session.id,amount);ok=true;}
-        }
-        try { socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:ok?amount:0})); } catch { /* The driver disconnected while saving. */ }
-      }
-    }
+    if(message.type==='mars')session.economy.boardMars(message.requestId);
   }
 
-  private tick(): void {
-    const now = Date.now();
-    for (const [socket, session] of this.sessions) {
-      if (now - session.lastMessage > 30_000) this.disconnect(socket, 1001, 'Connection inactive');
-    }
-    if (!this.sessions.size) return;
+  private tick():void{
+    const now=Date.now();
+    for(const [socket,session] of this.sessions)if(now-session.lastMessage>30_000)this.disconnect(socket,1001,'Connection inactive');
+    if(!this.sessions.size)return;
+    if(now>=this.nextRefresh){this.nextRefresh=now+2000;this.refresh();}
+    const byId=new Map([...this.sessions.values()].map(s=>[s.id,s]));
     const nextTick=this.tickCount+1;
     const edgeResults=new Map<string,{socket:WebSocket;outcomes:EdgeOutcome[]}>();
     for(const [socket,session] of this.sessions){
       const result=session.control.advance(nextTick,now);
-      this.inputs.set(session.id,result.input);
+      if(session.attachPending)this.inputs.delete(session.id);else this.inputs.set(session.id,result.input);
       if(result.outcomes.length)edgeResults.set(session.id,{socket,outcomes:result.outcomes});
     }
     const relocated=new Set<string>();
-    step(this.world, this.inputs, 0.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
-      // Ferry apron moves happen before that substep consumes controls; water
-      // recovery happens after. Stop both from carrying old input forward.
+    step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
       const player=this.world.players.find(item=>item.id===id);
       const entity=this.world.entities.find(item=>item.id===player?.entityId);
       for(const outcome of edgeResults.get(id)?.outcomes??[]){
         if(outcome.status==='processed'&&entity&&(outcome.kind==='jump'?entity.lastJump:entity.lastFlip)!==outcome.id)outcome.status='superseded';
       }
-      this.inputs.delete(id);
-      relocated.add(id);
+      this.inputs.delete(id);relocated.add(id);
+    },economy:{
+      canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
+      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.update(player,apply);},
+      pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
     }});
     this.tickCount=nextTick;
     for(const {socket,outcomes} of edgeResults.values())this.sendEdges(socket,outcomes);
     for(const [socket,session] of this.sessions)if(relocated.has(session.id))this.invalidate(socket,session,true);
-    if(!this.sessions.size)return;
-    if (this.tickCount % 2) return;
-    const snapshot = prepareSnapshots(this.world,this.tickCount,this.roomEpoch,this.lastSubsteps);
-    for (const [socket, session] of this.sessions) {
-      try {
-        socket.send(snapshot(session.id,session.control.snapshot(),session.poseRevision,session.pendingSync||undefined));
-        session.pendingSync=0;
-      } catch { this.disconnect(socket); }
-    }
+    if(!this.sessions.size||this.tickCount%2)return;
+    const snapshot=prepareSnapshots(this.world,this.tickCount,this.roomEpoch,this.lastSubsteps);
+    for(const [socket,session] of this.sessions){try{socket.send(snapshot(session.id,session.control.snapshot(),session.poseRevision,session.economy.sync()));}catch{this.disconnect(socket);}}
   }
 
   private sendEdges(socket:WebSocket,outcomes:EdgeOutcome[]):void {
@@ -239,15 +319,20 @@ export class GameRoom extends DurableObject<Env> {
     this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0},edgeBaseline?{type:'action',edgeBaseline}:{type:'relocation'}));
   }
 
-  private disconnect(socket: WebSocket, code = 1000, reason = 'Session ended'): void {
-    const session = this.sessions.get(socket);
-    if (!session) return;
-    this.sessions.delete(socket); this.inputs.delete(session.id); removePlayer(this.world, session.id);
-    try { socket.close(code, reason); } catch { /* Already disconnected. */ }
-    if (!this.sessions.size) {
-      if (this.timer) clearInterval(this.timer);
-      const fund=this.world.mars.fund;
-      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length)); this.world.mars.fund=fund;
+  private disconnect(socket:WebSocket,code=1000,reason='Session ended'):void{
+    const session=this.sessions.get(socket);if(!session)return;
+    this.sessions.delete(socket);this.inputs.delete(session.id);
+    // The departing driver may still have an uncommitted final timer checkpoint.
+    // Keep it discoverable until drained so a reconnect cannot overtake it.
+    const economy=session.economy,key=`${economy.walletId}:${economy.currentFence}`;
+    economy.finish();this.draining.set(key,economy);
+    this.ctx.waitUntil(economy.freeze().finally(()=>{if(this.draining.get(key)===economy)this.draining.delete(key);}));
+    removePlayer(this.world,session.id);
+    try{socket.close(code,reason);}catch{}
+    if(!this.sessions.size){
+      if(this.timer)clearInterval(this.timer);
+      const fund=this.world.mars.fund;this.timer=null;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;
+      this.ready=null;this.pickupGenerations=new Map();this.pendingPickups=new Set();
     }
   }
 }
