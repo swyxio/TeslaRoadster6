@@ -146,6 +146,7 @@ export class GameRoom extends DurableObject<Env> {
       const identity=await this.env.CHAT.get(this.env.CHAT.idFromName('global')).bindWallet(code,session.economy.walletId);
       if(!current())return;
       if(!identity){send(false,'Invalid recovery code.');return;}
+      if(!identity.walletId){send(false,'Rejoin before loading a different saved driver.');return;}
       if(identity.walletId===session.economy.walletId){
         const ok=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).activateIncome(session.economy.currentFence);
         accepted=ok;send(ok,ok?'Saved driver connected.':'Session superseded. Rejoin to recover.');return;

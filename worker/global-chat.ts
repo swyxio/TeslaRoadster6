@@ -59,7 +59,7 @@ const IP_BUCKET_LIMIT = 1000;
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
   /** Bind a saved identity to a server-created guest wallet once, without copying earnings. */
-  async bindWallet(code:string,guestWalletId:string):Promise<{playerId:string;name:string;walletId:string}|null> {
+  async bindWallet(code:string,guestWalletId:string):Promise<{playerId:string;name:string;walletId:string|null}|null> {
     const parsed=parseRecoveryCode(code);
     if(!parsed || !/^[0-9a-f-]{36}$/i.test(guestWalletId))return null;
     const givenHash=await hashRecoverySecret(parsed.secret);
@@ -68,9 +68,18 @@ export class GlobalChat extends DurableObject {
       const recordedHash=typeof saved?.hash==='string' && /^[0-9a-f]{64}$/.test(saved.hash)?saved.hash:'0'.repeat(64);
       const valid=crypto.subtle.timingSafeEqual(new TextEncoder().encode(givenHash),new TextEncoder().encode(recordedHash));
       if(!saved||!valid||typeof saved.name!=='string')return null;
-      const walletId=saved.walletId??guestWalletId;
-      if(!saved.walletId)await txn.put(key,{...saved,walletId} satisfies StoredIdentity);
-      return {playerId:parsed.playerId,name:saved.name,walletId};
+      if(saved.walletId){
+        const owner=await txn.get<string>(`wallet:${saved.walletId}`);
+        if(owner!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+        return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId};
+      }
+      const walletKey=`wallet:${guestWalletId}`,owner=await txn.get<string>(walletKey);
+      // The reverse claim and identity binding share one transaction: even a
+      // superseded request cannot attach a second identity to the same wallet.
+      if(owner && owner!==parsed.playerId)return {playerId:parsed.playerId,name:saved.name,walletId:null};
+      await txn.put(key,{...saved,walletId:guestWalletId} satisfies StoredIdentity);
+      await txn.put(walletKey,parsed.playerId);
+      return {playerId:parsed.playerId,name:saved.name,walletId:guestWalletId};
     });
   }
 

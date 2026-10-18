@@ -480,6 +480,50 @@ try {
   assert.ok(otaAfter>0&&otaAfter<=otaBefore+1,'OTA time is retained rather than renewed for free');
   assert.equal(restoredGuest.last('wallet')!.cash,guestCash-5,'first-time identity retains guest cash and OTA debit');
 
+  // An unbound code must not attach to a wallet already owned by a different
+  // saved driver. Rejoining can bind it to its own fresh guest wallet instead.
+  const boundGuest=(await rpc<{playerId:string;driverId:string}[]>('players',{room:guestRoomName})).find(session=>session.playerId===restoredPlayerId)!;
+  const newCode=await savedCode(`Unbound${randomUUID().slice(0,6)}`);
+  send(restoredGuest,{type:'identity',code:newCode,requestId:211});
+  await until(()=>restoredGuest.messages.some(message=>message.type==='identityResult'&&message.requestId===211),'unbound identity switch settles');
+  const switchResult=restoredGuest.messages.find(message=>message.type==='identityResult'&&message.requestId===211)!;
+  assert.equal(switchResult.ok,false,'a second identity cannot claim the saved wallet');
+  assert.match(switchResult.message,/rejoin/i);
+  send(restoredGuest,{type:'identity',code:guestCode,requestId:212});
+  await until(()=>restoredGuest.messages.some(message=>message.type==='identityResult'&&message.requestId===212),'same identity retry settles');
+  assert.equal(restoredGuest.messages.find(message=>message.type==='identityResult'&&message.requestId===212)!.ok,true,'the original identity remains usable');
+  await postIdentityState(restoredGuest,212);
+  restoredGuest.socket.close();await until(()=>restoredGuest.socket.readyState===WebSocket.CLOSED,'original identity leaves');
+  const newDriver=await join(guestRoomName,newCode),newPlayerId=newDriver.last('welcome')!.id as string;
+  const newWallet=(await rpc<{playerId:string;driverId:string}[]>('players',{room:guestRoomName})).find(session=>session.playerId===newPlayerId)!;
+  assert.notEqual(newWallet.driverId,boundGuest.driverId,'rejoining binds the new identity to a distinct wallet');
+  assert.equal(newDriver.last('wallet')!.cash,2_500,'the new driver starts with its own balance');
+  const originalAgain=await join(`guest-return-${randomUUID().slice(0,8)}`,guestCode);
+  assert.equal(originalAgain.last('wallet')!.cash,guestCash-5,'the original balance survives the attempted switch');
+  assert.equal(originalAgain.last('wallet')!.earned,guestEarned);
+
+  // Durable reverse claims serialize overlapping binds. Same-code retries are
+  // idempotent, and a rejected identity may claim a different guest wallet.
+  type BoundIdentity={playerId:string;walletId:string|null};
+  const raceCodeA=await savedCode(`BindA${randomUUID().slice(0,6)}`),raceCodeB=await savedCode(`BindB${randomUUID().slice(0,6)}`),raceWallet=driver();
+  const candidates=await Promise.all([raceCodeA,raceCodeB].map(code=>rpc<BoundIdentity>('associate',{driverId:raceWallet,code})));
+  assert.equal(candidates.filter(result=>result.walletId===raceWallet).length,1,'only one identity claims the wallet');
+  assert.equal(candidates.filter(result=>result.walletId===null).length,1,'the competing identity must rejoin');
+  const winnerIndex=candidates.findIndex(result=>result.walletId===raceWallet),loserIndex=1-winnerIndex;
+  const codes=[raceCodeA,raceCodeB],otherWallet=driver();
+  const retry=await rpc<BoundIdentity>('associate',{driverId:driver(),code:codes[winnerIndex]});
+  assert.equal(retry.walletId,raceWallet,'an identity retry keeps its original wallet');
+  const other=await rpc<BoundIdentity>('associate',{driverId:otherWallet,code:codes[loserIndex]});
+  assert.equal(other.walletId,otherWallet,'the losing identity can bind a different wallet');
+
+  const sameCode=await savedCode(`Same${randomUUID().slice(0,6)}`),sameWallets=[driver(),driver()];
+  const sameResults=await Promise.all(sameWallets.map(driverId=>rpc<BoundIdentity>('associate',{driverId,code:sameCode})));
+  assert.ok(sameWallets.includes(sameResults[0].walletId!));
+  assert.equal(sameResults[0].walletId,sameResults[1].walletId,'concurrent retries of the same identity resolve to one wallet');
+  const unusedWallet=sameWallets.find(id=>id!==sameResults[0].walletId)!;
+  const unusedCode=await savedCode(`Unused${randomUUID().slice(0,6)}`);
+  assert.equal((await rpc<BoundIdentity>('associate',{driverId:unusedWallet,code:unusedCode})).walletId,unusedWallet,'the losing guest wallet remains unclaimed');
+
   // An earned guest cannot silently overwrite its progress with an already
   // bound different driver; reconnecting makes the requested switch explicit.
   const switchRoom=`switch-${randomUUID().slice(0,8)}`,switchGuest=connect(`/api/room/${switchRoom}`,true);
