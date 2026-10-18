@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Economy progression simulations · 2026-10-18 Pacific
+
+- On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `6456933`, `pnpm test` passed 310 tests and `pnpm build` passed, with the same warning.
+- Automated review found an omitted level-six contract in the modeled option count; after correcting it, `pnpm test` passed 311 tests, `pnpm build` passed and the standalone TypeScript check and 250-seed run passed. The reported median option samples did not change.
+- Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
@@ -448,3 +455,11 @@ After integrating the Rocket Island, ferry and parking changes from main, 273 te
 ## 2026-10-18 · First development post rewrite
 
 In the isolated article worktree after integrating the Rocket Island and landmark changes, `pnpm test` passed 273 tests and `pnpm build` passed, including both TypeScript checks. In Chrome, the static article was inspected at desktop and emulated 390×844 portrait and 844×390 landscape widths; the delivery-loop graphic was resized for readable phone labels. Local solo play supplied the street, flight, citation and cockpit screenshots from the integrated build. These are browser captures, not physical-device or multiplayer load tests.
+
+## 2026-10-18 · Driving feel, supplies and surfaces
+
+In the isolated worktree, `pnpm test` passed 281 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. Simulation tests cover direction changes, controlled airborne momentum, repeated jump velocity, supply rewards, rocket-pad eligibility, the stunt loop and curved-roof landings. A local Wrangler two-client room integration passed on protocol v20; a separate run timed out at its existing flip-completion assertion, so that integration remains susceptible to intermittent failure. This was not a load test.
+
+In Chrome solo play, temporary spawn fixtures showed a supply pickup restoring air and awarding cash, and a thermal showing the refill message and increasing air. The thermal display was inspected at desktop and at emulated 390×844 portrait and 844×390 landscape; the final nearby-label adjustment was rechecked at desktop. Fixtures were removed. No physical device, full manual loop drive, or ferry landing was tested; further playtesting is needed to judge the handling. The collision surfaces remain stylized approximations, not exact collision meshes for every landmark.
+
+After integrating main's island, ferry and permanent Rocket kit changes, all 313 tests and the build passed. The local two-client Wrangler room integration passed on protocol v21; it is not a ferry-crossing or load test. Chrome showed the integrated solo game on desktop and in emulated portrait and landscape layouts, with landscape touch controls visible. No physical device was tested.
