@@ -1035,7 +1035,7 @@ scene.start(dt=>{
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
   if(!marsUi.isViewing()){
-    const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),stage:starship.stage()});
+    const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),total:starship.total()});
   }
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');

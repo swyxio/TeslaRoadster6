@@ -20,6 +20,7 @@ test('public progress stays visible without identity; private pending is derived
   const client=new StarshipClient(session,()=>now,async()=>response({status:status(),serverTime:200_000}));
   await client.refresh();
   assert.equal(client.state().confirmed?.total,100);
+  assert.equal(client.total(),100);
   assert.equal(client.state().confirmed?.personal,null);
   assert.equal(client.state().pendingContribution,null);
   assert.equal(client.state().privacy.status,'unavailable');
@@ -59,7 +60,6 @@ test('server time drives the global launch and outranks local replay',async()=>{
   assert.equal(client.animation()?.source,'replay');
   now=2200;
   assert.deepEqual(client.animation(),{source:'global',elapsed:.2});
-  assert.equal(client.stage(),5);
   assert.equal(client.animation(now,false)?.source,'global');
 });
 

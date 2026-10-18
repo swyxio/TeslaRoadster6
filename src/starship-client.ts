@@ -1,4 +1,4 @@
-import { starshipStage, type StarshipContributorGroup, type StarshipContributors } from '../shared/starship';
+import { type StarshipContributorGroup, type StarshipContributors } from '../shared/starship';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { Session } from './session';
 import type { StarshipContributorPage, StarshipPanelState } from './starship-panel';
@@ -11,7 +11,6 @@ type Snapshot={status:StarshipViewStatus;serverTime:number;receivedAt:number};
 /** Coordinates public reads and the room's private status without blocking driving. */
 export class StarshipClient {
   private latest:Snapshot|null=null;
-  private latestStage:number|null=null;
   private lastRoomStatus:Session['starshipStatus']=null;
   private nextPublic=0;
   private nextRoom=0;
@@ -29,7 +28,7 @@ export class StarshipClient {
   private remember(status:StarshipViewStatus,serverTime:number,receivedAt:number):void {
     if(this.latest&&serverTime<this.latest.serverTime)return;
     // Never retain a room identity in the public cache.
-    this.latest={status:{...status,personal:null},serverTime,receivedAt};this.latestStage=starshipStage(status.total);this.failed=false;
+    this.latest={status:{...status,personal:null},serverTime,receivedAt};this.failed=false;
   }
   tick(privateWanted=false):void {
     const now=this.now(),room=this.session.starshipStatus;
@@ -108,7 +107,7 @@ export class StarshipClient {
     const privacy=personal===null?{status:'unavailable' as const,publicName:null}:this.privacy;
     return {freshness,confirmed,pendingContribution:pending,clock,contributors:this.page,privacy};
   }
-  stage():number|null {return this.latestStage;}
+  total():number|null {return this.latest?.status.total??null;}
   animation(now=this.now(),includeReplay=true) {
     const latest=this.latest;
     const clock=latest?{launchAt:latest.status.launchAt,serverTime:latest.serverTime,receivedAt:latest.receivedAt}:null;
