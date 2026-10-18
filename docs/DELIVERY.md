@@ -12,21 +12,26 @@ Every third completed delivery also pays a repeatable $350 checkpoint. The missi
 
 ## Unlocking the Bay
 
-Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it.
+Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it. If no safe replacement is found, the order pauses and retries automatically when the driver returns to open ground.
 
 | Level | Cash | Areas opened |
 | --- | ---: | --- |
-| 0 | $0 | San Francisco |
-| 1 | $10,000 | Oakland and Berkeley |
-| 2 | $50,000 | Peninsula and East Bay, including SFO, Stanford and Fremont |
-| 3 | $250,000 | San Jose |
-| 4–8 | $500,000 / $1m / $2m / $4m / $8m | Higher fare tiers |
+| 0 | $0 | San Francisco and Marin |
+| 1 | $10,000 | Oakland, Berkeley and Emeryville |
+| 2 | $50,000 | South San Francisco and SFO |
+| 3 | $250,000 | San Mateo and Redwood City |
+| 4 | $500,000 | Menlo Park and Palo Alto |
+| 5 | $1m | Mountain View, Santa Clara, Hayward and Fremont |
+| 6 | $2m | San Jose and Cupertino |
+| 7–8 | $4m / $8m | Higher fare tiers |
 
 The next threshold appears on the mission card. Boundaries apply to flying and driving; Marin, Rocket Dome, North Bay Playground and the SF parking playground remain accessible from the start. The driver's saved wallet retains cash, completed deliveries, current order, achievements and owned luxury vehicles across rooms and reconnects. The active-time leaderboard remains room-local.
 
 Each new job starts with a level-based base fare of $1,200, $1,600, $2,500, $4,000, $5,500, $7,000, $9,000, $12,000 or $16,000 for levels 0–8. The route's distance scales that base between 0.5× and 2× before pickup and delivery timing adjustments. One-off delivery, region and research awards can add cash as the driver progresses.
 
-Orders only select locations already available to that driver. As the world opens, some runs go to the newly unlocked landmark destinations while other jobs stay local or use rooftops. These destinations are fictional deliveries to artistic, compressed versions of real places.
+The delivery catalog includes at least ten restaurant identities and ten fictional customer destinations in each of 17 towns, plus airport and preserved landmark stops. Rooftop destinations are offered to rocket-equipped drivers; the map and addresses are compressed fictional placements. Sources for the restaurant identities are in [delivery locations](DELIVERY_LOCATIONS.md).
+
+Orders only select locations already available to that driver. They favor nearby pickups and short local jobs, avoid repeating the previous venues when possible, and alternate exploration toward newly opened areas with local or rooftop runs. An existing order stays in place when a new area opens. Route selection runs in short batches, and the order clock pauses while a replacement is being found. Ground routes are checked against the shared road planner; a driver on a roof or off the road may need to approach the road manually before starting self-driving. A relocked driver at North Bay Playground can take the ferry to a mainland assignment. These destinations are fictional deliveries to artistic, compressed versions of real places.
 
 For a rough sense of scale, the complete loop is about 19.9 game km: at a steady 60 km/h it would take about 20 minutes, or about 10 minutes at 120 km/h, before traffic, turns and stops. The 48-minute day cycles at 30 game-clock minutes per real minute; driving physics and order timers remain in simulation seconds. These are design estimates, not measured travel times or real Bay geography.
 

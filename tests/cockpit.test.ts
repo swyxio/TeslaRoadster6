@@ -30,6 +30,8 @@ test('full active pickup and delivery must be in cockpit for a first-person run'
   const arrive=()=>{const t=orderTarget(player.delivery.order);Object.assign(car,{x:t.x,z:t.z,y:terrainHeight(t.x,t.z)??0,speed:0,vy:0,supportId:'ground'});};
   tick(true);arrive();tick(true);assert.equal(player.delivery.order.stage,'dropoff');
   arrive();tick(true);assert.equal(player.cockpit.deliveries,1);assert.equal(player.delivery.completed,1);
+  for(let i=0;player.delivery.order.search&&i<100;i++)tick(true);
+  assert.equal(player.delivery.order.search,undefined,'the next assignment becomes ready');
   tick(true);arrive();tick(false);player.delivery.order.customer=0;arrive();tick(true);
   assert.equal(player.delivery.completed,2);assert.equal(player.cockpit.deliveries,1,'mixed camera run is not credited');
   assert.ok(player.cockpit.activeSeconds>0);assert.equal(player.cockpit.active,true);

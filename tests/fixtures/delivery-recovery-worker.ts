@@ -3,10 +3,19 @@ import { EconomySession } from '../../worker/economy-session';
 import { applyAcceptedDelivery, applyTierProgress } from '../../worker/achievement-progress';
 import { progressFrom, type DriverOutcome, type EconomyIntent } from '../../worker/driver-profile';
 import { addPlayer, createEmptyWorld, NEUTRAL, step } from '../../shared/game';
-import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, payoutFor, pickupBonusFor, RESTAURANTS, updateDelivery } from '../../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, captureDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, payoutFor, pickupBonusFor, RESTAURANTS, rerouteInaccessibleOrder, updateDelivery } from '../../shared/delivery';
 import { applyAchievementAwards, initialAchievements } from '../../shared/achievements';
 import { normalizeAchievementTiers } from '../../shared/achievement-tiers';
 import { terrainHeight } from '../../shared/map';
+
+// Fake profile settlement follows the production contract: its receipt is
+// written only after the assignment has been resolved.
+function finishAssignment(delivery:ReturnType<typeof initialDelivery>){
+  const pending=!!delivery.order.search;
+  for(let i=0;i<10_000&&delivery.order.search;i++)advanceDeliverySearch(delivery,delivery.order.search.canFly);
+  if(delivery.order.search)throw new Error('Fixture assignment did not finish');
+  if(pending&&delivery.lastReroute){const {reason,origin,level}=delivery.lastReroute;return {reason,origin,level};}
+}
 
 async function scenario(visit:'committed'|'speculative') {
   const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
@@ -24,6 +33,7 @@ async function scenario(visit:'committed'|'speculative') {
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
       if(writes.length===1){started();await held;return {ok:false,reason:'reserved'};}
+      let assignment:Extract<DriverOutcome,{ok:true}>['assignment'];
       if(intent.action.kind==='delivery'){
         const action=intent.action,delivery=initialDelivery(action.stop),clock=intent.clock??0;
         Object.assign(delivery,{cash:saved.cash,lifetimeIncome:saved.eligibleIncome,earned:saved.earned,completed:saved.completed,
@@ -32,18 +42,21 @@ async function scenario(visit:'committed'|'speculative') {
         const parts=applyDeliveryStop(delivery,action.stop,part=>Math.round(part.amount*(action.multiplier??1)));
         const state=initialAchievements();state.unlocked=[...saved.unlocked];
         const tiers=parts?applyAcceptedDelivery(delivery,state,saved.achievementTiers!,order,rooftop,dropoff?customer:undefined,!!delivery.lastReward).progress:saved.achievementTiers;
+        assignment=finishAssignment(delivery);
         saved={...saved,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,earned:delivery.earned,completed:delivery.completed,
           level:delivery.level,order:delivery.order,unlocked:state.unlocked,achievementTiers:tiers,deliveryClock:clock};
       }else if(intent.action.kind==='progress')saved=structuredClone(intent.action.progress);
       else throw new Error(`Unexpected ${intent.action.kind}`);
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[],...(assignment?{assignment}:{})};
     },
     async acknowledge(){return true;},
   };
   const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
   session.contributeMars(1_000,1);await began;
-  const speculative=structuredClone((Reflect.get(session,'draft') as {delivery:{order:typeof initial.order}}).delivery.order);
+  const speculativeDelivery=structuredClone((Reflect.get(session,'draft') as {delivery:ReturnType<typeof initialDelivery>}).delivery);
+  finishAssignment(speculativeDelivery);
+  const speculative=speculativeDelivery.order;
   if(speculative.customer===initial.order.customer)throw new Error('The rejected predecessor did not reroute the order');
   const car=world.entities.find(entity=>entity.id===player.entityId)!;
   // Keep five seconds of active order time independent of either target.
@@ -64,7 +77,7 @@ async function scenario(visit:'committed'|'speculative') {
   return {initial,speculative,draft,saved,writes,expectedFare:2*payoutFor({...initial.order,elapsed:45.05})};
 }
 
-async function unknownRateScenario(){
+async function unknownRateScenario(knownRate=false){
   const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver'),car=world.entities.find(entity=>entity.id===player.entityId)!;
   const spawn={x:car.x,y:car.y,z:car.z,yaw:car.yaw};
   player.delivery.cash=10_120;player.delivery.level=levelForCash(player.delivery.cash);player.delivery.activeUntil=100;
@@ -102,9 +115,10 @@ async function unknownRateScenario(){
       const achievements=initialAchievements();achievements.unlocked=[...saved.unlocked];
       const tier=parts?applyAcceptedDelivery(delivery,achievements,saved.achievementTiers!,order,rooftop,dropoff?customer:undefined,!!delivery.lastReward):undefined;
       const awards=tier?.awards??[];
+      const assignment=finishAssignment(delivery);
       saved={...saved,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,earned:delivery.earned,completed:delivery.completed,
         level:delivery.level,order:delivery.order,unlocked:achievements.unlocked,achievementTiers:tier?.progress??saved.achievementTiers,deliveryClock:clock};
-      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards,
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards,...(assignment?{assignment}:{}),
         delivery:{matched:!!parts,earnings:[],lastReward:delivery.lastReward,lastPayout:delivery.lastPayout}};
     },
     async acknowledge(){return true;},
@@ -114,8 +128,8 @@ async function unknownRateScenario(){
   const first=CUSTOMERS[4];Object.assign(car,{x:first.x,z:first.z,y:terrainHeight(first.x,first.z),speed:0,vy:0,supportId:'ground'});
   world.time=1;
   session.update(player,()=>{session.deliveryStart(player,car,false);const before=player.delivery.activeSeconds;
-    const result=updateDelivery(world,player,car,NEUTRAL,.05,false,false,()=>null);
-    session.deliveryEnd(player,player.delivery.activeSeconds-before,result);return result;},null,undefined,1_000);
+    const result=updateDelivery(world,player,car,NEUTRAL,.05,false,false,knownRate?part=>2*part.amount:()=>null,false);
+    session.deliveryEnd(player,player.delivery.activeSeconds-before,result);return result;},knownRate?{atMs:1_000,multiplier:2}:null,undefined,1_000);
   await began;
   const stop=captureDeliveryStop(car);
   // Both the affected driver and another player keep receiving physical input
@@ -141,13 +155,14 @@ async function unknownRateScenario(){
   applyDeliveryStop(preview,stop,part=>2*part.amount);
   const awards=initialAchievements();awards.unlocked=[...initial.unlocked];
   applyAcceptedDelivery(preview,awards,initial.achievementTiers!,previousOrder,false,first.id,true);
-  const pickupOrder={...preview.order,elapsed:afterDrivingClock-firstClock+.05};
+  finishAssignment(preview);
+  const pickupOrder={...preview.order,elapsed:afterDrivingClock-firstClock+(knownRate?0:.05)};
   const next=RESTAURANTS[preview.order.restaurant],expectedPickup=Math.round(1.5*pickupBonusFor(pickupOrder));
   const earlyPickup=pickupOrder.elapsed<pickupOrder.pickupEstimate;
   Object.assign(car,{x:next.x,z:next.z,y:terrainHeight(next.x,next.z),speed:0,vy:0,supportId:'ground'});world.time=2;
-  session.update(player,()=>{session.deliveryStart(player,car,false);const before=player.delivery.activeSeconds;
-    const result=updateDelivery(world,player,car,NEUTRAL,.05,false,false,part=>Math.round(1.5*part.amount));
-    session.deliveryEnd(player,player.delivery.activeSeconds-before,result);return result;},{atMs:2_000,multiplier:1.5});
+  session.update(player,()=>{session.deliveryStart(player,car,false);const before=player.delivery.activeSeconds,paused=!!player.delivery.order.search;
+    const result=updateDelivery(world,player,car,NEUTRAL,.05,false,false,part=>Math.round(1.5*part.amount),false);
+    session.deliveryEnd(player,paused?0:player.delivery.activeSeconds-before,result);return result;},{atMs:2_000,multiplier:1.5});
   session.contributeMars(1_000,7);
   const deferredSpend=messages.some(value=>typeof value==='object'&&value!==null&&Reflect.get(value,'type')==='marsResult'&&Reflect.get(value,'ok')===false);
   release();
@@ -174,7 +189,42 @@ async function backlogScenario(){
   return {closed,queued:(Reflect.get(session,'queue') as unknown[]).length};
 }
 
+async function unavailableRetryScenario(){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver'),car=world.entities.find(entity=>entity.id===player.entityId)!;
+  player.delivery.cash=0;player.delivery.level=0;player.delivery.activeUntil=100;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,elapsed:12};
+  if(!rerouteInaccessibleOrder(player.delivery,{x:0,z:1e9}))throw new Error('Expected synthetic no-candidate result');
+  finishAssignment(player.delivery);
+  const initial=progressFrom(player.delivery,[],{},[],0,0);
+  let saved=structuredClone(initial),release=()=>{},started=()=>{};
+  const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
+  const writes:EconomyIntent[]=[];
+  const ledger={async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+    writes.push(structuredClone(intent));started();await held;
+    if(intent.action.kind!=='progress')throw new Error('Expected a progress write');
+    saved=structuredClone(intent.action.progress);
+    const delivery=initialDelivery({x:0,z:0});Object.assign(delivery,{order:structuredClone(saved.order),completed:saved.completed,level:saved.level});
+    const assignment=finishAssignment(delivery);saved.order=delivery.order;
+    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[],...(assignment?{assignment}:{})};
+  },async acknowledge(){return true;}};
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  const hooks=session.hooks(),inputs=new Map([[player.id,{...NEUTRAL,throttle:1}]]);
+  Object.assign(car,{x:450,z:60,y:0,speed:0,vy:0,supportId:'ground'});world.time=1;
+  step(world,inputs,.05,{economy:{...hooks,achievement:undefined,canCollect:()=>false}});
+  const whileLocked={order:{...player.delivery.order},reason:player.delivery.lastReroute?.reason,
+    clock:Reflect.get(session,'deliveryClock') as number,writes:writes.length};
+  Object.assign(car,{x:-120,z:60,y:0,speed:0,vy:0,supportId:'ground'});world.time=2;
+  step(world,inputs,.05,{economy:{...hooks,achievement:undefined,canCollect:()=>false}});
+  await began;
+  const whileHeld={order:{...player.delivery.order},reason:player.delivery.lastReroute?.reason};
+  release();
+  for(let i=0;i<2_000&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(Reflect.get(session,'processing'))throw new Error('Retry queue did not drain');
+  return {initial,whileLocked,whileHeld,saved,live:{order:player.delivery.order,reason:player.delivery.lastReroute?.reason},writes};
+}
+
 export default {async fetch(request:Request){
-  try{const path=new URL(request.url).pathname;return Response.json(path==='/unknown'?await unknownRateScenario():path==='/backlog'?await backlogScenario():await scenario(path==='/speculative'?'speculative':'committed'));}
+  try{const path=new URL(request.url).pathname;return Response.json(path==='/unknown'?await unknownRateScenario():path==='/known'?await unknownRateScenario(true):path==='/backlog'?await backlogScenario():path==='/unavailable-retry'?await unavailableRetryScenario():await scenario(path==='/speculative'?'speculative':'committed'));}
   catch(error){return new Response(String(error),{status:500});}
 }};

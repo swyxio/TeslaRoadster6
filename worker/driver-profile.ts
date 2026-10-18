@@ -3,7 +3,7 @@ import { applyAchievementAwards, initialAchievements, type AchievementId } from 
 import { isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
 import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
-import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
 import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
@@ -42,10 +42,12 @@ export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:Se
   | {kind:'achievement';evidence:AchievementEvidence} | {kind:'supply';type:'repair'|'air'};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;clock?:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
-  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number;delivery?:{matched:boolean;earnings:SettledDeliveryEarning[];lastReward:DeliveryState['lastReward'];lastPayout:number|null};achievement?:{lastReward:DeliveryState['lastReward']}}
+  | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number;delivery?:{matched:boolean;earnings:SettledDeliveryEarning[];lastReward:DeliveryState['lastReward'];lastPayout:number|null};achievement?:{lastReward:DeliveryState['lastReward']};assignment?:Omit<NonNullable<DeliveryState['lastReroute']>,'id'>}
   | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready';available?:number};
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean;marketPaint?:import('../shared/market-protocol').MarketPaint|null};
 type Receipt = {payload:string;outcome:DriverOutcome;cabEvents?:EarningsEvents};
+type AssignmentRequest = {kind:'assignment';context:string;delivery:DeliveryState};
+type AssignmentCheckpoint = AssignmentRequest & {payload:string;cabEvents?:EarningsEvents;done:boolean;version:number};
 type PrivacyPending = {revision:number;name:string|null};
 type OutboxRetry = {attempts:number;next:number};
 
@@ -141,6 +143,12 @@ export class DriverProfile extends DurableObject<Env> {
         const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet(),
           achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked)};
         const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false,progress:normalized}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:normalized,incomeActivated:false};
+        if(current&&(current.fence!==fence||current.roomId!==roomId)){
+          // An abandoned search from the previous owner cannot be used by
+          // the new fence or room.
+          const abandoned=await txn.list({prefix:'assignment:'});
+          if(abandoned.size)await txn.delete([...abandoned.keys()]);
+        }
         await txn.put('driver',record);
         return {revision:record.revision,sequence:record.sequence,progress:record.progress,marketPaint:record.marketPaint??null,resumed:!!current};
       });
@@ -162,17 +170,74 @@ export class DriverProfile extends DurableObject<Env> {
   /** Receipt lookup precedes fencing, including for a reply lost before a room switch. */
   async commit(intent:EconomyIntent,cabEvents?:EarningsEvents):Promise<DriverOutcome> {
     const payload=JSON.stringify(intent);
+    for(;;){
+      const result=await this.commitAttempt(intent,payload,cabEvents);
+      if(!('kind' in result))return result;
+      await this.advanceAssignment(intent,payload,cabEvents,result);
+      // Search work is bounded per turn, and another RPC can make progress
+      // while this assignment is being prepared.
+      await new Promise<void>(resolve=>setTimeout(resolve,0));
+    }
+  }
+
+  /** Test subclasses can interrupt a request after a durable search batch. */
+  protected async assignmentCheckpointed(_eventId:string,_done:boolean):Promise<void>{}
+
+  private async advanceAssignment(intent:EconomyIntent,payload:string,cabEvents:EarningsEvents|undefined,request:AssignmentRequest):Promise<void>{
+    const key=`assignment:${intent.eventId}`;
+    const checkpoint=await this.ctx.storage.transaction(async txn=>{
+      // Another attempt may already have finished, or a new fence may have
+      // taken ownership while the projected action was being evaluated.
+      if(await txn.get<Receipt>(`receipt:${intent.eventId}`))return null;
+      const record=await txn.get<DriverRecord>('driver');
+      if(!record||record.driverId!==intent.driverId||record.fence!==intent.fence||record.roomId!==intent.roomId||record.sealed||
+        record.revision!==intent.revision||intent.sequence<=record.sequence)return null;
+      const current=await txn.get<AssignmentCheckpoint>(key);
+      if(current){
+        if(current.payload!==payload||JSON.stringify(current.cabEvents)!==JSON.stringify(cabEvents)||current.context!==request.context)return null;
+        return current;
+      }
+      const created:AssignmentCheckpoint={...request,payload,...(cabEvents?{cabEvents}:{}),done:false,version:0};
+      await txn.put(key,created);
+      return created;
+    });
+    if(!checkpoint||checkpoint.done)return;
+    const delivery=structuredClone(checkpoint.delivery);
+    const search=delivery.order.search;
+    if(!search)throw new Error('Assignment checkpoint is missing its search');
+    const done=advanceDeliverySearch(delivery,search.canFly);
+    const saved=await this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<AssignmentCheckpoint>(key),record=await txn.get<DriverRecord>('driver');
+      if(!current||current.payload!==payload||current.context!==request.context||current.version!==checkpoint.version)return false;
+      if(!record||record.driverId!==intent.driverId||record.fence!==intent.fence||record.roomId!==intent.roomId||record.sealed||
+        record.revision!==intent.revision||intent.sequence<=record.sequence||await txn.get<Receipt>(`receipt:${intent.eventId}`)){
+        await txn.delete(key);
+        return false;
+      }
+      await txn.put(key,{...current,delivery,done,version:current.version+1} satisfies AssignmentCheckpoint);
+      return true;
+    });
+    if(saved)await this.assignmentCheckpointed(intent.eventId,done);
+  }
+
+  private async commitAttempt(intent:EconomyIntent,payload:string,cabEvents?:EarningsEvents):Promise<DriverOutcome|AssignmentRequest> {
     return this.ctx.storage.transaction(async txn=>{
       const key=`receipt:${intent.eventId}`;
       const receipt=await txn.get<Receipt>(key);
       if(receipt)return receipt.payload===payload && (intent.action.kind!=='cab-income'&&intent.action.kind!=='delivery'||JSON.stringify(receipt.cabEvents)===JSON.stringify(cabEvents))?receipt.outcome:{ok:false,reason:'conflict'};
+      const assignmentKey=`assignment:${intent.eventId}`;
+      const checkpoint=await txn.get<AssignmentCheckpoint>(assignmentKey);
+      if(checkpoint && (checkpoint.payload!==payload||JSON.stringify(checkpoint.cabEvents)!==JSON.stringify(cabEvents)))return {ok:false,reason:'conflict'};
       const record=await txn.get<DriverRecord>('driver');
       let result:DriverOutcome;
-      if(!record || record.driverId!==intent.driverId || record.fence!==intent.fence || record.roomId!==intent.roomId || record.sealed)return {ok:false,reason:'superseded'};
+      if(!record || record.driverId!==intent.driverId || record.fence!==intent.fence || record.roomId!==intent.roomId || record.sealed){
+        if(checkpoint)await txn.delete(assignmentKey);
+        return {ok:false,reason:'superseded'};
+      }
       record.progress={...record.progress,cybercabs:record.progress.cybercabs??emptyCybercabFleet(),
         achievementTiers:normalizeAchievementTiers(record.progress.achievementTiers,record.progress.completed,record.progress.unlocked)};
-      if(!Number.isSafeInteger(intent.sequence)||intent.sequence<=record.sequence)return {ok:false,reason:'revision'};
-      if(!Number.isSafeInteger(intent.revision)||intent.revision<0)return {ok:false,reason:'invalid'};
+      if(!Number.isSafeInteger(intent.sequence)||intent.sequence<=record.sequence){if(checkpoint)await txn.delete(assignmentKey);return {ok:false,reason:'revision'};}
+      if(!Number.isSafeInteger(intent.revision)||intent.revision<0){if(checkpoint)await txn.delete(assignmentKey);return {ok:false,reason:'invalid'};}
       if(record.revision<intent.revision)return {ok:false,reason:'not-ready'};
       else if(record.revision>intent.revision)result={ok:false,reason:'revision'};
       else {
@@ -224,7 +289,7 @@ export class DriverProfile extends DurableObject<Env> {
             evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean')error='invalid';
           else {
             const delivery=initialDelivery(evidence);
-            Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:{...next.order}});
+            Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:structuredClone(next.order)});
             const before=intent.action.orderBefore,order=delivery.order;
             if(intent.clock===undefined&&before&&next.completed===intent.action.completedBefore&&before.restaurant===order.restaurant&&before.customer===order.customer&&before.stage===order.stage&&
               before.pickupEstimate===order.pickupEstimate&&before.estimate===order.estimate&&before.base===order.base&&Number.isFinite(before.elapsed)&&before.elapsed>=0)
@@ -248,7 +313,7 @@ export class DriverProfile extends DurableObject<Env> {
               if(rate===null)return {ok:false,reason:'not-ready'};
               const delivery=initialDelivery(stop);
               Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,earned:next.earned,completed:next.completed,
-                level:levelForCash(next.cash),order:{...next.order},tickets:next.tickets});
+                level:levelForCash(next.cash),order:structuredClone(next.order),tickets:next.tickets});
               const previous={...delivery.order},wasDropoff=previous.stage==='dropoff',customer=CUSTOMERS[previous.customer]?.id,rooftop=wasDropoff&&orderTarget(previous).rooftop;
               const rewardBefore=delivery.lastReward?.id??0;
               const parts=applyDeliveryStop(delivery,stop,component=>{
@@ -330,8 +395,26 @@ export class DriverProfile extends DurableObject<Env> {
         if(error)result={ok:false,reason:error};
         else {
           next.level=levelForCash(next.cash);
+          let assignment:Extract<DriverOutcome,{ok:true}>['assignment'];
+          if(next.order.search){
+            // The action must not commit until its next order is fully
+            // assigned. Bind each checkpoint to this exact projection.
+            const context=JSON.stringify({order:next.order,completed:next.completed,level:next.level});
+            if(checkpoint && checkpoint.context!==context)return {ok:false,reason:'conflict'};
+            if(!checkpoint?.done){
+              const delivery=initialDelivery(next.order.search.origin);
+              Object.assign(delivery,{level:next.level,completed:next.completed,order:structuredClone(next.order)});
+              return {kind:'assignment',context,delivery};
+            }
+            if(checkpoint.delivery.order.search)throw new Error('Completed assignment still contains a search');
+            next.order=structuredClone(checkpoint.delivery.order);
+            if(checkpoint.delivery.lastReroute){
+              const {reason,origin,level}=checkpoint.delivery.lastReroute;
+              assignment={reason,...(origin?{origin}:{}),...(level!==undefined?{level}:{})};
+            }
+          } else if(checkpoint)return {ok:false,reason:'conflict'};
           const revision=record.revision+1;
-          result={ok:true,revision,progress:next,awards,...(deliveryResult?{delivery:deliveryResult}:{}),...(achievementResult?{achievement:achievementResult}:{})};
+          result={ok:true,revision,progress:next,awards,...(deliveryResult?{delivery:deliveryResult}:{}),...(achievementResult?{achievement:achievementResult}:{}),...(assignment?{assignment}:{})};
           await txn.put('driver',{...record,revision,sequence:intent.sequence,progress:next,incomeActivated:true} satisfies DriverRecord);
           if(intent.action.kind==='progress'&&intent.action.earnings?.length){
             const rows=Object.fromEntries(intent.action.earnings.map(part=>[`earned-source:${part.sourceId}`,part]));
@@ -349,6 +432,7 @@ export class DriverProfile extends DurableObject<Env> {
       }
       if(!result.ok)await txn.put('driver',{...record,sequence:intent.sequence} satisfies DriverRecord);
       await txn.put(key,{payload,outcome:result,...((intent.action.kind==='cab-income'||intent.action.kind==='delivery')&&cabEvents?{cabEvents}:{} )} satisfies Receipt);
+      if(checkpoint)await txn.delete(assignmentKey);
       return result;
     });
   }
@@ -366,6 +450,8 @@ export class DriverProfile extends DurableObject<Env> {
           Number.isSafeInteger(intent.sequence) && intent.sequence>record.sequence)
         await txn.put('driver',{...record,sequence:intent.sequence} satisfies DriverRecord);
       if(receipt)await txn.delete(key);
+      const assignmentKey=`assignment:${intent.eventId}`,checkpoint=await txn.get<AssignmentCheckpoint>(assignmentKey);
+      if(checkpoint?.payload===payload)await txn.delete(assignmentKey);
     });
   }
 
@@ -501,7 +587,7 @@ export class GlobalIncome extends DurableObject {
 
 export function progressFrom(delivery:DeliveryState,unlocked:AchievementId[],vehicles:SavedVehicles,ownedLuxury:LuxuryVehicleId[],time:number,eligibleIncome:number):DriverProgress {
   return {cash:delivery.cash,earned:delivery.earned,completed:delivery.completed,level:delivery.level,
-    order:{...delivery.order},tickets:delivery.tickets,unlocked:[...unlocked],vehicles:structuredClone(vehicles),
+    order:structuredClone(delivery.order),tickets:delivery.tickets,unlocked:[...unlocked],vehicles:structuredClone(vehicles),
     ownedLuxury:[...ownedLuxury],eligibleIncome,
     ota:{enabled:delivery.ota.enabled,active:delivery.ota.active,remaining:delivery.ota.active&&delivery.ota.renewAt!==null?Math.max(0,delivery.ota.renewAt-time):0,needsRenewalConsent:delivery.ota.needsRenewalConsent}};
 }
