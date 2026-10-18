@@ -67,3 +67,25 @@ test('activity multipliers boost eligible task pay without retroactively boostin
   const withGlobalTaskPay = simulate(dome, 'candidate', 1729, 1, { ...global, allActivityMultiplier: true });
   assert.ok(withGlobalTaskPay.ledger.matchPay > withoutGlobalTaskPay.ledger.matchPay);
 });
+
+test('the number of explorable landmarks can be varied without repeating one-off discoveries', () => {
+  const explorer = paths.find(p => p.name === 'Explorer')!.profile;
+  const options = { trackWindows: true, branchBalance: true, global: false, room: false };
+  const few = simulate({ ...explorer, landmarksPerCity: 3 }, 'candidate', 1729, 8, options);
+  const many = simulate({ ...explorer, landmarksPerCity: 20 }, 'candidate', 1729, 8, options);
+  const lateAchievements = (run: typeof few) => run.windows.filter(w => w.endMinute > 240).reduce((n, w) => n + w.achievements, 0);
+  assert.equal(lateAchievements(few), 0);
+  assert.ok(lateAchievements(many) > 0);
+  assert.throws(() => simulate({ ...explorer, landmarksPerCity: 0 }, 'candidate', 1729, 1), /positive integer/);
+});
+
+test('first city visits can add at most one one-off award per non-starting city', () => {
+  const courier = paths.find(p => p.name === 'Courier')!.profile;
+  const options = { trackWindows: true, branchBalance: true, global: false, room: false };
+  const ordinary = simulate(courier, 'candidate', 1729, 8, options);
+  const visits = simulate(courier, 'candidate', 1729, 8, { ...options, cityVisitAwards: true });
+  assert.equal(ordinary.cityVisitsAwarded, 0);
+  assert.equal(visits.cityVisitsAwarded, 4);
+  assert.ok(visits.windows.reduce((n, w) => n + w.achievements, 0) >= visits.cityVisitsAwarded);
+  assert.equal(simulate(courier, 'candidate', 1729, 8, { ...options, branchBalance: false, cityVisitAwards: true }).cityVisitsAwarded, 0);
+});

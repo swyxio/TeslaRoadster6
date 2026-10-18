@@ -22,6 +22,7 @@ export type Profile = {
   stopSpendingAfterSecondHome?: boolean;
   tourChance?: number;
   travelAfterTasks?: number;
+  landmarksPerCity?: number;
 };
 
 export const profiles: Profile[] = [
@@ -52,7 +53,7 @@ export type FiveMinuteWindow = {
   achievements: number; cityAchievements: number; checkins: number; unlocks: number; repeatableGoals: number; tasks: number; wallet: number; level: number; cabs: number;
 };
 export type Result = {
-  profile: string; rules: RuleSet; activeMinutes: number; sessions: number; deliveries: number; wins: number;
+  profile: string; rules: RuleSet; activeMinutes: number; sessions: number; deliveries: number; wins: number; cityVisitsAwarded: number;
   cabs: number; cash: number; level: number; plotMinute: number | null; homeMinute: number | null;
   secondPlotMinute: number | null; secondHomeMinute: number | null;
   marketUnlockMinute: number | null; homeBalance: number | null;
@@ -98,7 +99,7 @@ export function branchPayout(level: number, kind: 'dome' | 'race' | 'park' | 'to
 }
 
 type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean;
-  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean };
+  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean; cityVisitAwards?: boolean };
 export function simulate(profile: Profile, rules: RuleSet, seed: number, hours = 40,
   events: SimulationOptions = {}): Result {
   const rng = random(seed);
@@ -127,8 +128,12 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   ];
   const cityJobs = [0, 0, 0, 0, 0];
   const activities = { race: 0, park: 0, tour: 0 };
-  const landmarks = Array.from({ length: 15 }, () => ({ discovered: false, deliveries: 0 }));
+  const landmarksPerCity = profile.landmarksPerCity ?? 3;
+  if (!Number.isInteger(landmarksPerCity) || landmarksPerCity < 1) throw new Error('landmarksPerCity must be a positive integer');
+  const landmarks = Array.from({ length: 5 * landmarksPerCity }, () => ({ discovered: false, deliveries: 0 }));
   const unlocked = new Set<number>([0]);
+  const visitedCities = new Set<number>([0]);
+  let cityVisitsAwarded = 0;
   const milestoneTimes: number[] = [0];
   const progress: number[] = [0];
   const optionSamples: number[] = [];
@@ -252,7 +257,14 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   }
 
   function finish(t: Task) {
-    if (t.kind === 'travel') { city = t.target!; totalCityJobs = 0; totalCityTasks = 0; record(); return; }
+    if (t.kind === 'travel') {
+      city = t.target!; totalCityJobs = 0; totalCityTasks = 0;
+      if (!visitedCities.has(city)) {
+        visitedCities.add(city);
+        if (events.cityVisitAwards && rules === 'candidate' && events.branchBalance) { award(500); cityVisitsAwarded++; }
+      }
+      record(); return;
+    }
     totalCityTasks++; taskCount++;
     if (t.kind === 'explore') { discover(t.landmark!); return; }
     if (t.kind === 'race' || t.kind === 'park' || t.kind === 'tour') {
@@ -344,7 +356,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
       const kind = rng() < 0.5 ? 'race' : 'park';
       return { kind, remaining: 4 + Math.floor(rng() * 4), fare: branchPayout(rank, kind) };
     }
-    const local = [city * 3, city * 3 + 1, city * 3 + 2];
+    const local = Array.from({ length: landmarksPerCity }, (_, i) => city * landmarksPerCity + i);
     const undiscovered = local.filter(id => !landmarks[id].discovered);
     if (events.branchBalance && (profile.tourChance ?? 0) > 0 && rng() < profile.tourChance!) {
       return { kind: 'tour', remaining: 5 + Math.floor(rng() * 3), fare: branchPayout(rank, 'tour'),
@@ -399,7 +411,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   };
   const earned = ledger.fares + ledger.cabs + ledger.matchPay + ledger.activityPay + ledger.checkpoints + ledger.achievements + ledger.unlocks;
   if (Math.abs(cash - (earned - ledger.spending - ledger.fines)) > 1e-5) throw new Error(`Ledger mismatch: ${profile.name} ${initialSeed}`);
-  return { profile: profile.name, rules, activeMinutes: minute, sessions: Math.ceil(minute / profile.sessionMinutes), deliveries, wins,
+  return { profile: profile.name, rules, activeMinutes: minute, sessions: Math.ceil(minute / profile.sessionMinutes), deliveries, wins, cityVisitsAwarded,
     cabs, cash, level: tier(), plotMinute, homeMinute, secondPlotMinute, secondHomeMinute, marketUnlockMinute, homeBalance,
     secondHomeBalance, secondHomeBeforeLevel, secondHomeAfterLevel, secondHomeRecoveryMinutes, firstCabMinute, afterPlotLevel, afterHomeLevel,
     plotRecoveryMinutes, homeRecoveryMinutes, maxMilestoneGap: maxGap(milestoneTimes, minute), maxMilestoneGapFirstHome: maxGap(milestoneTimes, homeMinute ?? minute),

@@ -10,6 +10,9 @@ The desired experience is reasonably consistent money and meaningful achievement
 node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json
 node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --events --json
 node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --events --all-activities --json
+node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --landmarks-per-city 20 --json
+node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --city-visits --json
+pnpm exec tsx scripts/economy-charts.ts --players 250
 ```
 
 Each row runs 250 deterministic seeds, 1729–1978, over 40 **active hours**. Five-minute windows cover the first eight active hours; first-two-hour achievement results use 1,000 nonoverlapping 30-minute player blocks per path. The 30-minute earnings metric sums the six five-minute windows and divides by six so it can be compared on the same per-five-minute scale. The percentiles describe these imagined inputs, not confidence intervals or a forecast for real players. Home medians include only players who reached a home; completion counts are shown below. Each player's ledger is checked for conservation.
@@ -84,7 +87,23 @@ Only explorer and mixed meet the provisional **P90 ≤25-minute** gap; five path
 
 In first-hour five-minute windows, the share with **no one-off achievement** is 62.9% for courier, 35.3% explorer, 62.8% Dome, 58.3% no-win Dome, 40.8% racer/parker, 50.1% cab and 31.1% mixed. Some of those windows do contain check-ins, unlock cash or repeatable goals. Including all of those broader goals, the shares with **no goal** become 21.8%, 35.3%, 56.4%, 48.6%, 37.1%, 21.4% and 26.7%, respectively. Repeatable money therefore provides short-term feedback but cannot be counted as fresh one-off achievements.
 
-The problem persists after the first rush: in hours 4–8 the pure explorer has no further one-off achievement windows in this model, while its repeatable tours continue to pay. The Dome and racer paths also have very few one-off achievement windows. Consider additional spaced, varied goals or longer-term progress meters, but validate their interest and inflation impact; the current experiment does not prove a fix.
+The problem persists after the first rush: in hours 4–8 the pure explorer has no further one-off achievement windows with the default **three abstract landmarks per city**, while its repeatable tours continue to pay. A sensitivity run with **20** abstract landmarks per city produces an achievement in 18.1% of those windows, versus 0% with three; its first-two-hour P90 dry run changes from 20 to 10 minutes and its median home time from 21.4 to 21.1 hours. This assumes those landmarks have eligible distinct tour goals and the scripted player can reach them; the 100 modeled IDs are not a verified mapping of the game's real landmarks. Larger landmark supply does not change the courier or Dome gaps in these pure-path profiles. Consider additional spaced, varied goals or longer-term progress meters, but validate their interest and inflation impact; the current experiment does not prove a fix.
+
+### First-visit experiment
+
+The optional `--city-visits` scenario adds one $500 achievement on first physical arrival in each modeled non-SF city, distinct from its balance-based unlock. It awards each modeled city once and keeps the default charts and tables above unchanged. This is an experiment, not an implemented achievement. Its scripted players move through four non-starting cities after six completed local activities; actual city boundaries, destinations and travel require verification.
+
+| Path | P90 longest early gap, default → first visits | Early 30-minute blocks with fewer than two achievements | Median first home |
+| --- | ---: | ---: | ---: |
+| Courier | 35 → 30 min | 50.0% → 11.2% | 18.3 → 18.3 h |
+| Explorer | 20 → 20 min | 3.7% → 0.3% | 21.4 → 21.4 h |
+| Dome, 50% wins | 50 → 35 min | 50.4% → 32.2% | 19.7 → 19.7 h |
+| Dome, no wins | 50 → 35 min | 50.0% → 31.9% | 28.5 → 28.5 h |
+| Racer and parker | 50 → 35 min | 34.9% → 9.4% | 18.8 → 18.7 h |
+| Cab operator | 30 → 25 min | 28.5% → 16.9% | 15.3 → 15.3 h |
+| Mixed activities | 20 → 15 min | 2.3% → 0.6% | 16.4 → 16.4 h |
+
+First visits improve the dry gap on five paths and bring the cab operator within the provisional gap target; four paths still miss it. They can also worsen the early burst: the mixed path's share of blocks within the 2–4 band falls from 33.8% to 21.0%. These extra awards are worth prototyping because they introduce distinct places, not because the target is solved. Compare goal timing and bundled notifications in playtests, and explore verifiable activity-specific goals for the remaining gaps.
 
 ## Property, multipliers and sensitivities
 
