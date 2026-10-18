@@ -166,7 +166,7 @@ refreshSoundSettings();refreshRadio();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-room-label').hidden=true; $('error-join').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
-let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
+let menu = true, started = false, hudTime = 0, lastTicketCount = 0;
 let lastBlockedAt=-1,lastBlockedNoticeAt=-10,lastRerouteId=0;
 const achievementEvents=new AchievementEventTracker();
 const levelEvents=new LevelEventTracker();
@@ -206,7 +206,7 @@ let pendingRememberCode:string|undefined=currentCode===stagedCode&&stagedCode!==
 let walletBoundCode:string|undefined;
 let identityRequestId=0,identityRequestCode:string|undefined;
 function setWalletIdentity(code?:string){
-  if(walletBoundCode!==code)walletBoundCode=undefined;
+  if(walletBoundCode!==code){walletBoundCode=undefined;resetCelebration();}
   identityRequestCode=code;identityRequestId=session.setIdentity(code);
 }
 setWalletIdentity(currentCode);
@@ -430,7 +430,7 @@ function begin(userGesture=true){
     return;
   }
   menuRidePending=null;startingSelect.disabled=false;$<HTMLButtonElement>('apply-ride').disabled=false;
-  lastRewardId=0;lastTicketCount=0;levelEvents.reset();lastBlockedAt=-1;lastBlockedNoticeAt=-10;lastRerouteId=0;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
+  lastTicketCount=0;levelEvents.reset();lastBlockedAt=-1;lastBlockedNoticeAt=-10;lastRerouteId=0;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
   pendingShop=null;pendingOta=null;pendingStyle=null;pendingLuxury=null;luxuryStatus='';lastLuxuryKey='';stylePreviewKey='';pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   achievementEvents.reset();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
@@ -448,7 +448,7 @@ $('error-join').onclick=()=>{
   $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin();
 };
 $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
-$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;pendingStyle=null;stylePreviewKey='';shopBusyUntil=0;session.disconnect();toggleMenu(true);};
+$('error-menu').onclick=()=>{$('error').classList.add('hidden');resetCelebration();pendingShop=null;pendingOta=null;pendingStyle=null;stylePreviewKey='';shopBusyUntil=0;session.disconnect();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
   $('camera').textContent=`${controlSettings.label('camera')} · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;
@@ -1171,7 +1171,7 @@ scene.start(dt=>{
     $('cockpit-phase').textContent=order.stage==='pickup'?'PICK UP':target.rooftop?'ROOFTOP DELIVERY':'DELIVER';
     $('cockpit-target').textContent=$('mission').textContent;$('cockpit-estimate').textContent=$('hint').textContent;
     $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=target.name;$('objective-distance').textContent=`${distance} m`;
-    if(d.lastReward&&d.lastReward.id>lastRewardId){lastRewardId=d.lastReward.id;celebrateReward(d.lastReward);}
+    for(const reward of session.takeRewards())celebrateReward(reward);
     $('delivery-stats').textContent=`${money(d.cash)} cash · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const next=LEVELS[d.level+1];
     const checkpointProgress=`${DELIVERY_CHECKPOINT_INTERVAL-deliveriesUntilCheckpoint(d.completed)}/${DELIVERY_CHECKPOINT_INTERVAL}`;

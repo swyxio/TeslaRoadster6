@@ -78,9 +78,11 @@ const LANDMARK_VISITS=([
   {landmark:'san-jose-city-hall',id:'san-jose-city-hall'},
 ] as const).map(visit=>({...visit,arrival:LANDMARKS.find(landmark=>landmark.id===visit.landmark)!.arrival}));
 type Shore = 'sf' | 'oakland';
-export type AchievementState = { unlocked:AchievementId[]; lastUnlock:{id:number; achievement:AchievementId}|null; groundShore:Shore|null; crossing:{origin:Shore; entityId:string; crossedWater:boolean}|null; lastPosition:{x:number; z:number}|null };
-export function initialAchievements():AchievementState { return {unlocked:[],lastUnlock:null,groundShore:null,crossing:null,lastPosition:null}; }
-export function resetAchievementFlight(player:Player):void {player.achievements.groundShore=null;player.achievements.crossing=null;player.achievements.lastPosition=null;}
+type RoofFlight = {entityId:string;x:number;y:number;z:number;supported:boolean;
+  flight:{seconds:number;startY:number;rise:number;travel:number}|null};
+export type AchievementState = { unlocked:AchievementId[]; lastUnlock:{id:number; achievement:AchievementId}|null; groundShore:Shore|null; crossing:{origin:Shore; entityId:string; crossedWater:boolean}|null; lastPosition:{x:number; z:number}|null; roofFlight:RoofFlight|null };
+export function initialAchievements():AchievementState { return {unlocked:[],lastUnlock:null,groundShore:null,crossing:null,lastPosition:null,roofFlight:null}; }
+export function resetAchievementFlight(player:Player):void {player.achievements.groundShore=null;player.achievements.crossing=null;player.achievements.lastPosition=null;player.achievements.roofFlight=null;}
 function unlock(state:AchievementState,achievement:AchievementId):boolean {
   if(state.unlocked.includes(achievement))return false;
   state.unlocked.push(achievement);state.lastUnlock={id:(state.lastUnlock?.id??0)+1,achievement};
@@ -169,20 +171,43 @@ function shore(e:Entity):Shore|null {
 export function onRoof(e:Entity):boolean {
   return e.kind!=='person' && e.supportId?.startsWith('roof:')===true;
 }
+/** A supported departure and meaningful flight must precede each roof contact. */
+function roofLanding(state:AchievementState,e:Entity,dt:number):boolean {
+  const previous=state.roofFlight;
+  if(e.kind==='person'||e.inDome){state.roofFlight=null;return false;}
+  const supported=e.supportId!==null;
+  let flight=previous?.flight??null;
+  if(!supported&&previous){
+    if(previous.supported)flight={seconds:0,startY:previous.y,rise:0,travel:0};
+    if(flight){
+      flight.seconds+=Math.max(0,Number.isFinite(dt)?dt:0);
+      flight.rise=Math.max(flight.rise,e.y-flight.startY);
+      flight.travel=Math.min(6,flight.travel+Math.hypot(e.x-previous.x,e.z-previous.z));
+    }
+  }
+  const landed=supported&&onRoof(e)&&!!flight&&flight.seconds>=.35&&(flight.rise>=2||flight.travel>=6);
+  state.roofFlight={entityId:e.id,x:e.x,y:e.y,z:e.z,supported,flight:supported?null:flight};
+  return landed;
+}
 export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string,sameTickReward=false,
-  evidence?:AchievementEvidence[],physicalOnly=false):void {
+  evidence?:AchievementEvidence[],physicalOnly=false,dt=0):void {
   const state=player.achievements, region=shore(e), roof=onRoof(e);
   let researchCash=0;
   const grounded=e.supportId!==null;
   // A recovery or a vehicle switch is not a flight across the Bay.
   if(state.lastPosition&&Math.hypot(e.x-state.lastPosition.x,e.z-state.lastPosition.z)>15)resetAchievementFlight(player);
+  if(state.roofFlight&&(state.roofFlight.entityId!==e.id||Math.hypot(e.x-state.roofFlight.x,e.y-state.roofFlight.y,e.z-state.roofFlight.z)>15)){
+    if(evidence)resetAchievementFlight(player);
+    else state.roofFlight=null;
+  }
   if(state.crossing&&state.crossing.entityId!==e.id)resetAchievementFlight(player);
+  const landed=roofLanding(state,e,dt);
   if(e.kind==='person'){state.groundShore=null;state.crossing=null;}
   else if(grounded){
-    if(roof&&evidence){
+    if(landed&&evidence){
       const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
       evidence.push({kind:'roof',roof:style==='coit'?'coit':style==='salesforce'?'salesforce':'ordinary'});
-    }else if(roof&&unlock(state,'roof-rider'))researchCash+=500;
+    }else if(roof&&!evidence&&unlock(state,'roof-rider'))researchCash+=500;
     if(roof&&!evidence){
       const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
       if(style==='coit'&&unlock(state,'coit-landing'))researchCash+=1_000;

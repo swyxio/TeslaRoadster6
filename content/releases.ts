@@ -6,6 +6,35 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'More room to drive',
+    intro: 'Bring more drivers together in the Bay.',
+    sections: [
+      { title: 'Room for more', items: [
+        'Rooms can now admit up to 64 drivers. This limit is still being tested, and busy rooms may slow down.',
+        'If a room is full, retry or choose another named room. Automatic overflow is planned.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.23-alpha',
+    label: '0.0.23 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the victories coming',
+    intro: 'Find more milestones as you keep exploring and playing.',
+    sections: [
+      { title: 'More to earn', items: [
+        'Repeatable activities progress at 1, 10, 100, 1,000 and 10,000 completions, with extra cash at qualifying milestones alongside existing awards.',
+        'Saved drivers begin with the progress supported by their existing records; earlier milestones do not pay out again.'
+      ] },
+      { title: 'Celebrate your rewards', items: [
+        'Consecutive reward celebrations now appear one after another, even when they arrive between game updates.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.22-alpha',
+    label: '0.0.22 Alpha',
+    date: '2026-10-18',
     title: 'Fresh radio, visible versions',
     intro: 'Hear recent conversations and know which Tesland build you are driving.',
     sections: [
