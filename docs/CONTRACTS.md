@@ -1,4 +1,4 @@
-# Implementation contracts · v9
+# Implementation contracts · v10
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -28,21 +28,21 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 Source of truth is exported TypeScript in `shared/game.ts`:
 
 - `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
-- `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), and `achievements` (unlocked session awards and server-owned flight tracking). Each player controls exactly one entity; each vehicle has at most one driver.
+- `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
-- `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake are booleans. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
+- `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v9
+## Wire protocol v10
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:9,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:10,capacity:number}`.
 
 Client messages:
 
 ```json
-{"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0}}
+{"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
 {"type":"interact"}
 {"type":"reset"}
 {"type":"autopilot"}
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:9, capacity:number}
+{type:"welcome", id:string, version:10, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -69,7 +69,9 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
-`GameScene.render(world,playerId,dt,menu)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
+`GameScene.render(world,playerId,dt,menu)` reads snapshots. `start(callback)` runs render frames. `cycleCamera()` cycles chase, cockpit and wide views. Cockpit follows the interpolated vehicle orientation (including pitch and roll); the player's exterior mesh is hidden locally. On foot the selected cockpit mode renders as chase and is not counted as cockpit. The projected destination sign and dashboard are local to the player; the physical objective ring and authoritative target remain shared. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
+
+The client sets `Input.cockpit` only when cockpit is selected in a vehicle, gameplay is showing, and the tab is visible and focused; informational dialogs keep the selected view. The simulation ignores the claim on foot, tracks `Player.cockpit.active` and adds only delivery-active seconds to `activeSeconds`. A completed delivery increments `deliveries` only when all its active pickup and delivery time was reported in cockpit and at least one active cockpit step occurred. `orderEligible` and `orderSeconds` are per-order simulation bookkeeping; a new order resets them. Stale inputs become neutral, so missing input during an active interval can disqualify the run. The room validates the flag's type, not the camera: these are self-reported session stats, not anti-cheat proof or a cash multiplier. Other UI/asset agents must preserve the claim, these distinctions, and visible labels.
 
 ## Audio presentation
 

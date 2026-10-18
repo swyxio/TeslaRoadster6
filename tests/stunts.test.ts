@@ -7,7 +7,7 @@ import {initialAchievements} from '../shared/achievements';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()}],pickups:[],time:0};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}}],pickups:[],time:0};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }

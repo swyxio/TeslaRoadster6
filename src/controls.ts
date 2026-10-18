@@ -49,6 +49,6 @@ export class Controls {
   resetSequences(){this.jump=0;this.flip=0;}
   read(): Input {
     const down = (...codes: string[]) => this.enabled && codes.some(c => this.keys.has(c) || [...this.pointers.values()].includes(c));
-    return { throttle: Number(down('KeyW','ArrowUp')) - Number(down('KeyS','ArrowDown')), steer: Number(down('KeyA','ArrowLeft')) - Number(down('KeyD','ArrowRight')), boost: down('ShiftLeft','ShiftRight'), hover:down('KeyH'), jump:this.jump, flip:this.flip, roll: Number(down('KeyQ')) - Number(down('KeyE')), brake: down('Space') };
+    return { throttle: Number(down('KeyW','ArrowUp')) - Number(down('KeyS','ArrowDown')), steer: Number(down('KeyA','ArrowLeft')) - Number(down('KeyD','ArrowRight')), boost: down('ShiftLeft','ShiftRight'), hover:down('KeyH'), jump:this.jump, flip:this.flip, roll: Number(down('KeyQ')) - Number(down('KeyE')), brake: down('Space'), cockpit:false };
   }
 }
