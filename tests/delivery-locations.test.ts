@@ -1,16 +1,22 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS} from '../shared/delivery-locations';
-import {CUSTOMERS, RESTAURANTS, requiredLevelAt} from '../shared/delivery';
+import {ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS, type DeliveryCityId} from '../shared/delivery-locations';
+import {CUSTOMERS, RESTAURANTS, requiredLevelAt, type Level} from '../shared/delivery';
 import {MARIN_ARRIVAL_POINTS} from '../shared/marin-roads';
 import {inDomePlaza, isBridge, isRocketIsland, isSurface, nearbyBuildings, terrainHeight} from '../shared/map';
 import {NORTH_LANDMARKS} from '../shared/north-landmarks';
 import {PARKING_LOTS} from '../shared/parking-lots';
+import {SFO_DELIVERY_ROUTES, SFO_DELIVERY_STOPS} from '../shared/sfo-delivery-road';
 import {ROUTES} from '../shared/traffic';
 import {SHOPS} from '../shared/upgrades';
 
-const historicGround=[...RESTAURANTS,...CUSTOMERS.filter(place=>!place.rooftop)];
+const historicRestaurants=RESTAURANTS.slice(0,6);
+const historicCustomers=CUSTOMERS.slice(0,16);
+const historicGround=[...historicRestaurants,...historicCustomers.filter(place=>!place.rooftop)];
 const added=[...ADDED_RESTAURANTS,...ADDED_CUSTOMERS];
+const cities:readonly DeliveryCityId[]=['san-francisco','oakland','berkeley','emeryville','mill-valley','corte-madera',
+ 'south-san-francisco','san-mateo','redwood-city','menlo-park','palo-alto','mountain-view',
+ 'santa-clara','cupertino','san-jose','hayward','fremont'];
 const distance=(a:{x:number;z:number},b:{x:number;z:number})=>Math.hypot(a.x-b.x,a.z-b.z);
 function laneHeading(p:{x:number;z:number}):number{
  let bestDistance=Infinity,bestYaw=0;
@@ -24,16 +30,16 @@ function laneHeading(p:{x:number;z:number}):number{
 }
 
 test('historical saved indices retain their exact prefix and all have town metadata',()=>{
- assert.deepEqual(RESTAURANTS.map(place=>place.id),['tartine','tonys','burma','nanking','homeroom','comal']);
- assert.deepEqual(CUSTOMERS.map(place=>place.id),['poly','fog','cable','coast','oak','lake','port',
+ assert.deepEqual(historicRestaurants.map(place=>place.id),['tartine','tonys','burma','nanking','homeroom','comal']);
+ assert.deepEqual(historicCustomers.map(place=>place.id),['poly','fog','cable','coast','oak','lake','port',
   'landmark-berkeley','landmark-sfo','landmark-stanford','landmark-mission-san-jose',
   'landmark-san-jose-city-hall','landmark-ucsf','roof-sf--78--90','roof-sf-42-150','roof-oakland-350--30']);
- assert.deepEqual(Object.keys(HISTORIC_RESTAURANT_DETAILS).sort(),RESTAURANTS.map(place=>place.id).sort());
- assert.deepEqual(Object.keys(HISTORIC_CUSTOMER_AREAS).sort(),CUSTOMERS.map(place=>place.id).sort());
+ assert.deepEqual(Object.keys(HISTORIC_RESTAURANT_DETAILS).sort(),historicRestaurants.map(place=>place.id).sort());
+ assert.deepEqual(Object.keys(HISTORIC_CUSTOMER_AREAS).sort(),historicCustomers.map(place=>place.id).sort());
 });
 
 test('new places have stable unique IDs, source-backed food details, and distinct fictional customers',()=>{
- const ids=[...RESTAURANTS,...CUSTOMERS,...added].map(place=>place.id);
+ const ids=[...historicRestaurants,...historicCustomers,...added].map(place=>place.id);
  assert.equal(new Set(ids).size,ids.length);
  assert.equal(new Set(ADDED_CUSTOMERS.map(place=>place.name)).size,ADDED_CUSTOMERS.length);
  const icons=new Set(['pizza','burger','sandwich','noodles','taco','bakery','bowl','plate']);
@@ -59,14 +65,25 @@ test('new handoffs fit supported land, clear geometry and do not overlap other s
  }
 });
 
-test('each authored city has ten pickups and ten customers including its historical prefix',()=>{
- for(const cityId of ['san-francisco','oakland','berkeley','emeryville'] as const){
-  const pickups=RESTAURANTS.filter(place=>HISTORIC_RESTAURANT_DETAILS[place.id].cityId===cityId).length+
-   ADDED_RESTAURANTS.filter(place=>place.cityId===cityId).length;
-  const customers=CUSTOMERS.filter(place=>HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS]?.cityId===cityId).length+
-   ADDED_CUSTOMERS.filter(place=>place.cityId===cityId).length;
+test('each town has ten pickups and ten fictional customers excluding landmark arrivals',()=>{
+ for(const cityId of cities){
+  const pickups=historicRestaurants.filter(place=>HISTORIC_RESTAURANT_DETAILS[place.id].areaId===cityId).length+
+   ADDED_RESTAURANTS.filter(place=>place.areaId===cityId).length;
+  const customers=historicCustomers.filter(place=>!place.id.startsWith('landmark-')&&
+   HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS]?.areaId===cityId).length+
+   ADDED_CUSTOMERS.filter(place=>place.areaId===cityId).length;
   assert.equal(pickups,10,cityId);assert.equal(customers,10,cityId);
  }
+});
+
+test('SFO has its own sourced pickup and fictional customer, plus its historical landmark',()=>{
+ const pickups=ADDED_RESTAURANTS.filter(place=>place.areaId==='sfo');
+ const customers=ADDED_CUSTOMERS.filter(place=>place.areaId==='sfo');
+ assert.deepEqual(pickups.map(place=>place.id),['sfo-bun-mee']);
+ assert.deepEqual(customers.map(place=>place.id),['customer-sfo-01']);
+ assert.deepEqual([...pickups,...customers].map(p=>`${p.x},${p.z}`).sort(),
+  SFO_DELIVERY_STOPS.map(p=>`${p.x},${p.z}`).sort());
+ assert.ok(historicCustomers.some(place=>place.id==='landmark-sfo'));
 });
 
 test('each Marin town uses ten pickup and ten customer arrival points at level zero',()=>{
@@ -85,21 +102,37 @@ test('authored city stops route between every pair from a sampled lane heading',
  const {makeEntity}=await import('../shared/game');
  const {planNavigation,DELIVERY_DESTINATION_SNAP}=await import('../shared/navigation');
  const fixtures=JSON.parse(readFileSync(new URL('./fixtures/delivery-location-routes.json',import.meta.url),'utf8')) as Record<string,{x:number;z:number;yaw:number}[]>;
- assert.deepEqual(Object.keys(fixtures).sort(),[...new Set(added.map(place=>place.cityId))].sort());
- for(const [city,poses] of Object.entries(fixtures)){
-  const targets=added.filter(place=>place.cityId===city);
-  assert.equal(poses.length,targets.length,city);
-  assert.equal(new Set(poses.map(p=>`${p.x},${p.z}`)).size,poses.length,city);
-  const level=city==='san-francisco'||city==='mill-valley'||city==='corte-madera'?0:1;
+ const towns=JSON.parse(readFileSync(new URL('./fixtures/town-delivery-stops.json',import.meta.url),'utf8')) as Record<string,{level:Level;stops:{x:number;z:number;segment:number}[]}>;
+ const baselineLevels:Record<string,Level>={'san-francisco':0,'mill-valley':0,'corte-madera':0,oakland:1,berkeley:1,emeryville:1,sfo:2};
+ assert.deepEqual(Object.keys(fixtures).sort(),[...new Set(added.map(place=>place.areaId))].sort());
+ for(const [area,poses] of Object.entries(fixtures)){
+  const targets=added.filter(place=>place.areaId===area);
+  assert.equal(poses.length,targets.length,area);
+  assert.equal(new Set(poses.map(p=>`${p.x},${p.z}`)).size,poses.length,area);
+  const town=towns[area];
+  const level=town?.level??baselineLevels[area];
+  assert.notEqual(level,undefined,`${area}: unlock level`);
+  if(town)assert.deepEqual(poses.map(p=>`${p.x},${p.z}`).sort(),town.stops.map(p=>`${p.x},${p.z}`).sort(),area);
   for(const pose of poses){
-   assert.ok(targets.some(p=>distance(p,pose)<.01),`${city}: fixture target`);
-   if(city==='mill-valley'||city==='corte-madera'){
+   assert.ok(targets.some(p=>distance(p,pose)<.01),`${area}: fixture target`);
+   if(area==='mill-valley'||area==='corte-madera'){
     const difference=pose.yaw-laneHeading(pose);
-    assert.ok(Math.abs(Math.atan2(Math.sin(difference),Math.cos(difference)))<1e-9,`${city}: nearest-lane heading`);
+    assert.ok(Math.abs(Math.atan2(Math.sin(difference),Math.cos(difference)))<1e-9,`${area}: nearest-lane heading`);
+   }
+   if(town){
+    const stop=town.stops.find(p=>distance(p,pose)<.01)!;
+    const heading=[-Math.PI/2,-Math.PI,Math.PI/2,0][stop.segment];
+    const difference=pose.yaw-heading;
+    assert.ok(Math.abs(Math.atan2(Math.sin(difference),Math.cos(difference)))<1e-9,`${area}: town lane heading`);
+   }
+   if(area==='sfo'){
+    const [a,b]=SFO_DELIVERY_ROUTES[0];
+    const difference=pose.yaw-Math.atan2(-(b.x-a.x),-(b.z-a.z));
+    assert.ok(Math.abs(Math.atan2(Math.sin(difference),Math.cos(difference)))<1e-9,`${area}: airport lane heading`);
    }
    const car=makeEntity('delivery-route-probe','model-3',pose.x,pose.z);car.yaw=pose.yaw;
    for(const target of targets)if(distance(pose,target)>.01)
-    assert.ok(planNavigation(car,target,level,DELIVERY_DESTINATION_SNAP),`${city}: ${pose.x},${pose.z} to ${target.id}`);
+    assert.ok(planNavigation(car,target,level,DELIVERY_DESTINATION_SNAP),`${area}: ${pose.x},${pose.z} to ${target.id}`);
   }
  }
 });

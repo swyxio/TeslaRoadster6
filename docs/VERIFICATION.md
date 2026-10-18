@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Bay-wide delivery catalog checkpoint · 2026-10-18 Pacific
+
+- The staged catalog has ten sourced pickups and ten fictional customers per 17 towns, with one airport pickup, one fictional airport customer and six preserved landmark arrivals in addition. It is not yet connected to scheduling. The sampled-heading route fixture passed 5,974 ordered same-area plans; the historic Berkeley, SFO, Stanford, Mission San José and San José City Hall coordinates are preserved and have tested access. The new streets and routes are fictional, compressed layouts.
+- In a separate candidate with the progression owner's intended unlock gates, 4,180 ordered pairs in the eleven new towns and 440 highway ingress/egress plans passed, together with 22 representative empty-world Model 3 drives. Three preserved southern landmark arrivals and returns were also driven from earlier-tier roads without damage. On the long Mission approach and return, the car center stayed on pavement but body corners briefly extended up to 0.161 m beyond existing I-880 pavement; local Mission and City Hall checks kept the sampled body on pavement. These results do not establish live traffic, every heading or visual quality.
+- The current checkpoint's `pnpm build` passed with the existing Vite large-chunk warning. `pnpm test` ran 862 tests with 860 passing; an existing Vault forecourt clearance test and an overpass police patrol recovery test failed after the new roads were added. Those two interactions must be fixed and the suite rerun. The scheduler, actual protocol bump, live-room integration and desktop and emulated mobile visual checks remain outstanding.
+
 ## Delivery catalog and Marin streets candidate · 2026-10-18 Pacific
 
 - On the local protocol-v41 baseline, `pnpm test` passed 846 tests and `pnpm build` passed with the existing Vite large-chunk warning. The catalog preserves historical numeric prefixes and stages new locations; it is not yet connected to delivery scheduling. Its coverage and remaining gaps are in [DELIVERY_LOCATIONS.md](DELIVERY_LOCATIONS.md).
