@@ -51,6 +51,22 @@ try{
   practice.input.action({type:'teleport',x:-165,z:180,requestId:6});
   await until(()=>practice.events.some(e=>e.type==='teleportResult'&&e.requestId===6&&!e.ok),'practice cannot teleport');
   assert.equal(practice.input.poseRevision,0);
+  // Exercise the collection triggers against real room ticks and real interact
+  // messages, while every persistent binding remains forbidden.
+  for(const [room,client] of [['sandbox-test',a],['practice-test',practice]] as const){
+    const driven=await fetch(`${base}/collection-drive/${room}?player=${client.state.id}`).then(r=>r.json());
+    assert.ok(driven.distance>=100,`${room} physically drove a collectible for 100 m: ${JSON.stringify(driven)}`);
+    assert.equal(driven.economy,null);assert.deepEqual(driven.badges,[]);
+    client.input.send(NEUTRAL);await delay(450);
+    client.input.action({type:'interact'});
+    await until(()=>client.car()?.kind==='person',`${room} driver exits`);
+    await delay(450);
+    const npc=await fetch(`${base}/collection-npc/${room}?player=${client.state.id}`).then(r=>r.json());
+    client.input.action({type:'interact'});
+    await until(()=>client.car()?.id===npc.id,`${room} driver takes ambient car`);
+    const player=client.state.world!.players.find(p=>p.id===client.state.id)!;
+    assert.ok(!player.achievements.unlocked.some(id=>id.startsWith('npc-theft-')));
+  }
   for(const client of [a,b,practice])client.input.send(NEUTRAL);
   await delay(2100); // includes refresh and cab rebalance paths
   for(const room of ['sandbox-test','practice-test']){
@@ -62,7 +78,7 @@ try{
   for(const socket of sockets)socket.close();await delay(250);
   const fresh=connect('practice-test');await until(()=>fresh.input.active,'fresh practice rejoin');
   assert.equal(fresh.car().tankLevel,1);assert.equal(fresh.state.world!.players[0].delivery.cash,2500);
-  console.log('PASS: real room multiplayer, max fleet, fenced teleport, fresh practice, zero persistent service calls/journals.');
+  console.log('PASS: real room multiplayer, max fleet, fenced teleport, collection drive and takeover, fresh practice, zero persistent service calls/journals.');
 }finally{
   for(const socket of sockets)socket.close();try{process.kill(-child.pid!,'SIGTERM');}catch{}
   await new Promise<void>(resolve=>{if(child.exitCode!==null||child.signalCode!==null)return resolve();child.once('exit',()=>resolve());});

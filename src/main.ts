@@ -116,15 +116,15 @@ document.querySelector('#app')!.innerHTML = `
    <div class="shop-stage"><canvas id="style-preview" aria-label="Current car paint and decal preview"></canvas></div>
    <p id="shop-location" class="shop-location"></p>
    <div class="shop-wallet"><span>Available cash</span><strong id="shop-cash"></strong></div>
-   <details class="shop-level-note"><summary>Spending can change your level</summary><p>Cash determines your level. Spending can relock areas; ↓ LV shows your level after purchase. Finishes stay on your car.</p></details>
+   <details id="shop-level-note" class="shop-level-note"><summary>Spending can change your level</summary><p>Cash determines your level. Spending can relock areas; ↓ LV shows your level after purchase. Finishes stay on your car.</p></details>
   </aside>
   <div class="shop-browse">
    <div class="shop-tabs" role="tablist" aria-label="Workshop sections"><button type="button" id="shop-tab-upgrades" role="tab" aria-controls="shop-upgrades" aria-selected="true">Upgrades</button><button type="button" id="shop-tab-paint" role="tab" aria-controls="shop-paint" aria-selected="false" tabindex="-1">Paint</button><button type="button" id="shop-tab-decals" role="tab" aria-controls="shop-decals" aria-selected="false" tabindex="-1">Decals</button><button type="button" id="shop-tab-remote" role="tab" aria-controls="shop-remote" aria-selected="false" tabindex="-1">Remote shop</button></div>
    <div class="shop-scroll">
     <section id="shop-upgrades" role="tabpanel" aria-labelledby="shop-tab-upgrades"><div class="shop-section-heading"><h3>Upgrade your ride</h3><p>More ways to drive, fly and explore.</p></div><section id="shop-collection" hidden aria-labelledby="shop-collection-title"><h4 id="shop-collection-title">Your collection</h4><p>Collect an owned vehicle at a workshop.</p><div id="shop-collection-items" class="shop-items"></div></section><div id="shop-items" class="shop-items"></div></section>
-    <section id="shop-paint" class="style-shop" role="tabpanel" aria-labelledby="shop-tab-paint" hidden><div class="shop-section-heading"><h3>Find your color</h3><p>Your driver keeps this finish on this vehicle. Each change costs the listed price.</p></div><p id="style-level"></p><p id="style-market" hidden>Market paint is equipped. Unequip it in Market to show workshop paint.</p><h4>Paint</h4><div id="paint-options" class="style-options"></div></section>
-    <section id="shop-decals" class="style-shop" role="tabpanel" aria-labelledby="shop-tab-decals" hidden><div class="shop-section-heading"><h3>Add your signature</h3><p>Decals stay with this vehicle. Each change costs the listed price.</p></div><h4>Decals</h4><div id="decal-options" class="style-options"></div></section>
-    <section id="shop-remote" role="tabpanel" aria-labelledby="shop-tab-remote" hidden><div class="shop-section-heading"><h3>Take the shop with you</h3><p>Get upgrades wherever your drive takes you.</p></div><div class="shop-item ota-plan"><div><strong>Remote shop subscription</strong><p>$${OTA_FEE} per game hour (2 real minutes). Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $${OTA_FEE}.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div></section>
+    <section id="shop-paint" class="style-shop" role="tabpanel" aria-labelledby="shop-tab-paint" hidden><div class="shop-section-heading"><h3>Find your color</h3><p id="style-paint-copy"></p></div><p id="style-level"></p><p id="style-market" hidden>Market paint is equipped. Unequip it in Market to show workshop paint.</p><h4>Paint</h4><div id="paint-options" class="style-options"></div></section>
+    <section id="shop-decals" class="style-shop" role="tabpanel" aria-labelledby="shop-tab-decals" hidden><div class="shop-section-heading"><h3>Add your signature</h3><p id="style-decal-copy"></p></div><h4>Decals</h4><div id="decal-options" class="style-options"></div></section>
+    <section id="shop-remote" role="tabpanel" aria-labelledby="shop-tab-remote" hidden><div class="shop-section-heading"><h3>Take the shop with you</h3><p>Get upgrades wherever your drive takes you.</p></div><div class="shop-item ota-plan"><div><strong>Remote shop subscription</strong><p id="ota-copy"></p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div></section>
    </div>
    <p id="shop-feedback" class="shop-feedback" role="status">Earn cash by delivering food. Your saved driver keeps purchased upgrades for this vehicle.</p>
   </div>
@@ -1027,10 +1027,14 @@ function updateShop(){
   $('shop-location').textContent=!personalCar?'Choose your own car to customize it.':place?`${place.name} · Workshop connected.`:ota.active?'Remote shop connected · upgrades available anywhere.':'Visit a purple shop ring or subscribe for remote access.';
   $('shop-car').textContent=car.kind==='person'?'ON FOOT':VEHICLES[car.kind].name;
   $('shop-cash').textContent=session.sandbox?'∞':money(player.delivery.cash);
-  $('ota-status').textContent=ota.needsRenewalConsent
+  $('shop-level-note').hidden=session.sandbox;
+  $('style-paint-copy').textContent=session.playtest?'This finish lasts for the current playtest.':'Your driver keeps this finish on this vehicle. Each change costs the listed price.';
+  $('style-decal-copy').textContent=session.playtest?'This decal lasts for the current playtest.':'Decals stay with this vehicle. Each change costs the listed price.';
+  $('ota-copy').textContent=session.sandbox?'Remote shop access is included for this sandbox.':`${money(OTA_FEE)} per game hour (2 real minutes). Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have ${money(OTA_FEE)}.`;
+  $('ota-status').textContent=session.sandbox?'SANDBOX · Remote access included':ota.needsRenewalConsent
     ? ota.active?`PREVIOUS PERIOD ACTIVE · Re-enroll at ${money(OTA_FEE)} per game hour for the next renewal.`:`RE-ENROLL · Previous subscription ended. Confirm ${money(OTA_FEE)} per game hour.`
     : !ota.enabled?'OFF · Subscribe to activate':ota.active?'ACTIVE · Next charge in '+Math.ceil(Math.max(0,(ota.renewAt??0)-session.world.time))+' seconds':`PAUSED · Waiting for ${money(OTA_FEE)}`;
-  $('style-level').textContent=`Your level: ${levelForCash(player.delivery.cash)} · Earn cash to unlock more finishes.`;
+  $('style-level').textContent=session.sandbox?'All finishes are unlocked in sandbox.':`Your level: ${levelForCash(player.delivery.cash)} · Earn cash to unlock more finishes.`;
   const marketPaint=marketPaintColor(car.marketPaint);$('style-market').hidden=marketPaint===null;
   const previewKey=car.kind==='person'?'person':`${car.kind}:${car.style.paint}:${car.style.decal}:${marketPaint??'base'}`;
   $<HTMLCanvasElement>('style-preview').hidden=car.kind==='person';
@@ -1043,8 +1047,8 @@ function updateShop(){
     button.textContent=`${item.name} · ${installed?(category==='paint'&&marketPaint!==null?'SAVED':'APPLIED'):`${locked?'🔒 ':''}${item.price?money(item.price):'FREE'}${item.level?` · LV ${item.level}`:''}${locked?'':levelDrop(item.price)}`}`;button.setAttribute('aria-pressed',String(installed));
     button.disabled=!available||installed||locked||(category==='paint'&&marketPaint!==null)||player.delivery.cash<item.price||!!pendingShop||!!pendingOta||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
   }
-  const otaButton=$<HTMLButtonElement>('ota-toggle');otaButton.textContent=pendingOta?'CHECKING…':ota.enabled?'CANCEL':`${ota.needsRenewalConsent?'RE-ENROLL':'SUBSCRIBE'}${ota.active?'':levelDrop(OTA_FEE)}`;
-  otaButton.disabled=!!pendingOta||!!pendingShop||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
+  const otaButton=$<HTMLButtonElement>('ota-toggle');otaButton.textContent=session.sandbox?'INCLUDED':pendingOta?'CHECKING…':ota.enabled?'CANCEL':`${ota.needsRenewalConsent?'RE-ENROLL':'SUBSCRIBE'}${ota.active?'':levelDrop(OTA_FEE)}`;
+  otaButton.disabled=session.sandbox||!!pendingOta||!!pendingShop||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
   for(const id of Object.keys(UPGRADES) as UpgradeId[]){
     const button=document.querySelector<HTMLButtonElement>(`[data-upgrade="${id}"]`)!;
     const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:car.upgrades[id];
@@ -1069,7 +1073,7 @@ function openShop(preferSpaceX=false){
   }
   controls.clear();controls.enabled=false;
   if(preferSpaceX)selectShopSection('upgrades');
-  if(!pendingShop)$('shop-feedback').textContent='Earn cash by delivering food. Your saved driver keeps purchased upgrades for this vehicle.';
+  if(!pendingShop)$('shop-feedback').textContent=session.playtest?'Playtest changes last only for this room.':'Earn cash by delivering food. Your saved driver keeps purchased upgrades for this vehicle.';
   updateShop();shopDialog.showModal();
 }
 function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}

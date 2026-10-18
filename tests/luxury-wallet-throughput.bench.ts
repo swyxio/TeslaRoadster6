@@ -1,6 +1,7 @@
 // Local-only, bounded 5-client / 60-second active-wallet measurement.
 // Start the test fixture described in tests/fixtures/README-luxury-wallet.md.
-// pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp/tesland-wallet-throughput.json
+// Add --drive to exercise moving vehicles and the collection observer.
+// pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp/tesland-wallet-throughput.json --drive
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
@@ -14,6 +15,7 @@ import {RoomInputClient} from './room-input-client';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8797');
 if(base.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(base.hostname))throw new Error('Use an isolated local fixture only');
 const output=resolve(process.argv[3]??`/tmp/tesland-wallet-throughput-${Date.now()}.json`);
+const driving=process.argv[4]==='--drive';
 const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 const dirtyWorktree=execFileSync('git',['status','--porcelain=v1'],{encoding:'utf8'}).trim().length>0;
 const room=`throughput-${randomUUID().slice(0,8)}`,sockets:WebSocket[]=[];
@@ -28,7 +30,7 @@ async function rpc<T>(route:string,body:object):Promise<T>{
 }
 type Message={type:string;[key:string]:any};
 type InputTrace={sequence:number;sentMs:number;ackMs?:number;latencyMs?:number};
-type SnapshotTrace={atMs:number;worldTime:number;appliedSeq:number;decodedBytes:number};
+type SnapshotTrace={atMs:number;worldTime:number;appliedSeq:number;decodedBytes:number;poseRevision:number;vehicle:{id:string;x:number;z:number;speed:number}|null};
 type ActionTrace={driver:number;requestId:number;choice:string;sentMs:number;resultMs?:number;ok?:boolean};
 type Phase={start:number;end?:number;inputs:InputTrace[][];snapshots:SnapshotTrace[][];actions:ActionTrace[];missed:number};
 type ServerSample={wallMs:number;worldSeconds:number;tickCount:number;players:number;ticksMs:number[];droppedTicks:number;maxQueue:number};
@@ -48,7 +50,12 @@ function connect(path:string):Client{
       client.states++;
       const index=clients.indexOf(client);
       const appliedSeq=message.control.appliedSeq as number;
-      if(phase&&index>=0)phase.snapshots[index].push({atMs:now-phase.start,worldTime:message.world.time,appliedSeq,decodedBytes:Buffer.byteLength(raw)});
+      if(phase&&index>=0){
+        const player=message.world.players.find((item:{id:string})=>item.id===client.id);
+        const car=message.world.entities.find((item:{id:string})=>item.id===player?.entityId);
+        phase.snapshots[index].push({atMs:now-phase.start,worldTime:message.world.time,appliedSeq,decodedBytes:Buffer.byteLength(raw),poseRevision:message.poseRevision,
+          vehicle:car?{id:car.id,x:car.x,z:car.z,speed:car.speed}:null});
+      }
       for(const [seq,entry] of client.pending)if(appliedSeq>=seq){entry.trace.ackMs=now-entry.phase.start;entry.trace.latencyMs=entry.trace.ackMs-entry.trace.sentMs;client.pending.delete(seq);}
     }
     if(message.type==='vehicleStyleResult'&&activeData){
@@ -84,7 +91,13 @@ const distribution=(values:number[])=>({count:values.length,p50:percentile(value
 function summarize(data:Phase,server:ServerSample){
   const snapshots=data.snapshots.flatMap(items=>items.map((sample,index)=>index?sample.atMs-items[index-1].atMs:0).slice(1));
   const latencies=data.inputs.flat().flatMap(item=>item.latencyMs===undefined?[]:[item.latencyMs]);
-  return {wallSeconds:server.wallMs/1000,worldSeconds:server.worldSeconds,worldRate:server.worldSeconds/(server.wallMs/1000),ticks:server.tickCount,
+  const drivenDistanceM=data.snapshots.map(items=>items.reduce((sum,sample,index)=>{
+    const previous=items[index-1];
+    if(!previous||sample.poseRevision!==previous.poseRevision||!sample.vehicle||!previous.vehicle||sample.vehicle.id!==previous.vehicle.id)return sum;
+    const distance=Math.hypot(sample.vehicle.x-previous.vehicle.x,sample.vehicle.z-previous.vehicle.z);
+    return distance<=24?sum+distance:sum;
+  },0));
+  return {wallSeconds:server.wallMs/1000,worldSeconds:server.worldSeconds,worldRate:server.worldSeconds/(server.wallMs/1000),ticks:server.tickCount,drivenDistanceM,
     tickMs:distribution(server.ticksMs),snapshotGapMs:distribution(snapshots),inputAckLatencyMs:distribution(latencies),
     decodedBytes:data.snapshots.flat().reduce((sum,item)=>sum+item.decodedBytes,0),maxQueue:server.maxQueue,droppedTickSamples:server.droppedTicks,
     sentInputs:data.inputs.reduce((sum,items)=>sum+items.length,0),unacknowledgedInputs:data.inputs.flat().filter(item=>item.ackMs===undefined).length,
@@ -107,7 +120,8 @@ try{
     await until(()=>client.messages.some(message=>message.type==='otaResult'&&message.requestId===2),`OTA ${i}`);
     assert.equal(client.messages.find(message=>message.type==='otaResult'&&message.requestId===2)!.ok,true);
   }
-  const input={...NEUTRAL,brake:true};
+  if(driving)for(const [index,client] of clients.entries())await rpc('driving-start',{room,playerId:client.id,shopIndex:index});
+  const input=driving?{...NEUTRAL,throttle:1}:{...NEUTRAL,brake:true};
   timer=setInterval(()=>{
     for(const [index,client] of clients.entries()){
       if(client.socket.readyState!==WebSocket.OPEN)continue;
@@ -121,6 +135,7 @@ try{
   await sleep(5_000);baselineData.end=performance.now()-baselineData.start;
   baselineServer=await rpc<ServerSample>('measurement-stop',{room});
   phase=undefined;await until(()=>clients.every(client=>client.pending.size===0),'baseline input acknowledgements');
+  if(driving)for(const [index,client] of clients.entries())await rpc('driving-start',{room,playerId:client.id,shopIndex:index});
   const commitBefore=await Promise.all(clients.slice(0,4).map(client=>rpc<{started:number}>('fault-state',{driverId:client.driverId})));
   loop.reset();await rpc('measurement-start',{room});phase=activeData=newPhase();
   const next=[250,1250,2250,3250],counts=[0,0,0,0];
@@ -152,7 +167,7 @@ try{
   const ledgerKeys=await rpc<string[]>('economy-keys',{room});
   const profileKeys=await Promise.all(clients.slice(0,4).map(client=>rpc<string[]>('profile-keys',{driverId:client.driverId})));
   const baseline=summarize(baselineData,baselineServer),active=summarize(activeData,activeServer);
-  const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it'},
+  const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,control:driving?'sustained throttle':'brake',baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it',distance:'sum of same-vehicle snapshot displacements; gaps over 24 m and pose revisions excluded'},
     environment:{revision,dirtyWorktree,node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
     baseline,active,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
     pendingLedgerKeys:ledgerKeys.filter(key=>/^(pending|unacked|cleanup|intent):/.test(key)).length,
@@ -165,6 +180,7 @@ try{
   assert.ok(repliesDrained&&queuesDrained&&active.maxQueue<32,'wallet work drains without reaching its queue limit');
   assert.equal(active.droppedTickSamples,0);assert.equal(active.unacknowledgedInputs,0);assert.equal(results.closed,0);assert.deepEqual(results.inputRejections,[0,0,0,0,0]);
   assert.equal(active.actionsAttempted,48);assert.equal(active.actionsSucceeded,48);assert.equal(active.missedActions,0);
+  if(driving)assert.ok(active.drivenDistanceM.slice(0,4).some(distance=>distance>=100),'at least one saved driver must move at least 100 m during the sample');
   assert.equal(results.pendingLedgerKeys,0);assert.deepEqual(results.profileReceiptCounts,[0,0,0,0]);
 }finally{
   phase=undefined;loop.disable();if(timer)clearInterval(timer);

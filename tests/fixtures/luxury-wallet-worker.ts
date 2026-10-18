@@ -465,6 +465,17 @@ export class GameRoom extends ProductionGameRoom {
     const shop=SHOPS[shopIndex];if(!shop)throw new Error('Unknown test workshop');
     return this.fixturePlace(playerId,shop.x,shop.z);
   }
+  /** Place drivers on a repeatable open-road route for a local throughput sample. */
+  async fixtureDrivingStart(playerId:string,index:number) {
+    const world=Reflect.get(this,'world') as World;
+    const player=world.players.find(candidate=>candidate.id===playerId);
+    const car=world.entities.find(candidate=>candidate.id===player?.entityId);
+    if(!car||!Number.isInteger(index)||index<0||index>4)throw new Error('Invalid test driver');
+    const x=-300+index*12,z=-2050;
+    this.fixturePlace(playerId,x,z);
+    Object.assign(car,{yaw:Math.PI,autopilot:false,navigation:null});
+    return {x,z,yaw:car.yaw};
+  }
   async fixtureDeliveryPickup(playerId:string) {
     const world = Reflect.get(this, 'world') as World;
     const player = world.players.find(candidate => candidate.id === playerId);
@@ -561,6 +572,10 @@ export default {
       case '/__wallet-test/workshop': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixtureWorkshop(body.playerId,body.shopIndex));
+      }
+      case '/__wallet-test/driving-start': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        return Response.json(await room.fixtureDrivingStart(body.playerId,body.shopIndex??-1));
       }
       case '/__wallet-test/delivery-pickup': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
