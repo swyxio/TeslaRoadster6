@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Controls} from '../src/controls';
 import {makeEntity,step,type World} from '../shared/game';
+import {initialSoccer} from '../shared/soccer';
 
 class FakeButton extends EventTarget {
   dataset:{control:string};
@@ -48,7 +49,7 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
   const car=makeEntity('car','roadster',0,0,'driver');
-  const world:World={entities:[car],players:[],pickups:[],time:0};
+  const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
   const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyJ'});fakeWindow.dispatchEvent(key);
   step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,1);
   jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));

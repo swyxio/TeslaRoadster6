@@ -1,5 +1,5 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
@@ -49,8 +49,8 @@ export class Session {
   }
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
   buyUpgrade(upgrade:UpgradeId){if(this.status==='solo')buyUpgrade(this.world,this.id,upgrade);else this.send({type:'upgrade',upgrade});}
-  action(type: 'interact' | 'reset' | 'autopilot') {
-    if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:resetPlayer)(this.world, this.id);
+  action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
+    if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:type==='dome'?travelDome:resetPlayer)(this.world, this.id);
     else this.send({type});
   }
   private send(value: unknown) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(value)); }
