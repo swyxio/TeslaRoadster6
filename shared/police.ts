@@ -45,7 +45,9 @@ function resumePatrol(cop:Entity){
   cop.autopilot=true;
   if(cop.supportId==='overpass'){
     const exit=-Math.sin(cop.yaw)>=0?OVERPASS.end+10:OVERPASS.start-10;
-    state.path=[{x:exit,z:OVERPASS.z-OVERPASS.width/2-20},destination];
+    // Leave the ramp on the destination's side so the next leg cannot cut back through the deck.
+    const side=destination.z>=OVERPASS.z?1:-1;
+    state.path=[{x:exit,z:OVERPASS.z+side*(OVERPASS.width/2+20)},destination];
   }else state.path=route(cop,destination);
 }
 function heightAboveSurface(e:Entity){
