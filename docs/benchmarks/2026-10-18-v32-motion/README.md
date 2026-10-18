@@ -20,6 +20,9 @@ rendering or bandwidth benchmarks.
 The fixture uses a shared simulation and scene-transform emulation, not an
 actual browser or GPU; it does not exercise remote-player collision or WAN
 transport. See each trace's `report.fixture` for setup and timing definitions.
+The accompanying side-by-side visualization replays these traces in warmed
+game scenes on one clock with decorative trees hidden for visibility. It is
+not a measurement of frame rate or a live network session.
 
 `v32-final-slalom.json.gz`, `v32-final-flight.json.gz` and
 `v32-final-stall.json.gz` contain the corresponding candidate traces at a
