@@ -190,3 +190,19 @@ test('server-relative expiry survives incorrect and subsequently changed device 
     assert.equal(radio.episode,null);assert.match(radio.status,/No episodes from the last two months/);
   } finally {Date.now=realNow;env.cleanup();}
 });
+
+test('waking after sleep refreshes the server anchor before starting a prepared episode', async () => {
+  const realNow=Date.now;let serverNow=realNow(),deviceNow=serverNow,calls=0;
+  const publishedAt=radioCutoff(serverNow)+60_000;
+  Date.now=()=>deviceNow;
+  const env=setup(async()=>{calls++;return Response.json({serverNow,episodes:[{...episodes[0],publishedAt}]});});
+  try {
+    const radio=new Radio(()=>{});radio.select('latent-space');await tick();
+    assert.ok(radio.episode);
+    serverNow+=2*86400000;deviceNow+=2*86400000;
+    // No monotonic advance: model platforms whose clock pauses during sleep.
+    await radio.play();await tick();
+    assert.equal(calls,2);assert.equal(radio.episode,null);assert.equal(radio.playing,false);
+    assert.match(radio.status,/No episodes from the last two months/);
+  } finally {Date.now=realNow;env.cleanup();}
+});

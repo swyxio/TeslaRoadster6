@@ -17,7 +17,7 @@ export class Radio {
   loading = false;
   private media = new Audio();
   private catalogs = new Map<PodcastStation, Episode[]>();
-  private clocks = new Map<PodcastStation, { serverNow:number; receivedAt:number }>();
+  private clocks = new Map<PodcastStation, { serverNow:number; receivedAt:number; wallAt:number }>();
   private remaining = new Map<PodcastStation, Episode[]>();
   private generation = 0;
   private resumeOnVisible = false;
@@ -60,7 +60,7 @@ export class Radio {
         if (!episodes || !Number.isFinite(data.serverNow)) throw new Error('Invalid catalog');
         if (generation !== this.generation) return;
         this.catalogs.set(station, episodes);
-        this.clocks.set(station, { serverNow:data.serverNow, receivedAt:performance.now() });
+        this.clocks.set(station, { serverNow:data.serverNow, receivedAt:performance.now(), wallAt:Date.now() });
         this.remaining.delete(station);
       }
       if (generation !== this.generation) return;
@@ -76,7 +76,11 @@ export class Radio {
   }
   private catalogAge(station:PodcastStation):number {
     const clock=this.clocks.get(station);
-    return clock ? Math.max(0,performance.now()-clock.receivedAt) : Infinity;
+    if (!clock) return Infinity;
+    const elapsed=Math.max(0,performance.now()-clock.receivedAt);
+    // Sleep can stop the monotonic clock. Refresh the server anchor after sleep
+    // or a clock adjustment; never use the device calendar as the cutoff.
+    return Math.abs(Date.now()-clock.wallAt-elapsed)>60_000 ? Infinity : elapsed;
   }
   private catalogNow(station:PodcastStation):number {
     return (this.clocks.get(station)?.serverNow ?? NaN)+this.catalogAge(station);
@@ -93,7 +97,7 @@ export class Radio {
   async play(): Promise<void> {
     if (this.station === 'chiptune') return;
     const generation = this.generation;
-    if (this.episode && !isRecentRadioEpisode(this.episode.publishedAt, this.catalogNow(this.station))) {
+    if (this.episode && (this.catalogAge(this.station) === Infinity || !isRecentRadioEpisode(this.episode.publishedAt, this.catalogNow(this.station)))) {
       this.media.pause(); this.media.removeAttribute('src'); this.episode = null;
     }
     if (!this.episode) await this.prepare();
