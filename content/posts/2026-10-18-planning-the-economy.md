@@ -69,7 +69,7 @@ In the expanded economy, there's plenty to spend on before buying a house. Paint
 
 ## A place of your own
 
-After building a career of deliveries and fleet decisions, the $2m wallet threshold opens the property market. A ready-built starter home costs $1m. Or buy a $400k plot and spend $600k building a home to your taste. An owner can always reach and build on their own plot, even if a purchase lowers their balance below the market threshold.
+Our proposed property market opens at a $2m wallet threshold, after a career of deliveries and fleet decisions. A ready-built starter home would cost $1m. Or buy a $400k plot and spend $600k building a home to your taste. An owner could always reach and build on their own plot, even if a purchase lowers their balance below the market threshold.
 
 <link rel="stylesheet" href="/blog/economy/home-planner.css">
 <div id="home-planner" class="home-planner">
@@ -79,9 +79,9 @@ After building a career of deliveries and fleet decisions, the $2m wallet thresh
 </div>
 <script type="module" src="/blog/economy/home-planner.js"></script>
 
-A home comes with two garage spaces and a free teleport back home. Extra spaces cost $50k, $100k, $200k, $400k and $800k. Personal chargers start at $25k, and a launch pad or thermal starts at $50k. We want upgrades to change how a place feels to use: pull a favorite car out of the garage, recharge, then launch back toward the city.
+The planned home comes with two garage spaces and a free teleport back home. Extra spaces cost $50k, $100k, $200k, $400k and $800k. Personal chargers start at $25k, and a launch pad or thermal starts at $50k. We want upgrades to change how a place feels to use: pull a favorite car out of the garage, recharge, then launch back toward the city.
 
-Bigger plots and builds come in $2m, $4m, $8m and $16m starting packages. You can own one ready-built home bought from the city or another player, plus homes you build yourself on additional plots. Starter plots should always be available; a limited number of special world locations give players something to hunt for. Players set their own resale prices. On a $2m sale, a 5% fee removes $100k and the seller receives $1.9m.
+We propose bigger plots and builds in $2m, $4m, $8m and $16m starting packages. Players could own one ready-built home bought from the city or another player, plus homes they build on additional plots. Starter plots should always be available; a limited number of special world locations give players something to hunt for. Players would set their own resale prices. On a $2m sale, a 5% fee removes $100k and the seller receives $1.9m.
 
 For players who want to keep building, the property career can grow upward. A development plot costs $800k and its foundation and first floor cost $1.2m. The next floor costs $200k, with each additional floor about 10% more than the last. By the twentieth floor you've spent $12.232m on land and construction, before achievement awards. Milestones at floors 1, 5, 10 and 20 pay once, and the building remains yours even when its cost drops your wallet level. We haven't assumed any rental income: a tower is a place to make your mark and, eventually, a property another player might want to buy.
 
@@ -108,6 +108,11 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 <figure>
 <img src="/blog/economy/bay-landmarks.svg" alt="Map of Tesland from North Bay Playground to San José, with labeled bridges, research campuses, the Rocket Dome, Fremont Spaceport and city landmarks." loading="lazy">
 <figcaption>The full Tesland map, drawn from the game's coastlines, roads and landmark positions. Road traces © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.</figcaption>
+</figure>
+
+<figure>
+<img src="/blog/economy/bay-landmarks-concept.webp" alt="An illustrated Bay Area panorama with the Golden Gate and Bay bridges, downtown towers, a colorful Rocket Dome and a rocket launch pad." loading="lazy">
+<figcaption>A postcard from the Bay: bridges, towers, the Rocket Dome and a Fremont launch. Concept art.</figcaption>
 </figure>
 
 <ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>

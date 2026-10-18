@@ -6,14 +6,13 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
-    title: 'Build your skyline',
-    intro: 'Save your driving progress and grow a place of your own in the Bay.',
+    title: 'A Bay worth exploring',
+    intro: 'Visit four research stops, give your car a new look and explore the economy taking shape.',
     sections: [
-      { title: 'Keep building', items: [
-        'Saved online drivers keep their wallet, achievements and paid personal-car configurations between rooms. Guest drives remain session-only.',
-        'At the $2 million wallet threshold, buy one starter home or up to three development plots. Visit a plot to build a tower up to 20 stories and invite friends to see it.',
-        'UCSF research discounts the starter home, and Berkeley research discounts its charger. Building milestones pay once per driver; current delivery rates make property a long-term goal.',
-        'Visit the four research stops and buy paint or decals at a workshop. Explore the updated economy blog for simulations and the interactive tower planner.'
+      { title: 'Explore and customize', items: [
+        'Stop by UCSF, UC Berkeley, Stanford and SFO for a research award and a related workshop discount.',
+        'Buy paint and decals at a workshop; other drivers can see your finish and your name above the car.',
+        'Read the economy story for delivery and fleet simulations, a Bay landmark map and an interactive tower planner.'
       ] }
     ]
   },

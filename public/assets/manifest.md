@@ -19,8 +19,9 @@ The source PNGs were retained locally under `~/.codex/generated_images/` and are
 | [UCSF property research](../blog/economy/research-ucsf.webp) | `01a14e5d-c66e-7f32-b9fb-24bfc4b319df/exec-ef3484cd-1855-4ca0-be75-74fd77f1a785.png` | 1600 × 800 | 4.88 MiB |
 | [Berkeley energy research](../blog/economy/research-berkeley.webp) | `01a14e5d-c66e-7f32-b9fb-24bfc4b319df/exec-0e173fc3-a1ed-4887-9d5b-c05923cb09d1.png` | 1600 × 640 | 3.91 MiB |
 | [Developer tower](../blog/economy/developer-tower.webp) | `01a14e5d-c66e-7f32-b9fb-24bfc4b319df/exec-6234f838-39d8-47e0-ac2d-22d873a7147e.png` | 1600 × 800 | 4.88 MiB |
+| [Bay landmark panorama](../blog/economy/bay-landmarks-concept.webp) | `01a14e6f-6087-7070-8de1-7979e40d728b/exec-a76bff67-a651-4c6b-b81d-475d3cd6d8a6.png` | 1916 × 821 | 6.00 MiB |
 
-The four research illustrations and tower were resized to 1600 pixels wide and encoded with `cwebp -q 82 -m 6 -resize 1600 0`. The remaining WebP files are exports of the identified originals at their original pixel dimensions.
+The four research illustrations and tower were resized to 1600 pixels wide and encoded with `cwebp -q 82 -m 6 -resize 1600 0`. The Bay landmark panorama was encoded with `cwebp -q 82`; the remaining WebP files are exports of the identified originals at their original pixel dimensions.
 
 ## Gameplay screenshots
 

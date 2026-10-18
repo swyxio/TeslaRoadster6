@@ -66,6 +66,7 @@ test('an SFO drop-off earns its visit and express bonuses once alongside the far
   assert.equal(player.delivery.cash,fare+site.cash+80);
   assert.ok(player.achievements.unlocked.includes('sfo-ground-crew'));
   assert.ok(player.achievements.unlocked.includes('sfo-express'));
-  assert.equal(player.delivery.lastReward?.amount,site.cash+80);
+  assert.equal(player.delivery.lastReward?.kind,'delivery-research');
+  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+80);
   step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+80);
 });

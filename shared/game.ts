@@ -1039,7 +1039,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
   for(const player of world.players){
     const entity=world.entities.find(e=>e.id===player.entityId);
     if(entity){
-      const before=player.delivery.completed, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
+      const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       const orderPaused=islandProtected(entity)||entity.inDome;
       updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused);
@@ -1054,7 +1054,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
         if(cockpit.orderEligible&&cockpit.orderSeconds>0)cockpit.deliveries++;
         cockpit.orderEligible=true;cockpit.orderSeconds=0;
       }
-      updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined);
+      updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined,(player.delivery.lastReward?.id??0)>rewardBefore);
     }
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);

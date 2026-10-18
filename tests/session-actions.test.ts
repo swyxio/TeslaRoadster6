@@ -36,6 +36,20 @@ function state(socket:Socket,world:World,inputAck:number,sync?:number) {
   socket.message({type:'state',world:structuredClone(world),inputAck,...(sync === undefined ? {} : {sync})});
 }
 
+test('a finish purchase waits for the room result and post-action snapshot',()=>{
+  const {session,socket,world}=online();
+  const requestId=session.buyVehicleStyle({category:'paint',choice:'violet'});
+  assert.deepEqual(socket.sent.slice(-2),[
+    {type:'vehicleStyle',category:'paint',choice:'violet',requestId},{type:'sync',token:1}
+  ]);
+  assert.equal(session.vehicleStyleResult,null);
+  socket.message({type:'vehicleStyleResult',requestId,category:'paint',choice:'violet',ok:true});
+  assert.deepEqual(session.vehicleStyleResult,{type:'vehicleStyleResult',requestId,category:'paint',choice:'violet',ok:true});
+  assert.equal(session.renderWorld(),session.world,'the acknowledgement alone does not release prediction');
+  state(socket,world,0,1);
+  session.disconnect();
+});
+
 test('a new session stays empty until a completed room join',()=>{
   const session = new Session();
   assert.equal(session.status,'disconnected');

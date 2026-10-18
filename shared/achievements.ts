@@ -53,7 +53,7 @@ function shore(e:Entity):Shore|null {
 export function onRoof(e:Entity):boolean {
   return e.kind!=='person' && e.supportId?.startsWith('roof:')===true;
 }
-export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string):void {
+export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string,sameTickReward=false):void {
   const state=player.achievements, region=shore(e), roof=onRoof(e);
   const grounded=e.supportId!==null;
   // A recovery or a vehicle switch is not a flight across the Bay.
@@ -88,7 +88,10 @@ export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boole
   if(researchCash){
     // Research cash is a one-off award; session delivery earnings remain delivery-only.
     player.delivery.cash+=researchCash;
-    player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:'research',amount:researchCash};
+    const reward=player.delivery.lastReward;
+    if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery')){
+      player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'?'pickup-research':'delivery-research',amount:reward.amount+researchCash};
+    }else player.delivery.lastReward={id:(reward?.id??0)+1,kind:'research',amount:researchCash};
   }
   state.lastPosition={x:e.x,z:e.z};
 }

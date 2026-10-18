@@ -355,7 +355,7 @@ function begin(userGesture=true){
   }
   menuRidePending=null;startingSelect.disabled=false;$<HTMLButtonElement>('apply-ride').disabled=false;
   lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
-  pendingShop=null;pendingOta=null;pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
+  pendingShop=null;pendingOta=null;pendingStyle=null;stylePreviewKey='';pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
@@ -372,7 +372,7 @@ $('error-join').onclick=()=>{
   $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin();
 };
 $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
-$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;shopBusyUntil=0;session.disconnect();toggleMenu(true);};
+$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;pendingStyle=null;stylePreviewKey='';shopBusyUntil=0;session.disconnect();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
   $('camera').textContent=`${controlSettings.label('camera')} · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;

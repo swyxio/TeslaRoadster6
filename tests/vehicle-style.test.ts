@@ -6,7 +6,6 @@ import {SHOPS} from '../shared/upgrades';
 import {PAINTS,DECALS,type StyleChoice} from '../shared/vehicle-style';
 import {parseMessage} from '../worker/protocol';
 import {snapshotFor} from '../worker/snapshot';
-import {Session} from '../src/session';
 import {createVehicle,setVehicleStyle} from '../src/vehicles';
 
 function setup(){
@@ -33,13 +32,6 @@ test('wire accepts only bounded style choices and replicated snapshots contain t
   const {world,player}=setup();player.delivery.cash=100;
   assert.ok(buyVehicleStyle(world,'p',{category:'paint',choice:'mint'}));assert.ok(buyVehicleStyle(world,'p',{category:'decal',choice:'checker'}));
   const snapshot=snapshotFor(world,'p');assert.equal(snapshot.players[0].name,'Sky');assert.deepEqual(snapshot.entities.find(e=>e.id===player.entityId)?.style,{paint:'mint',decal:'checker'});
-});
-test('solo session uses the shared purchase and returns explicit results',()=>{
-  const session=new Session();session.solo();const player=session.world.players[0],car=session.world.entities.find(e=>e.id===player.entityId)!;
-  Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0,pushX:0,pushZ:0,vy:0});player.delivery.cash=18;
-  const id=session.buyVehicleStyle({category:'paint',choice:'violet'});
-  assert.deepEqual(session.vehicleStyleResult,{requestId:id,category:'paint',choice:'violet',ok:true});assert.equal(car.style.paint,'violet');assert.equal(player.delivery.cash,0);
-  const next=session.buyVehicleStyle({category:'decal',choice:'checker'});assert.deepEqual(session.vehicleStyleResult,{requestId:next,category:'decal',choice:'checker',ok:false});
 });
 test('changing one vehicle finish does not change another vehicle or shared materials',()=>{
   const first=createVehicle('roadster'),second=createVehicle('roadster');
