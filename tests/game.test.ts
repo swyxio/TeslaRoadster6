@@ -72,12 +72,17 @@ test('64-player spawns do not overlap and simulation stays finite', () => {
   assert.ok(world.entities.every(e => [e.x, e.y, e.z, e.speed].every(Number.isFinite)));
 });
 test('protocol rejects malformed, non-finite, oversized and out-of-range input', () => {
-  assert.ok(parseMessage(JSON.stringify({ type: 'input', input: NEUTRAL })));
+  assert.ok(parseMessage(JSON.stringify({ type: 'input', seq:1, input: NEUTRAL })));
+  assert.equal(parseMessage(JSON.stringify({type:'input',input:NEUTRAL})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'input',seq:0,input:NEUTRAL})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'input',seq:1.5,input:NEUTRAL})),null);
+  assert.deepEqual(parseMessage('{"type":"sync","token":2}'),{type:'sync',token:2});
+  assert.equal(parseMessage('{"type":"sync","token":0}'),null);
   assert.equal(parseMessage('{'), null); assert.equal(parseMessage('x'.repeat(1025)), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 2 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, throttle: 2 } })), null);
   assert.equal(parseMessage('{"type":"input","input":{"throttle":1e999}}'), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, boost: 1 } })), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, jump: -1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, boost: 1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, jump: -1 } })), null);
   assert.ok(parseMessage('{"type":"parking","action":"park"}'));
   assert.equal(parseMessage('{"type":"parking","action":"award"}'),null);
   assert.ok(parseMessage('{"type":"race","action":"join","courseId":"short"}'));

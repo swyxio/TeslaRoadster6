@@ -609,7 +609,8 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));scene.render(session.world,session.id,dt,menu);
+  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));
+  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world);
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(started&&!menu&&!document.hidden&&(session.status==='solo'||session.status==='online')&&observedPlayer){
     const now=Date.now(),active=observedPlayer.delivery.activeSeconds;

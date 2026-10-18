@@ -1,4 +1,4 @@
-# Implementation contracts · v20
+# Implementation contracts · v22
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -42,7 +42,8 @@ Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowerca
 Client messages:
 
 ```json
-{"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
+{"type":"input","seq":1,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
+{"type":"sync","token":1}
 {"type":"interact"}
 {"type":"reset"}
 {"type":"autopilot"}
@@ -64,12 +65,14 @@ Server messages:
 
 ```text
 {type:"welcome", id:string, version:23, capacity:number}
-{type:"state", world:World}
+{type:"state", world:World, inputAck:number, sync?:number}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 ```
 
-Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
+Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz with a strictly increasing positive sequence; the server keeps the latest intent and acknowledges the latest sequence actually used in a physics tick. The same input can run for multiple ticks, and intermediate sequences may be skipped. `sync` tags the next regular snapshot after preceding socket messages; multiple requests are coalesced and do not force extra snapshots or physics ticks.
+
+For local presentation only, the client replays at most three unacknowledged inputs with shared physics from each snapshot. It stops prediction when snapshots are stale, input backlog is excessive, another body is close, the vehicle is airborne or on a special surface, or an action is waiting for its `sync` barrier. A new vehicle or discontinuity clears pending preview. The server alone owns collisions, position, pickups, races, cash and HUD state; this short preview can be corrected when the next snapshot arrives, particularly when inputs are batched or reused. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v22 versions the relocated Rocket Dome world geometry and soccer match state; v23 adds island jump surfaces and collisions. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 

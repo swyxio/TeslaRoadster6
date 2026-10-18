@@ -495,3 +495,9 @@ After integrating main's flight, parking, island and permanent Rocket kit change
 Chrome solo play showed the integrated arena and score on desktop and emulated 390×844 portrait and 844×390 landscape. In landscape, the wall-refill hint remained visible and an emulated touch on Drive accelerated the car. No physical device was tested.
 
 After integrating the economy simulation proposal from main, all 334 tests passed; it does not change the playable simulation.
+
+## 2026-10-18 · Local multiplayer driving preview
+
+On the v21 baseline, 30 local WebSocket steering changes took a median 64.0 ms and p95 114.9 ms from send to the first snapshot reflecting steering, with a 207.2 ms maximum. That excludes input batching, visual smoothing, device rendering and wide-area latency. The prediction change passed 317 tests and the build; shared-physics tests exercise preview isolation, repeated and skipped inputs, action barriers, stale state, nearby traffic, supported surfaces and shoreline. A local Worker integration exercises sequence acknowledgements, stale inputs, repeated/batched inputs and coalesced action barriers. The two-client room integration passed once, while two subsequent runs timed out at Dome car/ball impact and forward flight respectively; these runs overlapped other local build, test or browser work, and the integration remains timing-sensitive. Neither is a load test.
+
+Chrome desktop joined a local multiplayer room and drove the Rocket Roadster by keyboard, reaching about 105 km/h. This is a brief drive, not a complete manual race. The iPhone 15 Pro Max was paired but locked; device tooling reported its screen off and offers no screen capture or touch control. No physical-device playtest or WAN responsiveness measurement was completed in this pass.
