@@ -10,7 +10,8 @@ export const RELEASES = [
       { title: 'Along the line', items: [
         'Visit stops from San Francisco to San José, with local roads and parking games at the larger stations.',
         'Find short northbound and southbound sky lanes above the stations. They refill air and are optional to enter.',
-        'Explore stylized Stripe, Meta, Google, NVIDIA and Apple campuses across the Peninsula.'
+        'Explore stylized Stripe, Meta, Google, NVIDIA and Apple campuses, plus NASA Ames, Chabot, Oakland Zoo and Levi’s Stadium.',
+        'Visit Redwood City’s clock-tower station, redwoods and downtown landmarks.'
       ] }
     ]
   },

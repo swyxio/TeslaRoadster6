@@ -11,6 +11,7 @@ import { SOUTH_LANDMARKS } from './south-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
+import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -351,6 +352,7 @@ for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,dist
 export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
 const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
  .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
+landmarkBuildings.push(...EAST_SOUTH_ADDITIONS);
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;

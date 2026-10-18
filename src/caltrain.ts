@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
+import { buildCaltrainScenery } from './caltrain-scenery';
 import { material } from './vehicles';
 
 type Box = {x:number;y:number;z:number;w:number;h:number;d:number;angle?:number};
@@ -43,4 +44,5 @@ export function buildCaltrain(scene:T.Scene):void {
     label.position.set(x,7.2,z);label.scale.set(21,4.4,1);scene.add(label);
   }
   boxes(0xbfc2b4,platforms);boxes(0xc8584d,roofs);boxes(0xe5e1d0,posts);
+  buildCaltrainScenery(scene);
 }

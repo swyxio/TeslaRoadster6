@@ -6,6 +6,7 @@ import { addPlayer, createWorld, setDestination, step } from '../shared/game';
 import { BUILDINGS, terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { contact } from '../shared/physics';
+import { SOUTH_LANDMARKS } from '../shared/south-landmarks';
 import { HIGHWAY_ROUTE_IDS, ROUTES } from '../shared/traffic';
 
 test('station names, platforms, rail and parking use shared supported ground',()=>{
@@ -72,5 +73,14 @@ test('both highway directions navigate into each station area after its unlock',
       assert.ok(Math.hypot(car.x-stop.x,car.z-stop.z)<30,`${stop.id}: arrived near station`);
       assert.equal(car.health,100,`${stop.id}: clear approach`);
     }
+  }
+});
+
+test('Redwood City groups its station with downtown landmarks on supported ground',()=>{
+  const station=CALTRAIN_STOPS.find(stop=>stop.id==='redwood-city')!;
+  for(const id of ['redwood-fox','county-history']){
+    const landmark=SOUTH_LANDMARKS.find(place=>place.id===id)!;
+    assert.ok(Math.hypot(landmark.x-station.x,landmark.z-station.z)<110,id);
+    assert.equal(terrainHeight(landmark.x,landmark.z),0,id);
   }
 });

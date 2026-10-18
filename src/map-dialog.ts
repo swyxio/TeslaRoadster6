@@ -2,6 +2,7 @@ import './map-dialog.css';
 import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
 import { TECH_CAMPUSES } from '../shared/tech-campuses';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
+import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 
@@ -152,6 +153,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const p = screen(campus); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#b9a7dc'; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
       drawLabel(p,campus.name,'600 10px system-ui',12);
+    }
+    if (scale > .16) for (const place of EAST_SOUTH_ADDITIONS) {
+      if (!visible(place)) continue;
+      const p = screen(place); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
+      c.fillStyle = '#e5b87a'; c.beginPath(); c.arc(p.x,p.y,3,0,Math.PI*2); c.fill();
+      drawLabel(p,place.name,'600 10px system-ui',12);
     }
     for (const stop of CALTRAIN_STOPS) {
       if (!visible(stop)) continue;

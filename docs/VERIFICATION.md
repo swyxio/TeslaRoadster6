@@ -2,11 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
-## Caltrain stops, local roads and campuses · protocol v31 · 2026-10-18 Pacific
+## Caltrain stops and Bay landmarks · protocol v31 · 2026-10-18 Pacific
 
-- `pnpm test` passed 462 tests and `pnpm build` passed both TypeScript checks and Vite, with the existing large-chunk warning. Station tests drove to all seven new lots from both highway directions, checked supported and unobstructed decorative tracks, and exercised parking games. Current tests covered directional force, normal unboosted escape and locked-region safeguards at the new stops.
+- On the combined Redwood City and East/South Bay landmark build, `pnpm test` passed 466 tests and `pnpm build` passed both TypeScript checks and Vite, with the existing large-chunk warning. Station tests drove to all seven new lots from both highway directions, checked supported and unobstructed decorative tracks, and exercised parking games. Current tests covered directional force, normal unboosted escape and locked-region safeguards at the new stops. Landmark tests checked supported terrain, collision envelopes and clearances; the grove tests checked road, rail and building clearances.
 - Local Wrangler passed the two-client room integration and prediction/acknowledgement and barrier integration. These are functional tests, not a capacity or load measurement.
-- Chrome on a local-only level-three staging fixture displayed the Redwood City station and lot, started Park It in that lot, and displayed and drove near the Apple Park entrance. Emulated 390×844 portrait drove with touch; 844×390 landscape drove and steered simultaneously. There were no captured warning or error logs in that playtest. No physical mobile device was tested. The stations, campuses and local streets are stylized game-space interpretations, and the rails have no train simulation.
+- Chrome on a local-only level-three staging fixture displayed the Redwood City station, clock and redwood grove, started Park It in that lot, displayed and drove near the Apple Park entrance, and displayed the Levi's Stadium entrance. On the combined build, emulated 390×844 portrait drove with touch and 844×390 landscape drove and steered simultaneously. There were no captured warning or error logs in that playtest. No physical mobile device was tested. The stations, campuses and local streets are stylized game-space interpretations, and the rails have no train simulation.
 
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 

@@ -19,6 +19,7 @@ import { GameAudio } from './audio';
 import { Radio, type RadioStation } from './radio';
 import { STATIONS } from '../shared/stations';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
+import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
 import { refillStationFor } from '../shared/charging';
 import { type Entity } from '../shared/game';
 import { ferryDocked, ferrySecured, islandProtected, FERRY_DECK } from '../shared/ferry';
@@ -471,6 +472,7 @@ function minimap(entity:Entity|undefined,level:Level){
     base.fillStyle='#eef0d9';
     for(const district of DISTRICTS.filter(d=>(d.id==='san-jose'||d.id==='fremont'||d.id==='palo-alto')&&visible(d.x,d.z)))base.fillText(district.name.toUpperCase(),px(district.x)+4,pz(district.z));
     for(const landmark of LANDMARKS.filter(l=>visible(l.arrival.x,l.arrival.z))){base.fillStyle='#fff2c6';base.beginPath();base.arc(px(landmark.arrival.x),pz(landmark.arrival.z),2.5,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(landmark.name,px(landmark.arrival.x)+4,pz(landmark.arrival.z)-4);}
+    for(const place of EAST_SOUTH_ADDITIONS.filter(p=>visible(p.x,p.z))){base.fillStyle='#e5b87a';base.beginPath();base.arc(px(place.x),pz(place.z),2.5,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(place.name,px(place.x)+4,pz(place.z)-4);}
     for(const monument of TESLAND_MONUMENTS.filter(p=>visible(p.x,p.z))){base.fillStyle='#ffd080';base.beginPath();base.arc(px(monument.x),pz(monument.z),3,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(monument.name.toUpperCase(),px(monument.x)+4,pz(monument.z)-4);}
     if(visible(FREMONT_SPACEPORT.entrance.x,FREMONT_SPACEPORT.entrance.z)){base.fillStyle='#ffad70';base.beginPath();base.arc(px(FREMONT_SPACEPORT.entrance.x),pz(FREMONT_SPACEPORT.entrance.z),4,0,Math.PI*2);base.fill();if(mapLocal)base.fillText('MARS SPACEPORT',px(FREMONT_SPACEPORT.entrance.x)+5,pz(FREMONT_SPACEPORT.entrance.z)-5);}
     if(visible(STUNT_LOOP.x,STUNT_LOOP.z)){base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);}
