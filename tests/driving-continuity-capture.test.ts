@@ -97,12 +97,12 @@ test('grounded collector records traced contact and fails closed on missing boun
 function completeCapture() {
   const input = (throttle: number, steer: number, brake = false) => ({ throttle, steer, brake });
   const controls = [input(1, 0), input(1, -1), input(1, 1), input(1, 0), input(0, 0, true), input(0, 0)]
-    .map((c, i) => ({ ...c, atMs: 200 + i * 1500 }));
+    .map((c, i) => ({ ...c, atMs: [350, 4350, 5350, 6350, 8350, 9350][i] }));
   const events = [['keydown','KeyW'], ['keydown','KeyD'], ['keyup','KeyD'], ['keydown','KeyA'],
     ['keyup','KeyA'], ['keyup','KeyW'], ['keydown','Space'], ['keyup','Space']]
-    .map(([type, code], i) => ({ type, code, atMs: 300 + i * 1000, trusted: true }));
+    .map(([type, code], i) => ({ type, code, atMs: [300, 4300, 5300, 5300, 6300, 8300, 8300, 9300][i], trusted: true }));
   const frames = Array.from({ length: 101 }, (_, i) => ({ atMs: 100 + i * 100, visual: { x: i * .2, y: 0, z: 0 } }));
-  const states = Array.from({ length: 51 }, (_, i) => ({ atMs: 100 + i * 200, car: { x: i * .4, y: 0, z: 0 } }));
+  const states = Array.from({ length: 51 }, (_, i) => ({ atMs: 100 + i * 200, tick: i * 4, poseRevision: 1, car: { x: i * .4, y: 0, z: 0 } }));
   const ticks = Array.from({ length: 210 }, (_, tick) => ({ tick, poseRevision: 1, x: tick * .1, y: 0, z: 0, contactReasons: [] }));
   return {
     trace: { marks: [{ label: 'drive-start', atMs: 100 }, { label: 'drive-end', atMs: 10100 }], frames, states, controls, events,
@@ -131,6 +131,28 @@ test('scenario completeness rejects warm-up-only data, missing controls, no moti
     const candidate = completeCapture(); mutate(candidate);
     assert.equal(assessCapture(candidate).complete, false);
   }
+});
+
+test('scenario completeness requires authoritative motion during the initial W-only segment', () => {
+  const candidate = completeCapture();
+  // The car remains stationary through the first four seconds of W, then
+  // moves far enough afterward to satisfy the whole-scenario checks.
+  candidate.authority.ticks.forEach(t => { t.x = Math.max(0, t.tick - 84) * .2; });
+  candidate.trace.states.forEach(s => { s.car.x = candidate.authority.ticks[s.tick].x; });
+  const result = assessCapture(candidate);
+  assert.ok(result.authorityDisplacementM > 10);
+  assert.ok(result.stateDisplacementM > 10);
+  assert.equal(result.firstStraightAuthorityDisplacementM, 0);
+  assert.ok(result.invalid.includes('insufficient-first-straight-motion'));
+  assert.equal(result.complete, false);
+
+  const missingBoundary = completeCapture();
+  missingBoundary.trace.states = missingBoundary.trace.states.filter(s => s.atMs < 300 || s.atMs > 1400);
+  assert.ok(assessCapture(missingBoundary).invalid.includes('insufficient-first-straight-motion'));
+
+  const wrongTick = completeCapture();
+  wrongTick.trace.states.filter(s => s.atMs >= 300 && s.atMs < 4300).forEach(s => { s.poseRevision = 2; });
+  assert.ok(assessCapture(wrongTick).invalid.includes('insufficient-first-straight-motion'));
 });
 
 test('gap completeness requires a held message to be forwarded after the full hold and no intermediate sends', () => {

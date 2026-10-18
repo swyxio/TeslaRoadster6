@@ -50,7 +50,10 @@ export function assessCapture({ trace, authority, profile, routed, connections, 
   const requiredEvents = [['keydown','KeyW'], ['keydown','KeyD'], ['keyup','KeyD'], ['keydown','KeyA'],
     ['keyup','KeyA'], ['keyup','KeyW'], ['keydown','Space'], ['keyup','Space']];
   let eventIndex = 0;
-  for (const e of events) if (e.trusted && e.type === requiredEvents[eventIndex]?.[0] && e.code === requiredEvents[eventIndex]?.[1]) eventIndex++;
+  const scenarioEvents = [];
+  for (const e of events) if (e.trusted && e.type === requiredEvents[eventIndex]?.[0] && e.code === requiredEvents[eventIndex]?.[1]) {
+    scenarioEvents.push(e); eventIndex++;
+  }
   const missingEvents = requiredEvents.slice(eventIndex);
   const predicates = [
     c => c?.throttle > 0 && c.steer === 0 && c.brake === false,
@@ -84,10 +87,24 @@ export function assessCapture({ trace, authority, profile, routed, connections, 
   const ticks = list(authority?.ticks), revision = ticks.at(-1)?.poseRevision;
   const finalPoseTicks = ticks.filter(t => t.poseRevision === revision);
   const authorityDisplacementM = distance(finalPoseTicks[0], finalPoseTicks.at(-1));
+  // Match snapshots received during the first W-only interval to authority by
+  // tick, without assuming Worker and browser clocks measure CPU time alike.
+  const firstWAtMs = scenarioEvents[0]?.atMs, firstTurnAtMs = scenarioEvents[1]?.atMs;
+  const firstStraightStates = states.filter(s => s.atMs >= firstWAtMs && s.atMs < firstTurnAtMs);
+  const firstStraightStart = firstStraightStates[0], firstStraightEnd = firstStraightStates.at(-1);
+  const firstStraightStartTick = finalPoseTicks.find(t => t.tick === firstStraightStart?.tick);
+  const firstStraightEndTick = finalPoseTicks.find(t => t.tick === firstStraightEnd?.tick);
+  const firstStraightAuthorityDisplacementM = distance(firstStraightStartTick, firstStraightEndTick);
+  const firstStraightMotion = firstTurnAtMs - firstWAtMs >= 3000 && firstStraightStates.length >= 2 &&
+    firstStraightStart.atMs - firstWAtMs <= 1000 && firstTurnAtMs - firstStraightEnd.atMs <= 1000 &&
+    firstStraightStart.poseRevision === revision && firstStraightEnd.poseRevision === revision &&
+    Number.isSafeInteger(firstStraightStart.tick) && firstStraightEnd.tick > firstStraightStart.tick &&
+    firstStraightAuthorityDisplacementM > 1;
   fail('invalid-window', windowOK);
   fail('incomplete-window-frames', frames.length >= 30 && ordered(frames) && frames[0]?.atMs - startMs <= 1000 && endMs - frames.at(-1)?.atMs <= 1000);
   fail('incomplete-window-snapshots', states.length >= 5 && ordered(states) && states[0]?.atMs - startMs <= 1000 && lastSnapshotAgeMs >= 0 && lastSnapshotAgeMs <= 1000);
   fail('insufficient-motion', displacementM > 10 && stateDisplacementM > 10 && authorityDisplacementM > 10);
+  fail('insufficient-first-straight-motion', firstStraightMotion);
   fail('incomplete-controls', ordered(controls) && ordered(sentEntries) && observedControlStages === predicates.length && sentControlStages === predicates.length);
   fail('missing-or-unordered-events', ordered(events) && missingEvents.length === 0);
   fail('missing-turnaround', turnaroundCount > 0);
@@ -101,7 +118,8 @@ export function assessCapture({ trace, authority, profile, routed, connections, 
   fail('unsuccessful-gap', gapOK);
   fail('connection-or-target-changed', connectionAtEnd?.includes('LIVE') === true && cleanAfter === true);
   return { complete: invalid.length === 0, invalid, startMs, endMs, frames: frames.length, states: states.length,
-    displacementM, stateDisplacementM, authorityDisplacementM, lastSnapshotAgeMs, missingEvents,
+    displacementM, stateDisplacementM, authorityDisplacementM, firstStraightAuthorityDisplacementM,
+    firstStraightStates: firstStraightStates.length, lastSnapshotAgeMs, missingEvents,
     observedControlStages, sentControlStages, turnaroundCount, gapOK };
 }
 async function freePort() {
