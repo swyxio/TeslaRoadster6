@@ -107,6 +107,31 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     assert.equal(client.name, 'Restored');
     assert.equal(client.code, 'correct-code');
     assert.ok(states.includes('connecting') && states.includes('online') && states.includes('offline'));
+
+    client.connect('Restored', 'correct-code', true);
+    fifth.finishClose();
+    const sixth = Socket.sockets[5]; sixth.open();
+    sixth.receive({ type: 'error', code: 'identity_active', message: 'Already connected.' });
+    assert.equal(client.status, 'connecting', 'a possibly stale connection does not block recovery immediately');
+    assert.equal(timers.size, 1);
+    let retry = [...timers.values()][0]; timers.clear(); retry();
+    assert.deepEqual(sixth.packets().at(-1), { type: 'hello', name: 'Restored', code: 'correct-code' });
+    sixth.receive({ type: 'ready', playerId: 'id-3', name: 'Restored', messages: [] });
+    assert.equal(client.status, 'online', 'recovery succeeds after the old server session releases');
+
+    client.connect('Restored', 'correct-code', true);
+    sixth.finishClose();
+    const seventh = Socket.sockets[6]; seventh.open();
+    for (let n = 0; n < 4; n++) {
+      seventh.receive({ type: 'error', code: 'identity_active', message: 'Already connected.' });
+      assert.equal(timers.size, 1);
+      retry = [...timers.values()][0]; timers.clear(); retry();
+    }
+    seventh.receive({ type: 'error', code: 'identity_active', message: 'Already connected.' });
+    assert.equal(client.status, 'offline', 'a persistently active identity eventually requires action');
+    assert.equal(errors.at(-1), 'Already connected.');
+    seventh.finishClose();
+    assert.equal(timers.size, 0, 'bounded identity retries stop when action is needed');
   } finally {
     Object.defineProperty(globalThis, 'WebSocket', { configurable: true, value: original.WebSocket });
     Object.defineProperty(globalThis, 'window', { configurable: true, value: original.window });

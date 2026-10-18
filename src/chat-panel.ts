@@ -1,4 +1,5 @@
 import './chat.css';
+import { MAX_CHAT_LENGTH, normalizeChatText } from '../worker/global-chat-core';
 
 export type ChatMessage = {
   id: string;
@@ -77,7 +78,9 @@ export function createChatPanel(options: ChatPanelOptions) {
   const input = document.createElement('input');
   input.id = 'chat-input';
   input.type = 'text';
-  input.maxLength = 240;
+  // HTML maxlength counts UTF-16 units, not the code points used by the hub.
+  // Two units per code point leaves room for the full limit of emoji.
+  input.maxLength = MAX_CHAT_LENGTH * 2;
   input.placeholder = 'Message everyone…';
   input.autocomplete = 'off';
   const send = document.createElement('button');
@@ -149,8 +152,12 @@ export function createChatPanel(options: ChatPanelOptions) {
 
   form.addEventListener('submit', event => {
     event.preventDefault();
-    const text = input.value.trim();
-    if (status !== 'online' || !text) return;
+    if (status !== 'online' || !input.value.trim()) return;
+    const text = normalizeChatText(input.value);
+    if (!text) {
+      feedback.textContent = 'Use visible text, up to 240 characters after normalization.';
+      return;
+    }
     if (options.onSend(text)) {
       input.value = '';
       clearFeedback();

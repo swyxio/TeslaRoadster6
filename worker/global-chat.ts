@@ -15,7 +15,7 @@ export type ChatServerMessage =
   | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[] }
   | { type: 'message'; message: ChatMessage }
   | { type: 'recovery'; code: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; code?: 'identity_active' };
 
 type StoredIdentity = { hash: string; name: string };
 type Session = {
@@ -199,7 +199,7 @@ export class GlobalChat extends DurableObject {
         name = saved.name;
         if (!this.sessions.has(socket)) return;
         if ([...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
-          this.error(socket, 'That saved driver is already connected elsewhere.'); return;
+          this.send(socket, { type: 'error', code: 'identity_active', message: 'That saved driver is already connected elsewhere.' }); return;
         }
       } else {
         playerId = crypto.randomUUID();

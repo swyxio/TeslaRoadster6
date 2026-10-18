@@ -22,6 +22,7 @@ export class GlobalChat {
   private heartbeatTimer = 0;
   private sentAt: number[] = [];
   private retries = 0;
+  private identityRetries = 0;
   private blocked = false;
   private generation = 0;
 
@@ -35,6 +36,7 @@ export class GlobalChat {
     this.requestedCode = code;
     this.blocked = false;
     this.retries = 0;
+    this.identityRetries = 0;
     clearTimeout(this.reconnectTimer);
     this.replaceSocket();
   }
@@ -107,6 +109,7 @@ export class GlobalChat {
         this.name = data.name;
         this.code = this.requestedCode;
         this.retries = 0;
+        this.identityRetries = 0;
         this.setStatus('online');
         this.startHeartbeat(socket);
         this.callbacks.onReady(this.playerId, this.name, data.messages as ChatMessage[]);
@@ -117,6 +120,18 @@ export class GlobalChat {
         this.requestedCode = data.code;
         this.callbacks.onRecovery(data.code);
       } else if (data.type === 'error' && typeof data.message === 'string') {
+        if (this.status === 'connecting' && data.code === 'identity_active' && this.requestedCode && this.identityRetries < 4) {
+          // A prior connection can take longer to disappear on the server than
+          // it does locally. Retry on this socket before requiring user action.
+          const delay = 1000 * 2 ** this.identityRetries++;
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = window.setTimeout(() => {
+            if (this.socket === socket && socket.readyState === WebSocket.OPEN && this.status === 'connecting') {
+              socket.send(JSON.stringify({ type: 'hello', name: this.requestedName, code: this.requestedCode }));
+            }
+          }, delay);
+          return;
+        }
         if (this.status === 'connecting') {
           // Failed recovery is never replaced with a new guest automatically.
           this.blocked = true;

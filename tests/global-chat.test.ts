@@ -75,6 +75,7 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     const b = makeSocket(), c = makeSocket(), bSession = attach(chat, b), cSession = attach(chat, c);
     await chat.hello(b, bSession, '', code);
     assert.match(b.sent.at(-1).message, /already connected/);
+    assert.equal(b.sent.at(-1).code, 'identity_active');
     let timerFired = false;
     aSession.handshakeTimer = setTimeout(() => { timerFired = true; }, 10);
     chat.disconnect(a);

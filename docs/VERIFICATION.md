@@ -2,9 +2,10 @@
 
 ## Global chat with rocket shops · protocol v12 · 2026-10-17 Pacific
 
-- The combined build passed `pnpm test` (161/161), `pnpm build`, focused chat tests and typechecks. Vite's large-chunk warning remains.
-- Local Wrangler room and chat integrations passed, including global delivery, private recovery, name collisions and the existing arena and shop checks. An isolated Wrangler restart restored the saved driver and cleared transient chat history. These are not load tests.
-- Chrome desktop showed chat alongside the rocket shops; 390×844 portrait and 844×390 landscape emulation showed the chat layout. No browser console errors were observed. Emulated touch activation of the chat button and physical devices remain unverified.
+- The combined build after review fixes passed `pnpm test` (163/163) and `pnpm build`. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including global delivery, private recovery, name collisions and the existing arena and shop checks. An isolated Wrangler restart restored the saved driver and cleared transient chat history. A room run overlapping the rebuild timed out at the dome goal; the stable rerun passed. These are not load tests.
+- The pre-review Cloudflare preview passed chat integration. One room run timed out on vehicle selection, then repeated runs passed; the test now checks the car is stationary and allows more time around the action cooldown.
+- Chrome desktop showed chat alongside the rocket shops; the reviewed build accepted a 20-emoji name and retained an invalid Unicode draft. 390×844 portrait and 844×390 landscape emulation showed the chat layout before the review fixes. No browser console errors were observed. Emulated touch activation of the chat button and physical devices remain unverified.
 
 ## Global chat and saved drivers · pre-rocket-shops local build · 2026-10-17 Pacific
 

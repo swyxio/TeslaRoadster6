@@ -2,6 +2,8 @@ import './style.css';
 import './identity.css';
 import { createChatPanel } from './chat-panel';
 import { GlobalChat } from './chat';
+import { limitDriverNameInput } from './driver-name';
+import { MAX_NAME_LENGTH } from '../worker/global-chat-core';
 import mapSourceUrl from '../shared/bay-route-source.json?url';
 import mapTraceUrl from '../shared/bay-highway-traces.ts?url&no-inline';
 import mapBakeUrl from '../shared/bake-bay-highways.py?url&no-inline';
@@ -32,7 +34,7 @@ document.querySelector('#app')!.innerHTML = `
  <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / DELIVER</span></div><p class="cockpit-invitation">Find a glowing purple rocket to make any car fly, or earn cash for upgrades at a purple shop. Try cockpit view with C or Actions → Camera.</p>
  <div class="launch-card"><div class="card-heading"><span class="eyebrow">YOUR NEXT DETOUR</span><span class="online-dot">● FREE ROAM</span></div>
  <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
- <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="20" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
+ <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
  <button id="solo" class="primary">Take a solo drive <span>↗</span></button>
  <button id="join" class="secondary">Drive with friends <span>→</span></button><p class="form-note" id="form-note" role="status">Same room code, same playground. No account needed.</p>
@@ -175,7 +177,8 @@ function ensureChat(){
   if(nameEdited){currentCode=undefined;rememberRequested=false;}
   requestedName=name;chat.connect(name,currentCode);
 }
-nameInput.addEventListener('input',()=>{nameEdited=true;});
+nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
+nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
 $('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
 function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityDialog.showModal();controls.clear();controls.enabled=false;}
 $('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;

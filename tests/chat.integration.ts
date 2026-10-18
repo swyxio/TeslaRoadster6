@@ -76,6 +76,13 @@ try {
   await delay(200);
   assert.ok(!two.events.some(event => event.type === 'recovery' || JSON.stringify(event).includes(code)), 'recovery code is not broadcast');
 
+  const conflict = connect(chatUrl);
+  await open(conflict);
+  send(conflict.socket, { type: 'hello', name, code });
+  await eventually(() => conflict.events.some(event => event.type === 'error'), 'active identity rejected');
+  assert.equal(conflict.events.find(event => event.type === 'error')!.code, 'identity_active');
+  conflict.socket.close();
+
   one.socket.close();
   await eventually(() => one.closed !== undefined, 'first chat disconnects');
   const resumed = connect(chatUrl);
