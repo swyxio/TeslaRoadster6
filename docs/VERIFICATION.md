@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Persistent chat names with radio · protocol v29 · 2026-10-18 Pacific
 
+- After incorporating main's settled-vehicle Mars fix, 438 tests and the build passed on the combined code; Vite's existing large-chunk warning remains.
 - After integrating the radio release, `pnpm test` passed 437 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler room, chat and radio integrations passed, as did an isolated Wrangler restart with overlapping save and rename. A held-write test verified that queued messages are delivered in order after disconnect, timestamps reflect broadcast, and recovery waits for the rename to drain. A panel test checks that an unsent name draft survives an earlier rename's confirmation. These are functional checks, not load tests.
 - In Chrome on the combined local build, a chat rename retained the same displayed ID. Earlier desktop, portrait and landscape checks are recorded below; no physical device was tested.
 
