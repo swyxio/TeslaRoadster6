@@ -9,7 +9,7 @@ type ChatCallbacks = {
   onError: (message: string) => void;
 };
 
-/** Global chat is independent of the current driving room, including in solo. */
+/** Global chat is independent of the current driving room. */
 export class GlobalChat {
   status: ChatStatus = 'offline';
   name = '';

@@ -70,7 +70,7 @@ export function joinRace(state:RaceState,course:RaceCourse,world:World,playerId:
   return true;
 }
 
-/** A solo host may start immediately; everyone still sees the countdown. */
+/** A host may start alone; everyone still sees the countdown. */
 export function startRace(state:RaceState,courseId:string,world:World,playerId:string):boolean {
   const round=state.rounds.find(r=>r.courseId===courseId);
   if(!round||round.phase!=='lobby'||round.hostId!==playerId||!round.entrants.some(e=>e.playerId===playerId)||!playerCar(world,playerId))return false;
