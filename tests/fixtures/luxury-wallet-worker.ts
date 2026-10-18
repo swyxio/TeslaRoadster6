@@ -15,10 +15,14 @@ export { GlobalIncome };
 
 /** Hold the real chat claim or confirmation after its transaction commits. */
 export class GlobalChat extends ProductionGlobalChat {
-  private nextBindingHold:'bind'|'confirm'|'lost-bind'|'lost-confirm'|null=null;
+  private nextBindingHold:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|null=null;
   private bindingHeld=false;
+  private releaseUnavailable=false;
   private releaseBindingHold:(()=>void)|undefined;
-  async armBindingHold(stage:'bind'|'confirm'|'lost-bind'|'lost-confirm') { this.nextBindingHold=stage; }
+  async armBindingHold(stage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore') {
+    if(stage==='restore'){this.releaseUnavailable=false;return;}
+    this.nextBindingHold=stage;
+  }
   async bindingFaultState() { return {held:this.bindingHeld}; }
   async releaseBinding() { this.releaseBindingHold?.(); }
   private async holdBinding(stage:'bind'|'confirm') {
@@ -29,7 +33,15 @@ export class GlobalChat extends ProductionGlobalChat {
     finally{this.bindingHeld=false;this.releaseBindingHold=undefined;}
   }
   override async bindWallet(code:string,walletId:string,token:string) {
+    if(this.nextBindingHold==='missing-bind'){
+      this.nextBindingHold=null;this.releaseUnavailable=true;
+      throw new TypeError('The RPC receiver does not implement the method "bindWallet".');
+    }
     const result=await super.bindWallet(code,walletId,token);await this.holdBinding('bind');return result;
+  }
+  override async releaseWallet(code:string,token:string) {
+    if(this.releaseUnavailable)throw new TypeError('The RPC receiver does not implement the method "releaseWallet".');
+    return super.releaseWallet(code,token);
   }
   override async confirmWallet(code:string,token:string) {
     const result=await super.confirmWallet(code,token);await this.holdBinding('confirm');return result;
@@ -388,7 +400,7 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/__wallet-test/')) return worker.fetch(request, env as never, ctx);
     if (request.method !== 'POST') return new Response('POST required', { status:405 });
-    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
+    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
     const driver = env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId || 'unused'));
     const economy = env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room || 'fixture'));
     switch (url.pathname) {

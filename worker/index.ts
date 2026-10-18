@@ -151,7 +151,7 @@ export class GameRoom extends DurableObject<Env> {
     const current=()=>socket.readyState===1&&this.sessions.get(socket)===session&&session.identitySequence===sequence;
     const send=(ok:boolean,message:string)=>{if(!current())return false;try{socket.send(JSON.stringify({type:'identityResult',requestId,ok,message}));return true;}catch{return false;}};
     if(!current())return;
-    let accepted=false,claimed=false;
+    let accepted=false,claimed=false,stage='bind',bindUnavailable=false;
     const token=crypto.randomUUID(),guestWalletId=session.economy.walletId;
     const chat=this.env.CHAT.get(this.env.CHAT.idFromName('global'));
     try{
@@ -162,9 +162,11 @@ export class GameRoom extends DurableObject<Env> {
       if(!identity){send(false,'Invalid recovery code.');return;}
       if(!identity.walletId){send(false,'Rejoin before loading a different saved driver.');return;}
       if(identity.walletId===session.economy.walletId){
+        stage='activate';
         const ok=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).activateIncome(session.economy.currentFence);
         if(!current())return;
         if(!ok){send(false,'Session superseded. Rejoin to recover.');return;}
+        stage='confirm';
         if(identity.claim && !await chat.confirmWallet(code,token)){
           send(false,'Driver connection changed. Rejoin to retry.');return;
         }
@@ -176,9 +178,11 @@ export class GameRoom extends DurableObject<Env> {
       // Register the incoming lease before awaiting it: another acquisition can
       // find and cancel this session even before replace() installs the wallet.
       session.pendingBind={driverId:identity.walletId,fence};
+      stage='acquire';
       const result=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).acquire(identity.walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),this.roomId);
       if(!current())return;
       if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      stage='confirm';
       if(identity.claim && !await chat.confirmWallet(code,token)){
         send(false,'Driver connection changed. Rejoin to retry.');return;
       }
@@ -188,11 +192,19 @@ export class GameRoom extends DurableObject<Env> {
       session.economy.restoreCurrentVehicle();
       this.invalidate(socket,session,true);
       accepted=send(true,'Saved driver connected.');
-    }catch{send(false,'Could not load driver. Rejoin to retry.');}
+    }catch(error){
+      // A receiver missing this method cannot execute it. No claim can have
+      // been written, so waiting for its likewise-missing release method would
+      // prevent the player from retrying while the deployment rolls out.
+      bindUnavailable=stage==='bind' && error instanceof Error && error.message==='The RPC receiver does not implement the method "bindWallet".';
+      const detail=error instanceof Error?error.message.replace(/poly-[0-9a-f.-]+/gi,'[redacted]').replace(/[0-9a-f]{32,}/gi,'[redacted]').slice(0,300):'Unknown error';
+      console.error('wallet attachment failed',stage,detail);
+      send(false,bindUnavailable?'Saved driver is temporarily unavailable. Rejoin to retry.':'Could not load driver. Rejoin to retry.');
+    }
     finally{
       session.pendingBind=null;
       if(accepted&&claimed&&code!==null)this.ctx.waitUntil(chat.settleWallet(code,token).catch(()=>{}));
-      else if(!accepted&&code!==null){
+      else if(!accepted&&code!==null&&!bindUnavailable){
         // A bind may have committed even when its reply was lost. Reconcile it
         // before starting the next identity request; other drivers keep moving.
         for(;;){

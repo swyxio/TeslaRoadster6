@@ -179,8 +179,32 @@ async function luxury(client:ReturnType<typeof connect>,action:'buy'|'collect',v
   return client.messages.find(message=>message.type==='luxuryResult'&&message.requestId===requestId)!;
 }
 
+async function verifyRolloutRetry(){
+  // A previous chat version cannot accept either RPC. A failed dispatch made
+  // no claim and must not leave identity retries waiting for release forever.
+  const rolloutCode=await savedCode(`Rollout${randomUUID().slice(0,6)}`);
+  const rollout=connect(`/api/room/rollout-${randomUUID().slice(0,8)}`,true);
+  await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.ok),'rollout guest joins');
+  await rpc('binding-arm',{bindingStage:'missing-bind'});
+  try{
+    send(rollout,{type:'identity',code:rolloutCode,requestId:330});
+    await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.requestId===330),'missing bind returns');
+    assert.equal(rollout.messages.find(message=>message.type==='identityResult'&&message.requestId===330)!.ok,false);
+    send(rollout,{type:'identity',code:rolloutCode,requestId:331});
+    await until(()=>rollout.messages.some(message=>message.type==='identityResult'&&message.requestId===331),'rollout retry does not await missing release');
+    assert.equal(rollout.messages.find(message=>message.type==='identityResult'&&message.requestId===331)!.ok,true);
+    console.log('PASS: saved-driver retry after unavailable bind RPC');
+  }finally{
+    await rpc('binding-arm',{bindingStage:'restore'});
+    rollout.socket.close();
+  }
+
+}
+
 try {
   child=start();await ready();
+  if(process.argv.includes('--rollout-only'))await verifyRolloutRetry();
+  else {
 
   // Simulated world time crosses three checkpoint windows without a wall-clock
   // wait. Paused orders must not write again; changed timers flush on finish.
@@ -553,6 +577,8 @@ try {
   await rpc('binding-release',{code:tentativeCode,token:tentativeB});
   const reclaimedCode=await savedCode(`Unused${randomUUID().slice(0,6)}`);
   assert.equal((await rpc<BoundIdentity>('associate',{code:reclaimedCode,driverId:tentativeWallet})).walletId,tentativeWallet,'no unacknowledged claimant leaves a permanent binding');
+
+  await verifyRolloutRetry();
 
   for(const stage of ['lost-bind','lost-confirm'] as const){
     const lostRoom=`${stage}-${randomUUID().slice(0,8)}`,lost=connect(`/api/room/${lostRoom}`,true);
@@ -1073,6 +1099,7 @@ try {
   await until(async()=>!(await economyKeys(liveRoom,alice.id)).some(key=>key.startsWith(`unacked:${alice.id}:`)),'abandoned room result eventually compacts');
 
   console.log('PASS: wallet revision races, duplicate receipts, fencing, ordered commits, failed and lost writes, compaction and crash recovery, independent drivers, rejected-head freeze, ownership and restart persistence; transient pickup refresh, stale pickup generation, bounded outage recovery, concurrent recovery, guest binding and bind/confirm supersession, disconnect, lost replies and adoption; paid pickup during a stalled write, showroom purchases and collection, customization, disconnect and recovery.');
+  }
 } finally {
   for(const socket of sockets)if(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)socket.close();
   if(child)await stop(child);
