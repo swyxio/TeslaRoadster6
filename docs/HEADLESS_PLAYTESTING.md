@@ -21,8 +21,8 @@ successful run must have exactly one finalized segment and an available room
 trajectory. It transcodes silent H.264 MP4, creates a poster, checks the output
 and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
 different staged scenario, `--name NAME` for another clip, and `--gpu default`,
-`metal`, `vulkan` or `swiftshader` as supported. Existing files are preserved
-unless `--force` is supplied. Video files are limited to 25,000,000 bytes,
+`metal`, `vulkan` or `swiftshader` as supported. Existing files are never
+overwritten; choose a different `--name` for another clip. Video files are limited to 25,000,000 bytes,
 below the [Workers static asset limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets).
 
 The original WebM, manifest and trajectory stay in the gitignored

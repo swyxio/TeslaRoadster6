@@ -11,7 +11,7 @@ import { parseArgs } from 'node:util';
 const { values } = parseArgs({ options: {
   slug: { type: 'string' }, name: { type: 'string', default: 'playtest' },
   scenario: { type: 'string', default: 'scripts/playtests/blog-drive.json' },
-  gpu: { type: 'string', default: 'default' }, force: { type: 'boolean', default: false },
+  gpu: { type: 'string', default: 'default' },
 } });
 for (const key of ['slug', 'name']) {
   if (!values[key] || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(values[key])) throw new Error(`Provide a URL-safe --${key}.`);
@@ -21,11 +21,9 @@ const scenario = resolve(values.scenario);
 const target = join('public', 'blog', values.slug);
 const video = join(target, `${values.name}.mp4`);
 const poster = join(target, `${values.name}-poster.jpg`);
-if (!values.force) {
-  for (const path of [video, poster]) {
-    try { await access(path); throw new Error(`${path} already exists; use --force to replace it.`); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; }
-  }
+for (const path of [video, poster]) {
+  try { await access(path); throw new Error(`${path} already exists; choose a different --name.`); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
 const ref = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
@@ -78,12 +76,11 @@ try {
   await mkdir(target, { recursive: true });
   let posterCreated = false;
   try {
-    const flags = values.force ? 0 : constants.COPYFILE_EXCL;
-    await copyFile(image, poster, flags);
+    await copyFile(image, poster, constants.COPYFILE_EXCL);
     posterCreated = true;
-    await copyFile(output, video, flags);
+    await copyFile(output, video, constants.COPYFILE_EXCL);
   } catch (error) {
-    if (posterCreated && !values.force) await rm(poster, { force: true });
+    if (posterCreated) await rm(poster, { force: true });
     throw error;
   }
   console.log(JSON.stringify({ video: `/${video.replace(/^public\//, '')}`, poster: `/${poster.replace(/^public\//, '')}`, run, seconds: Number(probe.format.duration), width: stream.width, height: stream.height, bytes: Number(probe.format.size) }));
