@@ -31,6 +31,7 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { playerRace } from '../shared/race';
 import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { LEVELS, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
+import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUntilCheckpoint } from '../shared/delivery-checkpoint';
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
@@ -1051,7 +1052,9 @@ scene.start(dt=>{
     if(d.lastReward&&d.lastReward.id>lastRewardId){lastRewardId=d.lastReward.id;celebrateReward(d.lastReward);}
     $('delivery-stats').textContent=`${money(d.cash)} cash · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const next=LEVELS[d.level+1];
-    $('region-progress').textContent=next?`LEVEL ${d.level} · ${next.name}: ${money(Math.min(d.cash,next.cash))} / ${money(next.cash)} cash`:`LEVEL ${d.level} · The Bay is open`;
+    const checkpointProgress=`${DELIVERY_CHECKPOINT_INTERVAL-deliveriesUntilCheckpoint(d.completed)}/${DELIVERY_CHECKPOINT_INTERVAL}`;
+    const checkpointPaid=d.lastPayout!==null&&d.completed%DELIVERY_CHECKPOINT_INTERVAL===0;
+    $('region-progress').textContent=(next?`LEVEL ${d.level} · ${next.name}: ${money(Math.min(d.cash,next.cash))} / ${money(next.cash)} cash`:`LEVEL ${d.level} · The Bay is open`)+(checkpointPaid?` · bonus +${money(DELIVERY_CHECKPOINT_REWARD)} · next ${checkpointProgress}`:` · bonus ${checkpointProgress} (+${money(DELIVERY_CHECKPOINT_REWARD)})`);
     const levelEvent=levelEvents.update(d,session.snapshotVersion);
     if(levelEvent==='up')notice(`${LEVELS[d.level].name} unlocked!`);
     if(levelEvent==='down')notice(`Level ${d.level} · Your purchases stay yours.`);
