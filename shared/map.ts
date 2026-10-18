@@ -1,9 +1,10 @@
 /** Compressed Bay geography. X east, Z south, meters in game space. */
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
+import { DOME } from './dome';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
-export const MAP_BOUNDS={minX:-1800,maxX:2400,minZ:-550,maxZ:9400} as const;
+export const MAP_BOUNDS={minX:-1800,maxX:2400,minZ:-1050,maxZ:9400} as const;
 // A vertical, driveable ribbon along Oakland's eastbound 180 street. The same
 // circle defines its collision surface and its rendered geometry.
 export const STUNT_LOOP={x:450,z:180,radius:12,width:12} as const;
@@ -17,6 +18,7 @@ export const REGIONS:Region[]=[
   {id:'oakland',name:'Oakland and the East Bay',color:0xd3cfb8,points:polygon([[310,-270],[400,-300],[550,-280],[602,-205],[610,260],[950,1000],[1300,2000],[1800,3500],[1800,5000],[2200,6500],[2340,8000],[1890,9100],[1500,9200],[1300,8800],[1600,8000],[1550,6500],[1150,5000],[760,3400],[500,1600],[350,1000],[230,430],[285,260],[285,195],[290,110],[305,50],[295,-40],[280,-125],[287,-215]])},
   {id:'marin',name:'Marin Headlands',color:0x9ba883,points:polygon([[-410,-550],[-120,-550],[-116,-460],[-140,-413],[-185,-385],[-230,-374],[-275,-385],[-340,-382],[-400,-405],[-420,-470]])},
   {id:'yerba',name:'Yerba Buena Island',color:0xa9b49a,points:polygon([[169,27],[193,12],[222,22],[238,44],[235,70],[220,87],[187,91],[164,76],[158,49]])},
+  {id:'alcatraz',name:'Alcatraz Rocket Dome',color:0x9fab8d,points:polygon([[190,-920],[215,-955],[385,-955],[410,-920],[410,-780],[385,-745],[215,-745],[190,-780]])},
 ];
 export type Bridge = { id:'golden-gate'|'bay-bridge'; name:string; axis:'x'|'z'; start:number; end:number; center:number; width:number };
 // Decks are at ground height, deliberate arcade simplification; water is below.
@@ -46,7 +48,7 @@ export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridg
 export const HILL={minX:-200,maxX:-15,minZ:500,maxZ:760,height:10,columns:32,rows:48} as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function hillSurface(x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=HILL.minX||x>=HILL.maxX||z<=HILL.minZ||z>=HILL.maxZ)return {height:0,dx:0,dz:0};
@@ -74,7 +76,7 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
  // The loop can have two heights at one x/z; its support uses loopAngle.
- if(id==='stunt-loop')return null;
+ if(id==='stunt-loop'||id==='dome')return null;
  const b=BUILDINGS[Number(id.slice(5))];
  return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
 }
@@ -89,6 +91,19 @@ export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number
  }
  const length=Math.hypot(dx,1,dz);return {x:-dx/length,y:1/length,z:-dz/length};
 }
+/** Arc length around the dome's inner cross-section, starting at the -Z floor edge.
+ * Tangent follows increasing arc length; normal points into the dome. */
+export const DOME_PERIMETER=4*DOME.flatHalfWidth+2*Math.PI*DOME.radius;
+export function domeSurface(arcLength:number):{y:number;z:number;tangentY:number;tangentZ:number;normalY:number;normalZ:number} {
+ const w=DOME.flatHalfWidth,r=DOME.radius,arc=Math.PI*r;
+ const s=((arcLength%DOME_PERIMETER)+DOME_PERIMETER)%DOME_PERIMETER;
+ if(s<2*w)return {y:0,z:DOME.z-w+s,tangentY:0,tangentZ:1,normalY:1,normalZ:0};
+ if(s<2*w+arc){const a=(s-2*w)/r;return {y:r*(1-Math.cos(a)),z:DOME.z+w+r*Math.sin(a),tangentY:Math.sin(a),tangentZ:Math.cos(a),normalY:Math.cos(a),normalZ:-Math.sin(a)};}
+ if(s<4*w+arc)return {y:2*r,z:DOME.z+w-(s-2*w-arc),tangentY:0,tangentZ:-1,normalY:-1,normalZ:0};
+ const a=(s-4*w-arc)/r;
+ return {y:r*(1+Math.cos(a)),z:DOME.z-w-r*Math.sin(a),tangentY:-Math.sin(a),tangentZ:-Math.cos(a),normalY:-Math.cos(a),normalZ:Math.sin(a)};
+}
+
 export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'};
 export const ROADS:RoadSegment[]=[];
 function streetGrid(xs:number[],zs:number[],xmin:number,xmax:number,zmin:number,zmax:number){

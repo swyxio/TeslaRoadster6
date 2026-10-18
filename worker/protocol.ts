@@ -1,6 +1,6 @@
 import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
-export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId};
+export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -16,7 +16,7 @@ export function parseMessage(raw: string): ClientMessage | null {
     return { type: 'input', input: { throttle: input.throttle as number, steer: input.steer as number, roll: input.roll as number, boost: input.boost as boolean, hover: input.hover as boolean, brake: input.brake as boolean, jump: input.jump as number, flip: input.flip as number, cockpit: input.cockpit as boolean } };
   }
   if(value.type==='selectVehicle' && typeof value.kind==='string' && Object.hasOwn(VEHICLES,value.kind))return {type:'selectVehicle',kind:value.kind as VehicleId};
-  if (value.type === 'interact' || value.type === 'reset' || value.type === 'autopilot') return { type: value.type };
+  if (value.type === 'interact' || value.type === 'reset' || value.type === 'autopilot' || value.type === 'dome') return { type: value.type };
   if (value.type === 'name' && typeof value.name === 'string') {
     const name = value.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24);
     return name ? { type: 'name', name } : null;
