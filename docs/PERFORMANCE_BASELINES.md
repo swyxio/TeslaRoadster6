@@ -81,8 +81,10 @@ can omit matches beyond the first 3,000 changed files; use manual dispatch for
 such diffs. Do not make this filtered workflow a required branch-protection
 check: GitHub may leave a skipped required check pending.
 
-The job builds both revisions and runs the candidate's harness against each in
-sequence on `macos-15`, using headless Chromium with the observed Apple
+The selected workflow first runs the full test suite on a separate Ubuntu
+runner, avoiding test load on the macOS measurement host. It then builds both
+revisions and runs the candidate's harness against each in sequence on
+`macos-15`, using headless Chromium with the observed Apple
 paravirtual Metal renderer. Its summary and
 artifact include the paired observations and raw traces; artifacts expire after
 90 days, including when the comparison is held. An incomplete measurement,

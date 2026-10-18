@@ -70,9 +70,33 @@ jobs:
         run: |
           echo "Performance run: $SELECTED ($REASON)." >> "$GITHUB_STEP_SUMMARY"
 
+  test:
+    name: Test candidate
+    needs: select
+    if: ${{ needs.select.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install and test candidate
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+
   measure:
     name: Paired local performance observation
-    needs: select
+    needs: [select, test]
     if: ${{ needs.select.outputs.run == 'true' }}
     runs-on: macos-15
     concurrency:
@@ -101,9 +125,6 @@ jobs:
       - name: Install candidate dependencies
         working-directory: candidate
         run: pnpm install --frozen-lockfile
-      - name: Test candidate
-        working-directory: candidate
-        run: pnpm test
       - name: Build candidate
         working-directory: candidate
         run: |
