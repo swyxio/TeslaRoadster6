@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-See [verification](docs/VERIFICATION.md) for observed checks and known limitations.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations, and the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks and next steps.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
@@ -18,7 +18,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose Rocket Dome in the Mini-games picker. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out to SF, or use Leave Dome to return to a checked SF or island spawn based on where you entered.
 
-**Global chat:** Pick a driver name and chat with players across rooms, including while driving solo when connected. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. Change your name from chat or Driver identity without changing your ID. By default, the game saves your driver when chat connects and remembers its recovery code in this browser; you can turn off browser remembering. Saving or storage failures are shown. Copy the code to use it on another device. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+**Global chat:** Pick a driver name and chat with players across rooms. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. Change your name from chat or Driver identity without changing your ID. By default, the game saves your driver when chat connects and remembers its recovery code in this browser; you can turn off browser remembering. Saving or storage failures are shown. Copy the code to use it on another device. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 
 **Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. The Mini-games picker offers quick entry to the Dome, parking games and island races.
 
@@ -88,7 +88,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
 - Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- Opening the game joins the shared `bay` room, or the room named by an invite link. Use **Invite** to copy the current link; the menu also offers another room or an explicit solo drive. A full or disconnected room offers retry, another room, or solo; it never silently switches modes.
+- Opening the game joins the shared `bay` room, or the room named by an invite link. Use **Invite** to copy the current link; the menu also offers another room. A full or disconnected room offers retry or another room.
 
 ## Boundaries
 
@@ -98,7 +98,7 @@ Rooms are public-by-code. Delivery money is fictional and session-only; shooting
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
-To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. Point it only at a local server or an authorized preview: it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
+To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
 
 ## Layout
 

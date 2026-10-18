@@ -15,13 +15,15 @@ type RocketPad = { x: number; z: number; active: boolean; readyAt?: number };
 export function updateRocketPickup(pad: RocketPad, entities: Entity[], time: number): string | null {
   if (!pad.active && time >= (pad.readyAt ?? Infinity)) pad.active = true;
   if (!pad.active) return null;
-  const ground = terrainHeight(pad.x, pad.z);
-  if (ground === null) return null;
-  const winner = entities.filter(e => e.kind !== 'person' && e.driver && e.supportId === 'ground' &&
-    Math.abs(e.y - ground) < 2 && Math.hypot(e.x - pad.x, e.z - pad.z) < 4 &&
-    (!hasRockets(e) || e.air < 99.99))
-    .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)[0];
-  if (!winner || winner.kind === 'person') return null;
+  let ground:number|null|undefined, winner:Entity|undefined;
+  for(const e of entities){
+    if(e.kind==='person'||!e.driver||e.supportId!=='ground'||Math.hypot(e.x-pad.x,e.z-pad.z)>=4)continue;
+    if(ground===undefined)ground=terrainHeight(pad.x,pad.z);
+    if(ground===null)return null;
+    if(Math.abs(e.y-ground)>=2||(hasRockets(e)&&e.air>=99.99))continue;
+    if(!winner||e.id<winner.id)winner=e;
+  }
+  if (!winner) return null;
   winner.air = 100;
   winner.upgrades.rocket = true;
   pad.active = false;

@@ -1,17 +1,19 @@
+import { CURRENT_RELEASE } from './version';
+export { CURRENT_RELEASE } from './version';
+
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.14-alpha',
-    label: '0.0.14 Alpha',
+    ...CURRENT_RELEASE,
     date: '2026-10-18',
     title: 'Build your skyline',
     intro: 'Save your driving progress and grow a place of your own in the Bay.',
     sections: [
       { title: 'Keep building', items: [
-        'Saved online drivers keep their wallet, achievements and paid personal-car configurations between rooms. Guest and solo drives remain session-only.',
+        'Saved online drivers keep their wallet, achievements and paid personal-car configurations between rooms. Guest drives remain session-only.',
         'At the $2 million wallet threshold, buy one starter home or up to three development plots. Visit a plot to build a tower up to 20 stories and invite friends to see it.',
         'UCSF research discounts the starter home, and Berkeley research discounts its charger. Building milestones pay once per driver; current delivery rates make property a long-term goal.',
-        'Explore the updated economy blog for the simulations, research stops and interactive tower planner.'
+        'Visit the four research stops and buy paint or decals at a workshop. Explore the updated economy blog for simulations and the interactive tower planner.'
       ] }
     ]
   },
@@ -19,13 +21,13 @@ export const RELEASES = [
     version: '0.0.13-alpha',
     label: '0.0.13 Alpha',
     date: '2026-10-18',
-    title: 'Research runs and custom rides',
-    intro: 'Visit the Bay’s research stops and give your car a look of its own.',
+    title: 'A smoother shared Bay',
+    intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [
-      { title: 'Make it yours', items: [
-        'Buy paint and decals at a workshop. Your finish stays on that car for the drive, and other drivers can see your name above your vehicle.',
-        'Stop at UCSF, Berkeley, Stanford and SFO for one-time cash. Berkeley, Stanford and SFO also offer energy, speed and flight discounts; a first SFO delivery earns an extra reward.',
-        'Explore our economy design and interactive simulations in the development blog.'
+      { title: 'Drive together', items: [
+        'The game always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
+        'The changelog stays on its own page instead of downloading with the game.'
       ] }
     ]
   },
@@ -218,5 +220,3 @@ export const RELEASES = [
     ]
   }
 ] as const;
-
-export const CURRENT_RELEASE = RELEASES[0];
