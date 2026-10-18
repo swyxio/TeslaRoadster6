@@ -15,6 +15,13 @@ Tesland is a browser game on Cloudflare Workers. Each multiplayer room runs a sh
 
 The room normally advances physics 20 times a second, one **tick** every 50 milliseconds, and sends snapshots about 10 times a second. The browser can draw many more frames than that. If it simply waits for the next snapshot and moves the car when one arrives, it can draw the same position repeatedly and then show a jump. A high frame rate would faithfully redraw the pause.
 
+<picture>
+  <source media="(max-width: 600px)" srcset="/blog/smooth-driving/driving-clocks-mobile.svg">
+  <img src="/blog/smooth-driving/driving-clocks.svg" alt="A timeline compares physics ticks every 50 milliseconds, snapshots every 100 milliseconds, and a 60-frame-per-second display. If each frame draws only the latest snapshot, six frames repeat the same position before the car jumps to the next one.">
+</picture>
+
+*When the browser waits for snapshots, more frames can mean more drawings of the same position.*
+
 In one early, unrepeated diagnostic, turning drawing off reportedly reduced the median frame interval from 40.5 ms to 8.3 ms, while the car's tracked position still advanced unevenly. It was a useful clue: there were [rendering and motion problems to investigate separately](https://github.com/swyxio/TeslaRoadster6/blob/80dc6aa/docs/PERFORMANCE_RELEASE_GATES.md#driving-continuity-comes-first).
 
 The old client already tried to predict the driver's car, but its model did not match the room's clock closely enough. It replayed a full 50 ms of motion for each pending input submission, while the room could use only the latest controls for a tick. For example, three pending submissions could make the client replay 150 ms of motion when the room advanced only 50 ms. It also switched prediction off in common situations, including near traffic and during flight. Correcting the camera helped some transitions; it could not make those two timelines agree.
@@ -46,9 +53,22 @@ Nearby cars complicate this. If my predicted car is moving ahead while a car bes
 
 The guardrails matter. We had to keep a car on the shared ground height when smoothing over a hill, and keep ferry passengers aligned with the moving deck. A review also caught a recovery case where the local car returned to the latest room state while a nearby car was still drawn from an older one. The fix puts both on the confirmed frame in that case. These checks reduce bad guesses during collisions.
 
-## What the replay showed
+## Two ways to see the drive
 
-We replayed the same scripted slalom with 150 ms of simulated round-trip delay, sampling modeled display positions 120 times a second. The test runs the shared simulation and emulates where the scene would draw the car; the two versions also had different background traffic.
+We recorded a manual drive in the older preview and another in the newer build. Both start on the same street, then take different routes.
+
+**Left: older preview · Right: newer build.**
+
+<video controls preload="none" width="1600" poster="/blog/smooth-driving/manual-driving-poster.png" style="max-width:100%;height:auto" aria-label="Two real Tesland playtests side by side: the older preview on the left and the newer build on the right">
+  <source src="/blog/smooth-driving/manual-driving-comparison.mp4" type="video/mp4">
+  <a href="/blog/smooth-driving/manual-driving-comparison.mp4">Download the playtest comparison</a>.
+</video>
+
+*Two independent drives, shown at their recorded speed with matching crops.*
+
+The older recording has a 150 ms gap between captured frames just after acceleration starts. The capture alone cannot tell us whether that gap came from the game or the recorder. The [capture notes](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/benchmarks/2026-10-18-manual-driving/README.md) include the timing audit.
+
+To compare the motion under the same inputs, we replayed the same scripted slalom with 150 ms of simulated round-trip delay, sampling modeled display positions 120 times a second. The test runs the shared simulation and emulates where the scene would draw the car; the two versions also had different background traffic.
 
 <video controls preload="none" width="1280" poster="/blog/smooth-driving/slalom-poster.png" style="max-width:100%;height:auto" aria-label="Side-by-side replay of the earlier and revised Tesland slalom on a shared clock">
   <source src="/blog/smooth-driving/slalom-comparison.mp4" type="video/mp4">
