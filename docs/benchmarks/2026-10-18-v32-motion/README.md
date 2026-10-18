@@ -20,7 +20,7 @@ rendering or bandwidth benchmarks.
 The fixture uses a shared simulation and scene-transform emulation, not an
 actual browser or GPU; it does not exercise remote-player collision or WAN
 transport. See each trace's `report.fixture` for setup and timing definitions.
-The accompanying side-by-side visualization replays these traces in warmed
+The [side-by-side visualization](fast-slalom-comparison.mp4) replays these traces in warmed
 game scenes on one clock with decorative trees hidden for visibility. It is
 not a measurement of frame rate or a live network session.
 
