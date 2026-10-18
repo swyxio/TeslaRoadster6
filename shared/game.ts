@@ -367,16 +367,21 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
 }
 type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null};
 function islandJumpWallHit(e:Entity,old:PreviousPose){
-  const size=dimensions(e.kind),c=Math.abs(Math.cos(e.yaw)),s=Math.abs(Math.sin(e.yaw));
+  const size=dimensions(e.kind);
   const vertical=verticalBounds(e);
-  return sweepIslandJumpWall(old,e,{halfX:(c*size.width+s*size.length)/2,halfZ:(s*size.width+c*size.length)/2,
+  return sweepIslandJumpWall(old,e,{halfWidth:size.width/2,halfLength:size.length/2,yaw:e.yaw,
     minY:vertical.min-e.y,maxY:vertical.max-e.y});
 }
 function resolveIslandJumpWall(e:Entity,old:PreviousPose,hit:NonNullable<ReturnType<typeof islandJumpWallHit>>):void {
   e.x=hit.x;e.y=hit.y;e.z=hit.z;
   if(old.supportId==='ground'){e.supportId='ground';e.y=terrainHeight(e.x,e.z)??old.y;e.vy=0;}
-  const into=e.vx*hit.normal.x+e.vz*hit.normal.z;
-  if(into<0){e.vx-=1.2*into*hit.normal.x;e.vz-=1.2*into*hit.normal.z;}
+  let normal=hit.normal;
+  if(old.supportId==='ground'){
+    const length=Math.hypot(normal.x,normal.z);
+    normal=length>1e-8?{x:normal.x/length,y:0,z:normal.z/length}:{...hit.faceNormal,y:0};
+  }
+  const into=e.vx*normal.x+e.vy*normal.y+e.vz*normal.z;
+  if(into<0){e.vx-=1.2*into*normal.x;e.vy-=1.2*into*normal.y;e.vz-=1.2*into*normal.z;}
   e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));
   e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
 }
