@@ -67,9 +67,18 @@ try {
   await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000);
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
-  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
-  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));await delay(500);
+  // Leave ample network margin around the server's 400 ms action cooldown.
+  await delay(1000);
+  const beforeReset=two.state.world!.entities.find(e=>e.id===entityId)!;
+  const resetOrigin={x:beforeReset.x,z:beforeReset.z};
+  one.socket.send(JSON.stringify({type:'reset'}));
+  await eventually(()=>{
+    const e=two.state.world?.entities.find(e=>e.id===entityId);
+    return !!e&&!e.inDome&&e.supportId==='ground'&&Math.abs(e.speed)<=1&&Math.hypot(e.x-resetOrigin.x,e.z-resetOrigin.z)>1;
+  },'reset to a stationary ground spawn replicated');
+  await delay(1000);one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));await delay(1000);
   assert.ok(!two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox'),'non-Tesla selection rejected by room');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.driver===id);return !!e&&e.supportId==='ground'&&Math.abs(e.speed)<=1;},'car stationary and grounded before Tesla selection');
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'model-3'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='model-3')??false,'Tesla fleet change visible to remote player');
   await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket',requestId:1}));
