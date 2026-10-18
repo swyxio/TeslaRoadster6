@@ -8,6 +8,7 @@ These entries describe separate historical builds. Check the version and scope i
 - Local Wrangler passed the standard two-client room integration and the island jump fixture with two real WebSockets. The isolated Mars fixture again verified simultaneous contributions, both drivers boarding, per-room isolation and fund survival after the last disconnect and a full Worker restart. These are functional checks, not load measurements.
 - Cloudflare's v28 preview passed its build and the standard two-client room integration; preview capacity was 128, which is not a load measurement.
 - Chrome desktop joined a local v28 room and showed the mission fund and room-only menu. Earlier Mars-screen observations below included phone portrait and landscape emulation; no physical mobile device was tested.
+- After incorporating `cfc085a`'s compact-screen CSS and release notes, `pnpm test` again passed 399 tests and `pnpm build` passed. The v28 multiplayer and Mars logic did not change in that integration.
 
 ## Fremont Mars mission with Bay charging lots · protocol v27 · 2026-10-18 Pacific
 
@@ -23,6 +24,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Combined Rocket Island and expanded charging lots · protocol v27 · 2026-10-18 Pacific
 
+- Cloudflare Workers Builds deployed merge `f54964ec558f521e5a1aae02fa4588f7de65f61b`; the live game returned protocol v27 and served the same JavaScript and stylesheet asset hashes as the local build. The production two-client room integration passed, including five-goal Dome soccer and parking controls. This was a functional check, not a load or end-to-end ferry-crossing test. Chrome joined a production room and entered the police-free island oval.
 - After integrating the 24 charging lots and their venue geometry, `pnpm test` passed 399 tests and `pnpm build` passed; Vite retains its large-chunk warning. Tests cover both parking games across all registered charging lots and island playgrounds, temporary Rocket capability, the ferry, island ramps and Dome.
 - Isolated local Wrangler checks passed two-client room and global-chat integration, room-full signaling, and a two-client ramp fixture observing launch and landing at a 5.10 m peak. These are functional checks, not load tests. The natural-input two-client ferry crossing below was on the preceding v26 build, before the charging-lot integration.
 - Chrome desktop joined a shared room and started and left a parking queue on v27. The earlier v26 Chrome playtest included the island oval and portrait and landscape browser emulation. No physical device was tested.
@@ -641,5 +643,13 @@ Local Wrangler advertised protocol v25 and the chat integration passed. One room
 The new custom domain `tesland.swyx.io` was connected to the existing Worker and served its pre-release health endpoint over HTTPS. Browser-local settings and identity shortcuts do not automatically transfer between origins; a saved identity can be recovered with its recovery code.
 
 On the separate follow-up branch, after integrating the mini-game and navigation changes with Tesland, all 346 tests and the build passed. Local Wrangler advertised protocol v25 and passed the full two-client room integration, including immediate Dome exit/re-entry, race start, switching to a parking queue, start and leave. The local changelog included both Tesland and the follow-up. These checks do not verify the combined v26 checkout and are not a load test or a physical-device test.
+
+The Cloudflare preview at commit e9d4fee passed the same two-client room integration on protocol v25; its experimental advertised 128-seat setting was not a capacity test. A final Chrome check found the compact landscape map covering the queue buttons, so the map was moved and its label wrapped. With the fix in local source, the mini-game chooser and queue Start/Leave worked at emulated 390×844 portrait and 844×390 landscape; center hit tests reached the map, queue buttons, and steering, flight and pedal controls. The landscape check covered both coarse and fine pointers. No physical device was tested.
+
+Review also identified a map/telemetry collision at 390×500. The short-portrait layout now keeps the map, telemetry and flight controls apart; Chrome emulation at that size confirmed the map opens and the queue and driving-control center hit tests pass with coarse and fine pointers. Landscape map and telemetry clearance was rechecked at 844×390.
+
+The short-portrait active-refill indicator was also restored for fine pointers. At 390×500, the Dome wall-refill hint appeared with both pointer modes and remained clear of the flight controls; the sky-lane indicator shares the rule but was not separately observed in a lane.
+
+After integrating the concurrent charging and island changes, protocol v27 passed 399 tests, the build and the local two-client room integration, including destination and immediate mini-game transitions. The integrated HUD needed two more compact-layout fixes: in Chrome emulation at 390×500, the map, queue, Dome status and flight controls were clear; at 844×390, the Dome, map, queue and driving controls were checked with both pointer modes, and queue Start/Leave worked with coarse-pointer emulation. The short-portrait chooser remains cramped but scrollable. Browser recovery and a fresh tab were needed for the final landscape check. No physical device or capacity test was performed.
 
 The deployed `tesland.swyx.io` game advertised protocol v25 and joined a shared room in Chrome. Its live two-client room integration passed; the test was not a load or ferry-crossing test. Both the new and previous domains served the Worker. A follow-up menu layout fix was checked locally at 1272×845 and built successfully, keeping the welcome heading reachable when the menu is taller than the viewport.

@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.7-alpha',
-    label: '0.0.7 Alpha',
+    version: '0.0.8-alpha',
+    label: '0.0.8 Alpha',
     date: '2026-10-18',
     title: 'The road to Mars',
     intro: 'A new Fremont spaceport gives every room a wildly ambitious shared destination.',
@@ -13,6 +13,19 @@ export const RELEASES = [
         'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
         'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.',
         'Play always joins a shared room; if the Bay is full, retry or name another room.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.7-alpha',
+    label: '0.0.7 Alpha',
+    date: '2026-10-18',
+    title: 'Room for every control',
+    intro: 'The map and game controls fit more comfortably on short screens.',
+    sections: [
+      { title: 'Play and explore', items: [
+        'The minimap stays clear of mini-game and driving controls in compact portrait and landscape layouts.',
+        'Air-refill cues stay visible when they are active.'
       ] }
     ]
   },
