@@ -78,7 +78,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores reset with your drive and aren’t saved with your driver. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
 <dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these during this drive. Awards reset with your session and don’t affect cash.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">An original little soundtrack, plus sounds for your drive. Adjust them anytime.</p><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
-<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Changing your name starts a new chat driver. A saved driver can still be recovered with its code.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
+<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>Your driver is saved on this browser. Copy the recovery code to use the same ID on another device. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
@@ -144,17 +144,17 @@ const storageKey='poly-av-driver-recovery';
 let rememberedCode:string|undefined;
 try { rememberedCode=localStorage.getItem(storageKey)||undefined; } catch { /* Browser storage is optional. */ }
 let currentCode:string|undefined=rememberedCode;
-let nameEdited=false, identityNameDirty=false, authError=false, pendingRecovery=false, pendingSave=false, pendingName=false, unread=0;
-let requestedName='Driver', rememberRequested=!!rememberedCode;
+let nameEdited=false, identityNameDirty=false, authError=false, pendingRecovery=false, pendingSave=false, savingDriver=false, pendingName=false, renameInFlight=false, showRecoveryCode=false, pendingShowCode=false, unread=0;
+let requestedName='Driver', rememberRequested=true, renameTimer=0;
 function identityFeedback(message:string){$('identity-feedback').textContent=message;}
 function rememberCode(code:string){
   try { localStorage.setItem(storageKey,code);rememberedCode=code;return true; }
-  catch { rememberRequested=false;rememberInput.checked=false;identityFeedback('Browser storage is unavailable. Copy your code somewhere safe.');return false; }
+  catch { rememberRequested=false;rememberInput.checked=false;identityFeedback('Browser storage is unavailable. Copy your code somewhere safe.');chatPanel.setConnection('online','Driver not saved on this browser');return false; }
 }
 function refreshIdentity(){
   $('identity-current').textContent=chat.playerId&&chat.status==='online'?`${chat.name} · #${chat.playerId.slice(0,8)}`:chat.status==='connecting'?'Connecting to chat…':'Chat is offline';
-  $('identity-code-group').hidden=!currentCode;
-  identityCode.value=currentCode||'';
+  $('identity-code-group').hidden=!currentCode||!showRecoveryCode;
+  identityCode.value=showRecoveryCode?currentCode||'':'';
   rememberInput.checked=rememberRequested;
 }
 function updateChatBadge(){
@@ -162,28 +162,44 @@ function updateChatBadge(){
   $('chat-button').setAttribute('aria-label',unread?`Open global chat, ${unread} unread`:'Open global chat');
 }
 const chat=new GlobalChat({
-  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();if(status==='offline'&&pendingName)identityFeedback('Name updated for your drive. Chat is offline and will retry.');},
+  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();if(status==='offline'){savingDriver=false;if(renameInFlight){clearTimeout(renameTimer);renameInFlight=false;chatPanel.finishRename('Connection lost. Your name will be retried.',false);}if(pendingName)identityFeedback('Chat is offline. Your name will be retried.');}},
   onReady(id,name,messages){
-    // A previous handshake may complete after the player has edited the name.
-    // Start the requested guest session before applying any stale identity.
-    if(nameEdited&&(nameInput.value.trim()||'Driver')!==requestedName){pendingRecovery=false;pendingSave=false;ensureChat();return;}
+    const desired=normalizeName(nameInput.value);
+    const needsRename=nameEdited&&desired!==name;
     currentCode=chat.code;authError=false;
-    if(!nameEdited||nameInput.value.trim()===requestedName){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;}
+    if(!needsRename){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;}
     chatPanel.setIdentity(id,name);chatPanel.setMessages(messages);session.setName(name);
     if(pendingRecovery){pendingRecovery=false;const stored=!rememberRequested||!currentCode||rememberCode(currentCode);identityEntry.value='';if(stored)identityFeedback(`Recovered ${name}.`);}
-    if(pendingName){pendingName=false;identityFeedback(name===requestedName?`Now going by ${name}.`:`That name is in use. You’re ${name}.`);}
     refreshIdentity();
-    if(pendingSave){pendingSave=false;if(!chat.save())identityFeedback('Could not request a code. Try again.');}
+    if((pendingSave||rememberRequested)&&!currentCode){savingDriver=chat.save();if(!savingDriver)identityFeedback('Could not save your driver. Try again.');}
+    else if(pendingSave){savingDriver=chat.save();if(!savingDriver)identityFeedback('Could not request a code. Try again.');}
+    pendingSave=false;
+    if(needsRename)requestName(desired);
+    else if(pendingName){pendingName=false;identityFeedback(`Now going by ${name}.`);}
+  },
+  onRenamed(id,name){
+    clearTimeout(renameTimer);renameInFlight=false;const newer=nameEdited&&normalizeName(nameInput.value)!==requestedName;
+    chatPanel.setIdentity(id,name);chatPanel.finishRename('',true);session.setName(name);
+    if(!newer){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;pendingName=false;}
+    identityFeedback(name===requestedName?`Now going by ${name}.`:`That name is in use. You’re ${name}.`);refreshIdentity();
+    if(newer)requestName(normalizeName(nameInput.value));
   },
   onMessage(message){chatPanel.append(message);if(!chatPanel.element.open&&message.playerId!==chat.playerId){unread++;updateChatBadge();}},
-  onRecovery(code){currentCode=code;const stored=!rememberRequested||rememberCode(code);refreshIdentity();if(stored)identityFeedback('Recovery code ready. Keep it private and copy it somewhere safe.');},
-  onError(message){
+  onRecovery(code){savingDriver=false;currentCode=code;if(pendingShowCode){showRecoveryCode=true;pendingShowCode=false;}const stored=!rememberRequested||rememberCode(code);refreshIdentity();if(stored)identityFeedback('Driver saved. Keep your recovery code private if you copy it.');},
+  onError(message,code){
+    if(code==='save_failed')savingDriver=false;
+    if(renameInFlight&&code==='rename_failed'){clearTimeout(renameTimer);renameInFlight=false;pendingName=false;chatPanel.finishRename(message,false);}
     if(chat.status==='offline'){authError=true;pendingSave=false;chatPanel.setConnection('offline',message);identityFeedback(message+' Retry the code or choose a new guest.');}
-    else {identityFeedback(message);chatPanel.setConnection('online',message);}
+    else {const detail=code==='save_failed'?`${message} Your driver may not be remembered after disconnecting.`:message;identityFeedback(detail);chatPanel.setConnection('online',detail);}
   },
 });
 const chatPanel=createChatPanel({
   onSend:text=>chat.send(text),
+  onRename:name=>{
+    if(chat.status!=='online'||renameInFlight)return false;
+    nameInput.value=name;nameEdited=true;identityNameDirty=false;pendingName=true;
+    return requestName(name);
+  },
   onOpenChange(open){
     if(open){unread=0;updateChatBadge();}
     controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');
@@ -191,10 +207,19 @@ const chatPanel=createChatPanel({
 });
 document.body.append(chatPanel.element);
 function ensureChat(){
-  if(authError&&!nameEdited)return;
-  const name=nameInput.value.trim()||'Driver';
-  if(nameEdited){currentCode=undefined;rememberRequested=false;}
-  requestedName=name;chat.connect(name,currentCode);
+  if(authError)return;
+  const name=normalizeName(nameInput.value);
+  if(chat.status==='online'){if(nameEdited&&!renameInFlight)requestName(name);return;}
+  if(chat.status==='connecting'){if(nameEdited)pendingName=true;return;}
+  requestedName=name;if(nameEdited)pendingName=true;chat.connect(name,currentCode);
+}
+function requestName(name:string){
+  if(chat.status!=='online'||renameInFlight)return false;
+  requestedName=name;pendingName=true;
+  if(!chat.rename(name)){pendingName=false;return false;}
+  renameInFlight=true;identityFeedback('Saving your name…');
+  renameTimer=window.setTimeout(()=>{if(renameInFlight){renameInFlight=false;pendingName=false;identityFeedback('Name change did not complete. Please try again.');chatPanel.finishRename('Name change did not complete. Please try again.',false);}},10_000);
+  return true;
 }
 nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
 nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
@@ -208,13 +233,16 @@ identityName.addEventListener('compositionend',()=>limitDriverNameInput(identity
 $('identity-name-form').addEventListener('submit',event=>{
   event.preventDefault();const name=normalizeName(identityName.value);identityName.value=name;
   if(chat.status==='online'&&name===chat.name){identityNameDirty=false;identityFeedback(`You’re already ${name}.`);return;}
-  nameInput.value=name;nameEdited=true;identityNameDirty=false;pendingRecovery=false;pendingSave=false;pendingName=true;authError=false;
-  identityFeedback(rememberedCode?'Connecting as a new driver. This browser still remembers your saved driver.':'Connecting with your new driver name…');
-  session.setName(name);ensureChat();
+  if(authError){identityFeedback('Retry recovery or choose a new driver first.');return;}
+  nameInput.value=name;nameEdited=true;identityNameDirty=false;pendingName=true;
+  identityFeedback('Saving your name…');ensureChat();
 });
 $('identity-save').onclick=()=>{
-  if(chat.status!=='online'){if(authError){identityFeedback('Retry recovery or choose a new guest first.');return;}pendingSave=true;ensureChat();identityFeedback('Connecting before creating your code…');return;}
-  if(!chat.save())identityFeedback('Could not request a code. Try again.');
+  if(chat.status==='online'&&currentCode){showRecoveryCode=true;refreshIdentity();identityFeedback('Keep your recovery code private.');return;}
+  pendingShowCode=true;
+  if(chat.status!=='online'){if(authError){pendingShowCode=false;identityFeedback('Retry recovery or choose a new driver first.');return;}pendingSave=true;ensureChat();identityFeedback('Connecting before creating your code…');return;}
+  if(savingDriver){identityFeedback('Preparing your recovery code…');return;}
+  savingDriver=chat.save();if(!savingDriver)identityFeedback('Could not request a code. Try again.');
 };
 $('identity-copy').onclick=async()=>{
   if(!currentCode)return;
@@ -230,10 +258,10 @@ $('identity-recover').addEventListener('submit',event=>{
   event.preventDefault();const code=identityEntry.value.trim();
   if(!code){identityFeedback('Paste a recovery code first.');return;}
   if(chat.status==='online'&&currentCode===code){identityFeedback('This driver is already connected.');return;}
-  pendingRecovery=true;pendingSave=false;pendingName=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
+  clearTimeout(renameTimer);renameInFlight=false;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=true;pendingSave=false;pendingName=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
 });
 $('identity-guest').onclick=()=>{
-  pendingRecovery=false;pendingSave=false;pendingName=false;authError=false;nameEdited=false;currentCode=undefined;rememberRequested=false;rememberInput.checked=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback(rememberedCode?'Starting a new guest. This browser still remembers a different driver.':'Starting a new guest driver.');chat.connect(requestedName,undefined,true);
+  clearTimeout(renameTimer);showRecoveryCode=false;pendingShowCode=false;pendingRecovery=false;pendingSave=false;pendingName=false;renameInFlight=false;authError=false;nameEdited=false;currentCode=undefined;rememberRequested=true;rememberInput.checked=true;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Starting a new driver on this browser…');chat.connect(requestedName,undefined,true);
 };
 if(rememberedCode)ensureChat();
 

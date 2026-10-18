@@ -1,5 +1,7 @@
 import './chat.css';
 import { MAX_CHAT_LENGTH, normalizeChatText } from '../worker/global-chat-core';
+import { MAX_NAME_LENGTH, normalizeName } from '../worker/global-chat-core';
+import { limitDriverNameInput } from './driver-name';
 
 export type ChatMessage = {
   id: string;
@@ -13,6 +15,7 @@ type ConnectionStatus = 'connecting' | 'online' | 'offline';
 
 type ChatPanelOptions = {
   onSend: (text: string) => boolean;
+  onRename: (name: string) => boolean;
   onOpenChange: (open: boolean) => void;
 };
 
@@ -54,8 +57,36 @@ export function createChatPanel(options: ChatPanelOptions) {
   const statusText = document.createElement('span');
   connection.append(statusDot, statusText);
 
+  const identityRow = document.createElement('div');
+  identityRow.className = 'chat-identity-row';
   const identity = document.createElement('p');
   identity.className = 'chat-identity';
+  const editName = document.createElement('button');
+  editName.type = 'button';
+  editName.className = 'chat-edit-name';
+  editName.textContent = 'Edit name';
+  identityRow.append(identity, editName);
+  const nameForm = document.createElement('form');
+  nameForm.className = 'chat-name-form';
+  nameForm.hidden = true;
+  const nameLabel = document.createElement('label');
+  nameLabel.className = 'chat-visually-hidden';
+  nameLabel.htmlFor = 'chat-name-input';
+  nameLabel.textContent = 'Your driver name';
+  const nameInput = document.createElement('input');
+  nameInput.id = 'chat-name-input';
+  nameInput.maxLength = MAX_NAME_LENGTH * 2;
+  nameInput.setAttribute('autocomplete', 'nickname');
+  const saveName = document.createElement('button');
+  saveName.type = 'submit';
+  saveName.textContent = 'Save';
+  const cancelName = document.createElement('button');
+  cancelName.type = 'button';
+  cancelName.textContent = 'Cancel';
+  const nameFeedback = document.createElement('p');
+  nameFeedback.className = 'chat-name-feedback';
+  nameFeedback.setAttribute('role', 'status');
+  nameForm.append(nameLabel, nameInput, saveName, cancelName, nameFeedback);
   const history = document.createElement('div');
   history.className = 'chat-history';
   const empty = document.createElement('p');
@@ -100,10 +131,11 @@ export function createChatPanel(options: ChatPanelOptions) {
   const phoneBottom = document.createElement('div');
   phoneBottom.className = 'chat-phone-bottom';
   phoneBottom.setAttribute('aria-hidden', 'true');
-  dialog.append(phoneTop, header, connection, identity, history, newer, form, feedback, phoneBottom);
+  dialog.append(phoneTop, header, connection, identityRow, nameForm, history, newer, form, feedback, phoneBottom);
 
   let status: ConnectionStatus = 'offline';
   let ownId = '';
+  let ownName = '';
   let notifiedOpen = false;
   const messageIds = new Set<string>();
 
@@ -113,6 +145,7 @@ export function createChatPanel(options: ChatPanelOptions) {
   function updateSend() {
     send.disabled = status !== 'online' || !input.value.trim();
     input.disabled = status !== 'online';
+    editName.disabled = status !== 'online';
   }
   function scrollToLatest() {
     history.scrollTop = history.scrollHeight;
@@ -177,6 +210,24 @@ export function createChatPanel(options: ChatPanelOptions) {
     }
   });
   input.addEventListener('input', () => { clearFeedback(); updateSend(); });
+  editName.addEventListener('click', () => {
+    nameForm.hidden = false;
+    nameInput.value = ownName;
+    nameFeedback.textContent = '';
+    nameInput.focus();
+  });
+  cancelName.addEventListener('click', () => { nameForm.hidden = true; nameFeedback.textContent = ''; editName.focus(); });
+  nameInput.addEventListener('input', event => { if (!(event as InputEvent).isComposing) limitDriverNameInput(nameInput); });
+  nameInput.addEventListener('compositionend', () => limitDriverNameInput(nameInput));
+  nameForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const name = normalizeName(nameInput.value);
+    nameInput.value = name;
+    if (options.onRename(name)) {
+      saveName.disabled = true;
+      nameFeedback.textContent = 'Saving…';
+    } else nameFeedback.textContent = 'Could not change your name. Check your connection and try again.';
+  });
   newer.addEventListener('click', scrollToLatest);
   history.addEventListener('scroll', () => {
     if (history.scrollHeight - history.scrollTop - history.clientHeight < 48) newer.hidden = true;
@@ -212,11 +263,17 @@ export function createChatPanel(options: ChatPanelOptions) {
     },
     setIdentity(id: string, name: string) {
       ownId = id;
+      ownName = name;
       identity.textContent = id ? `You’re ${name} · #${id.slice(0, 8)}` : '';
       identity.title = id;
       for (const row of messages.querySelectorAll<HTMLElement>('.chat-message')) {
         row.classList.toggle('chat-mine', !!id && row.dataset.playerId === id);
       }
+    },
+    finishRename(message: string, success: boolean) {
+      saveName.disabled = false;
+      nameFeedback.textContent = message;
+      if (success) { nameForm.hidden = true; if (dialog.open) editName.focus(); }
     },
     setMessages(next: ChatMessage[]) {
       messageIds.clear();

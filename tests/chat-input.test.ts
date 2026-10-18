@@ -23,7 +23,8 @@ test('chat composer preserves drafts rejected after normalization and accepts 24
   const ts = (await import('typescript')).default;
   let source = await readFile(new URL('../src/chat-panel.ts', import.meta.url), 'utf8');
   source = source.replace("import './chat.css';", '');
-  source = source.replace("'../worker/global-chat-core'", JSON.stringify(new URL('../worker/global-chat-core.ts', import.meta.url).href));
+  source = source.replaceAll("'../worker/global-chat-core'", JSON.stringify(new URL('../worker/global-chat-core.ts', import.meta.url).href));
+  source = source.replace("'./driver-name'", JSON.stringify(new URL('../src/driver-name.ts', import.meta.url).href));
   const js = ts.transpile(source, { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 });
   const { createChatPanel } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 
@@ -40,13 +41,19 @@ test('chat composer preserves drafts rejected after normalization and accepts 24
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => new Element() } });
   try {
     const sent: string[] = [];
-    const panel = createChatPanel({ onSend: (text: string) => { sent.push(text); return true; }, onOpenChange: () => {} });
+    const renamed: string[] = [];
+    const panel = createChatPanel({ onSend: (text: string) => { sent.push(text); return true; }, onRename: (name: string) => { renamed.push(name); return true; }, onOpenChange: () => {} });
     panel.setConnection('online');
     const find = (root: Element, predicate: (node: Element) => boolean): Element | undefined =>
       predicate(root) ? root : root.children.map(child => find(child, predicate)).find(Boolean);
     const form = find(panel.element, node => node.className === 'chat-compose')!;
     const input = find(panel.element, node => node.id === 'chat-input')!;
     const feedback = find(panel.element, node => node.className === 'chat-feedback')!;
+    const nameForm = find(panel.element, node => node.className === 'chat-name-form')!;
+    const nameInput = find(panel.element, node => node.id === 'chat-name-input')!;
+    nameInput.value = '  New  Name  ';
+    nameForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    assert.deepEqual(renamed, ['New Name']);
     assert.equal(input.maxLength, 480);
     const expanded = 'ﬃ'.repeat(81); // 81 visible ligatures normalize to 243 code points.
     input.value = expanded;
