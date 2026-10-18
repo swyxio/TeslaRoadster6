@@ -13,7 +13,7 @@ function setup(){
   world.entities=[car];player.entityId=car.id;return {world,player,car};
 }
 test('vehicle finishes validate the driver, funds and workshop and charge once',()=>{
-  const {world,player,car}=setup();const red:StyleChoice={category:'paint',choice:'ember'};
+  const {world,player,car}=setup();player.delivery.cash=0;const red:StyleChoice={category:'paint',choice:'ember'};
   assert.equal(buyVehicleStyle(world,'p',red),false,'no cash');
   player.delivery.cash=100;car.x+=30;assert.equal(buyVehicleStyle(world,'p',red),false,'outside workshop');car.x-=30;
   car.supportId=null;assert.equal(buyVehicleStyle(world,'p',red),false,'airborne');car.supportId='ground';

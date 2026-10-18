@@ -9,6 +9,7 @@ import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
+import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
 import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
@@ -281,7 +282,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus';stationId?:string};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom';stationId?:string};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -383,6 +384,12 @@ for(let i=BUILDINGS.length-1;i>=0;i--){
  if(TECH_CAMPUS_BUILDINGS.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1))BUILDINGS.splice(i,1);
 }
 BUILDINGS.push(...TECH_CAMPUS_BUILDINGS);
+// The Vault replaces one generated background block; its physical envelope and
+// visible building share the same footprint. The forecourt remains open ground.
+const vault=LUXURY_SHOWROOM.building;
+const vaultBlock=BUILDINGS.findIndex(b=>b.style==='midrise'&&Math.hypot(b.x-vault.x,b.z-vault.z)<.01);
+if(vaultBlock<0)throw new Error('The Vault background block is missing');
+BUILDINGS.splice(vaultBlock,1,{...vault,district:'peninsula',style:'luxury-showroom'});
 BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
 BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
 // Shared candidate index keeps collision cost local as the city grows.

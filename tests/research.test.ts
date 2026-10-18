@@ -11,7 +11,7 @@ import { parseMessage } from '../worker/protocol';
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),other=addPlayer(world,'q','Other');
   const car=world.entities.find(e=>e.id===player.entityId)!,otherCar=world.entities.find(e=>e.id===other.entityId)!;
-  world.entities=[car,otherCar];world.pickups=[];player.delivery.level=2;
+  world.entities=[car,otherCar];world.pickups=[];player.delivery.cash=0;other.delivery.cash=0;player.delivery.level=2;
   return {world,player,other,car};
 }
 
@@ -63,10 +63,10 @@ test('an SFO drop-off earns its visit and express bonuses once alongside the far
   Object.assign(car,{...at,y:terrainHeight(at.x,at.z),supportId:'ground',speed:0,vy:0});
   step(world,new Map([['p',NEUTRAL]]),.05);
   assert.equal(player.delivery.completed,1);assert.equal(player.delivery.earned,fare);
-  assert.equal(player.delivery.cash,fare+site.cash+80);
+  assert.equal(player.delivery.cash,fare+site.cash+2_500+2_500);
   assert.ok(player.achievements.unlocked.includes('sfo-ground-crew'));
   assert.ok(player.achievements.unlocked.includes('sfo-express'));
   assert.equal(player.delivery.lastReward?.kind,'delivery-research');
-  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+80);
-  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+80);
+  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+2_500+2_500);
+  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+2_500+2_500);
 });

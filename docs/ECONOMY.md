@@ -2,7 +2,7 @@
 
 **Economy design, 2026-10-18.** Deliveries build a wallet, a fleet puts money to work, and homes give players a place to show what they have built. This document sets out the proposed progression and prices. The [implementation guide](ECONOMY_IMPLEMENTATION.md) records the shared decisions and handoffs for contributors. The [player simulations](ECONOMY_SIMULATIONS.md) and [five-minute experiment](ECONOMY_FIVE_MINUTE.md) compare the choices and their pacing.
 
-Today, [delivery](DELIVERY.md) cash, regional unlocks and personal achievements last for the driving session. Regions open through completed deliveries and delivery earnings; spending does not close them again. A room-local Mars fund persists and accepts voluntary contributions. This design adds a persistent wallet, income-producing Cybercabs and property, and makes the current wallet balance the level. See [README](../README.md) and [MAP](MAP.md) for the playable world.
+The candidate branch implements a saved wallet, cash-based regional levels, delivery and showroom achievements, a luxury showroom, and an automatic global earnings counter for Starship. Its wallet recovery, gameplay and performance checks remain release gates. Cybercab income, property, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for the candidate's implemented rules.
 
 ## Goals
 
@@ -85,7 +85,7 @@ A provisional early-playtest target is 2–4 unique one-off achievements per 30 
 
 ## Research and airport deliveries
 
-The session research tour gives players a reason to visit four landmarks. UCSF's Homes Lab pays $20 and awards its badge; Berkeley's Energy Lab pays $35 and gives 20% off efficient nozzles; Stanford's Speed Lab pays $50 and gives 20% off sport motors; SFO's Flight Lab pays $40 and gives 20% off air tanks. An SFO delivery earns an additional one-time $80. The awards and discounts last for the current drive. Berkeley has the Campanile, Sather Gate and Doe Library; Stanford has Hoover Tower, the Main Quad and Dish; SFO has an airport, runway and Aviation Museum; the map also includes UCSF Parnassus.
+The research tour gives players a reason to visit four landmarks. UCSF's Homes Lab pays $1,000 and awards its badge; Berkeley's Energy Lab pays $1,500 and gives 20% off efficient nozzles; Stanford's Speed Lab pays $2,000 and gives 20% off sport motors; SFO's Flight Lab pays $2,000 and gives 20% off air tanks. An SFO delivery earns an additional one-time $2,500. The candidate saves awards and discounts with the driver. Berkeley has the Campanile, Sather Gate and Doe Library; Stanford has Hoover Tower, the Main Quad and Dish; SFO has an airport, runway and Aviation Museum; the map also includes UCSF Parnassus.
 
 The delivery-linked certifications below are the proposed persistent expansion of this tour. Their rewards and upgrades are separate from the current visit rewards. New lab and clinic destinations need map and collision design.
 

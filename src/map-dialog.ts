@@ -5,6 +5,7 @@ import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
 import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
+import { LUXURY_SHOWROOM } from '../shared/luxury';
 
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
 export function createMapDialog({ onDestination }: { onDestination: (point: MapPoint) => string | void }) {
@@ -34,7 +35,8 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   const copy = (point: MapPoint): MapPoint => ({ x: point.x, z: point.z });
   const screen = (point: MapPoint) => ({ x: width / 2 + (point.x - center.x) * scale, y: height / 2 + (point.z - center.z) * scale });
   const world = (x: number, y: number): MapPoint => ({ x: center.x + (x - width / 2) / scale, z: center.z + (y - height / 2) / scale });
-  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= level;
+  // Keep the surrounding region visible if spending lowers access mid-trip.
+  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= Math.max(level,requiredLevelAt(player.x,player.z));
   const bounds = (point: MapPoint): MapPoint => ({ x: Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, point.x)), z: Math.max(MAP_BOUNDS.minZ, Math.min(MAP_BOUNDS.maxZ, point.z)) });
   const local = (event: PointerEvent | WheelEvent) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
   function resize() {
@@ -176,6 +178,10 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const p=screen(FREMONT_SPACEPORT.entrance);c.fillStyle='#ffad70';c.beginPath();c.arc(p.x,p.y,5,0,Math.PI*2);c.fill();
       if(scale>.13){c.fillStyle='#173a40';c.font='700 10px system-ui';c.fillText('FREMONT MARS SPACEPORT',p.x+7,p.y+5);}
     }
+    if(visible(LUXURY_SHOWROOM.arrival)){
+      const p=screen(LUXURY_SHOWROOM.arrival);c.fillStyle='#d2a84f';c.beginPath();c.arc(p.x,p.y,5,0,Math.PI*2);c.fill();
+      if(scale>.13)drawLabel(p,'THE VAULT','700 10px system-ui',12);
+    }
     dirty = false;
   }
   function marker(point: MapPoint, color: string, size: number) {
@@ -280,8 +286,9 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       if (!dialog.open) dialog.showModal(); draw(); canvas.focus();
     },
     update(position: MapPoint, destination?: MapPoint | null, nextLevel: Level = 0) {
+      const previousRegion=requiredLevelAt(player.x,player.z);
       player = copy(position); currentDestination = destination ? copy(destination) : null;
-      if (level !== nextLevel) { level = nextLevel; dirty = true; }
+      if (level !== nextLevel || previousRegion!==requiredLevelAt(player.x,player.z)) { level = nextLevel; dirty = true; }
       draw();
     },
     close() { if (dialog.open) dialog.close(); },

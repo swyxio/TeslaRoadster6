@@ -117,7 +117,7 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 
 <ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>
 
-The next delivery can take you somewhere new, and the place should give you a reason to come back. The blue research rings already pay for a visit: UCSF's Homes Lab gives $20 and a badge; Berkeley's Energy Lab gives $35 and a discount on efficient nozzles; Stanford's Speed Lab gives $50 and a motor discount; SFO's Flight Lab gives $40 and an air-tank discount. Your first delivery to SFO earns an extra $80. These rewards and discounts last for the drive.
+The next delivery can take you somewhere new, and the place should give you a reason to come back. The blue research rings pay for a visit: UCSF's Homes Lab gives $1,000 and a badge; Berkeley's Energy Lab gives $1,500 and a discount on efficient nozzles; Stanford's Speed Lab gives $2,000 and a motor discount; SFO's Flight Lab gives $2,000 and an air-tank discount. Your first delivery to SFO earns an extra $2,500. The candidate saves these rewards and discounts with your driver.
 
 <div class="research-gallery">
 <figure><img src="/blog/economy/research-ucsf.webp" alt="Researchers study a model home at a UCSF hillside campus." loading="lazy"><figcaption><strong>UCSF · Homes</strong><br>Design a place of your own, then build it up.</figcaption></figure>

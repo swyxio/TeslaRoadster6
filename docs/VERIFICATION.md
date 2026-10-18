@@ -798,3 +798,7 @@ The contributor guide was checked against the held economy design, the main base
 ## 2026-10-18 · Luxury showroom research and prototypes
 
 A lightweight Node check constructed all six detached [vehicle prototypes](../experiments/luxury-models.ts), verified finite bounds, four wheels per car and two per motorcycle, independent wheel groups, a driver-seat anchor and shared clone geometry. Approximate overall bounds were checked against the sourced dimensions; motorcycle height includes the rider. The showroom documents' local links, $30m collection total and $251,250/hour comparison also passed. These checks did not render the models or verify their resemblance, handling, performance or placement. The showroom, achievements and purchase flow are not integrated; the full test suite, build and game playtest remain pending during the performance measurement window.
+
+## 2026-10-18 · Saved-wallet and Vault candidate
+
+The candidate integrates the Vault models, cash-based progression, one-off awards and a saved-driver transaction path. Static review identified pickup-refresh, concurrent recovery, reconnect-timer and backpressure hazards; fixes and dedicated local Wrangler scenarios have been prepared. `git diff --check` passes. The new tests, full suite, build, actual-game checks and persistence-isolation benchmark have not yet run while the shared performance measurements are active. The feature release remains held by [PERFORMANCE_RELEASE_GATES.md](PERFORMANCE_RELEASE_GATES.md).

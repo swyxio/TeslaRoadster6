@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
 import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,TESLAND_MONUMENTS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {PENINSULA_CROSS_STREETS} from '../shared/alternate-roads';
@@ -18,7 +19,7 @@ import {ovalBankSurface} from '../shared/oval-bank';
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
  const car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  world.entities=[car];world.pickups=[];Object.assign(car,{x,z,yaw});
  for(let i=0;i<650&&!goal(car.x,car.z);i++)step(world,new Map([['crossing',{...NEUTRAL,throttle:1}]]),.05);
  assert.ok(goal(car.x,car.z),`crossing stopped at ${car.x.toFixed(1)}, ${car.z.toFixed(1)}`);
@@ -243,7 +244,7 @@ test('new landmarks, hills and signs clear parking, ferry and race gameplay area
 
 test('autopilot can cross the Bay and return without teleporting',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
  for(let i=0;i<2400;i++){const x=car.x,z=car.z;step(world,new Map(),.05);assert.ok(Math.hypot(car.x-x,car.z-z)<2);furthest=Math.max(furthest,car.x);}
  assert.ok(furthest>330);assert.ok(car.x<100);assert.equal(car.autopilot,true);
 });

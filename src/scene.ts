@@ -325,13 +325,23 @@ export class GameScene {
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
       this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'?e.pitch:0));
-      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
+      // The bike leans into grounded turns; flight and surface roll remain
+      // authoritative. Lean is visual and does not change the collision body.
+      const lean=e.kind!=='person'&&VEHICLES[e.kind].shape==='motorcycle'&&e.driver&&e.supportId!==null&&e.loopAngle===null
+        ?e.steering*Math.min(Math.abs(e.speed)/18,1)*Math.sign(e.speed)*.32:0;
+      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll+lean));
       mesh.quaternion.slerp(this.orientation,blend);
       const incident=isTrafficIncident(e,world.time);
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+      if(e.kind!=='person'){
+        const spec=VEHICLES[e.kind];
+        if(spec.shape==='motorcycle'){
+          const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;
+          const wheel=mesh.getObjectByName('wheel_f');if(wheel)wheel.rotation.y=e.steering*spec.steerAngle;
+        }else for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}
+      }
     }
     this.driverLabels.update(world,this.entities,menu,controlled?.id);
     // Hide pickups absent from the current authoritative snapshot.

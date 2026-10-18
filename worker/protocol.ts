@@ -1,9 +1,10 @@
 import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
+import { luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
 import { isStyleChoice, type StyleChoice } from '../shared/vehicle-style';
-export type ClientMessage = ({type:'vehicleStyle';requestId:number} & StyleChoice) | { type: 'input'; seq:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number} | {type:'mars';action:'board';requestId:number};
+export type ClientMessage = {type:'identity';code:string|null;requestId:number} | {type:'luxury';action:'buy'|'collect';vehicle:LuxuryVehicleId;requestId:number} | ({type:'vehicleStyle';requestId:number} & StyleChoice) | { type: 'input'; seq:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'board';requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -19,6 +20,9 @@ export function parseMessage(raw: string): ClientMessage | null {
     for (const key of ['jump', 'flip']) if (!Number.isSafeInteger(input[key]) || (input[key] as number)<0 || (input[key] as number)>2147483647) return null;
     return { type: 'input', seq:value.seq as number, input: { throttle: input.throttle as number, steer: input.steer as number, roll: input.roll as number, boost: input.boost as boolean, hover: input.hover as boolean, brake: input.brake as boolean, jump: input.jump as number, flip: input.flip as number, cockpit: input.cockpit as boolean } };
   }
+  if(value.type==='identity' && (value.code===null || (typeof value.code==='string' && value.code.length<=160)) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'identity',code:value.code as string|null,requestId:value.requestId as number};
+  if(value.type==='luxury' && (value.action==='buy'||value.action==='collect') && typeof value.vehicle==='string' && luxuryVehicle(value.vehicle) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)
+    return {type:'luxury',action:value.action,vehicle:value.vehicle as LuxuryVehicleId,requestId:value.requestId as number};
   if(value.type==='sync'&&Number.isSafeInteger(value.token)&&(value.token as number)>0)return {type:'sync',token:value.token as number};
   if(value.type==='selectVehicle' && typeof value.kind==='string' && Object.hasOwn(VEHICLES,value.kind))return {type:'selectVehicle',kind:value.kind as VehicleId};
   if(value.type==='parking'&&(value.action==='park'||value.action==='queue'||value.action==='start'||value.action==='leave'))return {type:'parking',action:value.action};
@@ -30,7 +34,6 @@ export function parseMessage(raw: string): ClientMessage | null {
   if(value.type==='ota' && typeof value.enabled==='boolean' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'ota',enabled:value.enabled,requestId:value.requestId as number};
   if(value.type==='mars' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0){
     if(value.action==='board')return {type:'mars',action:'board',requestId:value.requestId as number};
-    if(value.action==='contribute' && Number.isSafeInteger(value.amount) && (value.amount as number)>0 && (value.amount as number)<=1_000_000_000)return {type:'mars',action:'contribute',amount:value.amount as number,requestId:value.requestId as number};
   }
   if (value.type === 'interact' || value.type === 'reset' || value.type === 'autopilot' || value.type === 'dome') return { type: value.type };
   if (value.type === 'name' && typeof value.name === 'string') {

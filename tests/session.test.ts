@@ -126,13 +126,34 @@ test('online Mars actions use an ordered sync barrier and clear stale results on
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const requestId=session.mars('contribute',10);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
+  const requestId=session.mars();
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'board',requestId});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
+  socket.message({type:'marsResult',requestId,action:'board',ok:true});
   assert.equal(session.marsResult?.ok,true);
   session.join('friends','Alex');assert.equal(session.marsResult,null);
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'board',ok:true});assert.equal(session.marsResult,null);
+  session.disconnect();
+});
+
+test('identity replies match the latest request and recovery is replayed on rejoin',()=>{
+  const session=new Session(),first=session.setIdentity('first-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'identity',code:'first-code',requestId:first});
+  const second=session.setIdentity('second-code');
+  socket.message({type:'identityResult',requestId:first,ok:true,message:'old'});
+  assert.equal(session.identityResult,null);
+  const cancelled=session.setIdentity();
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'identity',code:null,requestId:cancelled});
+  socket.message({type:'identityResult',requestId:second,ok:true,message:'superseded'});
+  assert.equal(session.identityResult,null);
+  const latest=session.setIdentity('second-code');
+  socket.message({type:'identityResult',requestId:latest,ok:true,message:'bound'});
+  assert.equal(session.identityResult?.message,'bound');
+  session.join('friends','Alex');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'second-code',requestId:latest});
   session.disconnect();
 });
 

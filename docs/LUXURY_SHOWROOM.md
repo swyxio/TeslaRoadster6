@@ -1,37 +1,35 @@
 # The Vault: a luxury showroom
 
-**Design and vehicle research · 2026-10-18.** A driver discovers a small independent showroom near Stanford, walks or drives into its forecourt, and finds cars and motorcycles priced like property. These are personal goals: the player chooses whether to put money into a Cybercab, build a home, or buy something extraordinary to drive.
+**Candidate implementation · 2026-10-18.** The Vault is a fictional independent showroom near Stanford with six cars and motorcycles priced as long-term goals. The candidate branch includes the showroom, model registry, purchase and collection interface, and achievement definitions. The persistent wallet and transaction flow remain in progress; visual, game-world and performance verification are pending.
 
-The showroom, purchases and achievements are planned. House-priced ownership depends on the persistent, responsive wallet in [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md); the current room resets individual money and vehicles and pays session-scale fares. The location and models below need game-world validation before release.
-
-The [six model prototypes](../experiments/luxury-models.ts) are original low-poly scene graphs with source-based proportions and distinguishing details. They are outside the game and have not been visually checked. Motorcycles have separate wheel and rider groups; integration still needs steering, lean, collision and camera work.
+The original low-poly models are integrated through `src/luxury-models.ts` and `src/vehicles.ts`. Motorcycles have separate front and rear wheels and a rider, with visual steering, lean and cockpit positioning. The showroom uses an on-demand model preview. [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) describes the wallet design.
 
 ## The place
 
-Call the shop **The Vault · Palo Alto**. A screened candidate is the generated midrise centered at `x=-828.56, z=4003.44`, near Stanford and the Stanford Shopping Center charger. Replace that building with a low, glass-fronted showroom; put its proposed purchase ring at `x=-829, z=4030`. This is a fictional independent venue, not a real dealership.
+**The Vault · Palo Alto** replaces a generated midrise near Stanford and the Stanford Shopping Center charger. `shared/luxury.ts` defines a 24 × 22 × 9 m building centered at `x=-828.56, z=4003.44`, and a forecourt centered at `x=-829, z=4030` with a 10 m radius. `shared/map.ts` uses that footprint for the collision building; `src/bay-world.ts` renders it and its gold ring. The location is a fictional independent venue.
 
-The candidate ring has supported ground at height zero, and an initial geometry check found no current building, road, parking lot or nearby landmark arrival in its 24-by-24-meter bounding box. Before committing to the site, check the entire building and driveway against Caltrain tracks and platforms, existing workshops and pickups, landmark access, vehicles, traffic and authoritative surface heights. Confirm that cars and bikes can approach, park and leave without obstructing the street. [MAP.md](MAP.md) owns the map and collision rules.
+To purchase, the player stops on the marked forecourt and opens the Vault with the shop control. The proposed authoritative flow checks location and wallet before completing a transaction; a remote workshop subscription does not permit purchases elsewhere. The dialog shows model previews, prices and the projected cash and level after payment. After purchase, the owner can request collection at the Vault or at a physical workshop while stopped in a car. An OTA subscription alone does not provide remote collection. The complete wallet, location and recovery flows still need verification.
 
-An achievement can hint at the Vault before discovery. To make the purchase, the player must physically reach the showroom and stop in its marked forecourt; the server validates their location, balance and vehicle selection. A remote workshop subscription does not bypass that visit. The showroom lists each vehicle, its price, handling character and the wallet/level that would remain after purchase.
+Validate the building and driveway against Caltrain tracks and platforms, workshops, pickups, landmark access and authoritative surface heights. Check that cars and bikes can approach, park and leave without obstructing the street. [MAP.md](MAP.md) owns the map and collision rules.
 
 ## The collection
 
 These candidate prices use the proposed economy's $1m starter home as a reference. They are in-game prices, not real-market quotations. Performance descriptions are arcade design targets to tune and measure.
 
-| Vehicle | Price | Driving character | Visual signature to model |
+| Vehicle / registry ID | Price | Driving character | Visual signature |
 | --- | ---: | --- | --- |
-| Ducati Panigale V4 | $1.5m | Light, nimble steering; quick changes of direction | Red sport-bike fairing, compact tail, low screen and a seated rider. |
-| Kawasaki Ninja H2 Carbon | $2m | Strong straight-line acceleration; stable at speed | Dark carbon upper cowl, green trellis-frame accents and a muscular, compact silhouette. |
-| Lamborghini Temerario | $3m | Precise cornering and strong braking | Low nose, hexagonal light elements and a wide rear with high central exhaust. |
-| Lamborghini Revuelto | $4.5m | Hard acceleration and planted all-around handling | Sharp wedge, Y-shaped lights, scissor-door seams and exposed rear engine area. |
-| Bugatti Chiron | $7m | Fast, durable long-distance cruiser | Horseshoe grille, sweeping C-shaped side line, center spine and thin full-width tail light. |
-| Bugatti Tourbillon | $12m | Composed high-speed handling and the flagship presence | Broad horseshoe, smooth teardrop cabin, slim rear lights and a large diffuser. |
+| Ducati Panigale V4 · `ducati-panigale-v4` | $1.5m | Light, nimble steering; quick changes of direction | Red sport-bike fairing, compact tail, low screen and a seated rider. |
+| Kawasaki Ninja H2 Carbon · `kawasaki-ninja-h2-carbon` | $2m | Strong straight-line acceleration; stable at speed | Dark carbon upper cowl, green trellis-frame accents and a muscular, compact silhouette. |
+| Lamborghini Temerario · `lamborghini-temerario` | $3m | Precise cornering and strong braking | Low nose, hexagonal light elements and a wide rear with high central exhaust. |
+| Lamborghini Revuelto · `lamborghini-revuelto` | $4.5m | Hard acceleration and planted all-around handling | Sharp wedge, Y-shaped lights, scissor-door seams and exposed rear engine area. |
+| Bugatti Chiron · `bugatti-chiron` | $7m | Fast, durable long-distance cruiser | Horseshoe grille, sweeping C-shaped side line, center spine and thin full-width tail light. |
+| Bugatti Tourbillon · `bugatti-tourbillon` | $12m | Composed high-speed handling and the flagship presence | Broad horseshoe, smooth teardrop cabin, slim rear lights and a large diffuser. |
 
 All six together cost $30m before achievement awards. They should feel different to drive, but none generates a passive income or receives an automatic fare multiplier. Faster routes can still change a player's earnings, so measure actual delivery times before treating the collection as economically neutral.
 
 As a rough upper-rate comparison, a $26k delivery every eight minutes plus five cabs running at 75% utilization would gross about $251,250 per active hour before awards, events or operating costs. At that steady rate, $30m is about 119 active hours. Buying vehicles can lower the driver's level and job tier, and actual traffic, travel, cab uptime and choices change the result. Add this purchase path to the existing five-minute simulations before treating the prices as balanced.
 
-The showroom's models are exclusive to an in-person purchase. Do not seed these IDs into parked cars, NPC traffic, highway traffic or free fleet selection; do not allow an unowned showroom display to be taken. Once bought, a car or bike remains owned through reconnects and level drops. The showroom keeps a recoverable account record and offers collection there even before the player owns a home; a home garage can also hold its configuration after purchase. Avoid introducing player resale for these models until transfer rules preserve the shop-exclusive acquisition decision.
+The six special IDs are outside `VEHICLE_IDS`, the 26-model ambient roster. Do not seed them into parked cars, NPC traffic, highway traffic or free fleet selection. Their intended acquisition is a Vault purchase; an owned model can then be collected at the Vault or a physical workshop, including after a level drop. Persistent recovery is being implemented and must be verified through reconnects and room changes. Home garages and player resale remain future design work.
 
 ## Awards and level changes
 
@@ -45,7 +43,7 @@ Show all six model-specific goals in Awards so that a player can pick a favorite
 | Revuelto / Chiron / Tourbillon | $60k / $100k / $150k |
 | Own 2 / 4 / 6 distinct luxury models | $50k / $100k / $250k |
 
-Awards from a single purchase pay together and appear as one notification. They raise the current wallet and can reopen levels, but do not receive event multipliers. They do count as eligible Starship earnings once. A first-time Temerario buyer with $3m would spend it, receive the $40k model award plus the $25k first-purchase award, and finish with $65k at level 2. The car stays owned after the level drop. This example assumes no other unclaimed award fires.
+The transaction design pays a purchase's awards together; achievement presentation may announce them separately. Awards raise current cash and can reopen levels. They are intended to count once toward eligible Starship earnings without event multipliers; end-to-end accounting remains to be verified. A first-time Temerario buyer with $3m would spend it, receive the $40k model award plus the $25k first-purchase award, and finish with $65k at level 2. The car stays owned after the level drop. This example assumes no other unclaimed award fires.
 
 ## Manufacturer references and model scope
 
@@ -62,12 +60,10 @@ The models should be original game geometry, identifiable from the real vehicles
 
 Car widths exclude mirrors. The Tourbillon launch page's specifications were visible in search but its direct page could not be opened during this research; verify them again when implementing. The Ducati sheet supplies wheelbase but not an overall envelope; any game envelope needs an explicit estimate.
 
-Motorcycles need a real two-wheel presentation, a visible rider, a suitable seat and steering/lean behavior. The current four-wheel renderer and ground-physics roll handling do not provide these automatically. Preserve the 26 existing vehicle IDs and their parked, traffic, takeover and driving coverage when extending the catalog.
+The integrated bikes use two wheel groups, a rider and a driver seat. The renderer hides the rider when unoccupied, steers the front wheel and applies visual lean when grounded; driving and collision behavior remain arcade simulation. Preserve the 26 existing vehicle IDs and their parked, traffic, takeover and driving coverage. Game-world visual and handling verification remains pending.
 
-## Implementation and verification
+## Remaining verification
 
-1. Finish the persistent player wallet and ownership transaction path first. One authoritative, idempotent purchase must debit the wallet, grant the model and issue its one-off awards together; lost replies, concurrent requests, disconnects and room changes must not lose or duplicate the purchase. Do not block room input, physics or snapshots while the buyer's profile is slow.
-2. Register luxury models separately from the existing ambient fleet. Apply the ownership check to selection, interaction, vehicle restoration and any showroom display, including forged client requests. Update shared gameplay and network contracts with the actual implementation.
-3. Add the validated showroom location and a desktop-and-touch interface, then render and drive all six models in the actual game. Check their silhouettes from front, side and rear; inspect bike steering, rider placement, landing, collisions and garage retrieval.
-4. Start within the existing fastest base-car speed envelope. A single fast entity can increase physics substeps for the whole room, so benchmark upgraded/rocket speeds and crowded-room input latency before increasing it. Compare delivery earning rates, model costs and the effect of wallet-level drops in the simulations.
-5. Check insufficient funds, first-time and repeated purchase, purchase during a level drop, duplicate purchase requests, failed save and replay, reconnect, another player's takeover attempt, and an owner without a home. Record the observed results in [VERIFICATION.md](VERIFICATION.md).
+The persistent wallet, recovery and ownership transaction are in progress. Verify debit, ownership and one-off awards under repeated requests, lost replies, slow storage, reconnects and room changes; check another player's takeover attempt and collection without owning a home. A slow profile must not block room input, physics or snapshots.
+
+Render and drive all six models in the actual game on desktop and touch. Inspect the showroom approach, model silhouettes, rider placement, steering, lean, landing, collisions and workshop retrieval. Measure upgraded and Rocket speeds, crowded-room input latency and delivery earning rates before treating the tuning or prices as balanced. Record observations in [VERIFICATION.md](VERIFICATION.md).

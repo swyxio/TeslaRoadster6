@@ -7,14 +7,14 @@ import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { planNavigation, type Navigation } from './navigation';
-import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, type DeliveryState } from './delivery';
+import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import { upgradePrice } from './research';
 import { setOta, updateOta } from './ota';
 import { awardDomeMatchAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
 import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
-import { UPGRADES, hasRockets, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
+import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
 import { PAINTS, DECALS, initialVehicleStyle, isStyleChoice, type VehicleStyle, type StyleChoice } from './vehicle-style';
 import { createParking, insideParkingArea, joinParking, leaveParking, startQueue, updateParking, type ParkingMode, type ParkingState } from './parking';
 import { PARKING_LOTS } from './parking-lots';
@@ -27,8 +27,9 @@ import { airCost, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
+import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=32;
+export const PROTOCOL_VERSION=33;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -44,6 +45,7 @@ export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air'|'rocket';a
 export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;launchAt:number|null}};
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
+const damageFactor=(e:Entity)=>e.kind==='person'?1:(VEHICLES[e.kind].damageFactor??1);
 const MAX_FLIGHT_SPEED=80; // 288 km/h: an arcade limit that keeps contact sampling bounded.
 export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:string|null=null):Entity=>{
   const height=terrainHeight(x,z);
@@ -199,7 +201,7 @@ export function interact(world:World,playerId:string):void {
   const player=world.players.find(p=>p.id===playerId),e=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!e||e.supportId===null||Math.abs(e.speed)>5||ferrySecured(world.ferry,e))return;
   if(e.kind==='person'){
-    const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&!other.police&&requiredLevelAt(other.x,other.z)<=player.delivery.level&&other.inDome===e.inDome&&(other.supportId===e.supportId||(e.inDome&&e.supportId==='ground'&&other.supportId==='dome'&&other.y<.05))&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
+    const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&!other.police&&(!luxuryVehicle(other.kind)||other.owner===playerId)&&requiredLevelAt(other.x,other.z)<=Math.max(player.delivery.level,requiredLevelAt(e.x,e.z))&&other.inDome===e.inDome&&(other.supportId===e.supportId||(e.inDome&&e.supportId==='ground'&&other.supportId==='dome'&&other.y<.05))&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
     if(!car)return;
     leaveParking(world.parking,playerId);
     leaveRace(world.races,playerId);
@@ -213,7 +215,7 @@ export function interact(world:World,playerId:string):void {
       const floorExit=e.inDome&&e.supportId==='dome'&&e.y<.05;
       const y=e.supportId==='ferry'?(ferryDocked(world.ferry)&&onFerryDeck(world.ferry,p.x,p.z)?0:null):floorExit?terrainHeight(p.x,p.z):supportHeight(e.supportId!,p.x,p.z);
       if(y===null)return null;p.y=y;p.inDome=e.inDome;p.domeReturn=e.domeReturn;p.supportId=floorExit?'ground':e.supportId;return p;
-    }).find((p):p is Entity=>p!==null&&requiredLevelAt(p.x,p.z)<=player.delivery.level&&fits(world,p));
+    }).find((p):p is Entity=>p!==null&&requiredLevelAt(p.x,p.z)<=Math.max(player.delivery.level,requiredLevelAt(e.x,e.z))&&fits(world,p));
     if(!person)return;
     leaveParking(world.parking,playerId);
     leaveRace(world.races,playerId);
@@ -234,6 +236,30 @@ export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
   release(old,world);
   world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
   const car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;placeEntity(car,spawn,old.inDome);car.domeReturn=old.domeReturn;car.lastJump=old.lastJump;car.lastFlip=old.lastFlip;
+  world.entities.push(car);player.entityId=car.id;resetAchievementFlight(player);return true;
+}
+export function canCollectLuxury(entity:Entity):boolean {
+  return atLuxuryShowroom(entity) || (!entity.inDome && entity.supportId==='ground' && Math.abs(entity.speed)<1 && Math.hypot(entity.pushX,entity.pushZ)<1 && Math.abs(entity.vy)<1 && SHOPS.some(shop=>Math.hypot(entity.x-shop.x,entity.z-shop.z)<SHOP_RADIUS));
+}
+/** Caller must separately authorize ownership; this helper validates the physical collection point. */
+export function collectLuxury(world:World,id:string,kind:LuxuryVehicleId):boolean {
+  const player=world.players.find(p=>p.id===id),old=world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!old||!luxuryVehicle(kind)||!canCollectLuxury(old))return false;
+  const removed=old.owner===id||old.id===`person-${id}`;
+  let spawn:{x:number;z:number;yaw:number}|null=null;
+  for(const radius of [0,4,8,12]){
+    for(let n=0;n<8;n++){
+      const angle=n*Math.PI/4,x=old.x+Math.cos(angle)*radius,z=old.z+Math.sin(angle)*radius;
+      const candidate=makeEntity('candidate',kind,x,z);candidate.yaw=old.yaw;
+      if(fits(world,candidate,removed?old:undefined,id)){spawn={x,z,yaw:old.yaw};break;}
+    }
+    if(spawn)break;
+  }
+  if(!spawn)return false;
+  leaveParking(world.parking,id);leaveRace(world.races,id);release(old,world);
+  world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
+  const car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;
+  placeEntity(car,spawn,false);car.lastJump=old.lastJump;car.lastFlip=old.lastFlip;
   world.entities.push(car);player.entityId=car.id;resetAchievementFlight(player);return true;
 }
 export function buyUpgrade(world:World,id:string,upgrade:UpgradeId):boolean {
@@ -257,6 +283,7 @@ export function buyUpgrade(world:World,id:string,upgrade:UpgradeId):boolean {
     if(upgrade==='rocket')car.air=100;
   }
   player.delivery.cash-=price;
+  updateLevel(player.delivery);
   return true;
 }
 /** Buy a finish on the currently driven vehicle; session cash and ownership stay authoritative. */
@@ -274,6 +301,7 @@ export function buyVehicleStyle(world:World,id:string,selection:StyleChoice):boo
     if(car.style.decal===choice||player.delivery.cash<price)return false;
     player.delivery.cash-=price;car.style.decal=choice;
   }
+  updateLevel(player.delivery);
   return true;
 }
 export function subscribeOta(world:World,id:string,enabled:boolean):boolean {
@@ -446,7 +474,7 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
     const impulse=-1.25*closing/denominator;
     addDomeVelocity(a,{x:-ta.x*impulse/ma,y:-ta.y*impulse/ma,z:-ta.z*impulse/ma});
     addDomeVelocity(b,{x:tb.x*impulse/mb,y:tb.y*impulse/mb,z:tb.z*impulse/mb});
-    const damage=Math.max(0,-closing-5)*.35,total=ma+mb;a.health=Math.max(5,a.health-damage*mb/total*(a.upgrades.armor?.5:1));b.health=Math.max(5,b.health-damage*ma/total*(b.upgrades.armor?.5:1));
+    const damage=Math.max(0,-closing-5)*.35,total=ma+mb;a.health=Math.max(5,a.health-damage*mb/total*(a.upgrades.armor?.5:1)*damageFactor(a));b.health=Math.max(5,b.health-damage*ma/total*(b.upgrades.armor?.5:1)*damageFactor(b));
   }
   return true;
 }
@@ -615,7 +643,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
     if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};
   }
   if(landing){
-    const impact=-e.vy;if(impact>12)e.health=Math.max(5,e.health-(impact-12)*.5*(e.upgrades.armor?.5:1));
+    const impact=-e.vy;if(impact>12)e.health=Math.max(5,e.health-(impact-12)*.5*(e.upgrades.armor?.5:1)*damageFactor(e));
     e.supportId=landing.id;e.y=landing.y;e.vy=landing.id==='stunt-ramp'?e.vx*STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start):landing.id==='island-bank'?bankVerticalVelocity(e.x,e.z,e.vx,e.vz):landing.id==='island-oval'?ovalBankVerticalVelocity(e.x,e.z,e.vx,e.vz):landing.id==='island-jump'?e.vx*islandJumpSlope(islandJumpAt(e.x,e.z)!):0;
     e.pitch=0;e.roll=0;e.pitchRate=0;e.rollRate=0;e.flipRemaining=0;
   }else if(e.y<=0&&ground===null){
@@ -697,24 +725,30 @@ function constrainDome(e:Entity,rocket:boolean):void {
   }
 }
 
-export function step(world:World,inputs:Map<string,Input>,dt:number):void {
+/** Optional authoritative transaction boundary; normal local prediction supplies none. */
+export type EconomyHooks = {
+  update(player:Player,apply:()=>void):void;
+  pickup(player:Player,car:Entity,pickup:Pickup):void;
+};
+export function step(world:World,inputs:Map<string,Input>,dt:number,economy?:EconomyHooks):void {
   if(!Number.isFinite(dt)||dt<=0)return;
   dt=Math.min(dt,.05);
   // Allow for two vehicles approaching one another, not just one moving body.
   const maxSpeed=world.entities.reduce((max,e)=>Math.max(max,Math.abs(e.speed)+Math.hypot(e.pushX,e.pushZ),Math.hypot(e.vx,e.vy,e.vz)),0);
   const steps=Math.min(8,Math.max(1,Math.ceil(2*maxSpeed*dt)));
-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps);
+  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,economy);
 }
-function advance(world:World,inputs:Map<string,Input>,dt:number):void {
+function advance(world:World,inputs:Map<string,Input>,dt:number,economy?:EconomyHooks):void {
+  const update=(player:Player,apply:()=>void)=>economy?economy.update(player,apply):apply();
   world.time+=dt;
   updateFerry(world,dt,(entity,side)=>moveToSide(world,entity,side));
   for(const e of world.entities){updateDomeReturn(world,e);enterDomeIfInside(e);}
   updateHighwayTraffic(world,dt,makeEntity);
-  updatePolice(world,dt);
+  updatePolice(world,dt,(player,apply)=>update(player,apply));
   // Capture the supported spawn/reset/vehicle before this tick can launch it.
   for(const player of world.players)if(player.achievements.lastPosition===null){
     const entity=world.entities.find(e=>e.id===player.entityId);
-    if(entity)updateAchievements(player,entity,false);
+    if(entity)update(player,()=>updateAchievements(player,entity,false));
   }
   const stuntPlayers=new Set<string>();
   for(const e of world.entities){
@@ -962,7 +996,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     }
     if(solid(e)){
       e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;
-      const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
+      const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1)*damageFactor(e));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
       e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
     }
     capFlightSpeed(e);
@@ -1020,7 +1054,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     if(blocksProgression(world,a,oldA)||solid(a))Object.assign(a,oldA);
     if(blocksProgression(world,b,oldB)||solid(b))Object.assign(b,oldB);
     const closing=(b.vx-a.vx)*hit.nx+(b.vz-a.vz)*hit.nz;
-    if(closing<0){const impulse=-1.25*closing/(1/ma+1/mb);applyImpulse(a,-hit.nx*impulse/ma,-hit.nz*impulse/ma);applyImpulse(b,hit.nx*impulse/mb,hit.nz*impulse/mb);const damage=Math.max(0,-closing-5)*.35;a.health=Math.max(5,a.health-damage*mb/total*(a.upgrades.armor?.5:1));b.health=Math.max(5,b.health-damage*ma/total*(b.upgrades.armor?.5:1));}
+    if(closing<0){const impulse=-1.25*closing/(1/ma+1/mb);applyImpulse(a,-hit.nx*impulse/ma,-hit.nz*impulse/ma);applyImpulse(b,hit.nx*impulse/mb,hit.nz*impulse/mb);const damage=Math.max(0,-closing-5)*.35;a.health=Math.max(5,a.health-damage*mb/total*(a.upgrades.armor?.5:1)*damageFactor(a));b.health=Math.max(5,b.health-damage*ma/total*(b.upgrades.armor?.5:1)*damageFactor(b));}
     // Collision resolution moves both bodies: reindex before looking for the
     // remaining pairs, preserving the original ascending pair order.
     collisionIndex.update(i);collisionIndex.update(j);
@@ -1033,12 +1067,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     for(const participant of world.soccer.participants){
       const player=world.players.find(p=>p.id===participant.playerId);
       const entity=world.entities.find(e=>e.id===player?.entityId);
-      if(player&&entity?.inDome)awardDomeMatchAchievements(player,participant,world.soccer.winningPlayers.includes(player.id));
+      if(player&&entity?.inDome)update(player,()=>awardDomeMatchAchievements(player,participant,world.soccer.winningPlayers.includes(player.id)));
     }
   }
   for(const player of world.players){
     const entity=world.entities.find(e=>e.id===player.entityId);
-    if(entity){
+    if(entity)update(player,()=>{
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       const orderPaused=islandProtected(entity)||entity.inDome;
@@ -1055,7 +1089,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
         cockpit.orderEligible=true;cockpit.orderSeconds=0;
       }
       updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined,(player.delivery.lastReward?.id??0)>rewardBefore);
-    }
+      updateLevel(player.delivery);
+    });
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
@@ -1063,9 +1098,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;
     const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2);if(!car)continue;
-    if(pickup.kind==='repair')car.health=100;else car.air=100;
     const player=world.players.find(p=>p.id===car.driver);
-    if(player){player.delivery.cash+=5;player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:pickup.kind==='repair'?'supply-repair':'supply-air',amount:5};}
-    pickup.active=false;pickup.readyAt=world.time+20;
+    if(player&&economy)economy.pickup(player,car,pickup);
+    else {
+      if(pickup.kind==='repair')car.health=100;else car.air=100;
+      if(player){player.delivery.cash+=5;player.delivery.lifetimeIncome+=5;updateLevel(player.delivery);player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:pickup.kind==='repair'?'supply-repair':'supply-air',amount:5};}
+      pickup.active=false;pickup.readyAt=world.time+20;
+    }
   }
 }

@@ -20,9 +20,9 @@ The exact level thresholds, fares, award sizes, cab rates, property tiers, floor
 
 ## What exists today
 
-At the checked main baseline, commit `3307584`, delivery money, delivery/earnings-based area unlocks, upgrades and achievements last for a driving session. The Mars mission accepts voluntary cash contributions into a persistent **per-room** fund. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md) and [CONTRACTS.md](CONTRACTS.md) describe those current rules.
+The held candidate branch adds a saved wallet and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the candidate's rules. Recovery and isolation, the actual game and performance are still being verified before release.
 
-The held economy draft also has session research visits and a paint/decal workshop. Those session features are separate from the persistent research programs, owned cosmetics and new prices described here. The property, income-producing fleet, cash-based levels and automatic global Starship goal are design work or prototypes; do not present them as deployed.
+Property, income-producing cabs, city-specific delivery chains, expanded research programs, event multipliers and season retirement remain design work. In particular, the candidate groups Oakland with Berkeley and the Peninsula with the East Bay; it does not yet implement the separate city gates described below.
 
 Saved-driver persistence must be isolated from room responsiveness before new persistent features ship. The prototype exposed room-wide stalls when a profile write was slow or failed. See [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) for the proposed transaction boundary, local fixture and performance checks. Keep the existing game playable while integrating each layer.
 

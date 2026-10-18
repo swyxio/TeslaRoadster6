@@ -1,7 +1,8 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
-import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { VEHICLES, isLuxuryVehicle, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { buildLuxuryModel } from './luxury-models';
 import { PAINTS, type VehicleStyle } from '../shared/vehicle-style';
 import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
@@ -200,6 +201,13 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
   root.userData.vehicleStyle=key;
 }
 function buildVehicle(kind: VehicleId | 'person'): T.Group {
+  if (isLuxuryVehicle(kind)) {
+    const root=buildLuxuryModel(kind);
+    const hardware=new T.Group();hardware.name='rocket_hardware';hardware.visible=false;
+    const jets=new T.Group();jets.name='jets';jets.visible=false;
+    root.add(hardware,jets);
+    return root;
+  }
   const root = new T.Group(); root.name = kind;
   if (kind === 'person') {
     box(root, 0, 1, 0, .65, 1, .4, 0xf5b94b);

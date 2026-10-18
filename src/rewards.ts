@@ -31,7 +31,7 @@ export function celebrateReward(reward: Reward) {
   element.classList.remove('celebrate');
   // Restart CSS animations even when two rewards arrive close together.
   void element.offsetWidth;
-  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : reward.kind === 'delivery' ? 'DELIVERY COMPLETE' : reward.kind === 'pickup-research' ? 'PICKUP + RESEARCH' : reward.kind === 'delivery-research' ? 'DELIVERY + RESEARCH' : reward.kind === 'supply-repair' ? 'REPAIR + CASH' : reward.kind === 'research' ? 'RESEARCH AWARD' : 'AIR REFILL + CASH';
+  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : reward.kind === 'delivery' ? 'DELIVERY COMPLETE' : reward.kind === 'pickup-research' ? 'PICKUP + AWARDS' : reward.kind === 'delivery-research' ? 'DELIVERY + AWARDS' : reward.kind === 'supply-repair' ? 'REPAIR + CASH' : reward.kind === 'research' ? 'ACHIEVEMENT AWARD' : 'AIR REFILL + CASH';
   element.querySelector('#reward-amount')!.textContent = `+$${reward.amount}`;
   element.classList.add('celebrate');
   timeout = window.setTimeout(resetCelebration, 3000);

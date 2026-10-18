@@ -10,6 +10,7 @@ import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { parseMessage } from '../worker/protocol';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { HIGHWAY_ROUTE_IDS, ROUTES } from '../shared/traffic';
+import { LEVELS, requiredLevelAt } from '../shared/delivery';
 
 function drivingWorld(){
   const world=createWorld(),player=addPlayer(world,'driver','Driver');
@@ -43,9 +44,9 @@ test('map pins reach either Peninsula alternative in both directions after the l
     const a=route[index],b=route[(index+1)%route.length];
     Object.assign(car,{x:a.x+(b.x-a.x)*.25,z:a.z+(b.z-a.z)*.25,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z))});
     const target=road.points.find(point=>point.z>4500)!;
-    player.delivery.level=1;
+    player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
     assert.equal(setDestination(world,'driver',target),false,`${road.id}: locked at level one`);
-    player.delivery.level=2;
+    player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
     assert.equal(setDestination(world,'driver',target),true,`${road.id}: route from ${direction===0?'north':'south'}`);
     for(let i=0;i<6000&&car.autopilot;i++){
       step(world,new Map(),.05);
@@ -58,11 +59,33 @@ test('map pins reach either Peninsula alternative in both directions after the l
   }
 });
 
+test('after spending lowers a level, navigation can leave a locked region but cannot enter a higher one',()=>{
+  const {world,player,car}=drivingWorld(),route=ROUTES[HIGHWAY_ROUTE_IDS[1]];
+  const index=route.findIndex(point=>Math.hypot(point.x+1124,point.z-2347)<10);
+  assert.ok(index>=0);
+  const a=route[index],b=route[(index+1)%route.length];
+  Object.assign(car,{x:a.x+(b.x-a.x)*.25,z:a.z+(b.z-a.z)*.25,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z))});
+  player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
+  assert.equal(requiredLevelAt(car.x,car.z),2);
+  assert.equal(setDestination(world,'driver',{x:1705,z:8730}),false,'a locked destination stays locked');
+  assert.equal(setDestination(world,'driver',{x:-180,z:60}),true,'the route can leave the Peninsula');
+  let previous={x:car.x,z:car.z},ceiling=2;
+  for(const next of car.navigation!.path){
+    const count=Math.max(1,Math.ceil(Math.hypot(next.x-previous.x,next.z-previous.z)/20));
+    for(let i=1;i<=count;i++){
+      const t=i/count,required=requiredLevelAt(previous.x+(next.x-previous.x)*t,previous.z+(next.z-previous.z)*t);
+      assert.ok(required<=ceiling,'the route does not re-enter a higher locked tier');
+      ceiling=Math.max(player.delivery.level,required);
+    }
+    previous=next;
+  }
+});
+
 test('nearby route changes use a shared cross street in either heading',()=>{
   const main={x:-734,z:4503},alternatives=[{x:-1023,z:4553},{x:-850,z:4553}];
   for(const yaw of [0,Math.PI])for(const alternative of alternatives)for(const back of [false,true]){
     const {world,player,car}=drivingWorld(),start=back?alternative:main,target=back?main:alternative;
-    Object.assign(car,{...start,yaw});player.delivery.level=2;
+    Object.assign(car,{...start,yaw});player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
     assert.equal(setDestination(world,'driver',target),true,`${yaw}: ${JSON.stringify(start)} to ${JSON.stringify(target)}`);
     assert.ok(car.navigation!.path.some(point=>PENINSULA_CROSS_STREETS.some(street=>Math.abs(point.z-street.z)<4)),
       'the route uses a local junction');
@@ -98,7 +121,7 @@ test('a Tesla facing against its current lane can continue to an intersection an
 });
 
 test('navigation rejects an excessive directed detour to a nearby destination',()=>{
-  const {world,player,car}=drivingWorld();player.delivery.level=3;
+  const {world,player,car}=drivingWorld();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
   Object.assign(car,{x:-210,z:177,yaw:-Math.PI/2,speed:0});
   assert.equal(setDestination(world,'driver',{x:-120,z:-60}),false);
 });
@@ -111,7 +134,7 @@ test('invalid, locked and disconnected destinations are rejected; manual input t
   assert.equal(setDestination(world,'driver',{x:-180,z:60}),true);
   step(world,new Map([['driver',{...NEUTRAL,steer:1}]]),.05);
   assert.equal(car.autopilot,false);assert.equal(car.navigation,null);
-  player.delivery.level=1;
+  player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
   assert.equal(setDestination(world,'driver',{x:NaN,z:0}),false);
 });
 
@@ -146,7 +169,7 @@ test('mini-game entry from the dome preserves the rocket kit and resources',()=>
 
 test('both parking games join and finish at every registered local lot',()=>{
   for(const lot of PARKING_LOTS)for(const game of ['park','queue'] as const){
-    const {world,player,car}=drivingWorld();player.delivery.level=3;
+    const {world,player,car}=drivingWorld();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
     const region=game==='park'?lot.area:lot.approach;
     Object.assign(car,{x:region.x,z:region.z,y:terrainHeight(region.x,region.z),yaw:region.yaw,supportId:'ground',speed:0});
     const before={x:car.x,z:car.z};

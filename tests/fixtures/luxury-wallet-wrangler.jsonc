@@ -1,0 +1,15 @@
+// LOCAL VISUAL TEST ONLY. Never deploy this entry point or expose its routes publicly.
+{
+  "name": "tesland-wallet-visual-test",
+  "main": "./luxury-wallet-worker.ts",
+  "compatibility_date": "2026-10-17",
+  "assets": { "directory": "../../dist", "binding": "ASSETS", "run_worker_first": ["/api/*", "/__wallet-test/*"] },
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "GameRoom" },
+    { "name": "CHAT", "class_name": "GlobalChat" },
+    { "name": "DRIVERS", "class_name": "DriverProfile" },
+    { "name": "ECONOMIES", "class_name": "RoomEconomy" },
+    { "name": "INCOME", "class_name": "GlobalIncome" }
+  ] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom", "GlobalChat", "DriverProfile", "RoomEconomy", "GlobalIncome"] }]
+}

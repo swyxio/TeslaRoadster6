@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { STATIONS } from '../shared/stations';
+import { LUXURY_SHOWROOM } from '../shared/luxury';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { material } from './vehicles';
@@ -225,8 +226,21 @@ export function buildBay(scene:T.Scene) {
     if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda','hospital'].includes(b.style);
-    if(!landmark&&!['pyramid','coit','salesforce','station-venue'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
-    if(b.style==='station-venue'){
+    if(!landmark&&!['pyramid','coit','salesforce','station-venue','luxury-showroom'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
+    if(b.style==='luxury-showroom'){
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,0x29353a);
+      box(b.x,3.7,b.z+b.d/2+.04,b.w-2,5.4,.1,0x526f77);
+      for(const side of [-1,1])box(b.x+side*5.5,3.7,b.z+b.d/2+.1,.28,5.4,.1,0xd4bc79);
+      box(b.x,b.h-.6,b.z+b.d/2+.08,b.w,.8,.18,0xbda873);
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+      const ctx=canvas.getContext('2d')!;ctx.fillStyle='#29353a';ctx.fillRect(0,0,512,96);
+      ctx.fillStyle='#f0dfac';ctx.textAlign='center';ctx.font='bold 52px system-ui';ctx.fillText('THE VAULT',256,66,480);
+      const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+      const sign=new T.Mesh(new T.PlaneGeometry(13,2.4),new T.MeshBasicMaterial({map:texture,side:T.DoubleSide}));
+      sign.position.set(b.x,7.3,b.z+b.d/2+.2);scene.add(sign);
+      const ring=new T.Mesh(new T.RingGeometry(LUXURY_SHOWROOM.radius-.45,LUXURY_SHOWROOM.radius,48),new T.MeshBasicMaterial({color:0xeacb79,side:T.DoubleSide}));
+      ring.rotation.x=-Math.PI/2;ring.position.set(LUXURY_SHOWROOM.arrival.x,.18,LUXURY_SHOWROOM.arrival.z);scene.add(ring);
+    }else if(b.style==='station-venue'){
       const station=STATIONS.find(s=>s.id===b.stationId)!;
       const color=station.setting==='garage'?0xa9adab:station.setting==='museum'?0x9bb6bd:0xd6ccb9;
       const accent=station.setting==='retail'?0xb9473d:station.setting==='museum'?0x507a85:station.setting==='garage'?0x6b797d:0xa57761;
