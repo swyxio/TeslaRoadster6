@@ -23,7 +23,7 @@ export function levelForCash(cash:number):Level {
   for(const milestone of LEVELS)if(cash>=milestone.cash)level=milestone.level;
   return level;
 }
-const BASE_FARES=[3_000,4_000,6_000,9_500,11_000,13_000,15_000,20_000,26_000] as const;
+const BASE_FARES=[1_200,1_600,2_500,4_000,5_500,7_000,9_000,12_000,16_000] as const;
 // Vertical gates also apply to flyers; the northern island approach remains open.
 const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;

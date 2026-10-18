@@ -27,7 +27,7 @@ These candidate prices use the proposed economy's $1m starter home as a referenc
 
 All six together cost $30m before achievement awards. They should feel different to drive, but none generates a passive income or receives an automatic fare multiplier. Faster routes can still change a player's earnings, so measure actual delivery times before treating the collection as economically neutral.
 
-As a rough upper-rate comparison, a $26k delivery every eight minutes plus five cabs running at 75% utilization would gross about $251,250 per active hour before awards, events or operating costs. At that steady rate, $30m is about 119 active hours. Buying vehicles can lower the driver's level and job tier, and actual traffic, travel, cab uptime and choices change the result. Add this purchase path to the existing five-minute simulations before treating the prices as balanced.
+The earlier planning model estimated about 119 active hours to earn $30m at a steady $251,250 per hour, using its old $26k delivery assumption and five cabs at 75% utilization. Delivery fares have since been rebalanced. Buying vehicles can lower the driver's level and job tier; traffic, travel, cab uptime and choices also change the result. Add the collection path to a new long-run simulation before treating the prices as balanced.
 
 The six special IDs are outside `VEHICLE_IDS`, the 26-model ambient roster. Do not seed them into parked cars, NPC traffic, highway traffic or free fleet selection. Their acquisition is a Vault purchase; an owned model can then be collected at the Vault or a physical workshop, including after a level drop. The local wallet integration exercises recovery across reconnects and rooms. Home garages and player resale remain future design work.
 
@@ -37,7 +37,7 @@ Show all six model-specific goals in Awards so that a player can pick a favorite
 
 | Goal | Candidate one-off reward |
 | --- | ---: |
-| Discover the Vault | $5k |
+| Discover the Vault | $1k |
 | First luxury purchase | $25k |
 | Panigale V4 / Ninja H2 Carbon / Temerario | $20k / $25k / $40k |
 | Revuelto / Chiron / Tourbillon | $60k / $100k / $150k |

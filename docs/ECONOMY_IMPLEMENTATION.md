@@ -20,7 +20,7 @@ The exact level thresholds, fares, award sizes, cab rates, property tiers, floor
 
 ## What exists today
 
-The wallet and showroom implementation adds saved driver progress and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. Every third completed delivery also pays a repeatable $750 checkpoint. It retains the earlier campus visit discounts and paint/decal workshop. [DELIVERY.md](DELIVERY.md), [UPGRADES.md](UPGRADES.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe the implemented rules. See [VERIFICATION.md](VERIFICATION.md) for testing and release evidence.
+The wallet and showroom implementation adds saved driver progress and vehicle configuration, cash-based levels, delivery and regional milestones, the Vault collection and an automatic global income counter. Every third completed delivery also pays a repeatable $350 checkpoint. Campus visit discounts and the paint/decal workshop use the prices and level requirements in [UPGRADES.md](UPGRADES.md). [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) describe other implemented rules. See [VERIFICATION.md](VERIFICATION.md) for testing and release evidence.
 
 Property, city-specific delivery chains, expanded research programs, event multipliers for other future activities and season retirement remain design work. Income-producing cabs are implemented in the unreleased v39 candidate. Delivery fares use the implemented room and global event rates. In particular, the candidate groups Oakland with Berkeley and the Peninsula with the East Bay; it does not yet implement the separate city gates described below.
 
@@ -46,7 +46,7 @@ Recalculate the level after every wallet change, including rewards, fines, purch
 
 The intended purchase flow shows the resulting cash and any level or access change. The intended relock rule lets a player already in a city finish an accepted job and use ordinary local jobs; after leaving, new entry requires the gate again. The current implementation instead reroutes an inaccessible active delivery to an open area when a purchase or fine lowers the level. Preserving an accepted delivery across locked boundaries and reconnects requires an explicit, persisted job-access rule; see [DELIVERY.md](DELIVERY.md) for current behavior. When property is implemented, a player should always be able to reach and manage an owned home or plot, including by home teleport. Premium contracts still require their current level.
 
-For example, a player at $49,900 receives a $2,000 delivery payment and reaches Fremont's $50k gate. If this is their first Fremont unlock, its $2,000 award brings the wallet to $53,900. Buying $15k wheels later leaves $38,900 and level 1, assuming the first-cosmetic award was already claimed. Fremont relocks when the wallet falls below its gate; a player already there can leave, and the wheels and unlock achievement remain.
+For example, a player at $49,900 receives a $2,000 delivery payment and reaches the Peninsula and East Bay's $50k gate. Its first-unlock award adds $1,000, bringing the wallet to $52,900. Applying $12,000 Midnight blue paint leaves $40,900 and level 1. The region relocks when the wallet falls below its gate; a player already there can leave, and the finish and unlock achievement remain.
 
 ## Jobs, achievements and discoveries
 
@@ -58,7 +58,7 @@ The first meaningful choices should arrive well before property: take the next d
 - **Ownership and building:** reward the first Cybercab and subsequent fleet milestones, the first plot, constructing homes, and the 1 / 5 / 10 / 20-story building milestones. The candidate fleet chain counts currently owned cabs and pays each tier once. Record unique plot and build IDs so reacquiring the same property cannot repay a one-off award. The user rejected a generic “homes owned” count. Cab resale and repurchase pricing still need rules.
 - **Guidance:** the Awards UI should show progress, the next reward and a map destination where useful. Complete several achievements from one action without turning each into a separate interrupting popup.
 
-Awards and one-time check-ins pay once per player. The repeatable delivery checkpoint is separate from an achievement; it pays every three deliveries. The exact schedule is in [ECONOMY.md](ECONOMY.md#cash-sources-and-awards). Protect completion events against retries and invalid or repeated participation.
+Awards and one-time check-ins pay once per player. The repeatable delivery checkpoint is separate from an achievement; it pays every three deliveries. The implemented schedule lives in `shared/achievements.ts`; the table in [ECONOMY.md](ECONOMY.md#cash-sources-and-awards) records the earlier design. Protect completion events against retries and invalid or repeated participation.
 
 The current model's early achievement target is still unmet: some sessions get too many awards at once, and hours two through eight have long gaps. Measure gross money, wallet change and meaningful achievements per five minutes, plus longer zero-award stretches. Keep progress toward a visible next goal even when a reward is not due in the current window.
 
@@ -85,7 +85,7 @@ The garage stores and displays personalized vehicle configurations. Two spaces c
 
 The candidate [Vault showroom](LUXURY_SHOWROOM.md) is a separate late-game collection: Lamborghini and Bugatti models plus Ducati and Kawasaki motorcycles. Its six vehicles require an in-person purchase, cost $1.5m–$12m, and remain owned after a balance drop. The existing free fleet is unchanged. The candidate includes purchases, collection and awards.
 
-Candidate cosmetics start at $2k for paint, $5k for decals and lettering, $15k for wheels and trim, $50k for wraps and fleet branding, and $150k for premium effects. Account-owned cosmetics can be reapplied to compatible cars. Offer early vehicle or flight kits around $10k / $20k / $40k; keep the starter Roadster's flight and public launch facilities available. Player trading of collectibles or skins needs separate rules for availability, transfers, fees and fraud; do not assume the property-sale rules already cover it.
+The implemented paint and decals span levels 0–8, with entry prices from $750 and $450 respectively; each application is paid for, and a finish already applied stays after a level drop. Repainting Cybercabs uses the same paint catalog and gates. The historical model used different cosmetic and upgrade prices; wheels, lettering, wraps and premium effects remain proposals. Keep the starter Roadster's flight and public launch facilities available. Player trading of collectibles or skins needs separate rules for availability, transfers, fees and fraud; do not assume the property-sale rules already cover it.
 
 ## Homes, development and resale
 

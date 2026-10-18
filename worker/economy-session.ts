@@ -1,5 +1,6 @@
 import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, levelForCash, matchesDeliveryStop, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
 import { hasRockets } from '../shared/upgrades';
+import { restoreOta } from '../shared/ota';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type EconomyUpdateResult, type Entity, type Pickup, type Player, type World } from '../shared/game';
 import { applyAchievementAwards, applyDeliveryAwards, awardMarsAchievement, type AchievementState } from '../shared/achievements';
@@ -23,7 +24,7 @@ const CAB_CHECKPOINT_MS=1_000;
 const MAX_CAB_STAGES=8;
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 // Compare only durable fields touched by simulation. Vehicle maps are copied on change.
-const durableFields=(d:Draft)=>[d.delivery.cash,d.delivery.lifetimeIncome,d.delivery.earned,d.delivery.completed,d.delivery.level,d.delivery.tickets,d.delivery.order.restaurant,d.delivery.order.customer,d.delivery.order.stage,d.delivery.order.pickupEstimate,d.delivery.order.estimate,d.delivery.order.base,d.delivery.ota.enabled,d.delivery.ota.active,d.achievements.unlocked.length,d.vehicles];
+const durableFields=(d:Draft)=>[d.delivery.cash,d.delivery.lifetimeIncome,d.delivery.earned,d.delivery.completed,d.delivery.level,d.delivery.tickets,d.delivery.order.restaurant,d.delivery.order.customer,d.delivery.order.stage,d.delivery.order.pickupEstimate,d.delivery.order.estimate,d.delivery.order.base,d.delivery.ota.enabled,d.delivery.ota.active,d.delivery.ota.needsRenewalConsent,d.achievements.unlocked.length,d.vehicles];
 const changed=(a:unknown[],b:unknown[])=>a.some((value,i)=>value!==b[i]);
 
 /** One draft and an ordered durable event stream per player; no room-wide awaits. */
@@ -86,7 +87,7 @@ export class EconomySession {
   private install(progress:DriverProgress){
     const d=this.player.delivery;
     Object.assign(d,{cash:progress.cash,lifetimeIncome:progress.eligibleIncome,earned:progress.earned,completed:progress.completed,level:progress.level,order:{...progress.order},tickets:progress.tickets});
-    d.ota={enabled:progress.ota.enabled,active:progress.ota.active&&progress.ota.remaining>0,renewAt:progress.ota.active&&progress.ota.remaining>0?this.world.time+progress.ota.remaining:null};
+    d.ota=restoreOta(progress.ota,this.world.time);
     this.player.achievements.unlocked=[...progress.unlocked];
   }
   private progress():DriverProgress{return {...progressFrom(this.draft.delivery,this.draft.achievements.unlocked,this.draft.vehicles,this.draft.ownedLuxury,this.world.time,this.draft.delivery.lifetimeIncome),deliveryClock:this.deliveryClock};}

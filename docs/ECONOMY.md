@@ -4,6 +4,8 @@
 
 The production baseline implements a saved wallet, cash-based regional levels, delivery and showroom achievements, a luxury showroom, and an automatic global earnings counter for Starship. The unreleased Cybercab candidate adds owned fleets and active-only income; its wallet recovery and gameplay checks remain release gates. Property, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for implemented and candidate rules.
 
+The tables and long-run simulations below describe the earlier economy proposal. The current rebalance changes delivery fares, achievement payouts, OTA, upgrades and finishes; see [delivery](DELIVERY.md), [workshops](UPGRADES.md), and the [opening-session ledger](ECONOMY_FIVE_MINUTE.md#opening-session-ledger) for playable values.
+
 ## Goals
 
 - Drive, explore and play with friends immediately; money and ownership add goals, not a mandatory tutorial or a paywall around the basic fleet.

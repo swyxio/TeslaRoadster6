@@ -16,7 +16,7 @@ function readyDropoff(completed:number,elapsed=100) {
 }
 
 test('a completed drop-off pays the checkpoint on every third job without inflating delivery earnings',()=>{
-  for(const [before,checkpoint] of [[1,0],[2,750],[3,0],[5,750]] as const){
+  for(const [before,checkpoint] of [[1,0],[2,350],[3,0],[5,350]] as const){
     const {world,player,car}=readyDropoff(before);
     const delivery=player.delivery as typeof player.delivery & {lifetimeIncome:number};
     const cash=delivery.cash,income=delivery.lifetimeIncome,earned=delivery.earned;
@@ -38,10 +38,10 @@ test('a third delivery still pays its checkpoint when the late fare is zero',()=
   const cash=delivery.cash,income=delivery.lifetimeIncome,earned=delivery.earned;
   updateDelivery(world,player,car,NEUTRAL,0);
   assert.equal(delivery.lastPayout,0);
-  assert.equal(delivery.cash-cash,750);
-  assert.equal(delivery.lifetimeIncome-income,750);
+  assert.equal(delivery.cash-cash,350);
+  assert.equal(delivery.lifetimeIncome-income,350);
   assert.equal(delivery.earned,earned);
-  assert.equal(delivery.lastReward?.amount,750);
+  assert.equal(delivery.lastReward?.amount,350);
 });
 
 test('a checkpoint, delivery milestone and region unlock can be grouped in one completion',()=>{
@@ -52,12 +52,12 @@ test('a checkpoint, delivery milestone and region unlock can be grouped in one c
   step(world,new Map([['driver',NEUTRAL]]),.05);
   assert.equal(delivery.completed,3);
   assert.equal(delivery.lastPayout,1_000);
-  assert.equal(delivery.cash,12_000);
-  assert.equal(delivery.lifetimeIncome,3_750);
+  assert.equal(delivery.cash,10_500);
+  assert.equal(delivery.lifetimeIncome,2_250);
   assert.equal(delivery.earned,1_000);
   assert.ok(player.achievements.unlocked.includes('regular'));
   assert.ok(player.achievements.unlocked.includes('region-oakland'));
-  assert.equal(delivery.lastReward?.amount,3_750);
+  assert.equal(delivery.lastReward?.amount,2_250);
 });
 
 test('the authoritative resolver applies to fare before level and award cascades, not the checkpoint',()=>{
@@ -68,14 +68,14 @@ test('the authoritative resolver applies to fare before level and award cascades
     seen.push(component.sourceId);return component.amount*2;
   })!;
   assert.deepEqual(seen,['delivery:3:dropoff']);
-  assert.deepEqual(parts.map(part=>[part.component.kind,part.component.amount,part.amount]),[['delivery',1_000,2_000],['checkpoint',750,750]]);
-  assert.equal(player.delivery.cash,11_000);
+  assert.deepEqual(parts.map(part=>[part.component.kind,part.component.amount,part.amount]),[['delivery',1_000,2_000],['checkpoint',350,350]]);
+  assert.equal(player.delivery.cash,10_600);
   assert.equal(player.delivery.level,1,'resolved pay determines the level before the next order');
   updateAchievements(player,car,false,undefined,true);
-  assert.equal(player.delivery.cash,13_000);
+  assert.equal(player.delivery.cash,11_500);
   assert.equal(player.delivery.earned,2_000);
-  assert.equal(player.delivery.lifetimeIncome,4_750);
-  assert.equal(player.delivery.lastReward?.amount,4_750);
+  assert.equal(player.delivery.lifetimeIncome,3_250);
+  assert.equal(player.delivery.lastReward?.amount,3_250);
 });
 
 test('rerouting the single accepted job does not change its completion source ID',()=>{
@@ -123,11 +123,11 @@ for(const stage of ['pickup','dropoff'] as const)test(`a deferred ${stage} retri
   assert.equal(records.length,1);
   assert.equal(records[0].result[0].component.kind,stage==='pickup'?'pickup':'delivery');
   if(stage==='dropoff'){
-    assert.deepEqual(records[0].result.map(part=>part.amount),[2_000,750]);
+    assert.deepEqual(records[0].result.map(part=>part.amount),[2_000,350]);
     assert.equal(player.delivery.completed,3);
     assert.ok(player.achievements.unlocked.includes('regular'));
     assert.ok(player.achievements.unlocked.includes('region-oakland'));
-    assert.equal(player.delivery.lastReward?.amount,4_750);
+    assert.equal(player.delivery.lastReward?.amount,3_250);
   }else assert.equal(player.delivery.order.stage,'dropoff');
   step(world,new Map([[player.id,input]]),.05,{economy:hooks,substeps:1});
   assert.equal(settled.filter(item=>item.playerId===player.id).length,1,'settled arrival cannot pay twice');

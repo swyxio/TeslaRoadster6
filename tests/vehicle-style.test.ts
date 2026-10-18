@@ -16,23 +16,35 @@ function setup(){
 test('vehicle finishes validate the driver, funds and workshop and charge once',()=>{
   const {world,player,car}=setup();player.delivery.cash=0;const red:StyleChoice={category:'paint',choice:'ember'};
   assert.equal(buyVehicleStyle(world,'p',red),false,'no cash');
-  player.delivery.cash=100;car.x+=30;assert.equal(buyVehicleStyle(world,'p',red),false,'outside workshop');car.x-=30;
+  player.delivery.cash=2500;car.x+=30;assert.equal(buyVehicleStyle(world,'p',red),false,'outside workshop');car.x-=30;
   car.supportId=null;assert.equal(buyVehicleStyle(world,'p',red),false,'airborne');car.supportId='ground';
   car.driver='other';assert.equal(buyVehicleStyle(world,'p',red),false,'only the driver can buy');car.driver='p';
   assert.equal(buyVehicleStyle(world,'p',{category:'paint',choice:'__proto__'} as StyleChoice),false,'invalid finishes cannot be installed');
-  assert.ok(buyVehicleStyle(world,'p',red));assert.equal(player.delivery.cash,100-PAINTS.ember.price);assert.equal(car.style.paint,'ember');
+  assert.ok(buyVehicleStyle(world,'p',red));assert.equal(player.delivery.cash,2500-PAINTS.ember.price);assert.equal(car.style.paint,'ember');
   assert.equal(buyVehicleStyle(world,'p',red),false,'repeating the same purchase does not charge');
-  assert.ok(buyVehicleStyle(world,'p',{category:'decal',choice:'stripe'}));assert.equal(player.delivery.cash,100-PAINTS.ember.price-DECALS.stripe.price);
-  assert.ok(buyVehicleStyle(world,'p',{category:'paint',choice:'stock'}));assert.equal(player.delivery.cash,100-PAINTS.ember.price-DECALS.stripe.price,'original paint is free');
+  assert.ok(buyVehicleStyle(world,'p',{category:'decal',choice:'stripe'}));assert.equal(player.delivery.cash,2500-PAINTS.ember.price-DECALS.stripe.price);
+  assert.ok(buyVehicleStyle(world,'p',{category:'paint',choice:'stock'}));assert.equal(player.delivery.cash,2500-PAINTS.ember.price-DECALS.stripe.price,'original paint is free');
   assert.deepEqual(car.style,{paint:'stock',decal:'stripe'});
   assert.ok(chooseVehicle(world,'p','model-3'));assert.deepEqual(world.entities.find(e=>e.id===player.entityId)?.style,{paint:'stock',decal:'none'},'a replacement car starts with its own finish');
 });
 test('wire accepts only bounded style choices and replicated snapshots contain the finish and driver name',()=>{
   assert.deepEqual(parseMessage('{"type":"vehicleStyle","category":"paint","choice":"mint","requestId":1}'),{type:'vehicleStyle',category:'paint',choice:'mint',requestId:1});
   for(const raw of ['{"type":"vehicleStyle","category":"paint","choice":"__proto__","requestId":1}','{"type":"vehicleStyle","category":"paint","choice":"stripe","requestId":1}','{"type":"vehicleStyle","category":"decal","choice":"stripe","requestId":0}'])assert.equal(parseMessage(raw),null);
-  const {world,player}=setup();player.delivery.cash=100;
+  const {world,player}=setup();player.delivery.cash=2500;
   assert.ok(buyVehicleStyle(world,'p',{category:'paint',choice:'mint'}));assert.ok(buyVehicleStyle(world,'p',{category:'decal',choice:'checker'}));
   const snapshot=snapshotFor(world,'p');assert.equal(snapshot.players[0].name,'Sky');assert.deepEqual(snapshot.entities.find(e=>e.id===player.entityId)?.style,{paint:'mint',decal:'checker'});
+});
+test('the server checks current cash level before charging and keeps an applied finish after the level drops',()=>{
+  const {world,player,car}=setup();
+  const selection:StyleChoice={category:'paint',choice:'sunset'};
+  player.delivery.cash=9_999;
+  assert.equal(buyVehicleStyle(world,'p',selection),false,'enough cash but the required level is locked');
+  assert.equal(player.delivery.cash,9_999);assert.equal(car.style.paint,'stock');
+  player.delivery.cash=10_000;
+  assert.equal(buyVehicleStyle(world,'p',selection),true,'level is checked before spending');
+  assert.equal(player.delivery.cash,7_000);assert.equal(player.delivery.level,0);
+  assert.equal(car.style.paint,'sunset','paint stays applied after level drops');
+  assert.equal(buyVehicleStyle(world,'p',{category:'decal',choice:'double'}),false,'a separate locked finish cannot be bought');
 });
 test('changing one vehicle finish does not change another vehicle or shared materials',()=>{
   const first=createVehicle('roadster'),second=createVehicle('roadster');
@@ -76,6 +88,18 @@ test('motorcycle decals sit on both fairings without changing a shared bike',()=
       }
       assert.equal(body[0].geometry,geometry,'styling preserves cached geometry');
       assert.equal(other.getObjectByName('vehicle-decal'),undefined,'other clones stay unchanged');
+    }
+  }
+});
+test('all catalog decals produce distinct marks on cars and motorcycles',()=>{
+  for(const kind of ['roadster','cybercab','ducati-panigale-v4'] as const){
+    const vehicle=createVehicle(kind),signatures=new Set<string>();
+    for(const decal of Object.keys(DECALS) as (keyof typeof DECALS)[]){
+      if(decal==='none')continue;
+      setVehicleStyle(vehicle,kind,{paint:'gold',decal});
+      const marks=vehicle.getObjectByName('vehicle-decal');assert.ok(marks?.children.length,`${kind} ${decal} has visible marks`);
+      const signature=JSON.stringify(marks.children.map(mark=>[mark.position.toArray(),mark.scale.toArray()]));
+      assert.ok(!signatures.has(signature),`${kind} ${decal} has a distinct pattern`);signatures.add(signature);
     }
   }
 });

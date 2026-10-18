@@ -197,7 +197,7 @@ test('a relocation floor discards a previously accepted stale edge',()=>{
 test('prediction does not award landmarks or claim supply pickups',()=>{
   const {world,car,control}=setup(),prediction=new TickPrediction();
   Object.assign(car,{x:-829,z:4030,y:0,health:40,speed:0,vx:0,vz:0,supportId:'ground'});
-  world.players[0].delivery.cash=8_000;
+  world.players[0].delivery.cash=9_000;
   world.pickups=[{id:'test-repair',x:car.x,z:car.z,kind:'repair',active:true}];
   const authoritative=structuredClone(world);
   step(authoritative,new Map([['p',NEUTRAL]]),.05);

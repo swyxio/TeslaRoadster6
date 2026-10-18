@@ -1,0 +1,198 @@
+[
+  {
+    "name": "Quick delivery",
+    "pickupSeconds": 10,
+    "dropoffSeconds": 30,
+    "startingCash": 2500,
+    "openingSpend": 0,
+    "points": [
+      {
+        "minute": 1,
+        "cash": 4171,
+        "gross": 1671,
+        "spent": 0,
+        "deliveries": 1,
+        "achievements": 1
+      },
+      {
+        "minute": 2,
+        "cash": 6899,
+        "gross": 4399,
+        "spent": 0,
+        "deliveries": 3,
+        "achievements": 2
+      },
+      {
+        "minute": 3,
+        "cash": 8198,
+        "gross": 5698,
+        "spent": 0,
+        "deliveries": 4,
+        "achievements": 2
+      },
+      {
+        "minute": 4,
+        "cash": 11321,
+        "gross": 8821,
+        "spent": 0,
+        "deliveries": 6,
+        "achievements": 4
+      },
+      {
+        "minute": 5,
+        "cash": 14372,
+        "gross": 11872,
+        "spent": 0,
+        "deliveries": 7,
+        "achievements": 4
+      }
+    ]
+  },
+  {
+    "name": "Steady delivery",
+    "pickupSeconds": 20,
+    "dropoffSeconds": 55,
+    "startingCash": 2500,
+    "openingSpend": 0,
+    "points": [
+      {
+        "minute": 1,
+        "cash": 2626,
+        "gross": 126,
+        "spent": 0,
+        "deliveries": 0,
+        "achievements": 0
+      },
+      {
+        "minute": 2,
+        "cash": 3813,
+        "gross": 1313,
+        "spent": 0,
+        "deliveries": 1,
+        "achievements": 1
+      },
+      {
+        "minute": 3,
+        "cash": 4737,
+        "gross": 2237,
+        "spent": 0,
+        "deliveries": 2,
+        "achievements": 1
+      },
+      {
+        "minute": 4,
+        "cash": 6095,
+        "gross": 3595,
+        "spent": 0,
+        "deliveries": 3,
+        "achievements": 2
+      },
+      {
+        "minute": 5,
+        "cash": 7016,
+        "gross": 4516,
+        "spent": 0,
+        "deliveries": 4,
+        "achievements": 2
+      }
+    ]
+  },
+  {
+    "name": "Steady + OTA and paint",
+    "pickupSeconds": 20,
+    "dropoffSeconds": 55,
+    "startingCash": 2500,
+    "openingSpend": 850,
+    "points": [
+      {
+        "minute": 1,
+        "cash": 1776,
+        "gross": 126,
+        "spent": 850,
+        "deliveries": 0,
+        "achievements": 0
+      },
+      {
+        "minute": 2,
+        "cash": 2863,
+        "gross": 1313,
+        "spent": 950,
+        "deliveries": 1,
+        "achievements": 1
+      },
+      {
+        "minute": 3,
+        "cash": 3787,
+        "gross": 2237,
+        "spent": 950,
+        "deliveries": 2,
+        "achievements": 1
+      },
+      {
+        "minute": 4,
+        "cash": 5045,
+        "gross": 3595,
+        "spent": 1050,
+        "deliveries": 3,
+        "achievements": 2
+      },
+      {
+        "minute": 5,
+        "cash": 5966,
+        "gross": 4516,
+        "spent": 1050,
+        "deliveries": 4,
+        "achievements": 2
+      }
+    ]
+  },
+  {
+    "name": "Leisurely delivery",
+    "pickupSeconds": 30,
+    "dropoffSeconds": 90,
+    "startingCash": 2500,
+    "openingSpend": 0,
+    "points": [
+      {
+        "minute": 1,
+        "cash": 2569,
+        "gross": 69,
+        "spent": 0,
+        "deliveries": 0,
+        "achievements": 0
+      },
+      {
+        "minute": 2,
+        "cash": 3488,
+        "gross": 988,
+        "spent": 0,
+        "deliveries": 1,
+        "achievements": 1
+      },
+      {
+        "minute": 3,
+        "cash": 3488,
+        "gross": 988,
+        "spent": 0,
+        "deliveries": 1,
+        "achievements": 1
+      },
+      {
+        "minute": 4,
+        "cash": 4031,
+        "gross": 1531,
+        "spent": 0,
+        "deliveries": 2,
+        "achievements": 1
+      },
+      {
+        "minute": 5,
+        "cash": 4111,
+        "gross": 1611,
+        "spent": 0,
+        "deliveries": 2,
+        "achievements": 1
+      }
+    ]
+  }
+]

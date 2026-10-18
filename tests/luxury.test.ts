@@ -57,8 +57,8 @@ test('visiting the Vault awards cash and lifetime income only once',()=>{
   Object.assign(entity,{...LUXURY_SHOWROOM.arrival,y:0,speed:0,vy:0,pushX:0,pushZ:0,supportId:'ground'});
   const cash=player.delivery.cash,income=player.delivery.lifetimeIncome;
   updateAchievements(player,entity,false);updateAchievements(player,entity,false);
-  assert.equal(player.delivery.cash,cash+5_000);
-  assert.equal(player.delivery.lifetimeIncome,income+5_000);
+  assert.equal(player.delivery.cash,cash+1_000);
+  assert.equal(player.delivery.lifetimeIncome,income+1_000);
   assert.equal(player.achievements.unlocked.filter(id=>id==='luxury-visit').length,1);
 });
 
@@ -67,12 +67,12 @@ test('delivery and actual region milestones pay once and survive spending',()=>{
   const entity=world.entities.find(item=>item.id===player.entityId)!;
   player.delivery.cash=0;player.delivery.lifetimeIncome=0;
   for(const count of [1,10,25,50,100]){player.delivery.completed=count;updateAchievements(player,entity,false);}
-  assert.equal(player.delivery.cash,63_000);
-  assert.equal(player.delivery.lifetimeIncome,63_000);
+  assert.equal(player.delivery.cash,30_200);
+  assert.equal(player.delivery.lifetimeIncome,30_200);
   assert.ok(player.achievements.unlocked.includes('region-oakland'));
-  assert.equal(player.delivery.level,2);
+  assert.equal(player.delivery.level,1);
   player.delivery.cash=0;updateAchievements(player,entity,false);
   assert.equal(player.delivery.cash,0);
-  assert.equal(player.delivery.lifetimeIncome,63_000);
+  assert.equal(player.delivery.lifetimeIncome,30_200);
   assert.equal(player.achievements.unlocked.filter(id=>id.startsWith('deliveries-')).length,10);
 });

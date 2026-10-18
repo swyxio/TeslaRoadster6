@@ -7,7 +7,7 @@ import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
-import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -32,7 +32,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=40;
+export const PROTOCOL_VERSION=41;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -341,12 +341,12 @@ export function buyVehicleStyle(world:World,id:string,selection:StyleChoice):boo
   updateOta(player,world.time);
   if(!shopFor(car)&&!player.delivery.ota.active)return false;
   if(selection.category==='paint'){
-    const choice=selection.choice,price=PAINTS[choice].price;
-    if(car.style.paint===choice||player.delivery.cash<price)return false;
+    const choice=selection.choice,{price,level}=PAINTS[choice];
+    if(car.style.paint===choice||player.delivery.cash<price||levelForCash(player.delivery.cash)<level)return false;
     player.delivery.cash-=price;car.style.paint=choice;
   }else{
-    const choice=selection.choice,price=DECALS[choice].price;
-    if(car.style.decal===choice||player.delivery.cash<price)return false;
+    const choice=selection.choice,{price,level}=DECALS[choice];
+    if(car.style.decal===choice||player.delivery.cash<price||levelForCash(player.delivery.cash)<level)return false;
     player.delivery.cash-=price;car.style.decal=choice;
   }
   updateLevel(player.delivery);

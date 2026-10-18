@@ -1,5 +1,6 @@
 import { PAINTS, initialVehicleStyle, isStyleChoice, type PaintId, type VehicleStyle } from './vehicle-style';
 import { CAB_REMAINDER_DENOMINATOR, cabAccrual, type EarningsEvents } from './earnings-events';
+import { levelForCash } from './delivery';
 
 /** The five proposed prices and one-time ownership milestones, in game dollars. */
 export const CYBERCAB_PRICES = [25_000, 50_000, 100_000, 200_000, 400_000] as const;
@@ -132,6 +133,7 @@ export function paintCybercab(fleet:CybercabFleet,cash:number,eligibleIncome:num
   if(!asset)return {ok:false,reason:'invalid'};
   if(asset.style.paint===paint)return {ok:false,reason:'owned'};
   const price=PAINTS[paint].price;
+  if(levelForCash(cash)<PAINTS[paint].level)return {ok:false,reason:'invalid'};
   if(cash<price)return {ok:false,reason:'unaffordable'};
   return {ok:true,cash:cash-price,eligibleIncome,fleet:{
     assets:fleet.assets.map(item=>({...item,style:{...item.style,...(item.id===assetId?{paint}:{})}})),

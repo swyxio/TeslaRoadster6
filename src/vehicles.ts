@@ -258,18 +258,47 @@ export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle,m
         // The overall bike width includes handlebars; decals follow the narrower front fairing.
         const x=side*(MOTORCYCLE_FAIRING_WIDTH*.5+.004),y=.66,z=-.48;
         if(style.decal==='stripe')box(decal,x,y,z,.008,.08,.66,0xffe9b9);
-        else for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
-          box(decal,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+        else if(style.decal==='checker'){
+          for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+            box(decal,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+        }
+        else addDecalPattern(decal,style.decal,x,y,z,.008,.08,.66);
         continue;
       }
       const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
       if(style.decal==='stripe')box(decal,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
-      else for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
-        box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+      else if(style.decal==='checker'){
+        for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+          box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+      }
+      else addDecalPattern(decal,style.decal,x,y,0,.035,.16,spec.length*.56);
     }
     detail.add(decal);
   }
   root.userData.vehicleStyle=key;
+}
+/** Simple, shared-geometry marks, sized to each body or motorcycle fairing. */
+function addDecalPattern(parent:T.Group,pattern:VehicleStyle['decal'],x:number,y:number,z:number,depth:number,height:number,length:number){
+  const mark=(u:number,v:number,w:number,h:number,color=0xffe9b9)=>box(parent,x,y+v*height,z+u*length,depth,h*height,w*length,color);
+  switch(pattern){
+    case 'double': mark(0,-.3,1,.23);mark(0,.3,1,.23);break;
+    case 'chevron':
+      for(const u of [-.3,0,.3]){mark(u,-.26,.24,.25);mark(u+.1,0,.24,.25);mark(u,.26,.24,.25);}break;
+    case 'circuit':
+      mark(0,0,.85,.18,0x80e6ec);mark(-.28,.3,.1,.6,0x80e6ec);mark(.26,-.3,.1,.6,0x80e6ec);
+      mark(-.38,.48,.14,.24);mark(.36,-.48,.14,.24);break;
+    case 'lightning':
+      mark(-.2,.28,.5,.28,0xffd45e);mark(0,0,.28,.3,0xffd45e);mark(.2,-.28,.5,.28,0xffd45e);break;
+    case 'stars':
+      for(const [u,v] of [[-.38,.3],[-.17,-.28],[.04,.2],[.23,-.22],[.4,.3]]){mark(u,v,.08,.45);mark(u,v,.18,.15);}break;
+    case 'crown':
+      mark(0,-.3,.65,.2,0xffd45e);for(const u of [-.28,0,.28])mark(u,.1,.12,.65,0xffd45e);break;
+    case 'wings':
+      for(let i=0;i<3;i++){mark(-.22,-.28+i*.28,.42-i*.1,.14);mark(.22,-.28+i*.28,.42-i*.1,.14);}break;
+    case 'solar':
+      mark(0,0,.2,.65,0xffd45e);mark(0,0,.42,.2,0xffd45e);
+      for(const u of [-.42,-.28,.28,.42])mark(u,0,.09,.32,0xffd45e);break;
+  }
 }
 function buildVehicle(kind: VehicleId | 'person', distant=false): T.Group {
   if (isLuxuryVehicle(kind)) {

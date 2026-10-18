@@ -2,6 +2,21 @@
 
 **Design experiment, 2026-10-18.** Seven delivery-led strategies explore a proposed persistent wallet, Cybercabs, research routes and a property market. The main loop is **deliver → spend or save → earn faster → eventually build**. A cash purchase can lower the player's current level; owned items and already-earned achievements stay owned. The wider design and current implementation are in [ECONOMY.md](ECONOMY.md).
 
+The seven-path results below use the earlier design's $3k–$26k task fares and $750 delivery checkpoints. The latest playable rules use $1.2k–$16k level base fares, distance and timing adjustments, a $350 checkpoint, and smaller achievement payouts. Treat the longer home, tower and community estimates as historical comparisons until rerun with measured route and activity times. The opening-session ledger below uses current rules.
+
+## Opening-session ledger
+
+Run `pnpm exec tsx scripts/economy-opening.ts --write-chart` to regenerate the [chart](../public/blog/economy/opening-wallet.svg) and [data](../public/blog/economy/opening-wallet.json). It starts with $2,500, calls the shared delivery and achievement functions, and checks that each wallet balances. The timing scenarios assume the player stays active, completes ground deliveries at the specified intervals, has no event multiplier or fines, and encounters no discoveries. The paint-and-OTA path begins at a workshop and pays $750 for Ember plus three $100 subscription periods. The scenarios do not simulate physical driving or workshop travel.
+
+| Path | Pickup / drop-off | Gross by 1 minute | Gross by 5 minutes | Deliveries / awards by 5 minutes | Cash after 5 minutes |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Quick | 10 s / 30 s | $1,671 | $11,872 | 7 / 4 | $14,372 |
+| Steady | 20 s / 55 s | $126 | $4,516 | 4 / 2 | $7,016 |
+| Steady, paint and OTA | 20 s / 55 s | $126 | $4,516 | 4 / 2 | $5,966 |
+| Leisurely | 30 s / 90 s | $69 | $1,611 | 2 / 1 | $4,111 |
+
+Gross excludes the starting $2,500 and includes one-off awards. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
+
 The pacing target is at most a 25-minute P90 longest gap between one-off achievements during the first two active hours, and two to four one-off achievements in each 30-minute block. These are diagnostics for comparing ideas, not a proven measure of fun. We count individual awards separately from notifications grouped when one action earns several awards. Repeatable checkpoints and progress indicators are separate from both.
 
 ## Reproduce the runs
