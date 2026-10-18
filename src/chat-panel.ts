@@ -33,7 +33,7 @@ export function createChatPanel(options: ChatPanelOptions) {
   const heading = document.createElement('div');
   const kicker = document.createElement('span');
   kicker.className = 'chat-kicker';
-  kicker.textContent = 'POLY AV MESSAGES';
+  kicker.textContent = 'TESLAND MESSAGES';
   const title = document.createElement('h2');
   title.id = 'chat-title';
   title.textContent = 'Everyone';

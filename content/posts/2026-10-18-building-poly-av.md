@@ -1,6 +1,6 @@
 I’ve never made a car game, and I’m not particularly a car-game person. I just wanted to drive a rocket-powered Tesla Roadster around San Francisco, jump out of traffic, and see what happened.
 
-That idea became [Poly AV](/): an open-source Bay Area driving game where you deliver food, earn fictional cash, upgrade your car, and occasionally get chased by the police for flying it. You join a shared room in your browser, and can invite friends into it.
+That idea became Poly AV, now called [Tesland](/): an open-source Bay Area driving game where you deliver food, earn fictional cash, upgrade your car, and occasionally get chased by the police for flying it. You join a shared room in your browser, and can invite friends into it.
 
 ![A red Roadster waits on a San Francisco street, with a Tartine Bakery pickup marked on the dashboard.](/blog/building-poly-av/street.jpg)
 
@@ -10,7 +10,7 @@ That idea became [Poly AV](/): an open-source Bay Area driving game where you de
 
 My original pitch was basically “GTA 6, but lite”: a place to drive around the Bay with other people, bump into each other, steal a car, and play with a Roadster that could jump and fly. I kept thinking about the possibilities: getting out of traffic, escaping a parking lot, finding a shortcut nobody on the road could take.
 
-Tesla’s [announced Roadster Rocket](https://www.tesla.com/en_GB/roadster) describes cold-gas thrusters that can push and rotate the car. Poly AV takes that idea into arcade territory: the air tanks, repeated jumps, hover, boosts and long flights are game fiction, not a simulation of a car you can buy and drive on public roads.
+Tesla’s [announced Roadster Rocket](https://www.tesla.com/en_GB/roadster) describes cold-gas thrusters that can push and rotate the car. Tesland takes that idea into arcade territory: the air tanks, repeated jumps, hover, boosts and long flights are game fiction, not a simulation of a car you can buy and drive on public roads.
 
 A flying car is a toy. I wanted a reason to keep taking it somewhere. I like Uber Eats, and delivering dinner in a flying car sounded like a fun excuse to explore. So the sandbox became a delivery game.
 
@@ -26,7 +26,7 @@ I wanted this to be a love letter to the Bay Area, not just a city grid with San
 
 Now the Golden Gate heads toward Marin, and the Bay Bridge connects San Francisco and Oakland through Yerba Buena Island. The map extends down the Peninsula and East Bay toward San Jose. Completing deliveries and earning cash unlock more regions during a session, so a longer trip becomes a goal rather than a huge empty map you have to cross immediately.
 
-The world is still a deliberately compressed, stylized remix, not an exact recreation or navigation map. It includes more than 100 low-poly landmarks, from Coit Tower and the Transamerica Pyramid to Salesforce Tower and SFO, along with fictional tech billboards. Some highway shapes use [OpenStreetMap data](https://www.openstreetmap.org/copyright); the game’s positions and distances are artistic choices. Restaurant and Tesla Supercharger identities are real, but their in-game placements and the compressed-air refill service are fictional. Poly AV isn’t affiliated with the named businesses.
+The world is still a deliberately compressed, stylized remix, not an exact recreation or navigation map. It includes more than 100 low-poly landmarks, from Coit Tower and the Transamerica Pyramid to Salesforce Tower and SFO, along with fictional tech billboards. Some highway shapes use [OpenStreetMap data](https://www.openstreetmap.org/copyright); the game’s positions and distances are artistic choices. Restaurant and Tesla Supercharger identities are real, but their in-game placements and the compressed-air refill service are fictional. Tesland isn’t affiliated with the named businesses.
 
 ## Flight needs both shortcuts and consequences
 
