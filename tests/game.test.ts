@@ -5,13 +5,14 @@ import { STATIONS } from '../shared/stations';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
-test('authoritative inputs move forward and airborne stunts consume air then land', () => {
-  const { world, car } = setup(); const start = {x:car.x,z:car.z,yaw:car.yaw};
-  const inputs = new Map([['one', { ...NEUTRAL, throttle: 1, lift: true, roll: 1 }]]);
-  for (let i = 0; i < 20; i++) step(world, inputs, 0.05);
-  assert.ok((car.x-start.x)*-Math.sin(start.yaw)+(car.z-start.z)*-Math.cos(start.yaw)>0); assert.ok(car.y > 1); assert.ok(car.roll > 0); assert.ok(car.air < 100);
-  car.speed = 0;
-  for (let i = 0; i < 100; i++) step(world, new Map(), 0.05);
+test('authoritative jump and one-tap flip consume air and land', () => {
+  const { world, car } = setup();
+  const inputs = new Map([['one', { ...NEUTRAL, jump: 1 }]]);
+  step(world, inputs, .05);
+  inputs.set('one', { ...NEUTRAL, jump: 1, flip: 1 });
+  for (let i = 0; i < 20; i++) step(world, inputs, .05);
+  assert.ok(car.y > 1); assert.ok(car.stunts === 1); assert.equal(car.air, 67);
+  for (let i = 0; i < 80; i++) step(world, inputs, .05);
   assert.equal(car.y, 0); assert.equal(car.roll, 0); assert.equal(car.vy, 0);
 });
 test('exit, take another car, disconnect keeps ownership consistent', () => {
@@ -52,6 +53,7 @@ test('protocol rejects malformed, non-finite, oversized and out-of-range input',
   assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 2 } })), null);
   assert.equal(parseMessage('{"type":"input","input":{"throttle":1e999}}'), null);
   assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, boost: 1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, jump: -1 } })), null);
   assert.equal(roomSlug('/api/room/bay-1'), 'bay-1'); assert.equal(roomSlug('/api/room/../../bad'), null);
   assert.equal(roomCapacity(), 64); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 64);
 });

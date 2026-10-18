@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { BRIDGES, BUILDINGS, PARKS, REGIONS, ROADS, isLand, isBridge, type Bridge } from '../shared/map';
+import { BRIDGES, BUILDINGS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
@@ -28,6 +28,24 @@ export function buildBay(scene:T.Scene) {
   // The lake is an inset visual feature, not a separate traversable body of water.
   const lake=new T.Mesh(new T.CircleGeometry(1,40),material(0x589ca5));lake.rotation.x=-Math.PI/2;lake.scale.set(18,21,1);lake.position.set(480,.055,150);scene.add(lake);
   const road=ROADS.map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d}));batches(0x505e60,road);
+  const r=STUNT_RAMP,near=r.z-r.width/2,far=r.z+r.width/2;
+  const rampGeometry=new T.BufferGeometry();rampGeometry.setAttribute('position',new T.Float32BufferAttribute([
+    r.start,0,near,r.start,0,far,r.end,0,near,r.end,0,far,r.end,r.height,near,r.end,r.height,far
+  ],3));rampGeometry.setIndex([0,4,1,1,4,5,2,3,4,3,5,4,0,2,4,1,5,3]);rampGeometry.computeVertexNormals();
+  scene.add(new T.Mesh(rampGeometry,new T.MeshStandardMaterial({color:0xc88450,roughness:.8,side:T.DoubleSide})));
+  // Ribbon vertices lie on the same analytic circle used by the simulation.
+  const loopVertices:number[]=[],loopIndices:number[]=[];
+  for(let i=0;i<=96;i++){
+    const a=i/96*Math.PI*2,x=STUNT_LOOP.x+STUNT_LOOP.radius*Math.sin(a),y=STUNT_LOOP.radius*(1-Math.cos(a));
+    loopVertices.push(x,y,STUNT_LOOP.z-STUNT_LOOP.width/2,x,y,STUNT_LOOP.z+STUNT_LOOP.width/2);
+    if(i<96){const n=i*2;loopIndices.push(n,n+1,n+2,n+1,n+3,n+2);}
+  }
+  const loopGeometry=new T.BufferGeometry();loopGeometry.setAttribute('position',new T.Float32BufferAttribute(loopVertices,3));loopGeometry.setIndex(loopIndices);loopGeometry.computeVertexNormals();
+  scene.add(new T.Mesh(loopGeometry,new T.MeshStandardMaterial({color:0xe3a251,roughness:.65,side:T.DoubleSide})));
+  for(const side of [-1,1]){
+    const points=Array.from({length:97},(_,i)=>{const a=i/96*Math.PI*2;return new T.Vector3(STUNT_LOOP.x+STUNT_LOOP.radius*Math.sin(a),STUNT_LOOP.radius*(1-Math.cos(a)),STUNT_LOOP.z+side*STUNT_LOOP.width/2);});
+    scene.add(new T.Line(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:0xffe2a7})));
+  }
   const stripes:typeof road=[];
   for(const r of ROADS){
     if(r.w>30||r.d>30)continue;

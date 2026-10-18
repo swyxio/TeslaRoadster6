@@ -192,9 +192,19 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   }
   wheels(root, spec); sensors(root, spec);
   const jets = new T.Group(); jets.name = 'jets'; jets.visible = false;
-  if (spec.airThrusters) for (const side of [-1, 1]) {
-    const nozzle = box(root, side * w * .32, .28, l * .28, .22, .14, .24, DARK); nozzle.name = side < 0 ? 'jet_left' : 'jet_right';
-    const jet = new T.Mesh(jetGeometry, jetMaterial); jet.rotation.z = Math.PI; jet.position.set(side * w * .32, -.55, l * .28); jets.add(jet);
+  if (spec.airThrusters) {
+    // Stylized fan and nozzle locations make the two systems distinct; these
+    // are original game art, not a representation of prototype hardware.
+    for(const z of [-l*.18,l*.18]){
+      const fan=new T.Mesh(hub,material(DARK));fan.scale.set(.38,.035,.38);fan.position.set(0,.12,z);root.add(fan);
+      for(const angle of [0,Math.PI/2]){const blade=box(root,0,.075,z,.6,.025,.045,0x82969a);blade.rotation.y=angle;}
+    }
+    for (const side of [-1, 1]) {
+      const nozzle = box(root, side * w * .32, .28, l * .28, .22, .14, .24, DARK); nozzle.name = side < 0 ? 'jet_left' : 'jet_right';
+      const jet = new T.Mesh(jetGeometry, jetMaterial); jet.rotation.z = Math.PI; jet.position.set(side * w * .32, -.55, l * .28); jets.add(jet);
+      for(const z of [-l*.35,l*.35])box(root,side*w*.5,.3,z,.04,.11,.15,DARK);
+      for(const z of [-l*.495,l*.495])box(root,side*w*.17,.3,z,.15,.11,.04,DARK);
+    }
   }
   root.add(jets);
   const seat = new T.Object3D(); seat.name = 'seat_driver'; seat.position.set(-w * .2, belt + .2, 0); root.add(seat);

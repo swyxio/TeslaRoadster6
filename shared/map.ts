@@ -3,6 +3,14 @@ export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
 export const MAP_BOUNDS={minX:-440,maxX:620,minZ:-550,maxZ:350} as const;
+// A vertical, driveable ribbon along Oakland's eastbound 180 street. The same
+// circle defines its collision surface and its rendered geometry.
+export const STUNT_LOOP={x:450,z:180,radius:12,width:12} as const;
+export const STUNT_RAMP={start:370,end:398,z:180,width:12,height:4} as const;
+export function rampHeight(x:number,z:number):number|null {
+  if(x<STUNT_RAMP.start||x>STUNT_RAMP.end||Math.abs(z-STUNT_RAMP.z)>STUNT_RAMP.width/2)return null;
+  return STUNT_RAMP.height*(x-STUNT_RAMP.start)/(STUNT_RAMP.end-STUNT_RAMP.start);
+}
 export const REGIONS:Region[]=[
   {id:'sf',name:'San Francisco',color:0xd4d1bb,points:polygon([[-390,-225],[-355,-290],[-285,-302],[-230,-290],[-160,-290],[-90,-276],[-25,-240],[25,-205],[65,-150],[86,-90],[92,-30],[86,45],[78,105],[52,170],[12,230],[-52,285],[-165,305],[-285,300],[-390,245],[-410,120],[-408,-80]])},
   {id:'oakland',name:'Oakland',color:0xd3cfb8,points:polygon([[310,-270],[400,-300],[550,-280],[602,-205],[610,260],[540,310],[390,302],[315,260],[285,195],[290,110],[305,50],[295,-40],[280,-125],[287,-215]])},

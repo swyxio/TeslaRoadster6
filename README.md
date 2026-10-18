@@ -1,6 +1,6 @@
 # Poly AV
 
-Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food from notable restaurants, deliver it for cash, fly shortcuts in a Roadster, dodge police, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Cross the Bay Bridge from San Francisco to Oakland via Yerba Buena Island, or take the Golden Gate north to Marin.
+Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, drive through an inverted stunt loop, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Cross the Bay Bridge from San Francisco to Oakland via Yerba Buena Island, or take the Golden Gate north to Marin.
 
 **[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
@@ -37,18 +37,18 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 ## Play
 
 - **WASD / arrows:** accelerate, reverse, steer. **B:** brake.
-- **Space:** Roadster lift; release to descend. **Shift:** air boost. **Q/E:** airborne roll.
+- **Space:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** fleet catalog; select a new ride while stopped.
 - **L:** room leaderboard with cash and active play time.
 - **C:** alternate chase camera. **R:** unstuck recovery, preserving air and condition.
-- Touch: simultaneous steering/pedals, Lift, Boost, roll, brake, and toolbar actions. Portrait and landscape layouts.
+- Touch: steering and pedals; tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
 
 ## Boundaries
 
-This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Air service/flight are fictional. No live charging availability, payment, telemetry, account, or Tesla API integration. No affiliation is implied.
+This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, account, or Tesla API integration. No affiliation is implied.
 
 Rooms are ephemeral and public-by-code. No authentication, persistent progression, saving, shooting, or death/respawn yet. Delivery money is fictional and session-only. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control.
 

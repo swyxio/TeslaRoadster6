@@ -59,7 +59,7 @@ export class GameScene {
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
-  render(world: World, playerId: string, dt: number, menu: boolean, lift: boolean) {
+  render(world: World, playerId: string, dt: number, menu: boolean, thrust: boolean) {
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -75,9 +75,11 @@ export class GameScene {
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
-      const yawDelta=Math.atan2(Math.sin(e.yaw-mesh.rotation.y),Math.cos(e.yaw-mesh.rotation.y));mesh.rotation.y+=yawDelta*alpha;mesh.rotation.z=e.roll;
+      mesh.rotation.order='YXZ';
+      const delta=(target:number,current:number)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
+      mesh.rotation.y+=delta(e.yaw,mesh.rotation.y)*alpha;mesh.rotation.x+=delta(e.pitch,mesh.rotation.x)*alpha;mesh.rotation.z+=delta(e.roll,mesh.rotation.z)*alpha;
+      const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind!=='person'&&VEHICLES[e.kind].airThrusters&&e.loopAngle===null&&e.y>.5&&(e.driver!==playerId||thrust);
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
-      const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind!=='person'&&VEHICLES[e.kind].airThrusters&&e.y>.5&&(e.driver!==playerId||lift);
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
     for(const pickup of world.pickups){
@@ -93,7 +95,7 @@ export class GameScene {
     }else if(e){
       const portrait=this.camera.aspect<.8;
       const distance=this.wideCamera?30:portrait?18:15;
-      const lookAhead=portrait?-1:5;
+      const lookAhead=portrait?-6:5;
       this.follow.set(e.x+Math.sin(e.yaw)*distance,e.y+(this.wideCamera?23:8),e.z+Math.cos(e.yaw)*distance);
       this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*lookAhead,e.y+1.3,e.z-Math.cos(e.yaw)*lookAhead),1-Math.exp(-8*dt));
     }

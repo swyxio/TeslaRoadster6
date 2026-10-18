@@ -18,7 +18,6 @@
 @media(max-height:550px) and (pointer:coarse){.mission{max-width:280px}.mission #police-status,.mission #delivery-stats{display:none}.mission #hint{display:block}.drive-actions{top:65px;left:auto;right:16px;max-width:420px}}
 
 @media(max-height:550px) and (pointer:coarse){.mission #police-status.chased{display:block}}
-
 .map-key b{color:#ffd180;font-size:8px;white-space:nowrap}
 .reward{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%);z-index:20;pointer-events:none;opacity:0;text-align:center}
 .reward.celebrate{opacity:1;animation:reward-appear .45s cubic-bezier(.2,1.5,.5,1) both}
@@ -32,3 +31,4 @@
 @media(pointer:coarse),(max-width:800px){.reward{top:36%}.reward-card{min-width:180px;padding:12px 18px}.map-key b{font-size:7px}}
 @media(max-height:550px) and (pointer:coarse){.map-panel{display:block;bottom:125px;left:16px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-title{font-size:7px;margin-bottom:3px}.map-panel .map-key{display:none}.reward{top:48%}.reward-card{min-width:160px;padding:8px 14px}.reward-card strong{font-size:40px}}
 @media(prefers-reduced-motion:reduce){.reward.celebrate{animation:none}.celebrate .confetti i{display:none}}
+@media(pointer:coarse),(max-width:800px){.touch-flight .hover-control{font-size:9px;min-width:54px}}

@@ -6,9 +6,9 @@ Approved: stylized compressed Bay Area; driving/stunts first; real Tesla Superch
 
 ## Thirty-second loop
 
-Join → start seated in a Roadster → accelerate → lift above a block → roll → land → find a charger → do it again with a friend. No account, tutorial wall, garage purchase, grind, or mandatory mission. Every participant starts with a usable vehicle and100 air. Every researched family has parked and autonomous traffic examples. NPCs can be taken while nearby; human-occupied cars cannot be stolen. Fleet selection also offers every model directly when stopped.
+Join → start seated in a Roadster → accelerate → jump above a block → flip → land → find a charger → do it again with a friend. No account, tutorial wall, garage purchase, grind, or mandatory mission. Every participant starts with a usable vehicle and100 air. Every researched family has parked and autonomous traffic examples. NPCs can be taken while nearby; human-occupied cars cannot be stolen. Fleet selection also offers every model directly when stopped.
 
-The simulation prioritizes arcade legibility over realism. Ground friction slows an unattended car. Roadster air is a shared boost/lift budget. Space/Lift holds thrust; releasing it allows gravity to land the car. Q/E/touch rolls provide stunts with automatic ground stabilization. A depleted air tank never prevents ordinary driving. Station refills take about3.6seconds from empty, only when grounded and stopped within9m. Pickups provide instant full air or repair with20second respawn. Condition is clamped to5 rather than introducing death before its design exists.
+The simulation prioritizes arcade legibility over realism. Ground friction slows an unattended car. The Rocket shares one air tank between boost, jumps and rolls. A jump costs 24%, a one-tap flip costs 9%, and boost consumes 14% per second. Holding Hover in free air enables fictional thruster hover at 18% per second; hover can maintain an inverted orientation. Gravity and flight assist return the car to the ground; manual roll remains available. Air jumps and free-air hover are arcade fiction. Underbody fans adhere the Rocket to the purpose-built loop without consuming compressed air and cannot hold it in free air. A depleted tank never prevents ordinary driving or falling. Station refills take about3.6seconds from empty, only when grounded and stopped within9m. Pickups provide instant full air or repair with20second respawn. Condition is clamped to5 rather than introducing death before its design exists.
 
 ## Delivery loop
 
@@ -18,7 +18,7 @@ Roadster flight can shorten a run but nearby police may spot it, pursue and slow
 
 ## Current content
 
-A compressed Bay spans distinct San Francisco and Oakland shores, Yerba Buena Island and Marin. The Bay Bridge crosses water to Oakland; the Golden Gate crosses the strait to Marin. Street grids, waterfront, parks, port cranes and landmark silhouettes are hand-authored, not a surveyed map. Driveable decks and streets are flat at the same height; water is below and off-bridge water landings recover the car to a safe street. See [MAP.md](MAP.md). Four primary-source station identities use artistic coordinates; air refilling and flight are fictional.
+A compressed Bay spans distinct San Francisco and Oakland shores, Yerba Buena Island and Marin. The Bay Bridge crosses water to Oakland; the Golden Gate crosses the strait to Marin. Street grids, waterfront, parks, port cranes and landmark silhouettes are hand-authored, not a surveyed map. Driveable decks and streets are flat at the same height; the Oakland launch ramp and stunt loop are shared physical surfaces; water is below and off-bridge water landings recover the car to a safe street. See [MAP.md](MAP.md). Four primary-source station identities use artistic coordinates; air refilling and flight are fictional.
 
 Controls: steering plus forward/reverse; separate brake. Person movement currently uses the same turn-and-move arcade controls. Exit requires grounded speed≤5m/s; entry selects closest empty car within7m. Unstuck recovery repositions the current entity while preserving condition/air and is not death/respawn.
 
@@ -48,7 +48,7 @@ Building collision uses a spatial index. First networking scaling step, when mea
 
 ## Next improvements in order
 
-1. Human playtest on a real iPhone and Android: steering, lift/roll reachability, heat and frame rate.
+1. Human playtest on a real iPhone and Android: steering, jump/flip/hover reachability, heat and frame rate.
 2. Vehicle feel: tune camera, air time, collisions and refill loop from playtests.
 3. Improve district art while preserving registry model pivots and collision volumes.
 4. Playful destinations: shared stunt rings, short time trials, small ramps using authoritative terrain geometry.

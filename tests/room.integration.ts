@@ -36,6 +36,13 @@ try {
   await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5&&p.delivery.order.elapsed>.5;},'active pickup time replicated');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
+  // The press is counted, so a complete tap between input frames is retained.
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>.5&&e.air===76;},'jump and air use replicated');
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&e.air===67;},'one-tap flip completion replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
+  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox')??false,'fleet change visible to remote player');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
@@ -44,5 +51,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, remote movement, delivery state, police, fleet selection, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, remote movement, delivery state, police, jump, flip, landing, fleet selection, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
 } finally { one.socket.close(); two.socket.close(); }

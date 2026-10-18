@@ -1,4 +1,4 @@
-# Implementation contracts · v5
+# Implementation contracts · v6
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -18,31 +18,31 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
 - Entity `x,y,z` is the ground-center pivot, not mesh center. `y=0` is street level.
-- `yaw` and `roll` are radians. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left. Roll rotates around local Z.
-- `speed` is signed meters/second; UI converts to km/h by multiplying 3.6. `vy` is vertical meters/second. Air/health are bounded 0–100.
+- `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left. Roll rotates around local Z.
+- `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocity in meters/second; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second steps. `World.time` is simulated seconds, not epoch time. Never use render delta directly for physics.
-- `shared/map.ts` owns map bounds, land polygons, roads, bridge decks and `BUILDINGS`; see [MAP.md](MAP.md). `isSurface()` is the authoritative ground support: land or a bridge at Y=0. Water is rendered at Y=−4; a grounded car stops at the shoreline, while a landing in open water returns it to an unoccupied spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative. Bridge decks and roads are flat, with no elevated terrain physics.
+- `shared/map.ts` owns map bounds, land polygons, roads, bridge decks and `BUILDINGS`; see [MAP.md](MAP.md). `isSurface()` is the authoritative ground support: land or a bridge at Y=0. Water is rendered at Y=−4; a grounded car stops at the shoreline, while a landing in open water returns it to an unoccupied spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative. Bridge decks and roads are flat. The Oakland STUNT_RAMP and analytic vertical STUNT_LOOP are authoritative surfaces; their rendering uses the same geometry.
 
 ## World schema
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/roll, speed/vy, health/air, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count and loop attachment, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, and `delivery` (session cash, active time, order, completed runs and ticket state). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
-- `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/lift/brake are booleans. Complete input frames replace previous intent.
+- `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake are booleans. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v5
+## Wire protocol v6
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:5,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:6,capacity:number}`.
 
 Client messages:
 
 ```json
-{"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"lift":true,"brake":false}}
+{"type":"input","input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0}}
 {"type":"interact"}
 {"type":"reset"}
 {"type":"autopilot"}
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:5, capacity:number}
+{type:"welcome", id:string, version:6, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -69,7 +69,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
-`GameScene.render(world,playerId,dt,menu,lift)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
+`GameScene.render(world,playerId,dt,menu,boost)` reads snapshots. `start(callback)` runs render frames. `wideCamera` toggles chase modes. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
 
 ## UI continuity and acceptance
 
@@ -80,19 +80,19 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 1. State owned files and intended contract changes before editing shared files.
 2. Keep a playable end-to-end baseline; do not leave the default route on a mock or asset gallery.
 3. Run `pnpm test` and `pnpm build`; network changes also run live two-client integration.
-4. Visual/input changes: inspect desktop and portrait/landscape phone layouts, drive/lift/land, and switch cars. Record actual browser/device used; emulation is not physical-device evidence.
+4. Visual/input changes: inspect desktop and portrait/landscape phone layouts, drive/jump/land, and switch cars. Record actual browser/device used; emulation is not physical-device evidence.
 5. List assets, provenance/licenses, budgets and known gaps. No unlicensed GTA assets or unexplained remote dependencies.
 6. Provide a small concrete diff and verification result. Do not change deployment names, domains, accounts or shared contracts as part of an art/UI task.
 
 ## Fleet and autonomy contract
 
-`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only `roadster` Air Edition has flight/boost.
+`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only the `roadster` Rocket has arcade thrust, jumps, flips and suction. Air jumps, free-air thruster hover and tank performance are game fiction. Suction operates only at the physical loop surface.
 
 Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. This is not suspension/tire simulation. Terrain roof support remains shared.
 
 Every model has one parked entity and one NPC traffic entity. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting/disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
 
-Autonomy uses deterministic right-lane loops, including a cross-Bay route, and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/lift/boost/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+Autonomy uses deterministic right-lane loops, including a cross-Bay route, and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
 
 Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 

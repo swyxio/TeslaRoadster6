@@ -17,7 +17,7 @@ try {
     ws.addEventListener('message', e => { const msg = JSON.parse(String(e.data)); if (msg.type === 'state') { counts.set(ws, msg.world.players.length); snapshots.set(ws,(snapshots.get(ws)??0)+1); const times=seen.get(ws)??[];times.push(Date.now());seen.set(ws,times); } });
     await wait(20);
   }
-  timer=setInterval(()=>sockets.forEach((ws,i)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:.3,lift:i%4===0}}));}),50);
+  timer=setInterval(()=>sockets.forEach((ws)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:.3}}));}),50);
   await wait(8000);
   assert.equal(sockets.filter(ws=>ws.readyState===WebSocket.OPEN).length,count);
   assert.ok(sockets.every(ws=>counts.get(ws)===count),'all clients see all peers');
