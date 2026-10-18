@@ -6,6 +6,23 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Fresh radio, visible versions',
+    intro: 'Hear recent conversations and know which Tesland build you are driving.',
+    sections: [
+      { title: 'On the radio', items: [
+        'Latent Space and ThursdAI now choose episodes published in the last two months. Older, undated and future episodes stay out of the shuffle.',
+        'If a station has no recent episodes, the radio explains it instead of playing the archive. The original 8-bit soundtrack remains available.'
+      ] },
+      { title: 'Know your build', items: [
+        'The browser title and a small label beneath the Tesland logo show the version actually loaded in your tab.',
+        'Select the version label to open its changelog entry. An old open tab keeps its old version label until you reload.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.21-alpha',
+    label: '0.0.21 Alpha',
+    date: '2026-10-18',
     title: 'Make your mark',
     intro: 'Choose your next upgrade and make your ride your own.',
     sections: [
