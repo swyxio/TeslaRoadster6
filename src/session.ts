@@ -21,6 +21,7 @@ export class Session {
   private nextUpgradeRequest = 0;
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
+  destinationResult: {requestId:number;ok:boolean}|null = null;
 
   join(room: string, name: string, kind: VehicleId = 'roadster') {
     if (this.status === 'online' && this.room === room) {
@@ -31,7 +32,7 @@ export class Session {
     this.disconnect();
     this.room = room;
     this.status = 'connecting'; this.error = ''; this.roomFull = false; this.id = ''; this.capacity = 0;
-    this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.world = createWorld();
+    this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.destinationResult = null; this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => {
@@ -50,6 +51,7 @@ export class Session {
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
+        if (message.type === 'destinationResult') this.destinationResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
     socket.onclose = event => {
@@ -67,21 +69,29 @@ export class Session {
     this.sendTime += dt;
     if (this.sendTime >= .05) { this.send({type:'input',input}); this.sendTime = 0; }
   }
-  selectVehicle(kind: VehicleId) { this.send({type:'selectVehicle',kind}); }
-  parkingAction(action:'park'|'queue'|'start'|'leave') { this.send({type:'parking',action}); }
-  raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval') { this.send({type:'race',action,courseId}); }
-  setName(name: string) { this.name = name; if (this.id) this.send({type:'name',name}); }
-  buyUpgrade(upgrade: UpgradeId) {
-    const requestId = ++this.nextUpgradeRequest; this.upgradeResult = null;
-    if (this.status !== 'online' || !this.send({type:'upgrade',upgrade,requestId})) this.upgradeResult = {requestId,upgrade,ok:false};
+  selectVehicle(kind:VehicleId){this.send({type:'selectVehicle',kind});}
+  parkingAction(action:'park'|'queue'|'start'|'leave'){this.send({type:'parking',action});}
+  raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){this.send({type:'race',action,courseId});}
+  enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status!=='online'||!this.send({type:'minigame',game}))return false;}
+  setDestination(x:number,z:number){
+    const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
+    if(this.status!=='online'||!this.send({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
-  setOta(enabled: boolean) {
-    const requestId = ++this.nextUpgradeRequest; this.otaResult = null;
-    if (this.status !== 'online' || !this.send({type:'ota',enabled,requestId})) this.otaResult = {requestId,enabled,ok:false};
+  setName(name:string) { this.name = name; if (this.id) this.send({type:'name',name}); }
+  buyUpgrade(upgrade:UpgradeId){
+    const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
+    if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
     return requestId;
   }
-  action(type: 'interact' | 'reset' | 'autopilot' | 'dome') { this.send({type}); }
+  setOta(enabled:boolean){
+    const requestId=++this.nextUpgradeRequest;this.otaResult=null;
+    if(this.status!=='online'||!this.send({type:'ota',enabled,requestId}))this.otaResult={requestId,enabled,ok:false};
+    return requestId;
+  }
+  action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
+    this.send({type});
+  }
   private send(value: unknown): boolean { if (this.socket?.readyState !== WebSocket.OPEN) return false; this.socket.send(JSON.stringify(value)); return true; }
   disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.status = 'disconnected'; }
 }

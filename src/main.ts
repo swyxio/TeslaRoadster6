@@ -1,9 +1,11 @@
 import './style.css';
 import './identity.css';
+import { setupMinigames } from './minigames';
+import { createMapDialog } from './map-dialog';
 import { createChatPanel } from './chat-panel';
 import { GlobalChat } from './chat';
 import { limitDriverNameInput } from './driver-name';
-import { MAX_NAME_LENGTH } from '../worker/global-chat-core';
+import { MAX_NAME_LENGTH, normalizeName } from '../worker/global-chat-core';
 import mapSourceUrl from '../shared/bay-route-source.json?url';
 import mapTraceUrl from '../shared/bay-highway-traces.ts?url&no-inline';
 import mapBakeUrl from '../shared/bake-bay-highways.py?url&no-inline';
@@ -59,7 +61,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="dome">⚽ Rocket Dome</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button><button id="parking-park">Park It</button><button id="parking-queue">Cut the queue</button><button id="parking-start">Start queue</button><button id="parking-leave">Leave parking game</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -72,10 +74,10 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump / hold to hover · X / □ flip · B / ○ boost · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">TESLAND / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
 <dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
-<dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR ROOM / ACTIVE DRIVERS</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by cash and active play. First-person time and deliveries are self-reported; a first-person delivery requires the whole active run in cockpit view. Scores last only for this session.</p><div class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
-<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR SESSION / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these once per session.</p><ul id="awards-list" class="awards-list"></ul></dialog>
+<dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores reset with your drive and aren’t saved with your driver. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
+<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these during this drive. Awards reset with your session and don’t affect cash.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">An original little soundtrack, plus sounds for your drive. Adjust them anytime.</p><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
-<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER / OPTIONAL</span><h2 id="identity-title">Save your driver</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><p>Choose a name for this session. If another driver is using it, we add a number. Driver IDs are assigned automatically.</p><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
+<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Changing your name starts a new chat driver. A saved driver can still be recovered with its code.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
@@ -133,6 +135,7 @@ document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const nameInput=$<HTMLInputElement>('name');
 const identityDialog=$<HTMLDialogElement>('identity-dialog');
+const identityName=$<HTMLInputElement>('identity-name');
 const rememberInput=$<HTMLInputElement>('identity-remember');
 const identityCode=$<HTMLTextAreaElement>('identity-code');
 const identityEntry=$<HTMLTextAreaElement>('identity-enter-code');
@@ -140,7 +143,7 @@ const storageKey='poly-av-driver-recovery';
 let rememberedCode:string|undefined;
 try { rememberedCode=localStorage.getItem(storageKey)||undefined; } catch { /* Browser storage is optional. */ }
 let currentCode:string|undefined=rememberedCode;
-let nameEdited=false, authError=false, pendingRecovery=false, pendingSave=false, unread=0;
+let nameEdited=false, identityNameDirty=false, authError=false, pendingRecovery=false, pendingSave=false, pendingName=false, unread=0;
 let requestedName='Driver', rememberRequested=!!rememberedCode;
 function identityFeedback(message:string){$('identity-feedback').textContent=message;}
 function rememberCode(code:string){
@@ -158,15 +161,16 @@ function updateChatBadge(){
   $('chat-button').setAttribute('aria-label',unread?`Open global chat, ${unread} unread`:'Open global chat');
 }
 const chat=new GlobalChat({
-  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();},
+  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();if(status==='offline'&&pendingName)identityFeedback('Name updated for your drive. Chat is offline and will retry.');},
   onReady(id,name,messages){
     // A previous handshake may complete after the player has edited the name.
     // Start the requested guest session before applying any stale identity.
     if(nameEdited&&(nameInput.value.trim()||'Driver')!==requestedName){pendingRecovery=false;pendingSave=false;ensureChat();return;}
     currentCode=chat.code;authError=false;
-    if(!nameEdited||nameInput.value.trim()===requestedName){nameInput.value=name;nameEdited=false;}
+    if(!nameEdited||nameInput.value.trim()===requestedName){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;}
     chatPanel.setIdentity(id,name);chatPanel.setMessages(messages);session.setName(name);
     if(pendingRecovery){pendingRecovery=false;const stored=!rememberRequested||!currentCode||rememberCode(currentCode);identityEntry.value='';if(stored)identityFeedback(`Recovered ${name}.`);}
+    if(pendingName){pendingName=false;identityFeedback(name===requestedName?`Now going by ${name}.`:`That name is in use. You’re ${name}.`);}
     refreshIdentity();
     if(pendingSave){pendingSave=false;if(!chat.save())identityFeedback('Could not request a code. Try again.');}
   },
@@ -194,10 +198,19 @@ function ensureChat(){
 nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
 nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
 $('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
-function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityDialog.showModal();controls.clear();controls.enabled=false;}
+function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();controls.clear();controls.enabled=false;}
 $('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;
 $('identity-close').onclick=()=>identityDialog.close();
 identityDialog.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+identityName.addEventListener('input',event=>{identityNameDirty=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(identityName);});
+identityName.addEventListener('compositionend',()=>limitDriverNameInput(identityName));
+$('identity-name-form').addEventListener('submit',event=>{
+  event.preventDefault();const name=normalizeName(identityName.value);identityName.value=name;
+  if(chat.status==='online'&&name===chat.name){identityNameDirty=false;identityFeedback(`You’re already ${name}.`);return;}
+  nameInput.value=name;nameEdited=true;identityNameDirty=false;pendingRecovery=false;pendingSave=false;pendingName=true;authError=false;
+  identityFeedback(rememberedCode?'Connecting as a new driver. This browser still remembers your saved driver.':'Connecting with your new driver name…');
+  session.setName(name);ensureChat();
+});
 $('identity-save').onclick=()=>{
   if(chat.status!=='online'){if(authError){identityFeedback('Retry recovery or choose a new guest first.');return;}pendingSave=true;ensureChat();identityFeedback('Connecting before creating your code…');return;}
   if(!chat.save())identityFeedback('Could not request a code. Try again.');
@@ -216,10 +229,10 @@ $('identity-recover').addEventListener('submit',event=>{
   event.preventDefault();const code=identityEntry.value.trim();
   if(!code){identityFeedback('Paste a recovery code first.');return;}
   if(chat.status==='online'&&currentCode===code){identityFeedback('This driver is already connected.');return;}
-  pendingRecovery=true;pendingSave=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
+  pendingRecovery=true;pendingSave=false;pendingName=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
 });
 $('identity-guest').onclick=()=>{
-  pendingRecovery=false;pendingSave=false;authError=false;nameEdited=false;currentCode=undefined;rememberRequested=false;rememberInput.checked=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback(rememberedCode?'Starting a new guest. This browser still remembers a different driver.':'Starting a new guest driver.');chat.connect(requestedName,undefined,true);
+  pendingRecovery=false;pendingSave=false;pendingName=false;authError=false;nameEdited=false;currentCode=undefined;rememberRequested=false;rememberInput.checked=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback(rememberedCode?'Starting a new guest. This browser still remembers a different driver.':'Starting a new guest driver.');chat.connect(requestedName,undefined,true);
 };
 if(rememberedCode)ensureChat();
 
@@ -250,12 +263,12 @@ function begin(){
   pendingShop=null;pendingOta=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
-  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
+  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,nameInput.value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('join').onclick=begin;$('retry').onclick=begin;
+$('join').onclick=() => begin();$('retry').onclick=() => begin();
 $('error-join').onclick=()=>{
   const room=$<HTMLInputElement>('error-room').value.trim().toLowerCase();
   if(!validRoom(room)){ $('error-room-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
@@ -281,41 +294,11 @@ controls.onAction=action;
 $('autopilot').onclick=()=>action('autopilot');$('fleet').onclick=()=>openFleet();$('scores').onclick=()=>openScores();$('awards').onclick=()=>openAwards();
 $('shop').onclick=()=>openShop();$('shop-prompt').onclick=()=>openShop();
 $('interact').onclick=()=>action('interact');$('recover').onclick=()=>action('reset');$('camera').onclick=()=>action('camera');
-for(const action of ['park','queue','start','leave'] as const){
-  $('parking-'+action).onclick=()=>{
-    session.parkingAction(action);
-    if(action==='park'||action==='queue'){
-      notice('Parking request sent · check the activity status.');
-    }
-  };
-}
-const activityHelp=document.createElement('p');activityHelp.className='activity-help';
-activityHelp.textContent='Take the ferry from north SF to Rocket Island. Drive over a Rocket pickup to fit a session-long flight kit. At a parking lot, join Park It or enter the marked approach for Cut the queue. Race from an island start marker; cars can bump. Keyboard: use Tab and Enter to choose an action.';
 const keyboardHelp=$('keyboard-help').querySelector('small');
-if(keyboardHelp)keyboardHelp.textContent+=' Use Tab to reach Actions, Enter to open it, then Tab and Enter to choose a game.';
-$('drive-actions').insertAdjacentHTML('beforeend','<label class="race-choice" for="race-course">RACE COURSE<select id="race-course"><option value="short">Short circuit</option><option value="oval">Speed oval</option></select></label><button id="race-join">Join race</button><button id="race-start">Start race</button><button id="race-leave">Leave race</button>');
-$('drive-actions').append(activityHelp);
-for(const action of ['join','start','leave'] as const){
-  $('race-'+action).onclick=()=>{
-    const active=playerRace(session.world.races,session.id);
-    const course=(action==='join'?$<HTMLSelectElement>('race-course').value:active?.round.courseId??$<HTMLSelectElement>('race-course').value) as 'short'|'oval';
-    session.raceAction(action,course);
-    if(action==='join')notice('Race: join at the selected island start marker. Cars can bump.');
-  };
-}
+if(keyboardHelp)keyboardHelp.textContent+=' Use Actions → Mini-games to jump straight into a game.';
+const minigames=setupMinigames({session,controls,closeDrawer:()=>setDrawer(null),canDrive:()=>!menu&&!openDrawer&&session.status!=='disconnected',notice});
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
-let domeRequest=0;
-$('dome').onclick=()=>{
-  const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);
-  if(!entity)return;
-  const wasInDome=entity.inDome,request=++domeRequest;
-  controls.clear();session.action('dome');
-  window.setTimeout(()=>{
-    const currentPlayer=session.world.players.find(p=>p.id===session.id),current=session.world.entities.find(e=>e.id===currentPlayer?.entityId);
-    if(request===domeRequest&&current?.inDome===wasInDome)notice('Travel has not completed yet. Try again.');
-  },1500);
-};
 $('invite').onclick=async()=>{
   try{await navigator.clipboard.writeText(location.href);notice('Invite link copied. Send it to your crew.');}catch{notice('Copy the address in your browser to invite a friend.');}
 };
@@ -331,7 +314,23 @@ const mapExtents=[
 ] as const;
 const localRoads=ROADS.filter(road=>road.kind!=='highway');
 let mapLocal=true,mapKey='';
-$('map-toggle').onclick=()=>{mapLocal=!mapLocal;mapKey='';$('map-label').textContent=mapLocal?'LOCAL · TAP':'BAY · TAP';$('map-toggle').setAttribute('aria-pressed',String(!mapLocal));};
+let pendingDestination:{requestId:number;expires:number}|null=null,navigationDriving=false;
+const mapDialog=createMapDialog({onDestination(point){
+  const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car||car.kind==='person')return 'Get into a car to use self-driving.';
+  if(car.supportId!=='ground'||car.inDome)return 'Drive onto a ground road outside the Dome first.';
+  if(requiredLevelAt(point.x,point.z)>player.delivery.level)return 'That area is locked. Keep delivering to open it.';
+  controls.clear();const requestId=session.setDestination(point.x,point.z);
+  pendingDestination={requestId,expires:performance.now()+5000};notice('Finding a route…');
+}});
+mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+$('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
+$('map-toggle').removeAttribute('aria-pressed');$('map-label').textContent='MAP · TAP TO EXPLORE';
+$('map-toggle').onclick=()=>{
+  const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car)return;
+  setDrawer(null);controls.clear();controls.enabled=false;mapDialog.open(car,car.navigation?.destination,player.delivery.level);
+};
 function minimap(entity:Entity|undefined,level:Level){
   const cx=Math.round((entity?.x??0)/25)*25,cz=Math.round((entity?.z??0)/25)*25;
   const extent=mapExtents[level],mapWidth=extent.maxX-extent.minX,mapHeight=extent.maxZ-extent.minZ;
@@ -407,6 +406,7 @@ function minimap(entity:Entity|undefined,level:Level){
   session.world.pickups.filter(p=>p.kind==='rocket'&&p.active&&visible(p.x,p.z)).forEach(p=>{map.beginPath();map.arc(px(p.x),pz(p.z),2,0,Math.PI*2);map.fillStyle='#f1caff';map.fill();});
   session.world.entities.filter(e=>e.npc&&!e.driver&&visible(e.x,e.z)).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
   const player=session.world.players.find(p=>p.id===session.id);if(player){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
+  if(entity?.navigation){const target=entity.navigation.destination;map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ff7771';map.lineWidth=2;map.stroke();}
   session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id||!visible(e.x,e.z))return;map.beginPath();map.arc(px(e.x),pz(e.z),3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
   if(entity){
     map.save();map.translate(px(entity.x),pz(entity.z));
@@ -422,6 +422,12 @@ const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount)}`;
 function updateScores(){
   const list=$('scores-list');list.replaceChildren();
+  const available=session.status==='online';
+  const player=available?session.world.players.find(p=>p.id===session.id):undefined;
+  $('score-head').classList.toggle('hidden',!available||session.world.players.length===0);
+  const summary=!available?'Scores will appear when your drive is connected.':!session.world.players.length?'No drivers in this session yet.':`This room · ${session.world.players.length} ${session.world.players.length===1?'driver':'drivers'}${player?` · ${player.delivery.completed} ${player.delivery.completed===1?'delivery':'deliveries'} completed by you`:''}`;
+  if($('scores-summary').textContent!==summary)$('scores-summary').textContent=summary;
+  if(!available)return;
   for(const p of [...session.world.players].sort((a,b)=>b.delivery.cash-a.delivery.cash||a.delivery.activeSeconds-b.delivery.activeSeconds)){
     const row=document.createElement('li');
     const driver=document.createElement('span');driver.className='score-driver';
@@ -430,7 +436,7 @@ function updateScores(){
       const badge=document.createElement('small');badge.textContent=`${p.cockpit.active?'● FIRST PERSON · ':'FIRST PERSON · '}${p.cockpit.deliveries} ${p.cockpit.deliveries===1?'run':'runs'} · ${clock(p.cockpit.activeSeconds)}`;driver.append(badge);
     }
     row.append(driver);
-    for(const value of [money(p.delivery.cash),clock(p.delivery.activeSeconds),money(p.delivery.activeSeconds>=1?Math.round(p.delivery.cash*60/p.delivery.activeSeconds):0)]){
+    for(const value of [money(p.delivery.cash),clock(p.delivery.activeSeconds),p.delivery.activeSeconds>=1?money(Math.round(p.delivery.cash*60/p.delivery.activeSeconds)):'—']){
       const cell=document.createElement('span');cell.textContent=value;row.append(cell);
     }
     list.append(row);
@@ -443,13 +449,16 @@ $('scores-close').onclick=closeScores;scoresDialog.addEventListener('cancel',()=
 const awardsDialog=$<HTMLDialogElement>('awards-dialog');
 const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
 function updateAwards(){
-  const player=session.world.players.find(p=>p.id===session.id),list=$('awards-list');list.replaceChildren();
+  const player=(session.status==='online')?session.world.players.find(p=>p.id===session.id):undefined,list=$('awards-list');list.replaceChildren();
+  const summary=player?`${player.achievements.unlocked.length} of ${Object.keys(ACHIEVEMENTS).length} earned this drive`:'Your awards will appear when your drive is connected.';
+  if($('awards-summary').textContent!==summary)$('awards-summary').textContent=summary;
+  if(!player)return;
   for(const [id,award] of Object.entries(ACHIEVEMENTS)){
     const unlocked=player?.achievements.unlocked.includes(id as AchievementId)??false;
     const row=document.createElement('li');row.className=unlocked?'unlocked':'';
     const badge=document.createElement('span');badge.className='award-icon';badge.textContent=unlocked?'★':'◇';
     const copy=document.createElement('div'),name=document.createElement('strong'),description=document.createElement('p');name.textContent=award.name;description.textContent=award.description;copy.append(name,description);
-    const status=document.createElement('span');status.className='award-status';status.textContent=unlocked?'EARNED':'TO DISCOVER';row.append(badge,copy,status);list.append(row);
+    const status=document.createElement('span');status.className='award-status';status.textContent=unlocked?'EARNED':id==='regular'?`${Math.min(player.delivery.completed,3)} / 3`:'TO EARN';row.append(badge,copy,status);list.append(row);
   }
 }
 function openAwards(){controls.clear();controls.enabled=false;updateAwards();awardsDialog.showModal();}
@@ -463,7 +472,7 @@ function announceAchievements(){
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
   setDrawer(null);
-  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();chatPanel.close();
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();mapDialog.close();minigames.close();chatPanel.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;
   $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;
@@ -510,10 +519,10 @@ function updateActivities(e:Entity){
       parkingText=round.mode==='park'?`PARK IT · Finished in ${entrant.elapsed?.toFixed(1)??'—'}s`:`QUEUE · Parked in ${entrant.elapsed?.toFixed(1)??'—'}s · ${entrant.overtakes??0} overtakes`;
     }else if(round.phase==='results')parkingText=round.mode==='queue'&&round.claimedStallIds.length>=lot.stalls.length?'QUEUE · No stalls remain':`${round.mode==='park'?'PARK IT':'QUEUE'} · Round ended`;
     else if(round.mode==='park')parkingText=`PARK IT · Stall ${entrant.targetId??'—'}${stall?` · ${Math.round(Math.hypot(e.x-stall.x,e.z-stall.z))}m`:''} · hold ${entrant.hold.toFixed(1)}/2s · ${remaining}s left`;
-    else if(round.phase==='waiting')parkingText=`QUEUE · Position ${round.entrants.findIndex(p=>p.playerId===session.id)+1} · starts in ${remaining}s${round.hostId===session.id?' · Actions: Start queue':''}`;
+    else if(round.phase==='waiting')parkingText=`QUEUE · Position ${round.entrants.findIndex(p=>p.playerId===session.id)+1} · starts in ${remaining}s`;
     else parkingText=`QUEUE · ${Math.max(0,lot.stalls.length-round.claimedStallIds.length)} unclaimed · red X = claimed · ${remaining}s left`;
   }else if(PARKING_LOTS.some(lot=>Math.hypot(e.x-lot.area.x,e.z-lot.area.z)<Math.max(lot.area.width,lot.area.length)/2+25)){
-    parkingText='PARKING PLAYGROUND · Actions: Park It or Cut the queue';
+    parkingText='PARKING PLAYGROUND · Choose a game in Actions → Mini-games';
   }
   $('parking-status').textContent=parkingText;
   const racing=playerRace(world.races,session.id);
@@ -524,14 +533,14 @@ function updateActivities(e:Entity){
     const remaining=Math.max(0,Math.ceil(race.endsAt-world.time)),name=course.name.toUpperCase();
     if(racer.status==='finished')raceText=`${name} · Finished ${racer.elapsed?.toFixed(1)??'—'}s${racer.rank?` · #${racer.rank}`:''}`;
     else if(racer.status==='dnf')raceText=`${name} · Did not finish`;
-    else if(race.phase==='lobby')raceText=`${name} · Lobby ${race.entrants.length}/8 · starts in ${remaining}s${race.hostId===session.id?' · Actions: Start race':''}`;
+    else if(race.phase==='lobby')raceText=`${name} · Lobby ${race.entrants.length}/8 · starts in ${remaining}s`;
     else if(race.phase==='countdown')raceText=`${name} · Starting in ${remaining}s`;
     else{
       const gate=course.gates[racer.nextGate];
       const feedback=racer.feedback==='wrong-way'?' · WRONG WAY':racer.feedback==='missed-gate'?' · MISSED GATE: return to checkpoint':'';
       raceText=`${name} · Gate ${racer.nextGate+1}/${course.gates.length}${gate?` · ${Math.round(Math.hypot(e.x-gate.x,e.z-gate.z))}m`:''} · ${remaining}s left${feedback}`;
     }
-  }else if(RACE_COURSES.some(course=>Math.hypot(e.x-course.start.x,e.z-course.start.z)<course.start.radius+20))raceText='RACE START · Choose a course in Actions. Cars can bump.';
+  }else if(RACE_COURSES.some(course=>Math.hypot(e.x-course.start.x,e.z-course.start.z)<course.start.radius+20))raceText='RACE START · Choose a game in Actions → Mini-games. Cars can bump.';
   $('race-status').textContent=raceText;
 }
 const shopDialog=$<HTMLDialogElement>('shop-dialog');
@@ -606,9 +615,17 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&session.status==='online');scene.render(session.world,session.id,dt,menu);
+  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='online'));scene.render(session.world,session.id,dt,menu);
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
-  if(started&&!menu&&!document.hidden&&session.status==='online'&&observedPlayer){
+  if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
+  navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;
+  if(mapDialog.isOpen()&&observedPlayer&&observedCar)mapDialog.update(observedCar,observedCar.navigation?.destination,observedPlayer.delivery.level);
+  if(pendingDestination){
+    const result=session.destinationResult;
+    if(result?.requestId===pendingDestination.requestId){notice(result.ok?'Self-driving to your destination. Use the controls to take over.':'No route found. Choose an unlocked nearby road and try again.');pendingDestination=null;}
+    else if(performance.now()>pendingDestination.expires){notice('Could not confirm the route. Please try again.');pendingDestination=null;}
+  }
+  if(started&&!menu&&!document.hidden&&(session.status==='online')&&observedPlayer){
     const now=Date.now(),active=observedPlayer.delivery.activeSeconds;
     if(active>lastActiveSeconds)lastActiveAt=now;
     if(!playRecorded||(active>lastActiveSeconds&&now-lastPlayWrite>=10000))recordPlay(now);
@@ -625,13 +642,10 @@ scene.start(dt=>{
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
+  minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');
   $('mission-panel').classList.toggle('hidden',e.inDome);$('dome-score').classList.toggle('hidden',!e.inDome);
-  const domeButton=$('dome'),domeLabel=e.inDome?'↩ Leave Dome':'⚽ Rocket Dome';
-  const domeAria=e.inDome?`Leave Rocket Dome and return to ${e.domeReturn==='island'?'Rocket Island':'the Bay'}`:'Travel to China Basin Rocket Dome';
-  if(domeButton.textContent!==domeLabel)domeButton.textContent=domeLabel;
-  if(domeButton.getAttribute('aria-label')!==domeAria)domeButton.setAttribute('aria-label',domeAria);
   if(e.inDome){
     const soccer=session.world.soccer;
     const blue=`BLUE ${soccer.blueScore}`,orange=`${soccer.orangeScore} ORANGE`;

@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-This checkout contains the Rocket Island expansion and Rocket Dome; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 

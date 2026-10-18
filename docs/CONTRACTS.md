@@ -1,4 +1,4 @@
-# Implementation contracts · v24
+# Implementation contracts · v25
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -12,7 +12,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
 | Data/map | `shared/map.ts`, `stations.ts`, `vehicles.ts` | Documented primary sources | Live fetching at render time |
 
-Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. All play is server-authoritative; a connection failure must never start a local simulation.
+Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. Multiplayer is server-authoritative; the client never starts a local simulation on connection failure.
 
 ## Coordinates and time
 
@@ -27,7 +27,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil, and optional current `navigation` route and arrival status; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, lifetime session delivery earnings, level, last blocked access attempt, active time, order, completed runs, ticket state and OTA subscription), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, ferry, parking rounds, race rounds, time and authoritative `soccer` (ball position/velocity, both scores, goal/win phase, per-player class-specific touches and credited goals, last touch, and winning player IDs). A Rocket kit installed by pickup or purchase counts as a retrofit. Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v24
+## Wire protocol v25
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:24,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:25,capacity:number}`.
 
 Client messages:
 
@@ -58,22 +58,25 @@ Client messages:
 {"type":"race","action":"join","courseId":"short"}
 {"type":"race","action":"start","courseId":"oval"}
 {"type":"race","action":"leave","courseId":"short"}
+{"type":"minigame","game":"park"}
+{"type":"destination","x":-120,"z":60,"requestId":3}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:24, capacity:number}
+{type:"welcome", id:string, version:25, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
+{type:"destinationResult", requestId:number, ok:boolean}
 ```
 
-Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared snapshot fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
+Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared snapshot fields and individual entities are serialized once per broadcast tick before assembling each recipient’s complete filtered JSON. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. The renderer smooths and briefly extrapolates observed motion; it never changes simulation positions or predicts input. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v22 versions the relocated Rocket Dome world geometry and soccer match state, alongside the curved roof and loop collision and supply reward changes in v21. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v24 adds two static, collision-backed monument bases in the Marin headlands. Their footprints and landable roof heights come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculptures above them are decorative. Rendering and minimap markers use the same positions. These are entirely fictional game art and do not imply affiliation.
+Protocol v25 adds two static, collision-backed monument bases in the Marin headlands. Their footprints and landable roof heights come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculptures above them are decorative. Rendering and minimap markers use the same positions. These are entirely fictional game art and do not imply affiliation.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403. A full room accepts the WebSocket then closes it with application code4003 and reason `Room full`; this lets browser clients distinguish capacity from a failed connection. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -93,7 +96,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `room`, `status` (`connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue or offline fallback. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `room`, `status` (`connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue or offline mode. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -128,6 +131,8 @@ Every model has one parked entity and one NPC traffic entity. `npc` is identity;
 
 Autonomy uses deterministic right-lane loops, including both directions around the Bay, speed-dependent following gaps and a timed eastbound Bay Bridge approach signal. Traffic demand follows the accelerated day, while the signal and driving behavior use real simulation seconds. Engage only on ground within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
 
+The expanded map can request a destination. `shared/navigation.ts` builds a directed graph from the existing traffic lanes, snaps to a nearby connected lane, and checks the player's unlocked regions along the route. A destination requires a driven car near a supported ground route; water, disconnected island roads, locked areas and unreachable lanes are rejected. The server replies to the request ID, records the route and arrival state in the entity, and clears stale manual inputs on success. Manual input cancels the route. Obstructions can still hold a car; this is arcade navigation, not a real road planner. Choosing another destination replaces the route only on success.
+
 Ambient demand targets up to 34 unattended autonomous highway cars alongside the 26 catalog NPCs and four police. Taken cars, off-route abandoned cars and cars reattached to city routes do not count toward that target; the optional ambient pool is capped at 68 in total, so replenishment can be delayed when its reserve is full. At most one ambient car is added or removed every five simulation seconds. Removal is beyond 1,600 m from every player and preserves occupied and stopped autonomous cars; hidden off-route abandoned cars and free-flowing city-route cars may be reclaimed when the pool blocks replenishment. Available hidden spawn sites and safe removal conditions also limit how quickly traffic follows demand.
 
 Fleet selection accepts only Tesla IDs, requires supported speed≤1 m/s and is unavailable on the ferry or while attached to an arc. Other families remain drivable through street takeover. It releases the old vehicle, creates the requested player-owned model at a checked free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
@@ -145,6 +150,8 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 `shared/oval-bank.ts` defines the speed oval's triangulated height and normals, shoulders and swept landing; banked support uses `supportId: 'island-oval'`, and the renderer follows those triangles. The race start/grid, short-course overlap and dock junction are flat and blend into the bank. The oval still uses the general arcade steering and traction model, not a realistic simulation of banking or a guarantee of high-speed grip.
 
 `shared/parking-lots.ts` defines two playgrounds and four Supercharger lots and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
+
+The mini-game picker uses `minigame` with `park|queue|short|oval`. The simulation chooses a collision-checked playground or race slot and joins in one operation, preserving the previous location if entry fails; health, air and progression are unchanged. Rocket Dome retains its existing `dome` travel action. The client verifies entry from snapshots and offers contextual start and leave controls.
 
 ## Shops and upgrades contract
 

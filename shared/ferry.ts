@@ -70,7 +70,7 @@ export function updateFerry(world:World,dt:number,relocate:(entity:Entity,side:F
     }
     if(occupants.filter(e=>e.kind!=='person').length>FERRY_DECK.vehicleCapacity){f.blocked='capacity';return;}
     f.passengers=occupants.map(e=>({entityId:e.id,x:e.x-f.x,z:e.z-f.z}));
-    for(const e of occupants){e.speed=0;e.pushX=0;e.pushZ=0;e.autopilot=false;e.thrusters=0;}
+    for(const e of occupants){e.speed=0;e.pushX=0;e.pushZ=0;e.autopilot=false;e.navigation=null;e.thrusters=0;}
     f.phase=side==='sf'?'to-island':'to-sf';f.remaining=FERRY_TRAVEL_SECONDS;
     return;
   }

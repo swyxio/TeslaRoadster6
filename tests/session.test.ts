@@ -62,3 +62,9 @@ test('joining the current room keeps the occupied seat and current ride',()=>{
   assert.ok(!socket.sent.some(message=>JSON.parse(message).type==='selectVehicle'));
   socket.closed();
 });
+
+test('offline navigation requests fail without starting a local session',()=>{
+  const session=new Session(), requestId=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId,ok:false});
+  assert.equal(session.world.players.length,0);
+});

@@ -22,3 +22,6 @@ dialog.identity-dialog { width: min(520px, 94vw); max-height: 90dvh; overflow-y:
 @media (max-height: 550px) { dialog.identity-dialog { max-height: 94dvh; padding: 12px 16px; } .identity-dialog h2 { margin: 3px 0; font-size: 20px; } .identity-dialog > p { margin: 5px 0; } .identity-block { margin: 7px 0; padding: 8px; } .identity-block p { margin: 4px 0 6px; } }
 .launch-card > .primary { margin-bottom: 8px; }
 .identity-dialog textarea:focus-visible { outline: 2px solid #ffdb9f; outline-offset: 3px; }
+.identity-name-row { display: flex; gap: 8px; align-items: stretch; }
+.identity-name-row input { min-width: 0; flex: 1; min-height: 44px; margin: 0; padding: 9px 11px; border: 1px solid #a9cbbb66; border-radius: 6px; background: #102a30; color: #fff3df; font: 16px system-ui, sans-serif; }
+.identity-name-row .identity-button { flex: none; min-height: 44px; background: #f6c780; border-color: #f6c780; color: #173138; font-weight: 700; }

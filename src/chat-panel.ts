@@ -22,15 +22,21 @@ export function createChatPanel(options: ChatPanelOptions) {
   dialog.className = 'chat-dialog';
   dialog.setAttribute('aria-labelledby', 'chat-title');
 
+  const phoneTop = document.createElement('div');
+  phoneTop.className = 'chat-phone-top';
+  phoneTop.setAttribute('aria-hidden', 'true');
+  const speaker = document.createElement('span');
+  speaker.className = 'chat-phone-speaker';
+  phoneTop.append(speaker);
   const header = document.createElement('header');
   header.className = 'chat-header';
   const heading = document.createElement('div');
   const kicker = document.createElement('span');
   kicker.className = 'chat-kicker';
-  kicker.textContent = 'TESLAND / EVERY ROOM';
+  kicker.textContent = 'TESLAND MESSAGES';
   const title = document.createElement('h2');
   title.id = 'chat-title';
-  title.textContent = 'Global chat';
+  title.textContent = 'Everyone';
   heading.append(kicker, title);
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
@@ -91,7 +97,10 @@ export function createChatPanel(options: ChatPanelOptions) {
   feedback.setAttribute('role', 'status');
   feedback.textContent = 'Up to 240 characters.';
   form.append(label, input, send);
-  dialog.append(header, connection, identity, history, newer, form, feedback);
+  const phoneBottom = document.createElement('div');
+  phoneBottom.className = 'chat-phone-bottom';
+  phoneBottom.setAttribute('aria-hidden', 'true');
+  dialog.append(phoneTop, header, connection, identity, history, newer, form, feedback, phoneBottom);
 
   let status: ConnectionStatus = 'offline';
   let ownId = '';
