@@ -8,7 +8,7 @@ import { isTrafficIncident } from '../shared/traffic';
 import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
-import { STATIONS, stationStalls } from '../shared/stations';
+import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
@@ -189,15 +189,6 @@ export class GameScene {
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
       addStationArt(scene,s);
-      for(const stall of stationStalls(s)) {
-        // Charger posts and mint stop bars identify the fictional air-refill bays.
-        box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);
-        const z=stall.z-stall.length/2-.8;
-        box(scene,stall.x-.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x+.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x,2.28,z,1.16,.24,.6,0xf3e8d6);
-        box(scene,stall.x,1.2,z,.68,1.7,.14,0xd34537);
-      }
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
     });
     const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
