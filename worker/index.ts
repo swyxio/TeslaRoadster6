@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input } from '../shared/game';
 import { planCybercabDispatch } from '../shared/cybercabs';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug, type ClientMessage } from './protocol';
@@ -24,6 +24,7 @@ import { PROPERTY_HOME_SPAWNS, propertyRoomAssetId } from '../shared/property';
 import { MarketService } from './market-service';
 import { captureMarketHold, restoreMarketHold, withMarketHolds, type MarketHold } from './market-hold';
 import type { MarketPaint } from '../shared/market-protocol';
+import { captureAmbientNpcCars } from './vehicle-takeover';
 
 export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent, MarketService };
 
@@ -622,9 +623,18 @@ export class GameRoom extends DurableObject<Env> {
     }
     session.lastAction=now;
     if(message.type==='interact'){
-      const before=this.world.players.find(player=>player.id===session.id)?.entityId;
+      const player=this.world.players.find(player=>player.id===session.id);
+      const before=player?.entityId;
+      const current=this.world.entities.find(entity=>entity.id===before);
+      const candidates=session.economy&&current?.kind==='person'?captureAmbientNpcCars(this.world.entities):null;
       interact(this.world,session.id);
-      if(before!==this.world.players.find(player=>player.id===session.id)?.entityId){if(this.playtest==='sandbox')prepareSandboxDriver(this.world,session.id);this.invalidate(socket,session,true,message.edgeBaseline);}
+      const after=player?.entityId;
+      if(before!==after){
+        const stolen=after?candidates?.get(after):undefined;
+        if(player&&stolen)session.economy?.achievement(player,{kind:'npc-stolen',vehicle:stolen});
+        if(this.playtest==='sandbox')prepareSandboxDriver(this.world,session.id);
+        this.invalidate(socket,session,true,message.edgeBaseline);
+      }
     }
     if(message.type==='reset'){const before=this.pose(session);resetPlayer(this.world,session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
     if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session,false,message.edgeBaseline);
@@ -726,6 +736,14 @@ export class GameRoom extends DurableObject<Env> {
     for(const id of heldRelocations)relocated.add(id);
     this.tickCount=nextTick;
     if(this.playtest==='sandbox')for(const player of this.world.players)sandboxWallet(player,this.world.time);
+    if(!this.playtest){
+      const entitiesById=new Map<string,Entity>();
+      for(const entity of this.world.entities)entitiesById.set(entity.id,entity);
+      for(const player of this.world.players){
+        const session=byId.get(player.id);
+        session?.economy?.observeVehicleDrive(entitiesById.get(player.entityId),session.attachPending||!!session.marketHold||relocated.has(player.id));
+      }
+    }
     for(const session of this.sessions.values())if(!session.attachPending)session.economy?.observeCabs(now);
     // Rebalance without awaiting any driver's storage in the physics loop.
     if(this.tickCount%20===0)this.rebalanceCabs();
@@ -787,7 +805,7 @@ export class GameRoom extends DurableObject<Env> {
     const player=this.world.players.find(item=>item.id===session.id);
     const entity=this.world.entities.find(item=>item.id===player?.entityId);
     this.inputs.delete(session.id);
-    if(relocated)session.poseRevision++;
+    if(relocated){session.poseRevision++;session.economy?.resetVehicleDrive();}
     this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0},edgeBaseline?{type:'action',edgeBaseline}:{type:'relocation'}));
   }
 

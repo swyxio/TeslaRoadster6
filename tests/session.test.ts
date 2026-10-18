@@ -5,6 +5,7 @@ import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
 import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
+import { emptyVehicleCollections } from '../shared/vehicle-collections';
 
 class Socket {
   static OPEN = 1;
@@ -19,7 +20,7 @@ class Socket {
   close() { this.readyState = 3; }
   message(value:unknown) {
     const message=value as Record<string,unknown>;
-    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[])}:
+    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[]),vehicleCollections:emptyVehicleCollections()}:
       message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
@@ -45,6 +46,16 @@ test('committed reward messages queue in order without crossing identity changes
   socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
   socket.message({type:'state',world,tick:2});
   assert.deepEqual(session.takeRewards(),[{id:4,kind:'research',amount:250}], 'an in-flight reward for the same driver is preserved');
+  session.disconnect();
+});
+
+test('owner wallet rejects malformed vehicle collections',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'wallet',vehicleCollections:{driven:['roadster'],stolen:[]}});
+  assert.deepEqual(session.wallet?.vehicleCollections,{driven:['roadster'],stolen:[]});
+  const log=console.error;console.error=()=>{};
+  try{socket.message({type:'wallet',vehicleCollections:{driven:['bad-model'],stolen:[]}});}finally{console.error=log;}
+  assert.equal(socket.readyState,3);assert.equal(session.error,'Invalid server message. Please reconnect.');
   session.disconnect();
 });
 

@@ -90,7 +90,50 @@ async function sync(client:Client,token:number){
 }
 const inspect=(driverId:string)=>rpc<{progress:DriverProgress}>('wallet','inspect',{driverId});
 
-async function rejectedPredecessor(kind:'roof'|'race'){
+async function observedVehicleDrive(){
+  const driver=await savedDriver('Collection driver'),room=`collection-${randomUUID().slice(0,8)}`;
+  const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
+  await sync(client,301);
+  const before=(await inspect(driver.driverId)).progress;
+  const drive=await rpc<{observed:boolean;distance:number}>('achievement','drive',{room,playerId});
+  assert.equal(drive.observed,true,'actual room physics must record the model');
+  assert.ok(drive.distance>=100,'the driven car must physically travel 100 m');
+  await sync(client,302);
+  const after=(await inspect(driver.driverId)).progress;
+  assert.ok(after.vehicleCollections?.driven.includes('roadster'));
+  assert.ok(after.unlocked.includes('tesla-drive-1'));
+  assert.equal(after.cash,before.cash+100);assert.equal(after.eligibleIncome,before.eligibleIncome+100);
+  client.socket.close();
+  const restored=await joinSaved(`collection-return-${randomUUID().slice(0,8)}`,driver.code);
+  await sync(restored,303);
+  assert.ok((await inspect(driver.driverId)).progress.vehicleCollections?.driven.includes('roadster'));
+  restored.socket.close();
+}
+
+async function observedNpcTakeover(){
+  const driver=await savedDriver('Takeover driver'),room=`takeover-${randomUUID().slice(0,8)}`;
+  const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
+  await sync(client,401);
+  const before=(await inspect(driver.driverId)).progress;
+  client.input.action({type:'interact'});
+  await until(()=>{
+    const world=client.last('state')?.world;
+    const player=world?.players.find((item:{id:string})=>item.id===playerId);
+    return world?.entities.some((entity:{id:string;kind:string})=>entity.id===player?.entityId&&entity.kind==='person');
+  },'driver exits car');
+  const npc=await rpc<{id:string;kind:string}>('achievement','npc',{room,playerId});
+  await delay(450);
+  client.input.action({type:'interact'});
+  await until(()=>client.last('state')?.world?.players.some((player:{id:string;entityId:string})=>player.id===playerId&&player.entityId===npc.id),'driver takes the ambient NPC');
+  await sync(client,402);
+  const after=(await inspect(driver.driverId)).progress;
+  assert.deepEqual(after.vehicleCollections?.stolen,['waymo-ipace']);
+  assert.ok(after.unlocked.includes('npc-theft-1'));
+  assert.equal(after.cash,before.cash+100);assert.equal(after.eligibleIncome,before.eligibleIncome+100);
+  client.socket.close();
+}
+
+async function rejectedPredecessor(kind:'roof'|'race'|'drive'){
   const driver=await savedDriver(`Regression ${kind}`),room=`award-${kind}-${randomUUID().slice(0,8)}`;
   const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
   await delay(600);await sync(client,101);
@@ -109,13 +152,18 @@ async function rejectedPredecessor(kind:'roof'|'race'){
     assert.equal(after.achievementTiers!['roof-landings'].count,before.achievementTiers!['roof-landings'].count+1);
     assert.equal(after.cash,before.cash+500,'only the roof reward is credited');
     assert.equal(after.eligibleIncome,before.eligibleIncome+500);
-  }else{
+  }else if(kind==='race'){
     assert.equal(after.unlocked.filter(id=>id==='race-finisher').length,1,'race completion survives earlier rejection');
     assert.equal(after.unlocked.filter(id=>id==='race-winner').length,1,'race win survives earlier rejection');
     assert.equal(after.achievementTiers!['races-finished'].count,before.achievementTiers!['races-finished'].count+1);
     assert.equal(after.achievementTiers!['races-won'].count,before.achievementTiers!['races-won'].count+1);
     assert.equal(after.cash,before.cash+200,'only the first finish and contested-win tiers are credited');
     assert.equal(after.eligibleIncome,before.eligibleIncome+200);
+  }else{
+    assert.deepEqual(after.vehicleCollections?.driven,['roadster'],'the observed model survives earlier rejection');
+    assert.equal(after.unlocked.filter(id=>id==='tesla-drive-1').length,1);
+    assert.equal(after.cash,before.cash+100,'the drive reward is credited once');
+    assert.equal(after.eligibleIncome,before.eligibleIncome+100);
   }
   client.socket.close();
 }
@@ -157,7 +205,11 @@ async function crashAfterAcceptedEvidence(){
 try{
   child=start();await ready();
   const failures:string[]=[];
-  for(const kind of ['roof','race'] as const){
+  try{await observedVehicleDrive();console.log('PASS server-observed vehicle drive and saved recovery');}
+  catch(error){failures.push(`vehicle drive: ${error instanceof Error?error.stack:String(error)}`);}
+  try{await observedNpcTakeover();console.log('PASS actual NPC takeover and wallet commit');}
+  catch(error){failures.push(`NPC takeover: ${error instanceof Error?error.stack:String(error)}`);}
+  for(const kind of ['roof','race','drive'] as const){
     try{await rejectedPredecessor(kind);console.log(`PASS ${kind} after rejected predecessor`);}
     catch(error){failures.push(`${kind}: ${error instanceof Error?error.stack:String(error)}`);}
   }

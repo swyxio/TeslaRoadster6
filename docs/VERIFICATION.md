@@ -7,6 +7,13 @@
 - All 893 tests and `pnpm build` passed before integration with subsequent main-branch releases; the build retained its existing large-chunk warning.
 - After integrating main through PR #93, all 899 tests and the 0.0.28 build passed, with the same large-chunk warning.
 
+## Vehicle collections · local candidate · 2026-10-18 Pacific
+
+- Based on `dad912e`, all 903 unit tests and `pnpm build` passed. The existing Vite large-chunk warning remains. An isolated local Wrangler two-client room integration passed at advertised capacity 64; this is a functional check, not a load or capacity test.
+- Local Wrangler recovery fixtures confirmed a real 100 m Roadster drive and a real on-foot NPC takeover, each with its saved model and $100 reward. A collected drive survived rejection of an earlier wallet action. Separate wallet tests covered legacy profiles, malformed progress, duplicate receipts, duplicate models, stale checkpoints and recovery of accepted collection evidence after a process kill. No prior driving or theft history was inferred.
+- Chrome showed the Awards collection on desktop and at emulated 390 × 844 portrait and 844 × 390 landscape sizes. These are browser emulations; no physical device was tested. The model arrays travel in the private wallet, but earned badge IDs remain visible under the existing player-snapshot contract. All 13 new IDs contribute 242 JSON bytes of array contents, plus a comma when appended to existing IDs; this is a serialization count, not a throughput measurement. The observer also builds an entity index once per room tick, so integrated driving-continuity and payload checks remain necessary.
+- This branch does not contain the sandbox implementation or a protocol bump. Sandbox isolation, the final integrated release and production verification belong to the combined candidate.
+
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
 - After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.

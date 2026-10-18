@@ -6,6 +6,7 @@ import type { PaintId, StyleChoice } from '../shared/vehicle-style';
 import type { CybercabFleet } from '../shared/cybercabs';
 import type { AchievementId } from '../shared/achievements';
 import { isAchievementTierProgress, type AchievementTierProgress } from '../shared/achievement-tiers';
+import { isVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
 import type { LuxuryVehicleId } from '../shared/luxury';
 import { TickPrediction } from './tick-prediction';
 import { MotionClock } from './motion-clock';
@@ -21,7 +22,7 @@ export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room)
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
 export type WalletStatus = 'guest' | 'connecting' | 'syncing' | 'ready' | 'failed';
 const WALLET_TIMEOUT_MS=15_000;
-export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];achievementTiers:AchievementTierProgress;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
+export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];achievementTiers:AchievementTierProgress;vehicleCollections:VehicleCollections;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
 export type LuxuryResult = {requestId:number;action:'buy'|'collect';vehicle:LuxuryVehicleId;ok:boolean;reason?:string;awards?:AchievementId[]};
 export class Session {
   world: World = createEmptyWorld();
@@ -180,6 +181,7 @@ export class Session {
         }
         if (message.type === 'wallet') {
           if(!isAchievementTierProgress(message.achievementTiers))throw new Error('Invalid achievement tier progress');
+          if(!isVehicleCollections(message.vehicleCollections))throw new Error('Invalid vehicle collection progress');
           this.wallet = message;
         }
         if(message.type==='reward'){

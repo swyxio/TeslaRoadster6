@@ -3,7 +3,9 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { ACHIEVEMENT_TIER_IDS, ACHIEVEMENT_TIER_NAMES, selectAchievementTierLadder, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import type { Player } from '../shared/game';
 import type { Session } from './session';
-import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers, type GameScores } from './progress-model';
+import { TESLA_COLLECTION_IDS, VAULT_COLLECTION_IDS } from '../shared/vehicle-collections';
+import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../shared/vehicles';
+import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers, vehicleCollectionAwardProgress, type GameScores } from './progress-model';
 
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
@@ -32,6 +34,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
   const history=new GameResultHistory();
   let games:GameScores={current:[],recent:[]},lastRender=0,lastAwardsKey='';
   const expandedFamilies=new Set<AchievementTierId>();
+  const expandedCollections=new Set<string>();
   const entries=Object.entries(ACHIEVEMENTS) as [AchievementId,typeof ACHIEVEMENTS[AchievementId]][];
   const available=()=>session.status==='online'&&(session.walletStatus==='guest'||(session.walletStatus==='ready'&&!!session.wallet));
   function observe(){
@@ -105,7 +108,8 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     const view=awardSaveView(session.status==='online',session.walletStatus,session.wallet?.unlocked??null,player?.achievements.unlocked??[]);
     const savedIds=new Set(view.saved),current=new Set(view.observed),all=new Set([...savedIds,...current]);
     const tiers=savedAwardTiers(session.status==='online',session.walletStatus,session.wallet?.achievementTiers??null);
-    const key=JSON.stringify([view,tiers,player?.delivery.completed,entries.map(([id])=>awardProgress(id,player,session.world))]);
+    const collections=available()?session.wallet?.vehicleCollections??null:null;
+    const key=JSON.stringify([view,tiers,collections,player?.delivery.completed,entries.map(([id])=>awardProgress(id,player,session.world))]);
     saveStatus.textContent=view.text;
     if(key===lastAwardsKey)return;
     lastAwardsKey=key;
@@ -113,9 +117,14 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       const id=details.dataset.family as AchievementTierId;
       if(details.open)expandedFamilies.add(id);else expandedFamilies.delete(id);
     }
+    for(const details of body.querySelectorAll<HTMLDetailsElement>('details[data-collection]')){
+      const id=details.dataset.collection!;
+      if(details.open)expandedCollections.add(id);else expandedCollections.delete(id);
+    }
     const active=document.activeElement instanceof HTMLElement?document.activeElement:null;
     const activeCard=active?.closest<HTMLElement>('[data-award-id]');
     const activeId=activeCard?.dataset.awardId,summaryFocused=active?.tagName==='SUMMARY';
+    const activeCollection=active?.closest<HTMLDetailsElement>('details[data-collection]')?.dataset.collection;
     const scrollTop=awardsDialog.scrollTop;
     body.replaceChildren();
     if(available())body.append(element('p','progress-awards-count',`${all.size} / ${entries.length} one-time awards earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
@@ -129,6 +138,28 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       if(available()&&items.length)heading.append(element('span','',`${items.filter(([id])=>all.has(id)).length} / ${items.length} one-time awards earned`));
       section.append(heading);
       const list=element('ul','progress-award-list');
+      if(group.id==='collection'){
+        section.append(element('p','progress-award-description','Drive 100 m in one ride to collect a model. Take over NPC traffic cars to collect thefts.'));
+        list.classList.add('progress-collection-list');
+        const groups:{id:string;title:string;ids:readonly VehicleId[];completed:readonly VehicleId[]|undefined}[]=[
+          {id:'tesla',title:'Tesla models driven',ids:TESLA_COLLECTION_IDS,completed:collections?.driven},
+          {id:'npc',title:'NPC models taken',ids:VEHICLE_IDS,completed:collections?.stolen},
+          {id:'vault',title:'Vault models driven',ids:VAULT_COLLECTION_IDS,completed:collections?.driven},
+        ];
+        for(const collection of groups){
+          const done=new Set(collection.completed??[]),count=collection.ids.filter(id=>done.has(id)).length;
+          const row=element('li','progress-award progress-collection-card');
+          const details=element('details','progress-tier-details');details.dataset.collection=collection.id;details.open=expandedCollections.has(collection.id);
+          details.append(element('summary','',`${collection.title} · ${collection.completed?`${count} / ${collection.ids.length}`:'Progress unavailable'}`));
+          const models=element('ul','progress-tier-ladder');
+          for(const id of collection.ids){
+            const item=element('li','progress-tier-step');
+            item.append(element('span','',VEHICLES[id].name),element('span','',collection.completed?(done.has(id)?'Collected':'Not yet'):'Unavailable'));
+            models.append(item);
+          }
+          details.append(models);row.append(details);list.append(row);
+        }
+      }
       for(const id of families)list.append(renderTierCard(id,tiers?.find(row=>row.id===id)));
       for(const [id,award] of items){
         const isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
@@ -142,7 +173,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
         row.append(top,title,element('p','progress-award-description',details.description));
         const target=awardDeliveryTarget(id),progress=element('div','progress-award-progress');
         progress.append(element('span','progress-award-label','Progress'));
-        progress.append(element('span','progress-award-progress-text',earned&&!target?'Completed':awardProgress(id,player,session.world)));
+        progress.append(element('span','progress-award-progress-text',earned&&!target?'Completed':vehicleCollectionAwardProgress(id,collections)??awardProgress(id,player,session.world)));
         if(target&&player){
           const bar=element('progress','progress-award-bar');bar.max=target;bar.value=Math.min(player.delivery.completed,target);
           bar.setAttribute('aria-label',`${award.name} delivery progress`);progress.append(bar);
@@ -157,7 +188,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       const replacement=document.getElementById(`progress-award-${activeId}`);
       const target=summaryFocused?replacement?.querySelector<HTMLElement>('summary'):replacement;
       target?.focus({preventScroll:true});
-    }
+    }else if(activeCollection&&summaryFocused)body.querySelector<HTMLElement>(`details[data-collection="${activeCollection}"] summary`)?.focus({preventScroll:true});
     awardsDialog.scrollTop=scrollTop;
   }
   function renderTierCard(id:AchievementTierId,data:AchievementTierRow|undefined){
