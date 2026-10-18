@@ -62,7 +62,7 @@ function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
 /** Snapshot flags describe arcade effects, not the prototype's real control law. */
 export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
   // The stock Roadster always has its hardware. Other cars show it only while
-  // the authoritative temporary upgrade is active (including between bursts).
+  // an authoritative Rocket capability is active (including between bursts).
   const hardware=root.getObjectByName('rocket_hardware'),jets=root.getObjectByName('jets');
   const spec=VEHICLES[root.name as VehicleId];
   if(hardware instanceof T.Group&&jets instanceof T.Group&&spec){

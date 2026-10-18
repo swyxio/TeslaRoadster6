@@ -2,7 +2,7 @@ import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
-export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'};
+export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;

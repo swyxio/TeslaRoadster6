@@ -14,10 +14,10 @@ import { Session } from './session';
 import { Controls } from './controls';
 import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
-import { STATIONS, chargingStationAt } from '../shared/stations';
+import { STATIONS } from '../shared/stations';
+import { refillStationFor } from '../shared/charging';
 import { type Entity } from '../shared/game';
 import { ferryDocked, ferrySecured, islandProtected, FERRY_DECK } from '../shared/ferry';
-import { hasRocket } from '../shared/rocket';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
@@ -27,7 +27,7 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
-import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, terrainHeight } from '../shared/map';
+import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP } from '../shared/map';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -66,9 +66,9 @@ document.querySelector('#app')!.innerHTML = `
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
  <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
- <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div id="rocket-status" hidden></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Drive onto the SF ferry for Rocket Island. Purple pads grant temporary flight. At parking lots, use Actions for parking games. Blue lanes add speed and air; golden thermals lift and refill you.</small></div></div>
- <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
+ <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for Rocket Island.</small></div></div>
+ <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump / hold to hover · X / □ flip · B / ○ boost · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
@@ -284,7 +284,7 @@ for(const action of ['park','queue','start','leave'] as const){
   };
 }
 const activityHelp=document.createElement('p');activityHelp.className='activity-help';
-activityHelp.textContent='Take the ferry from north SF to Rocket Island. Drive over a Rocket pad for temporary flight. At a parking lot, join Park It or enter the marked approach for Cut the queue. Race from an island start marker; cars can bump. Keyboard: use Tab and Enter to choose an action.';
+activityHelp.textContent='Take the ferry from north SF to Rocket Island. Drive over a Rocket pickup to fit a session-long flight kit. At a parking lot, join Park It or enter the marked approach for Cut the queue. Race from an island start marker; cars can bump. Keyboard: use Tab and Enter to choose an action.';
 const keyboardHelp=$('keyboard-help').querySelector('small');
 if(keyboardHelp)keyboardHelp.textContent+=' Use Tab to reach Actions, Enter to open it, then Tab and Enter to choose a game.';
 $('drive-actions').insertAdjacentHTML('beforeend','<label class="race-choice" for="race-course">RACE COURSE<select id="race-course"><option value="short">Short circuit</option><option value="oval">Speed oval</option></select></label><button id="race-join">Join race</button><button id="race-start">Start race</button><button id="race-leave">Leave race</button>');
@@ -319,9 +319,9 @@ const mapBase=document.createElement('canvas');mapBase.width=240;mapBase.height=
 const base=mapBase.getContext('2d')!;
 // The overview grows with the player's unlocked world; the local view stays useful for navigation.
 const mapExtents=[
-  {minX:-530,maxX:700,minZ:-1050,maxZ:430},
-  {minX:-550,maxX:850,minZ:-1050,maxZ:430},
-  {minX:-1800,maxX:2400,minZ:-1050,maxZ:7600},
+  {minX:-530,maxX:700,minZ:MAP_BOUNDS.minZ,maxZ:430},
+  {minX:-550,maxX:850,minZ:MAP_BOUNDS.minZ,maxZ:430},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:7600},
   MAP_BOUNDS,
 ] as const;
 const localRoads=ROADS.filter(road=>road.kind!=='highway');
@@ -353,7 +353,7 @@ function minimap(entity:Entity|undefined,level:Level){
     // Hide unreached districts instead of showing the complete Bay from the start.
     base.fillStyle='#193b48ee';for(let z=0;z<240;z+=6)for(let x=0;x<240;x+=6){if(!visible(worldX(x+3),worldZ(z+3)))base.fillRect(x,z,6,6);}
     base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('SF',px(-120)-12,pz(0));if(visible(385,-150))base.fillText('OAKLAND',px(385)+4,pz(-150));
-    base.fillText('ROCKET ISLAND',px(200)-22,pz(-1650));
+    if(visible(200,-1650))base.fillText('ROCKET ISLAND',px(200)-22,pz(-1650));
     for(const dock of Object.values(FERRY_DOCKS).filter(d=>visible(d.x,d.z))){
       const x=px(dock.x),z=pz(dock.z);base.beginPath();base.moveTo(x,z-4);base.lineTo(x+4,z);base.lineTo(x,z+4);base.lineTo(x-4,z);base.closePath();base.fillStyle='#e9f6ee';base.fill();
     }
@@ -366,16 +366,6 @@ function minimap(entity:Entity|undefined,level:Level){
     base.fillStyle='#91dfff';base.beginPath();base.arc(px(DOME.x),pz(DOME.z),3,0,Math.PI*2);base.fill();base.fillText('ROCKET DOME',px(DOME.x)+4,pz(DOME.z)-3);
   }
   map.drawImage(mapBase,0,0);
-  const ferry=session.world.ferry;
-  map.save();map.translate(px(ferry.x),pz(ferry.z));map.fillStyle='#f8f8ed';map.strokeStyle='#23535b';map.lineWidth=1.5;map.beginPath();map.rect(-3,-6,6,12);map.fill();map.stroke();map.restore();
-  const parkingRound=session.world.parking.rounds.find(r=>r.entrants.some(entrant=>entrant.playerId===session.id));
-  const parkingEntrant=parkingRound?.entrants.find(entrant=>entrant.playerId===session.id);
-  const stall=PARKING_LOTS.find(lot=>lot.id===parkingRound?.lotId)?.stalls.find(stall=>stall.id===parkingEntrant?.targetId);
-  if(stall){map.beginPath();map.arc(px(stall.x),pz(stall.z),6,0,Math.PI*2);map.strokeStyle='#ffb858';map.lineWidth=2;map.stroke();}
-  const racing=playerRace(session.world.races,session.id);
-  const raceRound=racing?.round,racer=racing?.entrant;
-  const gate=RACE_COURSES.find(course=>course.id===raceRound?.courseId)?.gates[racer?.nextGate??-1];
-  if(gate){map.beginPath();map.arc(px(gate.x),pz(gate.z),7,0,Math.PI*2);map.strokeStyle='#efbaf1';map.lineWidth=2;map.stroke();}
   map.save();map.strokeStyle='#85e9ff';map.lineWidth=2;map.setLineDash([5,4]);
   for(const lane of JET_STREAMS){
     // Sample the shared access boundary so a wind lane cannot reveal locked areas.
@@ -396,6 +386,16 @@ function minimap(entity:Entity|undefined,level:Level){
   map.setLineDash([]);map.strokeStyle='#ffe2a1';map.lineWidth=2;
   for(const t of THERMALS.filter(t=>visible(t.x,t.z))){map.beginPath();map.arc(px(t.x),pz(t.z),4,0,Math.PI*2);map.stroke();}
   map.restore();
+  const ferry=session.world.ferry;
+  map.save();map.translate(px(ferry.x),pz(ferry.z));map.fillStyle='#f8f8ed';map.strokeStyle='#23535b';map.lineWidth=1.5;map.beginPath();map.rect(-3,-6,6,12);map.fill();map.stroke();map.restore();
+  const parkingRound=session.world.parking.rounds.find(r=>r.entrants.some(entrant=>entrant.playerId===session.id));
+  const parkingEntrant=parkingRound?.entrants.find(entrant=>entrant.playerId===session.id);
+  const stall=PARKING_LOTS.find(lot=>lot.id===parkingRound?.lotId)?.stalls.find(stall=>stall.id===parkingEntrant?.targetId);
+  if(stall){map.beginPath();map.arc(px(stall.x),pz(stall.z),6,0,Math.PI*2);map.strokeStyle='#ffb858';map.lineWidth=2;map.stroke();}
+  const racing=playerRace(session.world.races,session.id);
+  const raceRound=racing?.round,racer=racing?.entrant;
+  const gate=RACE_COURSES.find(course=>course.id===raceRound?.courseId)?.gates[racer?.nextGate??-1];
+  if(gate){map.beginPath();map.arc(px(gate.x),pz(gate.z),7,0,Math.PI*2);map.strokeStyle='#efbaf1';map.lineWidth=2;map.stroke();}
   STATIONS.filter(s=>visible(s.x,s.z)).forEach(s=>{map.beginPath();map.arc(px(s.x),pz(s.z),2.8,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
   SHOPS.filter(s=>visible(s.x,s.z)).forEach(s=>{map.save();map.translate(px(s.x),pz(s.z));map.rotate(Math.PI/4);map.fillStyle='#cf99ff';map.fillRect(-3,-3,6,6);map.restore();});
   session.world.pickups.filter(p=>p.kind==='rocket'&&p.active&&visible(p.x,p.z)).forEach(p=>{map.beginPath();map.arc(px(p.x),pz(p.z),2,0,Math.PI*2);map.fillStyle='#f1caff';map.fill();});
@@ -480,7 +480,7 @@ for(const id of teslaIds){const spec=VEHICLES[id],button=document.createElement(
 function openFleet(){controls.clear();controls.enabled=false;const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);showVehicle(entity&&entity.kind!=='person'&&VEHICLES[entity.kind].brand==='Tesla'?entity.kind:selectedVehicle);fleetDialog.showModal();}
 function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu;}
 $('fleet-close').onclick=closeFleet;fleetDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
-$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.supportId==='ferry'||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent=entity?.supportId==='ferry'?'Drive off the ferry and stop before choosing a ride.':'Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
+$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.supportId==='ferry'||entity.supportId==='island-cliff'||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent=entity?.supportId==='ferry'?'Drive off the ferry and stop before choosing a ride.':'Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Tesla requested. Upgrades do not transfer between vehicles.');};
 function updateActivities(e:Entity){
   const world=session.world,ferry=world.ferry,secured=ferrySecured(ferry,e);
   const nearDock=Object.values(FERRY_DOCKS).some(dock=>Math.hypot(e.x-dock.x,e.z-dock.z)<180);
@@ -502,10 +502,10 @@ function updateActivities(e:Entity){
     const stall=lot.stalls.find(stall=>stall.id===entrant.targetId);
     if(entrant.finishedAt!==null){
       parkingText=round.mode==='park'?`PARK IT · Finished in ${entrant.elapsed?.toFixed(1)??'—'}s`:`QUEUE · Parked in ${entrant.elapsed?.toFixed(1)??'—'}s · ${entrant.overtakes??0} overtakes`;
-    }else if(round.phase==='results')parkingText=`${round.mode==='park'?'PARK IT':'QUEUE'} · Round ended`;
+    }else if(round.phase==='results')parkingText=round.mode==='queue'&&round.claimedStallIds.length>=lot.stalls.length?'QUEUE · No stalls remain':`${round.mode==='park'?'PARK IT':'QUEUE'} · Round ended`;
     else if(round.mode==='park')parkingText=`PARK IT · Stall ${entrant.targetId??'—'}${stall?` · ${Math.round(Math.hypot(e.x-stall.x,e.z-stall.z))}m`:''} · hold ${entrant.hold.toFixed(1)}/2s · ${remaining}s left`;
     else if(round.phase==='waiting')parkingText=`QUEUE · Position ${round.entrants.findIndex(p=>p.playerId===session.id)+1} · starts in ${remaining}s${round.hostId===session.id?' · Actions: Start queue':''}`;
-    else parkingText=`QUEUE · Find an empty stall · ${remaining}s left`;
+    else parkingText=`QUEUE · ${Math.max(0,lot.stalls.length-round.claimedStallIds.length)} unclaimed · red X = claimed · ${remaining}s left`;
   }else if(PARKING_LOTS.some(lot=>Math.hypot(e.x-lot.area.x,e.z-lot.area.z)<Math.max(lot.area.width,lot.area.length)/2+25)){
     parkingText='PARKING PLAYGROUND · Actions: Park It or Cut the queue';
   }
@@ -528,9 +528,8 @@ function updateActivities(e:Entity){
   }else if(RACE_COURSES.some(course=>Math.hypot(e.x-course.start.x,e.z-course.start.z)<course.start.radius+20))raceText='RACE START · Choose a course in Actions. Cars can bump.';
   $('race-status').textContent=raceText;
 }
-
 const shopDialog=$<HTMLDialogElement>('shop-dialog');
-let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false;
+let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false,lastSkyCurrent='';
 let pendingShop:{requestId:number;upgrade:UpgradeId;sentAt:number}|null=null;
 let pendingOta:{requestId:number;enabled:boolean;sentAt:number}|null=null;
 $('ota-toggle').onclick=()=>{
@@ -609,7 +608,7 @@ scene.start(dt=>{
     if(!playRecorded||(active>lastActiveSeconds&&now-lastPlayWrite>=10000))recordPlay(now);
     lastActiveSeconds=active;
   }
-  if(observedCar)controls.observeFlight(hasRocket(observedCar,session.world.time)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
+  if(observedCar)controls.observeFlight(hasRockets(observedCar)&&!ferrySecured(session.world.ferry,observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
   document.body.classList.toggle('cockpit-active',cockpit);
   $('cockpit-trim').hidden=!cockpit;$('cockpit-dashboard').hidden=!cockpit||!!car?.inDome;
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
@@ -628,14 +627,14 @@ scene.start(dt=>{
   if(e.inDome){
     const soccer=session.world.soccer;
     const blue=`BLUE ${soccer.blueScore}`,orange=`${soccer.orangeScore} ORANGE`;
-    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
+    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.stock;
     const ownParticipant=soccer.participants.find(participant=>participant.playerId===session.id);
     const ownGoals=ownParticipant?goalCount(ownParticipant):0;
     const topGoals=Math.max(0,...soccer.participants.map(goalCount));
     const leaders=topGoals?soccer.participants.filter(participant=>goalCount(participant)===topGoals):[];
-    const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Driver';
+    const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Departed driver';
     const leader=leaders.length?`${driverName(leaders[0].playerId)}${leaders.length>1?` +${leaders.length-1}`:''} (${topGoals})`:'No leader yet';
-    const standings=`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
+    const standings=soccer.phase==='win'?`Your goals: ${ownGoals}`:`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
     const winner=soccer.winningPlayers;
     const status=soccer.phase==='win'?(winner.length===0?'Match complete · no credited winner':winner.includes(session.id)?`${winner.length>1?'You share':'You take'} the win! New match soon.`:`${driverName(winner[0])}${winner.length>1?` +${winner.length-1} share the win`:' wins'}! New match soon.`):soccer.phase==='goal'?`${soccer.lastScorer?.toUpperCase()} goal! Last touch gets credit.`:'Either goal counts · first color to 5 ends match';
     if($('dome-blue').textContent!==blue)$('dome-blue').textContent=blue;
@@ -648,8 +647,8 @@ scene.start(dt=>{
   $('cockpit-speed').textContent=String(Math.round(Math.abs(e.speed)*3.6));
   const spec=e.kind==='person'?null:VEHICLES[e.kind];
   $('vehicle').textContent=spec?.name.toUpperCase()??'ON FOOT';
-  const rocket=hasRocket(e,session.world.time);
-  if(lastRocketEntity===e.id&&!lastRocketInstalled&&rocket)notice('Rocket flight ready! Jump, hover, boost and flip.');
+  const rocket=hasRockets(e);
+  if(lastRocketEntity===e.id&&!lastRocketInstalled&&rocket)notice('Rocket kit installed! Jump, hover, boost and flip are ready.');
   lastRocketEntity=e.id;lastRocketInstalled=rocket;
   $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${rocket?' · ROCKET':''}${e.autopilot?' · AUTONOMOUS':''}`:'';
   $('autopilot').textContent=`${controlSettings.label('autopilot')} · AV ${e.autopilot?'on':'off'}`;$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
@@ -658,8 +657,6 @@ scene.start(dt=>{
   for(const control of ['KeyQ','KeyR','KeyX','ShiftLeft','KeyE']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket||secured;
   }
-  $('rocket-status').hidden=!rocket||!!spec?.airThrusters||e.upgrades.rocket;
-  $('rocket-status').textContent=rocket&&!spec?.airThrusters&&!e.upgrades.rocket?`TEMP ROCKET · ${Math.ceil(e.rocketUntil-session.world.time)}s`:'';
   $('flight').textContent=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',airborne||e.loopAngle!==null||e.supportId==='dome');
   $('jump-control').textContent='JUMP / HOVER';$('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
   $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
@@ -667,12 +664,16 @@ scene.start(dt=>{
   $('air-label').textContent=`AIR LV ${e.tankLevel}`;$('air').classList.toggle('air-low',rocket&&e.air<12);$('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=`${controlSettings.label('interact')} · ${e.kind==='person'?'Take nearby car':'Exit car'}`;
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
-  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),station=chargingStationAt(e.x,e.z),refilling=!!station&&e.supportId==='ground'&&e.loopAngle===null&&Math.abs(e.y-(terrainHeight(station!.x,station!.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
+  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=refillStationFor(e);
   const skyCurrent=currentAt(e);
+  const skyId=skyCurrent?.id??'';
+  if(skyId&&skyId!==lastSkyCurrent&&!menu)notice(skyCurrent!.kind==='thermal'?'THERMAL · Lift + air refilling':'SKY LANE · Speed + air refilling');
+  lastSkyCurrent=skyId;
   const wallCharge=chargingDomeWall(e,rocket);
-  $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + AIR':'➜ SKY LANE · SPEED + AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${nearest.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
-  $('station-status').classList.toggle('refilling',refilling||!!skyCurrent||wallCharge);
+  $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').classList.toggle('refilling',!!refilling||!!skyCurrent||wallCharge);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);
+  $('station-status').classList.toggle('dome-active',e.inDome);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const shopDistance=Math.hypot(e.x-nearbyShop.x,e.z-nearbyShop.z),shopReady=!!shopFor(e);
   $('shop-prompt').hidden=menu||!started||e.kind==='person'||shopDistance>30||shopDialog.open;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, resetPlayer, step, travelDome } from '../shared/game';
 import { DOME } from '../shared/dome';
-import { domeSurface, DOME_PERIMETER, isLand } from '../shared/map';
+import { domeSurface, DOME_PERIMETER, isLand, isRocketIsland } from '../shared/map';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { body, contact } from '../shared/physics';
 
@@ -106,6 +106,16 @@ test('every vehicle drives through the stadium gate in both directions without t
   }
 });
 
+test('a grounded approach from the city joins the dome without teleporting and can leave by shortcut',()=>{
+  const {world,car}=setup();world.pickups=[];
+  Object.assign(car,{x:DOME.x,z:DOME.z-DOME.flatHalfWidth-8,y:0,supportId:'ground',yaw:Math.PI,speed:12,air:42,health:83});
+  for(let i=0;i<50&&!car.inDome;i++)step(world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+  assert.equal(car.inDome,true);assert.ok(car.z<DOME.z-DOME.flatHalfWidth+10,'entry keeps the driven position');
+  assert.ok(car.speed>0,'entry preserves motion');assert.equal(car.air,42);assert.equal(car.health,83);
+  assert.ok(travelDome(world,'one'));assert.equal(car.inDome,false);
+  assert.ok(!isRocketIsland(car.x,car.z),'the explicit leave action returns to the city');
+});
+
 test('natural entry disables autonomy while preserving position and resources',()=>{
   const {world,car}=setup();world.pickups=[];
   Object.assign(car,{x:DOME.x-DOME.halfLength+2,z:DOME.z,y:0,supportId:'ground',yaw:-Math.PI/2,speed:8,autopilot:true,air:42,health:83});
@@ -124,18 +134,12 @@ test('an airborne fly-in joins the capsule and can hit the ball before landing',
   assert.equal(car.air,42);assert.equal(car.health,83);
 });
 
-test('descent from above the roof enters and lands inside without resetting the car',()=>{
+test('descent from above lands on the arena roof rather than clipping through',()=>{
   const {world,car}=setup();world.pickups=[];
-  Object.assign(car,{x:DOME.x-15,z:DOME.z,y:52,supportId:null,vy:-8,vx:0,air:42,health:83,autopilot:true});
-  for(let i=0;i<20&&!car.inDome;i++){
-    step(world,new Map(),.05);
-    if(!car.inDome)assert.ok(car.y+VEHICLES.roadster.height>2*DOME.radius);
-  }
-  assert.equal(car.inDome,true);assert.equal(car.autopilot,false);assert.equal(car.supportId,null);
-  assert.equal(car.x,DOME.x-15);assert.equal(car.air,42);assert.equal(car.health,83);
-  for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
-  assert.equal(car.inDome,true);assert.equal(car.supportId,'ground');assert.equal(car.y,0);
-  assert.equal(car.x,DOME.x-15,'landing remains inside the arena');
+  Object.assign(car,{x:DOME.x-15,z:DOME.z,y:52,supportId:null,vy:-8,vx:0,air:42,health:83,autopilot:false});
+  for(let i=0;i<30&&car.supportId===null;i++)step(world,new Map(),.05);
+  assert.equal(car.inDome,false);assert.equal(car.supportId,'dome-roof');assert.equal(car.y,2*DOME.radius);
+  assert.equal(car.air,42);assert.equal(car.health,83);
 });
 
 test('passing above the roof or landing outside the capsule does not enter the dome',()=>{

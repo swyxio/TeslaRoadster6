@@ -2,6 +2,7 @@
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
+import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
@@ -83,7 +84,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-cliff'|'ferry'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-cliff'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -110,20 +111,53 @@ export function overpassHeight(x:number,z:number):number|null {
  if(x>OVERPASS.deckEnd)return OVERPASS.height*(OVERPASS.end-x)/(OVERPASS.end-OVERPASS.deckEnd);
  return OVERPASS.height;
 }
+/** The upper exterior follows the same capsule as the rendered arena shell. */
+export function domeRoofHeight(x:number,z:number):number|null {
+ if(Math.abs(x-DOME.x)>DOME.halfLength)return null;
+ const side=Math.max(0,Math.abs(z-DOME.z)-DOME.flatHalfWidth);
+ return side>DOME.radius?null:DOME.radius+Math.sqrt(Math.max(0,DOME.radius**2-side**2));
+}
+/** Shared roof height for the visible curved special landmarks. */
+export function buildingRoofHeight(b:Building,x:number,z:number):number {
+ const dome=(cx:number,cz:number,rx:number,rz:number,base:number,height:number)=>{
+  const q=((x-cx)/rx)**2+((z-cz)/rz)**2;
+  return q<=1?base+height*Math.sqrt(Math.max(0,1-q)):0;
+ };
+ if(b.style==='rotunda')return Math.max(14,dome(b.x,b.z,9,9,14,9));
+ if(b.style==='salesforce'||b.style==='coit')return Math.max(b.h,dome(b.x,b.z,b.w*.46,b.w*.46,b.h,b.w*.46*.38));
+ if(b.style==='landmark'){
+  const p=NORTH_LANDMARKS.find(p=>p.x===b.x&&p.z===b.z);
+  if(p?.shape==='rotunda')return Math.max(b.h*.72,dome(b.x,b.z,b.w*.35,b.d*.35,b.h*.72,b.h*.28));
+  if(p?.shape==='crystal')return Math.max(b.h*.26,dome(b.x,b.z,b.w*.4,b.d*.4,b.h*.26,b.h*.7));
+  if(p?.shape==='academy'||p?.shape==='greenhouse'){
+   const academy=p.shape==='academy',base=b.h*(academy?.56:.43),radius=academy?.18:.19,offset=academy?.27:.28;
+   return Math.max(base,...[-1,0,1].map(i=>dome(b.x+i*b.w*offset,b.z,b.w*radius,b.d*(academy?.4:.39),base,b.h*(academy?.4:.5))));
+  }
+ }
+ return b.h;
+}
 /** Surface IDs are static map identities; null denotes no support at the pivot. */
 export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='ground')return terrainHeight(x,z);
+ if(id==='dome-roof')return domeRoofHeight(x,z);
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
  if(id==='island-bank')return bankSurface(x,z)?.height??null;
+ if(id==='island-oval')return ovalBankSurface(x,z)?.height??null;
  // Curved surfaces can have multiple heights at one point; ferry support moves.
  if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
  const b=BUILDINGS[Number(id.slice(5))];
- return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
+ return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?buildingRoofHeight(b,x,z):null;
 }
 export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
  if(supportHeight(id,x,z)===null)return null;
  if(id==='island-bank')return bankSurface(x,z)?.normal??null;
+ if(id==='island-oval')return ovalBankSurface(x,z)?.normal??null;
+ if(id==='dome-roof'||id.startsWith('roof:')){
+  const delta=.05,h=supportHeight(id,x,z)!,hx=supportHeight(id,x+delta,z),hz=supportHeight(id,x,z+delta);
+  const dx=hx===null?0:(hx-h)/delta,dz=hz===null?0:(hz-h)/delta,len=Math.hypot(dx,1,dz);
+  return {x:-dx/len,y:1/len,z:-dz/len};
+ }
  let dx=0,dz=0;
  if(id==='ground')({dx,dz}=hillSurface(x,z));
  else if(id==='stunt-ramp')dx=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
@@ -146,7 +180,7 @@ export function domeSurface(arcLength:number):{y:number;z:number;tangentY:number
  return {y:r*(1+Math.cos(a)),z:DOME.z-w-r*Math.sin(a),tangentY:-Math.sin(a),tangentZ:-Math.cos(a),normalY:-Math.cos(a),normalZ:Math.sin(a)};
 }
 
-export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'|'island'};
+export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'|'island';course?:'oval'};
 export const ROADS:RoadSegment[]=[];
 /** Clear the stadium footprint while leaving the adjoining city streets intact. */
 export function inDomePlaza(x:number,z:number):boolean {
@@ -163,15 +197,12 @@ ROADS.push({x:-240,z:-330,w:18,d:180,axis:'z'},{x:195,z:60,w:270,d:24,axis:'x'})
 // The north gate connects directly to the z=120 city street.
 ROADS.push({x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:18,d:DOME.z-DOME.flatHalfWidth-120,axis:'z'});
 
-// A flat, wide free-roam loop and dock connection. The land is the physical
-// surface; these shared road rectangles are the same paint shown in the map.
-export const ISLAND_TRACK:MapPoint[]=Array.from({length:48},(_,i)=>{
- const a=i/48*Math.PI*2;
- return {x:200+510*Math.cos(a),z:-1650+350*Math.sin(a)};
-});
+// The route remains useful to the minimap; the oval's physical surface is
+// shared separately with its renderer in oval-bank.ts.
+export const ISLAND_TRACK:MapPoint[]=Array.from({length:OVAL_BANK.trackSegments},(_,i)=>ovalTrackPoint(i));
 for(let i=0;i<ISLAND_TRACK.length;i++){
  const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z;
- ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:28,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'island'});
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:28,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'island',course:'oval'});
 }
 for(let i=0;i<SHORT_TRACK.length;i++){
  const a=SHORT_TRACK[i],b=SHORT_TRACK[(i+1)%SHORT_TRACK.length],dx=b.x-a.x,dz=b.z-a.z;

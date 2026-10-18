@@ -2,11 +2,11 @@ import { DOME } from './dome';
 import type { Entity } from './game';
 import { domeSurface } from './map';
 import { dimensions } from './physics';
-import { VEHICLES } from './vehicles';
+import { hasRockets } from './upgrades';
 
 export type SoccerSide = 'blue' | 'orange';
 export type SoccerBall = {x:number;y:number;z:number;vx:number;vy:number;vz:number};
-export type DomeCarClass = 'roadster' | 'retrofit' | 'pickup' | 'stock';
+export type DomeCarClass = 'roadster' | 'retrofit' | 'stock';
 export type DomeParticipant = {playerId:string;touches:Record<DomeCarClass,boolean>;goals:Record<DomeCarClass,number>};
 export type SoccerState = {
   ball:SoccerBall;
@@ -31,16 +31,15 @@ export function initialSoccer():SoccerState {
 }
 
 export function domeGoals(participant:DomeParticipant):number {
-  return participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
+  return participant.goals.roadster+participant.goals.retrofit+participant.goals.stock;
 }
 
-function recordTouch(state:SoccerState,car:Entity,time:number):void {
+function recordTouch(state:SoccerState,car:Entity):void {
   if(!car.driver||car.kind==='person'){state.lastTouch=null;return;}
-  const carClass:DomeCarClass=car.kind==='roadster'?'roadster':
-    !VEHICLES[car.kind].airThrusters&&car.upgrades.rocket?'retrofit':time<car.rocketUntil?'pickup':'stock';
+  const carClass:DomeCarClass=car.kind==='roadster'?'roadster':hasRockets(car)?'retrofit':'stock';
   let participant=state.participants.find(p=>p.playerId===car.driver);
   if(!participant){
-    participant={playerId:car.driver,touches:{roadster:false,retrofit:false,pickup:false,stock:false},goals:{roadster:0,retrofit:0,pickup:0,stock:0}};
+    participant={playerId:car.driver,touches:{roadster:false,retrofit:false,stock:false},goals:{roadster:0,retrofit:0,stock:0}};
     state.participants.push(participant);
   }
   participant.touches[carClass]=true;
@@ -165,7 +164,7 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number
     ball.x+=hit.nx*(hit.depth+EPSILON);ball.y+=hit.ny*(hit.depth+EPSILON);ball.z+=hit.nz*(hit.depth+EPSILON);
     const relative=(ball.vx-hit.car.vx)*hit.nx+(ball.vy-hit.car.vy)*hit.ny+(ball.vz-hit.car.vz)*hit.nz;
     if(relative<0){
-      recordTouch(state,hit.car,time);
+      recordTouch(state,hit.car);
       const impulse=-(1+RESTITUTION)*relative;ball.vx+=impulse*hit.nx;ball.vy+=impulse*hit.ny;ball.vz+=impulse*hit.nz;limitSpeed(ball);
     }
     contain(ball);

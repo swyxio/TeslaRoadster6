@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
+import { BUILDINGS, FERRY_DOCKS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
 import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
@@ -14,14 +14,21 @@ export const LEVELS = [
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
 // Vertical gates also apply to flyers; the northern island approach remains open.
-const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
+const sfPlayground = PARKING_LOTS.find(lot=>lot.id==='sf-playground')!;
 export function requiredLevelAt(x:number,z:number):Level {
-  // The whole fictional island and its SF parking playground are available
-  // from the start, including the short approach across the Peninsula gate.
-  if(isRocketIsland(x,z)||(Math.abs(x-SF_PARKING.area.x)<=SF_PARKING.area.width/2+6&&z>=ACCESS_BOUNDARIES.bayMaxZ&&z<=SF_PARKING.area.z+SF_PARKING.area.length/2+6))return 0;
+  // The island and its approach, and the China Basin Dome, are open from the start.
+  if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
-  if(z>ACCESS_BOUNDARIES.bayMaxZ)return 2;
+  if(z>ACCESS_BOUNDARIES.bayMaxZ){
+    // Connect the SF playground to the city without opening a route onward.
+    const area=sfPlayground.area;
+    if(Math.abs(x-area.x)<=area.width/2&&z<=area.z+area.length/2)return 0;
+    return 2;
+  }
+  // The island and adjacent air remain open; the narrower northern corridor
+  // still prevents flying south into locked Oakland.
+  if(z<=FERRY_DOCKS.island.z)return 0;
   const islandApproach=z<ACCESS_BOUNDARIES.islandNorthZ&&x<ACCESS_BOUNDARIES.islandMaxX;
   return x>ACCESS_BOUNDARIES.oaklandX&&!islandApproach?1:0;
 }
@@ -64,7 +71,7 @@ for (const {x,z,district,name} of [
 }
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
-export type DeliveryState = { cash: number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryState = { cash: number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery' | 'supply-repair' | 'supply-air'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 function orderFor(index: number, origin: { x: number; z: number }, level:Level, canFly = false): Order {
   const restaurants = RESTAURANTS.map((place,i)=>({place,i})).filter(({place})=>requiredLevelAt(place.x,place.z)<=level);

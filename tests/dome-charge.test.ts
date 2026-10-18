@@ -4,7 +4,7 @@ import { addPlayer, createWorld, NEUTRAL, step, travelDome } from '../shared/gam
 import { DOME, DOME_CHARGE_HEIGHT, DOME_CHARGE_RATE, chargingDomeWall } from '../shared/dome';
 import { DOME_PERIMETER, domeSurface } from '../shared/map';
 import { airCost, type TankLevel } from '../shared/air-tank';
-import { hasRocket } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver');
@@ -36,14 +36,13 @@ test('wall charge requires a moving, attached Rocket above the marked height',()
     const {world,car}=setup();placeWall(car,side,12);
     const before=car.air;step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
     assert.ok(car.air>before && car.air<=before+DOME_CHARGE_RATE*.05+1e-8);
-    car.speed=0;assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    car.speed=12;car.supportId=null;assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    car.supportId='dome';car.inDome=false;assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    car.inDome=true;placeWall(car,side,4);assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    placeWall(car,side,12);car.kind='model-3';assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),false);
-    car.upgrades.rocket=true;assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),true);
-    car.upgrades.rocket=false;car.rocketUntil=world.time+10;assert.equal(chargingDomeWall(car,hasRocket(car,world.time)),true);
-    assert.equal(chargingDomeWall(car,hasRocket(car,car.rocketUntil)),false);
+    car.speed=0;assert.equal(chargingDomeWall(car,hasRockets(car)),false);
+    car.speed=12;car.supportId=null;assert.equal(chargingDomeWall(car,hasRockets(car)),false);
+    car.supportId='dome';car.inDome=false;assert.equal(chargingDomeWall(car,hasRockets(car)),false);
+    car.inDome=true;placeWall(car,side,4);assert.equal(chargingDomeWall(car,hasRockets(car)),false);
+    placeWall(car,side,12);car.kind='model-3';assert.equal(chargingDomeWall(car,hasRockets(car)),false);
+    car.upgrades.rocket=true;assert.equal(chargingDomeWall(car,hasRockets(car)),true);
+    world.time+=120;assert.equal(chargingDomeWall(car,hasRockets(car)),true,'the session kit does not expire');
   }
 });
 
