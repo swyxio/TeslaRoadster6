@@ -115,6 +115,18 @@ function navigationGraph():RoadGraph {
   }
   return roadGraph={segments,nodes,edges,nodeIds,segmentNodes};
 }
+
+/** Nearest supported road lane for localizing a job, not a route or teleport. */
+export function nearestNavigationAnchor(origin:Point,level:Level):{point:Point;distance:number}|null {
+  const ceiling=Math.max(level,requiredLevelAt(origin.x,origin.z));
+  let best:{point:Point;distance:number}|null=null;
+  for(const segment of navigationGraph().segments){
+    const candidate=projection(origin,segment).point,d=distance(origin,candidate);
+    if((!best||d<best.distance)&&isSurface(candidate.x,candidate.z)&&requiredLevelAt(candidate.x,candidate.z)<=ceiling)
+      best={point:candidate,distance:d};
+  }
+  return best;
+}
 function allowed(a:Point,b:Point,level:Level):boolean{
   const count=Math.max(1,Math.ceil(distance(a,b)/30));
   // A purchase may lower a driver's level while they are in a locked area.
@@ -131,7 +143,8 @@ function allowed(a:Point,b:Point,level:Level):boolean{
 // Connect an off-road car to a lane without crossing a building, unsupported
 // ground, or a locked region. This small visibility search runs only when a
 // destination is requested, never on the simulation tick.
-function offRoadApproach(car:Entity,end:Point,level:Level):Point[]|null {
+type NavigationVehicle = Pick<Entity,'x'|'z'|'yaw'|'kind'|'supportId'|'inDome'>;
+function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|null {
   if(car.kind==='person')return null;
   const radius=Math.max(2,VEHICLES[car.kind].width/2+1);
   const clear=(a:Point,b:Point)=>{
@@ -167,7 +180,7 @@ function offRoadApproach(car:Entity,end:Point,level:Level):Point[]|null {
 }
 
 /** Find a directed route to the nearest connected lane, respecting progress. */
-export function planNavigation(car:Entity,destination:Point,level:Level,maxDestinationSnap=100):Navigation|null {
+export function planNavigation(car:NavigationVehicle,destination:Point,level:Level,maxDestinationSnap=100):Navigation|null {
   if(car.kind==='person'||car.supportId!=='ground'||car.inDome||!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return null;
   const {segments,nodes,edges,nodeIds,segmentNodes}=navigationGraph();
   const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);

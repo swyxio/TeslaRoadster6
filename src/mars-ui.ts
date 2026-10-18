@@ -1,11 +1,14 @@
 import './mars-ui.css';
 import type { Entity } from '../shared/game';
 import { FREMONT_SPACEPORT } from '../shared/map';
+import { requiredLevelAt } from '../shared/delivery';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL } from '../shared/mars';
 import type { Session } from './session';
 import type { StarshipClient } from './starship-client';
 import { createStarshipPanel } from './starship-panel';
 import { createStarshipViewer } from './starship-viewer';
+
+const FREMONT_LEVEL=requiredLevelAt(FREMONT_SPACEPORT.entrance.x,FREMONT_SPACEPORT.entrance.z);
 
 export function createMarsUI(session:Session,money:(amount:number)=>string,onOpen:()=>void,onClose:()=>void,starship:StarshipClient) {
   const dialog=document.createElement('dialog');dialog.className='mars-dialog';dialog.setAttribute('aria-labelledby','mars-title');
@@ -70,7 +73,8 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     const dx=entity?FREMONT_SPACEPORT.entrance.x-entity.x:0,dz=entity?FREMONT_SPACEPORT.entrance.z-entity.z:0;
     const distance=Math.round(Math.hypot(dx,dz)),direction=['north','northeast','east','southeast','south','southwest','west','northwest'][(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8];
     const boarded=!!(player?.achievements.unlocked.includes('to-mars')||session.wallet?.unlocked.includes('to-mars'));
-    $('.mars-location').textContent=boarded?'You already boarded for Mars.':entity?`${distance} m ${distance>25?direction:'away'} · ${player&&player.delivery.level<2?'Unlock Fremont at level 2. ':''}Stop in the gold ring to board once the mission is complete.`:'Connect to your room to board.';
+    const needsFremont=player&&entity&&player.delivery.level<FREMONT_LEVEL&&requiredLevelAt(entity.x,entity.z)<FREMONT_LEVEL;
+    $('.mars-location').textContent=boarded?'You already boarded for Mars.':entity?`${distance} m ${distance>25?direction:'away'} · ${needsFremont?`Unlock Fremont at level ${FREMONT_LEVEL}. `:''}Stop in the gold ring to board once the mission is complete.`:'Connect to your room to board.';
     board.disabled=busy||!marsGoalReached(session.world.mars)||boarded||!entity||!atMarsBoarding(entity);
   }
   return {open(){onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close(){viewer.close();close();},update,isOpen:()=>dialog.open,isViewing:()=>viewer.openState};

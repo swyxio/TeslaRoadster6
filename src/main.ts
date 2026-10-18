@@ -58,6 +58,7 @@ import { createEarningsBonusBadge } from './earnings-bonus-ui';
 import './earnings-bonus-ui.css';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
+import { drawLockedAreas } from './access-overlay';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
 import { CURRENT_RELEASE, releaseLabel } from '../content/version';
 import { browserStorage, readLastPlayed, writeLastPlayed } from './release-tracker';
@@ -482,7 +483,10 @@ const base=mapBase.getContext('2d')!;
 const mapExtents=[
   {minX:-530,maxX:700,minZ:MAP_BOUNDS.minZ,maxZ:430},
   {minX:-550,maxX:850,minZ:MAP_BOUNDS.minZ,maxZ:430},
-  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:7600},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:1450},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:3200},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:4900},
+  {minX:-1800,maxX:2400,minZ:MAP_BOUNDS.minZ,maxZ:7700},
   MAP_BOUNDS,
 ] as const;
 const localRoads=ROADS.filter(road=>road.kind!=='highway');
@@ -531,8 +535,6 @@ function minimap(entity:Entity|undefined,level:Level){
   const scale=mapLocal?240/800:bayScale;
   const px=mapLocal?(x:number)=>120+(x-cx)*scale:(x:number)=>bayLeft+(x-extent.minX)*scale;
   const pz=mapLocal?(z:number)=>120+(z-cz)*scale:(z:number)=>bayTop+(z-extent.minZ)*scale;
-  const worldX=(x:number)=>mapLocal?cx+(x-120)/scale:extent.minX+(x-bayLeft)/scale;
-  const worldZ=(z:number)=>mapLocal?cz+(z-120)/scale:extent.minZ+(z-bayTop)/scale;
   const visible=(x:number,z:number)=>requiredLevelAt(x,z)<=level;
   const key=mapLocal?`${level},${drawLevel},${cx},${cz}`:`bay,${level},${drawLevel}`;
   if(key!==mapKey){
@@ -549,7 +551,7 @@ function minimap(entity:Entity|undefined,level:Level){
     base.strokeStyle='#d6c7a6';base.lineWidth=mapLocal?Math.max(2,24*scale):2;
     for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
     // Hide unreached districts instead of showing the complete Bay from the start.
-    base.fillStyle='#193b48ee';for(let z=0;z<240;z+=6)for(let x=0;x<240;x+=6){if(!visible(worldX(x+3),worldZ(z+3)))base.fillRect(x,z,6,6);}
+    drawLockedAreas(base,level,point=>({x:px(point.x),y:pz(point.z)}),'#193b48ee');
     base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('SF',px(-120)-12,pz(0));if(visible(385,-150))base.fillText('OAKLAND',px(385)+4,pz(-150));
     if(visible(200,-1650))base.fillText('NORTH BAY',px(200)-22,pz(-1650));
     for(const dock of Object.values(FERRY_DOCKS).filter(d=>visible(d.x,d.z))){
@@ -1173,14 +1175,14 @@ scene.start(dt=>{
     $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=target.name;$('objective-distance').textContent=`${distance} m`;
     for(const reward of session.takeRewards())celebrateReward(reward);
     $('delivery-stats').textContent=`${money(d.cash)} cash · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
-    const next=LEVELS[d.level+1];
+    const next=d.level<6?LEVELS[d.level+1]:undefined;
     const checkpointProgress=`${DELIVERY_CHECKPOINT_INTERVAL-deliveriesUntilCheckpoint(d.completed)}/${DELIVERY_CHECKPOINT_INTERVAL}`;
     const checkpointPaid=d.lastPayout!==null&&d.completed%DELIVERY_CHECKPOINT_INTERVAL===0;
     $('region-progress').textContent=(next?`LEVEL ${d.level} · ${next.name}: ${money(Math.min(d.cash,next.cash))} / ${money(next.cash)} cash`:`LEVEL ${d.level} · The Bay is open`)+(checkpointPaid?` · bonus +${money(DELIVERY_CHECKPOINT_REWARD)} · next ${checkpointProgress}`:` · bonus ${checkpointProgress} (+${money(DELIVERY_CHECKPOINT_REWARD)})`);
     const levelEvent=levelEvents.update(d,session.snapshotVersion);
     if(levelEvent==='up')notice(`${LEVELS[d.level].name} unlocked!`);
     if(levelEvent==='down')notice(`Level ${d.level} · Your purchases stay yours.`);
-    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice('Your delivery was rerouted to an open area.');}
+    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice(d.lastReroute.reason==='repeat'?'No new nearby route was available, so your last pickup is offered again.':d.lastReroute.reason==='ferry'?'Your delivery moved to an open area. Take the ferry to the mainland.':'Your delivery was rerouted to an open area.');}
     if(d.lastBlocked&&d.lastBlocked.at>lastBlockedAt){lastBlockedAt=d.lastBlocked.at;if(session.world.time-lastBlockedNoticeAt>=5){lastBlockedNoticeAt=session.world.time;const goal=LEVELS[d.lastBlocked.level];notice(`${goal.name} opens at ${money(goal.cash)} cash.`);}}
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'North Bay Playground and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';

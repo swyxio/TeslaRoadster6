@@ -296,7 +296,7 @@ export class GameScene {
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
     for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
-    for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
+    for(const level of [1,2,3,4,5,6] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
     this.skyCurrents.update(world.time,controlled);
