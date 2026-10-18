@@ -51,9 +51,23 @@ test('chat composer preserves drafts rejected after normalization and accepts 24
     const feedback = find(panel.element, node => node.className === 'chat-feedback')!;
     const nameForm = find(panel.element, node => node.className === 'chat-name-form')!;
     const nameInput = find(panel.element, node => node.id === 'chat-name-input')!;
+    nameForm.hidden = false;
     nameInput.value = '  New  Name  ';
     nameForm.dispatchEvent(new Event('submit', { cancelable: true }));
     assert.deepEqual(renamed, ['New Name']);
+    panel.finishRename('Connection lost.', false);
+    nameInput.value = 'Newer draft';
+    panel.finishRename('', true);
+    assert.equal(nameForm.hidden, false, 'recovery does not close an editor with an unsent draft');
+    assert.equal(nameInput.value, 'Newer draft');
+    nameForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    assert.deepEqual(renamed, ['New Name', 'Newer draft']);
+    panel.finishRename('', true);
+    assert.equal(nameForm.hidden, true, 'the submitted draft closes on confirmation');
+    nameForm.hidden = false;
+    nameInput.value = 'Another draft';
+    panel.finishRename('', true);
+    assert.equal(nameForm.hidden, false, 'an unrelated name confirmation does not close the editor');
     assert.equal(input.maxLength, 480);
     const expanded = 'ﬃ'.repeat(81); // 81 visible ligatures normalize to 243 code points.
     input.value = expanded;

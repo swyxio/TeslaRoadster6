@@ -136,6 +136,7 @@ export function createChatPanel(options: ChatPanelOptions) {
   let status: ConnectionStatus = 'offline';
   let ownId = '';
   let ownName = '';
+  let submittedName: string | undefined;
   let notifiedOpen = false;
   const messageIds = new Set<string>();
 
@@ -213,10 +214,11 @@ export function createChatPanel(options: ChatPanelOptions) {
   editName.addEventListener('click', () => {
     nameForm.hidden = false;
     nameInput.value = ownName;
+    submittedName = undefined;
     nameFeedback.textContent = '';
     nameInput.focus();
   });
-  cancelName.addEventListener('click', () => { nameForm.hidden = true; nameFeedback.textContent = ''; editName.focus(); });
+  cancelName.addEventListener('click', () => { nameForm.hidden = true; submittedName = undefined; nameFeedback.textContent = ''; editName.focus(); });
   nameInput.addEventListener('input', event => { if (!(event as InputEvent).isComposing) limitDriverNameInput(nameInput); });
   nameInput.addEventListener('compositionend', () => limitDriverNameInput(nameInput));
   nameForm.addEventListener('submit', event => {
@@ -224,6 +226,7 @@ export function createChatPanel(options: ChatPanelOptions) {
     const name = normalizeName(nameInput.value);
     nameInput.value = name;
     if (options.onRename(name)) {
+      submittedName = name;
       saveName.disabled = true;
       nameFeedback.textContent = 'Saving…';
     } else nameFeedback.textContent = 'Could not change your name. Check your connection and try again.';
@@ -273,7 +276,12 @@ export function createChatPanel(options: ChatPanelOptions) {
     finishRename(message: string, success: boolean) {
       saveName.disabled = false;
       nameFeedback.textContent = message;
-      if (success) { nameForm.hidden = true; if (dialog.open) editName.focus(); }
+      if (success) {
+        const hasNewDraft = !nameForm.hidden && (submittedName === undefined || nameInput.value !== submittedName);
+        submittedName = undefined;
+        if (hasNewDraft) nameFeedback.textContent = 'Name updated. Save your new draft when you’re ready.';
+        else { nameForm.hidden = true; if (dialog.open) editName.focus(); }
+      }
     },
     setMessages(next: ChatMessage[]) {
       messageIds.clear();
