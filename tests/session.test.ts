@@ -157,6 +157,20 @@ test('identity replies match the latest request and recovery is replayed on rejo
   session.disconnect();
 });
 
+test('identity confirmation captures its wallet baseline before later snapshots or earnings',()=>{
+  const session=new Session(),requestId=session.setIdentity('saved-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  socket.message({type:'wallet',level:2,eligibleIncome:200_000,cash:55_000,earned:200_000,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'wallet',level:3,eligibleIncome:260_000,cash:260_000,earned:260_000,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'state',world,inputAck:0});
+  assert.deepEqual(session.identityResult?.levelBaseline,{level:2,eligibleIncome:200_000,afterSnapshot:1});
+  assert.equal(session.snapshotVersion,2);
+  session.disconnect();
+});
+
 test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});

@@ -15,6 +15,7 @@ export class Session {
   id = '';
   status: SessionStatus = 'disconnected';
   capacity = 0;
+  snapshotVersion = 0;
   private socket?: WebSocket;
   private connectTimeout?: number;
   private sendTime = 0;
@@ -33,7 +34,7 @@ export class Session {
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
   marsResult: {requestId:number;action:'board';ok:boolean}|null = null;
-  identityResult: {requestId:number;ok:boolean;message:string}|null = null;
+  identityResult: {requestId:number;ok:boolean;message:string;levelBaseline:{level:number;eligibleIncome:number;afterSnapshot:number}|null}|null = null;
   wallet: WalletView|null = null;
   luxuryResult: LuxuryResult|null = null;
   vehicleResult: {kind:VehicleId;ok:boolean}|null = null;
@@ -50,7 +51,7 @@ export class Session {
     }
     kind ??= 'roadster';
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.world = createEmptyWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.snapshotVersion=0;this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.world = createEmptyWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, 10000);
@@ -67,7 +68,7 @@ export class Session {
           if(kind!=='roadster')this.actionWithBarrier({type:'selectVehicle',kind});
         }
         if (message.type === 'state' && this.id) {
-          this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
+          this.world = message.world;this.snapshotVersion++;this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
           const passed=Number.isSafeInteger(message.sync)&&this.waitingSync>0&&message.sync>=this.waitingSync;
           if(passed)this.waitingSync=0;
           this.prediction.snapshot(this.world,this.id,message.inputAck,this.lastState,passed);
@@ -84,7 +85,10 @@ export class Session {
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
-        if (message.type === 'identityResult' && message.requestId===this.identityRequestId) this.identityResult = message;
+        if (message.type === 'identityResult' && message.requestId===this.identityRequestId) {
+          const levelBaseline=message.ok&&this.identityCode&&this.wallet?{level:this.wallet.level,eligibleIncome:this.wallet.eligibleIncome,afterSnapshot:this.snapshotVersion}:null;
+          this.identityResult={requestId:message.requestId,ok:message.ok,message:message.message,levelBaseline};
+        }
         if (message.type === 'wallet') this.wallet = message;
         if (message.type === 'luxuryResult') this.luxuryResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }

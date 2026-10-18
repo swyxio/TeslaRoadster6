@@ -8,7 +8,7 @@ export type SoundEvent = { cue: SoundCue; strength?: number };
 type Sample = {
   playerId: string; entityId: string; time: number; x: number; z: number; y: number; vy: number;
   speed: number; health: number; air: number; grounded: boolean; jumpBurstUntil: number; stage: 'pickup' | 'dropoff';
-  completed: number; tickets: number; awards: number; pursued: boolean; refilling: boolean;
+  completed: number; tickets: number; achievementEventId: number; pursued: boolean; refilling: boolean;
   ferryPhase:World['ferry']['phase'];
   pickups: Map<string, boolean>;
 };
@@ -30,16 +30,16 @@ export class SoundEventTracker {
     const refilling=atStation&&(e.air<99.8||(previous?.entityId===e.id&&e.air>previous.air+.01));
     const sample:Sample={playerId,entityId:e.id,time:world.time,x:e.x,z:e.z,y:e.y,vy:e.vy,speed:e.speed,health:e.health,air:e.air,
       grounded:grounded(e),jumpBurstUntil:e.jumpBurstUntil,stage:p.delivery.order.stage,completed:p.delivery.completed,
-      tickets:p.delivery.tickets,awards:p.achievements.unlocked.length,pursued:world.entities.some(car=>car.police?.targetId===playerId),
+      tickets:p.delivery.tickets,achievementEventId:p.achievements.lastUnlock?.id??0,pursued:world.entities.some(car=>car.police?.targetId===playerId),
       refilling,ferryPhase:world.ferry.phase,pickups:new Map(world.pickups.map(pickup=>[pickup.id,pickup.active]))};
     this.previous=sample;
     if(!previous||previous.playerId!==playerId||sample.time<previous.time){this.lastCrash=-Infinity;return [];}
-    if(sample.time===previous.time)return [];
+    if(sample.time===previous.time)return sample.achievementEventId>previous.achievementEventId?[{cue:'achievement'}]:[];
     const events:SoundEvent[]=[];
     if(sample.completed>previous.completed)events.push({cue:'delivery'});
     else if(previous.stage==='pickup'&&sample.stage==='dropoff')events.push({cue:'pickup'});
     if(sample.tickets>previous.tickets)events.push({cue:'ticket'});
-    if(sample.awards>previous.awards)events.push({cue:'achievement'});
+    if(sample.achievementEventId>previous.achievementEventId)events.push({cue:'achievement'});
     if(sample.pursued&&!previous.pursued)events.push({cue:'pursuit'});
     if(sample.refilling&&!previous.refilling)events.push({cue:'refill'});
     if(sample.ferryPhase!==previous.ferryPhase&&Math.hypot(e.x-world.ferry.x,e.z-world.ferry.z)<120)events.push({cue:'ferry'});

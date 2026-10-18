@@ -34,6 +34,8 @@ import { LEVELS, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredL
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { AchievementEventTracker } from './achievement-events';
+import { LevelEventTracker } from './level-events';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
@@ -148,8 +150,10 @@ let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-room-label').hidden=true; $('error-join').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
-let lastLevel:Level|undefined,lastBlockedAt=-1,lastBlockedNoticeAt=-10,lastRerouteId=0;
-let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0, seenDurableWallet=false;
+let lastBlockedAt=-1,lastBlockedNoticeAt=-10,lastRerouteId=0;
+const achievementEvents=new AchievementEventTracker();
+const levelEvents=new LevelEventTracker();
+let achievementQueue:AchievementId[] = [], achievementTimer = 0;
 let openDrawer: 'actions' | 'controls' | null = null;
 function setDrawer(drawer: 'actions' | 'controls' | null) {
   openDrawer=drawer;
@@ -378,9 +382,9 @@ function begin(userGesture=true){
     return;
   }
   menuRidePending=null;startingSelect.disabled=false;$<HTMLButtonElement>('apply-ride').disabled=false;
-  lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;lastRerouteId=0;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
+  lastRewardId=0;lastTicketCount=0;levelEvents.reset();lastBlockedAt=-1;lastBlockedNoticeAt=-10;lastRerouteId=0;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
   pendingShop=null;pendingOta=null;pendingStyle=null;pendingLuxury=null;luxuryStatus='';lastLuxuryKey='';stylePreviewKey='';pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
-  seenAchievements.clear();seenDurableWallet=false;achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
+  achievementEvents.reset();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
@@ -865,6 +869,7 @@ scene.start(dt=>{
     if(result.requestId===identityRequestId){
       if(result.ok){
         walletBoundCode=identityRequestCode;
+        if(result.levelBaseline)levelEvents.restore(result.levelBaseline);
         if(pendingRememberCode===identityRequestCode&&pendingRememberCode&&rememberRequested){rememberCode(pendingRememberCode);pendingRememberCode=undefined;}
         $<HTMLButtonElement>('identity-rejoin').hidden=true;
         if(identityDialog.open)identityFeedback(result.message);
@@ -1006,18 +1011,17 @@ scene.start(dt=>{
     $('delivery-stats').textContent=`${money(d.cash)} cash · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const next=LEVELS[d.level+1];
     $('region-progress').textContent=next?`LEVEL ${d.level} · ${next.name}: ${money(Math.min(d.cash,next.cash))} / ${money(next.cash)} cash`:`LEVEL ${d.level} · The Bay is open`;
-    if(lastLevel!==undefined&&d.level>lastLevel)notice(`${LEVELS[d.level].name} unlocked!`);
-    if(lastLevel!==undefined&&d.level<lastLevel)notice(`Level ${d.level} · Your purchases stay yours.`);
-    lastLevel=d.level;
+    const levelEvent=levelEvents.update(d,session.snapshotVersion);
+    if(levelEvent==='up')notice(`${LEVELS[d.level].name} unlocked!`);
+    if(levelEvent==='down')notice(`Level ${d.level} · Your purchases stay yours.`);
     if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice('Your delivery was rerouted to an open area.');}
     if(d.lastBlocked&&d.lastBlocked.at>lastBlockedAt){lastBlockedAt=d.lastBlocked.at;if(session.world.time-lastBlockedNoticeAt>=5){lastBlockedNoticeAt=session.world.time;const goal=LEVELS[d.lastBlocked.level];notice(`${goal.name} opens at ${money(goal.cash)} cash.`);}}
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'North Bay Playground and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
     $('police-status').classList.toggle('chased',chased);
     if(scoresDialog.open)updateScores();if(awardsDialog.open)updateAwards();
-    if(session.wallet&&!seenDurableWallet){for(const id of session.wallet.unlocked)seenAchievements.add(id);seenDurableWallet=true;}
-    const newAwards=[...new Set([...player.achievements.unlocked,...(session.wallet?.unlocked??[])])].filter(id=>!seenAchievements.has(id));
-    for(const id of newAwards){seenAchievements.add(id);achievementQueue.push(id);}
+    const newAwards=achievementEvents.update(player.achievements);
+    achievementQueue.push(...newAwards);
     if(newAwards.length&&!achievementTimer)announceAchievements();
     if(d.lastTicket&&d.tickets>lastTicketCount&&!menu&&session.status!=='disconnected'&&!ticketDialog.open){lastTicketCount=d.tickets;showTicket(d.lastTicket);}
   }
