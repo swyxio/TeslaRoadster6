@@ -48,12 +48,15 @@ With the isolated fixture running and the host otherwise idle, run:
 pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp/tesland-wallet-throughput.json
 ```
 
-Pass `--drive` after the output path to place the five clients on an open-road
-route and hold throttle instead of brake. The trace includes each controlled
-vehicle's sampled positions and the sample requires at least one saved driver
-to cover 100 m. Add `--expect-collection` after `--drive` when testing a build
+Pass `--drive` after the output path to stage five stopped vehicles and a fixed
+seed-0 traffic cohort, then hold throttle instead of brake. The trace records
+the staged vehicles, traffic and room time as well as sampled positions. Room
+clocks, subsequent routes and contacts may still differ between runs. The sample
+requires at least one saved driver to cover 100 m. Add `--expect-collection`
+after `--drive` when testing a build
 with vehicle collections to require a saved collection in the resulting wallet.
-Omit that flag on a baseline without the feature. It remains a same-host fixture
+The saved drivers must start with empty collections. Omit that flag on a baseline
+without the feature. It remains a same-host fixture
 observation, not a capacity test.
 
 The sample connects four funded drivers and an observer, warms up, measures a

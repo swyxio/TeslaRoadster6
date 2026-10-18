@@ -121,24 +121,34 @@ try{
     await until(()=>client.messages.some(message=>message.type==='otaResult'&&message.requestId===2),`OTA ${i}`);
     assert.equal(client.messages.find(message=>message.type==='otaResult'&&message.requestId===2)!.ok,true);
   }
-  if(driving)for(const [index,client] of clients.entries())await rpc('driving-start',{room,playerId:client.id,shopIndex:index});
-  const input=driving?{...NEUTRAL,throttle:1}:{...NEUTRAL,brake:true};
-  timer=setInterval(()=>{
+  let input={...NEUTRAL,brake:true};
+  const sendInputs=()=>{
     for(const [index,client] of clients.entries()){
       if(client.socket.readyState!==WebSocket.OPEN)continue;
       const now=performance.now(),seq=client.input.send(input);
       if(phase){const trace:InputTrace={sequence:seq,sentMs:now-phase.start};phase.inputs[index].push(trace);client.pending.set(seq,{phase,trace});}
     }
-  },50);
+  };
+  timer=setInterval(sendInputs,50);
   await sleep(5_000); // Input, saved wallets, OTA and startup awards settle.
   const loadBefore=loadavg();loop.enable();
   await rpc('measurement-start',{room});phase=baselineData=newPhase();
   await sleep(5_000);baselineData.end=performance.now()-baselineData.start;
   baselineServer=await rpc<ServerSample>('measurement-stop',{room});
   phase=undefined;await until(()=>clients.every(client=>client.pending.size===0),'baseline input acknowledgements');
-  if(driving)for(const [index,client] of clients.entries())await rpc('driving-start',{room,playerId:client.id,shopIndex:index});
+  if(driving){
+    clearInterval(timer);timer=undefined;
+    const stopped=clients.map(client=>client.input.send(NEUTRAL));
+    await until(()=>clients.every((client,index)=>(client.input.control?.appliedSeq??0)>=stopped[index]),'neutral inputs applied before staging');
+  }
+  const initialCollections=clients.slice(0,4).map(client=>client.messages.filter(message=>message.type==='wallet').at(-1)?.vehicleCollections?.driven??null);
+  if(expectCollection)assert.ok(initialCollections.every(models=>Array.isArray(models)&&models.length===0),'saved drivers must start without collected models');
   const commitBefore=await Promise.all(clients.slice(0,4).map(client=>rpc<{started:number}>('fault-state',{driverId:client.driverId})));
-  loop.reset();await rpc('measurement-start',{room});phase=activeData=newPhase();
+  loop.reset();
+  const initialSetup=driving?await rpc('driving-measurement-start',{room,playerIds:clients.map(client=>client.id)}):null;
+  if(!driving)await rpc('measurement-start',{room});
+  phase=activeData=newPhase();
+  if(driving){input={...NEUTRAL,throttle:1};timer=setInterval(sendInputs,50);}
   const next=[250,1250,2250,3250],counts=[0,0,0,0];
   const actions=setInterval(()=>{
     const elapsed=performance.now()-activeData!.start;
@@ -174,7 +184,7 @@ try{
   const collectedModels=clients.slice(0,4).map(client=>client.messages.filter(message=>message.type==='wallet').at(-1)?.vehicleCollections?.driven??null);
   const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,control:driving?'sustained throttle':'brake',baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it',distance:'sum of same-vehicle snapshot displacements; gaps over 24 m and pose revisions excluded'},
     environment:{revision,dirtyWorktree,node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
-    baseline,active,collectedModels,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
+    baseline,active,initialSetup,initialCollections,collectedModels,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
     pendingLedgerKeys:ledgerKeys.filter(key=>/^(pending|unacked|cleanup|intent):/.test(key)).length,
     profileReceiptCounts:profileKeys.map(keys=>keys.filter(key=>key.startsWith('receipt:')).length),closed:clients.filter(client=>client.socket.readyState!==WebSocket.OPEN).length,inputRejections:clients.map(client=>client.input.rejectionCount),repliesDrained,queuesDrained,
     raw:{baseline:{server:baselineServer,inputs:baselineData.inputs,snapshots:baselineData.snapshots},active:{server:activeServer,inputs:activeData.inputs,snapshots:activeData.snapshots,actions:activeData.actions}}};

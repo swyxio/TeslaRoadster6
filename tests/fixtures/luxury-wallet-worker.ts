@@ -8,7 +8,7 @@ import { SHOPS } from '../../shared/upgrades';
 import { LUXURY_SHOWROOM } from '../../shared/luxury';
 import { terrainHeight } from '../../shared/map';
 import { PARKING_LOTS } from '../../shared/parking-lots';
-import { addPlayer, createEmptyWorld, type World } from '../../shared/game';
+import { addPlayer, createEmptyWorld, createWorld, type World } from '../../shared/game';
 import { progressFrom } from '../../worker/driver-profile';
 import { EconomySession } from '../../worker/economy-session';
 import { DOME } from '../../shared/dome';
@@ -476,6 +476,29 @@ export class GameRoom extends ProductionGameRoom {
     Object.assign(car,{yaw:Math.PI,autopilot:false,navigation:null});
     return {x,z,yaw:car.yaw};
   }
+  /** Atomically stage a fixed traffic cohort and five stopped drivers for a matched sample. */
+  async fixtureStartDrivingMeasurement(playerIds:string[]) {
+    const world=Reflect.get(this,'world') as World;
+    if(playerIds.length!==5||new Set(playerIds).size!==5||world.players.length!==5)throw new Error('Expected five distinct test drivers');
+    const cars=playerIds.map(id=>{
+      const player=world.players.find(item=>item.id===id);
+      const car=world.entities.find(item=>item.id===player?.entityId&&item.driver===id);
+      if(!car)throw new Error('Test driver is not in a car');
+      return car;
+    });
+    const traffic=createWorld(0).entities;
+    world.entities=[...traffic,...cars];
+    for(const [index,car] of cars.entries()){
+      const x=-300+index*12,z=-2050;
+      Object.assign(car,{x,z,y:terrainHeight(x,z)??0,yaw:Math.PI,pitch:0,roll:0,vx:0,vy:0,vz:0,
+        speed:0,pitchRate:0,yawRate:0,rollRate:0,pushX:0,pushZ:0,steering:0,air:100,health:100,thrusters:0,supportId:'ground',autopilot:false,navigation:null});
+    }
+    const setup={worldTime:world.time,tick:Reflect.get(this,'tickCount'),
+      traffic:traffic.map(({id,kind,x,y,z,yaw,npc,autopilot,routeId,waypoint})=>({id,kind,x,y,z,yaw,npc,autopilot,routeId,waypoint})),
+      cars:cars.map(({kind,x,y,z,yaw,speed,air,health,tankLevel,upgrades,style,supportId})=>({kind,x,y,z,yaw,speed,air,health,tankLevel,upgrades,style,supportId}))};
+    await this.fixtureMeasure('start');
+    return setup;
+  }
   async fixtureDeliveryPickup(playerId:string) {
     const world = Reflect.get(this, 'world') as World;
     const player = world.players.find(candidate => candidate.id === playerId);
@@ -496,7 +519,7 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/__wallet-test/')) return worker.fetch(request, env as never, ctx);
     if (request.method !== 'POST') return new Response('POST required', { status:405 });
-    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
+    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;playerIds:string[];side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
     const driver = env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId || 'unused'));
     const economy = env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room || 'fixture'));
     switch (url.pathname) {
@@ -538,6 +561,9 @@ export default {
       }
       case '/__wallet-test/measurement-start': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureMeasure('start'));
+      }
+      case '/__wallet-test/driving-measurement-start': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureStartDrivingMeasurement(body.playerIds));
       }
       case '/__wallet-test/measurement-stop': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));return Response.json(await room.fixtureMeasure('stop'));
