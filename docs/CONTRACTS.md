@@ -1,4 +1,4 @@
-# Implementation contracts · v11
+# Implementation contracts · v12
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -27,17 +27,17 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment, support identity, dome membership and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
-- `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
+- `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time and authoritative `soccer` (ball position/velocity, both scores and goal/win phase). Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
-Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
+Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `buyUpgrade`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v11
+## Wire protocol v12
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:11,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:12,capacity:number}`.
 
 Client messages:
 
@@ -47,14 +47,15 @@ Client messages:
 {"type":"reset"}
 {"type":"autopilot"}
 {"type":"dome"}
-{"type":"selectVehicle","kind":"zoox"}
+{"type":"selectVehicle","kind":"model-3"}
+{"type":"upgrade","upgrade":"rocket"}
 {"type":"name","name":"Driver"}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:11, capacity:number}
+{type:"welcome", id:string, version:12, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -66,17 +67,17 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Global chat and saved identities
 
-Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms and available in solo. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}` or `{type:"save"}`. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. It derives author IDs and names from the connection, not from message fields.
+Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms and available in solo. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
 
 Names are NFKC-normalized, stripped of control and invisible direction/format characters, whitespace-collapsed and capped at 20 Unicode code points; an empty name becomes `Driver`. Active names are compared case-insensitively. A conflict adds the first available ` #2`, ` #3`, and so on, trimming the base if needed. Names are not reserved when disconnected. Game rooms use the same rule independently, so a room display name can differ from the global chat name. Room labels are self-asserted: they are not proof of a saved chat identity. The full server-issued UUID identifies a chat sender; a short on-screen prefix is for convenience and is not guaranteed unique.
 
 An unsaved identity lasts for the connection. Saving generates a random 256-bit bearer secret; the code contains the public player UUID and secret. Only the SHA-256 verifier and saved name are stored in the chat object's durable storage. Saving again returns the same code, including after a successful recovery. A valid code restores the chat ID and saved name, subject to the active-name collision rule; a second simultaneous connection using the same identity is rejected. Anyone with a code can use that identity, so it is shown only to its owner and must never appear in URLs, broadcasts, history or logs. Losing the code loses access to the saved identity. This restores neither the room session nor cars, cash, achievements or game progress.
 
-Chat messages are normalized and limited to 240 Unicode code points. The server accepts at most five messages per connection per 10 seconds and limits all chat requests; these are modest abuse brakes, not identity verification. At most 50 recent messages are kept in memory and supplied on join; a runtime restart clears them. Chat sockets currently keep the object awake while connected. Reconnect and failure states must remain visible; chat failure must not silently change solo or room play. Render names and messages as text, never interpolated HTML.
+Chat messages are normalized and limited to 240 Unicode code points. The server accepts at most five messages per connection per 10 seconds and limits all chat requests. The in-memory hub permits at most 512 sockets, 24 simultaneous sockets and 60 connections per IP per minute, and 30 new saved identities per IP and 240 globally per hour; missing IPs share an unknown bucket. Connections inactive for three minutes are closed; the client sends a heartbeat every 25 seconds. These limits reset on object restart and are modest abuse brakes, not a capacity measurement or comprehensive moderation. At most 50 recent messages are kept in memory and supplied on join; a runtime restart clears them. Chat sockets currently keep the object awake while connected. Reconnect and failure states must remain visible; chat failure must not silently change solo or room play. Render names and messages as text, never interpolated HTML.
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -103,7 +104,7 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 
 ## Fleet and autonomy contract
 
-`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only the `roadster` Rocket has arcade thrust, jumps, flips and suction. Air jumps, free-air thruster hover and tank performance are game fiction. Suction operates at the physical loop and dome surfaces.
+`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. The `roadster` Rocket has native arcade thrust. Every vehicle can gain flight from a rocket pickup or shop kit; rocket-equipped vehicles can also use the stunt loop’s fictional suction. Air jumps, free-air thruster hover and tank performance are game fiction. Suction operates at the physical loop and dome surfaces.
 
 Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. A grounded player car moving forward can initiate an arcade drift by steering with brake or reverse; lateral momentum decays after release. This is not suspension/tire simulation. Terrain roof support remains shared.
 
@@ -113,9 +114,13 @@ Autonomy uses deterministic right-lane loops, including both directions around t
 
 Ambient demand targets up to 34 unattended autonomous highway cars alongside the 26 catalog NPCs and four police. Taken cars, off-route abandoned cars and cars reattached to city routes do not count toward that target; the optional ambient pool is capped at 68 in total, so replenishment can be delayed when its reserve is full. At most one ambient car is added or removed every five simulation seconds. Removal is beyond 1,600 m from every player and preserves occupied and stopped autonomous cars; hidden off-route abandoned cars and free-flowing city-route cars may be reclaimed when the pool blocks replenishment. Available hidden spawn sites and safe removal conditions also limit how quickly traffic follows demand.
 
-Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
+Fleet selection accepts only Tesla IDs and requires grounded speed≤1 m/s; non-Tesla models remain drivable through street takeover. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 
-Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` contains independent rear, corner and side cold-gas vapor groups. The simulation publishes a thruster bitmask so remote effects follow actual boost, jump, hover and roll events; firing patterns are arcade interpretations, not prototype control logic. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.
+Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` contains independent rear, corner and side cold-gas vapor groups. `addRocketKit(root,kind)` adds visible retrofit hardware and plumes for a non-native rocket kit without changing shared collision bodies. The simulation publishes a thruster bitmask so remote effects follow actual boost, jump, hover and roll events; firing patterns are arcade interpretations, not prototype control logic. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.
+
+## Shops and upgrades contract
+
+`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay before sending `upgrade` with one of `rocket|economy|motor|armor|service`. `buyUpgrade` independently validates driver, location, motion, cash, prerequisites and duplicates, and deducts the player’s session cash. The rocket kit grants any vehicle the flight controls and a full tank; economy reduces flight air use by 25%, motor changes acceleration and road speed, armor halves impact damage, and service repairs/refills. Shop state belongs to each vehicle, not the player; an old personal car is removed on fleet selection and abandoned ambient traffic may be reclaimed. A room reset loses all upgrades and money. Purple rocket pickups grant a kit without payment and respawn in 20 seconds. Shared simulation and room snapshots own all state; the UI and renderer must not apply purchases themselves. See [UPGRADES.md](UPGRADES.md).
 
 ## Delivery and police contract
 

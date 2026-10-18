@@ -30,13 +30,16 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     window: globalThis.window,
     location: globalThis.location,
     clearTimeout: globalThis.clearTimeout,
+    clearInterval: globalThis.clearInterval,
   };
   let nextTimer = 0;
   const timers = new Map<number, () => void>();
+  const intervals = new Map<number, { fn: () => void; delay: number }>();
   Object.defineProperty(globalThis, 'WebSocket', { configurable: true, value: Socket });
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: { setTimeout(fn: () => void) { const id = ++nextTimer; timers.set(id, fn); return id; } } });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { setTimeout(fn: () => void) { const id = ++nextTimer; timers.set(id, fn); return id; }, setInterval(fn: () => void, delay: number) { const id = ++nextTimer; intervals.set(id, { fn, delay }); return id; } } });
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { protocol: 'https:', host: 'example.test' } });
   Object.defineProperty(globalThis, 'clearTimeout', { configurable: true, value: (id: number) => timers.delete(id) });
+  Object.defineProperty(globalThis, 'clearInterval', { configurable: true, value: (id: number) => intervals.delete(id) });
   try {
     Socket.sockets = [];
     const states: ChatStatus[] = [];
@@ -49,19 +52,34 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     const first = Socket.sockets[0]; first.open();
     assert.deepEqual(first.packets()[0], { type: 'hello', name: 'Sky' });
     first.receive({ type: 'ready', playerId: 'id-1', name: 'Sky', messages: [] });
+    assert.equal(intervals.size, 1);
+    const heartbeat = [...intervals.values()][0];
+    assert.equal(heartbeat.delay, 25_000);
+    heartbeat.fn();
+    assert.deepEqual(first.packets().at(-1), { type: 'ping' });
     assert.equal(client.save(), true);
     first.receive({ type: 'recovery', code: 'private-code' });
     first.finishClose();
+    assert.equal(intervals.size, 0, 'heartbeat stops on disconnect');
+    heartbeat.fn();
+    assert.notDeepEqual(first.packets().at(-1), { type: 'ping' }, 'stale callback cannot send');
     assert.equal(client.status, 'offline');
     assert.equal(client.send('not sent'), false);
     const reconnect = [...timers.values()][0]; timers.clear(); reconnect();
     const second = Socket.sockets[1]; second.open();
     assert.deepEqual(second.packets()[0], { type: 'hello', name: 'Sky', code: 'private-code' });
     second.receive({ type: 'ready', playerId: 'id-1', name: 'Sky', messages: [] });
+    assert.equal(intervals.size, 1, 'heartbeat restarts after reconnect');
+    [...intervals.values()][0].fn();
+    assert.deepEqual(second.packets().at(-1), { type: 'ping' });
     assert.equal(client.send('hello'), true);
     assert.deepEqual(second.packets().at(-1), { type: 'message', text: 'hello' });
+    for (let n = 0; n < 4; n++) assert.equal(client.send(`message ${n}`), true);
+    assert.equal(client.send('keep this draft'), false, 'local rate limit preserves unsent input');
+    assert.match(errors.at(-1)!, /Please wait/);
 
     client.connect('New', undefined, true);
+    assert.equal(intervals.size, 0, 'heartbeat stops while replacing socket');
     assert.equal(Socket.sockets.length, 2, 'replacement waits until previous socket closes');
     second.finishClose();
     assert.equal(Socket.sockets.length, 3);
@@ -74,6 +92,7 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     const fourth = Socket.sockets[3]; fourth.open();
     assert.deepEqual(fourth.packets()[0], { type: 'hello', name: 'New', code: 'bad-code' });
     fourth.receive({ type: 'error', message: 'Recovery code not recognized.' });
+    assert.equal(intervals.size, 0, 'failed recovery does not start a heartbeat');
     assert.equal(client.status, 'offline');
     assert.equal(errors.at(-1), 'Recovery code not recognized.');
     fourth.finishClose();
@@ -84,6 +103,7 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     const fifth = Socket.sockets[4]; fifth.open();
     assert.deepEqual(fifth.packets()[0], { type: 'hello', name: 'New', code: 'correct-code' });
     fifth.receive({ type: 'ready', playerId: 'id-3', name: 'Restored', messages: [] });
+    assert.equal(intervals.size, 1, 'successful recovery starts a heartbeat');
     assert.equal(client.name, 'Restored');
     assert.equal(client.code, 'correct-code');
     assert.ok(states.includes('connecting') && states.includes('online') && states.includes('offline'));
@@ -92,5 +112,6 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     Object.defineProperty(globalThis, 'window', { configurable: true, value: original.window });
     Object.defineProperty(globalThis, 'location', { configurable: true, value: original.location });
     Object.defineProperty(globalThis, 'clearTimeout', { configurable: true, value: original.clearTimeout });
+    Object.defineProperty(globalThis, 'clearInterval', { configurable: true, value: original.clearInterval });
   }
 });

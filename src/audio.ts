@@ -130,6 +130,7 @@ export class GameAudio {
       case 'delivery':for(const [i,n] of [72,76,79,84].entries())tone(midi(n),midi(n),.24,.14,'triangle',i*.095);break;
       case 'repair':for(const [i,n] of [67,72,76].entries())tone(midi(n),midi(n),.2,.1,'sine',i*.08);break;
       case 'air':tone(480,820,.25,.12,'sine');this.hiss(t,.24,.08*s,2800);break;
+      case 'rocket':for(const [i,n] of [72,79,84,88].entries())tone(midi(n),midi(n),.22,.12,'square',i*.07);break;
       case 'refill':tone(620,780,.2,.08,'sine');break;
       case 'pursuit':tone(740,560,.18,.13,'square');tone(740,560,.18,.13,'square',.22);break;
       case 'ticket':tone(440,330,.28,.16,'triangle');tone(330,220,.36,.14,'triangle',.16);break;

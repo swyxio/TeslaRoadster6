@@ -55,10 +55,12 @@ try {
   assert.equal(first.name, name);
   assert.equal(second.name, `${name.toLowerCase()} #2`, 'case-insensitive collision is disambiguated');
   assert.notEqual(first.playerId, second.playerId);
+  send(one.socket, { type: 'ping' });
 
   const text = `Hello from ${name}`;
   send(one.socket, { type: 'message', text });
   await eventually(() => [one, two].every(client => client.events.some(event => event.type === 'message' && event.message?.text === text)), 'both clients receive global chat');
+  assert.ok(!one.events.some(event => event.type === 'error'), 'heartbeat is accepted without a reply or error');
   const received = two.events.find(event => event.type === 'message' && event.message?.text === text)!;
   assert.equal(received.message.playerId, first.playerId);
   assert.equal(received.message.name, first.name);

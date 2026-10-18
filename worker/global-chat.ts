@@ -3,7 +3,8 @@ import { chooseAvailableName, createRecoveryCode, hashRecoverySecret, normalizeC
 
 /**
  * One global object, shared across rooms. WebSocket client sends:
- *   {type:'hello',name:string,code?:string}, {type:'message',text:string}, or {type:'save'}.
+ *   {type:'hello',name:string,code?:string}, {type:'message',text:string},
+ *   {type:'save'}, or {type:'ping'} (a client heartbeat; no response).
  * Server sends:
  *   {type:'ready',playerId,name,messages}, {type:'message',message},
  *   {type:'recovery',code}, or {type:'error',message}.
@@ -20,6 +21,8 @@ type StoredIdentity = { hash: string; name: string };
 type Session = {
   playerId?: string;
   name?: string;
+  ip: string;
+  lastActivity: number;
   authenticating: boolean;
   saving: boolean;
   issuedCode?: string;
@@ -33,6 +36,12 @@ type Session = {
 type Bucket = { start: number; count: number };
 const HISTORY_LIMIT = 50;
 const CONNECTION_LIMIT = 512;
+const IP_CONNECTION_LIMIT = 24;
+const IDENTITY_WINDOW = 3_600_000;
+const IP_IDENTITY_LIMIT = 30;
+const GLOBAL_IDENTITY_LIMIT = 240;
+const STALE_AFTER = 180_000;
+const REAP_INTERVAL = 10_000;
 const AUTH_TIMEOUT = 30_000;
 const INBOUND_WINDOW = 10_000;
 const INBOUND_LIMIT = 30;
@@ -49,26 +58,60 @@ export class GlobalChat extends DurableObject {
   private sessions = new Map<WebSocket, Session>();
   private history: ChatMessage[] = [];
   private ipBuckets = new Map<string, Bucket>();
+  private identityBuckets = new Map<string, Bucket>();
+  private globalIdentityBucket: Bucket = { start: Date.now(), count: 0 };
+  private reapTimer: ReturnType<typeof setInterval> | null = null;
 
   fetch(request: Request): Response {
     if (this.sessions.size >= CONNECTION_LIMIT) return new Response('Global chat is full. Try again shortly.', { status: 503 });
     // Cloudflare provides this header for public requests; absent in some local
     // and internal calls. These short-lived buckets are only a modest abuse brake.
-    const ip = request.headers.get('CF-Connecting-IP');
-    if (ip && !this.allowConnection(ip)) return new Response('Too many chat connections. Try again shortly.', { status: 429 });
+    const incomingIp = request.headers.get('CF-Connecting-IP');
+    const ip = incomingIp && incomingIp.length <= 80 ? incomingIp : 'unknown';
+    if (!this.hasRoomForIp(ip) || !this.allowConnection(ip)) return new Response('Too many chat connections. Try again shortly.', { status: 429 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
     const session: Session = {
-      authenticating: false, saving: false, authFailures: 0,
+      ip, lastActivity: Date.now(), authenticating: false, saving: false, authFailures: 0,
       inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null,
     };
     this.sessions.set(server, session);
+    if (!this.reapTimer) this.reapTimer = setInterval(() => this.reap(), REAP_INTERVAL);
     session.handshakeTimer = setTimeout(() => this.disconnect(server, 1008, 'Chat name not provided'), AUTH_TIMEOUT);
     server.addEventListener('message', event => this.onMessage(server, event.data));
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private hasRoomForIp(ip: string): boolean {
+    let connections = 0;
+    for (const session of this.sessions.values()) {
+      if (session.ip === ip && ++connections >= IP_CONNECTION_LIMIT) return false;
+    }
+    return true;
+  }
+
+  // Best-effort memory-only abuse brakes, shared by all rooms and reset on
+  // restart. Existing saved drivers and idempotent re-requests do not count.
+  private allowIdentityCreation(ip: string, now = Date.now()): boolean {
+    if (now - this.globalIdentityBucket.start >= IDENTITY_WINDOW) this.globalIdentityBucket = { start: now, count: 0 };
+    let bucket = this.identityBuckets.get(ip);
+    if (!bucket || now - bucket.start >= IDENTITY_WINDOW) {
+      if (!bucket && this.identityBuckets.size >= IP_BUCKET_LIMIT) this.identityBuckets.delete(this.identityBuckets.keys().next().value!);
+      bucket = { start: now, count: 0 };
+      this.identityBuckets.set(ip, bucket);
+    }
+    if (bucket.count >= IP_IDENTITY_LIMIT || this.globalIdentityBucket.count >= GLOBAL_IDENTITY_LIMIT) return false;
+    bucket.count++; this.globalIdentityBucket.count++;
+    return true;
+  }
+
+  private reap(now = Date.now()): void {
+    for (const [socket, session] of this.sessions) {
+      if (now - session.lastActivity >= STALE_AFTER) this.disconnect(socket, 1001, 'Chat connection inactive');
+    }
   }
 
   private allowConnection(ip: string): boolean {
@@ -100,6 +143,7 @@ export class GlobalChat extends DurableObject {
     try { message = JSON.parse(raw); } catch { this.error(socket, 'Invalid chat request.'); return; }
     if (!message || typeof message !== 'object' || Array.isArray(message)) { this.error(socket, 'Invalid chat request.'); return; }
     const data = message as Record<string, unknown>;
+    session.lastActivity = now;
     if (data.type === 'hello') {
       if (session.playerId) { this.error(socket, 'You are already connected to chat.'); return; }
       if (session.authenticating) { this.error(socket, 'Connecting; please wait.'); return; }
@@ -111,9 +155,11 @@ export class GlobalChat extends DurableObject {
       return;
     }
     if (!session.playerId || !session.name) { this.error(socket, 'Choose a name before using chat.'); return; }
+    if (data.type === 'ping') return;
     if (data.type === 'save') {
       if (session.issuedCode) { this.send(socket, { type: 'recovery', code: session.issuedCode }); return; }
       if (session.saving) { this.error(socket, 'Generating your code; please wait.'); return; }
+      if (!this.allowIdentityCreation(session.ip)) { this.error(socket, 'Saved drivers are temporarily limited. Try again later.'); return; }
       session.saving = true;
       void this.save(socket, session);
       return;
@@ -209,6 +255,7 @@ export class GlobalChat extends DurableObject {
     if (!session) return;
     this.sessions.delete(socket);
     if (session.handshakeTimer) clearTimeout(session.handshakeTimer);
+    if (!this.sessions.size && this.reapTimer) { clearInterval(this.reapTimer); this.reapTimer = null; }
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }
   }
 }

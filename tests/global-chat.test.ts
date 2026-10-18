@@ -57,7 +57,7 @@ test('socket teardown and racing recovery retain one live owner and persistent h
       close() { this.closed++; },
     });
     const attach = (chat: any, socket: ReturnType<typeof makeSocket>) => {
-      const session = { authenticating: false, saving: false, authFailures: 0, inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null };
+      const session = { ip: 'test', lastActivity: Date.now(), authenticating: false, saving: false, authFailures: 0, inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null };
       chat.sessions.set(socket, session);
       return session;
     };
@@ -95,8 +95,9 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     assert.deepEqual(recovered.messages, []);
     // Repeated save requests return the same credential, even after resume.
     // They must not invalidate a previously saved code if a socket drops.
+    restarted.globalIdentityBucket.count = 240;
     restarted.onMessage(d, JSON.stringify({ type: 'save' }));
-    assert.equal(d.sent.at(-1).code, code);
+    assert.equal(d.sent.at(-1).code, code, 'existing drivers can retrieve their code even at the creation limit');
     restarted.disconnect(d);
     const e = makeSocket(), eSession = attach(restarted, e);
     const wrongCode = code.slice(0, -1) + (code.endsWith('0') ? '1' : '0');
@@ -104,6 +105,41 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     assert.match(e.sent.at(-1).message, /not recognized/);
     await restarted.hello(e, eSession, '', code);
     assert.equal(e.sent.at(-1).playerId, ready.playerId);
+
+    // Bounds are independent: one shared address has headroom for 24 sockets,
+    // 30 first-time saves/hour, and all addresses share 240 saves/hour.
+    const limits = new GlobalChat({ storage });
+    const now = Date.now();
+    const crowded = Array.from({ length: 24 }, () => {
+      const socket = makeSocket(), session = attach(limits, socket);
+      session.lastActivity = now - 180_001;
+      return { socket, session };
+    });
+    assert.equal(limits.hasRoomForIp('test'), false);
+    assert.equal(limits.hasRoomForIp('another-address'), true);
+    crowded[0].session.playerId = crypto.randomUUID();
+    crowded[0].session.name = 'Awake';
+    limits.onMessage(crowded[0].socket, JSON.stringify({ type: 'ping' }));
+    limits.reapTimer = setInterval(() => {}, 60_000);
+    limits.reap(now);
+    assert.equal(limits.sessions.size, 1, 'ping retains the active socket while stale ones close');
+    assert.equal(crowded.slice(1).every(item => item.socket.closed === 1), true);
+    assert.ok(limits.reapTimer, 'timer remains while any socket is active');
+    limits.reap(Date.now() + 180_001);
+    assert.equal(limits.sessions.size, 0);
+    assert.equal(limits.reapTimer, null, 'last disconnect clears the reaper timer');
+
+    for (let i = 0; i < 30; i++) assert.equal(limits.allowIdentityCreation('shared-address', now), true);
+    assert.equal(limits.allowIdentityCreation('shared-address', now), false);
+    assert.equal(limits.allowIdentityCreation('shared-address', now + 3_600_001), true, 'hourly quota resets');
+    const globalLimit = new GlobalChat({ storage });
+    for (let i = 0; i < 240; i++) assert.equal(globalLimit.allowIdentityCreation(`address-${i}`, now), true);
+    assert.equal(globalLimit.allowIdentityCreation('one-more', now), false);
+    const limitedSocket = makeSocket(), limited = attach(globalLimit, limitedSocket);
+    limited.playerId = crypto.randomUUID(); limited.name = 'New driver';
+    globalLimit.onMessage(limitedSocket, JSON.stringify({ type: 'save' }));
+    assert.match(limitedSocket.sent.at(-1).message, /temporarily limited/);
+    assert.equal(globalLimit.allowIdentityCreation('one-more', now + 3_600_001), true);
   } finally {
     Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
   }

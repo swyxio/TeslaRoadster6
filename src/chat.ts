@@ -19,6 +19,8 @@ export class GlobalChat {
   private requestedCode: string | undefined;
   private socket?: WebSocket;
   private reconnectTimer = 0;
+  private heartbeatTimer = 0;
+  private sentAt: number[] = [];
   private retries = 0;
   private blocked = false;
   private generation = 0;
@@ -37,7 +39,15 @@ export class GlobalChat {
     this.replaceSocket();
   }
 
-  send(text: string): boolean { return this.sendPacket({ type: 'message', text }); }
+  send(text: string): boolean {
+    if (this.status !== 'online') return false;
+    const now = Date.now();
+    this.sentAt = this.sentAt.filter(time => now - time < 10_000);
+    if (this.sentAt.length >= 5) { this.callbacks.onError('Please wait before sending more messages.'); return false; }
+    if (!this.sendPacket({ type: 'message', text })) return false;
+    this.sentAt.push(now);
+    return true;
+  }
   save(): boolean { return this.sendPacket({ type: 'save' }); }
 
   private sendPacket(packet: object): boolean {
@@ -52,6 +62,7 @@ export class GlobalChat {
 
   private replaceSocket() {
     const generation = ++this.generation;
+    this.stopHeartbeat();
     const previous = this.socket;
     this.socket = undefined;
     this.setStatus('connecting');
@@ -97,6 +108,7 @@ export class GlobalChat {
         this.code = this.requestedCode;
         this.retries = 0;
         this.setStatus('online');
+        this.startHeartbeat(socket);
         this.callbacks.onReady(this.playerId, this.name, data.messages as ChatMessage[]);
       } else if (data.type === 'message' && data.message && typeof data.message === 'object') {
         this.callbacks.onMessage(data.message as ChatMessage);
@@ -116,10 +128,24 @@ export class GlobalChat {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = undefined;
+      this.stopHeartbeat();
       if (this.blocked) return;
       this.setStatus('offline', 'Reconnecting soon');
       this.scheduleReconnect();
     };
+  }
+
+  private startHeartbeat(socket: WebSocket) {
+    this.stopHeartbeat();
+    if (this.socket !== socket || this.status !== 'online') return;
+    this.heartbeatTimer = window.setInterval(() => {
+      if (this.socket === socket) this.sendPacket({ type: 'ping' });
+    }, 25_000);
+  }
+
+  private stopHeartbeat() {
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = 0;
   }
 
   private scheduleReconnect() {
