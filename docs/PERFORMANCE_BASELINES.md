@@ -9,11 +9,16 @@ measurements. The performance workflow records four recurring observations:
 | Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive, with movement, live render telemetry and no recorded browser errors. | A render-activity guard is not proof of correct pixels. Callback timing is not GPU completion or actual display presentation. Lower is better for this matched scenario. |
 | Modeled display/body speed p05–p95 (×) | Frame-to-frame modeled visual speed divided by predicted-body speed, when the latter exceeds 10 m/s. Ideally near 1. | Synthetic 120 Hz slalom and simulated network, not a live rendered car. Retain max movement per sample and traces too. |
 | Modeled steering onset (ms) | Left/right first modeled yaw response relative to a no-steer counterfactual. | Synthetic 120 Hz samples quantize response to 8.333 ms; not human input-to-photon latency. |
-| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
+| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives, then stays connected without held controls. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
 
 The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
-fresh local room, staged start, 1280 × 720 viewport at DPR 1, and no video.
+fresh local room, staged start and no video. The local desktop scenario uses
+1280 × 720 at DPR 1, driving for 8 seconds and then idling for 54 seconds.
+The CI software scenario uses 384 × 216 at DPR 1, waits for render telemetry,
+drives for 27 seconds and then idles for 36 seconds. Its longer frame sample
+and smaller viewport accommodate the hosted runner's slow software renderer;
+they do not represent desktop graphics performance at the larger resolution.
 Traffic and collisions still affect the route. Artifacts record the scenario,
 endpoint, browser, WebGL renderer, revisions and host load; inspect these
 before comparing. A SwiftShader run describes software rendering on that CI
@@ -44,7 +49,8 @@ artifact include the paired observations and raw traces; artifacts expire after
 90 days. An incomplete measurement fails the job and is shown as `HOLD`, never
 as zero. Timing differences are descriptive: one shared-host pair is noisy,
 and no automatic performance threshold is inferred from it. Different renderer,
-viewport, fixture or route endpoints can make a comparison `HOLD`. Review the
+viewport, fixture or route endpoints can make a comparison `HOLD`. The CI and
+desktop scenarios must not be compared directly. Review the
 raw paths for divergence even when endpoints happen to be close.
 
 For local runs, build the candidate and target revisions and install the

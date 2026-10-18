@@ -112,6 +112,7 @@ jobs:
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/base" \
+            --scenario "$GITHUB_WORKSPACE/candidate/scripts/playtests/performance-software-drive.json" \
             --out "$RUNNER_TEMP/tesland-performance/base" --gpu swiftshader \
             > "$RUNNER_TEMP/tesland-performance/base.log" 2>&1
       - id: candidate
@@ -120,6 +121,7 @@ jobs:
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/candidate" \
+            --scenario "$GITHUB_WORKSPACE/candidate/scripts/playtests/performance-software-drive.json" \
             --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu swiftshader \
             > "$RUNNER_TEMP/tesland-performance/candidate.log" 2>&1
       - name: Summarize available observations
