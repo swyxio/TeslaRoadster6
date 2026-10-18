@@ -1,4 +1,10 @@
-# Verification · 2026-10-17 Pacific
+# Verification · 2026-10-18 Pacific
+
+## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
+
+- After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including requester-only shop rejection results, global chat and saved-driver recovery. An isolated Wrangler restart again preserved the saved ID and name and cleared history. These are not load tests.
+- Chrome desktop solo showed the combined game and connected chat with a chosen name. Earlier portrait and landscape layout checks and touch limitations are documented below.
 
 ## Rocket Dome stadium and wall charge · protocol v14 · 2026-10-18 Pacific
 
@@ -13,6 +19,19 @@
 - Staging preview of commit `39b41c4` returned protocol v13, matched the locally built browser assets, and passed the same two-client integration. This is not a load test.
 - Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. Chrome 390×844 portrait touch emulation bought the kit and displayed its confirmation; 844×390 landscape showed it after scrolling the shop. The fixture is absent from the built source. No physical device was tested for this follow-up.
 
+## Global chat with rocket shops · protocol v12 · 2026-10-17 Pacific
+
+- The combined build after review fixes passed `pnpm test` (163/163) and `pnpm build`. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including global delivery, private recovery, name collisions and the existing arena and shop checks. An isolated Wrangler restart restored the saved driver and cleared transient chat history. A room run overlapping the rebuild timed out at the dome goal; the stable rerun passed. These are not load tests.
+- The pre-review Cloudflare preview passed chat integration. One room run timed out on vehicle selection, then repeated runs passed; the test now checks the car is stationary and allows more time around the action cooldown.
+- Chrome desktop showed chat alongside the rocket shops; the reviewed build accepted a 20-emoji name and retained an invalid Unicode draft. 390×844 portrait and 844×390 landscape emulation showed the chat layout before the review fixes. No browser console errors were observed. Emulated touch activation of the chat button and physical devices remain unverified.
+
+## Global chat and saved drivers · pre-rocket-shops local build · 2026-10-17 Pacific
+
+- `pnpm test` passed 152/152 tests and `pnpm build` passed; the existing Vite large-chunk warning remains.
+- Local Wrangler integration passed for global message delivery, case-insensitive name collisions in chat and rooms, private recovery codes, repeated save, recovery, invalid-code rejection and cross-origin rejection. A separate isolated Wrangler restart test restored the same saved ID and name and confirmed the chat history was gone. The existing two-client room integration also passed. These are not load tests.
+- Chrome desktop solo showed a chosen name, sent a local chat message, generated a recovery code and displayed an invalid-code error. Chrome emulation at 390×844 and 844×390 showed chat and the scrollable recovery dialog; keyboard activation worked. Emulated pointer/touch activation did not register for the chat button, so touch activation and physical devices remain unverified. No browser console errors were observed.
+
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
@@ -26,6 +45,7 @@
 - Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
 - Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
 - Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
+
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.

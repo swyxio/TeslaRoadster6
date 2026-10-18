@@ -12,6 +12,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Use Leave Dome to return to the Bay. The ferry and the rest of Rocket Island remain a proposal.
 
+**Global chat:** Pick a driver name and chat with players across rooms, including from solo play. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
 **Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
@@ -37,6 +39,8 @@ For frontend hot reload, leave Wrangler running and start `pnpm dev` in another 
 ```sh
 pnpm run ci # tests, TypeScript checks and production build
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
+pnpm exec tsx tests/chat.integration.ts http://localhost:8787
+pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
 pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
 ```
 
@@ -56,9 +60,9 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 
 ## Boundaries
 
-This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, account, or Tesla API integration. No affiliation is implied.
+This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
 
-Rooms are ephemeral and public-by-code. No authentication, persistent progression, saving, shooting, or death/respawn yet. Delivery money is fictional and session-only. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control.
+Rooms are ephemeral and public-by-code. Delivery money is fictional and session-only; there is no persistent game progression, shooting, or death/respawn yet. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
@@ -79,6 +83,7 @@ shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
+worker/global-chat.ts  Global chat and optional saved identities
 src/session.ts     Solo/multiplayer transport adapter
 src/controls.ts    Keyboard and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
