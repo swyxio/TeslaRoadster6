@@ -135,7 +135,7 @@ These are example matched packages, not a requirement to buy only that pairing: 
 
 ### Build upward
 
-A developer can buy a larger $800k plot, build a $1.2m foundation and first story, then add floors. The second floor costs $200k; each following floor costs 10% more, rounded to the nearest $1,000. The foundation includes the larger building's initial structure; the increasing incremental payments fund the stories above it. A 20-floor limit keeps the tower within the game's flight space. Players may continue building on a plot they already own after their wallet falls below the market gate.
+A developer can buy a larger $800k plot, build a $1.2m foundation and first story, then add floors. For floor `n` from 2 to 20, compute `$200,000 × 1.1^(n − 2)` and round that floor independently to the nearest $1,000. The second floor costs $200k; do not compound from the previous rounded price. The foundation includes the larger building's initial structure; the increasing incremental payments fund the stories above it. A 20-floor limit keeps the tower within the game's flight space. Players may continue building on a plot they already own after their wallet falls below the market gate.
 
 | Building | Plot and construction | Latest floor |
 | --- | ---: | ---: |
