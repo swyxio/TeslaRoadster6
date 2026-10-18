@@ -91,7 +91,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><button type="button" id="next-award" class="mission-link" hidden></button></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><button id="charger-drive">⚡ Self-drive to Supercharger</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -174,9 +174,7 @@ const levelEvents=new LevelEventTracker();
 let achievementQueue:AchievementId[] = [], achievementTimer = 0;
 let openDrawer: 'actions' | 'controls' | null = null;
 let walletWasBlocked=false,lastSessionStatus=session.status;
-let driveShortcut:{reset:()=>void}|null=null;
 function setDrawer(drawer: 'actions' | 'controls' | null) {
-  driveShortcut?.reset();
   openDrawer=drawer;
   for(const name of ['actions','controls'] as const){
     const open=drawer===name;
@@ -189,7 +187,7 @@ function setDrawer(drawer: 'actions' | 'controls' | null) {
 $('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
 $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
 $('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button')){setDrawer(null);if(event.detail===0)$('actions-toggle').focus();}},{capture:true});
-const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{driveShortcut?.reset();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
+const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const nameInput=$<HTMLInputElement>('name');
@@ -458,7 +456,6 @@ function cameraLabel(onFoot:boolean){
   $('camera').setAttribute('aria-label',onFoot&&scene.cameraMode==='cockpit'?'Camera: cockpit selected, chase view on foot. Switch view':`Camera: ${label}. Switch view`);
 }
 function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'|'awards'|'shop'){
-  driveShortcut?.reset();
   if(type==='shop'){openShop();return;}
   if(type==='awards'){openAwards();return;}
   if(type==='scores'){openScores();return;}
@@ -519,9 +516,7 @@ function driveToDelivery(){
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
 $('route-goal').onclick=()=>{setDrawer(null);driveToDelivery();};
-function driveToCharger(){notice('Supercharger routing is being prepared.');}
-$('charger-drive').onclick=()=>{setDrawer(null);driveToCharger();};
-driveShortcut=listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer&&session.status==='online'&&!session.walletBlocked,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery,onTripleTap:driveToCharger});
+listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer&&session.status==='online'&&!session.walletBlocked,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery});
 mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 $('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
 $('map-toggle').removeAttribute('aria-pressed');$('map-label').textContent='MAP · TAP TO EXPLORE';

@@ -30,7 +30,7 @@ export function setupControlSettings(controls:Controls, open:()=>void, close:()=
       ['Enter / exit · unstuck · camera',`${label('interact')} · ${label('reset')} · ${label('camera')}`],
       ['Autopilot · fleet · shop · scores · awards',`${label('autopilot')} · ${label('fleet')} · ${label('shop')} · ${label('scores')} · ${label('awards')}`],
     ]){const p=document.createElement('p'),kbd=document.createElement('kbd');kbd.textContent=keys;p.append(kbd,` · ${text}`);guide.append(p);}
-    const note=document.createElement('small');note.textContent='Double-tap Shift to drive to your delivery; triple-tap Shift for a Supercharger. Shift still boosts normally. Blue sky lanes add speed and air; golden thermals lift and refill you. Edit bindings in Actions → Controls & gamepad.';guide.append(note);
+    const note=document.createElement('small');note.textContent='Blue sky lanes add speed and air; golden thermals lift and refill you. Edit bindings in Actions → Controls & gamepad.';guide.append(note);
     for(const [id,action,text] of [['recover','reset','Unstuck'],['fleet','fleet','Fleet'],['shop','shop','Shop'],['scores','scores','Scores'],['awards','awards','Awards']] as const)$(id).textContent=`${label(action)} · ${text}`;
   };
   const focusBinding=(action:KeyAction,slot:0|1)=>list.querySelector<HTMLButtonElement>(`[data-binding="${action}-${slot}"]`)?.focus();
