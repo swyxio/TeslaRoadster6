@@ -23,7 +23,7 @@ export class Radio {
     if (this.station !== 'chiptune') this.status = 'Choose Play to listen to a random episode.';
     this.media.preload = 'none';
     this.media.addEventListener('playing', () => { this.status = 'Playing'; this.changed(); });
-    this.media.addEventListener('pause', () => { if (this.station !== 'chiptune' && !this.media.ended) this.status = 'Paused'; this.changed(); });
+    this.media.addEventListener('pause', () => { if (this.station !== 'chiptune' && this.media.paused && !this.media.ended) this.status = 'Paused'; this.changed(); });
     this.media.addEventListener('ended', () => { void this.next(true); });
     this.media.addEventListener('error', () => { if (this.episode && this.station !== 'chiptune') { this.status = 'Stream unavailable. Try another episode.'; this.changed(); } });
   }

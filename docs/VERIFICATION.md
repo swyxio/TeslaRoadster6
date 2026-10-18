@@ -4,6 +4,8 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Podcast radio · protocol v28 · 2026-10-18 Pacific
 
+- After merging main at `a34248b`, the combined `pnpm run ci` output reported 412 passing tests and a successful build, with Vite's existing large-chunk warning. The local two-client room integration passed when run without concurrent test load, and global chat integration passed. Two earlier room runs under simultaneous CPU-heavy tests timed out at different gameplay assertions; these are functional checks, not load measurements.
+- Cloudflare's `bed55d3` preview passed its build and radio integration for both live feeds. Chrome in that preview selected and played one random episode from each show; this does not establish availability of every episode or every device.
 - Local Wrangler returned 235 Latent Space and 180 ThursdAI public episodes, with HTTPS stream and episode links; its radio integration checked unsupported stations and methods. Counts reflect the feeds at test time. Range requests to one stream per show returned audio bytes from the publisher CDN.
 - Chrome played a randomly selected episode from each station and displayed the playback state. The sound dialog was inspected at desktop and emulated 390 × 844 portrait and 844 × 390 landscape; landscape uses scrolling to reach volume and mute. No physical mobile device or subjective audio-quality test was performed.
 
