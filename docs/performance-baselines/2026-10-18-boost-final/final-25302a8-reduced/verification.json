@@ -1,0 +1,18 @@
+{
+  "status": "verified",
+  "input": "keyboard",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "isMobile": false,
+    "hasTouch": false
+  },
+  "boostGroundedSeconds": 1.47,
+  "observedJumpSamples": 2,
+  "landingTick": 122,
+  "poseRevision": 1,
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  }
+}

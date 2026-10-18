@@ -180,6 +180,32 @@ unset PLAYTEST_STAGE_SECRET
 
 Stop Wrangler when finished and remove the private temporary directory.
 
+For a shorter boost and landing visual check, use the same seeded, paused
+fixture and a fresh room for every capture. These scenarios do not replace the
+delivery/flight performance route. The desktop scenario holds W and Shift;
+the touch scenario holds Drive and Boost together while tapping Jump.
+
+```sh
+export PLAYTEST_STAGE_SECRET="$(cut -d = -f 2 "$stage_env")"
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=boost-desktop&perf' \
+  --target-ref YOUR_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/boost-desktop --trajectory --gpu metal
+node scripts/verify-boost-landing.mjs playtest-runs/boost-desktop
+
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=boost-touch&perf' \
+  --target-ref YOUR_COMMIT_SHA --scenario scripts/playtests/boost-landing-touch.json \
+  --out playtest-runs/boost-touch --trajectory --gpu metal --mobile --width 390 --height 844
+node scripts/verify-boost-landing.mjs playtest-runs/boost-touch
+unset PLAYTEST_STAGE_SECRET
+```
+
+Repeat the touch capture with a new room and output directory at `--width 844
+--height 390` for landscape. The verifier requires a real video, screenshots,
+sustained grounded rear thrust, an upward jump burst followed by a landing,
+and an unchanged pose revision. Keep the trace and inspect the video too; a
+touch-emulated browser is not a physical phone. Compare matching viewports and
+fixtures across revisions, and measure frame times in separate no-video runs.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged
