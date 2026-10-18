@@ -101,8 +101,9 @@ try {
   }
   assert.ok(laneSpawn,`a free ground spawn beneath City Glide is available: ${JSON.stringify(spawnAttempts)}`);
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:2}}));
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>2;},'first jump toward sky lane');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>4.5;},'first jump near its peak toward sky lane');
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:3}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.lastJump===3&&e.vy<=11;},'air jump restores capped upward speed');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&currentAt(e)?.id==='market';},'remote car enters shared sky lane');
   const streamAir=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.air>streamAir+2&&e.vx>2;},'server applies sky-lane speed and air');

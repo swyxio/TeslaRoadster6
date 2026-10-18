@@ -145,3 +145,28 @@ test('low air gives a proportional jump and hover works with the remainder',()=>
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',air:0});send({...NEUTRAL,jump:3});
   assert.equal(car.supportId,'ground');assert.equal(car.y,0);
 });
+
+test('tank upgrades do not change jump power and air jumps do not stack upward velocity',()=>{
+ const peaks:number[]=[];
+ for(const level of [1,2] as const){
+  const {car,send}=playground();car.tankLevel=level;send({...NEUTRAL,jump:1});const first=car.vy;
+  send({...NEUTRAL,jump:2});assert.ok(car.vy<=first+.1,'second jump cannot add another full impulse');
+  let peak=car.y;for(let i=0;i<45;i++){send({...NEUTRAL,jump:2});peak=Math.max(peak,car.y);}peaks.push(peak);
+ }
+ assert.ok(Math.abs(peaks[0]-peaks[1])<1e-8);
+});
+test('powered flight corrects opposing and sideways momentum without damping unpowered coasting',()=>{
+ const {car,send}=playground();Object.assign(car,{y:40,supportId:null,vx:20,vz:20});
+ for(let i=0;i<20;i++)send({...NEUTRAL,throttle:1,hover:true});
+ assert.ok(car.vz<0,`reversed forward velocity: ${car.vz}`);assert.ok(Math.abs(car.vx)<2,`sideways momentum: ${car.vx}`);
+ Object.assign(car,{vx:20,vz:20,air:0});send({...NEUTRAL,throttle:1});assert.equal(car.vx,20);assert.equal(car.vz,20);
+});
+test('the loop blocks outside approaches and attaches rockets from its interior',()=>{
+ for(const inside of [false,true]){
+  const {car,send}=playground(STUNT_LOOP.x+(inside?0:14),STUNT_LOOP.z);
+  Object.assign(car,{y:STUNT_LOOP.radius,supportId:null,vx:inside?30:-30,vy:0});
+  for(let i=0;i<15&&car.loopAngle===null;i++)send();
+  if(inside)assert.equal(car.supportId,'stunt-loop');
+  else {assert.equal(car.supportId,null);assert.ok(car.x>STUNT_LOOP.x+STUNT_LOOP.radius);assert.ok(car.vx>0);}
+ }
+});

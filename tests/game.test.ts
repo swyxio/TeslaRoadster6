@@ -98,9 +98,6 @@ test('player braking into a turn slides, then regains grip; straight braking sti
   assert.ok(slip > 1); assert.ok(slip > Math.hypot(normal.car.pushX, normal.car.pushZ) + 1);
   for (let i = 0; i < 20; i++) step(slide.world, new Map(), .05);
   assert.ok(Math.hypot(slide.car.pushX, slide.car.pushZ) < slip * .1);
-  const reverse = carAtSpeed();
-  for (let i = 0; i < 8; i++) step(reverse.world, new Map([['one', {...NEUTRAL, steer: -1, throttle: -1}]]), .05);
-  assert.ok(Math.hypot(reverse.car.pushX, reverse.car.pushZ) > 1);
   const straight = carAtSpeed();
   for (let i = 0; i < 60; i++) step(straight.world, new Map([['one', {...NEUTRAL, brake: true}]]), .05);
   assert.equal(straight.car.speed, 0); assert.equal(Math.hypot(straight.car.pushX, straight.car.pushZ), 0);
@@ -151,4 +148,51 @@ test('manual driving turns sharply at road speeds and in reverse',()=>{
   Object.assign(car,{x:0,z:0,y:0,supportId:'ground',yaw:0,speed:-8,steering:0,autopilot:false});
   for(let i=0;i<5;i++)step(world,new Map([['one',{...NEUTRAL,steer:1}]]),.05);
   assert.ok(car.yaw<0,'reverse steering changes direction');
+});
+
+test('direction changes brake first and do not turn the wrong way while slowing',()=>{
+ for(const direction of [-1,1]){
+  const {world,car}=setup();world.entities=[car];world.pickups=[];
+  Object.assign(car,{x:0,z:0,y:0,yaw:0,speed:direction*4,steering:direction,supportId:'ground'});
+  const input={...NEUTRAL,throttle:-direction,steer:-direction};
+  for(let i=0;i<4;i++){const oldSpeed=car.speed,oldYaw=car.yaw;step(world,new Map([['one',input]]),.05);if(oldSpeed*input.throttle<-.01)assert.ok(Math.abs(car.yaw-oldYaw)<1e-8,'braking does not turn toward the old direction');}
+  for(let i=0;i<5;i++)step(world,new Map([['one',input]]),.05);
+  assert.ok(car.speed*input.throttle>0);assert.ok(car.yaw*input.steer*Math.sign(car.speed)>0,'steering follows the new direction');
+ }
+});
+test('supply diamonds award cash without advancing delivery earnings',()=>{
+ const {world,player,car}=setup();world.entities=[car];
+ for(const kind of ['repair','air'] as const){
+  world.pickups=[{id:kind,kind,x:0,z:0,active:true}];Object.assign(car,{x:0,z:0,y:0,speed:0,supportId:'ground',air:20,health:20});
+  const cash=player.delivery.cash,earned=player.delivery.earned;step(world,new Map(),.05);
+  assert.equal(player.delivery.cash,cash+5);assert.equal(player.delivery.earned,earned);
+  assert.equal(player.delivery.lastReward?.kind,kind==='repair'?'supply-repair':'supply-air');
+  assert.equal(kind==='repair'?car.health:car.air,100);
+ }
+});
+
+test('curved landmark roofs support a descending vehicle at their visible surface',async()=>{
+ const {buildingRoofHeight}=await import('../shared/map');
+ const examples=[
+  BUILDINGS.find(b=>b.style==='rotunda')!,
+  BUILDINGS.find(b=>b.style==='salesforce')!,
+  BUILDINGS.find(b=>b.style==='landmark'&&b.x===-270&&b.z===-150)!,
+ ];
+ for(const roof of examples){
+  const {world,car}=setup();world.entities=[car];world.pickups=[];
+  const x=roof.x+roof.w*.15,z=roof.z,height=buildingRoofHeight(roof,x,z);
+  Object.assign(car,{x,z,y:height+2,vy:-6,vx:0,vz:0,supportId:null});
+  for(let i=0;i<20&&car.supportId===null;i++)step(world,new Map(),.05);
+  assert.equal(car.supportId,`roof:${BUILDINGS.indexOf(roof)}`);assert.ok(Math.abs(car.y-height)<.01);
+ }
+});
+
+test('supply diamonds are separate and never sit on the initial player spawns',()=>{
+ const world=createWorld();world.entities=[];
+ const supplies=world.pickups.filter(p=>p.kind!=='rocket');
+ for(const [i,pickup] of supplies.entries())for(const other of supplies.slice(i+1))assert.ok(Math.hypot(pickup.x-other.x,pickup.z-other.z)>8);
+ for(let i=0;i<20;i++){
+  const player=addPlayer(world,`spawn-${i}`,'Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
+  assert.ok(supplies.every(p=>Math.hypot(car.x-p.x,car.z-p.z)>=4),`spawn ${i}`);
+ }
 });

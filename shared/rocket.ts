@@ -35,7 +35,8 @@ export function updateRocketPickup(pad: RocketPad, entities: RocketEntity[], tim
   const ground = terrainHeight(pad.x, pad.z);
   if (ground === null) return null;
   const winner = entities.filter(e => e.kind !== 'person' && e.driver && e.supportId === 'ground' &&
-    Math.abs(e.y - ground) < 2 && Math.hypot(e.x - pad.x, e.z - pad.z) < 4)
+    Math.abs(e.y - ground) < 2 && Math.hypot(e.x - pad.x, e.z - pad.z) < 4 &&
+    (!(VEHICLES[e.kind as VehicleId].airThrusters || e.upgrades?.rocket) || e.air < 99.99))
     .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)[0];
   if (!winner || winner.kind === 'person') return null;
   winner.air = 100;

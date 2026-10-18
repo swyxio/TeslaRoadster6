@@ -85,3 +85,10 @@ test('all fleet meshes show independent upgrade hardware and replicated exhaust 
     assert.equal(upgraded.getObjectByName('rocket_hardware')!.visible, kind === 'roadster', kind);
   }
 });
+
+test('full permanently equipped cars leave the rocket pad for others',()=>{
+ const full={...car('a','roadster'),air:100},other=car('b');const pickup=pad();
+ assert.equal(updateRocketPickup(pickup,[full,other],1),'b');
+ const pad2=pad();assert.equal(updateRocketPickup(pad2,[full],1),null);assert.equal(pad2.active,true);
+ full.air=50;assert.equal(updateRocketPickup(pad2,[full],1),'a');assert.equal(full.air,100);
+});

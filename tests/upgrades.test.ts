@@ -61,7 +61,7 @@ test('rocket pickups sit on clear ground without overlapping other pickups',()=>
 });
 test('each family can collect a rocket pickup and use jump',()=>{
   for(const kind of VEHICLE_IDS){
-    const {world,player,car}=setup(kind);car.x=0;car.z=60;car.y=0;world.pickups=[{id:'rocket',x:0,z:60,kind:'rocket',active:true}];
+    const {world,player,car}=setup(kind);car.x=0;car.z=60;car.y=0;car.air=50;world.pickups=[{id:'rocket',x:0,z:60,kind:'rocket',active:true}];
     step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRocket(car,world.time),kind);
     step(world,new Map([[player.id,{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null,kind);assert.ok(car.y>0,kind);assert.ok(car.air<100,kind);
   }
