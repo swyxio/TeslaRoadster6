@@ -1,13 +1,13 @@
 import './progress-panels.css';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { ACHIEVEMENT_TIER_IDS, ACHIEVEMENT_TIER_NAMES, selectAchievementTierLadder, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import type { Player } from '../shared/game';
 import type { Session } from './session';
-import { awardDeliveryTarget, awardProgress, awardSaveView, deliveryStandings, GameResultHistory, nextDeliveryLevel, type GameScores } from './progress-model';
+import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers, type GameScores } from './progress-model';
 
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const plural=(number:number,word:string)=>`${number} ${word}${number===1?'':'s'}`;
-const gameAwards=new Set<AchievementId>(['rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner']);
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,text?:string):HTMLElementTagNameMap[K] {
   const item=document.createElement(tag);item.className=className;if(text!==undefined)item.textContent=text;return item;
 }
@@ -23,14 +23,16 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     <p class="progress-intro">Delivery progress follows your saved driver. Mini-game results last for this drive.</p>
     <div class="progress-scores-body"></div>`;
   awardsDialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER / LITTLE VICTORIES</span><h2 id="awards-title">Awards</h2></div><button type="button" class="progress-close" aria-label="Close awards">✕</button></div>
-    <p class="progress-intro">Explore, deliver and play to earn awards. Some award a one-time cash reward.</p>
+    <p class="progress-intro">Explore, deliver and play to earn awards. Tier bonuses are extra and apply when newly reached; one-time awards may pay separately.</p>
     <p class="progress-save-status"></p><div class="progress-awards-body"></div>`;
   for(const dialog of [scoresDialog,awardsDialog]){
     dialog.querySelector<HTMLButtonElement>('.progress-close')!.onclick=()=>dialog.close();
     dialog.addEventListener('close',onClose);
   }
   const history=new GameResultHistory();
-  let games:GameScores={current:[],recent:[]},lastRender=0;
+  let games:GameScores={current:[],recent:[]},lastRender=0,lastAwardsKey='';
+  const expandedFamilies=new Set<AchievementTierId>();
+  const entries=Object.entries(ACHIEVEMENTS) as [AchievementId,typeof ACHIEVEMENTS[AchievementId]][];
   const available=()=>session.status==='online'&&(session.walletStatus==='guest'||(session.walletStatus==='ready'&&!!session.wallet));
   function observe(){
     if(available())games=history.observe(session.world,session.id,session.room,driverId(),session.snapshotVersion);
@@ -99,27 +101,96 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
   }
   function renderAwards(){
     const body=awardsDialog.querySelector<HTMLElement>('.progress-awards-body')!,saveStatus=awardsDialog.querySelector<HTMLElement>('.progress-save-status')!;
-    body.replaceChildren();const player=available()?session.world.players.find(item=>item.id===session.id):undefined;
+    const player=available()?session.world.players.find(item=>item.id===session.id):undefined;
     const view=awardSaveView(session.status==='online',session.walletStatus,session.wallet?.unlocked??null,player?.achievements.unlocked??[]);
     const savedIds=new Set(view.saved),current=new Set(view.observed),all=new Set([...savedIds,...current]);
+    const tiers=savedAwardTiers(session.status==='online',session.walletStatus,session.wallet?.achievementTiers??null);
+    const key=JSON.stringify([view,tiers,player?.delivery.completed,entries.map(([id])=>awardProgress(id,player,session.world))]);
     saveStatus.textContent=view.text;
-    if(!available()){body.append(element('p','progress-empty','Awards will appear when your driver is connected.'));return;}
-    body.append(element('p','progress-awards-count',`${all.size} / ${Object.keys(ACHIEVEMENTS).length} earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
-    const entries=Object.entries(ACHIEVEMENTS) as [AchievementId,typeof ACHIEVEMENTS[AchievementId]][];
-    for(const [heading,items] of [['Mini-game awards',entries.filter(([id])=>gameAwards.has(id))],['Explore and deliver',entries.filter(([id])=>!gameAwards.has(id))]] as const){
-    body.append(element('h3','progress-subheading',heading));
-    const list=element('ul','progress-award-list');
-    for(const [id,award] of items){
-      const isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
-      const row=element('li',`progress-award${earned?' is-earned':''}`),icon=element('span','progress-award-icon',earned?'★':'◇');icon.setAttribute('aria-hidden','true');
-      const copy=element('div','progress-award-copy');copy.append(element('strong','',award.name),element('p','',award.description));
-      const status=isSaved?'Saved to your driver':isCurrent?(session.walletStatus==='guest'?'Earned · save your driver to keep':'Earned · awaiting wallet confirmation'):awardProgress(id,player,session.world);
-      copy.append(element('small','progress-award-status',status));
-      const target=awardDeliveryTarget(id);if(target&&!earned&&player){const bar=element('progress','progress-award-bar');bar.max=target;bar.value=Math.min(player.delivery.completed,target);bar.setAttribute('aria-label',`${award.name} delivery progress`);copy.append(bar);}
-      row.append(icon,copy);list.append(row);
+    if(key===lastAwardsKey)return;
+    lastAwardsKey=key;
+    for(const details of body.querySelectorAll<HTMLDetailsElement>('details[data-family]')){
+      const id=details.dataset.family as AchievementTierId;
+      if(details.open)expandedFamilies.add(id);else expandedFamilies.delete(id);
     }
-    body.append(list);
+    const active=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    const activeCard=active?.closest<HTMLElement>('[data-award-id]');
+    const activeId=activeCard?.dataset.awardId,summaryFocused=active?.tagName==='SUMMARY';
+    const scrollTop=awardsDialog.scrollTop;
+    body.replaceChildren();
+    if(available())body.append(element('p','progress-awards-count',`${all.size} / ${entries.length} one-time awards earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
+    for(const group of AWARD_GROUPS){
+      const items=entries.filter(([id])=>awardGroup(id)===group.id);
+      const families=ACHIEVEMENT_TIER_IDS.filter(id=>awardFamilyGroup(id)===group.id);
+      if(group.id==='delivery')items.sort(([a],[b])=>(awardDeliveryTarget(a)??Infinity)-(awardDeliveryTarget(b)??Infinity));
+      if(!items.length&&!families.length)continue;
+      const section=element('section','progress-award-group'),heading=element('div','progress-award-group-heading');
+      heading.append(element('h3','',group.name));
+      if(available()&&items.length)heading.append(element('span','',`${items.filter(([id])=>all.has(id)).length} / ${items.length} one-time awards earned`));
+      section.append(heading);
+      const list=element('ul','progress-award-list');
+      for(const id of families)list.append(renderTierCard(id,tiers?.find(row=>row.id===id)));
+      for(const [id,award] of items){
+        const isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
+        const status=awardCardState(available(),isSaved,isCurrent,session.walletStatus),details=awardDetails(id);
+        const row=element('li',`progress-award is-${status.state}`),top=element('div','progress-award-top');
+        row.id=`progress-award-${id}`;row.dataset.awardId=id;row.tabIndex=-1;
+        const tier=element('span','progress-award-tier',awardTier(id));
+        const badge=element('span','progress-award-badge',status.label);top.append(tier,badge);
+        const title=element('div','progress-award-title'),icon=element('span','progress-award-icon',earned?'★':'◇');
+        icon.setAttribute('aria-hidden','true');title.append(icon,element('strong','',award.name));
+        row.append(top,title,element('p','progress-award-description',details.description));
+        const target=awardDeliveryTarget(id),progress=element('div','progress-award-progress');
+        progress.append(element('span','progress-award-label','Progress'));
+        progress.append(element('span','progress-award-progress-text',earned&&!target?'Completed':awardProgress(id,player,session.world)));
+        if(target&&player){
+          const bar=element('progress','progress-award-bar');bar.max=target;bar.value=Math.min(player.delivery.completed,target);
+          bar.setAttribute('aria-label',`${award.name} delivery progress`);progress.append(bar);
+        }
+        const footer=element('div','progress-award-footer'),reward=element('div','progress-award-reward');
+        reward.append(element('span','progress-award-label','Reward'),element('strong','',details.reward));
+        footer.append(reward,element('span','progress-award-save',status.save));row.append(progress,footer);list.append(row);
+      }
+      section.append(list);body.append(section);
     }
+    if(activeId){
+      const replacement=document.getElementById(`progress-award-${activeId}`);
+      const target=summaryFocused?replacement?.querySelector<HTMLElement>('summary'):replacement;
+      target?.focus({preventScroll:true});
+    }
+    awardsDialog.scrollTop=scrollTop;
+  }
+  function renderTierCard(id:AchievementTierId,data:AchievementTierRow|undefined){
+    const row=element('li',`progress-award progress-tier-card${data?(data.rank?' is-saved':' is-tier-available'):' is-unavailable'}`);
+    row.id=`progress-award-${id}`;row.dataset.awardId=id;row.tabIndex=-1;
+    const top=element('div','progress-award-top');
+    top.append(element('span','progress-award-tier','Repeatable · 5 tiers'),element('span','progress-award-badge',data?`Rank ${data.rank} / 5`:'Unavailable'));
+    const title=element('div','progress-award-title'),icon=element('span','progress-award-icon',data?.rank?'★':'◇');
+    icon.setAttribute('aria-hidden','true');title.append(icon,element('strong','',ACHIEVEMENT_TIER_NAMES[id]));
+    const progress=element('div','progress-award-progress');progress.append(element('span','progress-award-label','Progress'));
+    const number=(value:number)=>value.toLocaleString('en-US');
+    const text=data?(data.nextTarget===null?`${number(data.count)} · all five ranks reached`:`${number(data.count)} / ${number(data.nextTarget)} toward rank ${data.rank+1}`):
+      session.status==='online'&&session.walletStatus==='guest'?'Save your driver to track these ranks':'Connect your saved driver to see progress';
+    progress.append(element('span','progress-award-progress-text',text));
+    if(data?.nextTarget){
+      const bar=element('progress','progress-award-bar');bar.max=data.nextTarget;bar.value=Math.min(data.count,data.nextTarget);
+      bar.setAttribute('aria-label',`${data.name} progress toward rank ${data.rank+1}`);progress.append(bar);
+    }
+    const footer=element('div','progress-award-footer'),reward=element('div','progress-award-reward');
+    reward.append(element('span','progress-award-label','Extra tier bonus'),element('strong','',data?.nextCash===null?'All ranks reached':data?money(data.nextCash!):'See tier details'));
+    footer.append(reward,element('span','progress-award-save',data?'Saved to your driver':session.walletStatus==='guest'?'Guest drive · not saved':'Save status unavailable'));
+    const details=element('details','progress-tier-details');details.dataset.family=id;details.open=expandedFamilies.has(id);
+    const summary=element('summary','','View all 5 tiers');details.append(summary);
+    const ladder=element('ol','progress-tier-ladder');
+    for(const {rank,target,cash} of selectAchievementTierLadder(id)){
+      const step=element('li','progress-tier-step');
+      const state=data?(rank<=data.rank?'Reached':rank===data.rank+1?'Next':'Locked'):'Progress unavailable';
+      const left=element('span','progress-tier-step-label'),right=element('span','progress-tier-step-status');
+      left.append(element('strong','',`Rank ${rank} · ${number(target)}`),element('small','',`Extra tier bonus: ${money(cash)}`));
+      right.textContent=state;step.append(left,right);ladder.append(step);
+    }
+    details.append(ladder);details.addEventListener('toggle',()=>{if(!details.isConnected)return;if(details.open)expandedFamilies.add(id);else expandedFamilies.delete(id);});
+    row.append(top,title,element('p','progress-award-description',AWARD_FAMILY_DESCRIPTIONS[id]),progress,footer,details);return row;
   }
   function update(){
     observe();
@@ -131,5 +202,15 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
   function open(dialog:HTMLDialogElement,render:()=>void){
     if(dialog.open)return;onOpen();observe();render();dialog.showModal();lastRender=performance.now();
   }
-  return {scoresDialog,awardsDialog,update,openScores:()=>open(scoresDialog,renderScores),openAwards:()=>open(awardsDialog,renderAwards),close:()=>{if(scoresDialog.open)scoresDialog.close();if(awardsDialog.open)awardsDialog.close();}};
+  function openAwards(targetId?:AchievementTierId|AchievementId){
+    open(awardsDialog,renderAwards);
+    if(!targetId)return;
+    const target=document.getElementById(`progress-award-${targetId}`);
+    if(!target||!awardsDialog.contains(target))return;
+    const details=target.querySelector<HTMLDetailsElement>('details[data-family]');
+    if(details){details.open=true;expandedFamilies.add(targetId as AchievementTierId);}
+    (details?.querySelector<HTMLElement>('summary')??target).focus({preventScroll:true});
+    target.scrollIntoView({block:'start'});
+  }
+  return {scoresDialog,awardsDialog,update,openScores:()=>open(scoresDialog,renderScores),openAwards,close:()=>{if(scoresDialog.open)scoresDialog.close();if(awardsDialog.open)awardsDialog.close();}};
 }
