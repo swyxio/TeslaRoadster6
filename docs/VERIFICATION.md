@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Production driving release · 0.0.15 Alpha / protocol v32 · 2026-10-18 Pacific
+
+- PR #65 merged as `74c2255`; native Workers Build `daa8e1ff-a18a-410c-8377-dba70de4f09f` succeeded. Production advertised v32/capacity eight, served the 0.0.15 changelog, and its `index-DQSL1AOa.js` SHA-256 matched the final tested local build. All 609 tests and the build passed before merge; native CI ran them again.
+- A short production two-client smoke saw the same 89.487 m driver displacement on both clients without disconnects, but its simplified sender received 26/25 late rejections. The follow-up with two actual `Session`/`MotionClock` instances stayed online, saw both players and applied input; it advanced 19.9 simulated seconds in 20.001 seconds and recorded five late rejections among 801 measured inputs. Snapshot gaps were 229 ms p95 and 297 ms maximum. It excludes prediction replay and rendering, and does not establish sustained capacity or the network cause of those rejections. See [production reports and raw evidence](benchmarks/2026-10-18-v32-motion/production/).
+- Production Chrome at 1272×845 drove and turned at 202 km/h, reversed steering, reset and flew at 251 km/h / 5 m, with no captured console warnings/errors. Its short 240-frame rolling sample after the ground maneuver had p95 animation interval 17 ms and callback CPU 3.9 ms, 107 draw calls and 178,548 triangles. This is not a sustained FPS, GPU or physical-device measurement. The exact final preview also exercised cockpit flight and citation acknowledgment; its mixed sample had p95 interval 25.2 ms. These are separate scene samples, not a controlled FPS comparison.
+- The release improves ordinary driving but does not close every [performance gate](PERFORMANCE_RELEASE_GATES.md). Long network outages can still cut presentation, the short production sample had late inputs, physical-device behavior is unverified, and the landscape HUD remains crowded. Feature work stays held pending those follow-ups; no 64-player playable-capacity claim is supported.
+
 ## Predicted driving and shared presentation · protocol v32 candidate · 2026-10-18 Pacific
 
 - This candidate incorporates the previously shipped fleet/detail reduction and distant-transform changes. Production had served the PR #64 assets `index-_PFhm3Yv.js` and `index-CDlN2B7Z.css`, with `/api/health` reporting v31/capacity 64. PR #63 had a production flight smoke reaching 201 km/h; PR #64 had a local pixel fixture, 491 tests and build, and production HTTP asset verification. Neither establishes the v32 candidate's behavior.

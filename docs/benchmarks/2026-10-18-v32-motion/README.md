@@ -3,6 +3,8 @@
 These are local experimental observations, not production, GPU, physical-device
 or playable-capacity measurements. They preserve separate measurements rather
 than combining client frame pacing, simulated motion and room throughput.
+The later [production release checks](production/) are separate and include
+their own scope and remaining input-timing limitations.
 
 ## Deterministic motion traces
 
