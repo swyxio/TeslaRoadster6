@@ -57,7 +57,7 @@ export function northBayScenery(){
       const seed=(((col+17)*73856093)^((row+13)*19349663))>>>0;
       // The compact headlands have less room between roads and landmarks;
       // smaller jitter keeps their denser grove from collapsing into clumps.
-      const jitter=zone.id==='marin'?.3:.8;
+      const jitter=zone.id==='marin'?.1:.8;
       const jx=x+(seed%9-4)*jitter,jz=z+(Math.floor(seed/9)%9-4)*jitter;
       if(seed%7===0||inVineyard(jx,jz)||!supportedIn(region,jx,jz,7)||!clear(jx,jz,6))continue;
       trees[zone.id].push({x:jx,z:jz,y:terrainHeight(jx,jz)??0,size:.8+(seed%9)*.06,shade:seed%3});
