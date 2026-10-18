@@ -79,12 +79,15 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
         const trip=distance(pickup,dropoff);if(trip<60)continue;
         // Seeded variation is deterministic across room and durable replays.
         const variation=((completed*97+pickup.index*37+dropoff.index*61)%101)/101;
-        const score=distance(from,pickup)/700+trip/1800+variation*.3;
+        // Encourage nearby neighboring areas without placing every cross-bay
+        // candidate ahead of a short local job. A forced area change can
+        // otherwise require hundreds of failed road plans in one room tick.
+        const nearbyAreaBonus=explore&&newest<=originLevel&&recentArea&&dropoff.areaId&&recentArea!==dropoff.areaId ? .2 : 0;
+        const score=distance(from,pickup)/700+trip/1800+variation*.3-nearbyAreaBonus;
         // If the latest tier is not within reach yet, move outward one tier at
         // a time instead of repeatedly choosing the same SF neighborhood.
         const exploreRank=newest>originLevel?
-          dropoff.level===newest?0:dropoff.level>originLevel?dropoff.level-originLevel:20:
-          recentArea&&dropoff.areaId?Number(recentArea===dropoff.areaId):Number(trip<500);
+          dropoff.level===newest?0:dropoff.level>originLevel?dropoff.level-originLevel:20:0;
         pairs.push({pickup,dropoff,score,exploreRank,
           repeat:pickup.index===previous?.restaurant||dropoff.index===previous?.customer});
       }

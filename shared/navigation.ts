@@ -17,7 +17,7 @@ export type Navigation = {
 // the nine-metre pickup/dropoff marker even after the endpoint is snapped.
 export const DELIVERY_DESTINATION_SNAP = 4.5;
 type Segment = {a:Point;b:Point;cuts:number[]};
-type Edge = {to:number;distance:number};
+type Edge = {to:number;distance:number;accessChecked:number;accessAllowed:number};
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
 const point=(s:Segment,t:number):Point=>({x:s.a.x+(s.b.x-s.a.x)*t,z:s.a.z+(s.b.z-s.a.z)*t});
 const cross=(ax:number,az:number,bx:number,bz:number)=>ax*bz-az*bx;
@@ -110,10 +110,15 @@ function navigationGraph():RoadGraph {
   for(let i=0;i<segments.length;i++){
     const cuts=segmentNodes[i];
     for(let j=0;j<cuts.length-1;j++){
-      const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to])});
+      const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to]),accessChecked:0,accessAllowed:0});
     }
   }
   return roadGraph={segments,nodes,edges,nodeIds,segmentNodes};
+}
+
+/** Prepare the shared graph before a room starts its simulation timer. */
+export function prepareNavigationGraph():void {
+  navigationGraph();
 }
 
 /** Nearest supported road lane for localizing a job, not a route or teleport. */
@@ -138,6 +143,46 @@ function allowed(a:Point,b:Point,level:Level):boolean{
     ceiling=Math.max(level,required);
   }
   return true;
+}
+
+// Graph edges and access boundaries are static. Cache the directed edge check
+// independently for each level, including the existing locked-area exit rule.
+function allowedEdge(a:Point,b:Point,edge:Edge,level:Level):boolean {
+  const bit=1<<level;
+  if(!(edge.accessChecked&bit)){
+    edge.accessChecked|=bit;
+    if(allowed(a,b,level))edge.accessAllowed|=bit;
+  }
+  return !!(edge.accessAllowed&bit);
+}
+
+// Order equal costs by node id, matching the previous ascending-node scan.
+class NavigationQueue {
+  private items:{id:number;cost:number}[]=[];
+  private before(a:{id:number;cost:number},b:{id:number;cost:number}):boolean {
+    return a.cost<b.cost||(a.cost===b.cost&&a.id<b.id);
+  }
+  push(id:number,cost:number):void {
+    const item={id,cost},items=this.items;let index=items.length;
+    items.push(item);
+    while(index>0){
+      const parent=(index-1)>>1;if(!this.before(item,items[parent]))break;
+      items[index]=items[parent];index=parent;
+    }
+    items[index]=item;
+  }
+  pop():{id:number;cost:number}|undefined {
+    const items=this.items,first=items[0],last=items.pop();
+    if(!first||!last||!items.length)return first;
+    let index=0;
+    while(true){
+      const left=index*2+1;if(left>=items.length)break;
+      const right=left+1,child=right<items.length&&this.before(items[right],items[left])?right:left;
+      if(!this.before(items[child],last))break;
+      items[index]=items[child];index=child;
+    }
+    items[index]=last;return first;
+  }
 }
 
 // Connect an off-road car to a lane without crossing a building, unsupported
@@ -209,7 +254,7 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     });
   if(!closeStarts.length)return null;
   const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
-  const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,typeof closeStarts[number]>(),used=new Set<number>();
+  const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,typeof closeStarts[number]>(),used=new Set<number>(),queue=new NavigationQueue();
   const ahead=(p:Point)=>(p.x-car.x)*-Math.sin(car.yaw)+(p.z-car.z)*-Math.cos(car.yaw)>=-.5;
   for(const start of closeStarts){
     const heading=alignment(start)*(start.reverse?-1:1);
@@ -218,7 +263,7 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||!allowed(car,nodes[next.id],level))continue;
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
     const cost=(onRoad?start.distance*2:approachLength)+(1-heading)*8+distance(start.point,nodes[next.id]);
-    if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);}
+    if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);queue.push(next.id,cost);}
   }
   let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
   // Direct travel on a single segment need not pass through an intersection.
@@ -228,9 +273,10 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     const cost=(onRoad?start.distance*2:approachLength)+distance(start.point,end.point)+end.distance*2;
     if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[...start.approach,end.point];directStart=start;}
   }
-  while(used.size<nodes.length){
-    let at=-1;for(let i=0;i<nodes.length;i++)if(!used.has(i)&&(at<0||dist[i]<dist[at]))at=i;
-    if(at<0||!Number.isFinite(dist[at])||dist[at]>bestCost)break;
+  while(true){
+    const next=queue.pop();if(!next)break;
+    const at=next.id;if(used.has(at)||next.cost!==dist[at])continue;
+    if(next.cost>bestCost)break;
     used.add(at);
     for(const end of closeEnds){
       const cuts=segmentNodes[end.i],before=[...cuts].reverse().find(c=>c.t<=end.t+1e-7);
@@ -238,9 +284,9 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
       const cost=dist[at]+distance(nodes[at],end.point)+end.distance*2;
       if(cost<bestCost){bestCost=cost;bestNode=at;bestEnd=end.point;direct=undefined;directStart=undefined;}
     }
-    for(const edge of edges[at])if(allowed(nodes[at],nodes[edge.to],level)){
+    for(const edge of edges[at])if(allowedEdge(nodes[at],nodes[edge.to],edge,level)){
       const cost=dist[at]+edge.distance;
-      if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;}
+      if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;queue.push(edge.to,cost);}
     }
   }
   // A one-way loop can technically connect nearby streets by routing around

@@ -6,6 +6,7 @@ import { hasRockets } from './upgrades';
 import { initialOta, type OtaSubscription } from './ota';
 import { dropoffPayouts, pickupPayout, resolveDeliveryPayout, type DeliveryPayoutResolver, type ResolvedDeliveryPayout } from './delivery-payout';
 import { createDeliveryScheduler } from './delivery-scheduler';
+import { ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS, type DeliveryAreaId, type DeliveryCityId } from './delivery-locations';
 
 // Current spendable cash determines level; ownership and awards survive a drop.
 export const LEVELS = [
@@ -29,7 +30,7 @@ const BASE_FARES=[1_200,1_600,2_500,4_000,5_500,7_000,9_000,12_000,16_000] as co
 export const requiredLevelAt = requiredAccessLevelAt;
 
 // Real business identities; game positions are artistic, not surveyed locations.
-export const RESTAURANTS = [
+const HISTORIC_RESTAURANTS = [
   { id: 'tartine', name: 'Tartine Bakery', address: '600 Guerrero St, San Francisco', x: -180, z: 120, source: 'https://tartinebakery.com/san-francisco/bakery' },
   { id: 'tonys', name: 'Tony’s Pizza Napoletana', address: '1570 Stockton St, San Francisco', x: -60, z: -180, source: 'https://tonyspizzanapoletana.com/location/' },
   { id: 'burma', name: 'Burma Superstar', address: '309 Clement St, San Francisco', x: -300, z: -120, source: 'https://www.burmasuperstar.com/' },
@@ -37,10 +38,16 @@ export const RESTAURANTS = [
   { id: 'homeroom', name: 'Homeroom To Go', address: '4007 Webster St, Oakland', x: 390, z: -120, source: 'https://www.homeroom510.com/locations' },
   { id: 'comal', name: 'Comal Next Door', address: '550 Grand Ave, Oakland', x: 510, z: 120, source: 'https://www.comalnextdoor.com/location/comal-next-door-oakland/' },
 ] as const;
+// Append to the original array: durable orders use numeric indices.
+export const RESTAURANTS = [
+  ...HISTORIC_RESTAURANTS.map(place=>({...place,...HISTORIC_RESTAURANT_DETAILS[place.id]})),
+  ...ADDED_RESTAURANTS,
+];
 
 // Customer addresses are fictional and placed on streets in the compressed world.
-type Customer = { id:string; name:string; x:number; z:number; y:number; rooftop:boolean };
-export const CUSTOMERS: Customer[] = [
+type CustomerPosition = { id:string; name:string; x:number; z:number; y:number; rooftop:boolean };
+type Customer = CustomerPosition & {cityId:DeliveryCityId;areaId:DeliveryAreaId};
+const historicCustomers: CustomerPosition[] = [
   { id: 'poly', name: '88 Poly Ave · SF', x: -120, z: 60, y: 0, rooftop: false },
   { id: 'fog', name: '12 Foggy Lane · SF', x: -240, z: 180, y: 0, rooftop: false },
   { id: 'cable', name: '45 Cable Court · SF', x: 0, z: -180, y: 0, rooftop: false },
@@ -51,7 +58,7 @@ export const CUSTOMERS: Customer[] = [
 ];
 // Landmark drop-offs use the same clear arrival coordinates as the shared map.
 for (const landmark of LANDMARKS) {
-  CUSTOMERS.push({ id:`landmark-${landmark.id}`, name:`${landmark.name} · Delivery`, ...landmark.arrival, y:0, rooftop:false });
+  historicCustomers.push({ id:`landmark-${landmark.id}`, name:`${landmark.name} · Delivery`, ...landmark.arrival, y:0, rooftop:false });
 }
 // Pick flat, physically supported rooftops from the shared map rather than inventing altitudes.
 for (const {x,z,district,name} of [
@@ -62,8 +69,16 @@ for (const {x,z,district,name} of [
   const building = BUILDINGS.filter(b=>b.district===district&&b.style==='midrise'&&b.w>=15&&b.d>=20&&b.h<=30)
     .sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
   if (!building) throw new Error(`No flat rooftop in ${district}`);
-  CUSTOMERS.push({ id:`roof-${district}-${x}-${z}`, name, x:building.x, z:building.z, y:building.h, rooftop:true });
+  historicCustomers.push({ id:`roof-${district}-${x}-${z}`, name, x:building.x, z:building.z, y:building.h, rooftop:true });
 }
+export const CUSTOMERS: Customer[] = [
+  ...historicCustomers.map(place=>{
+    const area=HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS];
+    if(!area)throw new Error(`No delivery area for historic customer ${place.id}`);
+    return {...place,...area};
+  }),
+  ...ADDED_CUSTOMERS,
+];
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
 export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
