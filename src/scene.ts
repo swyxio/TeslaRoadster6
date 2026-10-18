@@ -116,8 +116,8 @@ export class GameScene {
     });
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
-    for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);scene.add(label);}
-    const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);scene.add(yachtLabel);
+    for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }
   private label(text: string) {
@@ -236,7 +236,7 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
 }

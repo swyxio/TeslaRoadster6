@@ -33,7 +33,7 @@ function requirementMaterial(level:GateLevel):T.SpriteMaterial {
   ctx.fillStyle='#fff7e7';ctx.font='bold 43px system-ui';
   ctx.fillText(`${goal.deliveries} DELIVERIES  +  $${goal.earned} TOTAL EARNED`,512,173,950);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
-  return new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});
+  return new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false});
 }
 
 /** Visual-only checkpoints. Caller adds each group and sets its visibility per local player. */

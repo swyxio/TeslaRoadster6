@@ -218,7 +218,7 @@ function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
-  lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;resetCelebration();audio.reset();void audio.unlock();
+  lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();void audio.unlock();
   pendingShop=null;pendingOta=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();

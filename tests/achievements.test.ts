@@ -106,7 +106,7 @@ test('an immediate first-frame jump starts Bay Hopper after spawn, reset or vehi
 });
 
 test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick',()=>{
-  const {world,player,car}=setup();player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.speed=68;
+  const {world,player,car}=setup();player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.yaw=-Math.PI/2;car.speed=68;
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));

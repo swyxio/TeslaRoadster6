@@ -73,7 +73,7 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
 
 test('autopilot can cross the Bay and return without teleporting',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
+ player.delivery.level=3;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
  for(let i=0;i<2400;i++){const x=car.x,z=car.z;step(world,new Map(),.05);assert.ok(Math.hypot(car.x-x,car.z-z)<2);furthest=Math.max(furthest,car.x);}
  assert.ok(furthest>330);assert.ok(car.x<100);assert.equal(car.autopilot,true);
 });

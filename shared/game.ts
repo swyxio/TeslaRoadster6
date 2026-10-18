@@ -72,7 +72,8 @@ function solid(e:Entity):boolean {
 }
 function fits(world:World,e:Entity,ignore?:Entity):boolean{return e.supportId!==null&&!solid(e)&&!world.entities.some(other=>other!==ignore&&other!==e&&e.y<other.y+dimensions(other.kind).height&&other.y<e.y+dimensions(e.kind).height&&!!contact(body(e),body(other)));}
 function spawnPosition(world:World,kind:Entity['kind']='roadster'):{x:number;z:number;yaw:number} {
-  const bayApproach={x:40,z:60,yaw:-Math.PI/2};
+  // New drivers face the open city and their first delivery, not the locked bridge.
+  const bayApproach={x:40,z:60,yaw:Math.PI/2};
   const bayCandidate=makeEntity('candidate',kind,bayApproach.x,bayApproach.z);bayCandidate.yaw=bayApproach.yaw;
   if(fits(world,bayCandidate))return bayApproach;
   for(let i=0;i<192;i++){
