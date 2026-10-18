@@ -77,6 +77,8 @@ let pageErrors = 0;
 let consoleErrors = 0;
 let replayable = true;
 const replaySteps: Record<string, unknown>[] = [];
+let replayLastActionEnd: number | undefined;
+let replayFinishedAt: number | undefined;
 type Pose = { atMs: number; tick: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number };
 const poses: Pose[] = [];
 let posesTruncated = false;
@@ -89,6 +91,9 @@ function observeRoom(socket: PlaywrightWebSocket) {
   try { path = new URL(socket.url()).pathname; } catch { return; }
   if (!path.startsWith('/api/room/')) return;
   activeRoom = socket; playerId = undefined; latestPose = undefined;
+  socket.on('close', () => {
+    if (socket === activeRoom) { activeRoom = undefined; playerId = undefined; latestPose = undefined; }
+  });
   socket.on('framereceived', ({ payload }) => {
     if (socket !== activeRoom || typeof payload !== 'string') return;
     try {
@@ -113,6 +118,11 @@ function duration(action: Action, field: string, fallback: number, max: number):
   const value = action[field] ?? fallback;
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > max) throw new Error(`Invalid ${field}.`);
   return value;
+}
+function appendReplayIdle(until: number) {
+  // Scenario waits have a 60-second per-step limit.
+  let idleMs = replayLastActionEnd === undefined ? 0 : Math.round(until - replayLastActionEnd);
+  while (idleMs > 0) { const ms = Math.min(idleMs, 60000); replaySteps.push({ type: 'wait', ms }); idleMs -= ms; }
 }
 function nameField(action: Action): string {
   const name = textField(action, 'name', 40);
@@ -164,7 +174,7 @@ async function act(action: Action): Promise<unknown> {
         const revision = action.value;
         if (!Number.isSafeInteger(revision) || (revision as number) < 0) throw new Error('Invalid pose revision.');
         const deadline = performance.now() + duration(action, 'timeoutMs', 30000, 120000);
-        while (!latestPose || latestPose.poseRevision === null || latestPose.poseRevision < (revision as number)) {
+        while (!activeRoom || !latestPose || latestPose.poseRevision === null || latestPose.poseRevision < (revision as number)) {
           if (performance.now() >= deadline) throw new Error('Timed out waiting for the authoritative pose revision.');
           await page!.waitForTimeout(50);
         }
@@ -206,8 +216,7 @@ async function act(action: Action): Promise<unknown> {
       case 'touchUp': {
         const id = touchId(action);
         if (!touchSession || !touches.has(id)) throw new Error('That touch is not held.');
-        const remaining = [...touches.values()].filter(point => point.id !== id);
-        await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: remaining });
+        await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [touches.get(id)!] });
         touches.delete(id); break;
       }
       case 'sample': result = await sample(); break;
@@ -231,7 +240,7 @@ async function act(action: Action): Promise<unknown> {
       }
       case 'recordStop':
         result = await sample();
-        if (values.serve) { await releaseInputs(); replaySteps.push({ type: 'releaseAll' }); }
+        if (values.serve) await releaseInputs();
         await stopRecording(); break;
       default: throw new Error('Unknown action type.');
     }
@@ -241,8 +250,12 @@ async function act(action: Action): Promise<unknown> {
     actionErrors++;
     throw error;
   } finally {
-    events.push({ type: action.type, commandStartedAtMs: Math.round(begin - started), commandDurationMs: Math.round(performance.now() - begin), status: ok ? 'ok' : 'failed', ...(key ? { key } : {}), ...(result === undefined ? {} : { sample: result }) });
+    const end = performance.now();
+    events.push({ type: action.type, commandStartedAtMs: Math.round(begin - started), commandDurationMs: Math.round(end - begin), status: ok ? 'ok' : 'failed', ...(key ? { key } : {}), ...(result === undefined ? {} : { sample: result }) });
     if (values.serve && ok) {
+      // Preserve time spent between requests, including frame inspections while controls are held.
+      appendReplayIdle(begin);
+      if (action.type === 'recordStop') replaySteps.push({ type: 'releaseAll' });
       const saved: Record<string, unknown> = { type: action.type };
       for (const field of ['key', 'selector', 'ms', 'timeoutMs', 'state', 'name', 'id']) if (action[field] !== undefined) saved[field] = action[field];
       // Interactive wait-for calls are short so release cannot be blocked;
@@ -251,6 +264,9 @@ async function act(action: Action): Promise<unknown> {
       if (action.type === 'fill') { replayable = false; saved.value = null; }
       else if (action.value !== undefined) saved.value = action.value;
       replaySteps.push(saved);
+      replayLastActionEnd = end;
+    } else if (values.serve) {
+      replayable = false;
     }
   }
 }
@@ -320,7 +336,7 @@ try {
         if (req.method === 'GET' && path === `${base}/frame.png`) { const image = await page!.screenshot(); res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }); res.end(image); return; }
         if (req.method === 'POST' && path === `${base}/actions`) {
           const action = incoming!;
-          if (action.type === 'finish') { json(res, 202, { accepted: true }); server.close(); close(); return; }
+          if (action.type === 'finish') { replayFinishedAt = performance.now(); json(res, 202, { accepted: true }); server.close(); close(); return; }
           const result = await act(action); json(res, 200, { ok: true, result: result ?? null }); return;
         }
         json(res, 404, { error: 'Not found' });
@@ -331,13 +347,14 @@ try {
     await new Promise<void>((resolveListen, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => resolveListen()); });
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('Server did not bind.');
     console.log(JSON.stringify({ id, endpoint: `http://127.0.0.1:${address.port}/v1/runs/${id}`, output: out }));
-    const stop = () => { server.close(); close(); };
+    const stop = () => { replayFinishedAt = performance.now(); server.close(); close(); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     await done;
     process.off('SIGINT', stop); process.off('SIGTERM', stop);
   }
 } catch (error) { failure = error; }
 finally {
+  const endedAt = replayFinishedAt ?? performance.now();
   if (page) {
     await releaseInputs();
     if (recording) { try { await stopRecording(); } catch { failure ??= new Error('Could not finalize recording.'); } }
@@ -349,6 +366,9 @@ finally {
     if (!poses.length) failure ??= new Error('No compatible authoritative trajectory was received.');
   }
   if (values.serve) {
+    appendReplayIdle(endedAt);
+    replaySteps.push({ type: 'releaseAll' });
+    if (failure) replayable = false;
     await writeFile(join(out, 'replay.json'), JSON.stringify({ viewport: view, steps: replaySteps }, null, 2) + '\n');
     manifest.replay = { file: 'replay.json', replayable, note: 'Successful commands only; fill values are redacted.' };
   }

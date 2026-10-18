@@ -115,7 +115,9 @@ secret as a bearer token to `GET <endpoint>` for status,
 serialized; interactive waits and wait-for timeouts are limited to one second
 per request, and `recordStop` releases held inputs before encoding. `finish`
 returns HTTP 202 for acceptance, not completion: wait for the runner to exit
-and inspect `manifest.json`. `replay.json` saves successful commands for reuse;
+and inspect `manifest.json`. `replay.json` saves successful commands and the
+elapsed time between them for reuse; this approximates command timing, not
+the exact moment an input reaches the game. A failed action marks it incomplete.
 include a `waitFor` command for any readiness needed by a fresh run. Replayed
 wait-for timeouts are extended to 30 seconds to allow for fresh startup. Text
 passed to `fill` is redacted and marks that replay incomplete. Do not place

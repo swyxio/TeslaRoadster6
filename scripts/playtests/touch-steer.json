@@ -12,8 +12,10 @@
     { "type": "assertNumberAbove", "selector": "#speed", "value": 0 },
     { "type": "touchUp", "id": 1 },
     { "type": "wait", "ms": 500 },
+    { "type": "screenshot", "name": "steering-released" },
     { "type": "touchUp", "id": 0 },
     { "type": "wait", "ms": 500 },
+    { "type": "screenshot", "name": "all-released" },
     { "type": "recordStop" }
   ]
 }

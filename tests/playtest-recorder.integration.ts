@@ -6,6 +6,7 @@ import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const origin = new URL(process.argv[2] ?? 'http://127.0.0.1:8787');
@@ -51,8 +52,8 @@ try {
   await action({ type: 'waitFor', selector: '#hud:not(.hidden)', state: 'attached', timeoutMs: 1000 });
   await action({ type: 'recordStart' });
   await action({ type: 'keyDown', key: 'KeyW' });
-  await action({ type: 'wait', ms: 1000 });
-  await action({ type: 'wait', ms: 1000 });
+  // A human or agent may wait between requests without sending a wait action.
+  await delay(1400);
   const sample = await action({ type: 'sample' });
   assert.ok(Number(sample.result.speed) > 0, 'Driving input must move the car.');
   await action({ type: 'keyUp', key: 'KeyW' });
@@ -70,6 +71,9 @@ try {
   assert.equal(manifest.status, 'complete');
   assert.equal(manifest.replay.replayable, true);
   assert.ok(replay.steps.some((step: { type: string; key?: string }) => step.type === 'keyDown' && step.key === 'KeyW'));
+  const downIndex = replay.steps.findIndex((step: { type: string }) => step.type === 'keyDown');
+  const sampleIndex = replay.steps.findIndex((step: { type: string }) => step.type === 'sample');
+  assert.ok(replay.steps.slice(downIndex + 1, sampleIndex).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve the hold between requests.');
   assert.ok(!manifestText.includes(secret) && !replayText.includes(secret));
   assert.ok((await stat(join(output, 'segment-001.webm'))).size > 1000);
   if (process.platform !== 'win32') assert.equal((await stat(output)).mode & 0o077, 0);
@@ -83,6 +87,59 @@ try {
   const replayManifest = JSON.parse(await readFile(join(replayOutput, 'manifest.json'), 'utf8'));
   assert.equal(replayManifest.status, 'complete');
   assert.ok(replayManifest.events.some((event: { type: string; sample?: { speed?: string } }) => event.type === 'sample' && Number(event.sample?.speed) > 0), 'Replayed controls must move the car.');
+
+  // Observe real DOM touch events so releasing either finger is checked
+  // independently of the runner's own bookkeeping.
+  const fixture = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/html' });
+    response.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+      <button id="a" style="width:140px;height:140px">A</button><button id="b" style="width:140px;height:140px">B</button>
+      <script>for (const type of ['touchstart','touchend','touchcancel']) document.body.addEventListener(type, event => {
+        event.preventDefault(); document.body.dataset.teslandPerf = JSON.stringify({touches: [...event.touches].map(t => t.identifier).sort(), changed: [...event.changedTouches].map(t => t.identifier).sort()});
+      }, {passive:false});</script>`);
+  });
+  await new Promise<void>(resolve => fixture.listen(0, '127.0.0.1', resolve));
+  const fixtureAddress = fixture.address();
+  assert.ok(fixtureAddress && typeof fixtureAddress !== 'string');
+  const touchChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', `http://127.0.0.1:${fixtureAddress.port}/`, '--target-ref', 'touch-test', '--serve', '--mobile', '--no-video', '--gpu', gpu, '--out', join(dirname(output), 'touch')], {
+    env: { ...process.env, TESLAND_PLAYTEST_SECRET: secret }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const touchExited = new Promise<number | null>(resolve => touchChild.once('exit', resolve));
+  let touchError = '';
+  touchChild.stderr.on('data', chunk => { touchError += chunk; });
+  try {
+    const touchLine = await Promise.race([
+      new Promise<string>(resolve => createInterface({ input: touchChild.stdout }).once('line', resolve)),
+      touchExited.then(code => { throw new Error(`Touch recorder exited before listening: ${code} ${touchError}`); }),
+    ]);
+    const touchEndpoint = JSON.parse(touchLine).endpoint as string;
+    const touchAction = async (step: object) => {
+      const response = await fetch(`${touchEndpoint}/actions`, { method: 'POST', headers, body: JSON.stringify(step) });
+      assert.equal(response.status, 200);
+    };
+    const touchState = async () => (await fetch(touchEndpoint, { headers }).then(response => response.json()) as { state: { perf: { touches: number[]; changed: number[] } } }).state.perf;
+    for (const first of [1, 2]) {
+      await touchAction({ type: 'touchDown', id: 1, selector: '#a' });
+      await touchAction({ type: 'touchDown', id: 2, selector: '#b' });
+      assert.deepEqual((await touchState()).touches, [1, 2]);
+      await touchAction({ type: 'touchUp', id: first });
+      assert.deepEqual(await touchState(), { touches: [first === 1 ? 2 : 1], changed: [first] });
+      await touchAction({ type: 'touchUp', id: first === 1 ? 2 : 1 });
+      assert.deepEqual((await touchState()).touches, []);
+    }
+    await touchAction({ type: 'touchDown', id: 1, selector: '#a' });
+    await delay(1200);
+    const touchFinish = await fetch(`${touchEndpoint}/actions`, { method: 'POST', headers, body: JSON.stringify({ type: 'finish' }) });
+    assert.equal(touchFinish.status, 202);
+    assert.equal(await touchExited, 0, touchError);
+    const touchReplay = JSON.parse(await readFile(join(dirname(output), 'touch', 'replay.json'), 'utf8'));
+    const lastDown = touchReplay.steps.findLastIndex((step: { type: string }) => step.type === 'touchDown');
+    assert.ok(touchReplay.steps.slice(lastDown + 1).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve a hold through finish.');
+    assert.equal(touchReplay.steps.at(-1).type, 'releaseAll');
+  } finally {
+    touchChild.kill('SIGTERM');
+    fixture.close();
+  }
   console.log(`Local recorder integration passed; artifacts: ${output}`);
 } catch (error) {
   child.kill('SIGTERM');
