@@ -67,7 +67,7 @@ for (const {x,z,district,name} of [
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
 export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
-export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'|'unavailable'} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
@@ -139,13 +139,21 @@ export function updateLevel(delivery:DeliveryState):void { delivery.level=levelF
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
 }
-/** Move an active job back into regions available at the new balance. */
+export function isOrderAccessible(order:Order,level:Level):boolean {
+  const pickup=RESTAURANTS[order.restaurant],customer=CUSTOMERS[order.customer];
+  return (order.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=level) && requiredLevelAt(customer.x,customer.z)<=level;
+}
+/** Move an active job back into regions available at the new balance.
+ * Returns true if the order or its availability notice changed. */
 export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},canFly=false):boolean {
   const old=delivery.order;
-  const pickup=RESTAURANTS[old.restaurant],customer=CUSTOMERS[old.customer];
-  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level)return false;
+  if(isOrderAccessible(old,delivery.level))return false;
   const next=orderFor(delivery.completed,origin,delivery.level,canFly,old);
-  if(!next)return false;
+  if(!next){
+    if(delivery.lastReroute?.reason==='unavailable')return false;
+    delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'unavailable'};
+    return true;
+  }
   // A collected order stays collected; never grant a second pickup bonus.
   if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
   delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,
@@ -167,11 +175,12 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
+  const unavailable=delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(delivery.order,delivery.level);
   if (active) {
     delivery.activeSeconds += dt;
-    if(!orderPaused&&!entity.inDome)delivery.order.elapsed += dt;
+    if(!orderPaused&&!entity.inDome&&!unavailable)delivery.order.elapsed += dt;
   }
-  if(orderPaused||entity.inDome)return;
+  if(orderPaused||entity.inDome||unavailable)return;
   const payouts=applyDeliveryStop(delivery,entity,resolvePayout);
   if(payouts===null)delivery.order.elapsed=elapsedBefore;
   return payouts;

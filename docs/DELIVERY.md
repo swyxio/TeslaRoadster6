@@ -12,7 +12,7 @@ Every third completed delivery also pays a repeatable $350 checkpoint, even when
 
 ## Unlocking the Bay
 
-Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it.
+Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it. If no safe replacement is found, the order pauses and the HUD explains how to retry from an open road.
 
 | Level | Cash | Areas opened |
 | --- | ---: | --- |

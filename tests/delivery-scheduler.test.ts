@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDeliveryStop, CUSTOMERS, initialDelivery, LEVELS, RESTAURANTS, requiredLevelAt, rerouteInaccessibleOrder, updateLevel, type DeliveryStop, type Level, type Order } from '../shared/delivery';
+import { applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, LEVELS, RESTAURANTS, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryStop, type Level, type Order } from '../shared/delivery';
 import { createDeliveryScheduler, DELIVERY_MAX_PICKUP_DISTANCE, DELIVERY_MAX_TRIP_DISTANCE } from '../shared/delivery-scheduler';
+import { addPlayer, createWorld, NEUTRAL } from '../shared/game';
 import { terrainHeight } from '../shared/map';
 
 const choose=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
@@ -103,4 +104,24 @@ test('a remote airborne driver can receive an open job without a road at their p
   assert.equal(delivery.order.stage,'dropoff');
   for(const place of [RESTAURANTS[delivery.order.restaurant],CUSTOMERS[delivery.order.customer]])
     assert.equal(requiredLevelAt(place.x,place.z),0);
+});
+
+test('an unavailable relock preserves and pauses the job until an open-road retry',()=>{
+  const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
+  const delivery=player.delivery;
+  delivery.level=0;delivery.order={...delivery.order,customer:4,stage:'dropoff',elapsed:12};
+  const original={...delivery.order};
+  // An isolated synthetic origin makes the scheduler return no safe pair.
+  assert.equal(rerouteInaccessibleOrder(delivery,{x:0,z:1e9}),true);
+  assert.deepEqual(delivery.order,original);assert.equal(delivery.lastReroute?.reason,'unavailable');
+  assert.equal(isOrderAccessible(delivery.order,delivery.level),false);
+  const notice=delivery.lastReroute?.id;
+  assert.equal(rerouteInaccessibleOrder(delivery,{x:0,z:1e9}),false);
+  assert.equal(delivery.lastReroute?.id,notice,'repeated failures do not spam notices');
+  updateDelivery(world,player,car,{...NEUTRAL,throttle:1},1);
+  assert.equal(delivery.order.elapsed,12,'the unavailable job clock stays paused');
+  assert.equal(rerouteInaccessibleOrder(delivery,{x:-120,z:60}),true);
+  assert.equal(delivery.order.stage,'dropoff');assert.equal(delivery.order.elapsed,12);
+  assert.equal(isOrderAccessible(delivery.order,delivery.level),true);
+  assert.notEqual(delivery.lastReroute?.reason,'unavailable');
 });
