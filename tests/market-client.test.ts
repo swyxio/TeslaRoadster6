@@ -5,6 +5,38 @@ import type { MarketState } from '../shared/market-protocol';
 
 function store(){const entries=new Map<string,string>();return {getItem:(key:string)=>entries.get(key)??null,setItem:(key:string,value:string)=>{entries.set(key,value);},removeItem:(key:string)=>{entries.delete(key);}};}
 const empty=(id:number):MarketState=>({type:'marketState',requestId:id,listings:[],owned:[],shop:[]});
+test('an open market refreshes after reconnect without losing a pending operation',()=>{
+  const sent:any[]=[];let next=0;
+  const client=new MarketClient(store(),message=>{sent.push(message);return ++next;},()=> 'op');
+  const context=(owner:string|null,ready:boolean,generation:number)=>({owner,ready,generation,cash:ready?100:null});
+  assert.equal(client.setContext(context('a',true,1)),true);
+  client.refresh();client.receiveState(empty(1));
+  assert.equal(client.start({action:'acquire',catalogId:'paint'}),true);
+  assert.equal(client.setContext(context('a',false,1)),false);
+  assert.equal(client.setContext(context(null,false,2)),false);
+  const refreshOnReady=client.setContext(context('a',true,2));
+  client.tick();
+  if(refreshOnReady)client.refresh();
+  assert.deepEqual(sent.slice(-2),[{action:'status',operationId:'op'},{action:'browse'}]);
+  client.receiveState(empty(1));
+  assert.equal(client.view().state,'loading','an old-generation response cannot fill the new page');
+  client.receiveState(empty(4));
+  assert.equal(client.view().state,'ready');assert.equal(client.view().pending,true);
+  assert.equal(client.setContext(context('a',true,2)),false,'steady state does not refresh every frame');
+  client.receiveResult({type:'marketResult',requestId:3,operationId:'op',status:'not-found',action:null});
+  assert.deepEqual(sent.at(-1),{action:'acquire',catalogId:'paint',operationId:'op'});
+});
+test('restoring readiness replaces an in-flight browse in the same connection',()=>{
+  const sent:any[]=[];let next=0;
+  const client=new MarketClient(store(),message=>{sent.push(message);return ++next;});
+  const context=(ready:boolean)=>({owner:'a',ready,generation:1,cash:100});
+  client.setContext(context(true));client.refresh();
+  client.setContext(context(false));
+  if(client.setContext(context(true)))client.refresh();
+  assert.deepEqual(sent,[{action:'browse'},{action:'browse'}]);
+  client.receiveState(empty(1));assert.equal(client.view().state,'loading');
+  client.receiveState(empty(2));assert.equal(client.view().state,'ready');
+});
 test('a lost purchase is queried and, if never accepted, resent with the identical ID only for the same driver',()=>{
   const storage=store(),sent:unknown[]=[];let next=0,now=100;
   const send=(message:unknown)=>{sent.push(message);return ++next;};

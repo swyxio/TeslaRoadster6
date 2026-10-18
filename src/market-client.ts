@@ -33,7 +33,7 @@ export class MarketClient {
   constructor(private storage:StoragePort|null,private send:(message:Outgoing)=>number|null,
     private uuid:()=>string=()=>crypto.randomUUID(),private now:()=>number=()=>performance.now()){}
 
-  setContext(next:Context){
+  setContext(next:Context):boolean {
     const changed=next.owner!==this.context.owner||next.generation!==this.context.generation;
     const becameReady=next.ready&&!this.context.ready;
     this.context=next;
@@ -41,7 +41,8 @@ export class MarketClient {
       this.data=null;this.loading=null;this.message='';this.pending=null;this.journalProblem='';
       if(next.owner){const journal=readMarketOperation(this.storage,next.owner);this.pending=journal.operation;this.journalProblem=journal.state==='ready'?'':journal.state;}
       this.statusAfter=0;
-    }else if(becameReady)this.statusAfter=0;
+    }else if(becameReady){this.loading=null;this.statusAfter=0;}
+    return next.ready&&(changed||becameReady);
   }
   refresh(cursor?:string,ownedCursor?:string){
     if(!this.context.ready||this.loading)return;

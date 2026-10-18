@@ -793,11 +793,12 @@ let lastMarketKey='';
 function updateMarket(){
   const owner=chat.status==='online'&&currentCode&&currentCode===chat.code&&currentCode===walletBoundCode?chat.playerId:null;
   const ready=!!owner&&session.status==='online'&&session.walletStatus==='ready'&&!!session.wallet;
-  market.setContext({owner,ready,generation:session.connectionGeneration,cash:ready?session.wallet!.cash:null});
+  const refreshOnReady=market.setContext({owner,ready,generation:session.connectionGeneration,cash:ready?session.wallet!.cash:null});
   if(session.marketState){market.receiveState(session.marketState);session.marketState=null;}
   if(session.marketResult){market.receiveResult(session.marketResult);session.marketResult=null;}
   market.tick();
   if(marketUi.isOpen()){
+    if(refreshOnReady)market.refresh();
     const next=market.view(),key=JSON.stringify(next);if(key!==lastMarketKey){lastMarketKey=key;marketUi.update(next);}
   }
 }
