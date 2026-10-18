@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 595" role="img" aria-labelledby="title desc">
+<title id="title">Three clocks, one drive</title>
+<desc id="desc">An illustrative 200-millisecond timeline shows physics ticks every 50 milliseconds, snapshots every 100 milliseconds, and frames at 60 per second. If the browser draws only the latest snapshot, six frames repeat the same car position before the next snapshot makes the car jump.</desc>
+<rect width="1200" height="595" rx="16" fill="#17383c"/>
+<g font-family="system-ui, -apple-system, sans-serif" fill="#f2f7ee">
+<text x="40" y="55" font-size="32" fill="#f2f7ee" font-weight="700">Three clocks, one drive</text>
+<text x="40" y="89" font-size="20" fill="#bad0c5">Illustrative timing: 200 milliseconds of a multiplayer drive</text>
+<path d="M350.00 130 L350.00 465" fill="none" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<path d="M550.00 130 L550.00 465" fill="none" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<path d="M750.00 130 L750.00 465" fill="none" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<path d="M950.00 130 L950.00 465" fill="none" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<path d="M1150.00 130 L1150.00 465" fill="none" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="350.0" y="120" font-size="20" fill="#bad0c5" text-anchor="middle">0 ms</text>
+<text x="550.0" y="120" font-size="20" fill="#bad0c5" text-anchor="middle">50</text>
+<text x="750.0" y="120" font-size="20" fill="#bad0c5" text-anchor="middle">100</text>
+<text x="950.0" y="120" font-size="20" fill="#bad0c5" text-anchor="middle">150</text>
+<text x="1150.0" y="120" font-size="20" fill="#bad0c5" text-anchor="middle">200</text>
+<text x="40" y="185" font-size="25" fill="#f2f7ee" font-weight="700">Room physics</text>
+<text x="40" y="212" font-size="21" fill="#bad0c5">20 ticks / second</text>
+<path d="M350.00 196 L1150.00 196" fill="none" stroke="#53736e" stroke-width="1"/>
+<circle cx="350.0" cy="196" r="9" fill="#99c9f2"/>
+<circle cx="550.0" cy="196" r="9" fill="#99c9f2"/>
+<circle cx="750.0" cy="196" r="9" fill="#99c9f2"/>
+<circle cx="950.0" cy="196" r="9" fill="#99c9f2"/>
+<circle cx="1150.0" cy="196" r="9" fill="#99c9f2"/>
+<text x="40" y="283" font-size="25" fill="#f2f7ee" font-weight="700">Snapshots</text>
+<text x="40" y="310" font-size="21" fill="#bad0c5">about 10 / second</text>
+<path d="M350.00 295 L1150.00 295" fill="none" stroke="#53736e" stroke-width="1"/>
+<rect x="341.0" y="286" width="18" height="18" rx="3" fill="#a4e6bb"/>
+<rect x="741.0" y="286" width="18" height="18" rx="3" fill="#a4e6bb"/>
+<rect x="1141.0" y="286" width="18" height="18" rx="3" fill="#a4e6bb"/>
+<text x="40" y="385" font-size="25" fill="#f2f7ee" font-weight="700">Browser frames</text>
+<text x="40" y="412" font-size="21" fill="#bad0c5">60 / second in this example</text>
+<text x="40" y="439" font-size="21" fill="#bad0c5">Only the latest snapshot</text>
+<rect x="325.00" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M329.00 423 L371.00 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="338.00" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="391.67" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M395.67 423 L437.67 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="404.67" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="458.33" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M462.33 423 L504.33 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="471.33" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="525.00" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M529.00 423 L571.00 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="538.00" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="591.67" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M595.67 423 L637.67 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="604.67" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="658.33" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M662.33 423 L704.33 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="671.33" y="413" width="10" height="7" rx="2" fill="#ffc88f"/>
+<rect x="725.00" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M729.00 423 L771.00 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="752.00" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="791.67" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M795.67 423 L837.67 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="818.67" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="858.33" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M862.33 423 L904.33 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="885.33" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="925.00" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M929.00 423 L971.00 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="952.00" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="991.67" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M995.67 423 L1037.67 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="1018.67" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="1058.33" y="375" width="50" height="55" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M1062.33 423 L1104.33 423" fill="none" stroke="#79938a" stroke-width="1"/>
+<rect x="1085.33" y="413" width="10" height="7" rx="2" fill="#a4e6bb"/>
+<path d="M717.00 364 L717.00 440" fill="none" stroke="#ffc88f" stroke-width="2" stroke-dasharray="4 5"/>
+<text x="516.0" y="466" font-size="21" fill="#bad0c5" text-anchor="middle">same position repeated</text>
+<text x="916.0" y="466" font-size="21" fill="#bad0c5" text-anchor="middle">jump to the next position</text>
+<rect x="40" y="502" width="1120" height="56" rx="9" fill="#254b4a"/>
+<text x="60" y="537" font-size="22" fill="#f2f7ee" font-weight="600">A fast frame can redraw an old position; smooth motion needs a position between updates.</text>
+</g></svg>

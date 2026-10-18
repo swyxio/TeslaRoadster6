@@ -1128,3 +1128,13 @@ A disposable saved production driver completed two deliveries and reconnected wi
 Focused session tests check that denied storage still starts the matching room identity request, blocks play while it resolves, and preserves an earlier remembered and unfinished code during a switch. In a local Chrome fixture with storage access denied, the identity panel displayed the new code and copy warning. A saved driver paid $5 for remote-shop access, then after reload the same recovery code restored its $2,495 balance; switching from the newly created driver to the recovered driver restored that balance in the game. The test used isolated local Worker storage. The panel was also inspected in emulated 390×844 portrait and 844×390 landscape; the landscape panel scrolls to the code controls. No physical device was tested.
 
 With the storage correction integrated into the protocol v37 cruise-and-awards candidate, `pnpm test` passed 713 tests and `pnpm build` passed. The isolated award-wallet integration again passed held and rejected writes, identity ownership and recovery after disconnect. The local two-client room and prediction integrations also passed on the combined checkpoint and identity candidate. The Vite build retained its large-chunk warning.
+
+## 2026-10-18 · Driving article playback and clock diagram
+
+The article candidate based on `82c37f1` passed `pnpm test` (848 tests) and `pnpm build`. Headless Chrome inspected the clock diagram at desktop and 390 px and 320 px mobile widths. The manual comparison played at its beginning, middle and end on desktop and at both mobile widths without media errors or horizontal overflow. A readable left/right key was added above the video after review. The 21.5-second composite uses matching crops at normal speed and has no audio; its [capture audit](benchmarks/2026-10-18-manual-driving/README.md) records the separate user runs and their packet timing.
+
+The deployed Workers preview served the static MP4 with HTTP 200 to a Range request, leaving Chrome unable to seek. The article therefore uses the identical MP4 at the immutable GitHub raw URL for commit `f2a5799`; it returned HTTP 206 and the expected byte range. Headless Chrome and WebKit played it and sought to 10.5 and 20.8 seconds at desktop and 320 px. The site's MP4 remains available as a download. Merge the article branch without squashing so that the referenced commit remains reachable from main.
+
+After merging current main at `0aa7bcc` into the article branch, `pnpm test` passed 854 tests and `pnpm build` passed with the existing large-chunk warning.
+
+After also merging main at `5c3779d`, `pnpm test` passed 876 tests and `pnpm build` passed with the same warning.
