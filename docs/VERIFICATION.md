@@ -1,5 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+## Drift controls · 2026-10-17 Pacific
+
+- `pnpm test` passed 39 tests and `pnpm build` passed, including authoritative sliding, return to grip, straight braking and Ctrl/touch input release. The existing Vite chunk-size warning remains.
+- Local Wrangler two-client integration passed with drift lateral motion visible in the second client's snapshot. This is not a load test.
+- Local Chrome desktop solo: accelerated, then used Ctrl plus left steering and observed the car turn and slow. The control help was visible. Chrome touch-emulated 390×844 portrait and 844×390 landscape showed the Brake and steering buttons. Real-device multi-touch and subjective handling remain unverified.
+
 ## Roadster nozzle visuals · 2026-10-17 Pacific
 
 - `pnpm test` (37 tests) and `pnpm build` passed. Tests cover ten nozzle mounts, independent visual clones, actual boost/jump/flip/depleted-air signals and the existing fleet. The Vite chunk-size warning remains.
