@@ -88,6 +88,13 @@ operator-supplied target ref, origin/path (query omitted), browser/OS/renderer,
 viewport, command start/duration intervals, safe HUD/performance samples and
 capture settings. Command intervals are not the instant a browser dispatched an
 input event.
+Requested video fps is an encoder setting, not proof that the game rendered
+that many distinct frames or that playback resembles a player's device. Inspect
+the actual recording, frame intervals, renderer and host load. The hosted
+[two-delivery pair](performance-baselines/2026-10-18-two-delivery-cross-version/video-summary.md)
+shows real route completion but substantial capture-environment jitter, and is
+not suitable for judging player smoothness or the boost effect. Use the focused
+boost scenario on a representative GPU for that visual check.
 `--trajectory` additionally writes `trajectory.json` with the player's pose,
 delivery milestones and flight indicators from received authoritative room
 snapshots. It does not record player IDs or raw messages, nor does it measure
