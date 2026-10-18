@@ -36,8 +36,9 @@ pnpm playtest:record --url 'http://127.0.0.1:8787/?room=playtest-1&perf' \
 ```
 
 On Apple Silicon, `--gpu metal` requests Metal. `--gpu vulkan` requests Vulkan
-for an appropriately configured Linux host. Neither flag proves hardware
-acceleration: inspect `runner.webgl.renderer` in the manifest. The default
+for an appropriately configured Linux host. `--gpu swiftshader` forces a
+software WebGL implementation for isolated, trusted CI runs. None of these
+flags proves hardware acceleration: inspect `runner.webgl.renderer` in the manifest. The default
 browser is the Playwright-pinned Chromium headless shell; `--browser chrome`
 uses installed Chrome and `--headed` opens a visible browser. Output uses the
 viewport's CSS dimensions, defaults to 1280 × 720 and 30 fps, and can be set
@@ -64,7 +65,11 @@ Scenarios are local JSON files containing an ordered `steps` array; the checked
 in examples are starting points. Actions include `waitFor`, `wait`, `keyDown`,
 `keyUp`, `keyPress`, `click`, `tap`, `touchDown`, `touchUp`, `pointerDown`,
 `pointerUp`, `releaseAll`, `fill`, `sample`, `assertNumberAbove`, `screenshot`, `recordStart`
-and `recordStop`. Hold controls across a wait by pairing down/up actions.
+and `recordStop`. `frameStart` and `frameStop` capture raw requestAnimationFrame
+callback intervals without recording video; these are not GPU completion or
+display presentation times. Hold controls across a wait by pairing down/up actions.
+See [performance baselines](PERFORMANCE_BASELINES.md) for the fixed driving
+scenario and selective performance reports.
 Use distinct `id` values (0–9) on touch down/up to hold multiple controls.
 Place setup actions before `recordStart` to skip recording setup, or record
 multiple segments. A screenshot captured **before** `recordStop` represents
