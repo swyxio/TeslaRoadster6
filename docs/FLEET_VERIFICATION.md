@@ -1,6 +1,8 @@
 # Poly AV fleet verification · 2026-10-17 Pacific
 
-## Implemented
+This is historical fleet-baseline evidence, before Tesla-only selection and rocket kits. For current behavior see [UPGRADES.md](UPGRADES.md) and [VERIFICATION.md](VERIFICATION.md).
+
+## Implemented at the time
 
 26 researched platform families (11 Tesla, 9 Waymo, 4 Cruise, 2 Zoox); every family has a parked and an NPC instance. Original shared procedural mesh factories, distinct scale/body/sensors, steering-wheel assemblies, and an on-demand catalog preview. No remote assets or copied operator artwork. See FLEET_RESEARCH.md for provenance and estimated versus sourced values.
 

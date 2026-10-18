@@ -6,16 +6,24 @@ import { addPlayer,chooseVehicle,createWorld,interact,makeEntity,NEUTRAL,step,to
 import { body,contact } from '../shared/physics';
 import { parseMessage } from '../worker/protocol';
 
-test('every sourced family has parked, autonomous and selectable playable instances',()=>{
+test('every sourced family has parked and autonomous instances; only Teslas are selectable',()=>{
   const world=createWorld();addPlayer(world,'p','P');
   for(const id of VEHICLE_IDS){
     assert.ok(world.entities.some(e=>e.kind===id&&e.npc&&e.autopilot));
     assert.ok(world.entities.some(e=>e.kind===id&&!e.npc&&!e.driver));
-    assert.ok(chooseVehicle(world,'p',id));
-    assert.equal(world.entities.find(e=>e.driver==='p')!.kind,id);
+    assert.equal(chooseVehicle(world,'p',id),VEHICLES[id].brand==='Tesla');
+    if(VEHICLES[id].brand==='Tesla')assert.equal(world.entities.find(e=>e.driver==='p')!.kind,id);
     assert.ok(VEHICLES[id].sourceUrls.length&&VEHICLES[id].estimates.length);
   }
   assert.equal(world.entities.filter(e=>e.owner==='p').length,1,'swapping never leaks personal cars');
+});
+test('every parked family can be taken from the street',()=>{
+  for(const id of VEHICLE_IDS){
+    const world=createWorld(),player=addPlayer(world,'p','P');interact(world,'p');
+    const person=world.entities.find(e=>e.id===player.entityId)!,car=world.entities.find(e=>e.kind===id&&!e.npc&&!e.driver)!;
+    world.entities=[person,car];Object.assign(person,{x:car.x+2,z:car.z,y:car.y,supportId:car.supportId});
+    interact(world,'p');assert.equal(player.entityId,car.id,id);assert.equal(car.driver,'p');
+  }
 });
 test('traffic advances, player can take an NPC, and manual input overrides AV',()=>{
   const world=createWorld();addPlayer(world,'p','P');
@@ -43,6 +51,7 @@ test('fleet commands reject forged kinds, airborne swaps and occupied player car
   assert.equal(parseMessage('{"type":"selectVehicle","kind":"spaceship"}'),null);
   assert.ok(parseMessage('{"type":"autopilot"}'));
   const world=createWorld();addPlayer(world,'a','A');addPlayer(world,'b','B');
+  assert.equal(chooseVehicle(world,'a','zoox'),false,'non-Tesla vehicles must be taken from the street');
   const car=world.entities.find(e=>e.driver==='a')!;car.y=10;car.supportId=null;assert.equal(chooseVehicle(world,'a','zoox'),false);car.y=0;car.supportId='ground';
   interact(world,'a');const person=world.entities.find(e=>e.driver==='a')!,other=world.entities.find(e=>e.driver==='b')!;
   person.x=other.x;person.z=other.z;interact(world,'a');assert.equal(other.driver,'b');

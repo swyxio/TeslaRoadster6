@@ -1,5 +1,18 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
+
+- After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
+- Local Wrangler's two-client room integration passed for dome entry, a shared ball impact and goal, exit, Tesla-only selection, upgrade snapshot fields and a rejected purchase. Successful purchases remain covered by the shared simulation and solo UI fixture, not a live room transaction. This is not a load test.
+- The staging preview of commit `976a204` returned protocol v12 and served the locally built browser assets. Its two-client integration passed the same room checks, including a rejected purchase. This is not a load test.
+- Chrome desktop showed both Rocket Dome and Shop in Actions, shop distance guidance, and a working trip to the dome. Chrome 390×844 portrait and 844×390 landscape emulation showed the combined driving layout; in portrait, an emulated touch opened Actions and Shop displayed its nearest-shop guidance. The shop purchase dialog was checked in both orientations before dome integration (below). No physical phone was tested.
+
+## Rocket pickups, Tesla fleet and workshops · pre-dome protocol v11 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 124 tests, both TypeScript checks and the production build. The existing JavaScript chunk-size warning remains. Tests cover all 26 families collecting a rocket kit and jumping, Tesla-only selection, shop eligibility and costs, installed upgrade effects, geometry and independent retrofit plumes.
+- Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
+- Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
+- Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.

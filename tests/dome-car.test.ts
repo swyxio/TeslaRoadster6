@@ -35,17 +35,27 @@ test('travel places the first car on a direct kickoff, keeps resources, and supp
 });
 
 test('each catalog vehicle can safely enter the dome and multiple players get distinct slots',()=>{
-  const {world,player}=setup();
   for(const id of VEHICLE_IDS){
-    assert.ok(chooseVehicle(world,'one',id));
-    let car=world.entities.find(e=>e.id===player.entityId)!;
+    const {world,player}=setup();
+    const car=makeEntity('catalog-car',id,40,60,'one');world.entities=[car];player.entityId=car.id;
     assert.ok(travelDome(world,'one'));assert.equal(car.inDome,true);
     assert.ok(travelDome(world,'one'));assert.equal(car.inDome,false);
   }
+  const {world,player}=setup();
   const second=addPlayer(world,'two','Two');
   assert.ok(travelDome(world,'one'));assert.ok(travelDome(world,'two'));
   const a=world.entities.find(e=>e.id===player.entityId)!,b=world.entities.find(e=>e.id===second.entityId)!;
   assert.equal(contact(body(a),body(b)),null);
+});
+
+test('a retrofitted car keeps its upgrades in the dome and can use the walls',()=>{
+  const {world,player}=setup(),car=makeEntity('taken','zoox',40,60,'one');
+  world.entities=[car];player.entityId=car.id;car.upgrades.rocket=true;car.upgrades.motor=true;
+  assert.ok(travelDome(world,'one'));assert.equal(car.supportId,'dome');assert.ok(car.upgrades.rocket&&car.upgrades.motor);
+  Object.assign(car,{x:DOME.x-30,z:DOME.z,domeS:DOME.flatHalfWidth,yaw:0,speed:45});
+  let peak=0;for(let i=0;i<120;i++){step(world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);peak=Math.max(peak,car.y);assert.equal(car.supportId,'dome');}
+  assert.ok(peak>25,`retrofitted car climbed to ${peak} m`);
+  assert.ok(travelDome(world,'one'));assert.ok(car.upgrades.rocket&&car.upgrades.motor);
 });
 
 test('Rocket drives from floor up wall and onto ceiling, can steer and launch inward',()=>{
