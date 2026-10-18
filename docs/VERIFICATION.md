@@ -6,7 +6,7 @@
 - GitHub's unauthenticated repository API reports the repository public and its license MIT; private vulnerability reporting is enabled. A targeted scan of reachable text blobs for common credential formats found no matches; this is not a guarantee that history contains no sensitive data.
 - Manually deployed Cloudflare Worker Preview `staging` at `https://staging-bay-drive.swyxio.workers.dev`. Health returned protocol version 3 and capacity 64; the deployed two-client integration passed. A simultaneous connection to the same room code in production and staging saw only one player on each side, confirming isolation for that test. The three.js license notice was served from staging.
 - Manually deployed production Worker version `008d695b-7dcb-44f8-91cd-7ad12909c8ea`. Health and the two-client integration passed, and the three.js notice was served from production.
-- The native Git build connection and automatic production/preview deployments need separate verification; a manual Preview is not proof of CI/CD.
+- Cloudflare Workers Builds automatically built commit `39e9749` from both `main` and `staging`, running `pnpm run ci` and deploying production and the staging Preview. Both live health checks returned protocol version 3 and capacity 64, and both two-client integrations passed. A same-room-code test after the automatic deployments observed only its own player in each environment for at least five snapshots. Production version: `4d20b472-5d12-440d-8ca0-33b35eaae093`. Build IDs: production `db7ae04e`, staging `65b64b52`.
 
 ## Bay geography rebuild
 

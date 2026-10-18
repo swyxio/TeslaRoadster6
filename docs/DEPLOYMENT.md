@@ -2,7 +2,7 @@
 
 The game uses one Worker for the Vite assets and API, with one Durable Object per multiplayer room. The checked-in `wrangler.jsonc` names the existing production Worker `bay-drive`. Room state is ephemeral; a deployment, runtime restart or last disconnect can reset it. Rooms are public by code, not private, and active rooms incur Durable Object and WebSocket usage.
 
-The project's [production game](https://bay-drive.swyxio.workers.dev) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. Cloudflare Workers Builds is connected to the public repository; the first automatic deployments still need verification.
+The project's [production game](https://bay-drive.swyxio.workers.dev) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. Cloudflare Workers Builds is connected to the public repository: pushes to `main` build and deploy production, while pushes to `staging` build and deploy that preview. Staging does not automatically follow `main`.
 
 ## Deploy your own copy
 
@@ -24,6 +24,8 @@ Cloudflare [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/buil
 | Build variable | `PNPM_VERSION=10.33.1` |
 
 Workers Builds installs dependencies based on the pnpm lockfile. `.nvmrc` selects Node 22.23.2. Enable preview builds for non-production branches. The production command runs only after the tests and build succeed. Cloudflare creates GitHub check runs and can post preview links on pull requests; branch/fork behavior depends on the GitHub App's access and Cloudflare settings.
+
+To update the shared staging preview to a tested commit, push that commit to the `staging` branch (for example, `git push origin main:staging` when that is a fast-forward). Check the staging build and exercise the preview before sharing it. Other non-production branches get their own preview rather than updating the shared staging URL.
 
 The dedicated `bay-drive Workers Builds` user token has Workers Scripts edit and Account Settings read for the Cloudflare account. Workers Scripts edit is account-wide, so anyone able to execute a build with that token has access to other Workers in the account. Review changes to build scripts and restrict who can push to build-triggering branches; do not place untrusted contributor code in a privileged build without review.
 
