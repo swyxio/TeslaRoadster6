@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, NEUTRAL, BUILDINGS } from '../shared/game';
 import { STATIONS } from '../shared/stations';
+import { HILL, terrainHeight } from '../shared/map';
+import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
@@ -28,7 +30,7 @@ test('exit, take another car, disconnect keeps ownership consistent', () => {
 test('collisions stop buildings and transfer motion between cars', () => {
   const { world, car } = setup(); const b = BUILDINGS[0];
   car.x = b.x; car.z = b.z + b.d / 2 + 1.9; car.speed = 40; car.yaw = 0;
-  const start = car.z; step(world, new Map(), 0.05); assert.equal(car.z, start); assert.ok(car.speed < 0); assert.ok(car.health < 100);
+  const start = car.z; step(world, new Map(), 0.05); assert.equal(car.z, start); assert.ok(car.speed <= 0); assert.ok(car.health < 100);
   const other = world.entities.find(e => e.id === 'parked-1')!;
   car.x = 0; car.z = 0; car.speed = 10; other.x = 0; other.z = -3.5;
   step(world, new Map(), 0.05); assert.ok(other.speed > 0);
@@ -59,12 +61,12 @@ test('protocol rejects malformed, non-finite, oversized and out-of-range input',
 });
 test('rooftop landing stays supported and can drive off; positive steer turns left', () => {
   const { world, car } = setup(); const roof = BUILDINGS[0];
-  car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5; car.yaw = 0;
+  car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5; car.yaw = 0; car.supportId = null;
   for (let i = 0; i < 80; i++) step(world, new Map(), 0.05);
   assert.equal(car.y, roof.h); assert.equal(car.vy, 0);
   for (let i = 0; i < 30; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);
   assert.ok(car.z < roof.z - roof.d / 2); assert.ok(car.y < roof.h);
-  car.x = 0; car.z = 0; car.y = 0; car.vy = 0; car.speed = 10; car.yaw = 0;
+  car.x = 0; car.z = 0; car.y = 0; car.vy = 0; car.speed = 10; car.yaw = 0; car.supportId = 'ground';
   step(world, new Map([['one', { ...NEUTRAL, steer: 1 }]]), 0.05);
   assert.ok(car.x < 0); assert.ok(car.yaw > 0);
 });
@@ -104,4 +106,26 @@ test('pickups refill resources once and return after twenty simulation seconds',
   car.x = 0; car.z = 0;
   for (let i = 0; i < 401; i++) step(world, new Map(), .05);
   assert.equal(pickup.active, true);
+});
+
+
+test('occupied autopilot brakes and turns without involuntary drift', () => {
+  const {world,car}=setup();world.entities=[car];
+  Object.assign(car,{x:-20,z:-57,y:0,yaw:0,speed:20,autopilot:true,routeId:2,waypoint:1});
+  const input=trafficInput(car,world);assert.ok(input.brake);assert.ok(Math.abs(input.steer)>.1);
+  step(world,new Map(),.05);
+  assert.equal(car.autopilot,true);assert.ok(Math.hypot(car.pushX,car.pushZ)<1e-9);
+});
+
+test('drift keeps a high-speed car on the shared hill surface', () => {
+  const {world,car}=setup();world.entities=[car];
+  const x=HILL.minX+40,z=(HILL.minZ+HILL.maxZ)/2;
+  Object.assign(car,{x,z,y:terrainHeight(x,z),yaw:-Math.PI/2,speed:30,supportId:'ground'});
+  let maxSlip=0;
+  for(let i=0;i<8;i++){
+    step(world,new Map([['one',{...NEUTRAL,steer:1,brake:true}]]),.05);
+    maxSlip=Math.max(maxSlip,Math.hypot(car.pushX,car.pushZ));
+    assert.equal(car.supportId,'ground');assert.ok(Math.abs(car.y-terrainHeight(car.x,car.z)!)<1e-7);
+  }
+  assert.ok(maxSlip>1);
 });

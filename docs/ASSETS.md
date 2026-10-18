@@ -21,7 +21,7 @@ Distinct cues include open original Roadster, new sports wedge, Cybertruck's ang
 
 ## Environment
 
-Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. Terrain/elevated roads/ramps require a shared height/collision design before meshes are introduced. The existing Oakland stunt loop is derived from STUNT_LOOP in shared/map.ts. Bridge, hillside and water models are currently scenery; do not imply traversable surfaces that simulation cannot support.
+Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. The authored hill, overpass, Oakland stunt ramp and loop derive their geometry from shared data. Any new terrain, elevated road or ramp must update shared height, support identity and collision before its mesh is introduced. Distant hills, bridge furniture and water are scenery; do not imply unsupported traversable surfaces.
 
 ## UI alternatives
 

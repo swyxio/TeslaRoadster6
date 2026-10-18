@@ -1,41 +1,96 @@
 # Verification · 2026-10-17 Pacific
 
-## Synthesized audio · 2026-10-17 Pacific
+## Synthesized audio with Bay integration · 2026-10-17 Pacific
+
+- After integrating the protocol-v9 Bay expansion, `pnpm run ci` passed 111 tests and the build. The existing chunk-size warning remains. Audio tests include supported landing on elevated roads and rooftops and a near-full station refill.
+- Local Wrangler two-client integration passed with protocol v9 and surface identity. Chrome desktop opened the sound dialog during a solo drive; 390×844 portrait and 844×390 landscape emulation showed the combined sound dialog. These checks do not establish physical touch or subjective listening quality.
+
+## Synthesized audio · pre-Bay-integration, 2026-10-17 Pacific
 
 - `pnpm run ci` passed 56 tests, both typechecks and the production build; the existing Vite chunk-size warning remains. Audio event tests cover delivery, pickup, citations, achievements, police pursuit, jump, landing, impacts, refills, vehicle changes and repeat snapshots.
 - In local Chrome, the sound dialog opened from the menu and during solo driving; mute, music volume, test cue and preference restoration after reload were exercised. Chrome 390×844 portrait and 844×390 landscape emulation showed the sound controls; emulated pointer actions did not activate the HUD button, although it worked at the desktop viewport. Physical touch remains unverified.
 - A temporary browser fixture measured nonzero Web Audio output for all 11 event cues and for music, wind, thrust and siren; muting reduced the measured signal to zero. This verifies signal generation, not speaker output, subjective mix quality or listening on real devices.
 
-## Keyboard controls · 2026-10-17 Pacific
+## Bay circuit, achievements and citations · protocol v9, local build
+
+- `pnpm test` passed 104/104, including first-frame and support-aware achievements, severity-based police citations, rooftop delivery, Bay traffic and keyboard/touch input simulation. `pnpm build` passed; Vite warns about the 655 kB main JavaScript chunk (181 kB gzip).
+- Local Wrangler two-client integration passed for protocol, room clock, traffic, support identity, deliveries, police, stunts, fleet and disconnects. An eight-second same-host 64-client smoke passed with at least 65 snapshots/client and a 145 ms p95 inter-snapshot gap. That new-room run started at dawn with no ambient takeovers; it did not exercise the 34-car peak target or the 68-car optional reserve. This is not a production, WAN or sustained-load test.
+- A separate instrumented 64-client rerun had at least 66 snapshots/client and a 139 ms p95 gap. Across recipient snapshots, individual maxima were 123 entities, 33 NPCs, 3 ambient cars and 111,155 UTF-8 bytes; the largest observed room time was 7.7 seconds. These are recipient-specific maxima, not room-wide counts: interest filtering hides distant unattended vehicles. A new room begins with 41 NPCs including 11 ambient cars; maximum reserve and worst-case snapshot workloads remain untested.
+- Local Chrome desktop: drove the Bay Bridge, used Space to brake and J to jump, and opened and closed Awards. Chrome 390×844 portrait and 844×390 landscape emulation showed the driving HUD and Awards dialog. Automated touch taps did not visibly register in the final emulation; input-to-simulation tests cover touch jump and brake, but physical touch, multitouch and frame rate remain unverified. The landmark/terrain and traffic limits below still apply.
+
+## Ambient traffic reserve · historical pre-achievements integration, 2026-10-17 Pacific
+
+- A synthetic morning reconciliation test with one stationary observer and available hidden spawn sites reached the 34-car unattended target at 07:30; the largest shortfall was one car while demand rose from 14 at 06:30. The five-second interval is unchanged. This fixture does not establish actual rush-hour throughput or capacity when visibility, spacing or the reserve constrain placement.
+- Focused tests cover takeover replacement, off-route and city-route disconnect, the 68-car optional pool cap and preservation of occupied, visible or blocked cars during reclamation. These are simulation tests, not a new load or production measurement.
+- After this change, `pnpm test` passed 88/88 tests and `pnpm build` passed (648 kB / 179 kB gzip main JavaScript; the chunk-size warning remains). Local Wrangler two-client integration passed. An eight-second same-host 64-client smoke passed with at least 70 snapshots/client and a 120 ms p95 inter-snapshot gap; it started at dawn without takeovers and did not test peak or reserve ambient population. It is not a sustained, WAN or production capacity test. Browser playtests below preceded the reserve fix, which changed traffic reconciliation rather than controls or rendering.
+
+## Keyboard controls · historical pre-Bay build, 2026-10-17 Pacific
 
 - `pnpm test` passed 41 tests and `pnpm build` passed; the input tests cover Space braking without jumping, J jumping, and touch brake and jump. The existing Vite chunk-size warning remains.
 - Local Chrome desktop solo: accelerated, used Space to stop, then pressed J and observed the Roadster airborne with air use. Touch-emulated 390×844 portrait and 844×390 landscape layouts showed the controls. Physical touch and multi-touch remain unverified.
 
-## Drift controls · 2026-10-17 Pacific
+## Bay circuit with drift, Rocket and pickup rewards · historical pre-reserve protocol v8 build
+
+- `pnpm test`: 84/84 pass, including Bay traffic, elevated support, drift, stunt inputs, all fleet models and delivery rewards. `pnpm build` passed; Vite still warns about the 647 kB JavaScript chunk (179 kB gzip).
+- Local Wrangler two-client integration passed, including remote drift, room clock, traffic, surfaces, delivery, police and stunts. An eight-second same-host 64-client smoke saw at least 69 snapshots per client and a 128 ms p95 inter-snapshot gap; this is not a sustained, WAN or production capacity test.
+- Local Chrome desktop: accelerated to 195 km/h on the Bay Bridge, then Ctrl plus steering turned and slowed the car. Chrome 390×844 portrait touch emulation drove and jumped at 73 km/h with 76% air remaining; 844×390 landscape showed the map, Brake and flight controls. No physical device, multi-touch handling or frame rate was verified.
+- NPC lane changes, I-280 and additional crossings are not implemented. Traffic situations are fictional arcade approximations; hill, overpass, ramp and loop physics have simulation coverage but were not all manually driven in the browser. No new deployment was verified by these local checks.
+
+## Drift controls · historical pre-Bay build, 2026-10-17 Pacific
 
 - `pnpm test` passed 41 tests and `pnpm build` passed, including authoritative sliding, return to grip, straight braking and Ctrl/touch input release. The existing Vite chunk-size warning remains.
 - Local Wrangler two-client integration passed with drift lateral motion visible in the second client's snapshot. This is not a load test.
 - Local Chrome desktop solo: accelerated, then used Ctrl plus left steering and observed the car turn and slow. The control help was visible. Chrome touch-emulated 390×844 portrait and 844×390 landscape showed the Brake and steering buttons. Real-device multi-touch and subjective handling remain unverified.
 
-## Pickup rewards and minimap · 2026-10-17 Pacific
+## Bay circuit, Rocket and pickup rewards · historical pre-drift protocol v8 build
+
+- These checks predate the drift-controls merge; they do not verify the current combined build.
+- `pnpm test`: 80/80 pass, including both Bay circuit directions, traffic queues and incidents, elevated support, stunt inputs, all fleet models and delivery rewards. `pnpm build` passed; Vite warns about the 647 kB JavaScript chunk (178 kB gzip).
+- Local Wrangler health reported protocol 8 and capacity 64; the two-client integration passed for clock, traffic, surfaces, stunts, delivery and police. An eight-second same-host 64-client smoke recorded at least 63 snapshots per client and a 152 ms p95 inter-snapshot gap; it is not a sustained, WAN, mobile or production test.
+- In local Chrome desktop, drove the Bay Bridge, switched to the Bay map and jumped at 161 km/h with the pickup timer visible; the built v8 game joined a local multiplayer room. Chrome 390×844 portrait touch emulation accelerated to 76 km/h and jumped, using 24% air; 844×390 landscape showed the map and flight controls after a label-spacing correction. The v7 browser run also checked invalid room validation.
+- No physical-device, sustained peak-traffic, WAN or new deployed verification was performed. Ramp and loop physics were exercised by simulation tests, not a completed manual browser route. NPC lane changes, I-280 and additional crossings are not implemented; the traffic scenarios are fictional arcade approximations.
+
+## Pickup rewards and minimap · historical pre-Bay build, 2026-10-17 Pacific
 
 - After integrating the Rocket stunt update, `pnpm run ci` passed 37 tests and both typechecks/build; the existing Vite chunk-size warning remains. Local Wrangler two-client integration passed with protocol v6, pickup-clock replication and the stunt checks. This is not a load test.
 - After also integrating nozzle effects, `pnpm run ci` passed 39 tests and the build; local and staging two-client integrations passed with protocol v7, pickup-clock replication and remote thruster effects.
 - Chrome desktop and emulated 390×844 portrait / 844×390 landscape showed the larger heading marker, pickup timer and available bonus alongside the updated stunt controls. A separate browser preview of the actual reward component showed the cash card and confetti; simulation tests cover awarding and preventing duplicate payments. A complete positive pickup and its animation were not manually observed together, and no physical device was tested.
 
-## Roadster nozzle visuals · 2026-10-17 Pacific
+## Roadster nozzle visuals · historical v6 branch, 2026-10-17 Pacific
 
 - `pnpm test` (37 tests) and `pnpm build` passed. Tests cover ten nozzle mounts, independent visual clones, actual boost/jump/flip/depleted-air signals and the existing fleet. The Vite chunk-size warning remains.
 - Local Wrangler two-client integration passed, including remote rear, corner and side effect flags. An earlier run timed out waiting for autonomous mode; the later run passed after the build and code changes completed. Neither run is a load test.
 - Local Chrome desktop playtest showed four rear nozzle rings, rear vapor during boost and downward vapor while hovering. Portrait 390×844 and touch-emulated landscape 844×390 layouts were inspected. Side plumes were checked through model/simulation tests and multiplayer state, not directly seen in a browser playtest. Real device and multi-touch testing remain unverified. A narrow landscape desktop viewport with a fine pointer showed existing HUD overlap; the touch-emulated landscape layout did not.
 - No new production deployment is implied by these local checks. The ten-port layout is based on event reporting; exact hardware geometry and firing sequences remain artistic approximations.
 
-## Rocket stunt implementation · 2026-10-17 Pacific
+## Rocket stunt implementation · historical v6 branch, 2026-10-17 Pacific
 
 - Local simulation checks cover 0–60 mph arcade targets, three jump/flip/landing sequences (99% tank), two flips in one jump, depleted-air driving and falling, inverted thruster hover, the physical ramp, a complete suction loop and detachment. After integrating delivery and police from main, the full test suite and production build passed; Vite retains its existing >500 kB chunk warning.
 - Local Wrangler two-client integration passed with authoritative movement, jump, one-tap flip, landing, fleet switching and invalid-input isolation. This is not a load or production test. One earlier integration run was interrupted when a concurrent Vite build caused Wrangler to reload; it passed when rerun after the build.
 - Local Chrome desktop: solo jump, flip, landing and 67% remaining air were visible. Chrome 390×844 portrait and 844×390 landscape emulation: layout and changing airborne control labels inspected; keyboard-activated fleet selection and invalid room validation verified. Those observations and screenshots preceded integration of the delivery and police UI: `screenshots/stunt-desktop.png`, `screenshots/stunt-portrait.png`, `screenshots/stunt-landscape.png`. After integration, the desktop delivery HUD and stunt keyboard controls were visible; the combined mobile layouts were not rechecked.
 - Chrome's emulated pointer actions in this session did not activate either touch or ordinary toolbar buttons. Pointer handling was exercised with synthetic unit events and keyboard activation worked, but genuine phone touch and multi-finger interaction remain unverified. The ramp and loop have simulation tests, not a completed manual route playtest. No physical device, new load test, or production deployment was verified.
+
+## Bay and Rocket integration · historical v7 intermediate, local build
+
+- These checks used the Bay and stunt integration before the delivery-feedback rebase; they do not verify the combined protocol-v8 build or a deployment.
+- `pnpm test` passed 78 tests and `pnpm build` passed, with the existing Vite chunk warning (645 kB / 177.75 kB gzip). Local Wrangler two-client integration passed. An eight-second same-host 64-client smoke recorded at least 60 snapshots per client and a 177 ms p95 delivery gap; this is not a sustained or WAN load test.
+- Chrome desktop: drove the Bay Bridge at 189 km/h, toggled the minimap and jumped to 2 m with 76% air remaining. Portrait touch emulation exercised driving at 139 km/h and jumping; landscape controls, invalid-room handling and a local browser multiplayer LIVE state were inspected. Physical devices and frame rate were not checked.
+
+## Bay circuit, terrain and traffic · historical v5 branch, local build
+
+- This section describes the protocol-v5 Bay expansion after integration with delivery and police, before integration with the Rocket stunts and protocol v7. These observations do not verify the later combined v7 or v8 builds. Older deployment observations below refer to earlier builds; they do not establish that this version is deployed.
+- `pnpm test` passed 62 tests; `pnpm build` passed both TypeScript checks and the Vite build. Vite still warns that the main JavaScript chunk exceeds 500 kB (about 635 kB / 174 kB gzip). The source extract, generated OSM-derived trace and bake script were emitted as downloadable build assets; a clean temporary bake reproduced the checked-in trace.
+- The approximately 19.86 km loop was simulated in both directions. Controlled San Jose bend approaches at initial 160 and 220 km/h stayed within 4.1 m of the centerline in both directions; a 259 km/h boosted reverse approach left the pavement. The fictional hill and overpass, including ramp traversals at 100, 160 and 220 km/h and stacked-vehicle collisions, were checked in simulation. They were not manually driven in the browser.
+- Chrome desktop on the local build: drove across the Bay Bridge at up to 183 km/h, saw the Oakland approach, switched the local/Bay map, and lifted to 22 m while air decreased. The 06:00-start clock advanced. Local Chrome 390×844 portrait and 844×390 landscape touch emulation showed the driving controls; portrait acceleration moved the car, and the landscape scores dialog opened and closed. Invalid room input showed the validation message, and a browser joined a local multiplayer room. These checks are emulation, not physical-device or frame-rate evidence.
+- Local Wrangler two-client integration passed for clock, terrain support, traffic, delivery/police, fleet selection, remote movement, invalid input and disconnect cleanup. A separate eight-second local same-host 64-client smoke passed: all clients saw all players, minimum 69 snapshots/client and p95 snapshot delivery gap 128 ms. It started at dawn with fewer NPCs than the rush target; it is not a WAN, sustained-load or production test.
+- A separate local Node probe at the morning peak used 64 players and 43 NPCs after warm-up. Three repetitions measured 4.18–9.40 ms p95 per 50 ms simulation step, with a 115.8 ms maximum in one run. Another run under concurrent host work measured 166 ms p95. These noisy same-host observations are not a Workers performance guarantee.
+- The traffic profile, bridge meter and highway incident are fictional arcade scenarios; the bridge meter controls eastbound NPCs and AVs, not manual drivers. Sparse traffic and synthetic queue tests do not prove realistic Bay congestion. I-280, the other Bay crossings and real interchanges are not implemented. No physical-device, sustained peak-traffic, geographic-latency or new deployed verification has been performed.
+
+## Bay expansion planning (no implementation)
+
+- Added `BAY_EXPANSION_PLAN.md`: source review, proposed map compression/day clock, queue arithmetic, traffic/network budgets and staged acceptance gates. No gameplay, protocol or deployment changes.
+- Local current-world serialization probe with 64 players after 100 neutral 50 ms steps: 116 entities, 34,370-byte state JSON. The plan's bandwidth projections are arithmetic, not measured network throughput or production billing.
+- `pnpm test`: 18/18 pass. `pnpm build`: both TypeScript checks and Vite build pass; existing >500 kB chunk warning remains. No visual, physical-device or new capacity claim follows from these checks.
 
 ## Open-source and staging preparation
 
@@ -75,7 +130,7 @@
 
 No sustained load,128-player load, geographic multi-region latency, adversarial abuse soak or actual phone thermals/frame rates tested. Public room codes offer no privacy guarantee. Active rooms use billed DO duration and WebSocket messages; total public-room creation is not globally quota-limited by this app. Monitor usage before broadly promoting the sandbox.
 
-Multiplayer presentation interpolates server snapshots without client prediction; remote latency can be felt. Camera can clip scenery at awkward angles; collision geometry is simplified. Trees/charger posts/bridge furniture are decorative. At that baseline there was no sound, NPC traffic, quests, persistent inventory, shooting or death/respawn; NPC traffic has since been added. The map has flat playable streets and scenic hills; it is not an accurate road network.
+Multiplayer presentation interpolates server snapshots without client prediction; remote latency can be felt. Camera can clip scenery at awkward angles; collision geometry is simplified. Trees/charger posts/bridge furniture are decorative. At that baseline there was no sound, NPC traffic, quests, persistent inventory, shooting or death/respawn; NPC traffic has since been added. At that baseline, playable streets were flat and hills were scenery; the map is not an accurate road network.
 
 ## Station provenance
 

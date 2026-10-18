@@ -13,13 +13,13 @@ The always-visible **♫** button opens Sound settings from the menu or drive. M
 | Driving | Soft EV motor, increasing with speed | Local controlled vehicle velocity; silent on foot |
 | Speed and flight | Filtered wind, increasing with speed and altitude | Local velocity and height |
 | Rocket jump and thrusters | Ascending jump chirp, short hiss and continuous thrust | Authoritative jump burst and thruster bitmask; boost, hover and flip share the thrust layer |
-| Landing | Low, velocity-scaled thump | Transition onto ground, ramp, roof or loop; based on observed snapshots |
+| Landing | Low, velocity-scaled thump | Authoritative support transition onto ground, overpass, ramp, roof or loop; based on observed snapshots |
 | Crash | Low impact and filtered noise | Local damage or a sudden slowdown near an obstacle at the health floor; small impacts and skipped snapshots can be missed |
 | Police | Alert on pursuit; swept siren that fades with distance and pans toward the closest active patrol | Shared police target and car positions; no sound for patrols without a pursuit |
 | Citation | Descending warning | Increase in local player's authoritative ticket count |
 | Restaurant pickup / customer delivery | Different ascending chimes | Order stage and completed-delivery count, including zero-bonus pickups |
 | Repair / compressed-air pickup | Distinct chime / hiss | A nearby pickup disappearing from the shared world; attribution is approximate when drivers overlap |
-| Station refill | Brief soft confirmation | Local car stopped in a station ring while air is below full |
+| Station refill | Brief soft confirmation | Local car on ground and stopped in a station ring while refilling |
 | Achievement | Short four-note flourish | Increase in locally observed unlocked achievements |
 
 ## Architecture for future contributors

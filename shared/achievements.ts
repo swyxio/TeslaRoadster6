@@ -1,5 +1,5 @@
 import type { Entity, Player } from './game';
-import { REGIONS, insidePolygon, isLand, nearbyBuildings, rampHeight } from './map';
+import { REGIONS, insidePolygon, isLand } from './map';
 
 export const ACHIEVEMENTS = {
   'bay-hopper': { name:'Bay Hopper', description:'Fly from San Francisco to Oakland, or back, without landing on a bridge or island.' },
@@ -16,17 +16,22 @@ function unlock(state:AchievementState,achievement:AchievementId):void {
   if(state.unlocked.includes(achievement))return;
   state.unlocked.push(achievement);state.lastUnlock={id:(state.lastUnlock?.id??0)+1,achievement};
 }
+// Region polygons also contain the Peninsula and East Bay; the achievement's
+// endpoints are the SF and Oakland city grids, not the full Bay corridor.
 function shore(e:Entity):Shore|null {
-  for(const region of REGIONS)if((region.id==='sf'||region.id==='oakland')&&insidePolygon(e.x,e.z,region.points))return region.id;
+  if(e.z < -300 || e.z > 300)return null;
+  for(const region of REGIONS){
+    if(region.id==='sf'&&e.x>=-410&&e.x<=105&&insidePolygon(e.x,e.z,region.points))return 'sf';
+    if(region.id==='oakland'&&e.x>=270&&e.x<=610&&insidePolygon(e.x,e.z,region.points))return 'oakland';
+  }
   return null;
 }
 export function onRoof(e:Entity):boolean {
-  return e.kind!=='person' && e.loopAngle===null && Math.abs(e.vy)<=.1 && nearbyBuildings(e.x,e.z,4).some(b=>
-    Math.abs(e.y-b.h)<.05 && Math.abs(e.x-b.x)<b.w/2 && Math.abs(e.z-b.z)<b.d/2);
+  return e.kind!=='person' && e.supportId?.startsWith('roof:')===true;
 }
 export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean):void {
-  const state=player.achievements, region=shore(e), roof=onRoof(e), ramp=rampHeight(e.x,e.z);
-  const grounded=e.y<=.05||roof||e.loopAngle!==null||(ramp!==null&&Math.abs(e.y-ramp)<.08);
+  const state=player.achievements, region=shore(e), roof=onRoof(e);
+  const grounded=e.supportId!==null;
   // A recovery or a vehicle switch is not a flight across the Bay.
   if(state.lastPosition&&Math.hypot(e.x-state.lastPosition.x,e.z-state.lastPosition.z)>15)resetAchievementFlight(player);
   if(state.crossing&&state.crossing.entityId!==e.id)resetAchievementFlight(player);

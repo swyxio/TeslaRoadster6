@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS } from './map';
+import { BUILDINGS, terrainHeight } from './map';
 import { VEHICLES } from './vehicles';
 import { onRoof } from './achievements';
 
@@ -73,7 +73,13 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     delivery.order.elapsed += dt;
   }
   const target = orderTarget(delivery.order);
-  if (Math.abs(entity.y - target.y) > (target.rooftop ? .05 : 1) || (target.rooftop && !onRoof(entity)) || entity.vy > .1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > (target.rooftop ? 6 : 9)) return;
+  if(entity.vy>.1||Math.abs(entity.speed)>4)return;
+  if(target.rooftop){
+    if(!entity.supportId?.startsWith('roof:')||!onRoof(entity)||Math.abs(entity.y-target.y)>.05||Math.hypot(entity.x-target.x,entity.z-target.z)>6)return;
+  }else{
+    const targetHeight=terrainHeight(target.x,target.z);
+    if(entity.supportId!=='ground'||targetHeight===null||Math.hypot(entity.x-target.x,entity.y-targetHeight,entity.z-target.z)>9)return;
+  }
   if (delivery.order.stage === 'pickup') {
     const bonus = pickupBonusFor(delivery.order);
     if (bonus > 0) reward(delivery, 'pickup', bonus);

@@ -24,9 +24,9 @@ test('audio cues follow authoritative pickup, delivery, ticket and achievement c
 
 test('jump, supported landing and damage trigger distinct cues; ordinary movement is quiet',()=>{
   const {car,observe}=setup();
-  car.jumpBurstUntil=1;car.y=2;car.vy=8;assert.deepEqual(names(observe()),['jump']);
+  car.jumpBurstUntil=1;car.y=2;car.vy=8;car.supportId=null;assert.deepEqual(names(observe()),['jump']);
   car.y=5;car.vy=-8;assert.deepEqual(names(observe()),[]);
-  car.y=0;car.vy=0;assert.deepEqual(names(observe()),['land']);
+  car.y=0;car.vy=0;car.supportId='ground';assert.deepEqual(names(observe()),['land']);
   car.health=98;assert.deepEqual(names(observe(.4)),['crash']);
   car.speed=8;assert.deepEqual(names(observe()),[]);
 });
@@ -63,4 +63,14 @@ test('a nearly full tank that reaches full between observations confirms refill 
   car.air=99;observe();
   car.air=100;assert.deepEqual(names(observe(.05,true)),['refill']);
   assert.deepEqual(names(observe(.05,true)),[]);
+});
+
+
+test('elevated roads and rooftops use authoritative support for landing sounds',()=>{
+  const {car,observe}=setup();
+  car.y=15;car.vy=-6;car.supportId=null;observe();
+  car.y=8;car.vy=0;car.supportId='overpass';assert.deepEqual(names(observe()),['land']);
+  car.y=9;car.supportId='ground';assert.deepEqual(names(observe()),[]);
+  car.y=25;car.vy=-4;car.supportId=null;observe();
+  car.y=20;car.vy=0;car.supportId='roof:0';assert.deepEqual(names(observe()),['land']);
 });

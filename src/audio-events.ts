@@ -1,5 +1,4 @@
-import { onRoof } from '../shared/achievements';
-import { nearbyBuildings, rampHeight } from '../shared/map';
+import { nearbyBuildings, terrainHeight } from '../shared/map';
 import { VEHICLES } from '../shared/vehicles';
 import type { Entity, World } from '../shared/game';
 
@@ -13,11 +12,7 @@ type Sample = {
   pickups: Map<string, boolean>;
 };
 
-function grounded(e: Entity): boolean {
-  if(e.loopAngle!==null)return true;
-  const ramp=rampHeight(e.x,e.z);
-  return e.y<=.05 || (ramp!==null&&Math.abs(e.y-ramp)<.08) || onRoof(e);
-}
+function grounded(e: Entity): boolean { return e.supportId!==null; }
 
 /** Derives local presentation cues from authoritative snapshots; never mutates the world. */
 export class SoundEventTracker {
@@ -59,7 +54,7 @@ export class SoundEventTracker {
     const nearCar=abrupt&&world.entities.some(other=>other.id!==e.id&&Math.abs(other.y-e.y)<3&&Math.hypot(other.x-e.x,other.z-e.z)<(e.kind==='person'?2:VEHICLES[e.kind].length/2)+(other.kind==='person'?2:VEHICLES[other.kind].length/2)+3);
     if((damage>.05||nearBuilding||nearCar)&&sample.time-this.lastCrash>.3){events.push({cue:'crash',strength:Math.min(1,Math.max(.3,damage/5,(Math.abs(previous.speed)-Math.abs(sample.speed))/20))});this.lastCrash=sample.time;}
     for(const pickup of world.pickups){
-      if(previous.pickups.get(pickup.id)&&!pickup.active&&e.y<2&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<7)events.push({cue:pickup.kind});
+      if(previous.pickups.get(pickup.id)&&!pickup.active&&e.supportId==='ground'&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<7)events.push({cue:pickup.kind});
     }
     return events;
   }

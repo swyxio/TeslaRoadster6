@@ -1,5 +1,6 @@
 import type { Entity, World } from '../shared/game';
 import { STATIONS } from '../shared/stations';
+import { terrainHeight } from '../shared/map';
 import { SoundEventTracker, type SoundCue } from './audio-events';
 
 export type AudioSettings = { master: number; music: number; effects: number; muted: boolean };
@@ -151,7 +152,7 @@ export class GameAudio {
     if(active!==this.active){this.active=active;this.applyVolumes();if(active&&this.ctx)this.nextNote=this.ctx.currentTime+.05;}
     const player=world.players.find(p=>p.id===playerId),entity=world.entities.find(e=>e.id===player?.entityId);
     if(!active||!entity){this.tracker.reset();this.environment(undefined,world);return;}
-    const atStation=entity.kind!=='person'&&entity.loopAngle===null&&entity.y<1&&Math.abs(entity.speed)<1&&STATIONS.some(s=>Math.hypot(entity.x-s.x,entity.z-s.z)<9);
+    const atStation=entity.kind!=='person'&&entity.supportId==='ground'&&Math.abs(entity.speed)<1&&STATIONS.some(s=>Math.hypot(entity.x-s.x,entity.z-s.z)<9&&Math.abs(entity.y-(terrainHeight(s.x,s.z)??0))<1);
     for(const event of this.tracker.update(world,playerId,atStation))this.play(event.cue,event.strength);
     this.environment(entity,world);this.scheduleMusic();
   }

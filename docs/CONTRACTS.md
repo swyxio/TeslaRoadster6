@@ -1,4 +1,4 @@
-# Implementation contracts · v7
+# Implementation contracts · v9
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -17,17 +17,17 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is the ground-center pivot, not mesh center. `y=0` is street level.
-- `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left. Roll rotates around local Z.
-- `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocity in meters/second; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
-- Shared simulation uses fixed 0.05-second steps. `World.time` is simulated seconds, not epoch time. Never use render delta directly for physics.
-- `shared/map.ts` owns map bounds, land polygons, roads, bridge decks and `BUILDINGS`; see [MAP.md](MAP.md). `isSurface()` is the authoritative ground support: land or a bridge at Y=0. Water is rendered at Y=−4; a grounded car stops at the shoreline, while a landing in open water returns it to an unoccupied spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative. Bridge decks and roads are flat. The Oakland STUNT_RAMP and analytic vertical STUNT_LOOP are authoritative surfaces; their rendering uses the same geometry.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, roof or null while airborne. Loop support requires `loopAngle` because x/z alone cannot identify its height.
+- `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
+- `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
+- Shared simulation uses fixed 0.05-second outer steps, subdivided when needed for fast motion. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
+- `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt geometry and `BUILDINGS`; see [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
 
 ## World schema
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), and `achievements` (unlocked session awards and server-owned flight tracking). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v8
+## Wire protocol v9
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:8,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:9,capacity:number}`.
 
 Client messages:
 
@@ -53,11 +53,11 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:8, capacity:number}
+{type:"welcome", id:string, version:9, capacity:number}
 {type:"state", world:World}
 ```
 
-Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
+Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players and occupied vehicles plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Static map and simulation are shared and the room remains authoritative. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms, names trimmed/control characters stripped/24-character max. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -96,7 +96,9 @@ Collision bodies are oriented rectangles using registry length/width; mass-weigh
 
 Every model has one parked entity and one NPC traffic entity. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting/disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
 
-Autonomy uses deterministic right-lane loops, including a cross-Bay route, and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+Autonomy uses deterministic right-lane loops, including both directions around the Bay, speed-dependent following gaps and a timed eastbound Bay Bridge approach signal. Traffic demand follows the accelerated day, while the signal and driving behavior use real simulation seconds. Engage only on ground within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+
+Ambient demand targets up to 34 unattended autonomous highway cars alongside the 26 catalog NPCs and four police. Taken cars, off-route abandoned cars and cars reattached to city routes do not count toward that target; the optional ambient pool is capped at 68 in total, so replenishment can be delayed when its reserve is full. At most one ambient car is added or removed every five simulation seconds. Removal is beyond 1,600 m from every player and preserves occupied and stopped autonomous cars; hidden off-route abandoned cars and free-flowing city-route cars may be reclaimed when the pool blocks replenishment. Available hidden spawn sites and safe removal conditions also limit how quickly traffic follows demand.
 
 Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 

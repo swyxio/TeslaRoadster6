@@ -1,8 +1,9 @@
-/** Compressed, hand-authored Bay geography. X east, Z south, meters in game space. */
+/** Compressed Bay geography. X east, Z south, meters in game space. */
+import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
-export const MAP_BOUNDS={minX:-440,maxX:620,minZ:-550,maxZ:350} as const;
+export const MAP_BOUNDS={minX:-1800,maxX:2400,minZ:-550,maxZ:9400} as const;
 // A vertical, driveable ribbon along Oakland's eastbound 180 street. The same
 // circle defines its collision surface and its rendered geometry.
 export const STUNT_LOOP={x:450,z:180,radius:12,width:12} as const;
@@ -12,8 +13,8 @@ export function rampHeight(x:number,z:number):number|null {
   return STUNT_RAMP.height*(x-STUNT_RAMP.start)/(STUNT_RAMP.end-STUNT_RAMP.start);
 }
 export const REGIONS:Region[]=[
-  {id:'sf',name:'San Francisco',color:0xd4d1bb,points:polygon([[-390,-225],[-355,-290],[-285,-302],[-230,-290],[-160,-290],[-90,-276],[-25,-240],[25,-205],[65,-150],[86,-90],[92,-30],[86,45],[78,105],[52,170],[12,230],[-52,285],[-165,305],[-285,300],[-390,245],[-410,120],[-408,-80]])},
-  {id:'oakland',name:'Oakland',color:0xd3cfb8,points:polygon([[310,-270],[400,-300],[550,-280],[602,-205],[610,260],[540,310],[390,302],[315,260],[285,195],[290,110],[305,50],[295,-40],[280,-125],[287,-215]])},
+  {id:'sf',name:'San Francisco and the Peninsula',color:0xd4d1bb,points:polygon([[-390,-225],[-355,-290],[-285,-302],[-230,-290],[-160,-290],[-90,-276],[-25,-240],[25,-205],[65,-150],[86,-90],[92,-30],[86,45],[78,105],[52,170],[12,230],[-5,290],[10,600],[80,1200],[180,3000],[340,4800],[650,6500],[1150,8000],[1450,8800],[1600,8800],[1900,9200],[1050,9300],[650,9000],[350,8000],[-500,6800],[-800,5500],[-1200,4500],[-1500,3000],[-1550,2000],[-1500,1700],[-1300,1300],[-800,1000],[-600,700],[-400,300],[-390,245],[-410,120],[-408,-80]])},
+  {id:'oakland',name:'Oakland and the East Bay',color:0xd3cfb8,points:polygon([[310,-270],[400,-300],[550,-280],[602,-205],[610,260],[950,1000],[1300,2000],[1800,3500],[1800,5000],[2200,6500],[2340,8000],[1890,9100],[1500,9200],[1300,8800],[1600,8000],[1550,6500],[1150,5000],[760,3400],[500,1600],[350,1000],[230,430],[285,260],[285,195],[290,110],[305,50],[295,-40],[280,-125],[287,-215]])},
   {id:'marin',name:'Marin Headlands',color:0x9ba883,points:polygon([[-410,-550],[-120,-550],[-116,-460],[-140,-413],[-185,-385],[-230,-374],[-275,-385],[-340,-382],[-400,-405],[-420,-470]])},
   {id:'yerba',name:'Yerba Buena Island',color:0xa9b49a,points:polygon([[169,27],[193,12],[222,22],[238,44],[235,70],[220,87],[187,91],[164,76],[158,49]])},
 ];
@@ -40,7 +41,55 @@ export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
 export function isLand(x:number,z:number):boolean{return REGIONS.some(r=>insidePolygon(x,z,r.points));}
 export function isBridge(x:number,z:number):boolean{return BRIDGES.some(b=>b.axis==='x'?x>=b.start&&x<=b.end&&Math.abs(z-b.center)<=b.width/2:z>=b.start&&z<=b.end&&Math.abs(x-b.center)<=b.width/2);}
 export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridge(x,z);}
-export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z'};
+
+/** A small authored hill south of SF. Its height and gradient taper to zero at every edge. */
+export const HILL={minX:-200,maxX:-15,minZ:500,maxZ:760,height:10,columns:32,rows:48} as const;
+/** A fictional east/west crossing of US 101, with two 90 m approaches. */
+export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|`roof:${number}`;
+// Both simulation and the rendered mesh use these same two triangles per cell.
+function hillSurface(x:number,z:number):{height:number;dx:number;dz:number} {
+ if(x<=HILL.minX||x>=HILL.maxX||z<=HILL.minZ||z>=HILL.maxZ)return {height:0,dx:0,dz:0};
+ const width=(HILL.maxX-HILL.minX)/HILL.columns,depth=(HILL.maxZ-HILL.minZ)/HILL.rows;
+ const gx=(x-HILL.minX)/width,gz=(z-HILL.minZ)/depth,i=Math.floor(gx),j=Math.floor(gz),u=gx-i,v=gz-j;
+ const vertex=(a:number,b:number)=>HILL.height*Math.sin(Math.PI*a/HILL.columns)**2*Math.sin(Math.PI*b/HILL.rows)**2;
+ const h00=vertex(i,j),h10=vertex(i+1,j),h01=vertex(i,j+1),h11=vertex(i+1,j+1);
+ return u+v<=1
+  ? {height:h00+u*(h10-h00)+v*(h01-h00),dx:(h10-h00)/width,dz:(h01-h00)/depth}
+  : {height:h11+(1-u)*(h01-h11)+(1-v)*(h10-h11),dx:(h11-h01)/width,dz:(h11-h10)/depth};
+}
+export function terrainHeight(x:number,z:number):number|null {
+ if(!isSurface(x,z))return null;
+ return hillSurface(x,z).height;
+}
+export function overpassHeight(x:number,z:number):number|null {
+ if(x<OVERPASS.start||x>OVERPASS.end||Math.abs(z-OVERPASS.z)>OVERPASS.width/2)return null;
+ if(x<OVERPASS.deckStart)return OVERPASS.height*(x-OVERPASS.start)/(OVERPASS.deckStart-OVERPASS.start);
+ if(x>OVERPASS.deckEnd)return OVERPASS.height*(OVERPASS.end-x)/(OVERPASS.end-OVERPASS.deckEnd);
+ return OVERPASS.height;
+}
+/** Surface IDs are static map identities; null denotes no support at the pivot. */
+export function supportHeight(id:SupportId,x:number,z:number):number|null {
+ if(id==='ground')return terrainHeight(x,z);
+ if(id==='overpass')return overpassHeight(x,z);
+ if(id==='stunt-ramp')return rampHeight(x,z);
+ // The loop can have two heights at one x/z; its support uses loopAngle.
+ if(id==='stunt-loop')return null;
+ const b=BUILDINGS[Number(id.slice(5))];
+ return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
+}
+export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
+ if(supportHeight(id,x,z)===null)return null;
+ let dx=0,dz=0;
+ if(id==='ground')({dx,dz}=hillSurface(x,z));
+ else if(id==='stunt-ramp')dx=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
+ else if(id==='overpass'){
+  if(x<OVERPASS.deckStart)dx=OVERPASS.height/(OVERPASS.deckStart-OVERPASS.start);
+  else if(x>OVERPASS.deckEnd)dx=-OVERPASS.height/(OVERPASS.end-OVERPASS.deckEnd);
+ }
+ const length=Math.hypot(dx,1,dz);return {x:-dx/length,y:1/length,z:-dz/length};
+}
+export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'};
 export const ROADS:RoadSegment[]=[];
 function streetGrid(xs:number[],zs:number[],xmin:number,xmax:number,zmin:number,zmax:number){
  for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
@@ -50,7 +99,38 @@ streetGrid([-360,-300,-240,-180,-120,-60,0,60],[-240,-180,-120,-60,0,60,120,180,
 streetGrid([330,390,450,510,570],[-240,-180,-120,-60,0,60,120,180,240],270,610,-285,300);
 // Shore roads and bridge approaches, connected to the two street grids.
 ROADS.push({x:-240,z:-330,w:18,d:180,axis:'z'},{x:195,z:60,w:270,d:24,axis:'x'});
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'};
+
+/** Distances and shorelines are game-space approximations, not navigation. */
+export const HIGHWAYS:{id:string;name:string;points:MapPoint[]}[]=[
+ {id:'peninsula',name:'US 101',points:BAY_HIGHWAY_TRACES.peninsula.map(([x,z])=>({x,z}))},
+ {id:'east-bay',name:'I-880',points:BAY_HIGHWAY_TRACES['east-bay'].map(([x,z])=>({x,z}))},
+];
+// Shared route is closed implicitly: its final point joins the first on SF streets.
+export const BAY_CIRCUIT:MapPoint[]=[
+ {x:-180,z:60},...HIGHWAYS[0].points,...HIGHWAYS[1].points.slice(1),{x:330,z:60},
+];
+function pointAtZ(highway:typeof HIGHWAYS[number],z:number):MapPoint{
+ for(let i=1;i<highway.points.length;i++){
+  const a=highway.points[i-1],b=highway.points[i];
+  if(z>=Math.min(a.z,b.z)&&z<=Math.max(a.z,b.z))return {x:a.x+(b.x-a.x)*(z-a.z)/(b.z-a.z),z};
+ }
+ throw new Error(`No highway point at ${z}`);
+}
+// Approximate arcade destinations, placed beside the compressed traced corridors.
+export const DISTRICTS=[
+ {id:'san-mateo',name:'San Mateo',...pointAtZ(HIGHWAYS[0],2000)},
+ {id:'palo-alto',name:'Palo Alto',...pointAtZ(HIGHWAYS[0],4000)},
+ {id:'mountain-view',name:'Mountain View',...pointAtZ(HIGHWAYS[0],6000)},
+ {id:'san-jose',name:'San Jose',x:1530,z:8770},
+ {id:'fremont',name:'Fremont',...pointAtZ(HIGHWAYS[1],6000)},
+ {id:'east-bay',name:'East Bay',...pointAtZ(HIGHWAYS[1],3000)},
+] as const;
+for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
+ const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z;
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
+}
+
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -75,6 +155,31 @@ BUILDINGS.push(
  {x:420,z:-90,w:17,d:17,h:44,district:'oakland',style:'tribune'},
  {x:45,z:-35,w:17,d:31,h:11,district:'sf',style:'ferry'},
 );
+function distanceToHighway(x:number,z:number){
+ let best=Infinity;
+ for(const h of HIGHWAYS)for(let i=1;i<h.points.length;i++){
+  const a=h.points[i-1],b=h.points[i],dx=b.x-a.x,dz=b.z-a.z;
+  const t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz)));
+  best=Math.min(best,Math.hypot(x-a.x-t*dx,z-a.z-t*dz));
+ }
+ return best;
+}
+// Compact, physically collidable district clusters. Roads and shoulders remain clear.
+for(const district of DISTRICTS){
+ const highway=HIGHWAYS[district.id==='fremont'||district.id==='east-bay'?1:0];
+ const point=highway.points.findIndex((p,i)=>i>0&&district.z>=Math.min(p.z,highway.points[i-1].z)&&district.z<=Math.max(p.z,highway.points[i-1].z));
+ if(point<1)continue;
+ const before=highway.points[point-1],after=highway.points[point];
+ const dx=after.x-before.x,dz=after.z-before.z,length=Math.hypot(dx,dz),tx=dx/length,tz=dz/length;
+ for(const side of [-1,1])for(const along of [-70,0,70])for(const offset of [65,120]){
+  const x=district.x+tx*along+tz*offset*side,z=district.z+tz*along-tx*offset*side;
+  const w=24,d=22;
+  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2))))continue;
+  const high=district.id==='san-jose'&&offset===65;
+  const h=high?48+(along+70)/7:12+(Math.abs(along)+offset)%17;
+  BUILDINGS.push({x,z,w,d,h,district:district.id==='san-jose'?'south-bay':district.id==='fremont'||district.id==='east-bay'?'east-bay':'peninsula',style:high?'tower':h>22?'midrise':'house'});
+ }
+}
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

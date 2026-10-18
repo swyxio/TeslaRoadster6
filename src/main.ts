@@ -1,4 +1,7 @@
 import './style.css';
+import mapSourceUrl from '../shared/bay-route-source.json?url';
+import mapTraceUrl from '../shared/bay-highway-traces.ts?url&no-inline';
+import mapBakeUrl from '../shared/bake-bay-highways.py?url&no-inline';
 import { FleetPreview } from './fleet-preview';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
@@ -7,11 +10,12 @@ import { Controls } from './controls';
 import { GameAudio } from './audio';
 import { STATIONS } from '../shared/stations';
 import { type Entity } from '../shared/game';
-import { BRIDGES, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP } from '../shared/map';
 import { orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
 import { celebrateReward, resetCelebration } from './rewards';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
+import { dayMinute } from '../shared/day';
+import { BRIDGES, DISTRICTS, HIGHWAYS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, terrainHeight } from '../shared/map';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -28,7 +32,7 @@ document.querySelector('#app')!.innerHTML = `
  <button id="join" class="secondary">Drive with friends <span>→</span></button><p class="form-note" id="form-note" role="status">Same room code, same playground. No account needed.</p>
  <button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
- <p class="fine-print">An independent arcade prototype. Fictional flight & air service.<br>Real Supercharger sites. A deliberately remixed Bay Area.</p>
+ <p class="fine-print">An independent arcade prototype. Fictional flight & air service.<br>Real Supercharger sites. A deliberately remixed Bay Area.<br>Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> (ODbL) · <a href="${mapSourceUrl}" download="bay-route-source.json">Source</a> · <a href="${mapTraceUrl}" download="bay-highway-traces.ts">Map data</a> · <a href="${mapBakeUrl}" download="bake-bay-highways.py">Bake</a>.</p>
  </div>
  <aside class="world-caption"><span class="eyebrow">37°46′ N &nbsp; 122°25′ W</span><h2>Open relationships.<br>Open roads.</h2><span class="caption-rule"></span><p>TESLA · WAYMO · CRUISE · ZOOX</p></aside>
 </section>
@@ -37,7 +41,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
  <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div>
- <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: San Francisco, Oakland, Marin and bridges; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
+ <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="keyboard-help"><kbd>W A S D</kbd> drive / pitch / bank <kbd>SPACE</kbd> brake · steer to drift <kbd>J</kbd> jump <kbd>X</kbd> flip <kbd>H</kbd> hover <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>V</kbd> autopilot <kbd>G</kbd> fleet <kbd>L</kbd> scores <kbd>T</kbd> awards</div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyJ" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
@@ -113,15 +117,33 @@ $('invite').onclick=async()=>{
 };
 const map=$<HTMLCanvasElement>('minimap').getContext('2d')!;
 const mapBase=document.createElement('canvas');mapBase.width=240;mapBase.height=240;
-const base=mapBase.getContext('2d')!,scale=210/(MAP_BOUNDS.maxX-MAP_BOUNDS.minX);
-const px=(x:number)=>15+(x-MAP_BOUNDS.minX)*scale,pz=(z:number)=>25+(z-MAP_BOUNDS.minZ)*scale;
-base.fillStyle='#315965';base.fillRect(0,0,240,240);
-for(const r of REGIONS){base.beginPath();r.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.closePath();base.fillStyle=r.id==='marin'||r.id==='yerba'?'#819981':'#b5b4a3';base.fill();}
-base.fillStyle='#6e7b78';for(const road of ROADS)base.fillRect(px(road.x-road.w/2),pz(road.z-road.d/2),road.w*scale,road.d*scale);
-base.strokeStyle='#d6c7a6';base.lineWidth=2;for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
-base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('MARIN',px(-300),pz(-460));base.fillText('SF',px(-120),pz(0));base.fillText('OAKLAND',px(385),pz(-150));
-base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);
+const base=mapBase.getContext('2d')!;
+const mapWidth=MAP_BOUNDS.maxX-MAP_BOUNDS.minX,mapHeight=MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ;
+const bayScale=Math.min(210/mapWidth,210/mapHeight),bayLeft=(240-mapWidth*bayScale)/2,bayTop=(240-mapHeight*bayScale)/2;
+const localRoads=ROADS.filter(road=>road.kind!=='highway');
+let mapLocal=true,mapKey='';
+$('map-toggle').onclick=()=>{mapLocal=!mapLocal;mapKey='';$('map-label').textContent=mapLocal?'LOCAL · TAP':'BAY · TAP';$('map-toggle').setAttribute('aria-pressed',String(!mapLocal));};
 function minimap(entity:Entity|undefined){
+  const cx=Math.round((entity?.x??0)/25)*25,cz=Math.round((entity?.z??0)/25)*25;
+  const scale=mapLocal?240/800:bayScale;
+  const px=mapLocal?(x:number)=>120+(x-cx)*scale:(x:number)=>bayLeft+(x-MAP_BOUNDS.minX)*scale;
+  const pz=mapLocal?(z:number)=>120+(z-cz)*scale:(z:number)=>bayTop+(z-MAP_BOUNDS.minZ)*scale;
+  const key=mapLocal?`${cx},${cz}`:'bay';
+  if(key!==mapKey){
+    mapKey=key;base.fillStyle='#315965';base.fillRect(0,0,240,240);
+    for(const r of REGIONS){base.beginPath();r.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.closePath();base.fillStyle=r.id==='marin'||r.id==='yerba'?'#819981':'#b5b4a3';base.fill();}
+    base.fillStyle='#6e7b78';for(const road of localRoads){
+      const x=px(road.x-road.w/2),z=pz(road.z-road.d/2),w=Math.max(.5,road.w*scale),d=Math.max(.5,road.d*scale);
+      if(x+w>=0&&x<=240&&z+d>=0&&z<=240)base.fillRect(x,z,w,d);
+    }
+    base.strokeStyle='#e8d0a0';base.lineWidth=mapLocal?Math.max(2,32*scale):1.5;
+    for(const highway of HIGHWAYS){base.beginPath();highway.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.stroke();}
+    base.strokeStyle='#d6c7a6';base.lineWidth=mapLocal?Math.max(2,24*scale):2;
+    for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
+    base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('SF',px(-120)-12,pz(0));base.fillText('OAKLAND',px(385)+4,pz(-150));
+    for(const district of DISTRICTS.filter(d=>d.id==='san-jose'||d.id==='fremont'||d.id==='palo-alto'))base.fillText(district.name.toUpperCase(),px(district.x)+4,pz(district.z));
+    base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);
+  }
   map.drawImage(mapBase,0,0);
   STATIONS.forEach(s=>{map.beginPath();map.arc(px(s.x),pz(s.z),2.8,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
   session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
@@ -198,7 +220,7 @@ for(const id of VEHICLE_IDS){const spec=VEHICLES[id],button=document.createEleme
 function openFleet(){controls.clear();controls.enabled=false;const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);showVehicle(entity&&entity.kind!=='person'?entity.kind:selectedVehicle);fleetDialog.showModal();}
 function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu;}
 $('fleet-close').onclick=closeFleet;fleetDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
-$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.y>.5||Math.abs(entity.speed)>1){$('fleet-feedback').textContent='Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
+$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent='Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
 scene.start(dt=>{
   const input=controls.read();session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));scene.render(session.world,session.id,dt,menu);
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;
@@ -206,12 +228,13 @@ scene.start(dt=>{
   if(session.status==='disconnected'){controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   if(!e)return;
+  const minute=Math.floor(dayMinute(session.world.time));$('day-clock').textContent=`${Math.floor(minute/60).toString().padStart(2,'0')}:${(minute%60).toString().padStart(2,'0')}`;
   $('speed').textContent=Math.round(Math.abs(e.speed)*3.6).toString().padStart(3,'0');$('altitude').textContent=`${Math.round(e.y)} M ALT`;
   const spec=e.kind==='person'?null:VEHICLES[e.kind];
   $('vehicle').textContent=spec?.name.toUpperCase()??'ON FOOT';
   $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${e.autopilot?' · AUTONOMOUS':''}`:'';
   $('autopilot').textContent=e.autopilot?'V · AV on':'V · AV off';$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
-  const airborne=e.loopAngle===null&&e.y>.5;controls.airborne=airborne&&!!spec?.airThrusters;
+  const airborne=e.loopAngle===null&&e.supportId===null;controls.airborne=airborne&&!!spec?.airThrusters;
   for(const control of ['KeyQ','KeyE','KeyH','ShiftLeft','KeyJ']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!spec?.airThrusters;
   }
@@ -222,7 +245,7 @@ scene.start(dt=>{
   $('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=e.kind==='person'?'F · Take nearby car':'F · Exit car';
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
-  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=distance<9&&e.y<1&&Math.abs(e.speed)<1&&e.kind!=='person';
+  const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=distance<9&&e.supportId==='ground'&&e.loopAngle===null&&Math.abs(e.y-(terrainHeight(nearest.x,nearest.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
   $('station-status').textContent=refilling?`ϟ FICTIONAL AIR REFILL · ${nearest.name}`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').classList.toggle('refilling',refilling);
   if(player){

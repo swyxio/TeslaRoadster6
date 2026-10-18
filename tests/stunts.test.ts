@@ -51,11 +51,11 @@ test('empty tank disables thrust, jumps and flips while driving and gravity stil
   const {car,send}=playground();car.air=0;
   send({...NEUTRAL,throttle:1,boost:true,jump:1,flip:1});
   assert.equal(car.y,0);assert.equal(car.air,0);assert.ok(car.speed>0);assert.equal(car.stunts,0);
-  car.y=10;car.vy=0;const before=car.y;
+  car.y=10;car.vy=0;car.supportId=null;const before=car.y;
   send({...NEUTRAL,boost:true,jump:2,flip:2});assert.ok(car.y<before);assert.equal(car.air,0);
 });
 test('fictional inverted hover uses tank thrust, then gravity resumes',()=>{
-  const {car,send}=playground();car.y=10;car.roll=Math.PI;
+  const {car,send}=playground();car.y=10;car.supportId=null;car.roll=Math.PI;
   for(let i=0;i<20;i++)send({...NEUTRAL,hover:true});
   assert.ok(Math.abs(car.y-10)<.01);assert.ok(Math.abs(car.roll-Math.PI)<.01);assert.ok(car.air<83);
   send();assert.ok(car.y<10);
@@ -74,7 +74,7 @@ test('the visible ramp supports cars and launches their world velocity',()=>{
   for(let i=0;i<60;i++){
     send({...NEUTRAL,throttle:1});
     const height=rampHeight(car.x,car.z);
-    if(height!==null&&height>1){climbed=true;assert.ok(Math.abs(car.y-height)<.01);assert.ok(car.pitch>0);}
+    if(height!==null&&height>1){climbed=true;assert.ok(Math.abs(car.y-height)<.01);assert.equal(car.supportId,'stunt-ramp');}
     if(car.x>STUNT_RAMP.end&&car.y>STUNT_RAMP.height){launched=true;assert.ok(car.vy>0);break;}
   }
   assert.ok(climbed);assert.ok(launched);
@@ -84,11 +84,20 @@ test('loop has a real attached ceiling, fans do not consume tank air, and jump d
   let reachedCeiling=false,finished=false;
   for(let i=0;i<150;i++){
     send({...NEUTRAL,throttle:1});
-    if(car.loopAngle!==null&&car.y>STUNT_LOOP.radius*1.8){reachedCeiling=true;assert.ok(Math.cos(car.pitch)<-.5);}
+    if(car.loopAngle!==null&&car.y>STUNT_LOOP.radius*1.8){assert.equal(car.supportId,'stunt-loop');reachedCeiling=true;assert.ok(Math.cos(car.pitch)<-.5);}
     if(reachedCeiling&&car.loopAngle===null){finished=true;break;}
   }
   assert.ok(reachedCeiling);assert.ok(finished);assert.equal(car.air,0);
-  car.x=STUNT_LOOP.x-3;car.z=STUNT_LOOP.z;car.y=0;car.vy=0;car.yaw=-Math.PI/2;car.speed=18;car.air=100;
+  car.x=STUNT_LOOP.x-3;car.z=STUNT_LOOP.z;car.y=0;car.vy=0;car.supportId='ground';car.yaw=-Math.PI/2;car.speed=18;car.air=100;
   for(let i=0;i<30&&car.loopAngle===null;i++)send({...NEUTRAL,throttle:1});
   assert.notEqual(car.loopAngle,null);send({...NEUTRAL,jump:1});assert.equal(car.loopAngle,null);assert.ok(car.vy>0);
+});
+
+
+test('jump and flip edges fire once when a fast tick uses substeps',()=>{
+  const {car,send}=playground();car.speed=60;
+  send({...NEUTRAL,jump:1,flip:1});
+  assert.equal(car.supportId,null);assert.equal(car.air,67);
+  assert.equal(car.lastJump,1);assert.equal(car.lastFlip,1);
+  send({...NEUTRAL,jump:1,flip:1});assert.equal(car.air,67);
 });
