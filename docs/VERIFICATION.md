@@ -4,7 +4,8 @@
 
 - `pnpm run ci` passed 157 tests, both typechecks and the build; Vite's existing chunk-size warning remains. Regression checks cover reused retrofit meshes, solo purchase results and validated request IDs.
 - Local Wrangler two-client integration passed with requester-only results for a rejected purchase and a second immediate request. Successful multiplayer purchases remain covered by shared simulation, not a live room transaction; this is not a load test.
-- Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. The fixture is absent from the built source. No physical device was tested for this follow-up.
+- Staging preview of commit `39b41c4` returned protocol v13, matched the locally built browser assets, and passed the same two-client integration. This is not a load test.
+- Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. Chrome 390×844 portrait touch emulation bought the kit and displayed its confirmation; 844×390 landscape showed it after scrolling the shop. The fixture is absent from the built source. No physical device was tested for this follow-up.
 
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
