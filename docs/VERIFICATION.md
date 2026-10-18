@@ -2,6 +2,101 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Combined Rocket Island and expanded charging lots · protocol v27 · 2026-10-18 Pacific
+
+- After integrating the 24 charging lots and their venue geometry, `pnpm test` passed 399 tests and `pnpm build` passed; Vite retains its large-chunk warning. Tests cover both parking games across all registered charging lots and island playgrounds, temporary Rocket capability, the ferry, island ramps and Dome.
+- Isolated local Wrangler checks passed two-client room and global-chat integration, room-full signaling, and a two-client ramp fixture observing launch and landing at a 5.10 m peak. These are functional checks, not load tests. The natural-input two-client ferry crossing below was on the preceding v26 build, before the charging-lot integration.
+- Chrome desktop joined a shared room and started and left a parking queue on v27. The earlier v26 Chrome playtest included the island oval and portrait and landscape browser emulation. No physical device was tested.
+
+## Island controls with economy research integration · protocol v26 · 2026-10-18 Pacific
+
+- After integrating the mini-game control fix and the separate economy research materials, `pnpm test` passed 394 tests and `pnpm build` passed. Vite retains its large-chunk warning. The latest local room, chat, capacity, jump and browser checks are recorded under the v26 entries below; the economy merge changed no gameplay or wire code.
+- A two-client natural-input car crossing passed on an isolated local Wrangler snapshot at `59a8225`, the same gameplay and wire code as that v26 integration: both clients observed SF boarding at 154.50 s, secured departure at 180.20 s, island arrival at 225.20 s and drive-off onto ground at 227.90 s. Both sockets closed normally. This is not a full-deck, load or production test.
+- The Cloudflare preview for `59a8225` passed the two-client room integration, including five-goal soccer and immediate parking start/leave. The later integration changed research and public content, not gameplay or wire code. This is not a load test.
+
+## Integrated Tesland and island playground · protocol v26 · 2026-10-18 Pacific
+
+- After integrating Tesland branding and its shared landmark collision geometry, `pnpm test` passed 384 tests and `pnpm build` passed. Vite retains its large-chunk warning. The protocol version distinguishes the combined map and simulation from both earlier v25 builds.
+- Isolated local Wrangler checks passed two-client room integration including five-goal soccer, wall refill, navigation and mini-game entry, global chat, room-full signaling, and a two-client ramp fixture observing a 5.12 m launch and landing. These are functional checks, not load tests.
+- Local Chrome joined a live room, displayed the Tesland map with a monument, switched explicitly to solo, drove to 55 km/h, and entered the police-free island oval. Portrait and landscape views were inspected with browser emulation, including the corrected minimap and race controls. Earlier ferry, parking and stadium playthroughs are documented below. No physical device was tested.
+- After integrating the mini-game and navigation follow-up, `pnpm test` passed 388 tests and `pnpm build` passed. Local Wrangler room, chat, capacity and two-client jump checks passed; the jump reached 5.12 m. Chrome desktop online showed confirmation when starting and leaving a parking queue. These are functional checks, not load tests or physical-device tests.
+
+## Integrated island, stadium and navigation · protocol v25 · 2026-10-18 Pacific
+
+- `pnpm test` passed 382 tests. The production build passed TypeScript and Vite; the existing large-chunk warning remains. Simulation tests joined and completed both parking games at every registered lot, including queue approaches, and cover temporary Rocket expiry, ferry, ramps and stadium behavior.
+- Isolated local Wrangler checks passed two-client room integration including five-goal soccer, wall refill, navigation and mini-game entry, global chat, room-full signaling, and a two-client ramp fixture observing a 5.12 m launch and landing. They are functional checks, not load tests or an end-to-end multiplayer ferry crossing.
+- Local Chrome connected to a live room, joined Park It and the island oval, and showed the island as police-free. The v25 portrait and landscape views were inspected with browser emulation; after a layout fix, the landscape minimap no longer covered the oval lobby controls. Earlier solo ferry crossing, ramp and stadium playthroughs are documented below. No physical device was tested.
+- Earlier local v23 checks had intermittent timeouts under concurrent build/test load and initially shared a Wrangler persistence directory, causing SQLite contention; subsequent isolated v24 and v25 checks passed. Wrangler also logged a socket-shutdown error after successful earlier checks, reproduced on the v19 baseline; its cause is unconfirmed.
+
+## Dome roof fix and economy integration · protocol v22 · 2026-10-18 Pacific
+
+- After the latest main integration and roof-crossing fix, `pnpm test` passed 348 tests and `pnpm build` passed. Vite retains its existing large-chunk warning. Focused tests cover an ascending car crossing the roof and side/end fly-ins.
+- The protocol-v22 room, jump fixture and Chrome observations below preceded the roof fix; they are not physical-device or load tests.
+
+## Combined island, driving update and China Basin stadium · protocol v22 · 2026-10-18 Pacific
+
+- `pnpm test` passed 340 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Coverage includes the island ramps and banked oval, temporary Rocket expiry, ferry and parking behavior, dome roof and game scoring.
+- Local Wrangler protocol-v22 two-client room integration passed shared soccer scoring to five, wall refill, movement and the existing room checks. A separate local-only fixture let a second WebSocket observe jump support, launch and landing, with a 5.10 m peak. These are not load tests or an end-to-end multiplayer ferry crossing.
+- Chrome desktop solo on the combined v22 build traveled to the China Basin dome, drove into the ball and saw Blue score. A temporary island-spawn fixture on the preceding v21 island/oval integration showed a jump and landing; separate ferry, parking and emulated mobile observations are recorded below. No physical device was tested.
+- After the successful local jump fixture, Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown. This also occurred on the unchanged v19 baseline; the cause remains unconfirmed.
+
+## Island oval, jumps and relocated stadium · protocol v21 before later main updates · 2026-10-18 Pacific
+
+- After integrating the banked oval and ferry improvements, `pnpm test` passed 332 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Tests cover the 90-second pickup expiry, including detachment in the stadium, the paid kit, ferry and parking claims, jump collisions and the stadium at its new location.
+- A local-only two-WebSocket Wrangler fixture observed approach, jump support, takeoff and landing, with a 5.12 m peak. It was not a load test or a multiplayer ferry crossing.
+- Chrome desktop solo using a temporary island spawn showed the ramp and drove the Roadster into the air and back to ground. Earlier desktop ferry/parking and emulated mobile observations below describe the preceding builds; no physical device was tested.
+
+## Combined Rocket Island and China Basin stadium · protocol v21, before main oval/ferry merge · 2026-10-18 Pacific
+
+- `pnpm test` passed 301 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains.
+- Local Wrangler two-client room integration passed shared stadium scoring to five, the authoritative winner and Roadster awards, wall refills, movement and the existing room checks. A separate local-only fixture showed a second WebSocket receiving the first driver's jump support, launch and landing, with a 5.15 m peak. Neither was a load test or a multiplayer ferry crossing.
+- Chrome desktop solo on the combined build traveled to the China Basin stadium, drove into the ball and observed Blue score. The separate ramp, ferry, parking, and emulated mobile checks below were performed before the combined merge; the final combined build was not tested on a physical device.
+- After successful local room and fixture runs, Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown. This also occurred on the v19 baseline; the cause remains unconfirmed.
+
+## Rocket Island jump ramps · protocol v20 · 2026-10-18 Pacific
+
+- `pnpm test` passed 288 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Shared-simulation tests drove a Model 3 and a Roadster over both ramps, including 72 m/s Rocket approaches, launch and landing, swept ramp contact, Rocket jump direction and grounded and airborne side/end impacts. Oriented-footprint checks cover angled near-misses, rotation, landing and vehicle separation. The tested approach and 150 m landing corridors clear the planned banked oval shoulders and other island attractions.
+- Local Wrangler protocol-v20 two-client room integration passed, including activity snapshots and protocol handshakes. A separate local-only fixture staged the first driver before the west ramp; a second client observed its authoritative ramp support, takeoff and landing, with a 5.15 m peak. This did not exercise a multiplayer ferry crossing or load.
+- After successful room and fixture runs, local Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown, even when both fixture clients observed normal code-1000 closes. The same log appeared after a passing room test on the protocol-v19 baseline; the cause remains unconfirmed.
+- Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
+- A temporary solo spawn at the SF lot's approach allowed a desktop keyboard playthrough: joined Cut the queue, started it, reversed into a marked stall, and saw a scored finish in 11.3 seconds. This was a single-player check, not a competitive queue playthrough.
+- With a temporary spawn near the SF ferry dock, a desktop solo Roadster drove aboard, departed secured with controls locked, crossed to Rocket Island and drove off. The HUD marked the ferry and island police-free. This was a single-car trip, not a full-deck or multiplayer crossing.
+## Bay charging lots and Tesland monuments · protocol v26 branch · 2026-10-18 Pacific
+
+- Automated review identified moving cars leaving a newly joined local parking game and outdated protocol examples. After the fixes, `pnpm test` passed 354 tests, including a moving-car regression, and `pnpm build` passed with the existing Vite chunk warning.
+- After integrating the economy article and simulations, `pnpm test` passed 353 tests and `pnpm build` passed; Vite retained its large-chunk warning. That integration changed documentation, public assets and planning scripts rather than game or room behavior.
+- After integrating the Tesland landmarks and relocating the conflicting Marin lot and storefront, `pnpm test` reported 347 passed and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v26 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- After a further small lot move to clear the monument visually, the focused map, station and billboard tests, `pnpm build`, and the two-client room integration passed. Those tests cover monument, road, building and lot clearance. Chrome desktop joined a local shared room using a temporary server spawn fixture, showed the fictional Mill Valley lot and started Park It at its local stall; the fixture was removed. No physical device was tested.
+
+## Bay charging lots with mini-games · protocol v25 branch · 2026-10-18 Pacific
+
+- After integrating the navigation and mini-game menus, `pnpm test` passed 346 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v25 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- Simulation checks join Park It and Cut the Queue from each of the 24 charging lots, including moving to the same lot's queue approach. Chrome desktop solo, with a temporary Mill Valley spawn fixture removed afterward, showed its fictional sign and started both games locally; Park It highlighted a Mill Valley stall. The earlier v24 entry records touch emulation; no physical device was tested, and manual reachability and play at every lot remain unverified.
+
+## Bay charging lots with shared rooms · protocol v24 branch · 2026-10-18 Pacific
+
+- After integrating shared-room changes and adding two fictional Marin air stations, `pnpm test` passed 340 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v24 passed the two-client room and global-chat integrations. The full-room and slot-reuse check passed on the preceding v24 build. This was not a load test.
+- Chrome desktop joined a local shared room; touch driving reached 60 km/h in emulated portrait and 78 km/h in landscape on the preceding v24 build. No physical device was tested.
+
+## Bay charging lots and relocated Dome · protocol v23 · 2026-10-18 Pacific
+
+- After integrating main’s relocated China Basin Dome and awards, `pnpm test` passed 337 tests and `pnpm build` passed, retaining the Vite large-chunk warning. Local Wrangler v23 passed the updated two-client room integration, including a five-goal match and wall refill, and global chat integration. A v22 hosted preview passed its earlier two-client room test. Neither is a load test.
+- A temporary low-air spawn fixture showed the SF 16th Street warning at 20 m on desktop and emulated 844×390 landscape; the fixture was removed. No physical device was tested.
+
+## Bay charging lots · historical protocol v22 branch · 2026-10-18 Pacific
+
+- After integrating main's v21 driving changes, `pnpm test` passed 316 tests and `pnpm build` passed both typechecks and production generation; Vite retained its large-chunk warning. Local Wrangler advertised v22 and passed the two-client room and global-chat integrations. An earlier v20 room run timed out on its post-Dome reset check; the subsequent v22 run passed. These are local checks, not production or load evidence.
+- Shared simulation tests checked at least two lots per represented area, site provenance and fictional labels, charging at every bay, Park It completion and queue start at every lot, and clearance for lots and venue-building collision footprints.
+- After integrating main’s economy simulations, `pnpm test` passed 322 tests. Review prompted the low-air warning to stay visible near a station until the car can refill.
+- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in portrait. Touch Drive accelerated to 57 km/h in portrait; after reversing away from a building, touch Drive moved the car in landscape. An initial touch attempt hit the wrong control because of the emulator coordinate mapping. No browser console errors were captured during the fixture pass; no physical device was tested.
+## Five-minute economy design experiment · 2026-10-18 Pacific
+
+- On the checkout integrating main at `7b48759`, `pnpm test` passed 341 tests. `pnpm build` passed the two project typechecks, Vite and public-page generation; Vite retained its large-chunk warning. The standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `5986edb`, `pnpm test` passed 346 tests and `pnpm build` passed, with the same large-chunk warning.
+- Ran `node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json`, then the same command with `--events` and with `--events --all-activities`. These seeded hypothetical paths have balanced ledgers; the report records five-minute payouts, separate achievement categories, 30-minute distributions and their unmet pacing targets. The multiplier test covers the triggering match and later eligible payouts. None of this verifies player behavior, matchmaking, gameplay, devices or production, and no game or protocol rules changed.
+- After integrating Tesland main at `9ec81f0`, `pnpm test` passed 349 tests and `pnpm build` passed; Vite retains its large-chunk warning. Standalone strict TypeScript checked the chart and economy scripts and tests. The 250-seed first-visit and 20-landmarks-per-city sensitivities ran with balanced ledgers; seven 250-seed chart series were generated, checked as SVG XML and spot-checked by independent recomputation.
+- Local Wrangler served the article and correct Tesland canonical URL. Chrome showed the article and charts at desktop, portrait and landscape; the responsive sources loaded and page width matched viewport width at observed CSS viewport sizes of 433×937 and 937×433. These are browser previews, not physical-device tests. The preview preceded a main integration that changed the game menu stylesheet, not the public article layout.
+
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 
 - After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.
@@ -526,7 +621,7 @@ Local Wrangler advertised protocol v25 and the chat integration passed. One room
 
 The new custom domain `tesland.swyx.io` was connected to the existing Worker and served its pre-release health endpoint over HTTPS. Browser-local settings and identity shortcuts do not automatically transfer between origins; a saved identity can be recovered with its recovery code.
 
-After integrating the mini-game and navigation follow-up with Tesland, all 346 tests and the build passed. Local Wrangler advertised protocol v25 and passed the full two-client room integration, including immediate Dome exit/re-entry, race start, switching to a parking queue, start and leave. The local changelog included both Tesland and the follow-up. These checks are not a load test or a physical-device test.
+On the separate follow-up branch, after integrating the mini-game and navigation changes with Tesland, all 346 tests and the build passed. Local Wrangler advertised protocol v25 and passed the full two-client room integration, including immediate Dome exit/re-entry, race start, switching to a parking queue, start and leave. The local changelog included both Tesland and the follow-up. These checks do not verify the combined v26 checkout and are not a load test or a physical-device test.
 
 The Cloudflare preview at commit e9d4fee passed the same two-client room integration on protocol v25; its experimental advertised 128-seat setting was not a capacity test. A final Chrome check found the compact landscape map covering the queue buttons, so the map was moved and its label wrapped. With the fix in local source, the mini-game chooser and queue Start/Leave worked at emulated 390×844 portrait and 844×390 landscape; center hit tests reached the map, queue buttons, and steering, flight and pedal controls. The landscape check covered both coarse and fine pointers. No physical device was tested.
 

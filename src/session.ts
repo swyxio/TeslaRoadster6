@@ -1,10 +1,10 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, createWorld, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
 
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room: string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
-export type SessionStatus = 'connecting' | 'online' | 'disconnected';
+export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 
 export class Session {
   world: World = createWorld();
@@ -15,6 +15,7 @@ export class Session {
   roomFull = false;
   room = '';
   private socket?: WebSocket;
+  private accumulator = 0;
   private sendTime = 0;
   private lastState = 0;
   private name = 'Driver';
@@ -23,6 +24,12 @@ export class Session {
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
 
+  solo(kind:VehicleId='roadster',name=this.name) {
+    this.name = name; this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1;
+    this.error = ''; this.roomFull = false; this.room = ''; this.accumulator = 0; this.sendTime = 0;
+    this.upgradeResult = null; this.otaResult = null; this.destinationResult = null;
+    this.world = createWorld(); addPlayer(this.world, this.id, name); if (kind !== 'roadster') chooseVehicle(this.world, this.id, kind);
+  }
   join(room: string, name: string, kind: VehicleId = 'roadster') {
     if (this.status === 'online' && this.room === room) {
       this.setName(name);
@@ -32,7 +39,7 @@ export class Session {
     this.disconnect();
     this.room = room;
     this.status = 'connecting'; this.error = ''; this.roomFull = false; this.id = ''; this.capacity = 0;
-    this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.destinationResult = null; this.world = createWorld();
+    this.accumulator = 0; this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.destinationResult = null; this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => {
@@ -64,33 +71,48 @@ export class Session {
     socket.onerror = () => { if (this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   tick(dt: number, input: Input) {
+    if (this.status === 'solo') {
+      this.accumulator += Math.min(dt, .1);
+      while (this.accumulator >= .05) { step(this.world, new Map([[this.id, input]]), .05); this.accumulator -= .05; }
+      return;
+    }
     if (this.status !== 'online') return;
     if (performance.now() - this.lastState > 6000) { this.error = 'Connection stalled. Rejoin to continue.'; this.socket?.close(); return; }
     this.sendTime += dt;
     if (this.sendTime >= .05) { this.send({type:'input',input}); this.sendTime = 0; }
   }
-  selectVehicle(kind:VehicleId){this.send({type:'selectVehicle',kind});}
-  parkingAction(action:'park'|'queue'|'start'|'leave'){this.send({type:'parking',action});}
-  raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){this.send({type:'race',action,courseId});}
-  enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status!=='online'||!this.send({type:'minigame',game}))return false;}
+  selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
+  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')return parkingAction(this.world,this.id,action);this.send({type:'parking',action});}
+  raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
+  enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status==='solo')return enterMinigame(this.world,this.id,game);if(this.status!=='online'||!this.send({type:'minigame',game}))return false;}
   setDestination(x:number,z:number){
     const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
-    if(this.status!=='online'||!this.send({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
+    if(this.status==='solo')this.destinationResult={requestId,ok:setDestination(this.world,this.id,{x,z})};
+    else if(this.status!=='online'||!this.send({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
-  setName(name:string) { this.name = name; if (this.id) this.send({type:'name',name}); }
+  setName(name:string) {
+    this.name = name;
+    if (this.status === 'solo') {
+      const player = this.world.players.find(p => p.id === this.id);
+      if (player) player.name = name;
+    } else if (this.id) this.send({type:'name',name});
+  }
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
-    if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
+    if(this.status==='solo')this.upgradeResult={requestId,upgrade,ok:buyUpgrade(this.world,this.id,upgrade)};
+    else if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
     return requestId;
   }
   setOta(enabled:boolean){
     const requestId=++this.nextUpgradeRequest;this.otaResult=null;
-    if(this.status!=='online'||!this.send({type:'ota',enabled,requestId}))this.otaResult={requestId,enabled,ok:false};
+    if(this.status==='solo')this.otaResult={requestId,enabled,ok:subscribeOta(this.world,this.id,enabled)};
+    else if(this.status!=='online'||!this.send({type:'ota',enabled,requestId}))this.otaResult={requestId,enabled,ok:false};
     return requestId;
   }
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
-    this.send({type});
+    if(this.status==='solo')(type==='interact'?interact:type==='autopilot'?toggleAutopilot:type==='dome'?travelDome:resetPlayer)(this.world,this.id);
+    else this.send({type});
   }
   private send(value: unknown): boolean { if (this.socket?.readyState !== WebSocket.OPEN) return false; this.socket.send(JSON.stringify(value)); return true; }
   disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.status = 'disconnected'; }

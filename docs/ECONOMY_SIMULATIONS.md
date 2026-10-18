@@ -1,6 +1,6 @@
 # Economy progression simulations
 
-**Design experiment, 2026-10-18.** These are hypothetical players using proposed rules, not measurements of the current game or evidence that the experience is fun. The model deliberately makes simplifying assumptions about jobs, players and multiplayer. Its results identify places to tune and playtest; they do not prove that progression is smooth. See [ECONOMY.md](ECONOMY.md) for the economy proposal and current-game caveats.
+**Design experiment, 2026-10-18.** These are hypothetical players using proposed rules, not measurements of the current game or evidence that the experience is fun. This report preserves the earlier candidate's payouts and achievement schedule; the newer [five-minute branch experiment](ECONOMY_FIVE_MINUTE.md) tests a revised proposal. The model deliberately makes simplifying assumptions about jobs, players and multiplayer. Its results identify places to tune and playtest; they do not prove that progression is smooth. See [ECONOMY.md](ECONOMY.md) for the economy proposal and current-game caveats.
 
 ## Reproduce
 
