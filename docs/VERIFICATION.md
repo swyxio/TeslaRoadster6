@@ -957,3 +957,5 @@ A disposable saved production driver completed two deliveries and reconnected wi
 ## 2026-10-18 · Browser storage and wallet binding
 
 Focused session tests check that denied storage still starts the matching room identity request, blocks play while it resolves, and preserves an earlier remembered and unfinished code during a switch. In a local Chrome fixture with storage access denied, the identity panel displayed the new code and copy warning. A saved driver paid $5 for remote-shop access, then after reload the same recovery code restored its $2,495 balance; switching from the newly created driver to the recovered driver restored that balance in the game. The test used isolated local Worker storage.
+
+With the storage correction integrated into the protocol v37 cruise-and-awards candidate, `pnpm test` passed 713 tests and `pnpm build` passed. The isolated award-wallet integration again passed held and rejected writes, identity ownership and recovery after disconnect. The Vite build retained its large-chunk warning.
