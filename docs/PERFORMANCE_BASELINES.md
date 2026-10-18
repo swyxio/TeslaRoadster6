@@ -82,6 +82,7 @@ targets and additional coverage remain in [performance release gates](PERFORMANC
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |
 | 2026-10-18 · same version and commit, repeat | Same scenario and machine | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Repeat report](performance-baselines/2026-10-18-v0.0.24-aeb5704/repeat-report.json) and browser traces in the same directory; same synthetic traces as the first run. |
 | 2026-10-18 · 0.0.25-alpha · `1a5a0479570f1bde7d33ed6218c0c0df670767d2` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.7 | 0.983–1.052 | 8.333 / 16.667 | 0.952 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.25-1a5a047/); one busy-host observation. |
+| 2026-10-18 · 0.0.27-alpha · `00f8ffeeaefa7a184816244c26b515cf19585539` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.7 | 0.983–1.052 | 8.333 / 16.667 | 0.914 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.27-00f8ffe/); one busy-host observation. |
 
 That browser run observed 360 intervals across six seconds of driving, and
 59.2 simulated seconds across 61.912 seconds of received room snapshots. The
@@ -107,3 +108,9 @@ over 61.963 seconds of snapshots, with a maximum snapshot gap of 137 ms.
 One-minute load averages were 20.15 before and 13.66 after on 18 logical CPUs.
 The report predates the final reporter-method edit, so use the current harness
 for both sides of a new comparison.
+
+The 0.0.27 run observed 360 intervals in six seconds and 57 simulated seconds
+over 62.353 seconds of snapshots, with a maximum gap of 430 ms. One-minute
+load rose from 16.15 to 34.72 on 18 logical CPUs, so its room ratio is not a
+regression verdict. Its bunched 150 ms modeled speed range was 0.936–1.151×,
+with 39 rejected inputs; the upper end remains outside the aspirational range.
