@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Distant transform traversal · protocol v31 · 2026-10-18 Pacific
+
+- Three.js `Object3D.updateMatrixWorld` visits invisible descendants. The distant-detail path now detaches the inactive model tree, retaining it for reuse; this removes its per-frame matrix traversal without claiming a memory reduction. Reachable scene nodes per stock distant Roadster/Model 3/Cybertruck/Zoox fell from 95/31/32/32 to 2 each (root plus distant mesh). Entity-level incident warnings remain attached. Geometry, draw counts and rendered shapes are unchanged.
+- All 491 tests and `pnpm build` passed. Tests cover all 26 models, near/far hysteresis, restoring detail, updating hidden rocket hardware/effects without duplicate mounts, and preserving incident markers. The same Chrome distant-model fixture remains visually intact. The motion protocol and authoritative simulation are unchanged.
+
 ## Reduced background fleet and vehicle detail · protocol v31 · 2026-10-18 Pacific
 
 - Default deterministic room population is 22 background vehicles rather than 67: eight city cars, eight parked cars, two highway cars and four police. Peak highway demand is four cars (24 background total); taken/abandoned highway reserve is bounded at 12. Seeded cohorts cover all 26 models without permanent simultaneous copies. All police, deliveries, flight, map content and player car detail remain. This is a population count, not a measured end-to-end speedup.
