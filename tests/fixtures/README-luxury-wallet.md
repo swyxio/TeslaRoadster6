@@ -49,15 +49,24 @@ pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp
 ```
 
 Pass `--drive` after the output path to stage five stopped vehicles and a fixed
-seed-0 traffic cohort, then hold throttle instead of brake. The trace records
-the staged vehicles, traffic and room time as well as sampled positions. Room
-clocks, subsequent routes and contacts may still differ between runs. The sample
-requires at least one saved driver to cover 100 m. Add `--expect-collection`
-after `--drive` when testing a build
-with vehicle collections to require a saved collection in the resulting wallet.
-The saved drivers must start with empty collections. Omit that flag on a baseline
-without the feature. It remains a same-host fixture
-observation, not a capacity test.
+seed-0 traffic cohort. Per-client feedback from each latest authoritative speed
+holds the Roadsters around 10–12 m/s to keep them within the route. The trace
+records their positions, traffic and room time. Every car must move at least
+75 m and exceed 5 m/s in 80% of observed snapshots in each ten-second block,
+with at least 50 snapshots per block; a total distance alone is insufficient.
+Run the cheap geometry/control preflight on each exact revision before a pair:
+
+```sh
+pnpm exec tsx tests/fixtures/wallet-driving-preflight.ts
+```
+
+This pure-simulation check is not a room-throughput measurement. Add
+`--expect-collection` after `--drive` on a build with vehicle collections;
+the saved drivers must start with empty collections and at least one resulting
+wallet must record one. Omit that flag on a baseline without the feature.
+Room clocks, subsequent traffic routes, contacts and feedback timing may
+differ between runs. This remains a same-host fixture observation, not a
+capacity test.
 
 The sample connects four funded drivers and an observer, warms up, measures a
 five-second no-purchase baseline, then samples 60 seconds of production room

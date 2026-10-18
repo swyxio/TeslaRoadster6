@@ -11,6 +11,7 @@ import {resolve} from 'node:path';
 import {monitorEventLoopDelay} from 'node:perf_hooks';
 import {NEUTRAL,PROTOCOL_VERSION} from '../shared/game';
 import {RoomInputClient} from './room-input-client';
+import {walletRouteBlocks,walletRouteSustained,walletRouteThrottle} from './fixtures/wallet-driving-route';
 
 const base=new URL(process.argv[2]??'http://127.0.0.1:8797');
 if(base.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(base.hostname))throw new Error('Use an isolated local fixture only');
@@ -30,17 +31,17 @@ async function rpc<T>(route:string,body:object):Promise<T>{
   return response.json() as Promise<T>;
 }
 type Message={type:string;[key:string]:any};
-type InputTrace={sequence:number;sentMs:number;ackMs?:number;latencyMs?:number};
+type InputTrace={sequence:number;sentMs:number;throttle:number;ackMs?:number;latencyMs?:number};
 type SnapshotTrace={atMs:number;worldTime:number;appliedSeq:number;decodedBytes:number;poseRevision:number;vehicle:{id:string;x:number;z:number;speed:number}|null};
 type ActionTrace={driver:number;requestId:number;choice:string;sentMs:number;resultMs?:number;ok?:boolean};
 type Phase={start:number;end?:number;inputs:InputTrace[][];snapshots:SnapshotTrace[][];actions:ActionTrace[];missed:number};
 type ServerSample={wallMs:number;worldSeconds:number;tickCount:number;players:number;ticksMs:number[];droppedTicks:number;maxQueue:number};
-type Client={socket:WebSocket;input:RoomInputClient;messages:Message[];id:string;states:number;driverId?:string;pending:Map<number,{phase:Phase;trace:InputTrace}>};
+type Client={socket:WebSocket;input:RoomInputClient;messages:Message[];id:string;states:number;lastSpeed:number;driverId?:string;pending:Map<number,{phase:Phase;trace:InputTrace}>};
 let phase:Phase|undefined;
 const clients:Client[]=[];
 function connect(path:string):Client{
   const socket=new WebSocket(base.href.replace(/^http/,'ws').replace(/\/$/,'')+path);
-  const client:Client={socket,input:new RoomInputClient(socket),messages:[],id:'',states:0,pending:new Map()};sockets.push(socket);
+  const client:Client={socket,input:new RoomInputClient(socket),messages:[],id:'',states:0,lastSpeed:0,pending:new Map()};sockets.push(socket);
   socket.addEventListener('message',event=>{
     const raw=String(event.data),message=JSON.parse(raw) as Message,now=performance.now();
     client.input.observe(message);
@@ -54,6 +55,7 @@ function connect(path:string):Client{
       if(phase&&index>=0){
         const player=message.world.players.find((item:{id:string})=>item.id===client.id);
         const car=message.world.entities.find((item:{id:string})=>item.id===player?.entityId);
+        if(car)client.lastSpeed=car.speed;
         phase.snapshots[index].push({atMs:now-phase.start,worldTime:message.world.time,appliedSeq,decodedBytes:Buffer.byteLength(raw),poseRevision:message.poseRevision,
           vehicle:car?{id:car.id,x:car.x,z:car.z,speed:car.speed}:null});
       }
@@ -125,8 +127,8 @@ try{
   const sendInputs=()=>{
     for(const [index,client] of clients.entries()){
       if(client.socket.readyState!==WebSocket.OPEN)continue;
-      const now=performance.now(),seq=client.input.send(input);
-      if(phase){const trace:InputTrace={sequence:seq,sentMs:now-phase.start};phase.inputs[index].push(trace);client.pending.set(seq,{phase,trace});}
+      const now=performance.now(),value=driving&&phase&&phase===activeData?{...NEUTRAL,throttle:walletRouteThrottle(client.lastSpeed)}:input,seq=client.input.send(value);
+      if(phase){const trace:InputTrace={sequence:seq,sentMs:now-phase.start,throttle:value.throttle};phase.inputs[index].push(trace);client.pending.set(seq,{phase,trace});}
     }
   };
   timer=setInterval(sendInputs,50);
@@ -148,7 +150,7 @@ try{
   const initialSetup=driving?await rpc('driving-measurement-start',{room,playerIds:clients.map(client=>client.id)}):null;
   if(!driving)await rpc('measurement-start',{room});
   phase=activeData=newPhase();
-  if(driving){input={...NEUTRAL,throttle:1};timer=setInterval(sendInputs,50);}
+  if(driving){for(const client of clients)client.lastSpeed=0;timer=setInterval(sendInputs,50);}
   const next=[250,1250,2250,3250],counts=[0,0,0,0];
   const actions=setInterval(()=>{
     const elapsed=performance.now()-activeData!.start;
@@ -180,11 +182,11 @@ try{
   const commitAfter=await Promise.all(clients.slice(0,4).map(client=>rpc<{started:number}>('fault-state',{driverId:client.driverId})));
   const ledgerKeys=await rpc<string[]>('economy-keys',{room});
   const profileKeys=await Promise.all(clients.slice(0,4).map(client=>rpc<string[]>('profile-keys',{driverId:client.driverId})));
-  const baseline=summarize(baselineData,baselineServer),active=summarize(activeData,activeServer);
+  const baseline=summarize(baselineData,baselineServer),active=summarize(activeData,activeServer),movementBlocks=driving?walletRouteBlocks(activeData.snapshots):null;
   const collectedModels=clients.slice(0,4).map(client=>client.messages.filter(message=>message.type==='wallet').at(-1)?.vehicleCollections?.driven??null);
-  const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,control:driving?'sustained throttle':'brake',baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it',distance:'sum of same-vehicle snapshot displacements; gaps over 24 m and pose revisions excluded'},
+  const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,control:driving?'per-client latest authoritative speed feedback, target about 10–12 m/s':'brake',baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it',distance:'sum of same-vehicle snapshot displacements; gaps over 24 m and pose revisions excluded'},
     environment:{revision,dirtyWorktree,node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
-    baseline,active,initialSetup,initialCollections,collectedModels,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
+    baseline,active,movementBlocks,initialSetup,initialCollections,collectedModels,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
     pendingLedgerKeys:ledgerKeys.filter(key=>/^(pending|unacked|cleanup|intent):/.test(key)).length,
     profileReceiptCounts:profileKeys.map(keys=>keys.filter(key=>key.startsWith('receipt:')).length),closed:clients.filter(client=>client.socket.readyState!==WebSocket.OPEN).length,inputRejections:clients.map(client=>client.input.rejectionCount),repliesDrained,queuesDrained,
     raw:{baseline:{server:baselineServer,inputs:baselineData.inputs,snapshots:baselineData.snapshots},active:{server:activeServer,inputs:activeData.inputs,snapshots:activeData.snapshots,actions:activeData.actions}}};
@@ -195,7 +197,7 @@ try{
   assert.ok(repliesDrained&&queuesDrained&&active.maxQueue<32,'wallet work drains without reaching its queue limit');
   assert.equal(active.droppedTickSamples,0);assert.equal(active.unacknowledgedInputs,0);assert.equal(results.closed,0);assert.deepEqual(results.inputRejections,[0,0,0,0,0]);
   assert.equal(active.actionsAttempted,48);assert.equal(active.actionsSucceeded,48);assert.equal(active.missedActions,0);
-  if(driving)assert.ok(active.drivenDistanceM.slice(0,4).some(distance=>distance>=100),'at least one saved driver must move at least 100 m during the sample');
+  if(driving)assert.ok(movementBlocks&&walletRouteSustained(movementBlocks),'each driver must move at least 75 m with >5 m/s in 80% of snapshots in every 10-second block');
   if(expectCollection)assert.ok(collectedModels.some(models=>Array.isArray(models)&&models.length>0),'at least one saved collection must be observed');
   assert.equal(results.pendingLedgerKeys,0);assert.deepEqual(results.profileReceiptCounts,[0,0,0,0]);
 }finally{
