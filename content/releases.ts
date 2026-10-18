@@ -6,6 +6,21 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'The Peninsula local',
+    intro: 'Explore Caltrain-inspired stops, local roads and Silicon Valley landmarks.',
+    sections: [
+      { title: 'Along the line', items: [
+        'Visit stops from San Francisco to San José, with local roads and parking games at the larger stations.',
+        'Find short northbound and southbound sky lanes above the stations. They refill air and are optional to enter.',
+        'Explore stylized Stripe, Meta, Google, NVIDIA and Apple campuses, plus NASA Ames, Chabot, Oakland Zoo and Levi’s Stadium.',
+        'Visit Redwood City’s clock-tower station, redwoods and downtown landmarks.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.13-alpha',
+    label: '0.0.13 Alpha',
+    date: '2026-10-18',
     title: 'A smoother shared Bay',
     intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [

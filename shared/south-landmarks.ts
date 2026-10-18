@@ -4,7 +4,7 @@ import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 
 export type SouthLandmarkStyle = 'civic'|'museum'|'station'|'garden'|'theater'|'temple'|'mansion'|'hangar'|'church'|'quad'|'rotunda'|'dish'|'arena'|'adobe'|'market'|'tower'|'peak'|'zoo'|'slide'|'nursery'|'garage';
 export type SouthLandmark = {id:string;name:string;x:number;z:number;w:number;d:number;h:number;district:'peninsula'|'east-bay'|'south-bay';style:SouthLandmarkStyle;color:number};
-type Spec = {id:string;name:string;route:'peninsula'|'east-bay';z:number;side:-1|1;style:SouthLandmarkStyle;color:number;h:number;offset?:number;district?:SouthLandmark['district']};
+type Spec = {id:string;name:string;route:'peninsula'|'east-bay';z:number;side:-1|1;style:SouthLandmarkStyle;color:number;h:number;offset?:number;position?:{x:number;z:number};district?:SouthLandmark['district']};
 
 // Individual forms have real names; locations are deliberately redistributed
 // along the compressed corridor so they are visible from the existing roads.
@@ -15,7 +15,8 @@ const specs:Spec[]=[
  {id:'curiodyssey',name:'CuriOdyssey',route:'peninsula',z:1600,side:-1,style:'museum',color:0xd5c7a5,h:17},
  {id:'san-mateo-garden',name:'San Mateo Japanese Garden',route:'peninsula',z:1780,side:1,style:'garden',color:0xcacfb1,h:9},
  {id:'san-mateo-city-hall',name:'San Mateo City Hall',route:'peninsula',z:1990,side:1,style:'civic',color:0xe4d7c2,h:20},
- {id:'county-history',name:'San Mateo County History Museum',route:'peninsula',z:2190,side:-1,style:'rotunda',color:0xe0d5be,h:23},
+ // The historic courthouse, Fox Theatre and station form a compact downtown.
+ {id:'county-history',name:'San Mateo County History Museum',route:'peninsula',z:2400,side:-1,position:{x:-1020,z:2400},style:'rotunda',color:0xe0d5be,h:23},
  {id:'redwood-fox',name:'Redwood City Fox Theatre',route:'peninsula',z:2400,side:1,style:'theater',color:0xd4a58e,h:18},
  {id:'pulgas',name:'Pulgas Water Temple',route:'peninsula',z:2580,side:-1,style:'temple',color:0xe1d6c0,h:17},
  {id:'filoli',name:'Filoli Historic House',route:'peninsula',z:2780,side:1,style:'mansion',color:0xc6a78f,h:16},
@@ -74,6 +75,6 @@ function alongHighway(route:Spec['route'],z:number,side:-1|1,offset:number){
 }
 export const SOUTH_LANDMARKS:SouthLandmark[]=specs.map(spec=>{
  const {id,name,route,z,side,style,color,h,offset=75}=spec;
- const [w,d]=dimensions[style],position=alongHighway(route,z,side,offset);
+ const [w,d]=dimensions[style],position=spec.position??alongHighway(route,z,side,offset);
  return {id,name,...position,w,d,h,district:spec.district??(route==='peninsula'?'peninsula':'east-bay'),style,color};
 });
