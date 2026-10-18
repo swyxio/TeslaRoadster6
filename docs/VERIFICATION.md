@@ -17,6 +17,13 @@
 - Emulated 390×844 portrait and 844×390 landscape displayed the Hegenberger sign and controls. In portrait the mission panel obscured part of the sign from one close approach. An initial simulated touch did not drive. In a fresh local portrait guest, the Drive bounds were x=237–378, y=778–832 CSS pixels; sending their center directly through this Chrome session activated Boost instead. Accounting for the session's approximately 0.9 coordinate scale, a held touch set Drive's pressed state and accelerated the car from 1 to 100 km/h; release cleared the pressed state. A keyboard hold in the same guest also moved the car. This verifies portrait emulation, not physical touch; landscape touch still needs a check on the combined candidate.
 - The road planner ends about 35 game units from the Hegenberger lot, requiring a manual final approach. Charger auto-routing is separate. The final combined map needs its own station, routing, multiplayer and visual checks after integration.
 
+## Workshop redesign · 2026-10-18 Pacific
+
+- In an isolated local workshop fixture, Chrome showed the redesigned garage at desktop, emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape. The upgrade list scrolled to its final service item; the shop closed with Escape and reopened. The 3D car preview remained within its stage in the short landscape layout.
+- The tab strip worked with keyboard arrows and emulated touch. Guest purchases of paint, a decal and an air-tank upgrade updated the car, balance and confirmation; a remote-shop subscription could be enabled and cancelled. These were test-only guest purchases, not live wallet operations. No physical device was tested.
+- All 893 tests and `pnpm build` passed before integration with subsequent main-branch releases; the build retained its existing large-chunk warning.
+- After integrating main through PR #93, all 899 tests and the 0.0.28 build passed, with the same large-chunk warning.
+
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
 - After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.
