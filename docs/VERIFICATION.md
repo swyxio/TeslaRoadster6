@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
+
+- After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.
+
 ## Earnings lease timing · 0.0.24 candidate / protocol v43 · 2026-10-18 Pacific
 
 - Fresh disposable sockets reproduced intermittent unavailable earnings status on production and an isolated Cloudflare preview. They sent no identity, controls, purchases or delivery actions. In the 14-second diagnostic preview sample, the first status was valid and six subsequent refreshes were unavailable, while 127 snapshots advanced through tick 252. This does not establish that historical payout settlement was blocked.
@@ -1170,3 +1174,18 @@ After also merging main at `5c3779d`, `pnpm test` passed 876 tests and `pnpm bui
 - The game homepage, changelog, story, blog index and all three article pages had distinct 1200×630 PNG Open Graph cards, successful local image responses and matching Twitter card metadata. Every generated fragment link resolved to a unique page ID. Social-platform cache refresh and rendered previews were not verified.
 - After rebasing onto main, the candidate passed 879 tests, including heading, stable-ID and related-link checks, and a production build; Vite retained its existing large-chunk warning. A static local server showed the game shell, but has no multiplayer Worker and did not verify joining or driving.
 - Follow-up: heading generation reserves explicit fragments before assigning automatic slugs. Focused tests cover an automatic heading before a pinned ID and reject duplicate pinned or raw HTML IDs.
+## 2026-10-18 · Goal and awards presentation candidate
+
+The independent UI candidate was rebased on achievement merge `5c3779d`: `pnpm test` passed 884 tests and `pnpm build` passed with the existing Vite large-chunk warning. The build was repeated after increasing the touch targets to 44 CSS pixels. No room or gameplay protocol changes are included in this UI candidate.
+
+In local Chrome against Wrangler, the goal opened its grouped award and five-rank ladder, and Escape restored focus. Desktop, 390×844 portrait and 844×390 landscape layouts were inspected; emulated touch opened the award in both sizes. The local saved driver retained pickup progress after a reload. An earlier staged build showed the floating pickup bag and the ground dropoff cue during a completed delivery. Cuisine-specific imagery awaits the shared restaurant catalog; the current bag uses a generic food icon. No physical device was tested.
+
+The goal buttons now precede parking and race status, so those nearby-activity messages can appear or disappear without shifting the controls; police and ferry guidance remain above them. A second local Chrome build passed and was inspected at emulated portrait and landscape sizes. A tap initially hit the preceding button because this browser session scaled injected coordinates to 90%; the observed click coordinates and target confirmed the mismatch, and corrected emulated touches opened the award in both orientations.
+
+After rebasing the goal presentation on article merge `6a9d497`, `pnpm test` passed 884 tests and `pnpm build` passed with the existing large-chunk warning. A local Wrangler build showed the tentative 0.0.25 Alpha title, the pickup route and next-award controls; the latter opened its five-rank ladder, and Escape returned focus to the mission card. The earlier portrait and landscape observations above used emulation, not a physical device. The version is reserved pending the independently coordinated 0.0.24 production fix.
+
+After rebasing on earnings fix merge `aeb5704`, the goal candidate passed all 887 tests and `pnpm build` after installing the updated lockfile dependencies; the Vite large-chunk warning remains. In local Wrangler and Chrome, 0.0.25 Alpha joined the room, the next-award control opened its five-rank ladder, and Escape returned focus to the mission card. The game JavaScript and CSS assets matched the previously inspected goal candidate; the portrait and landscape checks above were emulated.
+
+After review, unavailable delivery-route advice was changed to noninteractive text and confirmed award goals were kept during a chat outage while hidden during an identity switch or unavailable room wallet. The candidate passed 888 tests and `pnpm build`; local Chrome against Wrangler showed the self-drive button in the car and plain “Get in a car to self-drive” guidance after exiting. Focused tests cover the confirmed-owner guard; a live chat-only outage was not simulated. The existing large-chunk warning remains.
+
+The mobile HUD candidate passed 890 tests and `pnpm build`. In local Chrome against Wrangler, the mission, map and stats started compact at emulated 390×844 and 844×390, each reopened and minimized independently, and mixed choices survived reload. The expanded map rendered and the cockpit mission scrolled without covering the landscape driving controls. An emulated touch hold and release moved the car, and an actual local flight showed both pursuit and low-air warnings while the corresponding panels were compact. Desktop returned to full panels. Minimap drawing is skipped while compact. These were browser-emulated touch checks, not physical-device testing; the existing Vite large-chunk warning remains.
