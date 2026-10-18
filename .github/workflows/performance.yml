@@ -33,6 +33,11 @@ on:
       candidate_ref:
         description: Candidate revision (blank uses the selected workflow ref)
         required: false
+      record_video:
+        description: Also record separate base and candidate playtests
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -122,8 +127,28 @@ jobs:
             --target-root "$GITHUB_WORKSPACE/candidate" \
             --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu metal \
             > "$RUNNER_TEMP/tesland-performance/candidate.log" 2>&1
+      - id: video_base
+        name: Record separate base playtest
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
+        continue-on-error: true
+        run: |
+          node candidate/scripts/performance-report.mjs \
+            --target-root "$GITHUB_WORKSPACE/base" \
+            --out "$RUNNER_TEMP/tesland-performance/base-video" --gpu metal --video \
+            > "$RUNNER_TEMP/tesland-performance/base-video.log" 2>&1
+      - id: video_candidate
+        name: Record separate candidate playtest
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
+        continue-on-error: true
+        run: |
+          node candidate/scripts/performance-report.mjs \
+            --target-root "$GITHUB_WORKSPACE/candidate" \
+            --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --video \
+            > "$RUNNER_TEMP/tesland-performance/candidate-video.log" 2>&1
       - name: Summarize available observations
         if: ${{ always() }}
+        env:
+          VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         run: |
           mkdir -p "$RUNNER_TEMP/tesland-performance"
           if [ -f candidate/scripts/performance-compare.mjs ]; then
@@ -131,6 +156,14 @@ jobs:
               "$RUNNER_TEMP/tesland-performance/base/report.json" \
               "$RUNNER_TEMP/tesland-performance/candidate/report.json" \
               "$RUNNER_TEMP/tesland-performance/summary.md" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$VIDEO_REQUESTED" = true ]; then
+              echo '### Separate video pair' >> "$GITHUB_STEP_SUMMARY"
+              node candidate/scripts/performance-compare.mjs \
+                "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
+                "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" \
+                "$RUNNER_TEMP/tesland-performance/video-summary.md" --require-route >> "$GITHUB_STEP_SUMMARY" || \
+                echo 'The recorded routes are unavailable or not comparable; inspect the artifact.' >> "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo 'Performance observations: HOLD (candidate harness unavailable).' >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -147,6 +180,9 @@ jobs:
         env:
           BASE_OUTCOME: ${{ steps.base.outcome }}
           CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+          VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
+          VIDEO_BASE_OUTCOME: ${{ steps.video_base.outcome }}
+          VIDEO_CANDIDATE_OUTCOME: ${{ steps.video_candidate.outcome }}
         run: |
           if [ "$BASE_OUTCOME" != success ] || [ "$CANDIDATE_OUTCOME" != success ]; then
             echo 'A measurement did not finish; inspect the artifact and HOLD summary.'
@@ -162,7 +198,8 @@ jobs:
               const complete = m?.browserFrameIntervalP95?.status === 'available' &&
                 m?.modeledMotion?.steady150?.status === 'available' &&
                 m?.modeledMotion?.bunched150?.status === 'available' &&
-                m?.roomProgress?.status === 'available';
+                m?.roomProgress?.status === 'available' &&
+                report.route?.status === 'available' && report.fixture?.captureVideo === false;
               const renderer = report.environment?.runner?.webgl?.renderer;
               if (!complete || typeof renderer !== 'string' || !/ANGLE Metal Renderer/i.test(renderer) || /swiftshader|software/i.test(renderer)) {
                 console.error(`${path}: missing metrics or unexpected renderer: ${renderer ?? 'unavailable'}`);
@@ -175,3 +212,37 @@ jobs:
           }
           if (missing) process.exitCode = 1;
           NODE
+          node candidate/scripts/performance-compare.mjs \
+            "$RUNNER_TEMP/tesland-performance/base/report.json" \
+            "$RUNNER_TEMP/tesland-performance/candidate/report.json" --require-comparable
+          if [ "$VIDEO_REQUESTED" = true ]; then
+            if [ "$VIDEO_BASE_OUTCOME" != success ] || [ "$VIDEO_CANDIDATE_OUTCOME" != success ]; then
+              echo 'A requested recording did not finish; inspect the artifact.'
+              exit 1
+            fi
+            node - "$RUNNER_TEMP/tesland-performance/base-video" "$RUNNER_TEMP/tesland-performance/candidate-video" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          let missing = false;
+          for (const dir of process.argv.slice(2)) {
+            try {
+              const report = JSON.parse(fs.readFileSync(path.join(dir, 'report.json'), 'utf8'));
+              const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'browser', 'manifest.json'), 'utf8'));
+              const files = manifest.recordings;
+              if (!report.fixture?.captureVideo || report.route?.status !== 'available' || manifest.status !== 'complete' ||
+                  !Array.isArray(files) || !files.length || files.some(name => typeof name !== 'string' ||
+                    !/^segment-\d{3}\.webm$/.test(name) || fs.statSync(path.join(dir, 'browser', name)).size === 0)) {
+                console.error(`${dir}: missing completed route or recording`);
+                missing = true;
+              }
+            } catch (error) {
+              console.error(`${dir}: recording unavailable: ${error.message}`);
+              missing = true;
+            }
+          }
+          if (missing) process.exitCode = 1;
+          NODE
+            node candidate/scripts/performance-compare.mjs \
+              "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
+              "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" --require-route
+          fi
