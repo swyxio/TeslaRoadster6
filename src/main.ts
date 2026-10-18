@@ -16,6 +16,7 @@ import { DEFAULT_ROOM, Session, validRoom } from './session';
 import { Controls } from './controls';
 import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
+import { Radio, type RadioStation } from './radio';
 import { STATIONS } from '../shared/stations';
 import { refillStationFor } from '../shared/charging';
 import { type Entity } from '../shared/game';
@@ -79,7 +80,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores reset with your drive and aren’t saved with your driver. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
 <dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these during this drive. Awards reset with your session and don’t affect cash.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
-<dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">An original little soundtrack, plus sounds for your drive. Adjust them anytime.</p><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
+<dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">Choose a soundtrack for your drive. Sound effects stay on their own channel.</p><div class="radio-panel"><label for="radio-station">RADIO STATION</label><select id="radio-station"><option value="chiptune">Tesland 8-bit</option><option value="latent-space">Latent Space podcast</option><option value="thursdai">ThursdAI podcast</option></select><div id="radio-episode" class="radio-episode" hidden><span id="radio-label">UP NEXT</span><a id="radio-title" target="_blank" rel="noopener noreferrer"></a></div><div id="radio-controls" class="radio-controls" hidden><button id="radio-play" type="button">Play</button><button id="radio-next" type="button">Next random episode ↗</button></div><p id="radio-status" role="status"></p></div><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music / radio <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music and radio volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
 <dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Changing your name starts a new chat driver. A saved driver can still be recovered with its code.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
@@ -97,8 +98,30 @@ const session = new Session();
 const controls = new Controls();
 const audio = new GameAudio();
 const soundDialog=$<HTMLDialogElement>('sound-dialog');
+const radio = new Radio(refreshRadio);
+function refreshRadio(){
+  const isPodcast=radio.station!=='chiptune';
+  $<HTMLSelectElement>('radio-station').value=radio.station;
+  $('radio-controls').hidden=!isPodcast;
+  $('radio-episode').hidden=!isPodcast||!radio.episode;
+  $('radio-label').textContent=radio.playing?'NOW PLAYING':'UP NEXT';
+  const title=$<HTMLAnchorElement>('radio-title');title.textContent=radio.episode?.title??'';
+  if(radio.episode?.link)title.href=radio.episode.link;else title.removeAttribute('href');
+  $<HTMLButtonElement>('radio-play').disabled=radio.loading;
+  $<HTMLButtonElement>('radio-next').disabled=radio.loading||!radio.episode;
+  $('radio-play').textContent=radio.playing?'Pause':'Play';
+  $('radio-status').textContent=radio.status;
+}
+$<HTMLSelectElement>('radio-station').onchange=event=>{
+  const station=(event.target as HTMLSelectElement).value as RadioStation;
+  radio.select(station);audio.setMusicEnabled(station==='chiptune');
+};
+$('radio-play').onclick=()=>{if(radio.playing)radio.pause();else void radio.play();};
+$('radio-next').onclick=()=>{void radio.next();};
+audio.setMusicEnabled(radio.station==='chiptune');
 function refreshSoundSettings(){
   for(const name of ['master','music','effects'] as const){$<HTMLInputElement>(`${name}-volume`).value=String(audio.settings[name]);$(`${name}-value`).textContent=`${audio.settings[name]}%`;}
+  radio.setVolume(audio.settings);
   $('sound-mute').setAttribute('aria-pressed',String(audio.settings.muted));
   $('sound-button').textContent=audio.settings.muted?'♪̸':'♫';
 }
@@ -107,12 +130,12 @@ for(const name of ['master','music','effects'] as const){
 }
 $('sound-mute').onclick=()=>{audio.setSettings({...audio.settings,muted:!audio.settings.muted});refreshSoundSettings();};
 $('sound-test').onclick=()=>{void audio.unlock().then(ok=>{if(ok)audio.play('pickup');$('sound-status').textContent=!ok?'Sound is unavailable in this browser.':audio.settings.muted||!audio.settings.master||!audio.settings.effects?'Unmute and raise master and effects volume to hear the test.':'Test played.';});};
-$('sound-button').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;refreshSoundSettings();soundDialog.showModal();};
+$('sound-button').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;refreshSoundSettings();refreshRadio();soundDialog.showModal();void radio.prepare();};
 function closeSound(){soundDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
 $('sound-close').onclick=closeSound;soundDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
-document.addEventListener('visibilitychange',()=>{void audio.visibility(document.hidden);});
+document.addEventListener('visibilitychange',()=>{void audio.visibility(document.hidden);radio.visibility(document.hidden);});
 for(const event of ['pointerdown','keydown'] as const)window.addEventListener(event,()=>{if(started)void audio.unlock();},{capture:true});
-refreshSoundSettings();
+refreshSoundSettings();refreshRadio();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true;  $('error-join').hidden=true; $('error-room').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }

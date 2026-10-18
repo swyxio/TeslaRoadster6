@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Podcast radio · protocol v28 · 2026-10-18 Pacific
+
+- Local Wrangler returned 235 Latent Space and 180 ThursdAI public episodes, with HTTPS stream and episode links; its radio integration checked unsupported stations and methods. Counts reflect the feeds at test time. Range requests to one stream per show returned audio bytes from the publisher CDN.
+- Chrome played a randomly selected episode from each station and displayed the playback state. The sound dialog was inspected at desktop and emulated 390 × 844 portrait and 844 × 390 landscape; landscape uses scrolling to reach volume and mute. No physical mobile device or subjective audio-quality test was performed.
+
 ## Mars mission with Rocket Island · protocol v28 · 2026-10-18 Pacific
 
 - After integrating main at `f54964e`, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning. The game retains room-only play.
