@@ -1,6 +1,6 @@
 # Delivery destinations
 
-Research and placement for the Bay playtest, 2026-10-18 Pacific. Real restaurant identities and menu examples come from the operators' public sites or their own ordering pages. Addresses describe the real business; all game positions are compressed fiction. Fictional customers are not real addresses. SFO terminal businesses are represented by fictional roadside handoffs: cars do not enter airport terminals.
+Research and placement for the Bay playtest, 2026-10-18 Pacific. Real restaurant identities and menu examples come from the operators' public sites or their own ordering pages. Addresses describe the real business; all game positions are compressed fiction. Some Mill Valley postal addresses are in nearby unincorporated communities, and the game groups them under Mill Valley. Fictional customers are not real addresses. If SFO terminal businesses are added, use fictional roadside handoffs: cars do not enter airport terminals.
 
 ## Catalog contract
 
@@ -12,7 +12,7 @@ The new catalog is a staging layer until the progression owner integrates it wit
 
 ## Coverage of the current staged catalog
 
-Counts include the existing six pickups, seven ground customers, six landmark customers, and three supported rooftop customers. These figures count authored data, not jobs already enabled by the scheduler. For the four cities with new coordinates, the planner has accepted every ordered pair of new stops from one sampled road-aligned heading at each origin. This does not test every vehicle, heading, traffic state, or route to the unchanged historic stops; driving and visual checks remain. The remaining records below are the unchanged historical prefix until their road access is resolved.
+Counts include the existing six pickups, seven ground customers, six landmark customers, and three supported rooftop customers. These figures count authored data, not jobs already enabled by the scheduler. For each city with new coordinates, the planner has accepted every ordered pair of new stops from one sampled road-aligned heading at each origin. This does not test every vehicle, heading, traffic state, or route to the unchanged historic stops; driving and visual checks remain. The remaining records below are the unchanged historical prefix until their road access is resolved.
 
 | Town | Pickups | Dropoffs |
 | --- | ---: | ---: |
@@ -20,8 +20,8 @@ Counts include the existing six pickups, seven ground customers, six landmark cu
 | Oakland | 10 | 10 |
 | Berkeley | 10 | 10 |
 | Emeryville | 10 | 10 |
-| Mill Valley | 0 | 0 |
-| Corte Madera | 0 | 0 |
+| Mill Valley | 10 | 10 |
+| Corte Madera | 10 | 10 |
 | South San Francisco, including SFO | 0 | 1 |
 | San Mateo | 0 | 0 |
 | Redwood City | 0 | 0 |
@@ -34,4 +34,6 @@ Counts include the existing six pickups, seven ground customers, six landmark cu
 | Hayward | 0 | 0 |
 | Fremont | 0 | 1 |
 
-The existing SFO, Stanford, Fremont and San Jose dropoffs are their historical landmark entries. The North Bay headlands currently need connected authoritative roads before Mill Valley and Corte Madera deliveries can be enabled. Farther south, lane proximity alone did not establish a useful local route: the directed highway circuit often requires a long detour or a rejected turnaround. Additional physically drivable local connections and checks are needed before those records can safely be scheduled.
+The San Francisco and Berkeley totals each include one real-named landmark dropoff; each currently has nine fictional customer dropoffs. Oakland, Emeryville, Mill Valley and Corte Madera each have ten fictional customer dropoffs.
+
+The Marin catalog requires the accompanying authoritative streets and has not yet been enabled or visually playtested. The existing SFO, Stanford, Fremont and San Jose dropoffs are their historical landmark entries. Farther south, lane proximity alone did not establish a useful local route: the directed highway circuit often requires a long detour or a rejected turnaround. Additional physically drivable local connections and checks are needed before those records can safely be scheduled.
