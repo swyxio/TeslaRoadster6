@@ -93,7 +93,7 @@ export function updatePolice(world:World,dt:number):void {
         const amount=60+durationFine+heightFine+repeatFine;
         delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(flight.seconds),peakHeight:Math.round(flight.peakHeight),durationFine,heightFine,repeatFine};
         delivery.cash-=amount;delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
-        target.autopilot=false;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
+        target.autopilot=false;target.navigation=null;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
         for(const other of world.entities)if(other.police?.targetId===player.id)resumePatrol(other);
         continue;
       }

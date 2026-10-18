@@ -89,3 +89,38 @@ test('a full-room error can be followed by an explicit solo drive',()=>{
   session.solo();assert.equal(session.status,'solo');assert.equal(session.roomFull,false);assert.equal(session.error,'');
   assert.equal(session.world.players.length,1);
 });
+
+test('solo is explicit, advances locally and ignores an old room socket',()=>{
+  const session=new Session();session.join('bay','Alex');const old=Socket.last;
+  session.solo('model-3','Scout');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');
+  assert.equal(session.world.players[0].name,'Scout');
+  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
+  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
+  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
+  assert.equal(session.status,'solo');assert.equal(session.id,'local');
+  const id=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
+});
+
+test('solo mini-game requests use the local simulation',()=>{
+  const session=new Session();session.solo('model-3','Scout');
+  assert.equal(session.enterMinigame('park'),true);
+  assert.ok(session.world.parking.rounds.some(round=>round.mode==='park'&&round.entrants.some(entry=>entry.playerId===session.id)));
+  assert.equal(session.parkingAction('leave'),true);
+  assert.equal(session.enterMinigame('oval'),true);
+  assert.ok(session.world.races.rounds.some(round=>round.courseId==='oval'&&round.entrants.some(entry=>entry.playerId===session.id)));
+});
+
+test('online destination and mini-game requests use the current socket',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});
+  const requestId=session.setDestination(-180,60);
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'destination',x:-180,z:60,requestId});
+  socket.message({type:'destinationResult',requestId,ok:true});
+  assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
+  session.enterMinigame('park');assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'minigame',game:'park'});
+  session.solo();assert.equal(session.destinationResult,null);
+  socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+});

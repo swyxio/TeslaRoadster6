@@ -1,0 +1,14 @@
+.minigames-dialog{width:min(760px,94vw);overflow:auto}
+.minigames-intro{font-size:13px;line-height:1.5;color:#c3d7ca;margin:0 0 16px}
+.minigames-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.minigames-grid button{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:94px;padding:12px;text-align:left;border:1px solid #a7d1bd38;border-radius:9px;background:#ffffff09}
+.minigames-grid button:hover{background:#ffffff16;border-color:#ffcf8599}
+.minigames-grid button:disabled{cursor:wait}
+.minigames-grid .game-icon{display:grid;place-items:center;width:38px;height:38px;background:#ffcb8020;border-radius:10px;font-size:22px}
+.minigames-grid strong,.minigames-grid small{display:block}.minigames-grid strong{font-size:14px}.minigames-grid small{margin-top:5px;color:#bdcfc5;font-size:11px;line-height:1.4}.minigames-grid b{font-size:11px;white-space:nowrap;color:#ffce8e}
+.minigames-feedback{min-height:18px;color:#ffcf8f;font-size:12px;margin:12px 0 0}
+.minigames-leave{min-height:40px;padding:8px 12px;border:1px solid #e5c48d77;border-radius:6px;background:#f4c37b20;color:#ffdda6;font-size:11px;font-weight:700}.minigames-leave[hidden]{display:none}
+.minigames-context{display:flex;gap:6px;flex-wrap:wrap}.minigames-context[hidden]{display:none}.minigames-context button,.dome-leave{min-height:40px;padding:8px 12px;border:1px solid #e5c48d77;border-radius:6px;background:#f4c37b20;color:#ffdda6;font-size:11px;font-weight:700}.minigames-context button:hover,.dome-leave:hover{background:#f4c37b38}
+.cockpit-active .mission .minigames-context:not([hidden]){display:flex}
+@media(max-width:600px){.minigames-grid{grid-template-columns:1fr}.minigames-grid button{min-height:72px}.minigames-intro{font-size:12px}.minigames-dialog{max-height:90dvh}.minigames-feedback{margin-top:8px}}
+@media(max-height:550px){.minigames-dialog{padding:14px;max-height:94dvh}.minigames-dialog .fleet-header h2{font-size:22px;margin:5px 0}.minigames-intro{font-size:11px;margin-bottom:8px}.minigames-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.minigames-grid button{min-height:64px;padding:8px}.minigames-grid small{font-size:10px;margin-top:2px}.minigames-context button,.dome-leave{min-height:38px;padding:6px 9px}}

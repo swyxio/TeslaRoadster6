@@ -23,13 +23,14 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
     if (data.type === 'state') state.world = data.world;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
+    if (data.type === 'destinationResult') (state.destinationResults??=[]).push(data);
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
   return { socket, state };
@@ -189,9 +190,17 @@ try {
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
+  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+  one.socket.send(JSON.stringify({type:'destination',x:-120,z:60,requestId:9}));
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9&&r.ok)??false,'destination is accepted by the room');
+  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
+  assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
+  await delay(500);one.socket.send(JSON.stringify({type:'minigame',game:'short'}));
+  await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.entrants.some(e=>e.playerId===id))??false,'direct race entry is replicated');
+  assert.ok(two.state.world?.entities.some(e=>e.driver===id&&e.z< -1200&&!e.autopilot),'car is placed at the island race start');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, ferry and activity snapshots, shared sky-lane speed and refill, arena entry, shared ball impact, five goals, authoritative match winner and Roadster awards, spectator exclusion, wall refill and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
+  console.log(`PASS: two-client join, ferry and activity snapshots, shared sky-lane speed and refill, arena entry, shared ball impact, five goals, authoritative match winner and Roadster awards, spectator exclusion, wall refill and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, destination navigation, direct mini-game entry, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
 } finally { clearInterval(keepObserverAlive); one.socket.close(); two.socket.close(); }

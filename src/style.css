@@ -150,3 +150,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 #rocket-status{margin-top:7px;color:#ffd08e;font:700 9px ui-monospace,monospace;letter-spacing:.5px}
 #rocket-status[hidden]{display:none}
 @media (max-width:600px){#rocket-status{font-size:8px;margin-top:2px}}
+
+/* Keep the landscape map beside activity controls instead of covering them. */
+@media(max-height:550px) and (pointer:coarse){.map-panel{top:62px;bottom:auto;left:min(304px,calc(100vw - 110px))}}
