@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 755" role="img" aria-labelledby="title desc">
+  <title id="title">One input, two timelines</title>
+  <desc id="desc">The browser predicts local motion immediately and sends the input to the room. The room simulates authoritative ticks and sends snapshots, which correct the local prediction and are buffered to display other cars.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#c8d9d1"/></marker>
+  </defs>
+  <rect width="640" height="755" rx="16" fill="#17383c"/>
+  <g font-family="system-ui, sans-serif" fill="#dfeee6">
+    <text x="24" y="44" font-size="21" letter-spacing="1" fill="#b8d4c8">YOUR BROWSER</text>
+    <text x="348" y="44" font-size="21" letter-spacing="1" fill="#b8d4c8">SHARED ROOM</text>
+    <g fill="#285646" stroke="#82c7a3" stroke-width="2">
+      <rect x="24" y="72" width="268" height="96" rx="12"/><rect x="24" y="222" width="268" height="96" rx="12"/><rect x="24" y="372" width="268" height="96" rx="12"/>
+    </g>
+    <g font-size="24" font-weight="650"><text x="42" y="112">Steer</text><text x="42" y="262">Predict locally</text><text x="42" y="412">Show your car</text></g>
+    <g font-size="18" fill="#c5ddd0"><text x="42" y="141">Driver input</text><text x="42" y="291">Shared simulation</text><text x="42" y="441">Before the reply</text></g>
+    <g fill="#254964" stroke="#8bb8e8" stroke-width="2">
+      <rect x="348" y="72" width="268" height="96" rx="12"/><rect x="348" y="222" width="268" height="96" rx="12"/><rect x="348" y="372" width="268" height="96" rx="12"/>
+    </g>
+    <g font-size="24" font-weight="650"><text x="366" y="112">Send input</text><text x="366" y="262">Room simulates</text><text x="366" y="412">Send snapshot</text></g>
+    <g font-size="18" fill="#c6d9ed"><text x="366" y="141">Target a room tick</text><text x="366" y="291">20 ticks / second</text><text x="366" y="441">About 10 / second</text></g>
+    <rect x="348" y="522" width="268" height="96" rx="12" fill="#604d31" stroke="#e7bc77" stroke-width="2"/>
+    <text x="366" y="562" font-size="24" font-weight="650">Show other cars</text><text x="366" y="591" font-size="18" fill="#f4dab0">Buffer and interpolate</text>
+    <text x="24" y="689" font-size="20" fill="#c8d9d1">Dashed arrow: confirm and replay</text>
+  </g>
+  <g fill="none" stroke="#c8d9d1" stroke-width="3" marker-end="url(#arrow)">
+    <path d="M292 120 H338"/><path d="M158 168 V212"/><path d="M158 318 V362"/>
+    <path d="M482 168 V212"/><path d="M482 318 V362"/><path d="M482 468 V512"/>
+    <path d="M348 420 H320 V270 H302" stroke-dasharray="8 7"/>
+  </g>
+</svg>

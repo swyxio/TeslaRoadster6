@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Driving-smoothness development blog · 2026-10-18 Pacific
+
+- The content worktree passed `pnpm test` (734 tests) before the final prose and asset edits; `pnpm build` passed after them, with Vite's existing large-chunk warning. Linked performance measurements retain their original fixture and production-test limitations in the article.
+- Local Wrangler preview in desktop Chrome and emulated 433×938 portrait and 938×433 landscape CSS viewports showed the article, navigation and responsive diagram without horizontal overflow. The side-by-side replay loaded and played in the portrait preview. This is a content check, not a game performance or physical-device measurement.
+
 ## Self-driving and driver awards · combined protocol v37 · 2026-10-18 Pacific
 
 - After integrating the released driver wallet and room-fund changes, `pnpm test` passed 699 tests and `pnpm build` passed; Vite still reported the existing large-chunk warning. A two-client local Wrangler room test passed, including the current-delivery action, replicated route, full Dome match and activity checks. The local client prediction integration also passed. These are functional checks, not capacity measurements.
