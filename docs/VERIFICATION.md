@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Combined Rocket Island and expanded charging lots · protocol v27 · 2026-10-18 Pacific
 
+- Cloudflare Workers Builds deployed merge `f54964ec558f521e5a1aae02fa4588f7de65f61b`; the live game returned protocol v27 and served the same JavaScript and stylesheet asset hashes as the local build. The production two-client room integration passed, including five-goal Dome soccer and parking controls. This was a functional check, not a load or end-to-end ferry-crossing test. Chrome joined a production room and entered the police-free island oval.
 - After integrating the 24 charging lots and their venue geometry, `pnpm test` passed 399 tests and `pnpm build` passed; Vite retains its large-chunk warning. Tests cover both parking games across all registered charging lots and island playgrounds, temporary Rocket capability, the ferry, island ramps and Dome.
 - Isolated local Wrangler checks passed two-client room and global-chat integration, room-full signaling, and a two-client ramp fixture observing launch and landing at a 5.10 m peak. These are functional checks, not load tests. The natural-input two-client ferry crossing below was on the preceding v26 build, before the charging-lot integration.
 - Chrome desktop joined a shared room and started and left a parking queue on v27. The earlier v26 Chrome playtest included the island oval and portrait and landscape browser emulation. No physical device was tested.
