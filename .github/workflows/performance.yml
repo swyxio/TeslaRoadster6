@@ -2,7 +2,8 @@ name: Performance observations
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    # Draft PRs already run selection on open and pushes; readiness can restart the same measurement.
+    types: [opened, synchronize, reopened, labeled]
     # Keep these in sync with scripts/performance-select.mjs.
     paths:
       - 'src/**'
