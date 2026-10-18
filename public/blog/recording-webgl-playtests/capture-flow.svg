@@ -11,7 +11,7 @@
       <rect x="626" y="36" width="248" height="108" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
       <text x="750" y="75">Prepare the clip</text><text x="750" y="107" font-size="16" font-weight="normal">MP4 + poster</text>
       <rect x="927" y="36" width="248" height="108" rx="12" fill="#ffd5d5" stroke="#d84b4b" stroke-width="2"/>
-      <text x="1051" y="75">Publish with the blog</text><text x="1051" y="107" font-size="16" font-weight="normal">Site build and deploy</text>
+      <text x="1051" y="75">Publish with the blog</text><text x="1051" y="107" font-size="16" font-weight="normal">Repository video + site post</text>
     </g>
     <rect x="326" y="205" width="248" height="62" rx="10" fill="#ffe7b2" stroke="#c88419" stroke-width="2"/>
     <text x="450" y="231" font-size="16" font-weight="bold">Private run artifacts</text><text x="450" y="252" font-size="15">manifest + trajectory</text>

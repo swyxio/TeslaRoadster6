@@ -10,7 +10,7 @@
     <rect x="30" y="305" width="350" height="95" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
     <text x="205" y="342" font-size="21" font-weight="bold">Prepare the clip</text><text x="205" y="374" font-size="18">MP4 + poster</text>
     <rect x="30" y="445" width="350" height="95" rx="12" fill="#ffd5d5" stroke="#d84b4b" stroke-width="2"/>
-    <text x="205" y="482" font-size="21" font-weight="bold">Publish with the blog</text><text x="205" y="514" font-size="18">Site build and deploy</text>
+    <text x="205" y="482" font-size="21" font-weight="bold">Publish with the blog</text><text x="205" y="514" font-size="18">Repository video + site post</text>
     <rect x="395" y="170" width="145" height="85" rx="10" fill="#ffe7b2" stroke="#c88419" stroke-width="2"/>
     <text x="467" y="198" font-size="16" font-weight="bold">Private run</text><text x="467" y="221" font-size="16">manifest +</text><text x="467" y="242" font-size="16">trajectory</text>
   </g>

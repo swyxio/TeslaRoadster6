@@ -3,7 +3,7 @@ Tesland runs in a browser, so it is tempting to think a browser session replay i
 We built a small runner that opens the actual game in Chromium, drives it with timed inputs and records the rendered pixels. It can prepare a video and poster for this blog without a person driving or editing the clip. Here's a real run, captured in a fresh local room:
 
 <video controls playsinline preload="none" width="1280" poster="/blog/recording-webgl-playtests/playtest-poster.jpg" style="max-width:100%;height:auto" aria-label="A scripted Tesland playtest: a red Roadster accelerates and turns through a local Bay Area street">
-  <source src="/blog/recording-webgl-playtests/playtest.mp4" type="video/mp4">
+  <source src="https://raw.githubusercontent.com/swyxio/TeslaRoadster6/3a278d53f134ad0fd63770187cb8d2a5a2f56145/public/blog/recording-webgl-playtests/playtest.mp4" type="video/mp4">
   <a href="/blog/recording-webgl-playtests/playtest.mp4">Download the playtest video</a>.
 </video>
 
@@ -15,11 +15,11 @@ The point is not to replace a human's judgment. It is to make the thing we are j
 
 Tesland draws its Three.js world into a canvas. The browser knows there is a canvas element, but the positions of the cars and the colored pixels on the road are not ordinary HTML elements. [Cloudflare Browser Run's session recording](https://developers.cloudflare.com/browser-run/features/session-recording/#rrweb-limitations), for example, records DOM changes and input events; its documented replay does not capture WebGL or canvas contents.
 
-That kind of replay is useful for many websites. For a driving game, we need the browser's actual image. The runner uses [Playwright's screencast](https://playwright.dev/docs/api/class-screencast) to save the rendered page as WebM. It closes the recording before using FFmpeg to make a browser-friendly MP4 and a still poster. The video above is served by Tesland alongside the article, so a reader does not need a third-party player or an account.
+That kind of replay is useful for many websites. For a driving game, we need the browser's actual image. The runner uses [Playwright's screencast](https://playwright.dev/docs/api/class-screencast) to save the rendered page as WebM. It closes the recording before using FFmpeg to make a browser-friendly MP4 and a still poster. The video above plays in the page without an account. Its bytes come from an immutable copy in the public repository: our site's static host currently ignores byte-range requests, which prevents reliable seeking.
 
 <picture>
   <source media="(max-width: 600px)" srcset="/blog/recording-webgl-playtests/capture-flow-mobile.svg">
-  <img src="/blog/recording-webgl-playtests/capture-flow.svg" alt="A scenario drives a fresh local game room. Chromium renders and records the WebGL page as WebM; FFmpeg creates an MP4 and poster. The site deploy serves those assets with the blog. The recorder also keeps a private manifest of the run and inputs.">
+  <img src="/blog/recording-webgl-playtests/capture-flow.svg" alt="A scenario drives a fresh local game room. Chromium renders and records the WebGL page as WebM; FFmpeg creates an MP4 and poster. The repository serves the video and the site publishes the post. The recorder also keeps a private manifest of the run and inputs.">
 </picture>
 
 *The pixels take one path to the article; the run manifest stays with the private playtest artifacts.*
@@ -42,7 +42,7 @@ For comparisons, we keep the starting conditions, input timeline, video and rele
 
 ## From a local run to a public clip {#publish-the-video}
 
-The [publishing helper](https://github.com/swyxio/TeslaRoadster6/blob/main/scripts/playtest-to-blog.mjs) builds the current checkout, starts an isolated local room, runs a scenario, checks that the recording and trajectory completed, and converts the result into an MP4 and poster under `public/blog/`. A normal site build and deployment then publish those files with the article. The original WebM, manifest and trajectory remain in the local `playtest-runs/` directory.
+The [publishing helper](https://github.com/swyxio/TeslaRoadster6/blob/main/scripts/playtest-to-blog.mjs) builds the current checkout, starts an isolated local room, runs a scenario, checks that the recording and trajectory completed, and converts the result into an MP4 and poster under `public/blog/`. The site deployment publishes the poster and download; the player uses the immutable repository copy so seeking works. The original WebM, manifest and trajectory remain in the local `playtest-runs/` directory.
 
 ```sh
 pnpm playtest:blog-video --slug my-playtest --gpu metal

@@ -1,6 +1,7 @@
 // Record a disposable local room and prepare a browser-playable publication asset.
 import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -75,8 +76,16 @@ try {
   const stream = probe.streams?.find(item => item.codec_name === 'h264');
   if (!stream || !stream.width || !stream.height || Number(probe.format?.duration) < 1 || Number(probe.format?.size) > 25_000_000) throw new Error('Invalid or oversized browser video.');
   await mkdir(target, { recursive: true });
-  await copyFile(output, video);
-  await copyFile(image, poster);
+  let posterCreated = false;
+  try {
+    const flags = values.force ? 0 : constants.COPYFILE_EXCL;
+    await copyFile(image, poster, flags);
+    posterCreated = true;
+    await copyFile(output, video, flags);
+  } catch (error) {
+    if (posterCreated && !values.force) await rm(poster, { force: true });
+    throw error;
+  }
   console.log(JSON.stringify({ video: `/${video.replace(/^public\//, '')}`, poster: `/${poster.replace(/^public\//, '')}`, run, seconds: Number(probe.format.duration), width: stream.width, height: stream.height, bytes: Number(probe.format.size) }));
 } finally {
   stopWorker();

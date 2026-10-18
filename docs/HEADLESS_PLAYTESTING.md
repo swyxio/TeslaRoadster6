@@ -32,7 +32,12 @@ Review the captured frames and scenario for sensitive content before including
 the generated paths in a post. The fixture uses local chat and storage; do not
 put real credentials or third-party content in a scenario. A normal blog build
 and the authorized GitHub/Cloudflare release workflow publish the MP4 and post
-together. The helper itself does not push or deploy.
+together. The helper itself does not push or deploy. For seekable playback,
+commit and push the video first, then embed its immutable GitHub raw commit URL
+and preserve that commit when merging; Tesland's static asset host currently
+ignores byte-range requests. Keep the local asset as a download and verify the
+deployed player can seek. The agent can perform this workflow without a human
+driving or editing the clip.
 
 For the fuller recording and interactive-control API, use the runner directly.
 

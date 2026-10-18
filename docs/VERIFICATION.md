@@ -1235,6 +1235,7 @@ The mobile HUD candidate passed 890 tests and `pnpm build`. In local Chrome agai
 - The automated publishing helper built revision `1ca0eeb` with uncommitted article/tooling changes, started a fresh loopback-only staged room, and recorded the scripted drive with Playwright Chromium on an Apple M5 Pro reporting the Metal renderer. The 1280×720 silent MP4 is 10.43 seconds and 1,272,110 bytes; the run received 151 authoritative trajectory samples and recorded no page or console errors. The visible video was inspected; it is an automated run, not a frame-rate benchmark or human/physical-device playtest.
 - `pnpm test` passed 899 tests, and the focused blog-content suite passed all five cases after the local-video integrity check was added. The capture helper's refusal to overwrite an existing clip without `--force` was also checked.
 - The local article played the MP4 in Chrome at 1440 px and emulated 390 px widths. The player, poster, article rail, section links and responsive flow diagram were inspected; there was no horizontal overflow or page error. No physical mobile device was tested.
+- Tesland's production static host returned 200 rather than 206 for a video byte-range request. The immutable GitHub raw copy returned 206; local Chrome loaded it and successfully sought to 8 seconds. The article uses that source with the site-hosted MP4 as a download.
 
 
 ## 2026-10-18 · Starship construction candidate
