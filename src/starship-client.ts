@@ -39,21 +39,21 @@ export class StarshipClient {
     }
     if(room&&room!==this.lastRoomStatus&&this.session.status==='online'){
       this.lastRoomStatus=room;this.remember(room.status,room.serverTime,room.receivedAt);
-      if(!this.pendingName)this.privacy={status:'ready',publicName:room.publicName};
+      if(!this.pendingName)this.privacy={status:room.privacyPending?'pending':'ready',publicName:room.publicName};
     }else if(!room)this.lastRoomStatus=null;
     if(this.pendingName){
       const result=this.session.starshipNameResult;
       if(result?.requestId===this.pendingName.id){
         this.pendingName=null;this.session.starshipNameResult=null;
         this.privacy={status:result.ok?'ready':'error',publicName:result.ok?result.publicName:this.privacy.publicName};
-        if(result.ok)this.nextRoom=0;
+        this.nextRoom=0;
       }else if(now-this.pendingName.at>REQUEST_TIMEOUT_MS*2||this.session.status!=='online'){
-        this.pendingName=null;this.privacy={status:'error',publicName:this.privacy.publicName};
+        this.pendingName=null;this.privacy={status:'error',publicName:this.privacy.publicName};this.nextRoom=0;
       }
     }
     const roomFresh=privateWanted&&room&&this.session.status==='online'&&now-room.receivedAt<=STALE_MS;
     if(now>=this.nextPublic&&!this.loading){this.nextPublic=now+REFRESH_MS;if(!roomFresh)void this.refresh();}
-    if(privateWanted&&now>=this.nextRoom&&this.session.status==='online'&&!this.session.walletBlocked){
+    if(privateWanted&&!this.pendingName&&now>=this.nextRoom&&this.session.status==='online'&&!this.session.walletBlocked){
       this.nextRoom=now+REFRESH_MS;this.session.requestStarshipStatus();
     }
   }

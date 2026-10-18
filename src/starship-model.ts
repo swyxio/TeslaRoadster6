@@ -2,7 +2,7 @@ import type { StarshipStatus } from '../shared/starship';
 
 /** The public endpoint has no room identity, so personal income is unknown. */
 export type StarshipViewStatus = Omit<StarshipStatus,'personal'> & { personal:number|null };
-export type StarshipRoomStatus = {status:StarshipViewStatus;publicName:string|null;serverTime:number;receivedAt:number};
+export type StarshipRoomStatus = {status:StarshipViewStatus;publicName:string|null;privacyPending:boolean;serverTime:number;receivedAt:number};
 
 const amount=(value:unknown):value is number=>Number.isSafeInteger(value)&&(value as number)>=0;
 const optionalAmount=(value:unknown)=>value===null||amount(value);

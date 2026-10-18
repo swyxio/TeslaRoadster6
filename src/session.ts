@@ -167,8 +167,8 @@ export class Session {
         if (message.type === 'marsResult') this.marsResult = message;
         if(message.type==='starshipStatus'&&message.requestId===this.starshipStatusRequest&&
           validStarshipStatus(message.status)&&validStarshipTime(message.serverTime)&&
-          (message.publicName===null||typeof message.publicName==='string')){
-          this.starshipStatus={status:message.status,publicName:message.publicName,serverTime:message.serverTime,receivedAt:this.now()};
+          (message.publicName===null||typeof message.publicName==='string')&&typeof message.privacyPending==='boolean'){
+          this.starshipStatus={status:message.status,publicName:message.publicName,privacyPending:message.privacyPending,serverTime:message.serverTime,receivedAt:this.now()};
         }
         if(message.type==='starshipNameResult'&&Number.isSafeInteger(message.requestId)&&typeof message.ok==='boolean'&&
           (message.publicName===null||typeof message.publicName==='string'))this.starshipNameResult=message;
@@ -300,6 +300,7 @@ export class Session {
   }
   setStarshipName(name:string|null):number {
     const requestId=++this.nextUpgradeRequest;this.starshipNameResult=null;
+    this.starshipStatusRequest=0;
     if(this.status!=='online'||this.walletBlocked||!this.send({type:'starship',action:'name',name,requestId}))
       this.starshipNameResult={requestId,ok:false,publicName:null};
     return requestId;

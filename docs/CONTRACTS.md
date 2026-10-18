@@ -84,7 +84,7 @@ Server messages:
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
 {type:"marsResult", requestId:number, action:"board"|"contribute", ok:boolean, amount:number, available?:number}
-{type:"starshipStatus", requestId:number, status:StarshipStatus, publicName:string|null, serverTime:number}
+{type:"starshipStatus", requestId:number, status:StarshipStatus, publicName:string|null, privacyPending:boolean, serverTime:number}
 {type:"starshipNameResult", requestId:number, ok:boolean, publicName:string|null}
 {type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
@@ -127,6 +127,8 @@ The profile includes balance, earned and eligible income, current order and comp
 `shared/mars.ts` owns the $1,000,000,000 target and boarding eligibility. The `GlobalIncome` authority aggregates each driver's cumulative eligible game-created income; profile outboxes retry credits and cumulative per-driver accounting avoids double counting on replay. `mars.fund` is the global total capped at the goal; earnings count automatically without spending cash. The separate `mars.roomFund` preserves that room's earlier contributions and accepts optional new contributions. A contribution debits the player's wallet and credits only that room's fund; it never counts toward global income. The journal reserves the full request against the room limit, rejects an over-limit request without a debit, and includes the currently unreserved `available` amount in that rejection. A successful private result reports the amount applied. Retries and recovery reconcile the durable debit and credit before publishing the result.
 
 `GET /api/starship/status` returns the confirmed global status and server time, with `personal:null`. A connected driver requests the private status over its fenced room connection; guest and recovered drivers use the same canonical profile. The client shows committed earnings awaiting global confirmation separately. `GET /api/starship/contributors?group=at-goal|later&cursor=...` pages through public names; anonymity is the default and hides amounts as well as names. Cursors are bound to the group. The at-goal list freezes confirmations at the threshold, while later confirmations can include earnings committed before it. The index may return `building` and should be retried. An already-complete pre-upgrade ledger has an unknown historical crossing, not an invented launch.
+
+Profile income and privacy outboxes retry independently with persisted, jittered exponential backoff. Timeouts bound each caller's wait, not the lifetime of a remote operation; credits and privacy revisions are safe to replay. Private status exposes whether a privacy choice is still pending so the client does not mistake the previously confirmed name for the final choice.
 
 At a newly confirmed goal crossing, the global coordinator stores a launch ID and a launch time 30 seconds later. The world construction and playback derive from the confirmed total and server-time anchor. Polling and network transit can introduce presentation delay; this is not frame-synchronized. Replay is available after completion and never starts another launch or changes earnings. No season or room is retired.
 

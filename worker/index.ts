@@ -368,9 +368,14 @@ export class GameRoom extends DurableObject<Env> {
           catch{send({type:'starshipNameResult',requestId:message.requestId,ok:false,publicName:null});}
         }else try{
           if(!await driver.checkFence(fence)||!current())return;
+          const before=await driver.starshipPrivacyState(driverId,fence);
+          if(!before||!current())return;
           const income=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
           const [status,publicName]=await Promise.all([income.status(driverId),income.publicName(driverId)]);
-          send({type:'starshipStatus',requestId:message.requestId,status,publicName,serverTime:Date.now()});
+          const after=await driver.starshipPrivacyState(driverId,fence);
+          if(!after||!current())return;
+          const privacyPending=before.pending||after.pending||before.revision!==after.revision;
+          send({type:'starshipStatus',requestId:message.requestId,status,publicName,privacyPending,serverTime:Date.now()});
         }catch{/* The client marks an unanswered status as stale. */}
       };
       const operation=run();this.ctx.waitUntil(operation);return;

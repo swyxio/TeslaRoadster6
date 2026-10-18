@@ -24,7 +24,7 @@ export type StarshipPanelState = {
   /** Server UTC at receipt and the local monotonic receipt time; never a browser wall clock. */
   clock:StarshipClock|null;
   contributors:StarshipContributorPage;
-  privacy:{status:'loading'|'ready'|'saving'|'error'|'unavailable';publicName:string|null};
+  privacy:{status:'loading'|'ready'|'saving'|'pending'|'error'|'unavailable';publicName:string|null};
 };
 
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,text?:string):HTMLElementTagNameMap[K] {
@@ -161,13 +161,13 @@ export function createStarshipPanel(options:{onLoadContributors:(group:StarshipC
     if(choice.status==='unavailable'&&lastPrivacy!==undefined){
       lastPrivacy=undefined;showName.checked=false;nameInput.value='';nameLabel.hidden=nameInput.hidden=true;
     }
-    if((choice.status==='ready'||choice.status==='error')&&choice.publicName!==lastPrivacy){
+    if((choice.status==='ready'||choice.status==='pending'||choice.status==='error')&&choice.publicName!==lastPrivacy){
       lastPrivacy=choice.publicName;showName.checked=choice.publicName!==null;nameInput.value=choice.publicName??'';
       nameLabel.hidden=nameInput.hidden=!showName.checked;
     }
     const privacyBusy=choice.status==='loading'||choice.status==='saving'||choice.status==='unavailable';
     showName.disabled=nameInput.disabled=privacySave.disabled=privacyBusy;
-    text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':choice.status==='unavailable'?'Connect a driver to choose a public name.':'');
+    text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='pending'?'Your choice is awaiting confirmation. Your previous public setting may remain visible until the update completes.':choice.status==='error'?'Could not confirm your choice. Please check again.':choice.status==='unavailable'?'Connect a driver to choose a public name.':'');
 
     contributors.hidden=!completed&&!unknown;
     const page=state.contributors;

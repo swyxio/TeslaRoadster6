@@ -10,7 +10,7 @@ export class DriverProfile extends ProductionDriver {
     await this.acquire(id,'fixture-fence',initial,'fixture-room');
     await this.activateIncome('fixture-fence');
   }
-  async fixtureState(){return {pending:await this.ctx.storage.get<number>('income-pending')??null,privacy:await this.ctx.storage.get('privacy-pending')??null,alarm:await this.ctx.storage.getAlarm()};}
+  async fixtureState(){return {pending:await this.ctx.storage.get<number>('income-pending')??null,privacy:await this.ctx.storage.get('privacy-pending')??null,privacyRetry:await this.ctx.storage.get('privacy-retry')??null,privacyPending:(await this.starshipPrivacyState('income-test','fixture-fence'))?.pending,alarm:await this.ctx.storage.getAlarm()};}
   async fixtureEarn(){
     const record=await this.ctx.storage.get<{revision:number;sequence:number;progress:DriverProgress}>('driver');
     if(!record)throw new Error('Missing test driver');
@@ -29,14 +29,16 @@ export class GlobalIncome extends ProductionIncome {
   private held=false;
   private holdPrivacy=false;
   private privacyHeld=false;
+  private privacyCalls=0;
   async fixtureHold(){this.hold=true;}
   async fixtureHoldPrivacy(){this.holdPrivacy=true;}
-  async fixtureState(){return {held:this.held,privacyHeld:this.privacyHeld,total:await this.total(),publicName:await this.publicName('income-test')};}
+  async fixtureState(){return {held:this.held,privacyHeld:this.privacyHeld,privacyCalls:this.privacyCalls,total:await this.total(),publicName:await this.publicName('income-test')};}
   override async credit(id:string,cumulative:number){
     if(this.hold){this.held=true;await new Promise<void>(()=>{});}
     return super.credit(id,cumulative);
   }
   override async setName(id:string,name:string|null,revision:number){
+    this.privacyCalls++;
     if(this.holdPrivacy){this.privacyHeld=true;await new Promise<void>(()=>{});}
     return super.setName(id,name,revision);
   }
@@ -44,10 +46,10 @@ export class GlobalIncome extends ProductionIncome {
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;INCOME:DurableObjectNamespace<GlobalIncome>};
 export default {
   async fetch(request:Request,env:Env):Promise<Response>{
-    const path=new URL(request.url).pathname,driver=env.DRIVERS.get(env.DRIVERS.idFromName('income-test')),income=env.INCOME.get(env.INCOME.idFromName('global'));
+    const url=new URL(request.url),path=url.pathname,driver=env.DRIVERS.get(env.DRIVERS.idFromName('income-test')),income=env.INCOME.get(env.INCOME.idFromName('global'));
     if(path==='/hold'){await income.fixtureHold();return Response.json({ok:true});}
     if(path==='/hold-privacy'){await income.fixtureHoldPrivacy();return Response.json({ok:true});}
-    if(path==='/set-privacy')return Response.json(await driver.setStarshipName('income-test','fixture-fence','Test driver'));
+    if(path==='/set-privacy')return Response.json(await driver.setStarshipName('income-test','fixture-fence',url.searchParams.get('name')??'Test driver'));
     if(path==='/start'){await driver.fixtureStart('income-test');return Response.json({ok:true});}
     if(path==='/earn')return Response.json(await driver.fixtureEarn());
     if(path==='/profile')return Response.json(await driver.fixtureState());

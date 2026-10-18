@@ -30,12 +30,23 @@ export type DriverOutcome =
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean};
 type Receipt = {payload:string;outcome:DriverOutcome};
 type PrivacyPending = {revision:number;name:string|null};
+type OutboxRetry = {attempts:number;next:number};
 
 const OUTBOX_RPC_TIMEOUT_MS=3_000;
+function nextOutboxRetry(previous:OutboxRetry|undefined,now:number):OutboxRetry {
+  const attempts=Math.min((previous?.attempts??0)+1,8);
+  const delay=Math.min(60_000,Math.round(5_000*2**(attempts-1)*(0.8+Math.random()*0.4)));
+  return {attempts,next:now+delay};
+}
 async function boundedOutbox<T>(operation:Promise<T>):Promise<T>{
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{return await Promise.race([operation,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Outbox RPC timed out')),OUTBOX_RPC_TIMEOUT_MS);})]);}
-  finally{if(timer!==undefined)clearTimeout(timer);}
+  finally{
+    if(timer!==undefined)clearTimeout(timer);
+    // Release the RPC stub; a timed-out remote operation may still finish.
+    const dispose=Reflect.get(operation,Reflect.get(Symbol,'dispose') as symbol);
+    if(typeof dispose==='function')Reflect.apply(dispose,operation,[]);
+  }
 }
 
 type Env = { INCOME:DurableObjectNamespace<GlobalIncome>; ROOMS:DurableObjectNamespace<GameRoom>; ECONOMIES:DurableObjectNamespace<RoomEconomy> };
@@ -158,7 +169,8 @@ export class DriverProfile extends DurableObject<Env> {
           if(next.eligibleIncome>record.progress.eligibleIncome || (!record.incomeActivated && next.eligibleIncome>0)){
             await txn.put('income-pending',next.eligibleIncome);
             const alarm=await txn.getAlarm();
-            const nextAttempt=Date.now()+500;
+            const retry=await txn.get<OutboxRetry>('income-retry');
+            const nextAttempt=Math.max(Date.now()+500,retry?.next??0);
             if(alarm===null || alarm>nextAttempt)await txn.setAlarm(nextAttempt);
           }
         }
@@ -201,7 +213,8 @@ export class DriverProfile extends DurableObject<Env> {
         await txn.put('driver',{...record,incomeActivated:true} satisfies DriverRecord);
         if(record.progress.eligibleIncome>0){
           await txn.put('income-pending',record.progress.eligibleIncome);
-          const alarm=await txn.getAlarm(),next=Date.now()+500;
+          const retry=await txn.get<OutboxRetry>('income-retry');
+          const alarm=await txn.getAlarm(),next=Math.max(Date.now()+500,retry?.next??0);
           if(alarm===null||alarm>next)await txn.setAlarm(next);
         }
       }
@@ -210,6 +223,14 @@ export class DriverProfile extends DurableObject<Env> {
   }
 
   async checkFence(fence:string):Promise<boolean>{const record=await this.ctx.storage.get<DriverRecord>('driver');return record?.fence===fence&&!record.sealed;}
+
+  async starshipPrivacyState(driverId:string,fence:string):Promise<{pending:boolean;revision:number}|null>{
+    return this.ctx.storage.transaction(async txn=>{
+      const record=await txn.get<DriverRecord>('driver');
+      if(!record||record.driverId!==driverId||record.fence!==fence||record.sealed)return null;
+      return {pending:!!await txn.get<PrivacyPending>('privacy-pending'),revision:await txn.get<number>('privacy-revision')??0};
+    });
+  }
 
   /** Privacy changes are ordered at the profile and retried independently of income. */
   async setStarshipName(driverId:string,fence:string,name:string|null):Promise<{ok:boolean;publicName:string|null}>{
@@ -221,62 +242,70 @@ export class DriverProfile extends DurableObject<Env> {
       const previous=await txn.get<number>('privacy-revision')??0,revision=previous+1;
       if(!Number.isSafeInteger(revision))throw new Error('Privacy revision overflow');
       const change={revision,name:normalized};
-      await txn.put({'privacy-revision':revision,'privacy-pending':change});
-      const alarm=await txn.getAlarm(),next=Date.now()+500;
-      if(alarm===null||alarm>next)await txn.setAlarm(next);
-      return change;
+      // Reserve before sending. A newer choice may replace the pending
+      // revision, but it must not bypass an already reserved deadline.
+      const now=Date.now(),previousRetry=await txn.get<OutboxRetry>('privacy-retry');
+      const attempt=!previousRetry||previousRetry.next<=now;
+      const retry=attempt?nextOutboxRetry(previousRetry,now):previousRetry;
+      await txn.put({'privacy-revision':revision,'privacy-pending':change,'privacy-retry':retry});
+      const alarm=await txn.getAlarm();
+      if(alarm===null||alarm>retry.next)await txn.setAlarm(retry.next);
+      return {change,attempt,deadline:retry.next};
     });
-    if(!pending)return {ok:false,publicName:null};
+    if(!pending||!pending.attempt||pending.deadline-Date.now()<=OUTBOX_RPC_TIMEOUT_MS)return {ok:false,publicName:null};
     try{
-      const publicName=await this.flushPrivacy(driverId,pending);
+      const publicName=await this.flushPrivacy(driverId,pending.change);
       const latest=await this.ctx.storage.get<number>('privacy-revision');
-      return {ok:latest===pending.revision&&publicName===normalized,publicName};
+      return {ok:latest===pending.change.revision&&publicName===normalized,publicName};
     }catch{return {ok:false,publicName:null};}
   }
 
   private async flushPrivacy(driverId:string,pending:PrivacyPending):Promise<string|null>{
     const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
-    const publicName=await global.setName(driverId,pending.name,pending.revision);
+    const publicName=await boundedOutbox(global.setName(driverId,pending.name,pending.revision));
     await this.ctx.storage.transaction(async txn=>{
       const current=await txn.get<PrivacyPending>('privacy-pending');
-      if(current?.revision===pending.revision)await txn.delete('privacy-pending');
+      if(current?.revision===pending.revision)await txn.delete(['privacy-pending','privacy-retry']);
     });
     return publicName;
   }
 
   async alarm():Promise<void>{
-    // Arm before reading the outbox or awaiting its remote credit, preserving
-    // any earlier deadline set by another operation.
-    const watchdog=Date.now()+1000;
-    const armed=await this.ctx.storage.transaction(async txn=>{
+    // Reserve independent retry deadlines and arm the next alarm atomically
+    // before making either RPC. A stalled lane cannot prevent the other lane
+    // from progressing, and prolonged failures back off instead of flooding.
+    const reserved=await this.ctx.storage.transaction(async txn=>{
+      const record=await txn.get<DriverRecord>('driver');
+      const pending=await txn.get<number>('income-pending'),privacy=await txn.get<PrivacyPending>('privacy-pending');
+      let incomeRetry=await txn.get<OutboxRetry>('income-retry'),privacyRetry=await txn.get<OutboxRetry>('privacy-retry');
+      const now=Date.now();
+      const incomeDue=!!record&&pending!==undefined&&(!incomeRetry||incomeRetry.next<=now);
+      const privacyDue=!!record&&!!privacy&&(!privacyRetry||privacyRetry.next<=now);
+      if(incomeDue){incomeRetry=nextOutboxRetry(incomeRetry,now);await txn.put('income-retry',incomeRetry);}
+      if(privacyDue){privacyRetry=nextOutboxRetry(privacyRetry,now);await txn.put('privacy-retry',privacyRetry);}
+      const next=Math.min(pending!==undefined?(incomeRetry?.next??now+500):Infinity,privacy?(privacyRetry?.next??now+500):Infinity);
       const alarm=await txn.getAlarm();
-      if(alarm!==null&&alarm<=watchdog)return false;
-      await txn.setAlarm(watchdog);return true;
+      if(Number.isFinite(next)){if(alarm===null||alarm>next)await txn.setAlarm(next);}
+      return {record,pending:incomeDue?pending:undefined,privacy:privacyDue?privacy:undefined,incomeDeadline:incomeRetry?.next,privacyDeadline:privacyRetry?.next};
     });
-    const [record,pending,privacy]=await Promise.all([this.ctx.storage.get<DriverRecord>('driver'),this.ctx.storage.get<number>('income-pending'),this.ctx.storage.get<PrivacyPending>('privacy-pending')]);
-    if(!record||(pending===undefined&&!privacy)){
-      if(armed&&pending===undefined&&!privacy)await this.ctx.storage.transaction(async txn=>{
-        if(await txn.getAlarm()===watchdog && await txn.get('income-pending')===undefined && await txn.get('privacy-pending')===undefined)await txn.deleteAlarm();
-      });
-      return;
-    }
+    const {record}=reserved;
+    if(!record)return;
+    // A slow storage transaction can consume a reservation. Let its already
+    // armed alarm reserve again instead of dispatching an expired attempt.
+    const pending=(reserved.incomeDeadline??0)-Date.now()>OUTBOX_RPC_TIMEOUT_MS?reserved.pending:undefined;
+    const privacy=(reserved.privacyDeadline??0)-Date.now()>OUTBOX_RPC_TIMEOUT_MS?reserved.privacy:undefined;
     // A hung RPC must not keep this alarm open forever: future earnings or
     // privacy changes still need the already-armed watchdog to run again.
-    const privacyFlush=privacy?boundedOutbox(this.flushPrivacy(record.driverId,privacy)).catch(()=>{}):Promise.resolve();
+    const privacyFlush=privacy?this.flushPrivacy(record.driverId,privacy).catch(()=>{}):Promise.resolve();
     const incomeFlush=pending===undefined?Promise.resolve():(async()=>{try {
       const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
       await boundedOutbox(global.credit(record.driverId,pending));
       await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<number>('income-pending');
-        if(current!==undefined && current<=pending)await txn.delete('income-pending');
-        else if(current!==undefined){const alarm=await txn.getAlarm(),next=Date.now()+500;if(alarm===null||alarm>next)await txn.setAlarm(next);}
+        if(current!==undefined && current<=pending)await txn.delete(['income-pending','income-retry']);
+        else if(current!==undefined){await txn.delete('income-retry');const alarm=await txn.getAlarm(),next=Date.now()+500;if(alarm===null||alarm>next)await txn.setAlarm(next);}
       });
-    } catch {
-      await this.ctx.storage.transaction(async txn=>{
-        const alarm=await txn.getAlarm(),next=Date.now()+1000;
-        if(alarm===null||alarm>next)await txn.setAlarm(next);
-      });
-    }})();
+    } catch { /* The durable retry deadline is already armed. */ }})();
     await Promise.all([privacyFlush,incomeFlush]);
   }
 }

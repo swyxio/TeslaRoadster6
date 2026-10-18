@@ -27,12 +27,14 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 function connect() {
   const socket = new WebSocket(url);
   const input = new RoomInputClient(socket);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; walletReady?:boolean; starshipStatus?:{privacyPending:boolean;publicName:string|null;status:{personal:number}}; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     input.observe(data);
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; socket.send(JSON.stringify({type:'identity',code:null,requestId:1})); }
     if (data.type === 'state') state.world = data.world;
+    if (data.type === 'wallet') state.walletReady = true;
+    if (data.type === 'starshipStatus') state.starshipStatus = data;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'vehicleStyleResult') (state.vehicleStyleResults??=[]).push(data);
     if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
@@ -47,6 +49,10 @@ const one = connect(), two = connect();
 const keepObserverAlive=setInterval(()=>{if(two.input.active)two.input.send(NEUTRAL);},5000);
 try {
   await eventually(() => one.input.active && two.input.active && !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two identified players visible in both snapshots');
+  await eventually(()=>!!one.state.walletReady,'guest wallet ready');
+  one.socket.send(JSON.stringify({type:'starship',action:'status',requestId:900}));
+  await eventually(()=>!!one.state.starshipStatus,'private Starship status');
+  assert.equal(one.state.starshipStatus!.privacyPending,false);assert.equal(one.state.starshipStatus!.publicName,null);assert.equal(one.state.starshipStatus!.status.personal,0);
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===2500&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
     assert.equal(state.world!.entities.filter(e=>e.police).length,4);

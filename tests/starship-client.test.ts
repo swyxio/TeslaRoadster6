@@ -24,7 +24,7 @@ test('public progress stays visible without identity; private pending is derived
   assert.equal(client.state().pendingContribution,null);
   assert.equal(client.state().privacy.status,'unavailable');
   session.status='online';session.wallet={cash:0,earned:0,eligibleIncome:40,level:0,unlocked:[],ownedLuxury:[]};
-  session.starshipStatus={status:status({personal:25}),serverTime:201_000,receivedAt:now,publicName:null};
+  session.starshipStatus={status:status({personal:25}),serverTime:201_000,receivedAt:now,publicName:null,privacyPending:false};
   client.tick();
   assert.equal(client.state().confirmed?.personal,25);
   assert.equal(client.state().pendingContribution,15);
@@ -42,7 +42,7 @@ test('a recovered driver is polled as soon as the new wallet is ready',()=>{
   session.status='online';session.requestStarshipStatus=()=>{requests++;return true;};
   const client=new StarshipClient(session,()=>now,async()=>response({status:status(),serverTime:200_000}));
   client.tick(true);assert.equal(requests,1);
-  session.starshipStatus={status:status({personal:5}),serverTime:200_000,receivedAt:now,publicName:'Old'};
+  session.starshipStatus={status:status({personal:5}),serverTime:200_000,receivedAt:now,publicName:'Old',privacyPending:false};
   client.tick(true);assert.equal(client.state().privacy.publicName,'Old');
   now+=1000;session.starshipStatus=null;session.starshipContextVersion++;session.walletStatus='connecting';
   Object.defineProperty(session,'walletBlocked',{value:true,writable:true,configurable:true});
@@ -61,6 +61,21 @@ test('server time drives the global launch and outranks local replay',async()=>{
   assert.deepEqual(client.animation(),{source:'global',elapsed:.2});
   assert.equal(client.stage(),5);
   assert.equal(client.animation(now,false)?.source,'global');
+});
+
+test('a queued privacy choice stays unconfirmed until the profile outbox clears',()=>{
+  let now=1000,requests=0;const session=fakeSession();session.status='online';
+  session.requestStarshipStatus=()=>{requests++;return true;};
+  session.starshipStatus={status:status({personal:5}),serverTime:200_000,receivedAt:now,publicName:null,privacyPending:false};
+  const client=new StarshipClient(session,()=>now,async()=>response({status:status(),serverTime:200_000}));
+  client.tick(true);client.setName('New name');
+  session.starshipNameResult={requestId:1,ok:false,publicName:null};client.tick(true);
+  assert.equal(client.state().privacy.status,'error');assert.equal(requests,2,'an unconfirmed result prompts a fresh status');
+  session.starshipStatus={status:status({personal:5}),serverTime:200_001,receivedAt:now,publicName:null,privacyPending:true};
+  client.tick(true);assert.equal(client.state().privacy.status,'pending');
+  now+=10_000;
+  session.starshipStatus={status:status({personal:5}),serverTime:200_002,receivedAt:now,publicName:'New name',privacyPending:false};
+  client.tick(true);assert.equal(client.state().privacy.status,'ready');assert.equal(client.state().privacy.publicName,'New name');
 });
 
 test('failed public reads and out-of-order contributor pages are handled explicitly',async()=>{
@@ -107,10 +122,14 @@ test('room status replies are correlated and invalidated when identity changes',
   socket.message({type:'state',world:createEmptyWorld(),roomEpoch:'r',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()});
   assert.equal(session.requestStarshipStatus(),true);
   const request=JSON.parse(socket.sent.at(-1)!);
-  socket.message({type:'starshipStatus',requestId:request.requestId,status:status({personal:0}),publicName:null,serverTime:10});
+  socket.message({type:'starshipStatus',requestId:request.requestId,status:status({personal:0}),publicName:null,privacyPending:false,serverTime:10});
   assert.equal(session.starshipStatus?.status.personal,0);
+  assert.equal(session.requestStarshipStatus(),true);const oldRequest=JSON.parse(socket.sent.at(-1)!);
+  session.setStarshipName('New');
+  socket.message({type:'starshipStatus',requestId:oldRequest.requestId,status:status({personal:0}),publicName:'stale',privacyPending:false,serverTime:10});
+  assert.equal(session.starshipStatus?.publicName,null,'an older poll cannot confirm a newer privacy choice');
   session.setIdentity('new-code');
-  socket.message({type:'starshipStatus',requestId:request.requestId,status:status({personal:7}),publicName:'Old',serverTime:11});
+  socket.message({type:'starshipStatus',requestId:request.requestId,status:status({personal:7}),publicName:'Old',privacyPending:false,serverTime:11});
   assert.equal(session.starshipStatus,null);
   session.disconnect();
 });
