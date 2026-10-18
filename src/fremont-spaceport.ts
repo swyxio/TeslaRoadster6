@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { FREMONT_SPACEPORT as site } from '../shared/map';
-import { constructionFraction } from './starship-construction';
+import { constructionFraction, constructionNoseRadius } from './starship-construction';
 import { createStarshipWorkyard } from './starship-workyard';
 import { box, material } from './vehicles';
 
@@ -98,7 +98,10 @@ export function buildFremontSpaceport(scene:T.Scene) {
   }
   const outlineGeometry=new T.BufferGeometry();outlineGeometry.setAttribute('position',new T.Float32BufferAttribute(outlinePoints,3));
   const outline=new T.LineSegments(outlineGeometry,new T.LineBasicMaterial({color:0x438c8b,transparent:true,opacity:.85}));rocket.add(outline);
-  const bodyGeometry=new T.CylinderGeometry(4.5,4.5,1,32),noseGeometry=new T.CylinderGeometry(0,4.5,1,32);
+  const bodyGeometry=new T.CylinderGeometry(4.5,4.5,1,32),noseGeometry=new T.CylinderGeometry(4.5,4.5,1,32,1,true);
+  const nosePositions=noseGeometry.getAttribute('position') as T.BufferAttribute;
+  const noseTop=Array.from({length:33},(_,i)=>({x:nosePositions.getX(i),z:nosePositions.getZ(i)}));
+  let lastNoseHeight=-1;
   const parts=[{bottom:0,height:36,color:0xb4c0bf,geometry:bodyGeometry},
     {bottom:36,height:36,color:0xb4c0bf,geometry:bodyGeometry},
     {bottom:72,height:35,color:0xc7d0cd,geometry:bodyGeometry},
@@ -109,10 +112,10 @@ export function buildFremontSpaceport(scene:T.Scene) {
     const mesh=new T.Mesh(new T.CylinderGeometry(4.56,4.56,.35,32),material(0x65757a,.7));mesh.position.y=y;rocket.add(mesh);return {mesh,y};
   });
   const tiles=box(rocket,0,0,4.5,7,1,.2,0x202a30);
-  const fins=new T.Group();rocket.add(fins);
+  const fins=new T.Group(),flaps=new T.Group();rocket.add(fins,flaps);
   for(const side of [-1,1]){
     const fin=box(fins,side*5,78,0,4,12,1,0x3b484c);fin.rotation.z=side*.28;
-    const flap=box(fins,side*4.3,103,0,2.4,5,.8,0x3b484c);flap.rotation.z=-side*.3;
+    const flap=box(flaps,side*4.3,103,0,2.4,5,.8,0x3b484c);flap.rotation.z=-side*.3;
   }
   const engines=new T.Group();rocket.add(engines);
   for(let i=0;i<9;i++){
@@ -128,10 +131,15 @@ export function buildFremontSpaceport(scene:T.Scene) {
     for(const part of parts){
       const visibleHeight=Math.max(0,Math.min(part.height,height-part.bottom));
       part.mesh.visible=visibleHeight>0;part.mesh.scale.y=visibleHeight;part.mesh.position.y=part.bottom+visibleHeight/2;
+      if(part.geometry===noseGeometry&&visibleHeight>0&&visibleHeight!==lastNoseHeight){
+        const radius=constructionNoseRadius(visibleHeight)/4.5;
+        for(let i=0;i<noseTop.length;i++){nosePositions.setX(i,noseTop[i].x*radius);nosePositions.setZ(i,noseTop[i].z*radius);}
+        nosePositions.needsUpdate=true;noseGeometry.computeVertexNormals();lastNoseHeight=visibleHeight;
+      }
     }
     for(const rib of ribs)rib.mesh.visible=height>=rib.y;
     const tileHeight=Math.max(0,Math.min(23,height-73.5));tiles.visible=tileHeight>0;tiles.scale.y=tileHeight;tiles.position.y=73.5+tileHeight/2;
-    fins.visible=height>=107;engines.visible=height>=3;outline.visible=height<120;gantry.visible=height<120;
+    fins.visible=height>=84;flaps.visible=height>=106;engines.visible=height>=3;outline.visible=height<120;gantry.visible=height<120;
     updateBoard(total);
     workyard.update(ambientTime,!launching);
     rocket.position.y=site.pad.h+(launching?Math.max(0,elapsed-1)**2*3:0);
