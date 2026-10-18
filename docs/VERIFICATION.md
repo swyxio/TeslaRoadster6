@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Service areas, stations and current main · preliminary integration · 2026-10-18 Pacific
+
+- On `fd8b787`, typechecking passed and 56 focused station, artwork, navigation, town-route, delivery-stop and progression tests passed together. These are preliminary checks before integrating the pending flight changes; they do not replace the final room, visual or performance checks.
+- Cloudflare preview build `e02929ab` failed one of 953 tests because the five-minute economy model tried to pick up a job while the new assignment search was still pending. The model now advances a single driver's bounded search on 20 Hz ticks before starting the assumed pickup time, rounded to a second. Its chart and article figures were regenerated; five focused economy and blog tests passed locally. The failed build was not deployed.
+
 ## Charger signs and Oakland spacing · current-main integration candidate · 2026-10-18 Pacific
 
 - On the candidate merged with main `c1fb945`, all 895 tests and `pnpm build` passed. The build retained Vite's large-chunk warning. The Oakland station move changes shared map geometry, so this branch uses protocol v44 provisionally; the combined release must choose its version against its final base.
@@ -79,6 +84,7 @@ These entries describe separate historical builds. Check the version and scope i
 - After integrating earnings fix `aeb5704`, Preview build `016e1ee` ran the same four-runner, 64-Session setup for 60 seconds after warm-up. All 64 clients remained online, saw all players and showed applied input; each observed at least 60.0 simulated seconds, meeting the 57-second simulation-progress target. Of 76,814 measured sends, 559 late rejections were captured; the one-second drain may miss delayed responses. Per-runner p95 snapshot gaps were 120–125 ms (maximum 694 ms), rejection-response p95 was 161–414 ms, and event-loop p95 was 21–25 ms. The four hosts each had four logical CPUs and sampled one-minute loads of 0.10–0.50; they decoded 5,115 MiB of JSON in aggregate, not measured wire bytes. The harness aborts if a client send buffer exceeds 1 MB. Server tick work, server queue/history bounds, successful-input acknowledgement latency, and wire bytes were not measured, so the remaining throughput targets and playable capacity are not established. The [raw traces and harness](benchmarks/2026-10-18-capacity-preview/) record the common room epoch, source hashes and timing; this was a preview sample without browser rendering or physical devices.
 - On `016e1ee`, `pnpm test` passed 880 tests and `pnpm build` passed with the existing large-chunk warning. Local Wrangler room and prediction integrations passed with protocol v43 and capacity 64; a separate capacity-2 fixture again passed full-room rejection, a distinct room and freed-seat reuse.
 - After incorporating the live economy and mobile HUD releases into `a3297d6`, all 894 tests and the build passed; the existing Vite large-chunk warning remains. Local Wrangler room and prediction integrations passed at protocol v43/capacity 64, and the separate capacity-2 fixture passed full-room rejection and freed-seat reuse. The only shared simulation change since the 60-second preview sample was the constant-time delivery payout floor; the sample remains attributed to `016e1ee`.
+
 ## Charger signs and Oakland placement candidate · 2026-10-18 Pacific
 
 - Against the protocol-v41 baseline at `fb65d4e`, `pnpm test` passed 839 tests and `pnpm build` passed with the existing Vite large-chunk warning. Focused checks cover sign placement, station identity and lot clearances. This is local functional evidence, not a production or capacity result.
