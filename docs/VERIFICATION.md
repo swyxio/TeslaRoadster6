@@ -211,3 +211,5 @@ After integrating the shop confirmation follow-up, 161 tests and `pnpm build` pa
 ## 2026-10-17 · Remote OTA shop
 
 `pnpm test` passed 166 tests and `pnpm build` passed. The local two-client Wrangler room integration and a deployed Cloudflare preview passed with protocol v15, including subscription acknowledgement, paused state and cancellation replication. Shared-simulation tests exercise payment, renewal, insufficient funds, automatic resumption, cancellation, and remote airborne purchases. A controls regression covers delayed jump acknowledgement and preserves brake-before-jump ordering. In Chrome solo play, opening the shop away from a workshop showed the price and allowed enrollment with $0, displaying the paused state. The dialog was inspected at desktop and emulated 390×844 portrait and 844×390 landscape; physical phones were not tested.
+
+One additional local integration run timed out at the existing Tesla fleet-change assertion; a subsequent run passed. The preview integration also passed. This intermittent selection result needs investigation if it recurs.
