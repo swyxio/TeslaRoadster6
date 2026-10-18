@@ -12,12 +12,13 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
     if (data.type === 'state') state.world = data.world;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
+    if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
   return { socket, state };
@@ -33,6 +34,7 @@ try {
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
+  assert.ok(two.state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
@@ -56,7 +58,12 @@ try {
   const remaining=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_SIDE_RIGHT),'remote flip exhaust replicated');
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-9))<.01;},'one-tap flip completion replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-4.5))<.01;},'one-tap flip completion replicated');
+  const flightStart=two.state.world!.entities.find(e=>e.id===entityId)!;
+  const flightOrigin={x:flightStart.x,z:flightStart.z,yaw:flightStart.yaw};
+  for(let i=0;i<12;i++){one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1,throttle:1,hover:true}}));await delay(50);}
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId===null&&((e.x-flightOrigin.x)*-Math.sin(flightOrigin.yaw)+(e.z-flightOrigin.z)*-Math.cos(flightOrigin.yaw)>1)&&(e.thrusters&THRUSTER_REAR)!==0;},'remote forward flight and hover replicated');
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'arena entry replicated');
@@ -87,6 +94,13 @@ try {
   await eventually(()=>one.state.upgradeResults?.some(r=>r.requestId===2&&!r.ok)??false,'rate-limited purchase receives an explicit result');
   assert.equal(two.state.upgradeResults?.length??0,0,'purchase results go only to the requester');
   assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:true,requestId:3}));
+  await eventually(()=>one.state.otaResults?.some(r=>r.requestId===3&&r.ok)??false,'subscription receives an explicit result');
+  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled??false,'subscription state replicated');
+  assert.equal(two.state.world?.players.find(p=>p.id===id)?.delivery.ota.active,false,'unfunded subscription pauses');
+  assert.equal(two.state.otaResults?.length??0,0,'subscription result goes only to requester');
+  await delay(500);one.socket.send(JSON.stringify({type:'ota',enabled:false,requestId:4}));
+  await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
