@@ -66,9 +66,10 @@ test('long bodies collide at their nose and heavier bodies gain less collision s
   assert.ok(impact('waymo-firefly')>impact('tesla-semi')*3);
 });
 test('fleet commands reject forged kinds, airborne swaps and occupied player cars',()=>{
-  assert.equal(parseMessage('{"type":"selectVehicle","kind":"__proto__"}'),null);
-  assert.equal(parseMessage('{"type":"selectVehicle","kind":"spaceship"}'),null);
-  assert.ok(parseMessage('{"type":"autopilot"}'));
+  const fence={actionSeq:1,edgeBaseline:{jump:0,flip:0}};
+  assert.equal(parseMessage(JSON.stringify({type:'selectVehicle',kind:'__proto__',...fence})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'selectVehicle',kind:'spaceship',...fence})),null);
+  assert.ok(parseMessage(JSON.stringify({type:'autopilot',...fence})));
   const world=createWorld();addPlayer(world,'a','A');addPlayer(world,'b','B');
   assert.equal(chooseVehicle(world,'a','zoox'),false,'non-Tesla vehicles must be taken from the street');
   const car=world.entities.find(e=>e.driver==='a')!;car.y=10;car.supportId=null;assert.equal(chooseVehicle(world,'a','zoox'),false);car.y=0;car.supportId='ground';

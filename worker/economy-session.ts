@@ -227,7 +227,7 @@ export class EconomySession {
       }else {pickup.active=true;pickup.readyAt=undefined;}
     });
   }
-  luxury(action:'buy'|'collect',vehicle:LuxuryVehicleId,requestId:number){
+  luxury(action:'buy'|'collect',vehicle:LuxuryVehicleId,requestId:number,onCollected?:()=>void){
     const entry=luxuryVehicle(vehicle),car=this.world.entities.find(e=>e.id===this.player.entityId);
     const reply=(ok:boolean,reason?:string,awards?:string[])=>this.send({type:'luxuryResult',requestId,action,vehicle,ok,...(reason?{reason}:{}),...(awards?{awards}:{})});
     if(this.failed||this.queue.length>=32||!entry||!car||this.lockedCar){reply(false,'unavailable');return;}
@@ -235,6 +235,7 @@ export class EconomySession {
       if(!this.committed.ownedLuxury.includes(vehicle)||!canCollectLuxury(car)){reply(false,'unavailable');return;}
       const ok=collectLuxury(this.world,this.player.id,vehicle);
       if(ok){const selected=this.world.entities.find(e=>e.id===this.player.entityId),saved=this.committed.vehicles[vehicle];if(selected&&saved){selected.upgrades=structuredClone(saved.upgrades);selected.tankLevel=saved.tankLevel;selected.style=structuredClone(saved.style);}}
+      if(ok)onCollected?.();
       reply(ok,ok?undefined:'no-space');return;
     }
     if(!atLuxuryShowroom(car)){reply(false,'location');return;}

@@ -309,6 +309,17 @@ export class GameRoom extends ProductionGameRoom {
     if(!pickup || !pickup.active)throw new Error('Test supply pickup is not available');
     return this.fixturePlace(playerId,pickup.x,pickup.z);
   }
+  async fixtureRocketPickup(playerId:string,pickupId:string) {
+    const world=Reflect.get(this,'world') as World;
+    const pickup=world.pickups.find(candidate=>candidate.id===pickupId && candidate.kind==='rocket');
+    if(!pickup || !pickup.active)throw new Error('Test rocket pickup is not available');
+    const position=this.fixturePlace(playerId,pickup.x,pickup.z);
+    const player=world.players.find(candidate=>candidate.id===playerId);
+    const car=world.entities.find(entity=>entity.id===player?.entityId);
+    if(!car)throw new Error('Test driver not in room');
+    car.air=40;
+    return position;
+  }
   async fixturePickupState(pickupId:string) {
     const world=Reflect.get(this,'world') as World;
     const pickup=world.pickups.find(candidate=>candidate.id===pickupId);
@@ -390,6 +401,10 @@ export default {
       case '/__wallet-test/supply-pickup': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixtureSupplyPickup(body.playerId,body.pickupId));
+      }
+      case '/__wallet-test/rocket-pickup': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        return Response.json(await room.fixtureRocketPickup(body.playerId,body.pickupId));
       }
       case '/__wallet-test/pickup-state': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));

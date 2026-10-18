@@ -6,13 +6,38 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
-    title: 'A Bay worth exploring',
-    intro: 'Visit four research stops, give your car a new look and explore the economy taking shape.',
+    title: 'The Vault opens',
+    intro: 'Save your driver, build a collection and explore the Bay.',
     sections: [
-      { title: 'Explore and customize', items: [
-        'Stop by UCSF, UC Berkeley, Stanford and SFO for research awards; the latter three also unlock workshop discounts.',
-        'Buy paint and decals at a workshop; other drivers can see your finish and your name above the car.',
-        'Read the economy story for delivery and fleet simulations, a Bay landmark map and an interactive tower planner.'
+      { title: 'Your collection', items: [
+        'Find the Vault to buy six luxury cars and motorcycles. Collect owned vehicles at a workshop.',
+        'Your saved driver keeps cash, delivery progress, achievements, vehicle upgrades, paint and decals.',
+        'Visit UCSF, UC Berkeley, Stanford and SFO for research awards and selected workshop discounts.',
+        'Explore the economy story for delivery and fleet simulations and a Bay landmark map.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.15-alpha',
+    label: '0.0.15 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the wheels moving',
+    intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
+    sections: [
+      { title: 'More consistent motion', items: [
+        'Your car keeps moving between network updates, with more immediate steering and flight controls.',
+        'The chase camera stays with you through ordinary takeoffs and landings.',
+        'Nearby cars share the driving timeline so bumping and close passes remain part of the game.'
+      ] },
+      { title: 'Less work around you', items: [
+        'Fewer ambient cars share the roads. Police remain, and different vehicle models appear across rooms.',
+        'Your car keeps its detail; distant cars use simpler models, and rocket hardware takes fewer drawing calls.',
+        'The Bay keeps its geography and landmarks, with more efficient scenery rendering. The 3D view uses a lower resolution on high-density displays while the interface stays sharp.',
+        'Rooms now default to eight players. If one is full, retry or create another named room.'
+      ] },
+      { title: 'Still in alpha', items: [
+        'Long network interruptions can still cause a visible position correction when the connection recovers.',
+        'The smaller room limit is a precaution while testing continues; it is not a performance guarantee for every device or connection.'
       ] }
     ]
   },

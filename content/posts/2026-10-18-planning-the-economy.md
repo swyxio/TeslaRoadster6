@@ -1,6 +1,6 @@
 Your first Tesland delivery gets you moving. A few more get you thinking: keep saving for the next city, buy a Cybercab that earns alongside you, or spend some cash making your car your own? We modeled those choices in five-minute slices, then followed drivers all the way from San Francisco to their first home—and, eventually, a shared launch to Mars.
 
-Today you can deliver around the Bay and contribute to a room's Mars mission. We want to grow that into an economy of owned cabs, property and a game-wide launch. The simulations use a proposed pay scale: current delivery pay is lower, so reaching these property prices will take longer until fares, prices and progression are rebalanced together.
+Deliveries, cash-based levels, saved vehicles and a game-wide Mars goal give the career its foundation. Next we want to add income-producing cabs and property. The simulations below explore how those investments could change the journey.
 
 ## The first big purchase
 
@@ -28,7 +28,9 @@ That dip in cash is the interesting part. Buying a cab makes you poorer for a wh
 
 We considered an XP system, then chose a simpler direction: **your current cash balance determines your level**. Earn enough and the Bay opens up. Spend enough and your level can fall until you earn it back. Achievements and purchases stay yours.
 
-Today, cities unlock from delivery count and lifetime delivery earnings. In the proposed system, a driver who spends below a city threshold can finish a job already in progress and take local contracts. Re-entering later may require rebuilding the balance. We should show the level a purchase will leave you with before you buy it.
+Oakland and Berkeley open at $10k, the Peninsula and East Bay at $50k, and San Jose at $250k. If spending drops your balance below a gate, you can leave the area; an inaccessible delivery is rerouted. The Vault shows the cash and level a purchase will leave you with.
+
+For the larger economy, we modeled these additional career goals:
 
 | Wallet | Level | What opens |
 | --- | ---: | --- |
@@ -40,11 +42,11 @@ Today, cities unlock from delivery count and lifetime delivery earnings. In the 
 | $2m | 6 | Property market and advanced contracts |
 | $4m / $8m | 7 / 8 | Luxury and estate contracts |
 
-Berkeley opens at $20k, San Mateo at $75k, Palo Alto at $100k and Mountain View at $150k. A first city unlock pays an achievement once, even if you drop a level and unlock it again.
+The model also proposes separate gates for Berkeley at $20k, San Mateo at $75k, Palo Alto at $100k and Mountain View at $150k. The current regional unlock achievements pay once, even if you drop a level and unlock the region again.
 
 ## From one cab to a fleet
 
-The first five Cybercabs cost **$25k, $50k, $100k, $200k and $400k**. Their ownership achievements return $5k, $10k, $20k, $40k and $80k respectively. Each active cab has the same $15k-per-hour base earning rate, so a bigger fleet pays more, while each successive purchase takes longer to earn back its price. The model pays cabs while their owner is playing.
+In the model, the first five Cybercabs cost **$25k, $50k, $100k, $200k and $400k**. Their ownership achievements return $5k, $10k, $20k, $40k and $80k respectively. Each active cab has the same $15k-per-hour base earning rate, so a bigger fleet pays more, while each successive purchase takes longer to earn back its price. The model pays cabs while their owner is playing.
 
 We want owners to find their cars on the map, follow them through the city, and put their name and colors on them. A driver and an owner should each be identifiable when they are different people. The garage holds personalized car configurations; dispatched Cybercabs can stay out earning.
 
@@ -53,7 +55,7 @@ We want owners to find their cars on the map, follow them through the city, and 
 <figcaption>You can already select and drive the Cybercab from the fleet menu.</figcaption>
 </figure>
 
-At a workshop today you can buy paint for $18 and decals for $12 or $18. The finish stays on that car for the session, and other players see your driver name above it.
+At a workshop you can buy paint for $18 and decals for $12 or $18. A saved driver keeps the finish for that vehicle model, and other players see the driver name above it.
 
 <figure>
 <img src="/blog/economy/workshop-current.jpg" alt="The current workshop shows a Roadster with mint paint and a speed stripe applied." loading="lazy">
@@ -65,7 +67,9 @@ At a workshop today you can buy paint for $18 and decals for $12 or $18. The fin
 <figcaption>Another driver's view of that same car.</figcaption>
 </figure>
 
-In the expanded economy, there's plenty to spend on before buying a house. Paint starts at $2k, decals and lettering at $5k, wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. Early vehicle and flight kits start at $10k, $20k and $40k. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
+The Vault near Stanford gives collectors an expensive destination today: two Lamborghinis, two Bugattis, a Ducati and a Kawasaki cost $1.5m–$12m each. Find the showroom to buy one, then collect it there or at a workshop. Each model and collection milestone has a one-off achievement; ownership and finishes stay with your saved driver.
+
+For the expanded economy, we modeled paint starting at $2k, decals and lettering at $5k, wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. Early vehicle and flight kits start at $10k, $20k and $40k. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
 
 ## A place of your own
 
@@ -183,15 +187,10 @@ We also tried rotating delivery contracts—two on-time jobs, three clean jobs, 
 <figcaption>A Fremont launch is the destination for the whole Bay. Concept art for the Starship finale.</figcaption>
 </figure>
 
-Imagine every delivery, cab fare and achievement moving the same giant meter. Once players together earn **$1 billion**, Starship and Super Heavy are ready at the Fremont spaceport. Everyone who helped is honored; players board for Mars and the room gets a proper finale. The earnings still belong to the players who made them.
+Every eligible delivery and achievement moves the shared Mars meter while the earnings stay in the driver's wallet. Once players together earn **$1 billion**, Starship and Super Heavy are ready at the Fremont spaceport. Drivers can board for Mars and continue exploring afterwards. We want a future finale to honor everyone who helped and give the season a proper sendoff.
 
 How long might that take? In a [community run](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/STARSHIP_ECONOMY.md#a-population-run-using-the-delivery-simulations) using our saver, cab, fleet and casual paths, **50 players each playing an hour a day** reach $100m on day 17, $500m on day 105 and $1 billion on day 223. Ten players on that schedule take 1,162 days; 250 players playing half an hour a day reach the goal on day 70. The run keeps the same players throughout and extends their later earning rates after 40 hours. Player activity and earning rates matter as much as the number on the meter.
 
-There's already a Mars mission in the game: open the mission menu, contribute from your session cash and watch your room's progress bar fill. At $1 billion, reach the Fremont spaceport to board. The room fund persists between drives. The game-wide earnings meter will need persistent identities and a reliable way to count each reward once.
-
-<figure>
-<img src="/blog/economy/mars-mission-menu.jpg" alt="The current Mars mission menu shows the room fund, contribution controls and boarding instructions for Fremont." loading="lazy">
-<figcaption>The mission menu in today's game. The future global meter will follow everyone's earnings automatically.</figcaption>
-</figure>
+Open the Mars mission menu to follow the global total. Earnings count automatically across rooms; there's no need to spend your cash to fund the launch.
 
 The full [economy design](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/ECONOMY.md), [simulation report](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/ECONOMY_FIVE_MINUTE.md) and [Starship model](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/STARSHIP_ECONOMY.md) have the details. Next comes the fun part: seeing which routes, upgrades and places players actually make their own.

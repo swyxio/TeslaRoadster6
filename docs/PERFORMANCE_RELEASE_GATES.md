@@ -14,19 +14,20 @@ varied from 0.28× to 1.79× simulated speed (5th–95th percentiles). These are
 busy-host observations, not controlled capacity measurements. Higher FPS alone
 does not fix packet-shaped motion.
 
-The current v31 path replays one 50 ms step per pending input submission and
-frequently disables prediction during flight or near traffic. Input sequence
-acknowledgement does not identify which server ticks held or replaced controls.
-Do not tune blend constants to conceal that mismatch or declare the camera-only
-correction a complete driving fix.
+The previous v31 path replayed a 50 ms step per pending submission and often
+disabled prediction near traffic or in flight. Its input acknowledgements did
+not identify which room ticks held or replaced controls. A camera-only correction
+did not fix that mismatch.
 
-The replacement must advance local motion independently of packet submission,
-reconcile against an explicit authoritative tick and bounded input history, and
-separate simulation correction from visual correction. Remote actors use their
-own snapshot interpolation. Server authority over collisions, rewards and money
-remains intact. A room incarnation, a player's connection and a controlled pose
-relocation are different lifetimes; reconnecting one player must not invalidate
-everyone's history. The wire definition belongs in [contracts](CONTRACTS.md).
+The v32 candidate schedules bounded inputs against authoritative ticks, replays
+the local car with nearby simulation, and separates the predicted simulation
+from display correction. Other vehicles use snapshot interpolation, with nearby
+vehicles presented on the predicted timeline when the path is safe. Collisions,
+rewards and money remain server-authoritative. Room incarnation, connection and
+controlled-pose relocation have distinct identifiers or revisions; reconnecting
+one player must not invalidate everyone else's history. See the wire definition
+in [contracts](CONTRACTS.md). This implementation does not by itself establish
+that the acceptance targets below are met.
 
 Keep the existing 20 Hz world step until measurements justify a change. Its
 adaptive substep count currently depends on the fastest entity in the world;

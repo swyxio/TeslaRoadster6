@@ -1,6 +1,6 @@
-# Implementation contracts · v34
+# Implementation contracts · v35
 
-These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the candidate implementation; the wallet integration is in progress. Correctness, gameplay, visual and performance verification remain pending. Planned features are labeled separately.
+These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the held candidate; local game and wallet recovery checks are recorded in [VERIFICATION.md](VERIFICATION.md), and the combined performance gate remains pending. Planned features are labeled separately.
 
 ## Ownership and dependency direction
 
@@ -35,20 +35,20 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v34
+## Wire protocol v35
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:34,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:35,capacity:number}`.
 
 Client messages:
 
 ```json
-{"type":"input","seq":1,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
+{"type":"input","seq":1,"targetTick":3,"roomEpoch":"00000000-0000-0000-0000-000000000000","controlRevision":0,"actionSeq":0,"input":{"throttle":1,"steer":0,"roll":0,"boost":false,"hover":false,"brake":false,"jump":1,"flip":0,"cockpit":true}}
 {"type":"sync","token":1}
-{"type":"interact"}
-{"type":"reset"}
-{"type":"autopilot"}
-{"type":"dome"}
-{"type":"selectVehicle","kind":"model-3"}
+{"type":"interact","actionSeq":1,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"reset","actionSeq":2,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"autopilot","actionSeq":3,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"dome","actionSeq":4,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"selectVehicle","kind":"model-3","actionSeq":5,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
 {"type":"vehicleStyle","category":"paint","choice":"mint","requestId":2}
 {"type":"ota","enabled":true,"requestId":2}
@@ -57,23 +57,25 @@ Client messages:
 {"type":"parking","action":"queue"}
 {"type":"parking","action":"start"}
 {"type":"parking","action":"leave"}
-{"type":"race","action":"join","courseId":"short"}
+{"type":"race","action":"join","courseId":"short","actionSeq":6,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"race","action":"start","courseId":"oval"}
 {"type":"race","action":"leave","courseId":"short"}
-{"type":"minigame","game":"park"}
-{"type":"destination","x":-120,"z":60,"requestId":3}
+{"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"mars","action":"board","requestId":5}
 {"type":"identity","code":"<recovery-code>","requestId":6}
 {"type":"identity","code":null,"requestId":9}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
-{"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8}
+{"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:34, capacity:number}
-{type:"state", world:World, inputAck:number, sync?:number}
+{type:"welcome", id:string, version:35, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
+{type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
+{type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"vehicleStyleResult", requestId:number, category:"paint"|"decal", choice:string, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -84,21 +86,29 @@ Server messages:
 {type:"luxuryResult", requestId:number, action:"buy"|"collect", vehicle:LuxuryVehicleId, ok:boolean, reason?:string, awards?:AchievementId[]}
 ```
 
-Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient’s complete filtered JSON. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz with a strictly increasing positive sequence; the server keeps the latest intent and acknowledges the latest sequence actually used in a physics tick. The same input can run for multiple ticks, and intermediate sequences may be skipped. `sync` acknowledges a barrier on a regular snapshot after that driver’s preceding economy operations settle; multiple requests are coalesced and do not force extra snapshots or physics ticks.
+Welcome precedes the initial snapshot. The room simulates one fixed 50 ms outer step per completed tick and sends snapshots every two ticks. `tick=T` is the world *after* step T; it advances only when a step completes, independent of wall time. `roomEpoch` identifies one room incarnation: it changes after the room empties and resets, not when a single driver reconnects. The WebSocket is that driver's connection generation. `substeps` is the count used by the most recently completed step (1 at tick zero). The authoritative room retains the adaptive global maximum-speed substep policy. Presentation replay may override its local count, but a last-known count cannot predict unseen traffic, collisions or changing physics.
 
-For local presentation only, the client replays at most three unacknowledged inputs with shared physics from each snapshot. It stops prediction when snapshots are stale, input backlog is excessive, another body is close, the vehicle is airborne or on a special surface, or an action is waiting for its `sync` barrier. A new vehicle or discontinuity clears pending preview. The server alone owns collisions, position, pickups, races, cash and HUD state; this short preview can be corrected when the next snapshot arrives, particularly when inputs are batched or reused. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
+Input frames carry a strictly increasing positive `seq`, the room epoch, the driver's current `controlRevision`, the latest sent `actionSeq` (initially zero), and the intended `targetTick`. The server accepts continuous controls only for T+1 through T+8. A newer sequence replaces the same slot and supersedes older slots at later ticks, preventing old acceleration from returning after a newer release. A missing slot holds the last controls for at most six completed ticks, then neutralizes. A 300 ms wall-clock watchdog also clears stale queued and held controls on the next callback; an edge-only frame cannot refresh the continuous-control watchdog. The rejected frame gets `inputRejected`; a sequence is receipt ordering, not elapsed time or an execution acknowledgement. `sync` tags a regular snapshot after that driver's preceding economy operations settle; requests are coalesced.
+
+Jump and flip are modulo-2^31 monotonic per-connection press counters. The scheduler recognizes new counters separately from held levels; repeated or backward counters cannot fire again. It reserves successive ticks for distinct same-kind edges, within T+1 through T+8. A slightly late edge (up to three ticks) may be rescheduled even though its continuous controls are rejected; older, far-future and overflow edges expire. Each pending edge expires after 300 ms wall time, independently of later input. `inputEdge` is private to the owner: `accepted` or `rescheduled` reports an edge bridged across an old revision before its level rejection, and a later terminal outcome reports whether it was processed, expired or superseded. Counter gaps do not invent intermediate presses. The simulation consumes an edge even if the car is secured on the ferry or the action is otherwise ineffective; an edge invalidated before the relocated car consumes it is superseded.
+
+Every potentially invalidating action carries a strictly increasing positive `actionSeq` and a synchronous `edgeBaseline` of the current counters; an invalid or backward baseline closes the socket. The server records the sequence even when cooldown or game rules reject the action, but only an accepted action cancels pending controls and marks its baseline seen. Input continues while `sync` waits. After an accepted action, an input with an older revision may still schedule new edges if its action sequence matches the latest processed action and its revision is at least `edgeFloorRevision`; its levels are rejected. Autonomous water or ferry relocation raises the floor to the new revision, closing that bridge even after later actions. A wrong room epoch is rejected before modifying the scheduler. Clients capture separate presses in a bounded queue rather than inferring them from a counter gap.
+
+The owner-only `control` field has `revision`, `actionSeq`, `edgeFloorRevision`, `receivedSeq`, `appliedSeq`, `held`, `heldUntilTick`, `queued` (at most eight `{seq,targetTick,input}` slots) and `jump`/`flip` (`seen`, `processed` and at most eight pending `{id,targetTick}` entries). `receivedSeq` means an ordered frame for this epoch was received, including rejected frames; `appliedSeq` identifies the most recent continuous slot actually run. It is not a duration. The snapshot's T makes all steps through T final; clients replay only later ticks. Reset attempts, accepted teleport/minigame/race placement, vehicle takeover or replacement, autopilot/destination changes, water recovery and forced ferry-apron relocation clear that driver's queue and increment `control.revision`. The separate top-level `poseRevision` increments when the controlled entity changes or its pose changes by more than 1 mm or 0.0001 radians, or on a reported water/ferry relocation. This prevents an autopilot change or floating-point noise during a no-op reset from forcing a camera cut. A revision change for one driver never resets another's. Socket closure clears only that driver's session.
+
+Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Command queues and edge metadata are sent only to their owner. The server alone owns collisions, position, pickups, races, cash and HUD state. Prediction is presentation only and must reconcile authoritative snapshots, including unknown contacts and special surfaces. The client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, a version bump and integration tests; do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The simulation decides membership and applies lift, speed and air. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v34 adds an explicit initial identity decision to wallet identity, owner-only wallet views and Vault purchase/collection messages. After welcome, clients send `identity` with a recovery code or `null` for a guest. The server pauses that player until the decision and any recovery resolve, without holding the rest of the room. An initial guest decision is accepted in socket order; a saved-driver client waits for the matching result and its subsequent snapshot before enabling play. The server validates visits, shop discounts and purchases; clients cannot claim visits or set prices. Server and client share world geometry, support queries and match schema. This version is a candidate pending integration and performance verification.
+After welcome, clients send `identity` with a recovery code or `null` for a guest. The server pauses that player's controls, progression, pickups and station or Dome air refills until the decision and any recovery resolve, without holding the rest of the room. A paused driver does not block another driver from collecting a pickup. Existing physics and world-time subscription periods continue during recovery. An initial guest decision is accepted in socket order; a saved-driver client waits for the matching result and its subsequent snapshot before enabling play. The server validates visits, shop discounts and purchases; clients cannot claim visits or set prices.
 
 The map includes a static, collision-backed monument base in the Marin headlands. Its footprint and landable roof height come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculpture above it is decorative. Rendering and minimap markers use the same position.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names, Dome travel, mini-game entry and mini-game start/leave bypass the action cooldown but remain subject to the socket rate limit and simulation validation. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403. A full room accepts the WebSocket then closes it with application code 4003; if no safe spawn is available it closes with 4002 without consuming a seat. Both conditions are retryable and distinguishable from a connection failure. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
-Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer request ID; corresponding results are sent only to the requester, including cooldown rejections where applicable. A null identity code cancels an older pending attachment; switching an already connected driver requires a rejoin. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
+Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer request ID; corresponding results are sent only to the requester, including cooldown rejections where applicable. After a saved recovery is requested, a null identity choice leaves the driver paused until rejoin. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Capacity: `MAX_PLAYERS`, default64, clamped2–128; this is a configuration bound, not a measured capacity. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. The candidate adds per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object for wallet and income accounting. Input and physics are designed to proceed without waiting on profile RPCs. Do not treat the pending isolation and performance checks as measurements of deployed capacity.
+Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and preview limit is eight; higher settings require explicit load experiments, and eight is not a validated capacity claim. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. The candidate adds per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object for wallet and income accounting. Input and physics are designed to proceed without waiting on profile RPCs. Do not treat the pending isolation and performance checks as measurements of deployed capacity.
 
 ## Wallet and ownership transaction boundary
 
@@ -187,15 +197,15 @@ The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games
 
 ## Shops and upgrades contract
 
-`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay or have an active OTA subscription before requesting `rocket|economy|tank|motor|armor|service`. The candidate room flow validates the driver, vehicle, location, cash and prerequisites and waits for the wallet transaction before publishing paid changes. A personal vehicle’s purchased configuration is stored by vehicle ID; free Rocket pickups are session-only. Green repair and amber air diamonds award $5 and use a room-economy reservation. The pending wallet implementation must be tested for recovery, retries and pickup contention. See [UPGRADES.md](UPGRADES.md).
+`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay or have an active OTA subscription before requesting `rocket|economy|tank|motor|armor|service`. The room validates the driver, vehicle, location, cash and prerequisites and waits for the wallet transaction before publishing paid changes. A personal vehicle’s purchased configuration is stored by vehicle ID; free Rocket pickups are session-only. Green repair and amber air diamonds award $5 and use a room-economy reservation. See [UPGRADES.md](UPGRADES.md).
 
 ## Delivery and police contract
 
-`shared/vehicle-style.ts` defines three $18 paints and two decals ($12 and $18), plus free original paint and decal removal. The `vehicleStyle` request carries a category, choice and request ID; the candidate room validates the action and commits the personal vehicle configuration before publishing the result. Finishes replicate to other drivers; the workshop offers a preview and keyboard/touch buttons. Saved configuration is keyed by vehicle kind in the candidate profile. Other drivers’ cars show the current driver’s room name; your own label is hidden locally. Cached materials remain shared. The wallet and recovery flow need verification.
+`shared/vehicle-style.ts` defines three $18 paints and two decals ($12 and $18), plus free original paint and decal removal. The `vehicleStyle` request carries a category, choice and request ID; the room validates the action and commits the personal vehicle configuration before publishing the result. Finishes replicate to other drivers; the workshop offers a preview and keyboard/touch buttons. Saved configuration is keyed by vehicle kind in the driver profile. Other drivers’ cars show the current driver’s room name; your own label is hidden locally. Cached materials remain shared.
 
 `shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. Pickup has its own active-time estimate based on distance from where the order began; reaching the restaurant early pays up to 40% of base fare immediately. The delivery estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the pickup and delivery estimates and leaderboard clock pause. `lastReward` contains the most recent positive pickup, delivery or research award with a monotonically increasing per-player ID; a renderer may celebrate each new ID once, but cannot create payouts. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
 
-A new guest starts with $2,500 at level 0. Current cash sets the level: Oakland/Berkeley at $10,000, Peninsula/East Bay at $50,000, San Jose at $250,000, then levels 4–8 at $500,000, $1 million, $2 million, $4 million and $8 million. `earned` tracks positive delivery income separately; cash awards, purchases and tickets can change level. `LEVELS`, `ACCESS_BOUNDARIES` and `requiredLevelAt(x,z)` define region access. The simulation blocks entry into locked regions while allowing directional exit after a level drop, and reroutes an inaccessible order. Rocket Dome and North Bay Playground remain open at all levels; the SF parking playground has a level-zero pocket. The candidate profile restores cash and progress for a recovered saved identity; recovery is under verification.
+A new guest starts with $2,500 at level 0. Current cash sets the level: Oakland/Berkeley at $10,000, Peninsula/East Bay at $50,000, San Jose at $250,000, then levels 4–8 at $500,000, $1 million, $2 million, $4 million and $8 million. `earned` tracks positive delivery income separately; cash awards, purchases and tickets can change level. `LEVELS`, `ACCESS_BOUNDARIES` and `requiredLevelAt(x,z)` define region access. The simulation blocks entry into locked regions while allowing directional exit after a level drop, and reroutes an inaccessible order. Rocket Dome and North Bay Playground remain open at all levels; the SF parking playground has a level-zero pocket. The profile restores cash and progress for a recovered saved identity.
 
 Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m, when the player is ticketed, or when the player enters the protected island/ferry area or dome. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 

@@ -1,19 +1,19 @@
 // Local Wrangler fixture only. The production room, messages, timer and
 // snapshots are unchanged; only the first player's initial pose is staged.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
 import { ISLAND_JUMPS } from '../../shared/island-jumps';
 import type { World } from '../../shared/game';
 
 export default worker;
-export { GlobalChat };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
 
 export class GameRoom extends ProductionGameRoom {
-  fetch(): Response {
+  override async fetch(request:Request): Promise<Response> {
     // TypeScript's private field is intentionally accessed only by this
     // test-only subclass, rather than exposing a production debug endpoint.
     const world = Reflect.get(this, 'world') as World;
     const stageDriver = world.players.length === 0;
-    const response = super.fetch();
+    const response = await super.fetch(request);
     if (stageDriver && response.status === 101) {
       const player = world.players[0];
       const car = world.entities.find(entity => entity.id === player?.entityId);

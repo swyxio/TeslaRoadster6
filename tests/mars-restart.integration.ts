@@ -21,7 +21,7 @@ async function post(path:string,value:unknown){const res=await fetch(base+'/__ma
 try{
   child=start();await ready();
   const a=connect(`ws://127.0.0.1:${p}/api/room/mars-test`),b=connect(`ws://127.0.0.1:${p}/api/room/mars-test`);sockets.push(a.socket,b.socket);
-  await until(()=>!!a.id()&&!!b.id()&&a.world()?.players.length===2,'fixture players connected');
+  await until(()=>!!a.id()&&!!b.id()&&a.events.some(e=>e.type==='identityResult'&&e.ok)&&b.events.some(e=>e.type==='identityResult'&&e.ok)&&a.world()?.players.length===2,'fixture guest players connected');
   const aCash=a.world()!.players.find(p=>p.id===a.id())!.delivery.cash;
   assert.equal(await post('credit',{id:'a',amount:600_000_000}),600_000_000);
   assert.equal(await post('credit',{id:'a',amount:600_000_000}),600_000_000,'repeated earnings do not count twice');

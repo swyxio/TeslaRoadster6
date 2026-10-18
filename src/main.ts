@@ -104,8 +104,9 @@ for(const id of teslaIds){const option=document.createElement('option');option.v
 startingSelect.value=selectedVehicle;
 function updateStarting(){selectedVehicle=startingSelect.value as VehicleId;const spec=VEHICLES[selectedVehicle];$('starting-spec').textContent=`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel':'Front-wheel'} steering · ${spec.airThrusters?'Air thrusters':'Autonomous cruise'}`;}
 startingSelect.onchange=()=>{updateStarting();startingRideChanged=true;};updateStarting();
-const session = new Session();
 const controls = new Controls();
+const session = new Session(undefined,()=>controls.edgeCounters());
+controls.onEdge=(kind,id)=>session.queueEdge(kind,id);
 const audio = new GameAudio();
 const soundDialog=$<HTMLDialogElement>('sound-dialog');
 const radio = new Radio(refreshRadio);
@@ -892,7 +893,7 @@ scene.start(dt=>{
     if(pendingLuxury?.source==='workshop')$('shop-feedback').textContent='Disconnected. Rejoin to collect your vehicle.';
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
-  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world,session.takePresentationSnap(),session.takeCameraSnap());
+  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive);
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;

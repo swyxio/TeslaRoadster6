@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join as joinPath, resolve } from 'node:path';
 import { LUXURY_CATALOG, luxuryPurchaseAwards, type LuxuryVehicleId } from '../shared/luxury';
 import { NEUTRAL } from '../shared/game';
+import { RoomInputClient } from './room-input-client';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
 
 const FUNDS = 20_000_000;
@@ -90,16 +91,29 @@ function success(outcome:DriverOutcome|null):asserts outcome is Extract<DriverOu
 type Message={type:string;[key:string]:any};
 function connect(path:string,guest=false) {
   const socket=new WebSocket(base.replace(/^http/,'ws')+path),messages:Message[]=[];
+  const input=new RoomInputClient(socket);
   sockets.push(socket);
   socket.addEventListener('message',event=>{
     const message=JSON.parse(String(event.data)) as Message;
+    input.observe(message);
     if(guest&&message.type==='welcome')socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));
     Object.defineProperty(message,'_receivedAt',{value:performance.now()});
     messages.push(message);
   });
-  return {socket,messages,last(type:string){return messages.filter(message=>message.type===type).at(-1);}};
+  return {socket,input,messages,last(type:string){return messages.filter(message=>message.type===type).at(-1);}};
 }
-function send(client:ReturnType<typeof connect>,message:object){client.socket.send(JSON.stringify(message));}
+function send(client:ReturnType<typeof connect>,message:object){
+  const value=message as Message;
+  if(value.type==='input'){client.input.send(value.input,{seq:value.seq});return;}
+  if(value.type==='luxury'&&value.action==='collect'){client.input.action({type:'luxury',action:'collect',vehicle:value.vehicle,requestId:value.requestId});return;}
+  client.socket.send(JSON.stringify(message));
+}
+const applied=(message?:Message)=>message?.control?.appliedSeq??0;
+async function postIdentityState(client:ReturnType<typeof connect>,requestId:number){
+  const result=client.messages.find(message=>message.type==='identityResult'&&message.requestId===requestId&&message.ok);
+  assert.ok(result,`identity ${requestId} succeeded`);
+  await until(()=>!!client.last('state')&&client.last('state')!._receivedAt>result._receivedAt,`control snapshot after identity ${requestId}`);
+}
 type TimingSample={elapsedMs:number;worldSeconds:number;worldRate:number;maxSnapshotGapMs:number;maxAckGapMs:number;maxInputLatencyMs:number;inputLatenciesMs:number[];snapshots:number;acks:number;lastSeq:number};
 /** Sample the actual observer socket and input acknowledgements at 10 Hz. */
 async function measureRoom(client:ReturnType<typeof connect>,startSeq:number,durationMs=1250):Promise<TimingSample> {
@@ -109,17 +123,17 @@ async function measureRoom(client:ReturnType<typeof connect>,startSeq:number,dur
   const timer=setInterval(()=>{sent.set(++seq,performance.now());send(client,{type:'input',seq,input:NEUTRAL});},100);
   try { await pause(durationMs); } finally { clearInterval(timer); }
   const end=performance.now();
-  await until(()=>client.last('state')?.inputAck>=seq,'sample input acknowledgements');
+  await until(()=>applied(client.last('state'))>=seq,'sample input acknowledgements');
   const allStates=client.messages.slice(startIndex).filter(message=>message.type==='state');
   const states=allStates.filter(message=>message._receivedAt<=end);
   const gaps=(times:number[])=>Math.max(...times.slice(1).map((value,index)=>value-times[index]));
   const snapshotTimes=[start,...states.map(state=>state._receivedAt as number),end];
   let lastAck=startSeq;
   const ackTimes=[start];
-  for(const state of states)if(state.inputAck>lastAck){lastAck=state.inputAck;ackTimes.push(state._receivedAt as number);}
+  for(const state of states)if(applied(state)>lastAck){lastAck=applied(state);ackTimes.push(state._receivedAt as number);}
   ackTimes.push(end);
   const inputLatenciesMs=[...sent].map(([sentSeq,sentAt])=>{
-    const acknowledged=allStates.find(state=>state.inputAck>=sentSeq);
+    const acknowledged=allStates.find(state=>applied(state)>=sentSeq);
     assert.ok(acknowledged,`input ${sentSeq} has an acknowledgement`);
     return (acknowledged._receivedAt as number)-sentAt;
   });
@@ -149,6 +163,8 @@ async function join(room:string,code:string) {
   await until(()=>client.messages.some(message=>message.type==='identityResult'&&message.requestId===1),'saved wallet attachment');
   const result=client.messages.find(message=>message.type==='identityResult'&&message.requestId===1)!;
   assert.equal(result.ok,true,JSON.stringify(result));
+  await postIdentityState(client,1);
+  await until(()=>client.input.ready,'saved driver control snapshot');
   return client;
 }
 async function barrier(client:ReturnType<typeof connect>,token:number){
@@ -426,21 +442,29 @@ try {
   await barrier(guest,201);
   const guestCash=guest.last('wallet')!.cash as number, guestEarned=guest.last('wallet')!.earned as number;
   const guestCode=await savedCode(`Guest${randomUUID().slice(0,6)}`);
+  await until(()=>guest.input.active,'guest controls ready before saving');
+  const recoveryRevision=guest.input.control!.revision;
+  const queuedBeforeRecovery=guest.input.send({...NEUTRAL,throttle:1},{targetTick:guest.input.tick+7});
+  await until(()=>guest.input.control?.queued.some(slot=>slot.seq===queuedBeforeRecovery)??false,'control queued before identity binding');
   send(guest,{type:'identity',code:guestCode,requestId:2});
   await until(()=>guest.messages.some(message=>message.type==='identityResult'&&message.requestId===2),'first guest binding');
   assert.equal(guest.messages.find(message=>message.type==='identityResult'&&message.requestId===2)!.ok,true);
+  await until(()=>(guest.input.control?.revision??0)>recoveryRevision,'identity binding invalidates queued controls');
+  assert.ok(!guest.input.control!.queued.some(slot=>slot.seq===queuedBeforeRecovery));
+  assert.ok(guest.input.control!.appliedSeq<queuedBeforeRecovery,'queued movement did not run across identity binding');
+  assert.equal(guest.input.control!.held.throttle,0);
   assert.equal(guest.last('wallet')!.cash,guestCash);assert.equal(guest.last('wallet')!.earned,guestEarned);
   // Checkpoint a partially completed order and paid OTA just before a quick reconnect.
   send(guest,{type:'ota',enabled:true,requestId:3});
   await until(()=>guest.messages.some(message=>message.type==='otaResult'&&message.requestId===3),'guest OTA activation');
   assert.equal(guest.messages.find(message=>message.type==='otaResult'&&message.requestId===3)!.ok,true);
-  send(guest,{type:'input',seq:1,input:{...NEUTRAL,steer:1}});
+  send(guest,{type:'input',seq:queuedBeforeRecovery+1,input:{...NEUTRAL,steer:1}});
   await until(()=>{
     const state=guest.last('state'),player=state?.world.players.find((item:Message)=>item.id===guestPlayer);
     return player?.delivery.order.stage==='dropoff'&&player.delivery.order.elapsed>=0.25&&player.delivery.ota.active;
   },'partial delivery and OTA timer advance');
-  send(guest,{type:'input',seq:2,input:NEUTRAL});
-  await until(()=>guest.last('state')?.inputAck===2,'guest stops steering');
+  send(guest,{type:'input',seq:queuedBeforeRecovery+2,input:NEUTRAL});
+  await until(()=>applied(guest.last('state'))===queuedBeforeRecovery+2,'guest stops steering');
   const oldState=guest.last('state')!,oldPlayer=oldState.world.players.find((item:Message)=>item.id===guestPlayer);
   const elapsedBefore=oldPlayer.delivery.order.elapsed as number;
   const otaBefore=oldPlayer.delivery.ota.renewAt-oldState.world.time;
@@ -478,6 +502,31 @@ try {
   const switched=await join(switchRoom,different.code);
   assert.ok(switched.messages.some(message=>message.type==='wallet'&&message.cash===beforeDifferent.progress.cash),'rejoining successfully restores the different wallet');
 
+  // A pending identity cannot passively claim a free shared rocket pad.
+  const rocketRoom=`rocket-wait-${randomUUID().slice(0,8)}`;
+  const rocketWaiter=connect(`/api/room/${rocketRoom}`);
+  await until(()=>!!rocketWaiter.last('state')&&!!rocketWaiter.last('welcome'),'rocket waiter joins');
+  const rocketPlayer=rocketWaiter.last('welcome')!.id as string;
+  await rpc('rocket-pickup',{room:rocketRoom,playerId:rocketPlayer,pickupId:'rocket-0'});
+  const rocketTime=rocketWaiter.last('state')!.world.time;
+  await until(()=>rocketWaiter.last('state')!.world.time>rocketTime+.5,'room advances with identity pending');
+  let rocketWorld=rocketWaiter.last('state')!.world;
+  assert.equal(rocketWorld.pickups.find((pickup:Message)=>pickup.id==='rocket-0').active,true,'pending driver does not consume the pad');
+  assert.equal(rocketWorld.entities.find((entity:Message)=>entity.driver===rocketPlayer).upgrades.rocket,false,'pending driver gains no rocket');
+  assert.equal(rocketWorld.entities.find((entity:Message)=>entity.driver===rocketPlayer).air,40,'pending driver receives no rocket refill');
+  send(rocketWaiter,{type:'identity',code:null,requestId:1});
+  await until(()=>rocketWaiter.messages.some(message=>message.type==='identityResult'&&message.requestId===1&&message.ok),'rocket driver chooses guest');
+  try {
+    await until(()=>{
+      rocketWorld=rocketWaiter.last('state')!.world;
+      const car=rocketWorld.entities.find((entity:Message)=>entity.driver===rocketPlayer);
+      return rocketWorld.pickups.find((pickup:Message)=>pickup.id==='rocket-0')?.active===false&&car?.upgrades.rocket===true&&car.air===100;
+    },'identified driver can collect the same pad',4_000);
+  } catch(error) {
+    throw new Error(`${error}: ${JSON.stringify({pickup:rocketWorld.pickups.find((pickup:Message)=>pickup.id==='rocket-0'),car:rocketWorld.entities.find((entity:Message)=>entity.driver===rocketPlayer),identity:rocketWaiter.last('identityResult')})}`);
+  }
+  rocketWaiter.socket.close();
+
   // From the first welcome, a driver awaiting a decision or a saved profile
   // cannot collect a landmark, drive, or spend while the room keeps running.
   const waitingDriver=await savedDriver(`Wait${randomUUID().slice(0,6)}`);
@@ -492,7 +541,7 @@ try {
   await until(()=>waiting.messages.some(message=>message.type==='otaResult'&&message.requestId===10),'pre-decision purchase rejected');
   assert.equal(waiting.messages.find(message=>message.type==='otaResult'&&message.requestId===10)!.ok,false);
   await until(()=>waiting.last('state')!.world.time>waitingTime+.4,'world ticks before the identity decision');
-  assert.equal(waiting.last('state')!.inputAck,0,'pre-decision controls are not applied');
+  assert.equal(applied(waiting.last('state')),0,'pre-decision controls are not applied');
   assert.equal(waiting.last('wallet')!.cash,2_500);
   assert.ok(!waiting.last('wallet')!.unlocked.includes('luxury-visit'),'nearby landmark does not award before the decision');
 
@@ -507,16 +556,48 @@ try {
     send(waiting,{type:'ota',enabled:true,requestId:12});
     await until(()=>waiting.messages.some(message=>message.type==='otaResult'&&message.requestId===12),'purchase rejected during recovery');
     assert.equal(waiting.messages.find(message=>message.type==='otaResult'&&message.requestId===12)!.ok,false);
-    await until(()=>waiting.last('state')!.world.time>duringTime+.4&&observer.last('state')!.inputAck>0,'other player and world continue during held recovery');
-    assert.equal(waiting.last('state')!.inputAck,0);
+    await until(()=>waiting.last('state')!.world.time>duringTime+.4&&applied(observer.last('state'))>0,'other player and world continue during held recovery');
+    assert.equal(applied(waiting.last('state')),0);
     assert.equal(waiting.last('wallet')!.cash,2_500);
     assert.ok(!waiting.last('wallet')!.unlocked.includes('luxury-visit'));
     await rpc('release-acquire',{driverId:waitingDriver.id});
     await until(()=>waiting.messages.some(message=>message.type==='identityResult'&&message.requestId===11&&message.ok),'held recovery completes');
     assert.ok(waiting.messages.some(message=>message.type==='wallet'&&message.cash===FUNDS),'saved balance is restored');
+    await postIdentityState(waiting,11);
     send(waiting,{type:'input',seq:3,input:NEUTRAL});
-    await until(()=>waiting.last('state')!.inputAck===3,'recovered driver can play');
+    await until(()=>applied(waiting.last('state'))===3,'recovered driver can play');
   } finally { clearInterval(observerTimer);await rpc('release-acquire',{driverId:waitingDriver.id}).catch(()=>{}); }
+
+  // A queued frame and active autonomous drive must not cross a held switch
+  // from a guest into an already saved profile.
+  const movingDriver=await savedDriver(`Moving${randomUUID().slice(0,6)}`);
+  const movingRoom=`moving-${randomUUID().slice(0,8)}`;
+  const moving=connect(`/api/room/${movingRoom}`,true);
+  await until(()=>moving.input.active&&!!moving.last('state'),'moving guest is ready');
+  const movingId=moving.last('welcome')!.id as string;
+  const movingCar=()=>moving.last('state')?.world.entities.find((entity:Message)=>entity.driver===movingId);
+  await rpc('arm-acquire',{driverId:movingDriver.id});
+  try {
+    moving.input.action({type:'autopilot'});
+    await until(()=>movingCar()?.autopilot===true,'autopilot starts before recovery');
+    const beforeRevision=moving.input.control!.revision;
+    const target=moving.input.tick+7;
+    const queued=moving.input.send({...NEUTRAL,throttle:1},{targetTick:target});
+    await until(()=>moving.input.control?.queued.some(slot=>slot.seq===queued)??false,'future movement is queued before recovery');
+    send(moving,{type:'identity',code:movingDriver.code,requestId:230});
+    await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:movingDriver.id})).held,'recovery holds the new profile');
+    await until(()=>(moving.input.control?.revision??0)>beforeRevision&&movingCar()?.autopilot===false,'recovery clears control and autonomous drive');
+    assert.ok(!moving.input.control!.queued.some(slot=>slot.seq===queued),'future movement is removed during recovery');
+    assert.equal(moving.input.control!.held.throttle,0);
+    await rpc('release-acquire',{driverId:movingDriver.id});
+    await until(()=>moving.messages.some(message=>message.type==='identityResult'&&message.requestId===230&&message.ok),'held moving recovery completes');
+    await postIdentityState(moving,230);
+    await until(()=>moving.input.tick>target+2,'room advances beyond the old target after recovery');
+    assert.ok(moving.input.control!.appliedSeq<queued,'old queued movement did not execute after recovery');
+    assert.equal(movingCar()?.autopilot,false,'recovered car remains out of autonomous mode');
+    const resumed=moving.input.send(NEUTRAL);
+    await until(()=>(moving.input.control?.appliedSeq??0)>=resumed,'recovered driver can send a fresh control');
+  } finally {await rpc('release-acquire',{driverId:movingDriver.id}).catch(()=>{});moving.socket.close();}
 
   // A timed-out/closed room must not install a late acquisition, and retrying
   // the same saved driver must not be trapped behind its abandoned fence.
@@ -547,19 +628,20 @@ try {
   send(invalid,{type:'ota',enabled:true,requestId:21});
   await until(()=>invalid.messages.some(message=>message.type==='otaResult'&&message.requestId===21),'failed recovery rejects spending');
   assert.equal(invalid.messages.find(message=>message.type==='otaResult'&&message.requestId===21)!.ok,false);
-  assert.equal(invalid.last('state')!.inputAck,0);
+  assert.equal(applied(invalid.last('state')),0);
   send(invalid,{type:'identity',code:null,requestId:22});
   await until(()=>invalid.messages.some(message=>message.type==='identityResult'&&message.requestId===22),'guest rejoin is required after failure');
   assert.equal(invalid.messages.find(message=>message.type==='identityResult'&&message.requestId===22)!.ok,false);
   send(invalid,{type:'input',seq:2,input:NEUTRAL});
-  await pause(200);assert.equal(invalid.last('state')!.inputAck,0,'null cannot resume a failed recovery');
+  await pause(200);assert.equal(applied(invalid.last('state')),0,'null cannot resume a failed recovery');
   invalid.socket.close();
   const replacementGuest=connect(`/api/room/${waitingRoom}`,true);
   await until(()=>replacementGuest.messages.some(message=>message.type==='identityResult'&&message.ok),'new guest joins explicitly');
   send(replacementGuest,{type:'identity',code:null,requestId:23});
   await until(()=>replacementGuest.messages.some(message=>message.type==='identityResult'&&message.requestId===23&&message.ok),'repeated guest decision is harmless');
+  await until(()=>replacementGuest.input.ready,'guest control snapshot');
   send(replacementGuest,{type:'input',seq:1,input:NEUTRAL});
-  await until(()=>replacementGuest.last('state')?.inputAck===1,'new guest can play');
+  await until(()=>applied(replacementGuest.last('state'))===1,'new guest can play');
   assert.equal(replacementGuest.last('wallet')!.cash,2_500,'rejected action was not replayed');
 
   // A newer recovery supersedes a held request without exposing the old wallet.
@@ -573,14 +655,15 @@ try {
     await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:firstChoice.id})).held,'first choice is held');
     send(changing,{type:'identity',code:secondChoice.code,requestId:31});
     send(changing,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
-    await pause(200);assert.equal(changing.last('state')!.inputAck,0);
+    await pause(200);assert.equal(applied(changing.last('state')),0);
     await rpc('release-acquire',{driverId:firstChoice.id});
     await until(()=>changing.messages.some(message=>message.type==='identityResult'&&message.requestId===31&&message.ok),'newer choice attaches');
+    await postIdentityState(changing,31);
     assert.ok(!changing.messages.some(message=>message.type==='identityResult'&&message.requestId===30),'superseded request never confirms');
     assert.ok(changing.messages.some(message=>message.type==='wallet'&&message.cash===7_000_000),'only the newer wallet is installed');
     assert.ok(!changing.messages.some(message=>message.type==='wallet'&&message.cash===FUNDS),'old wallet is never exposed');
     send(changing,{type:'input',seq:2,input:NEUTRAL});
-    await until(()=>changing.last('state')!.inputAck===2,'newer identity is usable');
+    await until(()=>applied(changing.last('state'))===2,'newer identity is usable');
   } finally { await rpc('release-acquire',{driverId:firstChoice.id}).catch(()=>{}); }
 
   // Two recoveries race after the first fence was installed but its reply was delayed.
@@ -603,6 +686,7 @@ try {
     const usable=usableClients();
     assert.equal(usable.length,1);
     const winner=usable[0],stale=winner===firstRecovery?secondRecovery:firstRecovery;
+    await postIdentityState(winner,1);
     if(stale.socket.readyState===WebSocket.OPEN){
       const staleRoom=new URL(stale.socket.url).pathname.split('/').at(-1)!;
       await rpc('position',{room:staleRoom,playerId:stale.last('welcome')!.id,side:-1});
@@ -748,7 +832,14 @@ try {
   await pause(450);
   assert.equal((await luxury(aliceRoom,'buy','ducati-panigale-v4',12)).ok,false,'a duplicate in-room purchase is rejected');
   await pause(450);
+  const collectionRevision=aliceRoom.input.control!.revision;
+  const queuedBeforeCollection=aliceRoom.input.send({...NEUTRAL,throttle:1},{targetTick:aliceRoom.input.tick+7});
+  await until(()=>aliceRoom.input.control?.queued.some(slot=>slot.seq===queuedBeforeCollection)??false,'control queued before collection');
   assert.equal((await luxury(aliceRoom,'collect','ducati-panigale-v4',13)).ok,true,'owner collects their car');
+  await until(()=>(aliceRoom.input.control?.revision??0)>collectionRevision,'collection invalidates the previous controls');
+  assert.ok(!aliceRoom.input.control!.queued.some(slot=>slot.seq===queuedBeforeCollection));
+  assert.ok(aliceRoom.input.control!.appliedSeq<queuedBeforeCollection,'queued throttle did not carry onto the collected vehicle');
+  assert.equal(aliceRoom.input.control!.held.throttle,0);
   await until(()=>{
     const world=aliceRoom.last('state')?.world,player=world?.players.find((item:Message)=>item.id===alicePlayer);
     return world?.entities.some((entity:Message)=>entity.id===player?.entityId&&entity.kind==='ducati-panigale-v4');
@@ -757,12 +848,12 @@ try {
   const collected=collectedWorld.entities.find((entity:Message)=>entity.id===collectedId);
   assert.equal(collected.owner,alicePlayer);assert.equal(collected.driver,alicePlayer);
   await until(()=>bobRoom.last('state')?.world.entities.some((entity:Message)=>entity.id===collectedId&&entity.owner===alicePlayer&&entity.driver===alicePlayer),'observer sees the owned, driven model');
-  send(aliceRoom,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
+  send(aliceRoom,{type:'input',seq:queuedBeforeCollection+1,input:{...NEUTRAL,throttle:1}});
   await until(()=>{
     const car=aliceRoom.last('state')?.world.entities.find((entity:Message)=>entity.id===collectedId);
     return car&&Math.hypot(car.x-collected.x,car.z-collected.z)>0.3;
   },'owner drives the collected model',5_000);
-  send(aliceRoom,{type:'input',seq:2,input:NEUTRAL});
+  send(aliceRoom,{type:'input',seq:queuedBeforeCollection+2,input:NEUTRAL});
   await until(()=>{
     const car=bobRoom.last('state')?.world.entities.find((entity:Message)=>entity.id===collectedId);
     return car&&Math.hypot(car.x-collected.x,car.z-collected.z)>0.3;

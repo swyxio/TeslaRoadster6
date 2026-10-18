@@ -6,7 +6,7 @@ const base=process.argv[2]??'http://localhost:8787';
 const sockets:WebSocket[]=[];
 type Result={type:'welcome';version:number;capacity:number}|{type:'close';code:number;reason:string};
 function connect():Promise<Result>{
-  const socket=new WebSocket(base.replace(/^http/,'ws')+'/room');
+  const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/room/blocked');
   sockets.push(socket);
   return new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('Timed out waiting for welcome or close')),10000);

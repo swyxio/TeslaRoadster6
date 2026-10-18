@@ -48,7 +48,8 @@ test('idle and on-foot time cannot be credited as cockpit driving',()=>{
 });
 
 test('wire frames require a boolean camera flag',()=>{
-  assert.ok(parseMessage(JSON.stringify({type:'input',seq:1,input:{...NEUTRAL,cockpit:true}})));
-  assert.equal(parseMessage(JSON.stringify({type:'input',seq:1,input:{...NEUTRAL,cockpit:'yes'}})),null);
-  const {cockpit,...oldInput}=NEUTRAL;assert.equal(parseMessage(JSON.stringify({type:'input',seq:1,input:oldInput})),null);
+  const frame={type:'input',seq:1,targetTick:2,controlRevision:0,actionSeq:0,roomEpoch:'00000000-0000-0000-0000-000000000000'};
+  assert.ok(parseMessage(JSON.stringify({...frame,input:{...NEUTRAL,cockpit:true}})));
+  assert.equal(parseMessage(JSON.stringify({...frame,input:{...NEUTRAL,cockpit:'yes'}})),null);
+  const {cockpit,...oldInput}=NEUTRAL;assert.equal(parseMessage(JSON.stringify({...frame,input:oldInput})),null);
 });

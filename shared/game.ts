@@ -29,7 +29,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=34;
+export const PROTOCOL_VERSION=35;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -618,7 +618,7 @@ function nearRocketIsland(x:number,z:number):boolean {
   }
   return isRocketIsland(x,z);
 }
-function landAirborne(world:World,e:Entity,old:PreviousPose):void {
+function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (playerId:string)=>void):void {
   if(e.supportId!==null)return;
   let landing:{id:SupportId;y:number}|null=null;
   const ground=terrainHeight(e.x,e.z),oldGround=terrainHeight(old.x,old.z);
@@ -657,6 +657,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
     const spawn=(nearRocketIsland(e.x,e.z)?sideSpawn(world,e.kind,'island',e):null)??availableSpawnPosition(world,e.kind);
     if(!spawn){Object.assign(e,{x:old.x,y:old.y,z:old.z,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0});return;}
     Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
+    if(e.driver)onRelocation?.(e.driver);
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
     const bottom=deckTopAt(e.x)-OVERPASS.thickness,height=dimensions(e.kind).height;
@@ -728,23 +729,32 @@ function constrainDome(e:Entity,rocket:boolean):void {
   }
 }
 
-/** Optional authoritative transaction boundary; normal local prediction supplies none. */
+/** Optional authoritative transaction boundary. */
 export type EconomyHooks = {
   update(player:Player,apply:()=>void):void;
   pickup(player:Player,car:Entity,pickup:Pickup):void;
+  canCollect?(driverId:string):boolean;
 };
-export function step(world:World,inputs:Map<string,Input>,dt:number,economy?:EconomyHooks):void {
-  if(!Number.isFinite(dt)||dt<=0)return;
+export function simulationSubsteps(world:World,dt:number):number {
+  if(!Number.isFinite(dt)||dt<=0)return 1;
   dt=Math.min(dt,.05);
   // Allow for two vehicles approaching one another, not just one moving body.
   const maxSpeed=world.entities.reduce((max,e)=>Math.max(max,Math.abs(e.speed)+Math.hypot(e.pushX,e.pushZ),Math.hypot(e.vx,e.vy,e.vz)),0);
-  const steps=Math.min(8,Math.max(1,Math.ceil(2*maxSpeed*dt)));
-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,economy);
+  return Math.min(8,Math.max(1,Math.ceil(2*maxSpeed*dt)));
 }
-function advance(world:World,inputs:Map<string,Input>,dt:number,economy?:EconomyHooks):void {
+// A substep override is for client presentation replay only; the room always
+// chooses its adaptive value from the complete authoritative world.
+export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{substeps?:number;onSubsteps?:(count:number)=>void;onRelocation?:(playerId:string)=>void;economy?:EconomyHooks}):void {
+  if(!Number.isFinite(dt)||dt<=0)return;
+  dt=Math.min(dt,.05);
+  const steps=Number.isInteger(options?.substeps)&&options!.substeps!>=1&&options!.substeps!<=8?options!.substeps!:simulationSubsteps(world,dt);
+  options?.onSubsteps?.(steps);
+  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy);
+}
+function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
   const update=(player:Player,apply:()=>void)=>economy?economy.update(player,apply):apply();
   world.time+=dt;
-  updateFerry(world,dt,(entity,side)=>moveToSide(world,entity,side));
+  updateFerry(world,dt,(entity,side)=>{const moved=moveToSide(world,entity,side);if(moved&&entity.driver)onRelocation?.(entity.driver);return moved;});
   for(const e of world.entities){updateDomeReturn(world,e);enterDomeIfInside(e);}
   updateHighwayTraffic(world,dt,makeEntity);
   updatePolice(world,dt,(player,apply)=>update(player,apply));
@@ -967,7 +977,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,economy?:Economy
         }
       }
       if(e.y>=FLIGHT_CEILING){e.y=FLIGHT_CEILING;e.vy=Math.min(e.vy,0);}
-      landAirborne(world,e,old);
+      landAirborne(world,e,old,onRelocation);
       if(e.supportId==='ground'){
         // Landing can precede the final rotated-footprint check. Resolve any
         // wall overlap at the landed pose without overriding a ramp landing.
@@ -1003,8 +1013,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,economy?:Economy
       e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
     }
     capFlightSpeed(e);
-    if(chargingDomeWall(e,hasRockets(e)))e.air=Math.min(100,e.air+DOME_CHARGE_RATE*dt);
-    if(refillStationFor(e))e.air=Math.min(100,e.air+28*dt);
+    if(chargingDomeWall(e,hasRockets(e))&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+DOME_CHARGE_RATE*dt);
+    if(refillStationFor(e)&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+28*dt);
   }
   const collisionIndex=new EntityIndex(world.entities);
   const domeIndices=world.entities.flatMap((e,i)=>e.inDome?[i]:[]);
@@ -1098,9 +1108,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,economy?:Economy
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
   for(const pickup of world.pickups){
-    if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time);continue;}
+    if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time,economy?.canCollect);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;
-    const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2);if(!car)continue;
+    const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2&&(!economy?.canCollect||economy.canCollect(e.driver)));if(!car)continue;
     const player=world.players.find(p=>p.id===car.driver);
     if(player&&economy)economy.pickup(player,car,pickup);
     else {

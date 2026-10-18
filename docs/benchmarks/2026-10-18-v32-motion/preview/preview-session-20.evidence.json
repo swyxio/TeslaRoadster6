@@ -1,0 +1,134 @@
+{
+  "origin": "https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev",
+  "source_commit": "7078709e6778257517142e607b12a3c989b7fe53",
+  "outer_start_utc": "2026-10-18T11:21:24.008+00:00",
+  "outer_end_utc": "2026-10-18T11:21:49.217+00:00",
+  "outer_elapsed_seconds": 25.213,
+  "returncode": 0,
+  "source_sha256": {
+    "scripts/session-diagnostic-once.ts": "7b9493eb4e20fdcdd799f09e4ee36685fc5494c881dc918ec2e77f5c2ca6577f",
+    "src/session.ts": "cbb5f59192a46d12990a4ca64a23b5c36b44242d3c77c94d1107e016c9b2793d",
+    "src/motion-clock.ts": "2bc401c6d0cca351678c32533d656094ce81c9437f2fed384661212684fd882d",
+    "src/tick-prediction.ts": "cd1728145742448bf01dd75ecad49fcdcbec1728b4f41becb5b32ac6240836fd",
+    "worker/index.ts": "798da702a5e57476088e36bd20aaee9a08abb9adc15dc708ce6242f0bebc284d",
+    "shared/tick-input.ts": "c8dcc47830879238cd52f85660d86712f233cc679743b74c97b0ca1e5e8a402b",
+    "pnpm-lock.yaml": "a057f63b5896724032ccc90105fe6c5b224c7a02db548dcd283b7ae28cbd392b"
+  },
+  "host_load_samples": [
+    {
+      "utc": "2026-10-18T11:21:24.012+00:00",
+      "load_1_5_15": [
+        13.41455078125,
+        12.85107421875,
+        12.72021484375
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:21:29.014+00:00",
+      "load_1_5_15": [
+        12.98095703125,
+        12.7705078125,
+        12.6923828125
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:21:34.014+00:00",
+      "load_1_5_15": [
+        12.501953125,
+        12.67431640625,
+        12.65869140625
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:21:39.016+00:00",
+      "load_1_5_15": [
+        12.38134765625,
+        12.646484375,
+        12.64892578125
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:21:44.039+00:00",
+      "load_1_5_15": [
+        15.0732421875,
+        13.2001953125,
+        12.84423828125
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:21:49.042+00:00",
+      "load_1_5_15": [
+        16.50830078125,
+        13.52880859375,
+        12.9619140625
+      ]
+    }
+  ],
+  "result": {
+    "preview": "https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev",
+    "room": "diag-1792322485318",
+    "health": {
+      "ok": true,
+      "version": 32,
+      "capacity": 8
+    },
+    "startedUtc": "2026-10-18T11:21:28.078Z",
+    "endedUtc": "2026-10-18T11:21:48.080Z",
+    "elapsedSeconds": 20.001,
+    "clientModel": "Eight real Session instances, MotionClock, frame-cadenced tick and clock sampling; no renderer or prediction render.",
+    "clients": 8,
+    "onlineAtEnd": 8,
+    "clientsSeeingAll": 8,
+    "clientsWithAppliedInput": 8,
+    "closeEventsBeforeEnd": [],
+    "inputsSent": {
+      "warmup": 335,
+      "measured": 3201,
+      "drain": 0,
+      "unknown": 0
+    },
+    "rejectionsByReceiveWindow": {
+      "warmup": {},
+      "measured": {
+        "late": 1
+      },
+      "drain": {}
+    },
+    "rejectionsBySendWindow": {
+      "warmup": {},
+      "measured": {
+        "late": 1
+      },
+      "drain": {},
+      "unknown": {}
+    },
+    "rejections": [
+      {
+        "client": 6,
+        "reason": "late",
+        "seq": 178,
+        "targetTick": 174,
+        "targetTickAtSend": 174,
+        "lastSnapshotTickAtSend": 172,
+        "lastSnapshotTickAtReceive": 174,
+        "sentMonotonicMs": 10192.132167,
+        "receivedMonotonicMs": 10260.259834,
+        "sentUtc": "2026-10-18T11:21:34.866Z",
+        "receivedUtc": "2026-10-18T11:21:34.934Z",
+        "sendPhase": "measured",
+        "receivePhase": "measured"
+      }
+    ],
+    "snapshots": 1608,
+    "minSnapshots": 201,
+    "minSimulatedSeconds": 20,
+    "medianSimulatedSeconds": 20,
+    "p95SnapshotGapMs": 151,
+    "maxSnapshotGapMs": 274,
+    "decodedJsonMiB": 50.35,
+    "clientEventLoopP95Ms": 22.1,
+    "note": "One synthetic preview room; clock calls approximate frame presentation without rendering. No production, sustained-capacity, browser-rendering or physical-device claim."
+  },
+  "stdout": "{\n  \"preview\": \"https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev\",\n  \"room\": \"diag-1792322485318\",\n  \"health\": {\n    \"ok\": true,\n    \"version\": 32,\n    \"capacity\": 8\n  },\n  \"startedUtc\": \"2026-10-18T11:21:28.078Z\",\n  \"endedUtc\": \"2026-10-18T11:21:48.080Z\",\n  \"elapsedSeconds\": 20.001,\n  \"clientModel\": \"Eight real Session instances, MotionClock, frame-cadenced tick and clock sampling; no renderer or prediction render.\",\n  \"clients\": 8,\n  \"onlineAtEnd\": 8,\n  \"clientsSeeingAll\": 8,\n  \"clientsWithAppliedInput\": 8,\n  \"closeEventsBeforeEnd\": [],\n  \"inputsSent\": {\n    \"warmup\": 335,\n    \"measured\": 3201,\n    \"drain\": 0,\n    \"unknown\": 0\n  },\n  \"rejectionsByReceiveWindow\": {\n    \"warmup\": {},\n    \"measured\": {\n      \"late\": 1\n    },\n    \"drain\": {}\n  },\n  \"rejectionsBySendWindow\": {\n    \"warmup\": {},\n    \"measured\": {\n      \"late\": 1\n    },\n    \"drain\": {},\n    \"unknown\": {}\n  },\n  \"rejections\": [\n    {\n      \"client\": 6,\n      \"reason\": \"late\",\n      \"seq\": 178,\n      \"targetTick\": 174,\n      \"targetTickAtSend\": 174,\n      \"lastSnapshotTickAtSend\": 172,\n      \"lastSnapshotTickAtReceive\": 174,\n      \"sentMonotonicMs\": 10192.132167,\n      \"receivedMonotonicMs\": 10260.259834,\n      \"sentUtc\": \"2026-10-18T11:21:34.866Z\",\n      \"receivedUtc\": \"2026-10-18T11:21:34.934Z\",\n      \"sendPhase\": \"measured\",\n      \"receivePhase\": \"measured\"\n    }\n  ],\n  \"snapshots\": 1608,\n  \"minSnapshots\": 201,\n  \"minSimulatedSeconds\": 20,\n  \"medianSimulatedSeconds\": 20,\n  \"p95SnapshotGapMs\": 151,\n  \"maxSnapshotGapMs\": 274,\n  \"decodedJsonMiB\": 50.35,\n  \"clientEventLoopP95Ms\": 22.1,\n  \"note\": \"One synthetic preview room; clock calls approximate frame presentation without rendering. No production, sustained-capacity, browser-rendering or physical-device claim.\"\n}\n",
+  "stderr": "ROOM: diag-1792322485318\n"
+}

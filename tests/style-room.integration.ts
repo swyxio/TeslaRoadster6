@@ -12,10 +12,11 @@ async function eventually(check: () => boolean, label: string) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; results: { requestId:number; ok:boolean }[] } = { results: [] };
+  const state: { id?: string; world?: World; identified?:boolean; results: { requestId:number; ok:boolean }[] } = { results: [] };
   socket.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
     if (message.type === 'welcome') {state.id = message.id;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
+    if (message.type === 'identityResult') state.identified=message.ok;
     if (message.type === 'state') state.world = message.world;
     if (message.type === 'vehicleStyleResult') state.results.push(message);
   });
@@ -23,9 +24,9 @@ function connect() {
 }
 const owner = connect(), observer = connect();
 try {
-  await eventually(() => !!owner.state.id && !!observer.state.world?.players.find(player => player.id === owner.state.id), 'both drivers join');
+  await eventually(() => !!owner.state.id && !!owner.state.identified && !!observer.state.identified && !!observer.state.world?.players.find(player => player.id === owner.state.id), 'both guest drivers join');
   const id = owner.state.id!;
-  await eventually(() => owner.state.world?.players.find(player => player.id === id)?.delivery.cash === 200, 'fixture wallet arrives');
+  await eventually(() => owner.state.world?.players.find(player => player.id === id)?.delivery.cash === 2500, 'guest wallet arrives');
   owner.socket.send(JSON.stringify({ type:'vehicleStyle', category:'paint', choice:'mint', requestId:1 }));
   await eventually(() => owner.state.results.some(result => result.requestId === 1 && result.ok), 'paint purchase succeeds');
   await eventually(() => observer.state.world?.entities.some(entity => entity.driver === id && entity.style.paint === 'mint') ?? false, 'paint reaches the other driver');
@@ -33,7 +34,7 @@ try {
   owner.socket.send(JSON.stringify({ type:'vehicleStyle', category:'decal', choice:'stripe', requestId:2 }));
   await eventually(() => owner.state.results.some(result => result.requestId === 2 && result.ok), 'decal purchase succeeds');
   await eventually(() => observer.state.world?.entities.some(entity => entity.driver === id && entity.style.paint === 'mint' && entity.style.decal === 'stripe') ?? false, 'decal reaches the other driver');
-  await eventually(() => owner.state.world?.players.find(player => player.id === id)?.delivery.cash === 170, 'both purchases debit the wallet');
+  await eventually(() => owner.state.world?.players.find(player => player.id === id)?.delivery.cash === 2470, 'both purchases debit the wallet');
   assert.equal(observer.state.results.length, 0, 'purchase responses are private');
   console.log('PASS: paid paint and decal purchases debit once and replicate to the other driver.');
 } finally {
