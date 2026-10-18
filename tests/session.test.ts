@@ -47,6 +47,10 @@ test('joining the current room keeps its seat and may select a car',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:2});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});const existingWorld=session.world;
+  const sentBefore=socket.sent.length;
+  session.join('bay','Alex');
+  assert.equal(socket.sent.length,sentBefore+1);
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'name',name:'Alex'});
   session.join('bay','Alex','model-3');
   assert.equal(Socket.last,socket);assert.equal(socket.readyState,Socket.OPEN);assert.equal(session.world,existingWorld);assert.equal(session.id,'p');
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'selectVehicle',kind:'model-3'});

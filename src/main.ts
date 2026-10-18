@@ -83,12 +83,13 @@ document.querySelector('#app')!.innerHTML = `
 <div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Rejoin room</button><button id="error-solo" class="secondary">Drive solo</button><button id="error-menu" class="text-button">Choose another room</button></div>
 `;
 let selectedVehicle:VehicleId='roadster';
+let startingRideChanged=false;
 const startingSelect=$<HTMLSelectElement>('starting-ride');
 const teslaIds=VEHICLE_IDS.filter(id=>VEHICLES[id].brand==='Tesla');
 for(const id of teslaIds){const option=document.createElement('option');option.value=id;option.textContent=VEHICLES[id].name;startingSelect.append(option);}
 startingSelect.value=selectedVehicle;
 function updateStarting(){selectedVehicle=startingSelect.value as VehicleId;const spec=VEHICLES[selectedVehicle];$('starting-spec').textContent=`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel':'Front-wheel'} steering · ${spec.airThrusters?'Air thrusters':'Autonomous cruise'}`;}
-startingSelect.onchange=updateStarting;updateStarting();
+startingSelect.onchange=()=>{updateStarting();startingRideChanged=true;};updateStarting();
 const session = new Session();
 const controls = new Controls();
 const audio = new GameAudio();
@@ -238,12 +239,12 @@ function recordPlay(now:number){
 }
 window.addEventListener('pagehide',()=>{if(playRecorded&&Date.now()-lastActiveAt<10000)recordPlay(Date.now());});
 if (roomParam && validRoom(roomParam)) $<HTMLInputElement>('room').value=roomParam;
-function toggleMenu(show: boolean) {menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started||session.status==='disconnected');$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
+function toggleMenu(show: boolean) {if(show&&!menu)startingRideChanged=false;menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started||session.status==='disconnected');$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function begin(solo:boolean,userGesture=true){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
-  if(!solo&&session.status==='online'&&session.room===room){session.join(room,nameInput.value.trim()||'Driver',selectedVehicle);if(userGesture)void audio.unlock();toggleMenu(false);return;}
+  if(!solo&&session.status==='online'&&session.room===room){session.join(room,nameInput.value.trim()||'Driver',startingRideChanged?selectedVehicle:undefined);if(userGesture)void audio.unlock();toggleMenu(false);return;}
   lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();if(userGesture)void audio.unlock();
   pendingShop=null;pendingOta=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
@@ -313,7 +314,7 @@ $('dome').onclick=()=>{
   },session.status==='solo'?50:1500);
 };
 $('invite').onclick=async()=>{
-  if(session.status==='solo'){toggleMenu(true);notice('Choose a room and press Drive with friends first.');return;}
+  if(session.status==='solo'){toggleMenu(true);notice('Choose a room and press Join room first.');return;}
   try{await navigator.clipboard.writeText(location.href);notice('Invite link copied. Send it to your crew.');}catch{notice('Copy the address in your browser to invite a friend.');}
 };
 const map=$<HTMLCanvasElement>('minimap').getContext('2d')!;

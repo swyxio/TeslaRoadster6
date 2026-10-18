@@ -26,14 +26,15 @@ export class Session {
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = ''; this.room = ''; this.roomFull = false; this.accumulator = 0;
     this.upgradeResult=null;this.otaResult=null;this.world = createWorld(); addPlayer(this.world, this.id, this.name); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
-  join(room: string, name: string,kind:VehicleId='roadster') {
+  join(room: string, name: string,kind?:VehicleId) {
     if (this.status === 'online' && this.room === room) {
       this.setName(name);
       const player = this.world.players.find(player => player.id === this.id);
       const vehicle = this.world.entities.find(entity => entity.id === player?.entityId);
-      if (vehicle?.kind !== kind) this.selectVehicle(kind);
+      if (kind && vehicle?.kind !== kind) this.selectVehicle(kind);
       return;
     }
+    kind ??= 'roadster';
     this.name = name;
     this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.otaResult=null;this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
