@@ -292,7 +292,33 @@ export function policeInput(cop:Entity,world:World):Input {
   const steer=Math.max(-1,Math.min(1,angle*1.6))*(reversing?-1:1);
   const chaseSpeed=state.cause==='speeding'&&onHighway(cop.x,cop.z)?42:15;
   const cruise=Math.abs(angle)>.65?6:Math.abs(angle)>.3?Math.min(18,chaseSpeed):chaseSpeed;
-  return {...NEUTRAL,steer,throttle:reversing?-.7:cop.speed<cruise?.8:0,brake:!reversing&&cop.speed>cruise+2};
+  const direction=reversing?-1:1,fx=-Math.sin(cop.yaw)*direction,fz=-Math.cos(cop.yaw)*direction;
+  const size=dimensions(cop.kind),speed=Math.max(0,cop.speed*direction);
+  let safeSpeed=reversing?3:cruise;
+  for(const other of world.entities){
+    // A stop deliberately approaches its suspect, but should not hit other
+    // traffic while pursuing or while reversing to turn around.
+    if(other===cop||other===target)continue;
+    const obstacle=dimensions(other.kind);
+    if(cop.y>=other.y+obstacle.height||other.y>=cop.y+size.height)continue;
+    const dx=other.x-cop.x,dz=other.z-cop.z,along=dx*fx+dz*fz;
+    if(along<=0||along>800)continue;
+    const side=Math.abs(dx*fz-dz*fx);
+    if(side>(size.width+obstacle.width+obstacle.length)/2+.5)continue;
+    const ox=-Math.sin(other.yaw),oz=-Math.cos(other.yaw),alignment=ox*fx+oz*fz,cross=ox*fz-oz*fx;
+    const lateralReach=(size.width+obstacle.width*Math.abs(alignment)+obstacle.length*Math.abs(cross))/2+.5;
+    if(side>lateralReach)continue;
+    const gap=along-(size.length+obstacle.length)/2;
+    const leaderSpeed=other.speed*alignment+other.pushX*fx+other.pushZ*fz;
+    const closing=Math.max(0,speed-leaderSpeed);
+    // Use a conservative deceleration and reaction margin, rather than
+    // assuming the patrol can stop instantly at highway speed.
+    const stoppingDistance=3+speed*.5+closing*closing/12;
+    if(gap<stoppingDistance)return {...NEUTRAL,steer,brake:true};
+    safeSpeed=Math.min(safeSpeed,Math.max(0,leaderSpeed+(gap-3-speed*1.3)*.55));
+  }
+  if(speed>safeSpeed+1||safeSpeed<.1)return {...NEUTRAL,steer,brake:true};
+  return {...NEUTRAL,steer,throttle:reversing?(speed<safeSpeed?-.7:0):cop.speed<safeSpeed?.8:0,brake:!reversing&&cop.speed>safeSpeed+2};
 }
 
 /** A tagged rocket officer may make a bounded, physical hop while pursuing a
@@ -301,6 +327,7 @@ export function policeInput(cop:Entity,world:World):Input {
 export function policeFlight(cop:Entity,world:World,groundInput:Input):{input:Input;jump:boolean} {
   const ground={input:groundInput,jump:false},state=cop.police;
   if(!state?.airPatrol||cop.driver||state.cause!=='flight'||!state.targetId||!hasRockets(cop))return ground;
+  if(cop.supportId!==null&&groundInput.brake)return ground;
   const player=world.players.find(p=>p.id===state.targetId),target=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!target||target.inDome||islandProtected(target)||world.races.rounds.some(round=>round.entrants.some(e=>e.playerId===player.id&&e.status==='entered')))return ground;
   const dx=target.x-cop.x,dz=target.z-cop.z,d=Math.hypot(dx,dz);

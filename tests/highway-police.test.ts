@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
 import { isSurface, nearbyBuildings, terrainHeight } from '../shared/map';
 import { body, contact, dimensions } from '../shared/physics';
-import { HIGHWAY_SPEED_TRIGGER_KPH, newPolice, onHighway, policeFlight, updatePolice } from '../shared/police';
+import { HIGHWAY_SPEED_TRIGGER_KPH, newPolice, onHighway, policeFlight, policeInput, updatePolice } from '../shared/police';
 import { HIGHWAY_ROUTE_IDS, ROUTES, trafficInput } from '../shared/traffic';
 
 const distance=(a:{x:number;z:number},b:{x:number;z:number})=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -113,6 +113,42 @@ for(const scenario of ['follow','opposite'] as const)test(`a moving highway patr
   assert.ok(Math.abs(car.speed)<6,'the stop requires slowing before the citation');assert.ok(player.delivery.ticketGraceUntil>world.time);
 });
 
+test('a chasing patrol brakes for traffic in its path without stopping for a clear adjacent lane',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190),pose=along(230);
+  const obstacle=makeEntity('obstacle','model-3',pose.x,pose.z);
+  Object.assign(obstacle,{yaw,speed:0});world.entities.push(obstacle);
+  cop.police!.targetId=player.id;cop.police!.cause='speeding';cop.police!.path=[{x:car.x,z:car.z}];
+  assert.equal(policeInput(cop,world).brake,true,'a stopped car is inside the stopping distance');
+  Object.assign(obstacle,along(230,5));
+  assert.equal(policeInput(cop,world).brake,false,'a parallel car in the next lane is clear');
+  Object.assign(obstacle,along(230,3.5),{yaw:yaw+Math.PI/4});
+  assert.equal(policeInput(cop,world).brake,true,'a turning car projects into the patrol lane');
+  Object.assign(obstacle,along(230),{yaw,y:10});
+  assert.equal(policeInput(cop,world).brake,false,'traffic on a separate level is ignored');
+  Object.assign(cop,{yaw:yaw+Math.PI,speed:0});
+  Object.assign(obstacle,along(197.5),{yaw,y:0});
+  assert.equal(policeInput(cop,world).brake,true,'a blocked reverse is held in place');
+});
+
+test('a patrol safely waits behind a stopped car and resumes when the road clears',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190),pose=along(220);
+  const obstacle=makeEntity('obstacle','model-3',pose.x,pose.z);
+  Object.assign(obstacle,{yaw,speed:0});world.entities.push(obstacle);
+  cop.police!.targetId=player.id;cop.police!.cause='speeding';cop.police!.lastSeen=0;
+  for(let i=0;i<60;i++){
+    step(world,new Map([[player.id,NEUTRAL]]),.05);
+    assert.equal(contact(body(cop),body(obstacle)),null,'the patrol does not overlap the stopped car');
+    assert.equal(cop.health,100);assert.equal(obstacle.health,100);
+  }
+  assert.ok(cop.speed<1,'the patrol stops behind the obstacle');
+  assert.ok(distance(obstacle,pose)<.001&&Math.hypot(obstacle.pushX,obstacle.pushZ)<.001,'the stopped car is not pushed');
+  world.entities=world.entities.filter(entity=>entity!==obstacle);
+  for(let i=0;i<40;i++)step(world,new Map([[player.id,NEUTRAL]]),.05);
+  assert.ok(cop.speed>4,'the patrol resumes pursuit after the lane clears');
+  assert.equal(cop.police!.targetId,player.id);
+  assert.equal(car.health,100);
+});
+
 test('a faster driver can escape a moving highway patrol without an automatic fine',()=>{
   const {world,player,car,cop,saw,offRoad,startCar}=movingPursuit('escape');
   assert.ok(saw);assert.equal(cop.police!.targetId,null);assert.equal(player.delivery.tickets,0);
@@ -176,6 +212,7 @@ test('only a tagged rocket officer may launch and protected players cannot trigg
   Object.assign(car,targetPosition);
   world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:100,starterCount:1,entrants:[{playerId:player.id,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:car.x,y:car.y,z:car.z,time:0}}]});
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'racers remain protected');world.races.rounds=[];
+  assert.equal(policeFlight(cop,world,{...NEUTRAL,brake:true}).jump,false,'braking for traffic cannot be overridden by a flight launch');
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,true);
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'launch has a bounded cooldown');
 });
