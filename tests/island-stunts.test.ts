@@ -65,7 +65,7 @@ test('ordinary cars fall after the vertical, while Rocket cars reach the overhan
   }
 });
 
-test('expiry detaches an inverted car without altering world velocity and non-Rocket contacts bounce',()=>{
+test('detaching preserves world velocity and non-Rocket contacts bounce',()=>{
   const e=car();e.supportId='island-cliff';e.loopAngle=Math.PI;e.vx=12;e.vy=-3;e.vz=4;
   assert.equal(advanceCliff(e,controls,.05,false),'airborne');
   assert.deepEqual([e.vx,e.vy,e.vz],[12,-3,4]);assert.equal(e.supportId,null);

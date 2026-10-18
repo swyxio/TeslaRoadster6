@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, ISLAND_TRACK, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 
@@ -89,7 +89,7 @@ export function buildBay(scene:T.Scene) {
     const ground=new T.Mesh(new T.CylinderGeometry(island.r,island.r*1.08,.15,10),material(0x91aa7b));ground.position.set(island.x,.12,island.z);scene.add(ground);
     const tree=new T.Mesh(new T.ConeGeometry(island.r*.55,4,7),material(0x60865f));tree.position.set(island.x,2.2,island.z);scene.add(tree);
   }
-  const road=ROADS.filter(r=>r.kind!=='highway').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));batches(0x505e60,road);
+  const road=ROADS.filter(r=>r.kind!=='highway'&&r.course!=='oval').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));batches(0x505e60,road);
   const highways=ROADS.filter(r=>r.kind==='highway');
   batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
   // Adjacent rotated rectangles leave outside wedges at bends. Round joins
@@ -101,13 +101,10 @@ export function buildBay(scene:T.Scene) {
     joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(16,1,16).setPosition(p.x,.13,p.z)));
     mesh.computeBoundingSphere();scene.add(mesh);
   }
-  // Round joins and center dashes follow the shared flat island track.
-  const islandJoinGeometry=new T.CircleGeometry(14,24);islandJoinGeometry.rotateX(-Math.PI/2);
-  const islandJoins=new T.InstancedMesh(islandJoinGeometry,material(0x505e60),ISLAND_TRACK.length),islandMatrix=new T.Matrix4();
-  ISLAND_TRACK.forEach((p,i)=>islandJoins.setMatrixAt(i,islandMatrix.makeTranslation(p.x,.13,p.z)));
-  islandJoins.computeBoundingSphere();scene.add(islandJoins);
+  // The oval surface and its paint come from shared bank geometry; the short
+  // circuit and dock approach remain ordinary flat roads.
   const islandDashes:BoxItem[]=[];
-  for(const r of ROADS.filter(r=>r.kind==='island')){
+  for(const r of ROADS.filter(r=>r.kind==='island'&&r.course!=='oval')){
     const angle=r.angle??0,s=Math.sin(angle),c=Math.cos(angle);
     for(let along=-r.d/2+5;along<r.d/2-3;along+=16)
       islandDashes.push({x:r.x+s*along,y:.15,z:r.z+c*along,w:.18,h:.02,d:7,angle});
@@ -132,7 +129,7 @@ export function buildBay(scene:T.Scene) {
     scene.add(new T.Line(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:0xffe2a7})));
   }
   const stripes:BoxItem[]=[];
-  for(const r of ROADS.filter(r=>r.kind!=='highway')){
+  for(const r of ROADS.filter(r=>r.kind!=='highway'&&r.course!=='oval')){
     if(r.w>30||r.d>30)continue;
     if(r.axis==='z'&&Math.abs(r.z%60)>14)stripes.push({x:r.x,y:.14,z:r.z,w:.16,h:.018,d:4});
     if(r.axis==='x'&&Math.abs(r.x%60)>14)stripes.push({x:r.x,y:.145,z:r.z,w:4,h:.018,d:.16});

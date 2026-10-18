@@ -2,13 +2,17 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
 import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
-import {CHARGER_LOT,STATIONS,stationStalls} from '../shared/stations';
+import {STATIONS} from '../shared/stations';
 import {PARKING_LOTS} from '../shared/parking-lots';
+import {fitsParkingStall} from '../shared/parking';
+import {FERRY_DECK} from '../shared/ferry';
+import {ROUTES} from '../shared/traffic';
 import {BILLBOARDS,BILLBOARD_WIDTH} from '../shared/billboards';
 import {RACE_COURSES} from '../shared/race-courses';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {DOME} from '../shared/dome';
+import {ovalBankSurface} from '../shared/oval-bank';
 
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
@@ -54,6 +58,23 @@ test('Rocket Island loop and ferry approaches are clear, supported and separated
  drive(0,-180,0,(_,z)=>z< -240);
  drive(0,-1250,Math.PI,(_,z)=>z> -1090);
 });
+test('the island-to-Dome road is supported, protected and clear of the bank and parking',()=>{
+ const road=ROADS.find(r=>r.kind==='island'&&r.x===300&&r.z===-1090);
+ assert.ok(road,'the shared approach is also rendered as a road');
+ for(let z=-1246;z<=-934;z+=4)for(let x=road.x-12;x<=road.x+12;x+=4){
+  assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
+  assert.ok(isRocketIsland(x,z),`approach not protected at ${x},${z}`);
+  assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).length,`building near the approach at ${x},${z}`);
+ }
+ const approach={...road,yaw:road.angle??0};
+ for(const lot of PARKING_LOTS){
+  const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
+  assert.equal(contact(approach,area),null,`${lot.id} overlaps the Dome approach`);
+ }
+ for(const other of ROADS.filter(r=>r.kind==='island'&&r!==road))
+  assert.equal(contact(approach,{...other,yaw:other.angle??0}),null,'the approach does not overlay a race course');
+});
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
  world.entities=[car];world.pickups=[];Object.assign(car,{x:80,z:0,yaw:-Math.PI/2,speed:10});
@@ -72,17 +93,47 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  assert.ok(BUILDINGS.length>100);
 });
 
-test('Supercharger lots are on flat land, clear of buildings and roads, with usable stalls',()=>{
+test('charger playgrounds, posts and pickups clear roads, buildings, spawns and ferry',()=>{
+ const world=createWorld();
+ const ferry={x:0,z:(FERRY_DOCKS.sf.deckZ+FERRY_DOCKS.island.deckZ)/2,w:FERRY_DECK.width,
+  d:Math.abs(FERRY_DOCKS.sf.deckZ-FERRY_DOCKS.island.deckZ)+FERRY_DECK.length,yaw:0};
+ const largestRadius=Math.max(...VEHICLE_IDS.map(id=>Math.hypot(VEHICLES[id].width,VEHICLES[id].length)/2));
  for(const station of STATIONS){
   const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
   assert.ok(lot,station.id);
-  const footprint={x:station.x,z:station.z,w:CHARGER_LOT.width,d:CHARGER_LOT.length,yaw:0};
-  for(const dx of [-12,0,12])for(const dz of [-12,0,12])assert.equal(terrainHeight(station.x+dx,station.z+dz),0,station.id);
-  assert.ok(!nearbyBuildings(station.x,station.z,30).some(b=>contact(footprint,{...b,yaw:0})),`${station.id} building`);
-  assert.ok(!ROADS.some(r=>contact(footprint,{...r,yaw:r.angle??0})),`${station.id} road`);
-  assert.equal(lot.stalls.length,4);
-  for(const stall of stationStalls(station))for(const kind of VEHICLE_IDS){
-   assert.ok(VEHICLES[kind].width<=stall.width&&VEHICLES[kind].length<=stall.length,`${stall.id}: ${kind}`);
+  const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
+  const approach={x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw};
+  const pad={x:lot.pickup.x,z:lot.pickup.z,w:14,d:14,yaw:0};
+  assert.equal(contact(pad,approach),null,`${station.id}: pickup clears queue`);
+  assert.equal(contact(area,ferry),null,`${station.id}: ferry`);
+  for(const dx of [-20,-10,0,10,20])for(const dz of [-20,-10,0,10,20])
+   assert.equal(terrainHeight(station.x+dx,station.z+dz),0,`${station.id}: land`);
+  for(const r of ROADS){
+   const road={...r,yaw:r.angle??0};
+   assert.equal(contact(area,road),null,`${station.id}: road`);
+   assert.equal(contact(pad,road),null,`${station.id}: pickup near road`);
+  }
+  for(const b of BUILDINGS)assert.equal(contact(area,{...b,yaw:0}),null,`${station.id}: building`);
+  for(const e of world.entities)assert.equal(contact(area,body(e)),null,`${station.id}: spawn ${e.id}`);
+  assert.equal(lot.stalls.length,4,station.id);
+  for(const stall of lot.stalls){
+   const post={x:stall.x,z:stall.z-stall.length/2-.8,w:1.16,d:.6,yaw:0};
+   assert.equal(terrainHeight(post.x,post.z),0,`${stall.id}: post support`);
+   for(const r of ROADS)assert.equal(contact(post,{...r,yaw:r.angle??0}),null,`${stall.id}: post road clearance`);
+   for(const b of BUILDINGS)assert.equal(contact(post,{...b,yaw:0}),null,`${stall.id}: post building clearance`);
+   for(const kind of VEHICLE_IDS){
+    const car=makeEntity('fit',kind,stall.x,stall.z);car.yaw=stall.yaw;
+    assert.equal(fitsParkingStall(stall,car),true,`${stall.id}: ${kind}`);
+   }
+  }
+  // A maximum-size vehicle centered on any authored traffic segment remains clear.
+  for(const route of ROUTES)for(let i=0;i<route.length;i++){
+   const a=route[i],b=route[(i+1)%route.length],samples=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z));
+   for(let n=0;n<=samples;n++){
+    const t=samples?n/samples:0,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+    const distance=Math.hypot(Math.max(0,Math.abs(x-area.x)-area.w/2),Math.max(0,Math.abs(z-area.z)-area.d/2));
+    assert.ok(distance>=largestRadius,`${station.id}: traffic route near lot`);
+   }
   }
  }
 });

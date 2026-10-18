@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,chooseVehicle,createWorld,makeEntity,NEUTRAL,raceAction,step} from '../shared/game';
-import {hasRocket} from '../shared/rocket';
+import {hasRockets} from '../shared/upgrades';
 import {newPolice} from '../shared/police';
 import {snapshotFor} from '../worker/snapshot';
 import { ISLAND_BANK, ISLAND_CLIFF, bankSurface, cliffPose } from '../shared/island-stunts';
@@ -22,12 +22,12 @@ test('two passengers retain their distinct physical positions and replicate in t
   assert.ok(snapshotFor(world,'p').entities.includes(other));assert.ok(snapshotFor(world,'two').entities.includes(car));
 });
 
-test('a driven non-Rocket car collects a pad and can jump until the upgrade expires',()=>{
+test('a driven non-Rocket car collects a permanent pad kit and can still jump later',()=>{
   const {world,car}=setup();car.kind='model-3';Object.assign(car,{x:0,z:-1160,y:0,supportId:'ground',air:3});
-  step(world,new Map(),.05);assert.ok(hasRocket(car,world.time));assert.equal(car.air,100);
+  step(world,new Map(),.05);assert.ok(hasRockets(car));assert.equal(car.air,100);
   step(world,new Map([['p',{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null);assert.ok(car.y>0);assert.ok(car.air<100);
-  world.time=car.rocketUntil;step(world,new Map([['p',{...NEUTRAL,jump:2}]]),.05);
-  assert.equal(hasRocket(car,world.time),false);
+  world.time+=120;step(world,new Map(),.05);
+  assert.equal(hasRockets(car),true);
 });
 
 test('island boundary clears pursuit and prevents detection at any height',()=>{
@@ -61,7 +61,7 @@ test('world physics follows the bank, launches along its normal, and lands on it
   assert.equal(car.supportId,'island-bank');assert.ok(Math.abs(car.y-bankSurface(car.x,car.z)!.height)<1e-6);
 });
 
-test('world physics drives the cliff and detaches ordinary and expired Rocket cars',()=>{
+test('world physics drives the cliff and detaches ordinary cars',()=>{
   for(const kind of ['model-3','roadster'] as const){
     const {world,car}=setup();Object.assign(car,{kind,x:ISLAND_CLIFF.x-1,z:ISLAND_CLIFF.z,y:0,yaw:-Math.PI/2,speed:40,supportId:'ground'});
     let highest=0,attached=false,detached=false;
@@ -76,7 +76,7 @@ test('world physics drives the cliff and detaches ordinary and expired Rocket ca
   }
   const {world,car}=setup(),pose=cliffPose(Math.PI);
   Object.assign(car,{kind:'model-3',x:pose.point.x,y:pose.point.y,z:ISLAND_CLIFF.z,supportId:'island-cliff',loopAngle:Math.PI,
-    vx:-15,vy:0,vz:0,speed:15,rocketUntil:world.time});
+    vx:-15,vy:0,vz:0,speed:15});
   step(world,new Map(),.01);assert.equal(car.supportId,null);assert.ok(car.vx< -14);assert.ok(car.y>35);
 });
 
