@@ -21,7 +21,8 @@ test('Rocket pads choose a stable winner, cool down and refresh without stacking
     assert.equal(pickup.readyAt, 100 + ROCKET_PAD_COOLDOWN);
     assert.equal(updateRocketPickup(pickup, [a, b], 119.99), null);
     assert.equal(pickup.active, false);
-    assert.equal(updateRocketPickup(pickup, [a, b], 120), 'a');
+    assert.equal(updateRocketPickup(pickup, [a, b], 120), 'b');
+    assert.equal(b.upgrades.rocket, true);
     assert.equal(a.upgrades.rocket, true);
     assert.equal(hasRockets(a), true);
   }
@@ -82,4 +83,11 @@ test('all fleet meshes show independent upgrade hardware and replicated exhaust 
     assert.equal(upgraded.getObjectByName('jets')!.visible, false, kind);
     assert.equal(upgraded.getObjectByName('rocket_hardware')!.visible, kind === 'roadster', kind);
   }
+});
+
+test('full permanently equipped cars leave the rocket pad for others',()=>{
+ const full={...car('a','roadster'),air:100},other=car('b');const pickup=pad();
+ assert.equal(updateRocketPickup(pickup,[full,other],1),'b');
+ const pad2=pad();assert.equal(updateRocketPickup(pad2,[full],1),null);assert.equal(pad2.active,true);
+ full.air=50;assert.equal(updateRocketPickup(pad2,[full],1),'a');assert.equal(full.air,100);
 });

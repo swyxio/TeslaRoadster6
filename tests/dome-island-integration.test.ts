@@ -147,8 +147,10 @@ test('a fly-in or shortcut returns to the last supported side even after flying 
     assert.equal(car.inDome, false);
     if (shortcut) assert.ok(travelDome(world, 'p'));
     else {
+      // The solid roof now supports landings; fly through an open side instead.
+      Object.assign(car, { x: DOME.x, z: DOME.z + 48, y: 10, vx: 0, vy: 0, vz: -20 });
       for (let i = 0; i < 40 && !car.inDome; i++) step(world, new Map(), .05);
-      assert.ok(car.inDome, 'the car enters through the roof');
+      assert.ok(car.inDome, 'the car enters through the side');
     }
     assert.equal(car.domeReturn, island ? 'island' : 'sf');
     assert.ok(travelDome(world, 'p'));
