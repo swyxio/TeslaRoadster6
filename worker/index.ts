@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { planCybercabDispatch } from '../shared/cybercabs';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
-import { parseMessage, roomCapacity, roomSlug } from './protocol';
+import { parseMessage, roomCapacity, roomSlug, type ClientMessage } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
@@ -16,7 +17,8 @@ import { RoomEconomy } from './room-economy';
 export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
-type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
+type CabMessage=Extract<ClientMessage,{type:'cab'}>;
+type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null;cabHighWater:number;cabRequests:Map<number,{payload:string;reply:string|null}> };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
@@ -118,7 +120,7 @@ export class GameRoom extends DurableObject<Env> {
     catch(error){if(!(error instanceof NoSpawnError))throw error;return close(ROOM_NO_SPAWN_CODE,'No safe starting space');}
     const economy=new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups);
     const control=new ScheduledInput({...NEUTRAL});
-    const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null};
+    const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null,cabHighWater:0,cabRequests:new Map()};
     this.sessions.set(server,session);
     server.addEventListener('message',event=>{void this.onMessage(server,event.data);});
     server.addEventListener('close',()=>this.disconnect(server));
@@ -218,7 +220,7 @@ export class GameRoom extends DurableObject<Env> {
       // ordered behind any recovery already in progress.
       if(message.code===null&&(sequence===1||(session.guest&&!session.attachPending))){session.guest=true;session.attachPending=false;socket.send(JSON.stringify({type:'identityResult',requestId:message.requestId,ok:true,message:'Guest driver ready.'}));return;}
       if(message.code!==null)session.guest=false;
-      session.attachPending=true;this.invalidate(socket,session);
+      session.attachPending=true;session.economy.pauseCabs();this.invalidate(socket,session);
       // Autonomous navigation is also a control source: suspend it while an
       // identity is unresolved so the previous driver's route cannot continue.
       const player=this.world.players.find(p=>p.id===session.id);
@@ -238,11 +240,13 @@ export class GameRoom extends DurableObject<Env> {
     }
     if(message.type==='sync'){session.economy.barrier(message.token);return;}
     if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
+    if(message.type==='cab'&&!this.beginCabRequest(socket,session,message))return;
     // Even rejected actions advance the action fence so later inputs remain ordered.
     if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
       this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
     }
     if(session.attachPending){
+      if(message.type==='cab')this.replyCab(socket,session,message,false,'unavailable');
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
@@ -257,6 +261,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if(now-session.lastAction<400){
+      if(message.type==='cab')this.replyCab(socket,session,message,false,'cooldown');
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
@@ -284,9 +289,35 @@ export class GameRoom extends DurableObject<Env> {
       if(message.action==='collect')session.economy.luxury(message.action,message.vehicle,message.requestId,()=>this.invalidate(socket,session,true,message.edgeBaseline));
       else session.economy.luxury(message.action,message.vehicle,message.requestId);
     }
+    if(message.type==='cab'){
+      const done=(ok:boolean,reason?:string)=>this.replyCab(socket,session,message,ok,reason);
+      if(session.guest)done(false,'save-driver');
+      else if(message.action==='buy')session.economy.buyCab(done);
+      else session.economy.paintCab(message.assetId,message.paint,done);
+    }
     if(message.type==='mars'){
       if(message.action==='board')session.economy.boardMars(message.requestId);
       else session.economy.contributeMars(message.amount,message.requestId);
+    }
+  }
+
+  private beginCabRequest(socket:WebSocket,session:Session,message:CabMessage):boolean {
+    const payload=JSON.stringify(message),previous=session.cabRequests.get(message.requestId);
+    if(previous){
+      if(previous.payload!==payload)socket.send(JSON.stringify({...message,type:'cabResult',ok:false,reason:'conflict'}));
+      else if(previous.reply)socket.send(previous.reply);
+      return false;
+    }
+    if(message.requestId<=session.cabHighWater){socket.send(JSON.stringify({...message,type:'cabResult',ok:false,reason:'stale'}));return false;}
+    session.cabHighWater=message.requestId;session.cabRequests.set(message.requestId,{payload,reply:null});return true;
+  }
+  private replyCab(socket:WebSocket,session:Session,message:CabMessage,ok:boolean,reason?:string):void {
+    const record=session.cabRequests.get(message.requestId);if(!record)return;
+    record.reply=JSON.stringify({...message,type:'cabResult',ok,...(reason?{reason}:{})});
+    try{socket.send(record.reply);}catch{}
+    while(session.cabRequests.size>128){
+      const completed=[...session.cabRequests].find(([,item])=>item.reply!==null);if(!completed)break;
+      session.cabRequests.delete(completed[0]);
     }
   }
 
@@ -317,11 +348,39 @@ export class GameRoom extends DurableObject<Env> {
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
     }});
     this.tickCount=nextTick;
+    for(const session of this.sessions.values())if(!session.attachPending)session.economy.observeCabs(now);
+    // Rebalance without awaiting any driver's storage in the physics loop.
+    if(this.tickCount%20===0)this.rebalanceCabs();
     for(const {socket,outcomes} of edgeResults.values())this.sendEdges(socket,outcomes);
     for(const [socket,session] of this.sessions)if(relocated.has(session.id))this.invalidate(socket,session,true);
     if(!this.sessions.size||this.tickCount%2)return;
     const snapshot=prepareSnapshots(this.world,this.tickCount,this.roomEpoch,this.lastSubsteps);
     for(const [socket,session] of this.sessions){try{socket.send(snapshot(session.id,session.control.snapshot(),session.poseRevision,session.economy.sync()));}catch{this.disconnect(socket);}}
+  }
+
+  private rebalanceCabs():void {
+    const sessions=[...this.sessions.values()],byOwner=new Map(sessions.map(session=>[session.id,session]));
+    const fleets=sessions.map(session=>({ownerId:session.id,assetIds:session.economy.cabFleet.assets.map(asset=>asset.id)}));
+    const cabs=this.world.entities.filter(entity=>entity.cab&&entity.owner).map(entity=>({ownerId:entity.owner!,assetId:entity.cab!.assetId,occupied:entity.driver!==null}));
+    const reserved=this.world.entities.filter(entity=>entity.retiredCab).length;
+    const plan=planCybercabDispatch(fleets,cabs,MAX_DISPATCHED_CABS_PER_ROOM,reserved);if(!plan)return;
+    const retiring=new Set(plan.retire.map(cab=>cab.assetId));
+    for(const cab of cabs){
+      const session=byOwner.get(cab.ownerId);if(!session)continue;
+      if(retiring.has(cab.assetId)||session.attachPending){
+        session.economy.suspendCab(cab.assetId);
+        if(!cab.occupied&&!session.attachPending&&session.economy.cabReadyToRetire(cab.assetId))retireCybercab(this.world,cab.ownerId,cab.assetId);
+      }else session.economy.resumeCab(cab.assetId);
+      const entity=this.world.entities.find(item=>item.cab?.assetId===cab.assetId);
+      const asset=session.economy.cabFleet.assets.find(item=>item.id===cab.assetId);
+      if(entity&&asset)entity.style=structuredClone(asset.style);
+    }
+    for(const cab of plan.dispatch){
+      const session=byOwner.get(cab.ownerId);if(!session||session.attachPending)continue;
+      const asset=session.economy.cabFleet.assets.find(item=>item.id===cab.assetId);if(!asset)continue;
+      const entity=dispatchCybercab(this.world,cab.ownerId,cab.assetId);
+      if(entity){entity.style=structuredClone(asset.style);session.economy.resumeCab(cab.assetId);}
+    }
   }
 
   private sendEdges(socket:WebSocket,outcomes:EdgeOutcome[]):void {

@@ -1,7 +1,8 @@
 import type { VehicleId } from '../shared/vehicles';
 import { NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, createEmptyWorld, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
-import type { StyleChoice } from '../shared/vehicle-style';
+import type { PaintId, StyleChoice } from '../shared/vehicle-style';
+import type { CybercabFleet } from '../shared/cybercabs';
 import type { AchievementId } from '../shared/achievements';
 import type { LuxuryVehicleId } from '../shared/luxury';
 import { TickPrediction } from './tick-prediction';
@@ -12,7 +13,7 @@ export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room)
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
 export type WalletStatus = 'guest' | 'connecting' | 'syncing' | 'ready' | 'failed';
 const WALLET_TIMEOUT_MS=15_000;
-export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];ownedLuxury:LuxuryVehicleId[]};
+export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
 export type LuxuryResult = {requestId:number;action:'buy'|'collect';vehicle:LuxuryVehicleId;ok:boolean;reason?:string;awards?:AchievementId[]};
 export class Session {
   world: World = createEmptyWorld();
@@ -20,6 +21,7 @@ export class Session {
   status: SessionStatus = 'disconnected';
   capacity = 0;
   snapshotVersion = 0;
+  connectionGeneration = 0;
   walletStatus:WalletStatus = 'guest';
   walletError = '';
   private socket?: WebSocket;
@@ -60,6 +62,8 @@ export class Session {
   identityResult: {requestId:number;ok:boolean;message:string;levelBaseline:{level:number;eligibleIncome:number;afterSnapshot:number}|null}|null = null;
   wallet: WalletView|null = null;
   luxuryResult: LuxuryResult|null = null;
+  cabBuyResult: {requestId:number;action:'buy';ok:boolean;reason?:string}|null = null;
+  cabPaintResult: {requestId:number;action:'paint';assetId:string;paint:PaintId;ok:boolean;reason?:string}|null = null;
   vehicleResult: {kind:VehicleId;ok:boolean}|null = null;
   error = '';
   room = '';
@@ -84,8 +88,9 @@ export class Session {
       return;
     }
     kind ??= 'roadster';
+    this.connectionGeneration++;
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.world = createEmptyWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.cabBuyResult=null;this.cabPaintResult=null;this.world = createEmptyWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, 10000);
@@ -153,6 +158,8 @@ export class Session {
         }
         if (message.type === 'wallet') this.wallet = message;
         if (message.type === 'luxuryResult') this.luxuryResult = message;
+        if (message.type === 'cabResult' && message.action === 'buy') this.cabBuyResult = message;
+        if (message.type === 'cabResult' && message.action === 'paint') this.cabPaintResult = message;
         if (message.type === 'vehicleStyleResult') this.vehicleStyleResult = message;
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
@@ -249,6 +256,14 @@ export class Session {
     const sent=this.status==='online'&&!this.walletBlocked&&(action==='collect'?this.actionWithBarrier(message):this.send(message));
     if(!sent)this.luxuryResult={requestId,action,vehicle,ok:false,reason:'Connection lost. Rejoin and try again.'};
     return requestId;
+  }
+  buyCab():number|null {
+    const requestId=++this.nextUpgradeRequest;this.cabBuyResult=null;
+    return this.status==='online'&&this.walletStatus==='ready'&&this.send({type:'cab',action:'buy',requestId})?requestId:null;
+  }
+  paintCab(assetId:string,paint:PaintId):number|null {
+    const requestId=++this.nextUpgradeRequest;this.cabPaintResult=null;
+    return this.status==='online'&&this.walletStatus==='ready'&&this.send({type:'cab',action:'paint',assetId,paint,requestId})?requestId:null;
   }
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;

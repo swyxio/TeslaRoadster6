@@ -73,7 +73,7 @@ export function createCybercabUI(options:CybercabUIOptions) {
   heading.append(el('span','cybercab-eyebrow','YOUR FLEET'),el('h2','','Cybercabs'));
   const close=button('cybercab-close','✕');close.setAttribute('aria-label','Close Cybercab fleet');
   header.append(heading,close);
-  const intro=el('p','cybercab-intro','Find your cabs, check their status and choose how they look.');
+  const intro=el('p','cybercab-intro','Cabs earn $15,000 per hour while you are active and they are driving themselves in your room. Earnings pause when you leave or a driver takes over.');
   const wallet=el('div','cybercab-wallet'),cash=el('span',''),level=el('span','');wallet.append(cash,level);
   const content=el('div','cybercab-content'),fleet=el('section','cybercab-fleet');fleet.setAttribute('aria-label','Your Cybercabs');
   const fleetHeading=el('h3','','Your cabs'),empty=el('p','cybercab-empty','No Cybercabs yet.');
@@ -198,6 +198,7 @@ export function createCybercabUI(options:CybercabUIOptions) {
   renderPurchase();renderFleet();
   return {
     element:dialog,
+    isOpen(){return dialog.open;},
     open(){if(dialog.open)return;dialog.showModal();options.onOpenChange?.(true);close.focus();},
     close(){if(dialog.open)dialog.close();},
     update(next:CybercabFleetView){view=next;renderPurchase();renderFleet();},

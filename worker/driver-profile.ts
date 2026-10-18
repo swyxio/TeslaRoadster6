@@ -2,8 +2,9 @@ import { DurableObject } from 'cloudflare:workers';
 import type { AchievementId } from '../shared/achievements';
 import { levelForCash, type DeliveryState, type Level, type Order } from '../shared/delivery';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
+import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import type { VehicleUpgrades } from '../shared/upgrades';
-import type { VehicleStyle } from '../shared/vehicle-style';
+import type { PaintId, VehicleStyle } from '../shared/vehicle-style';
 import type { TankLevel } from '../shared/air-tank';
 import type { GameRoom } from './index';
 import type { RoomEconomy } from './room-economy';
@@ -17,8 +18,12 @@ export type DriverProgress = {
   ota:{enabled:boolean; active:boolean; remaining:number};
   /** Cumulative verified game-created income; player transfers never increase this. */
   eligibleIncome:number;
+  /** Omitted only by profiles written before fleets existed. */
+  cybercabs?:CybercabFleet;
 };
-export type DriverAction = {kind:'progress';progress:DriverProgress} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order};
+export type DriverAction = {kind:'progress';progress:DriverProgress} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order}
+  | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
+  | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
   | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number}
@@ -55,7 +60,9 @@ export class DriverProfile extends DurableObject<Env> {
       const result=await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<DriverRecord>('driver');
         if(current?.fence!==previous?.fence || current?.roomId!==previous?.roomId)return null;
-        const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:initial,incomeActivated:false};
+        const progress=current?.progress??initial;
+        const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet()};
+        const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false,progress:normalized}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:normalized,incomeActivated:false};
         await txn.put('driver',record);
         return {revision:record.revision,sequence:record.sequence,progress:record.progress,resumed:!!current};
       });
@@ -78,6 +85,7 @@ export class DriverProfile extends DurableObject<Env> {
       const record=await txn.get<DriverRecord>('driver');
       let result:DriverOutcome;
       if(!record || record.driverId!==intent.driverId || record.fence!==intent.fence || record.roomId!==intent.roomId || record.sealed)return {ok:false,reason:'superseded'};
+      record.progress={...record.progress,cybercabs:record.progress.cybercabs??emptyCybercabFleet()};
       if(!Number.isSafeInteger(intent.sequence)||intent.sequence<=record.sequence)return {ok:false,reason:'revision'};
       if(!Number.isSafeInteger(intent.revision)||intent.revision<0)return {ok:false,reason:'invalid'};
       if(record.revision<intent.revision)return {ok:false,reason:'not-ready'};
@@ -88,7 +96,23 @@ export class DriverProfile extends DurableObject<Env> {
         let error:'invalid'|'owned'|'unaffordable'|undefined;
         if(intent.action.kind==='progress'){
           if(!validProgress(intent.action.progress,record.progress))error='invalid';
-          else Object.assign(next,structuredClone(intent.action.progress));
+          else {
+            Object.assign(next,structuredClone(intent.action.progress));
+            // A room checkpoint can carry stale or absent fleet state. Only cab
+            // mutations are allowed to replace the durable owned fleet.
+            next.cybercabs=structuredClone(record.progress.cybercabs);
+          }
+        } else if(intent.action.kind==='cab-buy' || intent.action.kind==='cab-income' || intent.action.kind==='cab-paint'){
+          const result=intent.action.kind==='cab-buy'
+            ?purchaseCybercab(next.cybercabs!,next.cash,next.eligibleIncome,intent.action.assetId)
+            :intent.action.kind==='cab-paint'
+              ?paintCybercab(next.cybercabs!,next.cash,next.eligibleIncome,intent.action.assetId,intent.action.paint)
+              :settleCybercabIntervals(next.cybercabs!,next.cash,next.eligibleIncome,intent.action.intervals);
+          if(!result.ok)error=result.reason;
+          else {
+            next.cybercabs=result.fleet;next.cash=result.cash;next.eligibleIncome=result.eligibleIncome;
+            if(intent.action.kind!=='cab-income' && intent.action.order)next.order=structuredClone(intent.action.order);
+          }
         } else if(intent.action.kind==='contribute'){
           const amount=intent.action.amount;
           if(!Number.isSafeInteger(amount)||amount<=0||amount>1_000_000_000)error='invalid';

@@ -1,4 +1,4 @@
-# Implementation contracts · v36
+# Implementation contracts · v37 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v36
+## Wire protocol v37 candidate
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:36,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:37,capacity:number}`.
 
 Client messages:
 
@@ -66,6 +66,8 @@ Client messages:
 {"type":"mars","action":"contribute","amount":100,"requestId":10}
 {"type":"identity","code":"<recovery-code>","requestId":6}
 {"type":"identity","code":null,"requestId":9}
+{"type":"cab","action":"buy","requestId":11}
+{"type":"cab","action":"paint","assetId":"<server-asset-id>","paint":"mint","requestId":12}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
 {"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
 ```
@@ -73,7 +75,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:36, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:37, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -83,7 +85,8 @@ Server messages:
 {type:"destinationResult", requestId:number, ok:boolean}
 {type:"marsResult", requestId:number, action:"board"|"contribute", ok:boolean, amount:number, available?:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
-{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], ownedLuxury:LuxuryVehicleId[]}
+{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
+{type:"cabResult", requestId:number, action:"buy"|"paint", ok:boolean, reason?:string, assetId?:string, paint?:PaintId}
 {type:"luxuryResult", requestId:number, action:"buy"|"collect", vehicle:LuxuryVehicleId, ok:boolean, reason?:string, awards?:AchievementId[]}
 ```
 
@@ -115,7 +118,7 @@ Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and p
 
 The server creates a guest wallet on join. `EconomySession` keeps a per-driver draft and ordered queue; `RoomEconomy` records intents and pickup reservations, while `DriverProfile` checks revisions and fences and records receipts with wallet changes. The visible wallet is the last committed result. Identity, purchase and collection requests are validated against server-owned state; a slow driver profile must not block other players' room physics or input acknowledgements. `sync` barriers wait for the requesting driver's preceding economy operations.
 
-The profile includes balance, earned and eligible income, current order and completion count, achievement IDs, owned Vault vehicle IDs, personal vehicle upgrades/finishes and OTA state. Position, health, air, traffic and activity rounds stay in the room. Local checks of reconnects, identity recovery, uncertain outcomes, timer checkpoints and isolation under delay are recorded in [VERIFICATION.md](VERIFICATION.md). Property, player trading, Cybercab passive ownership and broader event multipliers remain plans rather than implemented wallet features.
+The profile includes balance, earned and eligible income, current order and completion count, achievement IDs, owned Vault vehicle IDs, personal vehicle upgrades/finishes, Cybercab fleet state and OTA state. Position, health, air, traffic and activity rounds stay in the room. Local checks of reconnects, identity recovery, uncertain outcomes, timer checkpoints and isolation under delay are recorded in [VERIFICATION.md](VERIFICATION.md). Property, player trading and broader event multipliers remain plans rather than implemented wallet features.
 
 ## Mars mission
 
@@ -223,11 +226,15 @@ Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the 
 `shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first color to five ends the match; after a six-second winner display, both scores, player match stats and the ball reset. The last driven car to physically strike the ball earns the goal for its driver and its class; an undriven car's strike clears the last touch. The player(s) present in the dome at match completion with the most credited goals win; if no eligible player has a credited goal, the match has no player winner. Leaving and returning before the finish retains the player’s match goals. Departing the room removes that driver's match stats and pending touch. Physics, scoring and timing are authoritative in online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 
 
-## In-progress economy primitives
+## Cybercab candidate and in-progress market
 
-The Cybercab and marketplace primitives are not connected to player actions, persistent storage or the wire protocol. They do not yet make cabs purchasable, pay income, or enable resale. `dispatchCybercab` is server-internal and may be called only after durable ownership is verified; it allows at most eight additional cab entities per room, including borrowed retired copies. A dispatched cab retains its owner through normal takeover. When an owner leaves, an occupied borrowed car immediately loses its durable asset identity and becomes a temporary ride until its borrower releases it. The new room may then dispatch the asset without a second owned instance in the old room. Simultaneous room sessions still require authoritative fencing and cross-room eviction before this is integrated. A room-local player ID in `Entity.owner` is not durable identity. The cab's `assetId` is an opaque server-owned identifier, and the owning player receives its entity in snapshots even outside the normal ambient-interest radius. An undispatched or blocked cab must not earn income. The current cap is a provisional traffic budget, not a measured room-capacity guarantee; the allocation planner and visible availability remain to be integrated with the wallet.
+In this unreleased candidate, only a connected saved driver can purchase a Cybercab. The server generates the asset ID and price; the profile commits the debit, asset and one-time ownership award with its receipt. Paint uses the existing server-side workshop catalog and is committed to that specific owned asset. Repeated request IDs on one connection are coalesced while pending or replayed after completion; older evicted IDs are rejected. After an uncertain disconnect the UI waits for the same saved wallet to reconnect and reconcile before allowing a new purchase. The wallet fence drains and evicts an earlier session before binding the next one.
 
-`shared/cybercabs.ts` contains provisional purchase quotes and exact fractional income calculations; the caller must atomically persist price, asset, one-time ownership award and claimed milestone. Each cab's first $20,000 gross revenue pays its own one-time $2,000 award. Income requires server-measured owner activity and cab operation, a durable fractional remainder, event-boundary splitting, stable income IDs and exactly-once wallet/outbox settlement. The remainder uses the same units as the proposed Starship event accrual, but no timed event is enabled here. An unwired allocation planner shares the provisional room budget across owners while keeping occupied cars; its caller must settle before retirement and wait for an actually free slot before dispatching. A desired dispatch is not operating income. `shared/market.ts` contains pure property-resale decisions only: listing custody, revisions, sufficient funds, the level-six property gate, purchased-home slot and the 5% resale sink. Collectible and cosmetic trading rules remain open. A server transaction must authenticate the actor and atomically read and write buyer and seller wallets, asset custody, listing and per-operation receipt. Sequential writes to separate driver objects do not satisfy that contract. Existing owner-derived home/plot room IDs are not transferable asset identities. Do not expose resale until a stable shared authority and crash recovery exist.
+`dispatchCybercab` only uses committed ownership. Its provisional budget is eight additional cab entities per room, including borrowed retired copies; the allocator shares slots across owners, keeps occupied cars, and settles before retiring an unoccupied car. A dispatched cab retains its owner through takeover. When its owner leaves, an occupied borrowed car loses its durable asset identity and becomes a temporary ride until released. The cab's `assetId` is opaque and the owner receives its entity outside the normal ambient-interest radius. The fleet dialog exposes owner/driver, committed gross income, paint and map find/follow. The cap is not a measured room-capacity guarantee.
+
+The room measures consecutive observed wall-clock ticks only while the owner is active and an owned cab is dispatched, autonomous and unoccupied. It does not infer operation across gaps longer than 200 ms. It batches intervals at ten seconds or on pause/disconnect; the wallet journal provides event IDs and receipts, and the profile atomically advances each cab's non-overlapping watermark, fractional remainder, cash, eligible income and one-time $2,000 award at $20,000 gross. A sudden room-process loss can discard intervals not yet in that journal; a stalled earlier wallet action can extend this window beyond ten seconds. They cannot be reconstructed from the wallet. A slow driver's storage does not block other players' physics; an overloaded driver is disconnected. No timed multiplier is enabled here.
+
+`shared/market.ts` contains pure property-resale decisions only: listing custody, revisions, sufficient funds, the level-six property gate, purchased-home slot and the 5% resale sink. Collectible and cosmetic trading rules remain open. A server transaction must authenticate the actor and atomically read and write buyer and seller wallets, asset custody, listing and per-operation receipt. Sequential writes to separate driver objects do not satisfy that contract. Existing owner-derived home/plot room IDs are not transferable asset identities. Do not expose resale until a stable shared authority and crash recovery exist.
 
 The separate event-history prototype is not yet integrated. When it is, consume every page of the relevant historical windows and defer settlement while history is unavailable or a room win affecting the interval is pending. A current global lease cannot establish an earlier interval's multiplier: its validity begins at its issue time. Do not substitute a base-rate settlement for an unresolved historical interval. Keep delivering cumulative eligible income through the shared outbox after a Starship launch; a late confirmation may represent money earned before launch.
 

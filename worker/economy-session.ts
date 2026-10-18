@@ -5,12 +5,13 @@ import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribe
 import { awardMarsAchievement, type AchievementState } from '../shared/achievements';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
-import type { StyleChoice } from '../shared/vehicle-style';
+import type { PaintId, StyleChoice } from '../shared/vehicle-style';
+import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
 import { RoomEconomy } from './room-economy';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
-type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[]};
+type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
 type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;onApplied?:(outcome:DriverOutcome)=>void};
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 // Compare only durable fields touched by simulation. Vehicle maps are copied on change.
@@ -39,12 +40,19 @@ export class EconomySession {
   private committed:DriverProgress;
   private driverId:string;
   private fence:string;
+  // Open intervals remain room-local until submitted to the existing journal.
+  // They are never presented as committed income.
+  private cabClock:number|null=null;
+  private cabOpen=new Map<string,CybercabInterval>();
+  private cabIntervals:CybercabInterval[]=[];
+  private suspendedCabs=new Set<string>();
+  private cabBackpressure=false;
   constructor(private env:Env,private economy:DurableObjectStub<RoomEconomy>,private world:World,private player:Player,private socket:WebSocket,
     driverId:string,fence:string,private roomId:string,revision:number,sequence:number,progress:DriverProgress,pickupGenerations:Map<string,number>,private pendingPickups:Set<string>) {
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);
     this.pickupGenerations=pickupGenerations;
     this.install(progress);
-    this.draft={delivery:structuredClone(player.delivery),achievements:structuredClone(player.achievements),cockpit:structuredClone(player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury]};
+    this.draft={delivery:structuredClone(player.delivery),achievements:structuredClone(player.achievements),cockpit:structuredClone(player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=player.delivery.ota.renewAt;
     this.rememberTimers();
   }
@@ -69,22 +77,27 @@ export class EconomySession {
     if(this.committedOtaPeriodEnd<=this.world.time){ota.active=false;ota.renewAt=null;}
     else ota.renewAt=this.committedOtaPeriodEnd;
   }
-  private wallet(){this.send({type:'wallet',cash:this.committed.cash,earned:this.committed.earned,eligibleIncome:this.committed.eligibleIncome,level:this.committed.level,unlocked:this.committed.unlocked,ownedLuxury:this.committed.ownedLuxury});}
+  private wallet(){this.send({type:'wallet',cash:this.committed.cash,earned:this.committed.earned,eligibleIncome:this.committed.eligibleIncome,level:this.committed.level,unlocked:this.committed.unlocked,ownedLuxury:this.committed.ownedLuxury,cybercabs:this.committed.cybercabs??emptyCybercabFleet()});}
   initialWallet(){this.wallet();}
   get pending(){return this.queue.length>0;}
   get vehicleLocked(){return this.lockedCar;}
   get unstarted(){return this.submitted===0&&this.draft.delivery.earned===0&&this.draft.delivery.lifetimeIncome===0&&this.draft.achievements.unlocked.length===0;}
   get walletId(){return this.driverId;}
   get currentFence(){return this.fence;}
+  get cabFleet(){return this.committed.cybercabs??emptyCybercabFleet();}
   close(){this.closed=true;}
   finish(){
+    this.closeCabIntervals();
     if(!this.failed && this.timersChanged())
       this.enqueue({kind:'progress',progress:this.progress()});
+    this.flushCabIncome();
     this.close();
   }
   async freeze():Promise<void>{
     if(!this.closed){this.closed=true;try{this.socket.close(1008,'Driver opened in another room.');}catch{}}
-    while(this.processing || this.queue.length)await wait(100);
+    while(this.processing || this.queue.length || (!this.failed&&this.cabIntervals.length)){
+      this.flushCabIncome();await wait(100);
+    }
   }
   barrier(token:number){this.barriers.push({token,after:this.submitted});}
   sync():number|undefined{
@@ -93,12 +106,85 @@ export class EconomySession {
   }
   /** The caller must serialize identity switches and ensure no guest events happened. */
   replace(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress){
+    this.cabClock=null;
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);
     this.install(progress);
-    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury]};
+    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=this.player.delivery.ota.renewAt;
     this.rememberTimers();
     this.wallet();
+  }
+  /** Only committed ownership may enter the world or be shown to the player. */
+  buyCab(reply:(ok:boolean,reason?:string)=>void){
+    if(this.failed||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
+    const assetId=crypto.randomUUID();
+    const result=purchaseCybercab(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,assetId);
+    if(!result.ok){reply(false,result.reason);return;}
+    const previousLevel=this.draft.delivery.level;
+    this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.lifetimeIncome=result.eligibleIncome;
+    this.draft.delivery.level=levelForCash(result.cash);
+    const car=this.world.entities.find(e=>e.id===this.player.entityId);
+    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    this.enqueue({kind:'cab-buy',assetId,...(rerouted?{order:{...this.draft.delivery.order}}:{})},undefined,
+      outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason));
+  }
+  paintCab(assetId:string,paint:PaintId,reply:(ok:boolean,reason?:string)=>void){
+    if(this.failed||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
+    const result=paintCybercab(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,assetId,paint);
+    if(!result.ok){reply(false,result.reason);return;}
+    const previousLevel=this.draft.delivery.level;
+    this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.level=levelForCash(result.cash);
+    const car=this.world.entities.find(e=>e.id===this.player.entityId);
+    const rerouted=car&&this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    this.enqueue({kind:'cab-paint',assetId,paint,...(rerouted?{order:{...this.draft.delivery.order}}:{})},undefined,
+      outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason));
+  }
+  private closeCabInterval(id:string){
+    const interval=this.cabOpen.get(id);if(!interval)return;
+    this.cabOpen.delete(id);if(interval.endMs>interval.startMs)this.cabIntervals.push(interval);
+  }
+  private closeCabIntervals(){for(const id of this.cabOpen.keys())this.closeCabInterval(id);}
+  pauseCabs(){this.closeCabIntervals();this.cabClock=null;this.flushCabIncome();}
+  /** Stop measuring before eviction; the entity stays until the journal drains. */
+  suspendCab(id:string){this.suspendedCabs.add(id);this.closeCabInterval(id);this.flushCabIncome();}
+  resumeCab(id:string){this.suspendedCabs.delete(id);}
+  cabReadyToRetire(id:string){return this.suspendedCabs.has(id)&&!this.cabOpen.has(id)&&!this.cabIntervals.some(interval=>interval.assetId===id)&&!this.pending&&!this.processing;}
+  /** Record only observed consecutive room ticks while the owner is active. */
+  observeCabs(now:number){
+    const previous=this.cabClock;this.cabClock=now;
+    if(this.closed||this.failed||previous===null||!Number.isSafeInteger(now)||now<=previous||now-previous>200){
+      this.closeCabIntervals();this.flushCabIncome();return;
+    }
+    const owned=new Set(this.cabFleet.assets.map(asset=>asset.id));
+    const active=this.world.time<=this.draft.delivery.activeUntil;
+    const operating=new Set(this.world.entities.filter(e=>active&&e.owner===this.player.id&&e.cab&&owned.has(e.cab.assetId)&&
+      !this.suspendedCabs.has(e.cab.assetId)&&e.npc&&e.autopilot&&!e.driver).map(e=>e.cab!.assetId));
+    for(const id of this.cabOpen.keys())if(!operating.has(id))this.closeCabInterval(id);
+    for(const id of operating){
+      const open=this.cabOpen.get(id);
+      if(open&&open.endMs===previous)open.endMs=now;
+      else {this.closeCabInterval(id);this.cabOpen.set(id,{assetId:id,startMs:previous,endMs:now,multiplier:1});}
+    }
+    // Checkpoint at most every ten seconds of observed operation. A stalled
+    // or interrupted room does not infer activity through the missing time.
+    for(const [id,interval] of this.cabOpen)if(interval.endMs-interval.startMs>=10_000)this.closeCabInterval(id);
+    this.flushCabIncome();
+    // Bound unjournaled intervals if this driver's persistence is unavailable.
+    if(this.cabIntervals.length>=128&&!this.cabBackpressure){
+      this.cabBackpressure=true;try{this.socket.close(1011,'Cab income delayed. Please rejoin.');}catch{}
+    }
+  }
+  private flushCabIncome(){
+    if(this.failed||this.pending||!this.cabIntervals.length)return;
+    const intervals=[...this.cabIntervals];
+    const result=settleCybercabIntervals(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,intervals);
+    if(!result.ok){this.failed=true;try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}return;}
+    this.cabIntervals.splice(0,intervals.length);
+    this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.lifetimeIncome=result.eligibleIncome;
+    this.draft.delivery.level=levelForCash(result.cash);
+    this.enqueue({kind:'cab-income',intervals},undefined,outcome=>{
+      if(!outcome.ok){this.failed=true;if(!this.closed)try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}}
+    });
   }
   hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
   update(player:Player,apply:()=>void){
@@ -165,7 +251,7 @@ export class EconomySession {
           // The committed period keeps counting down even if a later draft
           // speculatively renewed or disabled the subscription.
           this.restoreCommittedOta();
-          this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(this.committed.vehicles),ownedLuxury:[...this.committed.ownedLuxury]};
+          this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(this.committed.vehicles),ownedLuxury:[...this.committed.ownedLuxury],cybercabs:structuredClone(this.committed.cybercabs??emptyCybercabFleet())};
           // Preserved elapsed time is still dirty and must flush on disconnect.
           this.lastOrderElapsed=saved.elapsed;
           this.lastOtaRemaining=this.committed.ota.active?this.committed.ota.remaining:null;
@@ -205,6 +291,7 @@ export class EconomySession {
           try{acknowledged=await this.economy.acknowledge(item.intent);}catch{}
           if(!acknowledged)await wait(500);
         }
+        if(!this.queue.length)this.flushCabIncome();
       }
     } finally { this.processing=false; }
   }

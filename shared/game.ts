@@ -29,7 +29,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=36;
+export const PROTOCOL_VERSION=37;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -209,6 +209,15 @@ export function dispatchCybercab(world:World,ownerId:string,assetId:string):Enti
     if(clear&&fits(world,car)){world.entities.push(car);return car;}
   }
   return null;
+}
+/** The owner must settle the final operating interval before calling this. */
+export function retireCybercab(world:World,ownerId:string,assetId:string):boolean {
+  const cab=world.entities.find(entity=>entity.owner===ownerId&&entity.cab?.assetId===assetId);
+  if(!cab||cab.driver)return false;
+  removeFerryPassenger(world.ferry,cab.id);
+  world.ferry.arrivals=world.ferry.arrivals.filter(id=>id!==cab.id);
+  world.entities=world.entities.filter(entity=>entity!==cab);
+  return true;
 }
 function cleanupCars(world:World){world.entities=world.entities.filter(e=>(!e.retiredCab||e.driver!==null)&&(!e.owner||e.driver!==null||world.players.some(p=>p.id===e.owner)));}
 function release(e:Entity,world:World){e.driver=null;e.speed=0;e.autopilot=false;e.navigation=null;if(e.npc&&e.supportId!=='ferry'){engageAutopilot(e);e.pauseUntil=world.time+2;}}

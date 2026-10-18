@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Cybercab and market draft · protocol v37 candidate · 2026-10-18 Pacific
+
+- Before the latest wallet fixes were integrated, `pnpm test` passed 710 tests and `pnpm build` passed, with the existing Vite chunk-size warning. Separate local Wrangler Cybercab wallet and room fixtures passed purchase, paint, receipt replay after restart, held and lost replies, independent players during a stalled wallet, active and idle income, takeover, and saved-driver fencing. They are functional tests, not load or production evidence.
+- The standard local Wrangler two-player room integration and prediction integration passed on v37. The first room attempt was interrupted by a local Worker reload and the clean rerun passed. The room run does not establish capacity or a complete ferry crossing.
+- In desktop Chrome against a funded local fixture, a $25,000 cab purchase with its $5,000 award committed once, $18 mint paint persisted, and map follow and its pause control worked. No console warning or error was captured. Actual mobile portrait, landscape and touch behavior remain unverified; no physical device was tested.
+- Release remains blocked: observed income that has not reached the durable wallet journal can be lost on a room crash, including intervals queued behind a stalled wallet write. Event-history multipliers are not integrated. Property resale has only pure decision logic and needs a transferable property registry and crash-safe atomic buyer/seller settlement. These checks do not cover the later wallet recovery fixes or a production deploy.
+
 ## Development resumed · 2026-10-18 Pacific
 
 After the production v32 checks below, the user lifted the global feature freeze and requested periodic performance checks. The paused progression, Cybercab/market, Starship, driving/chat UX and Bay landmarks article chats were resumed; the active wallet/showroom chat owns their shared persistence contract. This changes the release policy, not the measured results: known performance gaps remain documented. See [the current integration policy](PERFORMANCE_RELEASE_GATES.md#feature-integration-and-periodic-checks).

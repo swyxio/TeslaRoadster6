@@ -2,7 +2,7 @@
 
 **Economy design, 2026-10-18.** Deliveries build a wallet, a fleet puts money to work, and homes give players a place to show what they have built. This document sets out the proposed progression and prices. The [implementation guide](ECONOMY_IMPLEMENTATION.md) records the shared decisions and handoffs for contributors. The [player simulations](ECONOMY_SIMULATIONS.md) and [five-minute experiment](ECONOMY_FIVE_MINUTE.md) compare the choices and their pacing.
 
-The candidate branch implements a saved wallet, cash-based regional levels, delivery and showroom achievements, a luxury showroom, and an automatic global earnings counter for Starship. Its wallet recovery, gameplay and performance checks remain release gates. Cybercab income, property, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for the candidate's implemented rules.
+The production baseline implements a saved wallet, cash-based regional levels, delivery and showroom achievements, a luxury showroom, and an automatic global earnings counter for Starship. The unreleased Cybercab candidate adds owned fleets and active-only income; its wallet recovery and gameplay checks remain release gates. Property, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for implemented and candidate rules.
 
 ## Goals
 

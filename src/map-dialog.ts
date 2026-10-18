@@ -7,6 +7,8 @@ import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
 
+export type MapCab = { id: string; name: string; position: MapPoint | null };
+
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
 export function createMapDialog({ onDestination }: { onDestination: (point: MapPoint) => string | void }) {
   const dialog = document.createElement('dialog');
@@ -17,8 +19,9 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     <p class="map-lightbox-help" id="map-lightbox-help">Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. Shaded areas unlock as you play. The car stops at a connected road up to 100 m from your pin.</p>
     <div class="map-lightbox-view"><canvas class="map-lightbox-canvas" tabindex="0" role="application" aria-label="Bay map. Use arrow keys to move the destination pin; press Enter to drive there." aria-describedby="map-lightbox-help">Interactive map of the Bay.</canvas>
       <div class="map-lightbox-zoom" aria-label="Map controls"><button type="button" data-map-zoom="in" aria-label="Zoom in">+</button><button type="button" data-map-zoom="out" aria-label="Zoom out">−</button><button type="button" data-map-center aria-label="Center on your car">◎</button></div>
-      <div class="map-lightbox-legend"><span><i></i> YOU</span><span><i></i> DESTINATION</span><span><i></i> LOCKED</span></div>
+      <div class="map-lightbox-legend"><span><i></i> YOU</span><span><i></i> DESTINATION</span><span><i></i> LOCKED</span><span class="map-cab-legend" hidden><i></i> CAB</span></div>
     </div>
+    <div class="map-lightbox-cab" hidden><p class="map-cab-status" role="status" aria-live="polite"></p><button type="button" class="map-cab-follow" aria-pressed="false">Follow</button></div>
     <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
   document.body.append(dialog);
   const canvas = dialog.querySelector('canvas')!;
@@ -27,7 +30,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   const baseCtx = base.getContext('2d')!;
   const drive = dialog.querySelector<HTMLButtonElement>('.map-drive')!;
   const status = dialog.querySelector<HTMLElement>('.map-lightbox-status')!;
+  const cabPanel = dialog.querySelector<HTMLElement>('.map-lightbox-cab')!;
+  const cabStatus = dialog.querySelector<HTMLElement>('.map-cab-status')!;
+  const cabFollow = dialog.querySelector<HTMLButtonElement>('.map-cab-follow')!;
+  const cabLegend = dialog.querySelector<HTMLElement>('.map-cab-legend')!;
   let player: MapPoint = { x: 0, z: 0 }, selected: MapPoint | null = null, currentDestination: MapPoint | null = null;
+  let cab: MapCab | null = null, followingCab = false, lastFollowAt = 0;
   let level: Level = 0, center: MapPoint = { x: 0, z: 0 }, scale = .6, width = 0, height = 0, dpr = 1, dirty = true;
   const pointers = new Map<number, { x: number; y: number }>();
   let moved = false, pointerStart = { x: 0, y: 0 };
@@ -39,6 +47,27 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= Math.max(level,requiredLevelAt(player.x,player.z));
   const bounds = (point: MapPoint): MapPoint => ({ x: Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, point.x)), z: Math.max(MAP_BOUNDS.minZ, Math.min(MAP_BOUNDS.maxZ, point.z)) });
   const local = (event: PointerEvent | WheelEvent) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
+  const cabPosition = (point: MapPoint | null): MapPoint | null => point && Number.isFinite(point.x) && Number.isFinite(point.z) ? copy(point) : null;
+  function renderCabControls() {
+    cabPanel.hidden = !cab;
+    cabLegend.hidden = !cab?.position;
+    if (!cab) return;
+    cabStatus.textContent = cab.position
+      ? `${cab.name} · ${followingCab ? 'Following' : 'Location shown'}`
+      : `${cab.name} · Location unavailable`;
+    cabFollow.disabled = !cab.position;
+    cabFollow.textContent = followingCab ? 'Following' : 'Follow';
+    cabFollow.setAttribute('aria-pressed', String(followingCab));
+    cabFollow.setAttribute('aria-label', `${followingCab ? 'Stop following' : 'Follow'} ${cab.name}`);
+  }
+  function stopFollowing() {
+    if (!followingCab) return;
+    followingCab = false; renderCabControls();
+  }
+  function centerCab() {
+    if (!cab?.position) return;
+    center = bounds(cab.position); dirty = true; lastFollowAt = performance.now();
+  }
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -199,8 +228,24 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const p = screen(selected); ctx.fillStyle = '#f46d69'; ctx.strokeStyle = '#fff7e5'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(p.x, p.y - 5, 7, Math.PI, 0); ctx.lineTo(p.x, p.y + 9); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
+    if (cab?.position) {
+      const p = screen(cab.position);
+      if (p.x >= -10 && p.x <= width + 10 && p.y >= -10 && p.y <= height + 10) {
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - 10); ctx.lineTo(p.x + 10, p.y); ctx.lineTo(p.x, p.y + 10); ctx.lineTo(p.x - 10, p.y); ctx.closePath();
+        ctx.fillStyle = '#e5bc4c'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff7e5'; ctx.stroke();
+        ctx.fillStyle = '#173a40'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('C', p.x, p.y);
+        ctx.textAlign = 'left'; ctx.font = '700 11px system-ui';
+        const label = `CAB · ${cab.name}`, labelWidth = Math.min(180, width - 8, ctx.measureText(label).width + 12);
+        if (labelWidth > 12) {
+          const x = Math.max(4, Math.min(width - labelWidth - 4, p.x + 13)), y = Math.max(4, Math.min(height - 22, p.y - 10));
+          ctx.fillStyle = '#193a40ed'; ctx.fillRect(x, y, labelWidth, 18);
+          ctx.fillStyle = '#fff7e5'; ctx.fillText(label, x + 6, y + 9, labelWidth - 12);
+        }
+      }
+    }
   }
   function choose(point: MapPoint) {
+    stopFollowing();
     selected = copy(point); drive.disabled = false;
     status.textContent = `Pin placed · X ${Math.round(point.x)}, Z ${Math.round(point.z)} (game meters).`;
     draw();
@@ -221,14 +266,25 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   drive.onclick = start;
   dialog.querySelector<HTMLButtonElement>('.map-close')!.onclick = () => dialog.close();
   function zoomTarget() {
-    if (!selected) return undefined;
+    if (followingCab || !selected) return undefined;
     const p = screen(selected);
     return p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height ? p : undefined;
   }
   dialog.querySelector<HTMLButtonElement>('[data-map-zoom="in"]')!.onclick = () => zoom(1.5, zoomTarget());
   dialog.querySelector<HTMLButtonElement>('[data-map-zoom="out"]')!.onclick = () => zoom(1 / 1.5, zoomTarget());
-  dialog.querySelector<HTMLButtonElement>('[data-map-center]')!.onclick = () => { center = copy(player); dirty = true; draw(); };
-  canvas.addEventListener('wheel', event => { event.preventDefault(); zoom(Math.exp(-event.deltaY * .002), local(event)); }, { passive: false });
+  dialog.querySelector<HTMLButtonElement>('[data-map-center]')!.onclick = () => { stopFollowing(); center = copy(player); dirty = true; draw(); };
+  cabFollow.onclick = () => {
+    if (!cab?.position) return;
+    followingCab = !followingCab;
+    if (followingCab) centerCab();
+    renderCabControls(); draw();
+  };
+  canvas.addEventListener('wheel', event => {
+    event.preventDefault();
+    const at = local(event);
+    if (Math.hypot(at.x - width / 2, at.y - height / 2) > 1) stopFollowing();
+    zoom(Math.exp(-event.deltaY * .002), at);
+  }, { passive: false });
   canvas.addEventListener('pointerdown', event => {
     if (event.button !== 0) return;
     event.preventDefault(); canvas.focus(); canvas.setPointerCapture(event.pointerId);
@@ -239,6 +295,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     const previous = pointers.get(event.pointerId); if (!previous) return;
     const next = local(event), entries = [...pointers.entries()], other = entries.find(([id]) => id !== event.pointerId)?.[1];
     if (other) {
+      stopFollowing();
       const beforeDistance = Math.hypot(previous.x - other.x, previous.y - other.y);
       const afterDistance = Math.hypot(next.x - other.x, next.y - other.y);
       const beforeMid = { x: (previous.x + other.x) / 2, y: (previous.y + other.y) / 2 };
@@ -250,7 +307,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     } else {
       const dx = next.x - previous.x, dy = next.y - previous.y;
       if (Math.hypot(next.x - pointerStart.x, next.y - pointerStart.y) > 5) moved = true;
-      if (moved) center = bounds({ x: center.x - dx / scale, z: center.z - dy / scale });
+      if (moved) { stopFollowing(); center = bounds({ x: center.x - dx / scale, z: center.z - dy / scale }); }
     }
     pointers.set(event.pointerId, next); dirty = true; draw();
   });
@@ -263,28 +320,52 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   canvas.addEventListener('pointerup', event => endPointer(event, false));
   canvas.addEventListener('pointercancel', event => endPointer(event, true));
   canvas.addEventListener('keydown', event => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (selected) start(); else choose(player); return; }
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (selected) start(); else choose(cab?.position ?? player); return; }
     if (event.key === '+' || event.key === '=') { event.preventDefault(); zoom(1.5); return; }
     if (event.key === '-') { event.preventDefault(); zoom(1 / 1.5); return; }
     const direction: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const delta = direction[event.key]; if (!delta) return;
     event.preventDefault(); event.stopPropagation();
-    const origin = selected ?? player, step = (event.shiftKey ? 40 : 12) / scale;
+    const origin = selected ?? cab?.position ?? player, step = (event.shiftKey ? 40 : 12) / scale;
     const point = bounds({ x: origin.x + delta[0] * step, z: origin.z + delta[1] * step });
     const p = screen(point);
     if (p.x < 35 || p.x > width - 35 || p.y < 35 || p.y > height - 35) { center = copy(point); dirty = true; }
     choose(point);
   });
   const observer = new ResizeObserver(() => draw()); observer.observe(canvas);
-  dialog.addEventListener('close', () => { pointers.clear(); });
+  dialog.addEventListener('close', () => {
+    pointers.clear();
+    if (!dialog.open) { cab = null; followingCab = false; renderCabControls(); }
+  });
+  function open(position: MapPoint, destination?: MapPoint | null, nextLevel: Level = 0) {
+    cab = null; followingCab = false; renderCabControls();
+    player = copy(position); center = copy(position); currentDestination = destination ? copy(destination) : null;
+    selected = destination ? copy(destination) : null; level = nextLevel; scale = .6; dirty = true;
+    drive.disabled = !selected; status.textContent = selected ? 'Destination selected. Choose another place or start driving.' : 'Choose a destination on the map.';
+    if (!dialog.open) dialog.showModal(); draw(); canvas.focus();
+  }
   return {
     element: dialog,
-    open(position: MapPoint, destination?: MapPoint | null, nextLevel: Level = 0) {
-      player = copy(position); center = copy(position); currentDestination = destination ? copy(destination) : null;
-      selected = destination ? copy(destination) : null; level = nextLevel; scale = .6; dirty = true;
-      drive.disabled = !selected; status.textContent = selected ? 'Destination selected. Choose another place or start driving.' : 'Choose a destination on the map.';
-      if (!dialog.open) dialog.showModal(); draw(); canvas.focus();
+    open,
+    openCab(position: MapPoint, destination: MapPoint | null | undefined, nextLevel: Level, nextCab: MapCab, follow = false) {
+      open(position, destination, nextLevel);
+      cab = { id: nextCab.id, name: nextCab.name, position: cabPosition(nextCab.position) };
+      followingCab = follow && !!cab.position;
+      centerCab(); renderCabControls(); draw();
     },
+    updateCab(id: string, position: MapPoint | null) {
+      if (!cab || cab.id !== id) return;
+      const wasAvailable = !!cab.position;
+      cab.position = cabPosition(position);
+      if (!cab.position) stopFollowing();
+      if (wasAvailable !== !!cab.position) renderCabControls();
+      // Base map painting is expensive; keep the moving marker live while
+      // recentring at most four times a second during follow.
+      if (followingCab && cab.position && performance.now() - lastFollowAt >= 250 &&
+          Math.hypot(cab.position.x - center.x, cab.position.z - center.z) * scale > .5) centerCab();
+      draw();
+    },
+    trackedCabId() { return cab?.id ?? null; },
     update(position: MapPoint, destination?: MapPoint | null, nextLevel: Level = 0) {
       const previousRegion=requiredLevelAt(player.x,player.z);
       player = copy(position); currentDestination = destination ? copy(destination) : null;
