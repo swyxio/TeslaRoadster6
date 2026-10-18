@@ -1,4 +1,4 @@
-# Implementation contracts · v37
+# Implementation contracts · v38
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v37
+## Wire protocol v38
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:37,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:38,capacity:number}`.
 
 Client messages:
 
@@ -63,6 +63,8 @@ Client messages:
 {"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"deliveryDestination","requestId":4,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"starship","action":"status","requestId":11}
+{"type":"starship","action":"name","name":"Driver","requestId":12}
 {"type":"mars","action":"board","requestId":5}
 {"type":"mars","action":"contribute","amount":100,"requestId":10}
 {"type":"identity","code":"<recovery-code>","requestId":6}
@@ -74,7 +76,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:37, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:38, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -83,6 +85,9 @@ Server messages:
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
 {type:"marsResult", requestId:number, action:"board"|"contribute", ok:boolean, amount:number, available?:number}
+{type:"starshipStatus", requestId:number, status:StarshipStatus, publicName:string|null, privacyPending:boolean, serverTime:number}
+{type:"starshipNameResult", requestId:number, ok:boolean, publicName:string|null}
+{type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
 {type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], ownedLuxury:LuxuryVehicleId[]}
 {type:"luxuryResult", requestId:number, action:"buy"|"collect", vehicle:LuxuryVehicleId, ok:boolean, reason?:string, awards?:AchievementId[]}
@@ -123,6 +128,17 @@ The profile includes balance, earned and eligible income, current order and comp
 ## Mars mission
 
 `shared/mars.ts` owns the $1,000,000,000 target and boarding eligibility. The `GlobalIncome` authority aggregates each driver's cumulative eligible game-created income; profile outboxes retry credits and cumulative per-driver accounting avoids double counting on replay. `mars.fund` is the global total capped at the goal; earnings count automatically without spending cash. The separate `mars.roomFund` preserves that room's earlier contributions and accepts optional new contributions. A contribution debits the player's wallet and credits only that room's fund; it never counts toward global income. The journal reserves the full request against the room limit, rejects an over-limit request without a debit, and includes the currently unreserved `available` amount in that rejection. A successful private result reports the amount applied. Retries and recovery reconcile the durable debit and credit before publishing the result.
+
+`GET /api/starship/status` returns the confirmed global status and server time, with `personal:null`. A connected driver requests the private status over its fenced room connection; guest and recovered drivers use the same canonical profile. The client shows committed earnings awaiting global confirmation separately. `GET /api/starship/contributors?group=at-goal|later&cursor=...` pages through public names; anonymity is the default and hides amounts as well as names. Cursors are bound to the group. The at-goal list freezes confirmations at the threshold, while later confirmations can include earnings committed before it. The index may return `building` and should be retried. An already-complete pre-upgrade ledger has an unknown historical crossing, not an invented launch.
+
+Profile income and privacy outboxes retry independently with persisted, jittered exponential backoff. Timeouts bound each caller's wait, not the lifetime of a remote operation; credits and privacy revisions are safe to replay. Private status exposes whether a privacy choice is still pending so the client does not mistake the previously confirmed name for the final choice.
+
+At a newly confirmed goal crossing, the global coordinator stores a launch ID and a launch time 30 seconds later. The world construction and playback derive from the confirmed total and server-time anchor. Polling and network transit can introduce presentation delay; this is not frame-synchronized. Replay is available after completion and never starts another launch or changes earnings. No season or room is retired.
+
+A verified Dome win with a player winner starts a 1.5× room bonus for ten minutes, refreshing on a subsequent win. An authenticated operator may schedule a 2× game-wide event for 30 minutes, at least 60 seconds ahead; combined activity pay is capped at 3×. Delivery pickup and drop-off components use their authoritative payout-time rate; checkpoint and one-off achievement awards remain fixed. The current Dome match has no repeatable match payout. Any future repeatable activity or cab producer must integrate its own durable event-time settlement; the shared interval and room-history helpers alone do not activate those payouts. A room fails closed on a missing or stale event lease: arrivals wait for a confirmed rate while driving continues.
+
+Operators configure a high-entropy `STARSHIP_ADMIN_TOKEN` secret (at least 32 characters), then `POST /api/admin/earnings-events` with `Authorization: Bearer <token>` and JSON `{"requestId":"<unique-id>","startsAtMs":<future-UTC-ms>}`. A repeated request ID with the same start is idempotent; conflicting IDs, overlap and insufficient lead time are rejected. Never commit or log the secret. Without it, scheduling returns 503.
+
 
 Once either the global total or this room's fund is fully funded, a player must be on the ground within 14 m of the shared Fremont boarding point, with both forward speed and lateral push magnitude below 1 m/s, to request boarding. The server records the `to-mars` achievement with the driver profile, broadcasts `launchAt` in simulation time, and returns a private result after the award commits. Additional drivers joining an active 12-second launch do not restart it; a later eligible driver starts a new launch. The cinematic launch and victory presentation are client-side, and free roam continues. There is no playable Mars surface.
 
@@ -213,7 +229,7 @@ The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games
 
 Every third completion adds a $750 checkpoint to cash and cumulative eligible income, including when the delivery fare is zero. It is not part of delivery-only `earned` and is grouped with same-tick fare and awards for presentation. The completed order and wallet update share the existing fenced profile commit and income outbox; a retry cannot complete the same order twice.
 
-`shared/delivery-payout.ts` produces server-derived pickup, delivery and checkpoint components with base amounts and stable source IDs scoped to a driver: `delivery:<completed+1>:pickup`, `:dropoff`, and, when due, `:checkpoint`. This ordinal is valid while a driver has only one active automatically assigned order; a future system that suspends an order while another completes needs a persisted accepted-job ID. `EconomyHooks.resolveDeliveryPayout` may resolve eligible fares before cash, level, next-order and achievement updates; checkpoint pay is never passed to it. A null result defers the arrival without changing order stage, cash or achievements, freezes that order's timer for the tick, and leaves physics and other drivers running. The `EconomyHooks.update` apply callback returns the resolved components for a host to capture in the same transaction, or null for deferral. Identity resolution is the default. The current wallet commits the resulting aggregate progress but does not persist typed component records, rates or timestamps; event bonuses are not yet active. Those records must be committed with the fenced progress before enabling event multipliers.
+`shared/delivery-payout.ts` produces server-derived pickup, delivery and checkpoint components with base amounts and stable source IDs scoped to a driver: `delivery:<completed+1>:pickup`, `:dropoff`, and, when due, `:checkpoint`. This ordinal is valid while a driver has only one active automatically assigned order; a future system that suspends an order while another completes needs a persisted accepted-job ID. `EconomyHooks.resolveDeliveryPayout` may resolve eligible fares before cash, level, next-order and achievement updates; checkpoint pay is never passed to it. A null result defers the arrival without changing order stage, cash or achievements, freezes that order's timer for the tick, and leaves physics and other drivers running. The `EconomyHooks.update` apply callback returns the resolved components for a host to capture in the same transaction, or null for deferral. Identity resolution is the default; the room supplies its authoritative event rate and the wallet commits the component records, rates and timestamps with fenced progress.
 
 On a verified soccer play-to-win transition, `EconomyHooks.onDomeWin` synchronously receives detached server-derived present participants and winner IDs before same-tick match awards or delivery resolution. A host can establish its settlement ordering barrier there; the callback alone does not settle or persist a payout.
 

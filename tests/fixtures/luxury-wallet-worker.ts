@@ -1,6 +1,6 @@
 // LOCAL TEST ONLY. This worker supplies funded drivers, showroom positioning,
 // and deterministic profile faults. It must never be used as a deployment entry.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat as ProductionGlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat as ProductionGlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { parseRecoveryCode } from '../../worker/global-chat-core';
 import { DriverProfile as ProductionDriverProfile, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
 import { initialDelivery, levelForCash, orderTarget } from '../../shared/delivery';
@@ -14,7 +14,7 @@ import { EconomySession } from '../../worker/economy-session';
 import { DOME } from '../../shared/dome';
 import { RACE_COURSES } from '../../shared/race-courses';
 
-export { GlobalIncome };
+export { GlobalIncome, GlobalEarningsEvent };
 /** Hold a claim before binding, or after its transaction or confirmation. */
 export class GlobalChat extends ProductionGlobalChat {
   private nextBindingHold:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|null=null;

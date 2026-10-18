@@ -39,9 +39,9 @@ await writeFile(config,JSON.stringify({
   durable_objects:{bindings:[
     {name:'ROOMS',class_name:'GameRoom'},{name:'CHAT',class_name:'GlobalChat'},
     {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},
-    {name:'INCOME',class_name:'GlobalIncome'},
+    {name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'},
   ]},
-  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}],
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome','GlobalEarningsEvent']}],
 }));
 let child:ChildProcess|undefined,logs='';
 const sockets:WebSocket[]=[];
@@ -281,6 +281,14 @@ try {
   assert.equal(afterReplay.unlocked.filter(id=>id==='roadster-champion').length,1,'Dome win survives rollback exactly once');
   assert.equal(afterReplay.cash,baseline.cash+4_000,'replay credits only the two game-award rewards');
   assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+4_000,'rejected and speculative income are not replayed');
+  let starshipRequest=700;
+  await until(async()=>{
+    const requestId=starshipRequest++;
+    send(replay.client,{type:'starship',action:'status',requestId});
+    await until(()=>replay.client.messages.some(message=>message.type==='starshipStatus'&&message.requestId===requestId),'private mission status');
+    const status=replay.client.messages.find(message=>message.type==='starshipStatus'&&message.requestId===requestId)!;
+    return status.status.personal===afterReplay.eligibleIncome;
+  },'replayed game awards reach the global ledger without speculative income');
 
   // Reject the award's own first commit, then hold its replay. A barrier may
   // only settle after that replay commits, and unrelated queued income drops.

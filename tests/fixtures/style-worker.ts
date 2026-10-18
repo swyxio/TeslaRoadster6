@@ -1,11 +1,11 @@
 // Local-only fixture: start two drivers at a workshop with their guest wallets.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { SHOPS } from '../../shared/upgrades';
 import { terrainHeight } from '../../shared/map';
 import type { World } from '../../shared/game';
 
 export default worker;
-export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 
 export class GameRoom extends ProductionGameRoom {
   override async fetch(request:Request): Promise<Response> {

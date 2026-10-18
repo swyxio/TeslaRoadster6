@@ -1,9 +1,9 @@
 // Local-only fixture: seed verified global income and place a player at Fremont.
-import worker, { GameRoom, GlobalChat, DriverProfile as ProductionDriverProfile, GlobalIncome, RoomEconomy as ProductionRoomEconomy } from '../../worker/index';
+import worker, { GameRoom, GlobalChat, GlobalEarningsEvent, DriverProfile as ProductionDriverProfile, GlobalIncome, RoomEconomy as ProductionRoomEconomy } from '../../worker/index';
 import type { EconomyIntent } from '../../worker/driver-profile';
 import { FREMONT_SPACEPORT, terrainHeight } from '../../shared/map';
 import type { World } from '../../shared/game';
-export { GlobalChat, GlobalIncome };
+export { GlobalChat, GlobalIncome, GlobalEarningsEvent };
 export class RoomEconomy extends ProductionRoomEconomy {
   private alarmCalls=0;
   override async alarm(){this.alarmCalls++;return super.alarm();}

@@ -45,6 +45,9 @@ import { DOME, chargingDomeWall } from '../shared/dome';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
 import { MARS_GOAL } from '../shared/mars';
 import { createMarsUI } from './mars-ui';
+import { StarshipClient } from './starship-client';
+import { createEarningsBonusBadge } from './earnings-bonus-ui';
+import './earnings-bonus-ui.css';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -66,7 +69,7 @@ document.querySelector('#app')!.innerHTML = `
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
  <button id="join" class="primary">Join room <span>↗</span></button>
  <p class="form-note" id="form-note" role="status">Join friends with a room code. Change rides here or use Actions → Fleet.</p>
- <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
+ <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="mars-menu" type="button" class="text-button">🚀 Starship mission &amp; launch view</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <div class="release-links"><span>${CURRENT_RELEASE.label}</span><a id="release-changelog" href="/changelog/">Changelog</a><a href="/blog/">Dev blog</a><a href="/lore/">The story</a></div><p id="last-played" class="last-played">No earlier play recorded on this browser.</p>
  <p class="fine-print">An independent, fictional satire. No Tesla or SpaceX affiliation.<br>Fictional flight & air service.<br>Real Supercharger sites. A deliberately remixed Bay Area.<br>Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> (ODbL) · <a href="${mapSourceUrl}" download="bay-route-source.json">Source</a> · <a href="${mapTraceUrl}" download="bay-highway-traces.ts">Map data</a> · <a href="${mapBakeUrl}" download="bake-bay-highways.py">Bake</a>.</p>
@@ -98,7 +101,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
-<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="error-menu" class="text-button">Room settings</button></div>
+<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="mars-error" class="text-button" type="button">Starship mission &amp; launch view</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
 let selectedVehicle:VehicleId='roadster';
 let startingRideChanged=false;
@@ -610,9 +613,11 @@ function minimap(entity:Entity|undefined,level:Level){
 
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
+const starship=new StarshipClient(session);
+const earningsBadge=createEarningsBonusBadge();$('mission-panel').append(earningsBadge.element);
 const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
-const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
-$('mars-quick').onclick=()=>marsUi.open();$('mars-action').onclick=()=>marsUi.open();
+const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},starship);
+for(const id of ['mars-quick','mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
 const progressPanels=createProgressPanels({
   session,
   driverId:()=>chat.playerId,
@@ -873,6 +878,7 @@ function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&
 $('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 
 scene.start(dt=>{
+  starship.tick(marsUi.isOpen());
   if(session.walletBlocked&&!walletWasBlocked){
     controls.clear();controls.enabled=false;$('hud').classList.add('hidden');
     for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))if(dialog!==identityDialog&&dialog!==chatPanel.element)dialog.close();
@@ -904,7 +910,9 @@ scene.start(dt=>{
     if(pendingLuxury?.source==='workshop')$('shop-feedback').textContent='Disconnected. Rejoin to collect your vehicle.';
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
-  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive);
+  if(!marsUi.isViewing()){
+    const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),stage:starship.stage()});
+  }
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;
@@ -953,10 +961,12 @@ scene.start(dt=>{
       identityFeedback(session.walletError);$<HTMLButtonElement>('identity-rejoin').hidden=false;
     }
   }
-  if(session.walletBlocked)return;
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   marsUi.update(e);
-  $('mars-quick').textContent=session.world.mars.fund>=MARS_GOAL?'🚀 Mars funded · board in Fremont':`🚀 Mars mission · ${money(session.world.mars.fund)} / $1B`;
+  earningsBadge.update(session.earningsBonus);
+  if(session.walletBlocked)return;
+  const mission=starship.state();
+  $('mars-quick').textContent=mission.confirmed?(mission.freshness==='live'?'🚀 Mars mission':'🚀 Mars mission · last confirmed')+` · ${money(Math.min(mission.confirmed.total,MARS_GOAL))} / $1B`:'🚀 Mars mission · status unavailable';
   minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');

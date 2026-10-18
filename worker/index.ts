@@ -12,14 +12,20 @@ import { initialDelivery } from '../shared/delivery';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
 import { RoomEconomy } from './room-economy';
+import { GlobalEarningsEvent } from './global-earnings-event';
+import { scheduleGlobalEarnings } from './global-earnings-admin';
+import { activityPayout, earningsMultiplier, globalWindowsForInstant, ROOM_WIN_DURATION_MS, type EarningsEvents, type GlobalEventLease } from '../shared/earnings-events';
 import { leaveParking } from '../shared/parking';
 import { resetAchievementFlight } from '../shared/achievements';
 
-export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent };
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; GLOBAL_EVENTS: DurableObjectNamespace<GlobalEarningsEvent>; STARSHIP_ADMIN_TOKEN?:string; MAX_PLAYERS?: string };
 type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
+type PendingRoomWin = {event_id:string;requested_at:number;room_id:string};
+type RoomEarningsSnapshot = {observedAt:number;events:EarningsEvents;lease:GlobalEventLease};
+const ROOM_EARNINGS_STALE_MS=5_000;
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -27,6 +33,21 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (url.pathname.startsWith('/api/radio/')) return radioFeed(request, ctx);
     if (url.pathname === '/api/health') return Response.json({ ok: true, version: PROTOCOL_VERSION, capacity: roomCapacity(env.MAX_PLAYERS) });
+    if (url.pathname === '/api/admin/earnings-events') return scheduleGlobalEarnings(request,env);
+    if (url.pathname === '/api/starship/status' || url.pathname === '/api/starship/contributors'){
+      if(request.method!=='GET')return reply('GET required',405);
+      const income=env.INCOME.get(env.INCOME.idFromName('global'));
+      try{
+        if(url.pathname.endsWith('/status'))return Response.json({status:await income.status(),serverTime:Date.now()},{headers:{'Cache-Control':'no-store'}});
+        const group=url.searchParams.get('group')??'at-goal',cursor=url.searchParams.get('cursor');
+        if(group!=='at-goal'&&group!=='later')return reply('Invalid contributor group',400);
+        const page=await income.contributors(group,cursor??undefined);
+        return Response.json(page,{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        if(error instanceof Error&&error.message==='Invalid contributor cursor')return reply('Invalid contributor cursor',400);
+        return reply('Starship service unavailable',503);
+      }
+    }
     const slug = roomSlug(url.pathname);
     const chat = url.pathname === '/api/chat';
     if (!slug && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
@@ -56,9 +77,93 @@ export class GameRoom extends DurableObject<Env> {
   private pendingPickups=new Set<string>();
   private nextRefresh=0;
   private refreshing=false;
+  private earningsSnapshot:RoomEarningsSnapshot|null=null;
+  private earningsGeneration=0;
+  private winFlight:Promise<void>|null=null;
+  private hasPendingWin=false;
 
   private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
+  private initWinStorage(){
+    this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS game_room_pending_wins (event_id TEXT PRIMARY KEY, requested_at INTEGER NOT NULL, room_id TEXT NOT NULL)');
+    this.hasPendingWin=this.pendingWins().length>0;
+  }
+  private pendingWins():PendingRoomWin[]{
+    return this.ctx.storage.sql.exec<PendingRoomWin>('SELECT event_id,requested_at,room_id FROM game_room_pending_wins ORDER BY requested_at,event_id').toArray();
+  }
+  private publishEarningsStatus(){
+    const now=Date.now(),snapshot=this.earningsSnapshot;
+    let payload:unknown={type:'earningsStatus',events:null,serverTime:now,validForMs:0};
+    if(snapshot&&now>=snapshot.observedAt&&now-snapshot.observedAt<ROOM_EARNINGS_STALE_MS&&now>=snapshot.lease.issuedAtMs&&now<snapshot.lease.validUntilMs){
+      payload={type:'earningsStatus',events:snapshot.events,serverTime:now,
+        validForMs:Math.min(ROOM_EARNINGS_STALE_MS-(now-snapshot.observedAt),snapshot.lease.validUntilMs-now)};
+    }
+    const encoded=JSON.stringify(payload);
+    for(const [socket] of this.sessions)try{socket.send(encoded);}catch{this.disconnect(socket);}
+  }
+  private rate(atMs:number):{events:EarningsEvents;multiplier:1|1.5|2|3;atMs:number}|null{
+    const snapshot=this.earningsSnapshot;
+    if(!snapshot||atMs<snapshot.observedAt||atMs-snapshot.observedAt>=ROOM_EARNINGS_STALE_MS||this.hasPendingWin)return null;
+    try{
+      const events={room:snapshot.events.room,global:globalWindowsForInstant(snapshot.lease,atMs)};
+      return {events,multiplier:earningsMultiplier(events,atMs).multiplier,atMs};
+    }catch{return null;}
+  }
+  private async refreshEarnings(){
+    if(!this.roomId||this.hasPendingWin){this.earningsSnapshot=null;this.publishEarningsStatus();return;}
+    const observedAt=Date.now(),generation=this.earningsGeneration,roomId=this.roomId;
+    try{
+      const [roomUntil,lease]=await Promise.all([
+        this.ledger().earningsAt(observedAt),this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global')).lease(),
+      ]);
+      if(generation!==this.earningsGeneration||roomId!==this.roomId||this.hasPendingWin)return;
+      const room=roomUntil===null?[]:[{startsAtMs:roomUntil-ROOM_WIN_DURATION_MS,endsAtMs:roomUntil}];
+      const now=Date.now();globalWindowsForInstant(lease,now);
+      this.earningsSnapshot={observedAt,lease,events:{room,global:lease.windows}};
+    }catch{if(generation===this.earningsGeneration)this.earningsSnapshot=null;}
+    this.publishEarningsStatus();
+  }
+  private resumeWins():Promise<void>{
+    if(this.winFlight)return this.winFlight;
+    const flight=(async()=>{
+      // Arm before remote work; a crash or lost reply leaves the local journal retryable.
+      await this.ctx.storage.setAlarm(Date.now()+1000);
+      do{
+        for(let win=this.pendingWins()[0];win;win=this.pendingWins()[0]){
+          const economy=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(win.room_id));
+          const published=await economy.recordEarningsWinWithoutPayout(win.event_id,win.requested_at);
+          // A same-millisecond observation can place the win one millisecond
+          // later. Do not resume payouts from a snapshot taken before it starts.
+          while(Date.now()<published.startsAtMs)await new Promise(resolve=>setTimeout(resolve,Math.min(50,published.startsAtMs-Date.now())));
+          this.ctx.storage.sql.exec('DELETE FROM game_room_pending_wins WHERE event_id=?',win.event_id);
+        }
+        this.hasPendingWin=false;
+        this.earningsGeneration++;this.earningsSnapshot=null;
+        if(this.sessions.size)await this.refreshEarnings();
+      }while(this.hasPendingWin);
+    })().catch(async()=>{
+      this.earningsSnapshot=null;this.publishEarningsStatus();
+      try{await this.ctx.storage.setAlarm(Date.now()+1000);}catch{}
+    });
+    this.winFlight=flight;
+    void flight.finally(()=>{if(this.winFlight===flight)this.winFlight=null;}).catch(()=>{});
+    return flight;
+  }
+  private recordWin(){
+    const eventId=crypto.randomUUID(),requestedAt=Date.now();
+    this.earningsGeneration++;this.earningsSnapshot=null;this.hasPendingWin=true;
+    this.ctx.storage.sql.exec('INSERT INTO game_room_pending_wins (event_id,requested_at,room_id) VALUES (?,?,?)',eventId,requestedAt,this.roomId);
+    // Queue the watchdog in the same synchronous write batch as the journal,
+    // before sending anything or awaiting remote work.
+    const watchdog=this.ctx.storage.setAlarm(Date.now()+1000);
+    this.publishEarningsStatus();this.ctx.waitUntil(watchdog.then(()=>this.resumeWins()));
+  }
+  async alarm():Promise<void>{
+    this.initWinStorage();
+    if(this.hasPendingWin){await this.ctx.storage.setAlarm(Date.now()+1000);await this.resumeWins();}
+  }
   private async initializeRoom(world=this.world){
+    this.initWinStorage();
+    if(this.pendingWins().length)this.ctx.waitUntil(this.resumeWins());
     // The pre-wallet room fund remains in its original object and is never
     // rewritten; the journal seeds its own balance once before accepting gifts.
     const stored=await this.ctx.storage.get<number>('mars-fund');
@@ -89,6 +194,7 @@ export class GameRoom extends DurableObject<Env> {
       this.refreshPickups(world),
       this.env.INCOME.get(this.env.INCOME.idFromName('global')).total().then(total=>{if(world===this.world)world.mars.fund=Math.min(MARS_GOAL,total);}),
       this.ledger().roomFund().then(balance=>{if(world===this.world)world.mars.roomFund=Math.max(world.mars.roomFund,balance);}),
+      this.refreshEarnings(),
     ]).finally(()=>{this.refreshing=false;});
   }
 
@@ -269,6 +375,30 @@ export class GameRoom extends DurableObject<Env> {
     }
     if(message.type==='sync'){session.economy.barrier(message.token);return;}
     if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
+    if(message.type==='starship'){
+      const driverId=session.economy.walletId,fence=session.economy.currentFence,identitySequence=session.identitySequence;
+      const current=()=>this.sessions.get(socket)===session&&!session.attachPending&&session.identitySequence===identitySequence&&session.economy.walletId===driverId&&session.economy.currentFence===fence;
+      const send=(value:unknown)=>{if(current())try{socket.send(JSON.stringify(value));}catch{}};
+      const run=async()=>{
+        if(!current())return;
+        const driver=this.env.DRIVERS.get(this.env.DRIVERS.idFromName(driverId));
+        if(message.action==='name'){
+          try{const result=await driver.setStarshipName(driverId,fence,message.name);send({type:'starshipNameResult',requestId:message.requestId,...result});}
+          catch{send({type:'starshipNameResult',requestId:message.requestId,ok:false,publicName:null});}
+        }else try{
+          if(!await driver.checkFence(fence)||!current())return;
+          const before=await driver.starshipPrivacyState(driverId,fence);
+          if(!before||!current())return;
+          const income=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
+          const [status,publicName]=await Promise.all([income.status(driverId),income.publicName(driverId)]);
+          const after=await driver.starshipPrivacyState(driverId,fence);
+          if(!after||!current())return;
+          const privacyPending=before.pending||after.pending||before.revision!==after.revision;
+          send({type:'starshipStatus',requestId:message.requestId,status,publicName,privacyPending,serverTime:Date.now()});
+        }catch{/* The client marks an unanswered status as stale. */}
+      };
+      const operation=run();this.ctx.waitUntil(operation);return;
+    }
     // Even rejected actions advance the action fence so later inputs remain ordered.
     if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
       this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
@@ -339,6 +469,7 @@ export class GameRoom extends DurableObject<Env> {
       if(result.outcomes.length)edgeResults.set(session.id,{socket,outcomes:result.outcomes});
     }
     const relocated=new Set<string>();
+    let settlement:ReturnType<GameRoom['rate']>=null;
     step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
       const player=this.world.players.find(item=>item.id===id);
       const entity=this.world.entities.find(item=>item.id===player?.entityId);
@@ -348,12 +479,14 @@ export class GameRoom extends DurableObject<Env> {
       this.inputs.delete(id);relocated.add(id);
     },economy:{
       canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
-      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.update(player,apply);},
+      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending){settlement=this.rate(Date.now());try{session.economy.update(player,apply,settlement);}finally{settlement=null;}}},
       // A result can occur while binding (for example, a ball already in
       // motion). Commit it to the current wallet; a different incoming wallet
       // must then pass the unstarted check again before it can replace it.
       gameAward:(player,apply,capture)=>{byId.get(player.id)?.economy.gameAward(player,apply,capture);},
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
+      resolveDeliveryPayout:(_player,component)=>settlement?activityPayout(component.amount,component.kind,settlement.atMs,settlement.events):null,
+      onDomeWin:result=>{if(result.winners.length)this.recordWin();},
     }});
     this.tickCount=nextTick;
     for(const {socket,outcomes} of edgeResults.values())this.sendEdges(socket,outcomes);

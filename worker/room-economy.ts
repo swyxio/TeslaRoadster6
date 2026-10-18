@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { DriverProfile, type DriverOutcome, type EconomyIntent } from './driver-profile';
 import type { GameRoom } from './index';
 import { MARS_GOAL } from '../shared/mars';
+import { RoomEarningsEvents, type RoomEventCursor } from './room-earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>};
 type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null};
@@ -14,7 +15,16 @@ const PICKUP_COOLDOWN_MS=20_000;
 /** Separate from GameRoom so a slow profile or storage output gate cannot stop physics. */
 export class RoomEconomy extends DurableObject<Env> {
   private flights=new Map<string,Promise<void>>();
+  private earningsEvents=new RoomEarningsEvents(this.ctx.storage);
   private profile(id:string){return this.env.DRIVERS.get(this.env.DRIVERS.idFromName(id));}
+
+  /** Trusted room RPCs; pending wins fence later payout and cab observations. */
+  prepareEarningsWin(eventId:string,atMs:number){return this.earningsEvents.prepareWin(eventId,atMs);}
+  recordEarningsWinWithoutPayout(eventId:string,atMs:number){return this.earningsEvents.recordWinWithoutPayout(eventId,atMs);}
+  commitEarningsWin(eventId:string){return this.earningsEvents.commitWin(eventId);}
+  pendingEarningsWin(){return this.earningsEvents.pendingWin();}
+  earningsAt(atMs:number){return this.earningsEvents.activeUntil(atMs);}
+  earningsHistory(fromMs:number,toMs:number,cursor?:RoomEventCursor){return this.earningsEvents.history(fromMs,toMs,cursor);}
 
   /** Seed once from the read-only legacy GameRoom key; later credits live here. */
   async initializeRoomFund(legacy:number):Promise<number>{
