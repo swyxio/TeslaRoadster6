@@ -47,8 +47,8 @@ export function parseMessage(raw: string): ClientMessage | null {
   return null;
 }
 export function roomCapacity(value?: string): number {
-  const requested = Number(value ?? 64);
-  return Number.isFinite(requested) ? Math.max(2, Math.min(128, Math.floor(requested))) : 64;
+  const requested = Number(value ?? 8);
+  return Number.isFinite(requested) ? Math.max(2, Math.min(128, Math.floor(requested))) : 8;
 }
 export function roomSlug(path: string): string | null {
   return /^\/api\/room\/([a-z0-9][a-z0-9-]{0,31})$/.exec(path)?.[1] ?? null;

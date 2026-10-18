@@ -100,7 +100,7 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Start timer with first connection; stop and reset simulation when empty. Each room's Mars fund is durable; players, cash, awards, vehicles and all other simulation state remain ephemeral. Do not replace with a global room object or client-authoritative coordinates.
+Capacity: `MAX_PLAYERS`, default8, clamped2–128. Production and preview use eight as a conservative performance limit; higher settings require explicit load experiments, and eight is not a validated capacity claim. A full room closes with `ROOM_FULL_CODE`; the UI offers retry or another named room. One named Durable Object per room. Start timer with first connection; stop and reset simulation when empty. Each room's Mars fund is durable; players, cash, awards, vehicles and all other simulation state remain ephemeral. Do not replace with a global room object or client-authoritative coordinates.
 
 ## Mars mission
 
