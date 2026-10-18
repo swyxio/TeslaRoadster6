@@ -2,6 +2,10 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Main documentation integration · protocol v20 · 2026-10-18 Pacific
+
+- After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
+
 ## Island, Dome approach and Bay landmarks · protocol v20 · 2026-10-18 Pacific
 
 - At merge `a9f902c`, `pnpm test` passed 305 tests and `pnpm build` passed both TypeScript checks, Vite and public-page generation. The main JavaScript was 831.99 kB (241.27 kB gzip), with Vite's large-chunk warning. Local Wrangler reported v20; its two-client room and global-chat integrations passed. The Cloudflare branch preview served the same asset hashes and v20, and passed the two-client room integration. These checks do not describe the shared production deployment.
@@ -60,6 +64,11 @@ These entries describe separate historical builds. Check the version and scope i
 
 - In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
 - This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
+
+## Economy planning model · 2026-10-18 Pacific
+
+- On checkout `8625bf0`, `pnpm test` passed 273 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The standalone planning script also passed a separate TypeScript check.
+- Ran both `node --experimental-strip-types scripts/economy-scenarios.ts --ledger` and the `--smooth --ledger` variant. Their cash ledgers balanced, and the first-home scenarios agreed with an independent calculation. These are hypothetical projections, not gameplay, device, live-room or production measurements. The economy proposal does not change gameplay or protocol.
 
 ## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
 
@@ -435,3 +444,7 @@ In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` p
 Chrome local solo play exercised keyboard driving at desktop size and inspected 390×844 portrait and 844×390 landscape with touch emulation. Temporary spawn fixtures inspected the Palace of Fine Arts and a roadside Moon Goose billboard; the fixture was removed from the final build. A billboard post was shortened after it obscured the panel. No console errors were observed during the local playtest. The new sites are stylized and compressed, and the hills are authored rather than surveyed terrain. This was not a complete manual visit to every site or a physical-device test; touch interaction was not verified in this pass.
 
 After integrating the Rocket Island, ferry and parking changes from main, 273 tests and the build passed. The local two-client room integration passed on protocol v19, including ferry and activity snapshots. Tests also check the new landmarks, hills and billboards against parking areas, the ferry corridor and island race routes. Chrome showed the merged solo start at desktop, portrait and landscape emulation; no physical device was tested.
+
+## 2026-10-18 · First development post rewrite
+
+In the isolated article worktree after integrating the Rocket Island and landmark changes, `pnpm test` passed 273 tests and `pnpm build` passed, including both TypeScript checks. In Chrome, the static article was inspected at desktop and emulated 390×844 portrait and 844×390 landscape widths; the delivery-loop graphic was resized for readable phone labels. Local solo play supplied the street, flight, citation and cockpit screenshots from the integrated build. These are browser captures, not physical-device or multiplayer load tests.
