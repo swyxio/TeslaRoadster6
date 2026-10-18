@@ -1,6 +1,7 @@
 .drive-mode { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:3px 8px; }
 .mission-link { align-self:flex-start; max-width:100%; border:0; background:transparent; color:#ffd28c; padding:5px 0; text-align:left; font-size:11px; line-height:1.3; }
 .mission-link:hover { text-decoration:underline; }
+.mission-advice { color:#c4d8cd; font-size:11px; line-height:1.3; }
 @media(pointer:coarse) { .mission-link { min-height:44px; padding:8px 0; } }
 .drive-mode label { color:#b9ccc3; font:700 9px ui-monospace,monospace; letter-spacing:.5px; white-space:nowrap; }
 .drive-mode select { width:100%; min-width:0; min-height:36px; padding:5px 26px 5px 8px; border:1px solid #b8d9ca70; border-radius:6px; background:#193a40; color:#fff2dc; font:600 11px system-ui,sans-serif; }

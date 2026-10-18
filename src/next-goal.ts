@@ -6,6 +6,12 @@ const deliveryAwards=(Object.keys(ACHIEVEMENTS) as AchievementId[])
   .filter(id=>awardDeliveryTarget(id)!==null)
   .sort((a,b)=>awardDeliveryTarget(a)!-awardDeliveryTarget(b)!);
 
+/** A confirmed room wallet remains usable during a transient chat outage. */
+export function confirmedGoalOwner(context:{currentCode?:string;boundCode?:string;chatCode?:string;chatPlayerId:string;pendingRecovery:boolean;roomOnline:boolean;walletReady:boolean}):string|null {
+  const {currentCode,boundCode,chatCode,chatPlayerId,pendingRecovery,roomOnline,walletReady}=context;
+  return !pendingRecovery&&roomOnline&&walletReady&&!!currentCode&&currentCode===boundCode&&currentCode===chatCode&&!!chatPlayerId?chatPlayerId:null;
+}
+
 /** A delivery is always an actionable goal; use confirmed unlocks for saved drivers. */
 export function nextDeliveryAward(unlocked:readonly AchievementId[]):AchievementId|null {
   const earned=new Set(unlocked);

@@ -2,7 +2,7 @@ import './style.css';
 import './identity.css';
 import { setupMinigames } from './minigames';
 import { createProgressPanels } from './progress-panels';
-import { nextDeliveryAward, nextReachableTier, tierGoalLabel } from './next-goal';
+import { confirmedGoalOwner, nextDeliveryAward, nextReachableTier, tierGoalLabel } from './next-goal';
 import { listenForDoubleShift } from './double-shift';
 import { createMapDialog } from './map-dialog';
 import { createDriveModes } from './self-drive-mode';
@@ -89,7 +89,7 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><button type="button" id="next-award" class="mission-link" hidden></button><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><span id="route-advice" class="mission-advice" hidden></span><button type="button" id="next-award" class="mission-link" hidden></button><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
@@ -1164,11 +1164,14 @@ scene.start(dt=>{
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
-    const routeButton=$<HTMLButtonElement>('route-goal');
-    const routeLabel=e.kind==='person'?'↗ Get in a car to self-drive':target.rooftop?'↗ Rooftop delivery · fly manually':e.supportId!=='ground'?'↗ Land to start self-driving':`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;
-    routeButton.hidden=false;if(routeButton.textContent!==routeLabel)routeButton.textContent=routeLabel;
+    const routeButton=$<HTMLButtonElement>('route-goal'),routeAdvice=$('route-advice');
+    const advice=session.status!=='online'||session.walletBlocked?'Connect your driver to self-drive.':e.kind==='person'?'Get in a car to self-drive.':target.rooftop?'Rooftop delivery · fly manually.':e.supportId!=='ground'||e.inDome?'Land on the ground outside the Dome to self-drive.':requiredLevelAt(target.x,target.z)>d.level?'This delivery is in a locked area.':'';
+    const routeLabel=`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;
+    routeButton.hidden=!!advice;routeAdvice.hidden=!advice;
+    if(routeButton.textContent!==routeLabel)routeButton.textContent=routeLabel;
+    if(routeAdvice.textContent!==advice)routeAdvice.textContent=advice;
     const awardButton=$<HTMLButtonElement>('next-award');
-    const owner=chat.status==='online'&&currentCode&&currentCode===chat.code&&currentCode===walletBoundCode?chat.playerId:null;
+    const owner=confirmedGoalOwner({currentCode,boundCode:walletBoundCode,chatCode:chat.code,chatPlayerId:chat.playerId,pendingRecovery,roomOnline:session.status==='online',walletReady:session.walletStatus==='ready'});
     const wallet=owner&&session.walletStatus==='ready'?session.wallet:null;
     if(owner!==goalOwner||session.connectionGeneration!==goalGeneration){goalOwner=owner;goalGeneration=session.connectionGeneration;goalWallet=null;goalTier=null;}
     if(wallet!==goalWallet){goalWallet=wallet;goalTier=wallet?nextReachableTier(selectAchievementTiers(wallet.achievementTiers),goalTier):null;}
