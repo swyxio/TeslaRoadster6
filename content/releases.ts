@@ -1,5 +1,21 @@
+import { CURRENT_RELEASE } from './version';
+export { CURRENT_RELEASE } from './version';
+
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
+  {
+    ...CURRENT_RELEASE,
+    date: '2026-10-18',
+    title: 'A smoother shared Bay',
+    intro: 'Less work per simulation tick and more consistent input in shared rooms.',
+    sections: [
+      { title: 'Drive together', items: [
+        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
+        'The changelog stays on its own page instead of downloading with the game.'
+      ] }
+    ]
+  },
   {
     version: '0.0.12-alpha',
     label: '0.0.12 Alpha',
@@ -189,5 +205,3 @@ export const RELEASES = [
     ]
   }
 ] as const;
-
-export const CURRENT_RELEASE = RELEASES[0];
