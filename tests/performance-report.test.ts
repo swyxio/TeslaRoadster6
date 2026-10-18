@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { frameMetrics, motionMetrics, performanceRoomName, roomProgress } from '../scripts/performance-report.mjs';
+import { browserFrameMetrics, frameMetrics, motionMetrics, performanceRoomName, roomProgress } from '../scripts/performance-report.mjs';
 import { selectPerformance } from '../scripts/performance-select.mjs';
 
 test('performance CI ignores documentation and small runtime edits unless explicitly selected', () => {
@@ -17,6 +17,9 @@ test('performance CI ignores documentation and small runtime edits unless explic
   assert.equal(selectPerformance(small, ['performance-required']).run, true);
   assert.equal(selectPerformance(large).run, true);
   assert.equal(selectPerformance([{ path: 'public/assets/car.glb', binary: true, added: 0, deleted: 0 }]).run, true);
+  for (const path of ['.nvmrc', 'vite.config.ts', 'wrangler.jsonc', 'index.html']) {
+    assert.equal(selectPerformance([{ path, added: 1, deleted: 1 }], ['performance-required']).run, true);
+  }
   assert.equal(selectPerformance([], [], true).run, true);
 });
 
@@ -55,11 +58,32 @@ test('generated performance room names are accepted by the game', () => {
   for (let i = 0; i < 20; i++) assert.match(performanceRoomName(), /^[a-z0-9][a-z0-9-]{0,31}$/);
 });
 
+test('comparison holds modeled changes if the measurement adapter changes', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-perf-compare-'));
+  try {
+    const baseline = JSON.parse(readFileSync(fileURLToPath(new URL('../docs/performance-baselines/2026-10-18-v0.0.24-aeb5704/report.json', import.meta.url)), 'utf8'));
+    baseline.fixture.reporterSha256 = 'same-reporter';
+    const before = join(dir, 'before.json'), after = join(dir, 'after.json');
+    writeFileSync(before, JSON.stringify(baseline));
+    baseline.fixture.motionAdapterSha256 = 'different-adapter';
+    writeFileSync(after, JSON.stringify(baseline));
+    const script = fileURLToPath(new URL('../scripts/performance-compare.mjs', import.meta.url));
+    const result = execFileSync(process.execPath, [script, before, after], { encoding: 'utf8' });
+    assert.match(result.split('\n').find(line => line.startsWith('| Modeled display')) ?? '', /\| HOLD \|$/);
+    assert.match(result.split('\n').find(line => line.startsWith('| Modeled steering')) ?? '', /\| HOLD \|$/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('frame intervals report a real percentile and reject missing or truncated data', () => {
   const intervals = Array.from({ length: 100 }, (_, i) => i + 1);
   assert.equal(frameMetrics({ intervalsMs: intervals }).p95Ms, 95);
   assert.equal(frameMetrics({ intervalsMs: [16] }).status, 'unavailable');
   assert.equal(frameMetrics({ intervalsMs: intervals, truncated: true }).status, 'unavailable');
+  const manifest = { events: [{ type: 'sample', status: 'ok', sample: { connection: '● LIVE / 1 DRIVER', perf: { drawCalls: 10 } } }], browserErrors: { pageErrors: 0, consoleErrors: 0 } };
+  assert.equal(browserFrameMetrics(manifest, { sample: { intervalsMs: intervals } }, 5).status, 'available');
+  assert.equal(browserFrameMetrics(manifest, { sample: { intervalsMs: intervals } }, 0).status, 'unavailable');
+  manifest.events[0].sample.perf.drawCalls = 0;
+  assert.equal(browserFrameMetrics(manifest, { sample: { intervalsMs: intervals } }, 5).status, 'unavailable');
 });
 
 test('room progress requires a long continuous monotonic tick stream', () => {

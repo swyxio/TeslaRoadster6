@@ -38,6 +38,15 @@ export function frameMetrics(sample) {
   return { status: 'available', p95Ms: round(percentile(values, .95)), samples: values.length, observedSeconds: round(values.reduce((a, b) => a + b, 0) / 1000) };
 }
 
+export function browserFrameMetrics(manifest, frameStop, displacement) {
+  const sample = manifest.events.find(e => e.type === 'sample' && e.status === 'ok')?.sample;
+  const errors = manifest.browserErrors;
+  if (!sample?.connection?.startsWith('● LIVE') || !number(displacement) || displacement <= 1 ||
+      !number(sample.perf?.drawCalls) || sample.perf.drawCalls <= 0 || errors?.pageErrors !== 0 || errors?.consoleErrors !== 0)
+    return { status: 'unavailable', reason: 'missing live movement, render activity or error-free browser evidence' };
+  return frameMetrics(frameStop.sample);
+}
+
 export function motionMetrics(report) {
   const result = report?.results?.[0];
   const ratio = result?.motion?.travelToBodySpeedRatio;
@@ -83,8 +92,10 @@ async function main() {
   const dirty = !!run('git', ['status', '--porcelain'], root).trim();
   const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
   const fixtureSha256 = sha(await readFile(join(root, 'scripts/motion-benchmark.ts')));
+  const adapterSha256 = sha(await readFile(join(root, 'scripts/motion-adapter-ticks.ts')));
   const scenarioSha256 = sha(await readFile(scenario));
   const recorderSha256 = sha(await readFile(join(harness, 'scripts/playtest-record.ts')));
+  const reporterSha256 = sha(await readFile(fileURLToPath(import.meta.url)));
   const motion = {};
   for (const profile of ['steady150', 'bunched150']) {
     const trace = join(out, `motion-${profile}-trace.json`);
@@ -136,18 +147,17 @@ async function main() {
   const inDrive = trajectory.filter(p => p.atMs >= frameStart.commandStartedAtMs && p.atMs <= frameStop.commandStartedAtMs);
   const first = inDrive[0], last = inDrive.at(-1);
   const displacement = first && last ? Math.hypot(last.x - first.x, last.z - first.z) : NaN;
-  const driveLive = event('sample')?.sample?.connection?.startsWith('● LIVE');
-  const frame = driveLive && number(displacement) && displacement > 1
-    ? frameMetrics(frameStop.sample)
-    : { status: 'unavailable', reason: 'game was not live or the observed driving path did not move' };
-  const room = roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs);
+  const frame = browserFrameMetrics(manifest, frameStop, displacement);
+  const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
+    ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
+    : { status: 'unavailable', reason: 'room was not live for the measurement window' };
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
-    fixture: { scenarioSha256, recorderSha256, motionBenchmarkSha256: fixtureSha256, start: { x: -300, z: -2050, yaw: Math.PI }, captureVideo: false },
+    fixture: { scenarioSha256, recorderSha256, reporterSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, start: { x: -300, z: -2050, yaw: Math.PI }, captureVideo: false },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'One local client and live background traffic; the server and browser share this host. Paths and contacts can diverge.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The room observation includes a short drive followed by 54 seconds without held driving controls.', 'One local client and live background traffic; the server and browser share this host. Paths and contacts can diverge.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

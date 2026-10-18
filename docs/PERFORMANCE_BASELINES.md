@@ -6,10 +6,10 @@ measurements. The performance workflow records four recurring observations:
 
 | Measurement | What it captures | Limits |
 | --- | --- | --- |
-| Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive. | Browser callback timing, not GPU completion or actual display presentation. Lower is better for this matched scenario. |
+| Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive, with movement, live render telemetry and no recorded browser errors. | A render-activity guard is not proof of correct pixels. Callback timing is not GPU completion or actual display presentation. Lower is better for this matched scenario. |
 | Modeled display/body speed p05–p95 (×) | Frame-to-frame modeled visual speed divided by predicted-body speed, when the latter exceeds 10 m/s. Ideally near 1. | Synthetic 120 Hz slalom and simulated network, not a live rendered car. Retain max movement per sample and traces too. |
 | Modeled steering onset (ms) | Left/right first modeled yaw response relative to a no-steer counterfactual. | Synthetic 120 Hz samples quantize response to 8.333 ms; not human input-to-photon latency. |
-| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. | One player and a shared browser/Worker host; not sustained production capacity or WAN latency. |
+| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
 
 The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
@@ -78,14 +78,21 @@ targets and additional coverage remain in [performance release gates](PERFORMANC
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |
+| 2026-10-18 · same version and commit, repeat | Same scenario and machine | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Repeat report](performance-baselines/2026-10-18-v0.0.24-aeb5704/repeat-report.json) and browser traces in the same directory; same synthetic traces as the first run. |
 
 That browser run observed 360 intervals across six seconds of driving, and
 59.2 simulated seconds across 61.912 seconds of received room snapshots. The
 host's one-minute load average was 9.00 before and 10.09 after on 18 logical
-CPUs; other workloads were active. It does not establish a regression budget.
+CPUs; other workloads were active. The repeat had load averages 7.95 before and
+10.02 after, with 59.2 simulated seconds over 61.928 seconds of observations.
+Two busy-host runs do not establish a regression budget.
 For the separate bunched 150 ms model, the speed ratio was 0.898–1.171× and
 46 inputs were rejected. That range falls outside the existing aspirational
 0.9–1.1× smoothness target; recording it is not a pass. The compressed browser
 manifest includes the raw frame intervals, and the trajectory is the received
 authoritative pose rather than the displayed pose. The synthetic traces are
 retained separately. No physical device or GPU-completion timing was measured.
+The adapter hash was added to the saved report after capture by hashing the file
+from the recorded commit; subsequent runs record it automatically. The first
+report predates reporter-method hashing, so automatic deltas against it are
+`HOLD`; rerun both versions with the same current harness for a paired result.

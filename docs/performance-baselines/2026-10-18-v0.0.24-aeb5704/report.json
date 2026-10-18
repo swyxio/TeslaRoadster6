@@ -51,6 +51,7 @@
     "scenarioSha256": "4319061719d9b163462adb100a509545454d33eab0c920686fda455166b4afa2",
     "recorderSha256": "0ecc273968bc1fc9d588dcdc85e6a717bacb9545559ed252de608a4b6deaf203",
     "motionBenchmarkSha256": "7dbcbcaef9232cc0b6061caaad2f40caf0840275f200116eebe6af186b1c22a2",
+    "motionAdapterSha256": "97b93e90e47e6e1c6b64d8ed1fb17f45a47d2db49ed2b59b11da33e427bcc5e7",
     "start": {
       "x": -300,
       "z": -2050,
