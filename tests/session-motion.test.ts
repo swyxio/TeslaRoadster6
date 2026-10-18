@@ -355,19 +355,20 @@ test('a nearby car remains continuous while jumping off the banked oval',()=>{
     return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
   const drive=new Map([['p',input],['q',input]]);
   socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,drive,.05,{substeps:5});socket.message(packet(14));
-  const queue:{when:number;packet:unknown}[]=[];let previous:Entity|undefined,sawFlight=false;
-  for(let frame=0;frame<=120;frame++){
+  const queue:{when:number;packet:unknown}[]=[];let previous:Entity|undefined,sawFlight=false,sawLanding=false;
+  for(let frame=0;frame<=300;frame++){
     now=frame*1000/120;
     if(frame&&frame%6===0)step(world,new Map([['p',input],['q',{...input,jump:now>=400?1:0}]]),.05,{substeps:5});
     if(frame&&frame%12===0)queue.push({when:now+75,packet:packet(14+frame/6)});
     while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
     session.tick(1/120,input);const shown=pair(session.renderWorld());
     sawFlight||=shown.peer.supportId===null;
+    sawLanding||=sawFlight&&shown.peer.supportId==='ground';
     const bank=ovalBankSurface(shown.peer.x,shown.peer.z);
     if(shown.peer.supportId===null&&bank)assert.ok(shown.peer.y>=bank.height-.001,`peer remains above bank at frame ${frame}`);
     if(previous)assert.ok(Math.hypot(shown.peer.x-previous.x,shown.peer.y-previous.y,shown.peer.z-previous.z)<1,`peer frame ${frame}`);
     previous=shown.peer;
   }
-  assert.ok(sawFlight,'the peer actually jumped');assert.equal(peer.health,100);
+  assert.ok(sawFlight,'the peer actually jumped');assert.ok(sawLanding,'the peer landed');assert.equal(peer.health,100);
   session.disconnect();
 });

@@ -42,7 +42,10 @@ function isGroundSupported(entity:Entity):boolean {
 }
 function sampleBetween(a:Entity,b:Entity,alpha:number):Entity {
   const sampled=interpolate(a,b,alpha);
-  return isGroundSupported(a)&&isGroundSupported(b)?sampleSupported(sampled):sampled;
+  if(isGroundSupported(a)&&isGroundSupported(b))return sampleSupported(sampled);
+  if(a.supportId===null&&isGroundSupported(b)||isGroundSupported(a)&&b.supportId===null)
+    return {...sampled,supportId:alpha<=0?a.supportId:alpha>=1?b.supportId:null};
+  return sampled;
 }
 function presentationPathClear(from:Entity,to:Entity):boolean {
   if(isGroundSupported(from)&&isGroundSupported(to))return projectedGroundOvalPathClear(from,to);
