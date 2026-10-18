@@ -2,6 +2,15 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Browser performance baseline and asset caching · protocol v31 · 2026-10-18 Pacific
+
+- On the PR #55-integrated game source, `pnpm run ci` passed 486 tests and the build after the HTML scanner review fix; the build also checked both TypeScript targets and generated exact cache rules for five fingerprinted Vite assets. Focused tests cover static graph accounting, transfer probes and invalid cache rules. The local timing and asset-size observations, including host load and scope, are in [the performance audit](PERFORMANCE_AUDIT.md).
+- After integrating PRs #59 and #61, `pnpm run ci` passed 490 tests and the build. The separate driving-continuity [release gates](PERFORMANCE_RELEASE_GATES.md) remain open.
+- The local Wrangler two-client room integration passed, including authoritative movement, flight, mini-games, delivery and disconnect cleanup. This is a functional check, not a capacity or ferry-crossing test.
+- Local Wrangler returned a one-year immutable cache policy for the emitted game JavaScript and CSS; the game HTML, unversioned changelog script and a missing asset path served by the SPA fallback retained revalidation. In Chrome, the first local navigation transferred 272,337 bytes of game JavaScript and 14,491 bytes of CSS including response overhead; after navigating away and back, both came from the browser's memory cache with zero transferred bytes. The HTML revalidated with HTTP 304.
+- Cloudflare's `d59226b` preview passed the two-client room integration and served the same cache policies for game assets, HTML, the changelog script and a missing asset path. Three hash-checked preview responses for the game JavaScript were 270,772–270,900 Brotli body bytes. Production cache behavior remains unverified.
+- Earlier PR #54 local Chrome samples covered desktop and emulated phone portrait and landscape at the stationary SF spawn. They were heavily contended and cannot establish a speedup. On the integrated build, Chrome also sampled flight and the Rocket Dome. Initial automated touch did not move the car; after accounting for a 0.9 coordinate scale in the Chrome session, Drive worked in portrait and landscape emulation. No physical mobile device or multi-touch was tested.
+
 ## Static Bay batches and performance gates · protocol v31 · 2026-10-18 Pacific
 
 - Against baseline `3307584`, the six-view dev-only scenery fixture reduced static draw calls from 110→58 at Golden Gate, 199→96 at Bay Bridge, 156→92 at the waterfront, 149→91 at Oakland port, 44→37 at SFO and 61→60 at Stanford. Uploaded geometries after all views fell from 386 to 100; slightly coarser regional culling increased submitted triangles by at most 0.39%. Per-view raster differences affected at most 0.032% of pixels. See [method and raw measurements](BAY_RENDERING.md).
