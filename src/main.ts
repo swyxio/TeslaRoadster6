@@ -111,7 +111,7 @@ for(const event of ['pointerdown','keydown'] as const)window.addEventListener(ev
 refreshSoundSettings();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
-catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; throw new Error('WebGL unavailable'); }
+catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
 let lastLevel:Level|undefined,lastBlockedAt=-1,lastBlockedNoticeAt=-10;
 let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
