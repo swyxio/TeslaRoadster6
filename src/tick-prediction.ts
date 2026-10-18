@@ -9,6 +9,7 @@ import { requiredLevelAt } from '../shared/delivery';
 import { hasRockets } from '../shared/upgrades';
 import { VEHICLES } from '../shared/vehicles';
 import { remotePathClear } from './remote-presentation';
+import { buildingSweepBlocked } from './building-sweep';
 
 const TICK=.05;
 const MAX_HISTORY=64;
@@ -55,7 +56,7 @@ function correctionClear(from:Entity,to:Entity):boolean {
     overlaps(DOME.x-DOME.halfLength,DOME.x+DOME.halfLength,DOME.z-DOME.flatHalfWidth-DOME.radius,DOME.z+DOME.flatHalfWidth+DOME.radius)))return false;
   if(nearbyBuildings(midX,midZ,Math.hypot(maxX-minX,maxZ-minZ)/2).some(b=>{
     const roof=b.style==='rotunda'?Math.max(b.h,23):b.style==='salesforce'||b.style==='coit'?b.h+b.w*.46*.38:b.h;
-    return Math.min(from.y,to.y)<roof&&b.x+b.w/2>=minX&&b.x-b.w/2<=maxX&&b.z+b.d/2>=minZ&&b.z-b.d/2<=maxZ;
+    return Math.min(from.y,to.y)<roof&&buildingSweepBlocked(from,to,b);
   }))return false;
   const extent={halfWidth:spec.width/2,halfLength:spec.length/2,yaw:to.yaw,
     minY:-radius,maxY:spec.height+radius};
@@ -273,8 +274,16 @@ export class TickPrediction {
     const correctionRate=Math.min(10,20/Math.max(.001,correctionDistance));
     const decay=rebased?1:Math.exp(-correctionRate*dt);
     for(const key of ['x','y','z','yaw','pitch','roll'] as const)this.offset[key]*=decay;
-    const car={...goal,x:goal.x+this.offset.x,y:goal.y+this.offset.y,z:goal.z+this.offset.z,
+    let car={...goal,x:goal.x+this.offset.x,y:goal.y+this.offset.y,z:goal.z+this.offset.z,
       yaw:goal.yaw+this.offset.yaw,pitch:goal.pitch+this.offset.pitch,roll:goal.roll+this.offset.roll};
+    // The path proved clear when the offset was created can become unsafe as
+    // the replayed car turns or moves. Recheck the current correction and the
+    // displayed frame transition before using the remaining offset.
+    if((this.offset.x!==0||this.offset.y!==0||this.offset.z!==0||this.offset.yaw!==0||this.offset.pitch!==0||this.offset.roll!==0)&&
+      (!correctionClear(goal,car)||(this.presented&&!correctionClear({...this.presented,health:car.health},car)))){
+      this.offset={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};car=goal;cut=true;
+      if(this.presented&&Math.hypot(this.presented.x-goal.x,this.presented.y-goal.y,this.presented.z-goal.z)>20)cutCamera=true;
+    }
     let peers=shown;
     if(coTimedPeers){
       const {peersBefore,peersAfter,unsafePeers}=this.segment;

@@ -266,6 +266,7 @@ test('a convoy remains smooth while travelling parallel to a nearby building',()
     while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
     session.tick(1/120,input);const shown=pair(session.renderWorld());
     assert.equal(contact(body(shown.local),body(shown.peer)),null,`frame ${frame}`);
+    assert.equal(session.takePresentationSnap(),false,`local cut at frame ${frame}`);
     if(previous)assert.ok(Math.hypot(shown.peer.x-previous.x,shown.peer.y-previous.y,shown.peer.z-previous.z)<1,`peer frame ${frame}`);
     previous=shown.peer;
   }

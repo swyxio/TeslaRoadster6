@@ -55,6 +55,30 @@ test('airborne correction does not blend through a ridge between valid endpoints
   }
 });
 
+for (const steer of [0,.35]) test(`decaying correction cannot enter a building while driving with steer ${steer}`, () => {
+  const {world,car}=setup(),wall=BUILDINGS[0],left=wall.x-wall.w/2;
+  Object.assign(car,{x:left-9,z:wall.z,y:0,yaw:-Math.PI/2,speed:35,vx:35,vy:0,vz:0,supportId:'ground'});
+  const state=new ScheduledInput({...NEUTRAL,throttle:1,steer}).snapshot();state.heldUntilTick=1000;
+  const prediction=new TickPrediction();prediction.snapshot(world,'p',100,state,0,5,0);
+  let previous=driven(prediction.renderWorld(0,101,100,0)!);
+  const after=structuredClone(world);driven(after).x=left-13;
+  prediction.snapshot(after,'p',101,state,0,5,10);
+  for(let now=10;now<=500;now+=1000/120){
+    const elapsed=now-10,target=102+Math.floor(elapsed/50),phase=(elapsed%50)/50;
+    const shown=driven(prediction.renderWorld(now,target,101+elapsed/50,phase)!);
+    const cut=prediction.takeSnap(),hit=contact(body(shown),{...wall,yaw:0});
+    assert.ok(!hit||hit.depth<1e-7,`rendered penetration at ${now}: ${hit?.depth}`);
+    if(!cut){
+      const delta=Math.atan2(Math.sin(shown.yaw-previous.yaw),Math.cos(shown.yaw-previous.yaw));
+      for(let sample=1;sample<10;sample++){
+        const t=sample/10,pose={...shown,x:previous.x+(shown.x-previous.x)*t,z:previous.z+(shown.z-previous.z)*t,yaw:previous.yaw+delta*t};
+        assert.equal(contact(body(pose),{...wall,yaw:0}),null,`swept penetration at ${now}`);
+      }
+    }
+    previous=shown;
+  }
+});
+
 test('correction cannot interpolate through an island jump wall', () => {
   const { world, car } = setup(), ramp = ISLAND_JUMPS[1], near = ramp.z - ramp.width / 2;
   Object.assign(car, { x: ramp.start + 15, z: near - 2.5, y: 0, yaw: 0, speed: 0, vx: 0, vy: 0, vz: 0, supportId: 'ground' });
