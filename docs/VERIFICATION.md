@@ -15,7 +15,7 @@ These entries describe separate historical builds. Check the version and scope i
 ## Provisional 64-player admission candidate · 2026-10-18 Pacific
 
 - Based on `82c37f1` / protocol v42, the capacity candidate passed all 848 tests and `pnpm build`; the existing Vite large-chunk warning remains. A local Wrangler instance using the checked-in configuration advertised capacity 64. With a separate capacity-2 Wrangler instance, the room-capacity integration verified a 4003 full-room close, a separate named room and reuse of a freed seat.
-- The standard two-client room integration reached five Dome goals but timed out waiting for the winning-player and both Roadster award assertions. Its cause has not been established; this run is not a full integration pass. The previous v32 64-client local throughput sample and its shared-host limits are recorded below. No new sustained 64-player throughput, browser or physical-device result is claimed here.
+- The first standard two-client room integration reached five Dome goals but timed out waiting for the winning-player and both Roadster award assertions. Its cause has not been established. After merging the radio release into candidate `67cbd1c`, a separate rerun of the full local Wrangler integration passed, including the match winner, awards, movement and disconnect checks; it advertised capacity 64. This is a functional check, not a load test. The previous v32 64-client local throughput sample and its shared-host limits are recorded below. No new sustained 64-player throughput, browser or physical-device result is claimed here.
 
 ## Economy and self-driving integration · protocol v42 candidate · 2026-10-18 Pacific
 
