@@ -7,6 +7,7 @@ import {VEHICLE_IDS, VEHICLES} from '../shared/vehicles';
 import {SHOPS, UPGRADES, hasRockets} from '../shared/upgrades';
 import {hasRocket} from '../shared/rocket';
 import {parseMessage} from '../worker/protocol';
+import {Session} from '../src/session';
 
 function setup(kind:typeof VEHICLE_IDS[number]='model-3'){
   const world=createWorld(),player=addPlayer(world,'p','P'),car=makeEntity('car',kind,SHOPS[0].x,SHOPS[0].z,'p');
@@ -20,8 +21,10 @@ test('fictional shops sit on clear supported ground for the largest vehicles',()
 });
 test('shop validates location, funds, eligibility and one-time purchases on the simulation',()=>{
   const {world,player,car}=setup();
-  assert.equal(parseMessage('{"type":"upgrade","upgrade":"__proto__"}'),null);
-  assert.deepEqual(parseMessage('{"type":"upgrade","upgrade":"rocket"}'),{type:'upgrade',upgrade:'rocket'});
+  assert.equal(parseMessage('{"type":"upgrade","upgrade":"__proto__","requestId":1}'),null);
+  assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket"}'),null);
+  assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket","requestId":0}'),null);
+  assert.deepEqual(parseMessage('{"type":"upgrade","upgrade":"rocket","requestId":1}'),{type:'upgrade',upgrade:'rocket',requestId:1});
   assert.equal(buyUpgrade(world,'p','rocket'),false,'no cash');
   player.delivery.cash=200;car.x+=50;assert.equal(buyUpgrade(world,'p','rocket'),false,'outside shop');car.x-=50;
   car.supportId=null;assert.equal(buyUpgrade(world,'p','rocket'),false,'airborne');car.supportId='ground';
@@ -33,6 +36,15 @@ test('shop validates location, funds, eligibility and one-time purchases on the 
   for(const id of ['economy','motor','armor'] as const){assert.equal(buyUpgrade(world,'p',id),true,id);assert.equal(buyUpgrade(world,'p',id),false,id);}
   assert.equal(player.delivery.cash,15);car.health=45;car.air=30;assert.equal(buyUpgrade(world,'p','service'),true);assert.equal(car.health,100);assert.equal(car.air,100);assert.equal(player.delivery.cash,3);
   assert.equal(buyUpgrade(world,'p','service'),false);
+});
+test('solo shop reports authoritative purchase and rejection results',()=>{
+  const session=new Session();session.solo('model-3');
+  const player=session.world.players.find(p=>p.id===session.id)!,car=session.world.entities.find(e=>e.id===player.entityId)!;
+  Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0,pushX:0,pushZ:0,vy:0});
+  player.delivery.cash=UPGRADES.rocket.price;
+  const first=session.buyUpgrade('rocket');assert.deepEqual(session.upgradeResult,{requestId:first,upgrade:'rocket',ok:true});
+  assert.equal(player.delivery.cash,0);assert.ok(car.upgrades.rocket);
+  const second=session.buyUpgrade('rocket');assert.ok(second>first);assert.deepEqual(session.upgradeResult,{requestId:second,upgrade:'rocket',ok:false});
 });
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
   const world=createWorld(), rockets=world.pickups.filter(p=>p.kind==='rocket');

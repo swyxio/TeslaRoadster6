@@ -1,6 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
-## Ferry, parking, temporary rockets and connected dome · protocol v13 · local checks
+## Ferry playground with shop feedback · protocol v14 · 2026-10-18 Pacific
+
+- After integrating main's shop purchase acknowledgements, `pnpm test` passed 217 tests and `pnpm build` passed both typechecks and Vite. The existing chunk warning remains (744 kB main JavaScript, 210 kB gzip).
+- Local Wrangler two-client integration passed the ferry and activity snapshots, Rocket pads, requester-only shop results, dome ball and goals, movement and disconnect checks. This did not exercise a full multiplayer ferry crossing or a load test.
+- Chrome desktop and 390×844 portrait / 844×390 landscape emulation showed the final game's driving HUD and activity actions. The fixture-based island observations below were from the preceding v13 build, not this final merge. Touch driving, physical devices and a complete manual route remain unverified.
+
+## Ferry, parking, temporary rockets and connected dome · protocol v13 before the shop follow-up · local checks
 
 - `pnpm test` passed 216 tests and `pnpm build` passed browser and Worker typechecks and Vite. The existing chunk-size warning remains (743 kB main JavaScript, 210 kB gzip).
 - Local Wrangler two-client integration passed the ferry and activity snapshots, Rocket pads, dome ball and goals, movement, delivery and disconnect checks. This was not a full multiplayer ferry crossing or a load test.
@@ -26,6 +32,13 @@ The protocol v11 island and dome records below describe separate builds.
 - `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
 - In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
 - Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
+## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 157 tests, both typechecks and the build; Vite's existing chunk-size warning remains. Regression checks cover reused retrofit meshes, solo purchase results and validated request IDs.
+- Local Wrangler two-client integration passed with requester-only results for a rejected purchase and a second immediate request. Successful multiplayer purchases remain covered by shared simulation, not a live room transaction; this is not a load test.
+- Staging preview of commit `39b41c4` returned protocol v13, matched the locally built browser assets, and passed the same two-client integration. This is not a load test.
+- Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. Chrome 390×844 portrait touch emulation bought the kit and displayed its confirmation; 844×390 landscape showed it after scrolling the shop. The fixture is absent from the built source. No physical device was tested for this follow-up.
+
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
