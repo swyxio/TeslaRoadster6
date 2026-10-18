@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Driving continuity and room timing candidate · 2026-10-18 Pacific
+
+- **HOLD:** [paired local evidence and raw traces](performance-baselines/2026-10-18-driving-continuity/) show a faster five-client room clock and a shorter first-input stall, but do not establish the same-instant steady-motion gate. One bunched run still rejected an input, and an experimental tick-bracketing probe was too imprecise to verify the speed ratio. The candidate has not been merged or deployed on this evidence.
+- On `4656339`, all 1,057 tests and the build passed; local Wrangler room and prediction integrations passed on the preceding Worker-identical `ef7dc05`. Emulated portrait and landscape touch checks completed; no physical device was tested. Full limitations and host-load context are in the linked record.
+
 ## Boost and landing feedback candidate · 2026-10-18 Pacific
 
 - After integrating sandbox main `26fc934`, all 1,006 tests and `pnpm build` passed on `0f9b494`; the existing large-chunk warning remains. These are functional checks, not a performance verdict.
