@@ -17,12 +17,14 @@ test('quick touch jumps and flips survive release without interrupting steering'
   fakeDocument.hidden=false;fakeDocument.querySelectorAll=(selector)=>selector==='[data-control]'?[steering,drive,jump,flip]:[];
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
+  const edges:{kind:string;id:number}[]=[];controls.onEdge=(kind,id)=>edges.push({kind,id});
   steering.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerdown',2));jump.dispatchEvent(pointer('pointerup',2));jump.dispatchEvent(click(1));
   assert.equal(controls.read().jump,1);assert.equal(controls.read().steer,1);
   controls.airborne=true;drive.dispatchEvent(pointer('pointerdown',3));flip.dispatchEvent(pointer('pointerdown',4));
   assert.equal(controls.read().throttle,1);assert.equal(controls.read().flip,1);assert.equal(controls.read().steer,1);
   drive.dispatchEvent(pointer('pointerup',3));flip.dispatchEvent(pointer('pointerup',4));
   jump.dispatchEvent(click(0));assert.equal(controls.read().jump,2);
+  assert.deepEqual(edges,[{kind:'jump',id:1},{kind:'flip',id:1},{kind:'jump',id:2}], 'each actual press is emitted exactly once');
   controls.clear();assert.equal(controls.read().steer,0);
 });
 
@@ -157,6 +159,18 @@ test('controller action edges pause driving immediately when a menu opens',()=>{
   controls.enabled=true;controls.read();assert.equal(menus,1,'held menu button does not fire twice');
 });
 
+test('action callbacks can snapshot gamepad edge counters without rereading the controller',()=>{
+  const fakeWindow=new EventTarget(),fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const buttons=Array.from({length:16},()=>({pressed:false,value:0}));const pad={connected:true,mapping:'standard',index:0,buttons,axes:[0,0,0,0]} as Gamepad;
+  let reads=0;const controls=new Controls(()=>{reads++;return [pad];});controls.enabled=true;
+  let seen:{jump:number;flip:number}|undefined;
+  controls.onAction=action=>{if(action==='reset')seen=controls.edgeCounters();};
+  controls.read();buttons[0].pressed=true;buttons[14].pressed=true;controls.read();
+  assert.deepEqual(seen,{jump:1,flip:0});assert.equal(reads,2);
+  controls.read();assert.deepEqual(controls.edgeCounters(),{jump:1,flip:0},'held controls do not create another edge');
+});
+
 test('tap jump then hold the same rebound key or touch button to hover',()=>{
   const jump=new FakeButton('KeyE'),drive=new FakeButton('KeyW');
   const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
@@ -169,4 +183,17 @@ test('tap jump then hold the same rebound key or touch button to hover',()=>{
   jump.dispatchEvent(pointer('pointerdown',3));assert.equal(controls.read().jump,2);now=501;assert.equal(controls.read().hover,true);
   jump.dispatchEvent(pointer('pointercancel',3));assert.equal(controls.read().hover,false);
   jump.dispatchEvent(pointer('pointerdown',4));assert.equal(controls.read().hover,false);controls.clear();now=1000;assert.equal(controls.read().hover,false);
+});
+
+
+test('held driving keys stay cleared until released and pressed again',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const key=(type:string,code:string,repeat=false)=>{const event=new Event(type);Object.defineProperties(event,{code:{value:code},repeat:{value:repeat}});fakeWindow.dispatchEvent(event);};
+  key('keydown','KeyW');assert.equal(controls.read().throttle,1);
+  key('keydown','KeyW',true);assert.equal(controls.read().throttle,1,'ordinary repeat preserves a held key');
+  controls.clear();assert.equal(controls.read().throttle,0);
+  key('keydown','KeyW',true);assert.equal(controls.read().throttle,0,'repeat cannot cancel a route after controls are cleared');
+  key('keyup','KeyW');key('keydown','KeyW');assert.equal(controls.read().throttle,1,'a fresh press resumes manual driving');
 });

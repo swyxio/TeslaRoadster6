@@ -6,6 +6,7 @@ import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
+import { requiredLevelAt } from './delivery';
 export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
 // large district loops let NPCs tour more than a single block.
@@ -71,6 +72,35 @@ export function isTrafficIncident(e:Entity,time:number):boolean {
 }
 
 const wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v));
+// Reverse only through currently supported, unlocked space with clearance for
+// the whole car. Recovery is local and does not relocate or phase through cars.
+function clearBehind(e:Entity,world:World):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  const player=world.players.find(p=>p.id===e.driver),ceiling=Math.max(player?.delivery.level??0,requiredLevelAt(e.x,e.z));
+  for(let d=1;d<=5;d+=1){
+    const x=e.x-forward.x*d,z=e.z-forward.z*d;
+    if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
+    const pose=body({...e,x,z});
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return false;
+    for(const other of world.entities){
+      if(other===e)continue;
+      const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
+      if(e.y>=other.y+height||other.y>=e.y+spec.height)continue;
+      if(contact(pose,body(other)))return false;
+    }
+  }
+  return true;
+}
+function wallAhead(e:Entity):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  for(let d=1;d<=3;d++){
+    const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return true;
+  }
+  return false;
+}
 export function routePose(index:number,count:number) {
   const routeId=index%6,route=ROUTES[routeId],side=(index*4/count)%4,segment=Math.floor(side),t=side-segment;
   const a=route[segment],b=route[(segment+1)%4];
@@ -104,29 +134,83 @@ export function trafficInput(e:Entity,world:World):Input {
   let waypoint=navigation?navigation.index:e.waypoint;
   if(waypoint<0||waypoint>=route.length)waypoint=0;
   let target=route[waypoint];
-  const previous=navigation&&waypoint===0?{x:e.x+Math.sin(e.yaw)*10,z:e.z+Math.cos(e.yaw)*10}:route[(waypoint+route.length-1)%route.length];
-  const final=!!navigation&&waypoint===route.length-1;
-  const next=final?target:route[(waypoint+1)%route.length];
-  const incoming={x:target.x-previous.x,z:target.z-previous.z};
-  const outgoing={x:next.x-target.x,z:next.z-target.z};
-  const cosine=(incoming.x*outgoing.x+incoming.z*outgoing.z)/(Math.hypot(incoming.x,incoming.z)*Math.hypot(outgoing.x,outgoing.z)||1);
-  const distance=Math.hypot(target.x-e.x,target.z-e.z);
+  let previous=navigation&&waypoint===0?{x:e.x+Math.sin(e.yaw)*10,z:e.z+Math.cos(e.yaw)*10}:route[(waypoint+route.length-1)%route.length];
+  let final=!!navigation&&waypoint===route.length-1;
+  let next=final?target:route[(waypoint+1)%route.length];
+  let incoming={x:target.x-previous.x,z:target.z-previous.z};
+  let outgoing={x:next.x-target.x,z:next.z-target.z};
+  let cosine=(incoming.x*outgoing.x+incoming.z*outgoing.z)/(Math.hypot(incoming.x,incoming.z)*Math.hypot(outgoing.x,outgoing.z)||1);
+  let distance=Math.hypot(target.x-e.x,target.z-e.z);
   const progress=((e.x-previous.x)*incoming.x+(e.z-previous.z)*incoming.z)/(incoming.x*incoming.x+incoming.z*incoming.z||1);
   const lateral=Math.abs((e.x-previous.x)*incoming.z-(e.z-previous.z)*incoming.x)/(Math.hypot(incoming.x,incoming.z)||1);
   // On city corners, pause briefly; points along a straight road are not stops.
-  if(final&&distance<5&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
+  if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
     waypoint=(waypoint+1)%route.length;
     if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;
     if(!e.driver&&cosine<.75)e.pauseUntil=world.time+.7;
     target=route[waypoint];
+    if(e.driver){
+      // Speed planning must use the same segment as steering after a turn.
+      previous=route[(waypoint+route.length-1)%route.length];
+      final=!!navigation&&waypoint===route.length-1;
+      next=final?target:route[(waypoint+1)%route.length];
+      incoming={x:target.x-previous.x,z:target.z-previous.z};
+      outgoing={x:next.x-target.x,z:next.z-target.z};
+      cosine=(incoming.x*outgoing.x+incoming.z*outgoing.z)/(Math.hypot(incoming.x,incoming.z)*Math.hypot(outgoing.x,outgoing.z)||1);
+      distance=Math.hypot(target.x-e.x,target.z-e.z);
+    }
   }
   const angle=wrap(Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw);
   const spec=VEHICLES[e.kind];
   const steer=Math.max(-1,Math.min(1,angle*1.8));
+  if(navigation&&e.driver){
+    // Keep the reduced joining speed through the first lane turn. Leaving the
+    // approach as soon as we touch it can swing wide into the next building.
+    if(navigation.join){
+      const joinDistance=Math.hypot(e.x-navigation.join.x,e.z-navigation.join.z);
+      if(joinDistance<10)navigation.joinReached=true;
+      if((joinDistance<15&&Math.abs(angle)<.35)||(navigation.joinReached&&joinDistance>15)){
+        delete navigation.join;delete navigation.joinReached;
+      }
+    }
+    let recovery=navigation.recovery;
+    if(!recovery||recovery.index!==waypoint){
+      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
+    }else if(distance<recovery.distance-2){
+      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
+    }
+    const wall=!!navigation.join&&e.speed>=0&&wallAhead(e);
+    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
+    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
+      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
+    // A red light can last longer than the recovery timeout; waiting in its
+    // queue is expected and should never trigger a reverse manoeuvre.
+    if(waitingAtSignal&&!wall)recovery.at=world.time;
+    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
+      // Three bounded attempts, then return control and expose a failure to
+      // the driver instead of sitting indefinitely against a wall or queue.
+      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
+      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
+    }
+    const reversing=world.time<recovery.reverseUntil||(!!navigation.join&&Math.abs(angle)>2.1);
+    if(reversing&&clearBehind(e,world)){
+      if(e.speed>1)return {...neutral,brake:true,steer};
+      const recovering=world.time<recovery.reverseUntil;
+      // Clear the nose from a wall before rotating, or the physics correctly
+      // rejects the turn even though the straight line behind is open.
+      const straight=recovering&&world.time-recovery.at<2;
+      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
+      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
+      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
+      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
+      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
+      return {...neutral,throttle,steer:reverseSteer};
+    }
+  }
   const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  let cruise=navigation?12:highway?Math.min(spec.maxSpeed*.92,26*variety):8;
+  let cruise=navigation?(navigation.join?4.5:12):highway?Math.min(spec.maxSpeed*.92,26*variety):8;
   if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
   // Start braking before bends; the approach length uses real-time speed.
   if(e.driver&&!final&&cosine<.95){
@@ -135,12 +219,12 @@ export function trafficInput(e:Entity,world:World):Input {
   }else if(!e.driver&&cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
   if(Math.abs(angle)>.5)cruise=Math.min(cruise,4.5);
   const forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
-  let safeSpeed=cruise,hazardGap=Infinity;
+  let safeSpeed=cruise,hazardGap=Infinity,hazardClosingSpeed=0;
   // The meter is a virtual stopped leader on the eastbound approach. Cars that
   // have already crossed the stop line continue, including on a phase change.
   if(bayBridgeSignal(world.time).state==='red'&&forward.x>.8&&Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth){
     const gap=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
-    if(gap>=0&&gap<150){hazardGap=Math.min(hazardGap,gap);safeSpeed=Math.min(safeSpeed,Math.max(0,(gap-2-Math.max(0,e.speed)*1.5)*.55));}
+    if(gap>=0&&gap<150){hazardGap=Math.min(hazardGap,gap);hazardClosingSpeed=Math.max(hazardClosingSpeed,e.speed);safeSpeed=Math.min(safeSpeed,Math.max(0,(gap-(e.driver?3:2)-Math.max(0,e.speed)*(e.driver?2.2:1.5))*.55));}
   }
   for(const other of world.entities){
     if(other===e)continue;
@@ -151,11 +235,12 @@ export function trafficInput(e:Entity,world:World):Input {
     const size=other.kind==='person'?{length:.7,width:.7}:VEHICLES[other.kind];
     if(along<=0||side>(spec.width+size.width)/2+.35)continue;
     const gap=along-(spec.length+size.length)/2;
-    hazardGap=Math.min(hazardGap,gap);
     const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
     const leaderSpeed=Math.max(0,other.speed*(forward.x*otherForward.x+forward.z*otherForward.z));
-    // 2 m standstill gap and 1.5 seconds of headway, in real simulation time.
-    const followingSpeed=Math.max(0,leaderSpeed+(gap-2-Math.max(0,e.speed)*1.5)*.55);
+    if(gap<hazardGap){hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);}
+    // Occupied cars start slowing earlier, leaving room to follow smoothly.
+    // Ambient traffic retains its existing 1.5-second headway.
+    const followingSpeed=Math.max(0,leaderSpeed+(gap-(e.driver?3:2)-Math.max(0,e.speed)*(e.driver?2.2:1.5))*.55);
     safeSpeed=Math.min(safeSpeed,followingSpeed);
   }
   if(world.time<e.pauseUntil)safeSpeed=0;
@@ -169,7 +254,10 @@ export function trafficInput(e:Entity,world:World):Input {
   if(e.driver){
     // Let occupied cars roll through bends and slow progressively instead of
     // applying full brakes at each snapshot-sized speed change.
-    if(hazardGap<Math.max(2,e.speed*e.speed/10+2))return {...neutral,brake:true,steer};
+    // Reserve full braking for an imminent collision. Normal following uses
+    // the same bounded deceleration as bends, including a stopped leader.
+    const emergencyDistance=1+Math.max(0,e.speed)*.35+hazardClosingSpeed**2/(2*Math.min(8,spec.brakeDecel*.7));
+    if(hazardGap<emergencyDistance)return {...neutral,brake:true,steer};
     if(safeSpeed<.1&&Math.abs(e.speed)<.15)return {...neutral,brake:true,steer};
     const acceleration=Math.max(-2.2,Math.min(2.2,(safeSpeed-e.speed)*.9));
     const throttle=Math.max(-1,Math.min(1,(Math.max(0,e.speed)*.12+acceleration)/(spec.acceleration*(e.upgrades.motor?1.25:1))));
@@ -201,12 +289,12 @@ function routeDistancePose(routeId:number,fraction:number){
 }
 
 type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=34; // Target for unattended traffic, in addition to catalog NPCs and police.
-const AMBIENT_POOL_MAX=68; // Also bounds taken and abandoned optional cars.
+const AMBIENT_MAX=4; // Alongside eight city cars and four police.
+const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
 
-function desiredAmbient(time:number):number{return Math.round(5+29*trafficDemand(time).intensity);}
+function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
 function observers(world:World):Entity[]{
   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
 }
@@ -231,7 +319,7 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
   return false;
 }
 
-/** Called after the permanent 26 NPCs and parked fleet have been created. */
+/** Called after the small city and parked cohorts have been created. */
 export function seedHighwayTraffic(world:World,make:EntityFactory):void {
   const target=desiredAmbient(world.time);
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);

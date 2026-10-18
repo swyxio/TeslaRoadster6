@@ -1,7 +1,9 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
-import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { VEHICLES, isLuxuryVehicle, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { buildLuxuryModel, MOTORCYCLE_FAIRING_WIDTH } from './luxury-models';
+import { PAINTS, type VehicleStyle } from '../shared/vehicle-style';
 import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
 // Geometry and materials belong to the fleet, not individual entities: never dispose
@@ -10,6 +12,7 @@ const materials = new Map<string, T.MeshStandardMaterial>();
 const geometries = new Map<string, T.BufferGeometry>();
 const cube = new T.BoxGeometry(1, 1, 1);
 const tire = new T.CylinderGeometry(1, 1, 1, 32);
+const distantTire = new T.CylinderGeometry(1, 1, 1, 8);
 const hub = new T.CylinderGeometry(1, 1, 1, 24);
 const head = new T.SphereGeometry(.25, 8, 6);
 const nozzleRing = new T.TorusGeometry(.095,.018,8,20);
@@ -39,31 +42,44 @@ export function box(parent: T.Object3D, x: number, y: number, z: number, w: numb
 function nozzle(root:T.Group,jets:T.Group,name:string,x:number,y:number,z:number,direction:T.Vector3){
   const mount=new T.Group();mount.name=`nozzle_${name}`;mount.position.set(x,y,z);
   mount.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);
-  const rim=new T.Mesh(nozzleRing,material(0xb2c2c6,.8));rim.rotation.x=Math.PI/2;mount.add(rim);
-  const core=new T.Mesh(nozzleCore,material(0x10191e,.35));mount.add(core);root.add(mount);
+  root.add(mount);
   const plume=new T.Group();plume.name=`plume_${name}`;plume.position.copy(mount.position);plume.quaternion.copy(mount.quaternion);plume.visible=false;
   for(let i=0;i<4;i++){
     const cloud=new T.Sprite(vaporMaterial);cloud.position.y=.2+i*.38;cloud.scale.setScalar(.35+i*.17);plume.add(cloud);
   }
   jets.add(plume);
+  return mount;
 }
 
 function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
   const {length:l,width:w}=spec;
-  for(let i=0;i<4;i++)nozzle(hardware,jets,`rear_${i}`,(i-1.5)*w*.16,.33,l*.51,new T.Vector3(0,0,1));
+  const mounts:T.Group[]=[];
+  for(let i=0;i<4;i++)mounts.push(nozzle(hardware,jets,`rear_${i}`,(i-1.5)*w*.16,.33,l*.51,new T.Vector3(0,0,1)));
   for(const side of [-1,1]){
     const label=side<0?'l':'r';
     for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
-      nozzle(hardware,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
-    nozzle(hardware,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
+      mounts.push(nozzle(hardware,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0)));
+    mounts.push(nozzle(hardware,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0)));
   }
+  // Mounts are rigid relative to the car; only the separate vapor groups
+  // animate. Keep the named anchors, but submit their hardware in two draws.
+  const rims=new T.InstancedMesh(nozzleRing,material(0xb2c2c6,.8),mounts.length);
+  const cores=new T.InstancedMesh(nozzleCore,material(0x10191e,.35),mounts.length);
+  rims.name='rocket-rims';cores.name='rocket-cores';
+  const rimRotation=new T.Matrix4().makeRotationX(Math.PI/2),matrix=new T.Matrix4();
+  mounts.forEach((mount,i)=>{
+    mount.updateMatrix();cores.setMatrixAt(i,mount.matrix);
+    rims.setMatrixAt(i,matrix.copy(mount.matrix).multiply(rimRotation));
+  });
+  rims.computeBoundingSphere();cores.computeBoundingSphere();hardware.add(rims,cores);
 }
 
 /** Snapshot flags describe arcade effects, not the prototype's real control law. */
 export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
   // The stock Roadster always has its hardware. Other cars show it only while
   // an authoritative Rocket capability is active (including between bursts).
-  const hardware=root.getObjectByName('rocket_hardware'),jets=root.getObjectByName('jets');
+  const detail=vehicleDetails.get(root)?.near??root;
+  const hardware=detail.getObjectByName('rocket_hardware'),jets=detail.getObjectByName('jets');
   const spec=VEHICLES[root.name as VehicleId];
   if(hardware instanceof T.Group&&jets instanceof T.Group&&spec){
     hardware.visible=spec.airThrusters||capable||mask!==0;
@@ -84,9 +100,9 @@ export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capab
 
 /** Add visible fictional retrofit hardware to a vehicle when its shared kit is installed. */
 export function addRocketKit(root:T.Group,kind:VehicleId){
-  if(root.getObjectByName('rocket-kit'))return;
+  if((vehicleDetails.get(root)?.near??root).getObjectByName('rocket-kit'))return;
   const spec=VEHICLES[kind],w=spec.width,l=spec.length;
-  const kit=new T.Group();kit.name='rocket-kit';root.add(kit);
+  const kit=new T.Group();kit.name='rocket-kit';(vehicleDetails.get(root)?.near??root).add(kit);
   for(const side of [-1,1]){
     box(kit,side*w*.39,.34,l*.47,.32,.3,.35,0x9b7be8);
   }
@@ -95,18 +111,18 @@ export function addRocketKit(root:T.Group,kind:VehicleId){
 /** Reconcile cached meshes when an entity ID is reused by a new session. */
 export function setRocketKit(root:T.Group,kind:VehicleId,installed:boolean){
   if(installed)addRocketKit(root,kind);
-  const kit=root.getObjectByName('rocket-kit');if(kit)kit.visible=installed;
+  const kit=(vehicleDetails.get(root)?.near??root).getObjectByName('rocket-kit');if(kit)kit.visible=installed;
 }
 
 /** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
-function profile(parent: T.Object3D, width: number, points: [number, number][], color: number) {
-  const key = JSON.stringify([width, points]);
+function profile(parent: T.Object3D, width: number, points: [number, number][], color: number, distant=false) {
+  const key = JSON.stringify([width, points, distant]);
   let geometry = geometries.get(key);
   if (!geometry) {
     const shape = new T.Shape();
     points.forEach(([z, y], i) => i ? shape.lineTo(z, y) : shape.moveTo(z, y));
     shape.closePath();
-    geometry = new T.ExtrudeGeometry(shape, { depth: width - .06, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 3, steps: 1 });
+    geometry = new T.ExtrudeGeometry(shape, { depth: width - .06, bevelEnabled: !distant, bevelThickness: .03, bevelSize: .03, bevelSegments: 3, steps: 1 });
     // Local shape XY -> vehicle ZY, extrusion Z -> vehicle -X.
     geometry.rotateY(-Math.PI / 2); geometry.translate(width / 2 - .03, 0, 0);
     geometries.set(key, geometry);
@@ -114,13 +130,14 @@ function profile(parent: T.Object3D, width: number, points: [number, number][], 
   const mesh = new T.Mesh(geometry, material(color, .28)); parent.add(mesh); return mesh;
 }
 
-function wheels(root: T.Group, spec: VehicleSpec) {
+function wheels(root: T.Group, spec: VehicleSpec, distant=false) {
   const radius = spec.shape === 'semi' || spec.shape === 'bus' ? .5 : spec.shape === 'pickup' ? .44 : spec.shape === 'pod' ? .32 : .35;
   for (const side of [-1, 1]) for (const axle of [-1, 1]) {
     const assembly = new T.Group();
     assembly.name = `wheel_${axle < 0 ? 'f' : 'r'}${side < 0 ? 'l' : 'r'}`;
     assembly.position.set(side * (spec.width / 2 - .09), radius, axle * spec.wheelbase / 2);
-    const rubber = new T.Mesh(tire, material(DARK)); rubber.rotation.z = Math.PI / 2; rubber.scale.set(radius, .24, radius); assembly.add(rubber);
+    const rubber = new T.Mesh(distant?distantTire:tire, material(DARK)); rubber.rotation.z = Math.PI / 2; rubber.scale.set(radius, .24, radius); assembly.add(rubber);
+    if(distant){root.add(assembly);continue;}
     const disk = new T.Mesh(hub, material(spec.id.includes('cybercab') ? spec.color : 0xa6b6b8, .5));
     disk.rotation.z = Math.PI / 2; disk.scale.set(radius * .65, .255, radius * .65); assembly.add(disk);
     const rim=new T.Mesh(new T.TorusGeometry(radius*.73,.025,6,32),material(0xc4cbd0,.7));rim.rotation.y=Math.PI/2;rim.position.x=side*.135;assembly.add(rim);
@@ -130,7 +147,7 @@ function wheels(root: T.Group, spec: VehicleSpec) {
     root.add(assembly);
   }
   if (spec.shape === 'semi') for (const side of [-1, 1]) {
-    const extra = new T.Mesh(tire, material(DARK)); extra.rotation.z = Math.PI / 2;
+    const extra = new T.Mesh(distant?distantTire:tire, material(DARK)); extra.rotation.z = Math.PI / 2;
     extra.scale.set(radius, .32, radius); extra.position.set(side * (spec.width / 2 - .1), radius, spec.wheelbase / 2 - 1.1); root.add(extra);
   }
 }
@@ -150,6 +167,55 @@ function sensors(root: T.Group, spec: VehicleSpec) {
 
 /** Original stylized models. Ground-centered pivot; -Z front; SI dimensions. */
 const templates=new Map<string,T.Group>();
+const distantTemplates=new Map<VehicleId,T.Mesh>();
+const decalTemplates=new Map<string,T.Group>();
+const distantMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.65});
+const vehicleDetails=new WeakMap<T.Object3D,{near:T.Group;far:T.Mesh}>();
+
+/** Preserve the real body silhouette, flatten distant detail into one draw. */
+function distantVehicle(kind:VehicleId):T.Mesh {
+  if(!distantTemplates.has(kind)){
+    const source=buildVehicle(kind,true),parts:T.BufferGeometry[]=[];
+    source.updateMatrixWorld(true);
+    source.traverse(object=>{
+      if(!(object instanceof T.Mesh))return;
+      const part=object.geometry.index?object.geometry.toNonIndexed():object.geometry.clone();
+      part.deleteAttribute('uv');part.applyMatrix4(object.matrixWorld);
+      const color=(object.material as T.MeshStandardMaterial).color;
+      const colors=new Float32Array(part.attributes.position.count*3);
+      for(let i=0;i<colors.length;i+=3){colors[i]=color.r;colors[i+1]=color.g;colors[i+2]=color.b;}
+      part.setAttribute('color',new T.BufferAttribute(colors,3));parts.push(part);
+    });
+    const geometry=mergeGeometries(parts)!;parts.forEach(part=>part.dispose());
+    geometry.computeBoundingSphere();distantTemplates.set(kind,new T.Mesh(geometry,distantMaterial));
+  }
+  return distantTemplates.get(kind)!.clone();
+}
+
+/** Hysteresis avoids flickering detail at the boundary. Player/police stay detailed. */
+export function setVehicleDetail(root:T.Group,distanceSquared:number,forceDetailed=false):boolean {
+  if(root.name==='person')return true;
+  // The motorcycle rider is independently visible when the bike is occupied.
+  // A flattened distant mesh would otherwise display a rider on parked bikes.
+  if(isLuxuryVehicle(root.name)&&VEHICLES[root.name].shape==='motorcycle')return true;
+  let state=vehicleDetails.get(root);
+  const detailed=forceDetailed||distanceSquared<(state?.near.visible===false?100**2:125**2);
+  if(!state){
+    if(detailed)return true;
+    const near=new T.Group();near.name='vehicle-detail';
+    // Incident warnings are entity-level indicators, not model detail.
+    near.add(...root.children.filter(child=>child.name!=='traffic-hazard'));
+    const far=distantVehicle(root.name as VehicleId);far.name='vehicle-distant';
+    root.add(near,far);state={near,far};vehicleDetails.set(root,state);
+  }
+  state.near.visible=detailed;state.far.visible=!detailed;
+  // Invisible descendants still receive Three.js matrix updates. Detach the
+  // inactive tree, retain it in the weak cache, and reattach without rebuilding.
+  const active=detailed?state.near:state.far,inactive=detailed?state.far:state.near;
+  if(inactive.parent===root)root.remove(inactive);
+  if(active.parent!==root)root.add(active);
+  return detailed;
+}
 export function createVehicle(kind:VehicleId|'person'):T.Group {
   if(!templates.has(kind)){
     const template=buildVehicle(kind);
@@ -171,7 +237,96 @@ export function createVehicle(kind:VehicleId|'person'):T.Group {
   }
   return templates.get(kind)!.clone(true);
 }
-function buildVehicle(kind: VehicleId | 'person'): T.Group {
+/** Materials and decal geometry are shared; styles change only the individual mesh references. */
+export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle,marketPaint:number|null=null){
+  const key=`${style.paint}:${style.decal}:${marketPaint??'base'}`;
+  if(root.userData.vehicleStyle===key)return;
+  const spec=VEHICLES[kind],color=marketPaint??PAINTS[style.paint].color,detail=vehicleDetails.get(root)?.near??root;
+  detail.traverse(node=>{
+    if(!(node instanceof T.Mesh)||Array.isArray(node.material)||node.name==='vehicle-distant')return;
+    const current=node.material;
+    if(node.userData.originalVehiclePaint===undefined&&current instanceof T.MeshStandardMaterial&&current.color.getHex()===spec.color)
+      node.userData.originalVehiclePaint=current;
+    const original=node.userData.originalVehiclePaint as T.Material|undefined;
+    if(original)node.material=color===null?original:paint(color);
+  });
+  let decal=detail.getObjectByName('vehicle-decal') as T.Group|undefined;
+  if(decal)decal.removeFromParent();
+  if(style.decal!=='none'){
+    const decalKey=`${kind}:${style.decal}`;
+    let template=decalTemplates.get(decalKey);
+    if(!template){
+    template=new T.Group();template.name='vehicle-decal';
+    for(const side of [-1,1]){
+      if(spec.shape==='motorcycle'){
+        // The overall bike width includes handlebars; decals follow the narrower front fairing.
+        const x=side*(MOTORCYCLE_FAIRING_WIDTH*.5+.004),y=.66,z=-.48;
+        if(style.decal==='stripe')box(template,x,y,z,.008,.08,.66,0xffe9b9);
+        else if(style.decal==='checker'){
+          for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+            box(template,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+        }
+        else addDecalPattern(template,style.decal,x,y,z,.008,.08,.66);
+        continue;
+      }
+      const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
+      if(style.decal==='stripe')box(template,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
+      else if(style.decal==='checker'){
+        for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+          box(template,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+      }
+      else addDecalPattern(template,style.decal,x,y,0,.035,.16,spec.length*.56);
+    }
+    // A pattern can contain dozens of boxes. Merge by material once per
+    // vehicle and pattern, then share those geometries between all clones.
+    const groups=new Map<T.Material,T.Mesh[]>();
+    for(const piece of template.children as T.Mesh[]){
+      const mat=piece.material as T.Material,parts=groups.get(mat)??[];parts.push(piece);groups.set(mat,parts);
+    }
+    const pieces=[...template.children];template.remove(...pieces);
+    for(const [mat,meshes] of groups){
+      const parts=meshes.map(mesh=>{mesh.updateMatrix();const part=mesh.geometry.toNonIndexed();part.deleteAttribute('uv');return part.applyMatrix4(mesh.matrix);});
+      const merged=mergeGeometries(parts);parts.forEach(part=>part.dispose());
+      if(merged)template.add(new T.Mesh(merged,mat));
+    }
+    decalTemplates.set(decalKey,template);
+    }
+    detail.add(template.clone(true));
+  }
+  root.userData.vehicleStyle=key;
+}
+/** Simple, shared-geometry marks, sized to each body or motorcycle fairing. */
+function addDecalPattern(parent:T.Group,pattern:VehicleStyle['decal'],x:number,y:number,z:number,depth:number,height:number,length:number){
+  const mark=(u:number,v:number,w:number,h:number,color=0xffe9b9)=>box(parent,x,y+v*height,z+u*length,depth,h*height,w*length,color);
+  switch(pattern){
+    case 'double': mark(0,-.3,1,.23);mark(0,.3,1,.23);break;
+    case 'chevron':
+      for(const u of [-.3,0,.3]){mark(u,-.26,.24,.25);mark(u+.1,0,.24,.25);mark(u,.26,.24,.25);}break;
+    case 'circuit':
+      mark(0,0,.85,.18,0x80e6ec);mark(-.28,.3,.1,.6,0x80e6ec);mark(.26,-.3,.1,.6,0x80e6ec);
+      mark(-.38,.48,.14,.24);mark(.36,-.48,.14,.24);break;
+    case 'lightning':
+      mark(-.2,.28,.5,.28,0xffd45e);mark(0,0,.28,.3,0xffd45e);mark(.2,-.28,.5,.28,0xffd45e);break;
+    case 'stars':
+      for(const [u,v] of [[-.38,.3],[-.17,-.28],[.04,.2],[.23,-.22],[.4,.3]]){mark(u,v,.08,.45);mark(u,v,.18,.15);}break;
+    case 'crown':
+      mark(0,-.3,.65,.2,0xffd45e);for(const u of [-.28,0,.28])mark(u,.1,.12,.65,0xffd45e);break;
+    case 'wings':
+      for(let i=0;i<3;i++){mark(-.22,-.28+i*.28,.42-i*.1,.14);mark(.22,-.28+i*.28,.42-i*.1,.14);}break;
+    case 'solar':
+      mark(0,0,.2,.65,0xffd45e);mark(0,0,.42,.2,0xffd45e);
+      for(const u of [-.42,-.28,.28,.42])mark(u,0,.09,.32,0xffd45e);break;
+  }
+}
+function buildVehicle(kind: VehicleId | 'person', distant=false): T.Group {
+  if (isLuxuryVehicle(kind)) {
+    const root=buildLuxuryModel(kind);
+    const hardware=new T.Group();hardware.name='rocket_hardware';hardware.visible=false;
+    const jets=new T.Group();jets.name='jets';jets.visible=false;
+    root.add(hardware,jets);
+    return root;
+  }
+  const bodyProfile=(parent:T.Object3D,width:number,points:[number,number][],color:number)=>profile(parent,width,points,color,distant);
   const root = new T.Group(); root.name = kind;
   if (kind === 'person') {
     box(root, 0, 1, 0, .65, 1, .4, 0xf5b94b);
@@ -191,8 +346,8 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   box(root, 0, .36, 0, w * .9, .22, l * .9, DARK);
 
   if (shape === 'pickup') {
-    profile(root, w, [[-l / 2, .47], [-l / 2, .88], [-l * .08, h], [l / 2, h * .56], [l / 2, .47]], color);
-    profile(root, w * 1.006, [[-l * .32, 1.28], [-l * .08, h + .01], [l * .22, h * .75], [l * .22, 1.03]], GLASS);
+    bodyProfile(root, w, [[-l / 2, .47], [-l / 2, .88], [-l * .08, h], [l / 2, h * .56], [l / 2, .47]], color);
+    bodyProfile(root, w * 1.006, [[-l * .32, 1.28], [-l * .08, h + .01], [l * .22, h * .75], [l * .22, 1.03]], GLASS);
     // Windshield follows the exterior roof plane rather than hiding inside it.
     const glassFrontY=.88+(h-.88)*(.16/.42),glassRise=h-glassFrontY;
     const windshield=box(root,0,(h+glassFrontY)/2+.025,-l*.21,w*.88,.035,Math.hypot(l*.26,glassRise),GLASS);
@@ -203,14 +358,14 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
   } else if (shape === 'semi' && id !== 'tesla-semi') {
     // Conventional Waymo Via tractor: long bonnet, upright sleeper cab.
     box(root, 0, .65, 0, w * .87, .32, l, DARK);
-    profile(root, w * .77, [[-l / 2, .8], [-l / 2, 1.55], [-l * .22, 1.8], [-l * .22, .8]], color);
-    profile(root, w, [[-l * .24, .8], [-l * .24, h * .78], [-l * .12, h], [l * .15, h], [l * .19, .8]], color);
+    bodyProfile(root, w * .77, [[-l / 2, .8], [-l / 2, 1.55], [-l * .22, 1.8], [-l * .22, .8]], color);
+    bodyProfile(root, w, [[-l * .24, .8], [-l * .24, h * .78], [-l * .12, h], [l * .15, h], [l * .19, .8]], color);
     box(root, 0, h * .65, -l * .245, w * .85, h * .23, .04, GLASS);
     box(root, 0, 1.08, -l / 2 - .025, w * .57, .7, .04, 0x8c9da0);
     if (id.includes('peterbilt')) for (const side of [-1, 1]) box(root, side * w * .44, h * .53, l * .07, .12, h * .76, .12, 0xa6b6b8);
   } else if (shape === 'semi') {
-    profile(root, w, [[-l / 2, .5], [-l / 2, h * .58], [-l * .36, h], [-l * .02, h], [l * .05, .8], [l / 2, .8], [l / 2, .5]], color);
-    profile(root, w * 1.005, [[-l * .49, h * .6], [-l * .36, h * .89], [-l * .08, h * .89], [-l * .04, h * .6]], GLASS);
+    bodyProfile(root, w, [[-l / 2, .5], [-l / 2, h * .58], [-l * .36, h], [-l * .02, h], [l * .05, .8], [l / 2, .8], [l / 2, .5]], color);
+    bodyProfile(root, w * 1.005, [[-l * .49, h * .6], [-l * .36, h * .89], [-l * .08, h * .89], [-l * .04, h * .6]], GLASS);
     box(root, 0, .94, l * .26, w * .65, .14, l * .2, DARK);
   } else if (shape === 'pod' || shape === 'bus') {
     // Rounded bidirectional shuttles; Firefly has a much narrower egg-shaped nose.
@@ -218,12 +373,12 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
     root.add(new T.Mesh(loft([
       [-l*.5,w*ends/2,.4,belt],[-l*.46,w*.48,.3,belt+.04],[-l*.34,w*.5,.28,belt+.06],
       [0,w*.5,.28,belt+.06],[l*.34,w*.5,.28,belt+.06],[l*.46,w*.48,.3,belt+.04],[l*.5,w*ends/2,.4,belt],
-    ],firefly?.8:.35),paint(color)));
+    ],firefly?.8:.35,distant?8:24),paint(color)));
     root.add(new T.Mesh(loft([
       [-l*.467,w*.448,belt,h*.74],[-l*.35,w*.48,belt,h*.91],[0,w*.484,belt,h*.94],
       [l*.35,w*.48,belt,h*.91],[l*.467,w*.448,belt,h*.74],
-    ],.4),material(GLASS,.5)));
-    root.add(new T.Mesh(loft([[-l*.35,w*.46,h*.91,h*.96],[0,w*.47,h*.94,h],[l*.35,w*.46,h*.91,h*.96]],.4),paint(color)));
+    ],.4,distant?8:24),material(GLASS,.5)));
+    root.add(new T.Mesh(loft([[-l*.35,w*.46,h*.91,h*.96],[0,w*.47,h*.94,h],[l*.35,w*.46,h*.91,h*.96]],.4,distant?8:24),paint(color)));
     for (const side of [-1, 1]) {
       box(root, side * w * .507, h * .51, 0, .025, h * .76, .035, color);
       box(root, side * w * .509, h * .52, -.12, .03, .18, .04, WHITE);
@@ -237,7 +392,7 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
       box(root, 0, .58, -l / 2 - .02, w * .3, .06, .035, DARK);
     }
   } else {
-    coachwork(root,spec,paint(color),material(GLASS,.55),material(DARK));
+    coachwork(root,spec,paint(color),material(GLASS,.55),material(DARK),distant);
 
   }
 
@@ -264,10 +419,10 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
     box(root,0,.28,-l*.495,w*.72,.045,.14,DARK);
     box(root,0,.36,l*.485,w*.6,.15,.04,DARK);
   }
-  wheels(root, spec); sensors(root, spec);
+  wheels(root, spec,distant); if(!distant)sensors(root, spec);
   const jets = new T.Group(); jets.name = 'jets'; jets.visible = false;
   const hardware = new T.Group(); hardware.name = 'rocket_hardware'; hardware.visible = spec.airThrusters;
-  if (spec.airThrusters) {
+  if (spec.airThrusters&&!distant) {
     // The four rear, four corner and two front lateral nozzles follow the
     // reported arrangement. Shapes and activation are artistic estimates.
     for(const z of [-l*.18,l*.18]){
@@ -277,7 +432,7 @@ function buildVehicle(kind: VehicleId | 'person'): T.Group {
     box(root,0,.32,l*.498,w*.76,.24,.035,0x10191e);
   }
   // Other fleet models instantiate the dimensioned mounts only when upgraded.
-  if(spec.airThrusters)addRocketNozzles(hardware,jets,spec);
+  if(spec.airThrusters&&!distant)addRocketNozzles(hardware,jets,spec);
   root.add(hardware);
   root.add(jets);
   const seat = new T.Object3D(); seat.name = 'seat_driver'; seat.position.set(-w * .2, belt + .2, 0); root.add(seat);

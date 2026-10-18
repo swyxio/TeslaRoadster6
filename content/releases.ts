@@ -6,6 +6,229 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A better workshop',
+    intro: 'Give your ride some attention in a new garage.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'See your car and balance while you browse upgrades, paint, decals and the remote shop.',
+        'Find flight, driving and self-driving upgrades in their own groups. The shop explains when an item needs cash or another upgrade.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.27-alpha',
+    label: '0.0.27 Alpha',
+    date: '2026-10-18',
+    title: 'Build Starship together',
+    intro: 'Watch the Fremont launch site grow as Tesland earns.',
+    sections: [
+      { title: 'A mission in the making', items: [
+        'The Starship rises with confirmed game-wide earnings, while workers, vehicles and rocket parts bring the construction yard to life.',
+        'Find the Fremont mission sign or open the nearby mission shortcut to learn how to board for Mars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.26-alpha',
+    label: '0.0.26 Alpha',
+    date: '2026-10-18',
+    title: 'More room to drive',
+    intro: 'Bring more drivers together in the Bay.',
+    sections: [
+      { title: 'Room for more', items: [
+        'Rooms can now admit up to 64 drivers. This limit is still being tested, and busy rooms may slow down.',
+        'If a room is full, retry or choose another named room. Automatic overflow is planned.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.25-alpha',
+    label: '0.0.25 Alpha',
+    date: '2026-10-18',
+    title: 'A little direction',
+    intro: 'Find your next delivery and see the victories you are working toward.',
+    sections: [
+      { title: 'Your next move', items: [
+        'The mission card offers a route to your pickup or dropoff and a steady next award to work toward.',
+        'Look for a floating food bag at your pickup and a distinct marker at ground and rooftop dropoffs.',
+        'On mobile, expand or minimize the mission, map and driving stats independently. Your choices stay on this device.'
+      ] },
+      { title: 'Your awards', items: [
+        'Explore grouped awards for delivery, flight, exploration, games and collection.',
+        'Open repeatable awards to see all five ranks, progress, bonuses and save status.'
+      ] },
+      { title: 'Fairer fares', items: [
+        'Completed deliveries pay at least half the quoted base fare, even if they take longer than expected.',
+        'The shop warns you when a purchase will lower your cash-based level.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.24-alpha',
+    label: '0.0.24 Alpha',
+    date: '2026-10-18',
+    title: 'Steadier earnings status',
+    intro: 'Small timing differences between game services no longer discard a valid earnings-bonus update.',
+    sections: [
+      { title: 'Keep driving', items: [
+        'Earnings updates can wait briefly for their confirmed start time while the room keeps running.',
+        'Expired or unavailable bonus data still waits for confirmation; rewards never assume a missing rate.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.23-alpha',
+    label: '0.0.23 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the victories coming',
+    intro: 'Find more milestones as you keep exploring and playing.',
+    sections: [
+      { title: 'More to earn', items: [
+        'Repeatable activities progress at 1, 10, 100, 1,000 and 10,000 completions, with extra cash at qualifying milestones alongside existing awards.',
+        'Saved drivers begin with the progress supported by their existing records; earlier milestones do not pay out again.'
+      ] },
+      { title: 'Celebrate your rewards', items: [
+        'Consecutive reward celebrations now appear one after another, even when they arrive between game updates.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.22-alpha',
+    label: '0.0.22 Alpha',
+    date: '2026-10-18',
+    title: 'Fresh radio, visible versions',
+    intro: 'Hear recent conversations and know which Tesland build you are driving.',
+    sections: [
+      { title: 'On the radio', items: [
+        'Latent Space and ThursdAI now choose episodes published in the last two months. Older, undated and future episodes stay out of the shuffle.',
+        'If a station has no recent episodes, the radio explains it instead of playing the archive. The original 8-bit soundtrack remains available.'
+      ] },
+      { title: 'Know your build', items: [
+        'The browser title and a small label beneath the Tesland logo show the version actually loaded in your tab.',
+        'Select the version label to open its changelog entry. An old open tab keeps its old version label until you reload.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.21-alpha',
+    label: '0.0.21 Alpha',
+    date: '2026-10-18',
+    title: 'Make your mark',
+    intro: 'Choose your next upgrade and make your ride your own.',
+    sections: [
+      { title: 'Your workshop', items: [
+        'Explore new paints and decals, with more finishes to unlock as your cash level rises.',
+        'Remote shop access costs $100 per game hour. Existing subscribers keep paid time and can re-enroll at the new rate.'
+      ] },
+      { title: 'The road ahead', items: [
+        'Delivery rewards, achievements, upgrades and marketplace paint prices have been rebalanced.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.20-alpha',
+    label: '0.0.20 Alpha',
+    date: '2026-10-18',
+    title: 'More ways to self-drive',
+    intro: 'Get back on the road, or give your car a little more ambition.',
+    sections: [
+      { title: 'Make your way', items: [
+        'Street Pilot can try to rejoin a road from off-road and recover when traffic blocks the way.',
+        'Buy Ludicrous Leap at the SpaceX shop to hop stopped traffic, then Maximum Plaid to try flight and helpful air currents. Both need rockets.',
+        'Choose a mode for your next map or delivery trip. Manual controls take over whenever you like.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.19-alpha',
+    label: '0.0.19 Alpha',
+    date: '2026-10-18',
+    title: 'Build a Cybercab fleet',
+    intro: 'Put Cybercabs on the road and trade things you own.',
+    sections: [
+      { title: 'Your fleet', items: [
+        'Buy Cybercabs with a saved driver, find them on the map and follow their rides.',
+        'Active, self-driving Cybercabs earn income while they are on the road.'
+      ] },
+      { title: 'The exchange', items: [
+        'Collect paints and souvenirs, or buy a starter home to visit with friends.',
+        'List owned items at a fixed price. The seller receives 95% of a completed sale.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.18-alpha',
+    label: '0.0.18 Alpha',
+    date: '2026-10-18',
+    title: 'Take the scenic ride',
+    intro: 'Settle in for smoother self-driving and keep your little victories.',
+    sections: [
+      { title: 'Cruise to your delivery', items: [
+        'Double-tap Shift or tap Self-drive to delivery to route toward your current pickup or drop-off.',
+        'Self-driving eases through turns and follows traffic with more room. Use the controls to take over.'
+      ] },
+      { title: 'Keep your victories', items: [
+        'Scores show delivery milestones, room standings and current or recent mini-game results.',
+        'Earn new parking and racing awards, and keep confirmed awards with your saved driver.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.17-alpha',
+    label: '0.0.17 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the deliveries coming',
+    intro: 'A little extra for every three completed deliveries.',
+    sections: [
+      { title: 'Delivery checkpoints', items: [
+        'Earn a $750 bonus for every third delivery, even when a late fare has fallen to zero.',
+        'The mission card tracks progress to your next bonus. Your saved driver keeps it alongside delivery progress.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.16-alpha',
+    label: '0.0.16 Alpha',
+    date: '2026-10-18',
+    title: 'The Vault opens',
+    intro: 'Save your driver, build a collection and explore the Bay.',
+    sections: [
+      { title: 'Your collection', items: [
+        'Find the Vault to buy six luxury cars and motorcycles. Collect owned vehicles at a workshop.',
+        'Your saved driver keeps cash, delivery progress, achievements, vehicle upgrades, paint and decals.',
+        'Visit UCSF, UC Berkeley, Stanford and SFO for research awards and selected workshop discounts.',
+        'Explore the economy story for delivery and fleet simulations and a Bay landmark map.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.15-alpha',
+    label: '0.0.15 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the wheels moving',
+    intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
+    sections: [
+      { title: 'More consistent motion', items: [
+        'Your car keeps moving between network updates, with more immediate steering and flight controls.',
+        'The chase camera stays with you through ordinary takeoffs and landings.',
+        'Nearby cars share the driving timeline so bumping and close passes remain part of the game.'
+      ] },
+      { title: 'Less work around you', items: [
+        'Fewer ambient cars share the roads. Police remain, and different vehicle models appear across rooms.',
+        'Your car keeps its detail; distant cars use simpler models, and rocket hardware takes fewer drawing calls.',
+        'The Bay keeps its geography and landmarks, with more efficient scenery rendering. The 3D view uses a lower resolution on high-density displays while the interface stays sharp.',
+        'Rooms now default to eight players. If one is full, retry or create another named room.'
+      ] },
+      { title: 'Still in alpha', items: [
+        'Long network interruptions can still cause a visible position correction when the connection recovers.',
+        'The smaller room limit is a precaution while testing continues; it is not a performance guarantee for every device or connection.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.14-alpha',
+    label: '0.0.14 Alpha',
+    date: '2026-10-18',
     title: 'The Peninsula local',
     intro: 'Explore Caltrain-inspired stops, local roads and Silicon Valley landmarks.',
     sections: [
@@ -25,7 +248,7 @@ export const RELEASES = [
     intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [
       { title: 'Drive together', items: [
-        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
+        'The game always joins a shared room. If a room is full or unavailable, retry or choose another room.',
         'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
         'The changelog stays on its own page instead of downloading with the game.'
       ] }

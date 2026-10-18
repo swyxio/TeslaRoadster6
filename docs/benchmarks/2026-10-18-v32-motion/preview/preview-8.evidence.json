@@ -1,0 +1,144 @@
+{
+  "origin": "https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev",
+  "source_commit": "b47d91350630c4fb9f5e9ef64cd9477237b6df81",
+  "outer_start_utc": "2026-10-18T11:17:20.087+00:00",
+  "outer_end_utc": "2026-10-18T11:18:24.414+00:00",
+  "outer_elapsed_seconds": 64.325,
+  "returncode": 0,
+  "load_room_sha256": "19be60ffa7c68f161787d5ed0253c631a35cec4dd6374ec7112d1763baa44d62",
+  "preview_harness_sha256": "f20c8cf32d431ffba17c6b8ba2466c597ac66b89ae75e32555ec01f6a2443b11",
+  "client_fixture_sha256": "c92dd05b8e00e3c5573e8ffe1f76c1c99a0297ae4ad67141e87fd54b23aa69bf",
+  "host_load_samples": [
+    {
+      "utc": "2026-10-18T11:17:20.090+00:00",
+      "load_1_5_15": [
+        12.91748046875,
+        12.6162109375,
+        12.5947265625
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:25.092+00:00",
+      "load_1_5_15": [
+        12.283203125,
+        12.48974609375,
+        12.5498046875
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:30.094+00:00",
+      "load_1_5_15": [
+        12.18017578125,
+        12.46484375,
+        12.54052734375
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:35.096+00:00",
+      "load_1_5_15": [
+        14.08740234375,
+        12.85546875,
+        12.677734375
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:40.096+00:00",
+      "load_1_5_15": [
+        16.322265625,
+        13.3388671875,
+        12.84912109375
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:45.097+00:00",
+      "load_1_5_15": [
+        15.89599609375,
+        13.2998046875,
+        12.837890625
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:50.098+00:00",
+      "load_1_5_15": [
+        15.0234375,
+        13.16162109375,
+        12.79150390625
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:17:55.099+00:00",
+      "load_1_5_15": [
+        15.501953125,
+        13.29150390625,
+        12.83935546875
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:18:00.101+00:00",
+      "load_1_5_15": [
+        15.54150390625,
+        13.33642578125,
+        12.857421875
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:18:05.101+00:00",
+      "load_1_5_15": [
+        15.658203125,
+        13.39697265625,
+        12.88134765625
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:18:10.102+00:00",
+      "load_1_5_15": [
+        15.4453125,
+        13.39013671875,
+        12.8818359375
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:18:15.104+00:00",
+      "load_1_5_15": [
+        15.4091796875,
+        13.41650390625,
+        12.89404296875
+      ]
+    },
+    {
+      "utc": "2026-10-18T11:18:20.105+00:00",
+      "load_1_5_15": [
+        14.4150390625,
+        13.2431640625,
+        12.8359375
+      ]
+    }
+  ],
+  "result": {
+    "preview": "https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev",
+    "room": "load-1792322241186",
+    "ninthClose": {
+      "code": 4003,
+      "reason": "Room full"
+    },
+    "clients": 8,
+    "elapsedSeconds": 60,
+    "closed": 0,
+    "sentInputs": 9456,
+    "inputRejections": 226,
+    "clientsWithAppliedInput": 8,
+    "snapshots": 4800,
+    "clientsSeeingAll": 8,
+    "minSnapshots": 600,
+    "snapshotRatePerClient": 10,
+    "p95SnapshotGapMs": 152,
+    "maxSnapshotGapMs": 367,
+    "decodedJsonMiB": 149.01,
+    "minSimulatedSeconds": 59.9,
+    "medianSimulatedSeconds": 59.9,
+    "clientEventLoopP95Ms": 21.6,
+    "note": "Eight synthetic clients send input at 20 Hz to one remote preview room and parse all received JSON. One bounded run, not production, sustained, real-player or physical-device capacity evidence."
+  },
+  "stdout": "{\n  \"preview\": \"https://codex-driving-tick-contract-bay-drive.swyxio.workers.dev\",\n  \"room\": \"load-1792322241186\",\n  \"ninthClose\": {\n    \"code\": 4003,\n    \"reason\": \"Room full\"\n  },\n  \"clients\": 8,\n  \"elapsedSeconds\": 60,\n  \"closed\": 0,\n  \"sentInputs\": 9456,\n  \"inputRejections\": 226,\n  \"clientsWithAppliedInput\": 8,\n  \"snapshots\": 4800,\n  \"clientsSeeingAll\": 8,\n  \"minSnapshots\": 600,\n  \"snapshotRatePerClient\": 10,\n  \"p95SnapshotGapMs\": 152,\n  \"maxSnapshotGapMs\": 367,\n  \"decodedJsonMiB\": 149.01,\n  \"minSimulatedSeconds\": 59.9,\n  \"medianSimulatedSeconds\": 59.9,\n  \"clientEventLoopP95Ms\": 21.6,\n  \"note\": \"Eight synthetic clients send input at 20 Hz to one remote preview room and parse all received JSON. One bounded run, not production, sustained, real-player or physical-device capacity evidence.\"\n}\n",
+  "stderr": "ROOM: load-1792322241186\n"
+}

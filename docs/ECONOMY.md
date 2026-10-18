@@ -1,8 +1,10 @@
 # Economy and property design
 
-**Planning proposal, 2026-10-18.** Values below are fictional game money and untested design assumptions, not current game prices or a promise of future implementation. The [player simulations](ECONOMY_SIMULATIONS.md) compare an earlier candidate with the original proposal. The newer [five-minute branch experiment](ECONOMY_FIVE_MINUTE.md) tests the activity-payout and achievement changes recommended below; both reports explain their limitations. This document does not change the playable game or its contracts.
+**Economy design, 2026-10-18.** Deliveries build a wallet, a fleet puts money to work, and homes give players a place to show what they have built. This document sets out the proposed progression and prices. The [implementation guide](ECONOMY_IMPLEMENTATION.md) records the shared decisions and handoffs for contributors. The [player simulations](ECONOMY_SIMULATIONS.md) and [five-minute experiment](ECONOMY_FIVE_MINUTE.md) compare the choices and their pacing.
 
-In this checkout, [delivery](DELIVERY.md) money, regional unlocks and personal achievements are session-only. Current regions require both completed deliveries and session lifetime delivery earnings; spending does not relock them. A separate room-local Mars fund persists and accepts voluntary contributions of session cash. There is no XP, persistent wallet, persistent property or owned income-producing Cybercab. Saved chat identity does not restore game progress. The world has the fictional China Basin Rocket Dome, North Bay Playground and a ferry, plus Yerba Buena Island; Treasure Island is not currently a separate playable island. See [README](../README.md), [MAP](MAP.md), and the shared simulation for actual behavior. This proposal deliberately changes progression and requires a separate persistence and multiplayer design.
+The game implements a saved wallet, cash-based regional levels, delivery and showroom achievements, the luxury showroom, owned Cybercabs with active-only income, a player market, a starter home and an automatic global earnings counter for Starship. Plots and construction, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for implemented and proposed rules.
+
+The tables and long-run simulations below describe the earlier economy proposal. The current rebalance changes delivery fares, achievement payouts, OTA, upgrades and finishes; see [delivery](DELIVERY.md), [workshops](UPGRADES.md), and the [opening-session ledger](ECONOMY_FIVE_MINUTE.md#opening-session-ledger) for playable values.
 
 ## Goals
 
@@ -31,7 +33,7 @@ Use the **current spendable wallet** for levels; no XP or career-earnings gate. 
 
 Thresholds are inclusive. Separate city access gates spread discoveries between the broader wallet levels. San Francisco starts open with a $2,500 award; Oakland opens at $10k, Berkeley at $20k, Fremont at $50k, San Mateo at $75k, Palo Alto at $100k, Mountain View at $150k, and San Jose at $250k. Their respective first-unlock awards are $1k / $1.5k / $2k / $2.5k / $3k / $4k / $5k, once per account. The first arrival at levels 4–8 also awards $2,500 / $5,000 / $5,000 / $10,000 / $20,000, respectively; levels 1–3 do not pay an additional bundled city award. Awards can cause another threshold to be crossed, but crossing it again never pays again. Marin is a region, not a city. Assign explicit destination-city IDs before offering per-city delivery milestones.
 
-The redesigned model adds a **$500 first-visit achievement** for arriving in each named non-starting city, distinct from unlocking entry, once per account. Verify city boundaries and meaningful arrival before awarding; group simultaneous notifications and playtest the timing. The simulation visits only SF, Oakland, Berkeley, Fremont and San Jose; it counts the other three city unlocks without modeling their travel.
+The first delivery in each city earns its own achievement. The simulation visits only SF, Oakland, Berkeley, Fremont and San Jose; it counts the other three city unlocks without modeling their travel. Group awards from the same action and playtest the timing.
 
 Recalculate levels after each payment, purchase, fine, transfer and one-off award. Relocked areas block **new entry** after the player leaves; do not abruptly eject a player already there. Let an accepted delivery finish and keep local jobs available at that city's normal difficulty and pay; premium contracts still require the current wallet level. Let the owner teleport to and manage an owned plot or home, even if its city has relocked. The owner can then enter that local city on foot or by car. Owned assets and earned achievements persist when levels fall. Before a purchase, show the resulting wallet, level and relocked access; offer a reserve calculation without imposing a mandatory minimum balance.
 
@@ -52,20 +54,22 @@ One-off achievement tiers, payable once each per player and additive when the sa
 
 | Chain | Triggers for levels 1–5 | Award per level |
 | --- | --- | --- |
-| Total deliveries | 1 / 10 / 50 / 100 / 250 | $2,500 / $5,000 / $10,000 / $20,000 / $40,000 |
-| Deliveries **in each city** | 1 / 10 / 25 / 50 / 100 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
-| **Each landmark** | Discover / 1 / 3 / 5 / 10 deliveries there | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| Total deliveries | 1 / 10 / 25 / 50 / 100 | $2,500 / $5,000 / $7,500 / $10,000 / $20,000 |
+| Deliveries **in each city** | 1 / 10 / 20 / 35 / 50 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
+| **Each landmark delivery** | 1 / 3 / 6 / 12 / 20 | $1,000 / $2,000 / $4,000 / $8,000 / $16,000 |
 | Rocket Dome wins | 1 / 3 / 10 / 25 / 50 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
 | Each of Dome matches, races, parking challenges and scenic contracts completed | 1 / 3 / 5 / 10 / 25 | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
 | Races and parking challenges combined | 1 / 3 / 5 / 10 / 25 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
 | Cybercabs owned | 1 / 2 / 3 / 4 / 5 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
-| Consecutive deliveries without a citation | 13 / 22 / 37 / 60 / 100 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
-| Distinct delivery drop-offs | 6 / 10 / 15 / 20 / 25 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
-| On-time deliveries | 10 / 20 / 50 / 100 / 200 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| Consecutive deliveries without a citation | 20 / 30 / 45 / 60 / 100 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| Distinct delivery drop-offs | 4 / 9 / 15 / 22 / 30 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| On-time deliveries | 10 / 22 / 38 / 60 / 85 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| Tier-3-or-higher delivery contracts | 3 / 8 / 16 / 28 / 45 | $500 / $1,000 / $2,000 / $4,000 / $8,000 |
+| First cab gross earnings | $20k / $60k / $120k / $240k / $480k | $2,000 / $4,000 / $8,000 / $16,000 / $32,000 |
 | Distinct plots acquired | 1 / 2 / 3 / 5 / 10 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
 | Homes constructed | 1 / 2 / 3 / 5 / 10 | $5,000 / $10,000 / $20,000 / $40,000 / $80,000 |
 
-The first home, bought or constructed, pays an additional $10,000 once. Unranked, one-time delivery check-ins pay $1k / $1.5k / $2k / $2.5k / $3k / $5k / $10k / $15k at 3 / 5 / 20 / 30 / 40 / 75 / 150 / 200 total jobs; each city's check-ins pay $1k / $2k / $3k at 5 / 15 / 20 jobs. Each Dome, race, parking and scenic chain has a $10k one-time check-in at 50 completions. These sit between or after the five ranked achievement tiers. A separate repeatable $750 checkpoint pays every three deliveries, Dome matches, races, parking challenges or scenic contracts of the same kind. The first cosmetic and first vehicle upgrade pay $1,000 and $2,000 respectively. Check-ins and checkpoints are not ranked achievements, and neither those payments nor one-off awards are multiplied.
+The first home, bought or constructed, pays an additional $10,000 once. Unranked, one-time delivery check-ins pay $1k / $1.5k / $2k / $2.5k / $3k / $5k / $10k / $15k at 3 / 5 / 20 / 30 / 40 / 75 / 150 / 200 total jobs, plus $40k at 250; each city's check-ins pay $1k / $2k / $3k at 5 / 15 / 20 jobs. Each Dome, race, parking and scenic chain has a $10k one-time check-in at 50 completions. These sit between or after the five ranked achievement tiers. A separate repeatable $750 checkpoint pays every three deliveries, Dome matches, races, parking challenges or scenic contracts of the same kind. The first cosmetic and first vehicle upgrade pay $1,000 and $2,000 respectively. Check-ins and checkpoints are not ranked achievements, and neither those payments nor one-off awards are multiplied.
 
 The five-minute experiment proposes activity payouts relative to a delivery of the same current job tier, using a fixed expected duration at acceptance. Let `reference` be the tier's base fare divided by its typical minutes, before multipliers. Pay **30% × reference × 6.5 minutes** for a Dome match at a 50% win rate: each participant receives 70% of that amount on completion, plus another 60% for a win. Pay **35% × reference × 5.5 minutes** for a race, **30% × reference × 5.5 minutes** for parking, and **65% × reference × 6 minutes** for a scenic contract. Round the base amount to the nearest $10. For tier 0 those base amounts are $1,950 / $1,930 / $1,650 / $3,900 respectively; a lost match pays $1,365. These are proposed average difficulty and time assumptions, not measured game outcomes. Actual waiting longer never increases the accepted payout. Scenic contracts are a proposed repeatable activity, not an implemented feature. Gate all completion payments and achievements on verified participation and a genuine completion; design opponent/collusion and AFK protections before multiplayer launch.
 
@@ -73,13 +77,34 @@ The first cab earning $20k gross pays a one-time $2k award: at that point it has
 
 Count unique plot/build events per player, so selling and reacquiring the same plot does not repeat an award. This does not stop multiple accounts cycling a plot through $0 sales for achievements; property achievement payouts need a sybil/fraud design before trading launches. Add small first-use bonuses for decoration, a home charger, home teleport and a launch pad; amounts remain to be tuned. The existing Awards UI should show the next goal, its reward and a map pin. Allow choosing a destination city when jobs exist there; the current generator does not offer that choice.
 
-Landmarks should include SFO, the China Basin Dome, Bay Bridge/Yerba Buena, Golden Gate, Ferry Building, Transamerica Pyramid, Oakland Tribune Tower, Berkeley Campanile, Stanford Hoover Tower, Mission San José and San Jose City Hall. Salesforce and Coit require **landing on the tower**, not merely approaching it. Their visible caps and collision surfaces need a visibly landable target and playtest. Treasure Island needs to be added before it can have an award. Landmark-specific deliveries and city IDs do not yet exist for all these places. Monetary Dome awards remain a proposal; the current session achievements already use authoritative player goal attribution.
+Landmarks should include Alcatraz, Treasure Island, SFO, the China Basin Dome, Bay Bridge/Yerba Buena, Golden Gate, Ferry Building, Transamerica Pyramid, Oakland Tribune Tower, Berkeley Campanile, Stanford Hoover Tower, Mission San José and San Jose City Hall. Salesforce and Coit require **landing on the tower**, not merely approaching it. Their visible caps and collision surfaces need a visibly landable target and playtest. Alcatraz and Treasure Island need supported destinations and validated arrival interactions before they can have awards. Landmark-specific deliveries and city IDs do not yet exist for all these places. Monetary Dome awards remain a proposal; the current session achievements already use authoritative player goal attribution.
 
 ### Early goals and remaining gaps
 
 Keep five ranked levels per chain, with small early milestones and repeatable checkpoints. Put a few optional, varied goals on the HUD: the next delivery milestone, a nearby landmark, a cosmetic, the first cab, and side games when a player chooses them. Rewarding participation makes trying the Dome useful even without a win, but minigames deliberately earn less than deliveries. Players can change activities freely; they need not play minigames to progress.
 
 A provisional early-playtest target is 2–4 unique one-off achievements per 30 minutes in the first two hours, with no-achievement gaps of at most 25 minutes for 90% of simulated players. The [redesigned five-minute experiment](ECONOMY_FIVE_MINUTE.md) meets that early gap target on its seven delivery-led paths but frequently exceeds four achievements per block, and it has much longer gaps in hours 2–8. The 2–4 target is **not met**. Batch notifications earned by the same action without delaying the cash; pin visible progress toward the next meaningful goal. A simulated rotating-contract alternative shows partial progress more often but completes a little less frequently than the current checkpoint; it is a repeatable goal, not an achievement, and needs playtesting. Do not promise a new achievement in every five-minute window or add arbitrary badges forever. Measure five-minute cash, achievement count and zero-award windows separately from 30-minute averages; maintain meaningful choices as individual chains run out. Income is allowed to rise between tiers so exponential prices remain attainable.
+
+## Research and airport deliveries
+
+The research tour gives players a reason to visit four landmarks. UCSF's Homes Lab pays $1,000 and awards its badge; Berkeley's Energy Lab pays $1,500 and gives 20% off efficient nozzles; Stanford's Speed Lab pays $2,000 and gives 20% off sport motors; SFO's Flight Lab pays $2,000 and gives 20% off air tanks. An SFO delivery earns an additional one-time $2,500. The candidate saves awards and discounts with the driver. Berkeley has the Campanile, Sather Gate and Doe Library; Stanford has Hoover Tower, the Main Quad and Dish; SFO has an airport, runway and Aviation Museum; the map also includes UCSF Parnassus.
+
+The delivery-linked certifications below are the proposed persistent expansion of this tour. Their rewards and upgrades are separate from the current visit rewards. New lab and clinic destinations need map and collision design.
+
+After **20 lifetime deliveries**, offer research work at each eligible campus. Berkeley opens at $20k, the SFO Flight Lab program at $75k, Stanford at $100k, and UCSF's real-estate program at $1m. SFO airport entry itself opens earlier, at the $50k level-2 threshold. Access uses the current wallet, while progress and earned certification survive a balance drop. The work itself remains delivery play: select a lab or terminal job, pick up a named item, and bring it safely to its destination. A job advances the one program named on the offer; it can also advance ordinary city and total-delivery achievements. Program ranks track achievement progress; ordinary jobs and existing flight remain open to everyone.
+
+| Program | Jobs and character | Level-two unlock |
+| --- | --- | --- |
+| UC Berkeley · Energy Systems | Take equipment between the Campanile and nearby energy labs. | $10k efficient-flight tune: use 10% less air while flying. |
+| UCSF · Homes Lab | Deliver materials and housing-design prototypes to research partners. | $20k home design kit, with distinctive exterior and interior choices; a first-home discount is another candidate. |
+| Stanford · Speed Lab | Deliver motor prototypes between Hoover Tower, the Quad and Dish; try a controlled acceleration run. | $20k sport-motor tune; refine handling and speed in playtests. |
+| SFO · Flight Lab | Move flight equipment between the terminal, Aviation Museum and city; some routes ask for a careful, timed arrival. | $40k glider kit: add an air-saving glide mode; tune handling in playtests. |
+
+The suggested university tiers unlock at **2 / 6 / 12 / 20 / 30** qualifying deliveries each, with the level-two unlock at six. They award **$500 / $1,000 / $2,000 / $4,000 / $8,000** once per tier. SFO uses **1 / 4 / 8 / 14 / 20**, with the level-two unlock at four, and the same cash awards. A finished university program can award its matching livery; the three research lines plus SFO issue at most $62k of one-off awards per player. SFO pays the ordinary delivery fare plus a $2k airport supplement; eligible fare and supplement receive the same event multiplier, and the achievement awards do not. Qualifying jobs must be completed, distinct validated job IDs; repeating a job or reconnecting must not repay a tier. Award underlying ordinary milestones as normal, but present awards from one job in a grouped notification.
+
+The proposed Berkeley tune composes multiplicatively with an efficient-nozzle upgrade if both are fitted: 25% then 10% less air leaves 67.5% of baseline use. The UCSF kit expands property customization, Stanford improves road speed, and SFO expands flight. Do not silently accumulate multiple copies. Keep tuned, upgraded vehicles eligible for ordinary jobs; test vehicle handling, races and flight before deciding whether competitive modes use these effects.
+
+At the example level-four delivery rate ($11k per six minutes), a 30-job research line takes three active hours and pays $330k in fares plus $15.5k in program awards, before ordinary milestones and other income. At seven minutes per $11k job plus the $2k supplement, SFO's 20 jobs take 2h20 and return $275.5k including its $15.5k awards, or about $118.1k/hour. A regular job at the same tier earns $110k/hour before other awards; SFO's repeatable rate after its one-offs is about $111.4k/hour. The research chain's last two milestones are an hour apart at the assumed pace; it adds a meaningful branch but does not erase the late achievement gap. Run `pnpm exec tsx scripts/economy-research.ts` to reproduce these comparisons. The seven-path progression runs model program jobs as an abstract share of deliveries, rather than simulating physical travel to each campus.
 
 ## Cybercabs and events
 
@@ -110,6 +135,19 @@ An account may own **at most one ready-built home it acquired by purchase** at a
 
 These are example matched packages, not a requirement to buy only that pairing: any design that physically fits may be built on a plot. The first city-supplied ready-made home is also $1 million. For the first implementation, choose a preset exterior and pay for immediate construction; add material-delivery missions and deeper customization later. The $2m market gate means a player buying the $400k plot can immediately afford the $600k build; dividing it into four payments therefore creates no extra progression in the model. Include a two-car garage with each home. Decorations, chargers and launch pads are separate purchases.
 
+### Build upward
+
+A developer can buy a larger $800k plot, build a $1.2m foundation and first story, then add floors. For floor `n` from 2 to 20, compute `$200,000 × 1.1^(n − 2)` and round that floor independently to the nearest $1,000. The second floor costs $200k; do not compound from the previous rounded price. The foundation includes the larger building's initial structure; the increasing incremental payments fund the stories above it. A 20-floor limit keeps the tower within the game's flight space. Players may continue building on a plot they already own after their wallet falls below the market gate.
+
+| Building | Plot and construction | Latest floor |
+| --- | ---: | ---: |
+| 1 story | $2m | $1.2m foundation |
+| 5 stories | $2.928m | $266k |
+| 10 stories | $4.716m | $429k |
+| 20 stories | $12.232m | $1.112m |
+
+The figures exclude achievement awards and optional upgrades. Propose one-time awards of $5k / $10k / $25k / $50k at floors 1 / 5 / 10 / 20. Building floors gives owners a visible skyline to shape and a reason to keep earning; any eventual sale transfers the whole parcel and building under the existing market rules, including the purchased-home slot if it contains a home. Avoid automatic rental income until there is a separately balanced tenant and payout system. An individual instance can establish the build-and-visit loop first; scarce shared physical plots require the cross-room registry and collision-safe placement described below.
+
 ### Scarcity and supply
 
 1. **Guaranteed starter access:** offer every account one city-sold, instanced starter plot for $400,000, as well as access to a $1 million instanced ready-made starter home. A shared neighborhood entrance leads to individually persistent, visitable spaces; this avoids promising unique visible street lots for unlimited players. A player's one subsidized starter-plot purchase is once per account; additional plots can be bought on the market or from other city releases. The one purchased-home limit still applies. Authentication/account abuse needs its own design; this rule alone does not stop multiple accounts.
@@ -139,11 +177,24 @@ This is not a money sink: the goal meter does not deduct or escrow money. The ex
 
 Keep ordinary available passenger vehicles free to drive and select; do not introduce passenger-EV purchase prices until there is a compelling gameplay reason. A garage stores persistent personalized car configurations and can display and retrieve them. The proposed new BYD Dolphin/Seal, Rivian R1T/R1S, Lucid Air, civilian Hyundai IONIQ, Kia EV9, Silverado EV and F-150 Lightning remain a separate fleet-content proposal, not shipped by this document. The current fleet already includes a Waymo IONIQ 5 variant. Owned Cybercabs are separate income-producing assets; a dispatched cab need not occupy a garage space.
 
+An exclusive [luxury showroom](LUXURY_SHOWROOM.md) gives late-game players a separate collection of Lamborghini and Bugatti supercars and Ducati and Kawasaki motorcycles. Purchase requires visiting the showroom, and the candidate prices run from $1.5m to $12m. These models do not enter the free ambient fleet; the first purchase of each has an achievement. Purchases require the planned persistent wallet and ownership system.
+
 Two garage spaces are included per home; the next five spaces cost $50k / $100k / $200k / $400k / $800k. Cosmetic starting prices: paint $2k, decals and lettering $5k, wheels/trim $15k, wraps and fleet branding $50k, and premium lights/effects $150k. Account-owned cosmetics can be reapplied to compatible cars; earned special designs can celebrate achievements. Show driver names and Cybercab owner names. Prices and compatibility need playtesting.
 
-Optional early vehicle or flight kits at $10k / $20k / $40k give players goals before property. Their abilities and balance are not specified; the simulation counts purchases but gives them no speed or income benefit. Keep the Roadster's existing flight and public launch pads available without buying a kit.
+Optional early vehicle or flight kits at $10k / $20k / $40k give players goals before property. The research kits above sketch possible abilities; the seven-path simulation counts kit purchases without a speed or income benefit. Keep the Roadster's existing flight and public launch pads available without buying a kit.
 
-Optional home chargers cost $25k / $50k / $100k; launch/thermal upgrades cost $50k / $100k / $200k. Home teleport is free after ownership. The effects and whether they change competitive balance remain to be designed.
+A starter home includes two garage spaces and free home teleport. Its owner can give it a distinct look and choose which amenities to add first:
+
+| Upgrade | First cost | What the player gets |
+| --- | ---: | --- |
+| Furnishing set | $20k | Furniture and interior decoration for the owner's chosen rooms. |
+| Home charger | $25k | Refill the vehicle's air tank at home; public charging stays available. |
+| Third garage space | $50k | Store and display one more personalized vehicle configuration. |
+| Thermal launch pad | $50k | A visible home launch point that helps lift a vehicle into the air. |
+
+Further charger upgrades cost $50k then $100k; further launch upgrades cost $100k then $200k. These are successive payments, not replacement totals. The remaining garage slots cost $100k / $200k / $400k / $800k. Garages hold configurations, not a requirement to buy a passenger EV, and a dispatched cab need not occupy a bay. Keep permissions simple initially: the owner edits and retrieves; visitors can look around. Specify guest access, collision safety and exact charging or launch performance when implementing them.
+
+At exactly the $2m market gate, buying the $400k plot and $600k build leaves $1.02m after the $5k plot and $15k first-build/home awards. Buying all four improvements costs $145k and leaves $875k: current level falls from 5 to 4, but the home, its improvements and the free teleport remain. This example excludes any future first-use rewards. On resale, the listing identifies which installed improvements transfer; portable cars and account-owned cosmetics stay with the seller.
 
 ## Historical first-home napkin math
 

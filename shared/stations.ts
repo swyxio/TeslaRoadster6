@@ -38,10 +38,7 @@ export function stationStalls(station:{id:string;x:number;z:number}) {
   return BAY_OFFSETS.map((offset,i)=>({id:`${station.id}-${i}`,x:station.x+offset,z:station.z+CHARGER_LOT.bayZ,y:0,yaw:0,width:CHARGER_LOT.bayWidth,length:CHARGER_LOT.bayLength}));
 }
 export function chargingStationAt(x:number,z:number) {
-  return STATIONS.find(s=>{
-    const dx=x-s.x,dz=z-s.z;
-    return (Math.abs(dx)<9&&Math.abs(dz)<9&&Math.hypot(dx,dz)<9)||
-      (Math.abs(dz-CHARGER_LOT.bayZ)<=CHARGER_LOT.bayLength/2&&
-        BAY_OFFSETS.some(offset=>Math.abs(dx-offset)<=CHARGER_LOT.bayWidth/2));
-  });
+  return STATIONS.find(s=>Math.hypot(x-s.x,z-s.z)<9||
+    (Math.abs(z-s.z-CHARGER_LOT.bayZ)<=CHARGER_LOT.bayLength/2&&
+      BAY_OFFSETS.some(offset=>Math.abs(x-s.x-offset)<=CHARGER_LOT.bayWidth/2)));
 }

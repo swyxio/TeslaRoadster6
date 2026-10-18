@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, makeEntity } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, NEUTRAL } from '../shared/game';
+import { ScheduledInput } from '../shared/tick-input';
 import { supportNormal } from '../shared/map';
 import { ovalBankSurface } from '../shared/oval-bank';
 import { AMBIENT_INTEREST_METERS, prepareSnapshots, snapshotFor } from '../worker/snapshot';
@@ -37,7 +38,7 @@ test('a remote snapshot preserves the banked oval support needed to orient a car
   const car = world.entities.find(e => e.id === two.entityId)!;
   const surface = ovalBankSurface(710, -1650)!;
   Object.assign(car, {x:710, z:-1650, y:surface.height, supportId:'island-oval'});
-  const wire = JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,one.id),inputAck:0}));
+  const wire = JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,one.id)}));
   const remote = wire.world.entities.find((e:{id:string}) => e.id === car.id);
   assert.equal(remote.supportId, 'island-oval');
   assert.equal(remote.y, surface.height);
@@ -48,10 +49,11 @@ test('cached snapshot serialization matches the recipient-specific world',()=>{
   const world=createWorld();const one=addPlayer(world,'one','One');const two=addPlayer(world,'two','Two');
   const distant=makeEntity('distant','model-3',AMBIENT_INTEREST_METERS*4,0);world.entities.push(distant);
   const other=world.entities.find(entity=>entity.id===two.entityId)!;other.x=AMBIENT_INTEREST_METERS*3;
-  const prepare=prepareSnapshots(world);
+  const tick=12,roomEpoch='epoch',substeps=3,control=new ScheduledInput(NEUTRAL).snapshot();
+  const prepare=prepareSnapshots(world,tick,roomEpoch,substeps);
   for(const id of [one.id,two.id,'missing']) {
-    assert.deepEqual(JSON.parse(prepare(id,7)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),inputAck:7})));
-    assert.deepEqual(JSON.parse(prepare(id,9,4)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),inputAck:9,sync:4})));
+    assert.deepEqual(JSON.parse(prepare(id,control,1)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),tick,roomEpoch,substeps,poseRevision:1,control})));
+    assert.deepEqual(JSON.parse(prepare(id,control,1,4)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),tick,roomEpoch,substeps,poseRevision:1,control,sync:4})));
   }
 });
 
@@ -61,16 +63,30 @@ test('cached snapshots retain a distant dome player and ferry passenger',()=>{
   Object.assign(person,{kind:'person',x:AMBIENT_INTEREST_METERS*3,inDome:true});
   const ferryCar=makeEntity('ferry-car','model-3',-AMBIENT_INTEREST_METERS*3,0);
   ferryCar.supportId='ferry';world.entities.push(ferryCar);
-  const wire=JSON.parse(prepareSnapshots(world)(viewer.id,0));
-  assert.equal(wire.inputAck,0);
+  const wire=JSON.parse(prepareSnapshots(world,0,'epoch',1)(viewer.id,new ScheduledInput(NEUTRAL).snapshot(),0));
+  assert.equal(wire.control.appliedSeq,0);
   assert.ok(wire.world.entities.some((entity:{id:string;inDome:boolean})=>entity.id===person.id&&entity.inDome));
   assert.ok(wire.world.entities.some((entity:{id:string;supportId:string})=>entity.id===ferryCar.id&&entity.supportId==='ferry'));
 });
 
-test('cached snapshots include the required acknowledgement and optional sync metadata',()=>{
-  const world=createWorld(),player=addPlayer(world,'viewer','Viewer'),prepare=prepareSnapshots(world);
-  const initial=JSON.parse(prepare(player.id,0));
-  assert.equal(initial.inputAck,0);assert.ok(!('sync' in initial));
-  const ordered=JSON.parse(prepare(player.id,3,7));
-  assert.equal(ordered.inputAck,3);assert.equal(ordered.sync,7);
+test('cached snapshots include owner-only controls and optional sync metadata',()=>{
+  const world=createWorld(),player=addPlayer(world,'viewer','Viewer'),prepare=prepareSnapshots(world,4,'epoch',2);
+  const own=new ScheduledInput(NEUTRAL);own.receive({seq:3,targetTick:5,controlRevision:0,actionSeq:0,input:{...NEUTRAL,steer:1}},4,0);
+  const initial=JSON.parse(prepare(player.id,own.snapshot(),1));
+  assert.equal(initial.control.receivedSeq,3);assert.equal(initial.control.queued[0].seq,3);assert.equal(initial.control.actionSeq,0);assert.equal(initial.control.edgeFloorRevision,0);assert.ok(!('sync' in initial));
+  const ordered=JSON.parse(prepare(player.id,new ScheduledInput(NEUTRAL).snapshot(),1,7));
+  assert.equal(ordered.control.receivedSeq,0);assert.deepEqual(ordered.control.queued,[]);assert.equal(ordered.sync,7);
+});
+
+test('flight samples stay server-side and tier progress is not replicated with players',()=>{
+  const world=createWorld(),player=addPlayer(world,'viewer','Viewer');
+  player.achievements.roofFlight={entityId:player.entityId,x:1,y:2,z:3,supported:false,
+    flight:{seconds:1,startY:0,rise:2,travel:6}};
+  const sample=player.achievements.roofFlight;
+  const direct=snapshotFor(world,player.id);
+  const wire=JSON.parse(prepareSnapshots(world,0,'epoch',1)(player.id,new ScheduledInput(NEUTRAL).snapshot(),0));
+  assert.equal(direct.players[0].achievements.roofFlight,null);
+  assert.equal(wire.world.players[0].achievements.roofFlight,null);
+  assert.ok(!('achievementTiers' in wire.world.players[0]));
+  assert.equal(player.achievements.roofFlight,sample,'serialization must not mutate the authoritative tracker');
 });

@@ -16,9 +16,16 @@
 .map-lightbox-legend i { width:8px; height:8px; border-radius:50%; background:#f3a75d; }
 .map-lightbox-legend span:nth-child(2) i { background:#f46d69; }
 .map-lightbox-legend span:nth-child(3) i { background:#66848a; }
+.map-lightbox-legend .map-cab-legend i { background:#e5bc4c; border-radius:0; transform:rotate(45deg); }
+.map-cab-legend[hidden], .map-lightbox-cab[hidden] { display:none; }
+.map-lightbox-cab { flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.map-cab-status { flex:1; min-width:0; margin:0; overflow:hidden; color:#ffe6a0; font-size:12px; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
+.map-cab-follow { flex:none; min-width:92px; min-height:44px; padding:8px 14px; border:1px solid #f5d37e; border-radius:7px; background:#193a40ed; color:#fff5da; font-size:13px; font-weight:700; }
+.map-cab-follow[aria-pressed="true"] { background:#e5bc4c; color:#21373b; }
+.map-cab-follow:disabled { opacity:.5; cursor:default; }
 .map-lightbox-footer { flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .map-lightbox-status { margin:0; font-size:12px; line-height:1.35; color:#d3e4da; }
 .map-drive { flex:none; min-width:140px; min-height:44px; padding:10px 16px; border:0; border-radius:7px; background:#ffc77f; color:#21373b; font-size:13px; font-weight:700; }
 .map-drive:disabled { opacity:.5; cursor:default; }
 @media(max-width:600px) { .map-lightbox { width:96vw; height:94dvh; max-height:94dvh; padding:12px; } .map-lightbox[open] { gap:7px; } .map-lightbox-header h2 { font-size:23px; } .map-lightbox-help { font-size:11px; } .map-lightbox-legend { gap:7px; padding:7px; font-size:8px; } .map-lightbox-status { font-size:11px; } .map-drive { min-width:120px; } }
-@media(max-height:550px) { .map-lightbox { width:96vw; height:96dvh; max-height:96dvh; padding:8px 12px; } .map-lightbox[open] { gap:4px; } .map-lightbox-header h2 { font-size:19px; } .map-lightbox-header span { font-size:8px; } .map-close { width:36px; height:36px; } .map-lightbox-help { font-size:10px; } .map-lightbox-zoom button { width:36px; height:36px; } .map-lightbox-footer { min-height:36px; } .map-drive { min-height:36px; padding:6px 12px; } }
+@media(max-height:550px) { .map-lightbox { width:96vw; height:96dvh; max-height:96dvh; padding:8px 12px; } .map-lightbox[open] { gap:4px; } .map-lightbox-header h2 { font-size:19px; } .map-lightbox-header span { font-size:8px; } .map-close { width:36px; height:36px; } .map-lightbox-help { font-size:10px; } .map-lightbox-zoom button { width:36px; height:36px; } .map-lightbox-footer { min-height:36px; } .map-drive { min-height:36px; padding:6px 12px; } .map-cab-follow { min-height:36px; padding:6px 12px; } }

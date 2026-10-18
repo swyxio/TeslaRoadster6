@@ -5,6 +5,7 @@ import {FERRY_DOCKS,isRocketIsland,terrainHeight} from '../shared/map';
 import {FERRY_DECK,FERRY_TRAVEL_SECONDS,updateFerry,whollyOnFerry} from '../shared/ferry';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS} from '../shared/vehicles';
+import {ScheduledInput} from '../shared/tick-input';
 
 function setup(){
   const world=createWorld();world.entities=[];world.players=[];world.pickups=[];
@@ -57,6 +58,19 @@ test('the shared ferry transports secured riders, permits exit, and returns',()=
   advance(world,FERRY_TRAVEL_SECONDS);assert.equal(world.ferry.phase,'sf');
 });
 
+test('a jump processed while secured does not fire after disembarking',()=>{
+  const {world,car}=setup();Object.assign(car,{x:0,z:world.ferry.z,y:0,supportId:'ferry'});world.ferry.remaining=.05;
+  advance(world,.1);assert.equal(world.ferry.phase,'to-island');
+  const controls=new ScheduledInput(NEUTRAL);
+  controls.receive({seq:1,targetTick:1,controlRevision:0,actionSeq:0,input:{...NEUTRAL,jump:1}},0,0);
+  step(world,new Map([['p',controls.advance(1,50).input]]),.05);
+  assert.equal(car.lastJump,1);assert.equal(car.supportId,'ferry');
+  world.ferry.passengers=[];
+  Object.assign(car,{x:0,z:-235,y:terrainHeight(0,-235)??0,supportId:'ground',vx:0,vy:0,vz:0,speed:0});
+  step(world,new Map([['p',controls.advance(2,100).input]]),.05);
+  assert.equal(car.lastJump,1);assert.equal(car.supportId,'ground');assert.equal(car.vy,0);
+});
+
 test('reset and disconnect detach occupants without losing resources or leaving stale manifest entries',()=>{
   const {world,car}=setup();Object.assign(car,{x:0,z:world.ferry.z,y:0,supportId:'ferry',health:62,air:37});world.ferry.remaining=0;
   advance(world,.1);assert.equal(world.ferry.passengers.length,1);
@@ -72,6 +86,13 @@ test('blocked arrivals and unsafe boarding hold the ferry instead of overlapping
   updateFerry(world,.05,()=>false);assert.equal(world.ferry.blocked,'apron');assert.equal(world.ferry.remaining,12);
   world.ferry.arrivals=[];world.ferry.remaining=0;car.x=6;
   updateFerry(world,.05,()=>true);assert.equal(world.ferry.blocked,'ramp');assert.equal(world.ferry.phase,'sf');
+});
+
+test('forced apron relocation reports the affected driver',()=>{
+  const {world,car}=setup();Object.assign(car,{x:0,z:world.ferry.z,y:0,supportId:'ferry'});
+  world.ferry.arrivals=[car.id];world.ferry.remaining=12;
+  const relocated:string[]=[];step(world,new Map(),.05,{onRelocation:id=>relocated.push(id)});
+  assert.deepEqual(relocated,['p']);assert.equal(car.supportId,'ground');
 });
 
 test('a shore-supported vehicle straddling either dock holds departure until it clears',()=>{

@@ -30,7 +30,7 @@ test('a secured ferry passenger keeps delivery paused while OTA renews and upgra
   const player = addPlayer(world, 'p', 'Player');
   const car = world.entities.find(entity => entity.id === player.entityId)!;
   world.entities = [car];
-  player.delivery.cash = 100;
+  player.delivery.cash = 3_300;
   assert.equal(subscribeOta(world, player.id, true), true);
   Object.assign(car, { x: 0, y: 0, z: -500, supportId: 'ferry', tankLevel: 2, air: 42 });
   Object.assign(world.ferry, { phase: 'to-island', z: -500, remaining: 30,
@@ -45,14 +45,14 @@ test('a secured ferry passenger keeps delivery paused while OTA renews and upgra
   assert.equal(car.z, world.ferry.z);
   assert.equal(player.delivery.order.elapsed, orderElapsed);
   assert.equal(player.cockpit.orderEligible, true);
-  assert.equal(player.delivery.cash, 90);
+  assert.equal(player.delivery.cash, 3_100);
   assert.equal(player.delivery.ota.active, true);
   assert.ok(player.delivery.ota.renewAt! > world.time);
 
   assert.equal(buyUpgrade(world, player.id, 'tank'), true);
   assert.equal(car.tankLevel, 3);
   assert.equal(car.air, 100);
-  assert.equal(player.delivery.cash, 30);
+  assert.equal(player.delivery.cash, 100);
   assert.equal(car.supportId, 'ferry');
 });
 

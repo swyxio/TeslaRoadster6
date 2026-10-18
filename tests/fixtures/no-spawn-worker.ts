@@ -1,10 +1,11 @@
 // Local-only fixture: fill every checked SF spawn without changing production state.
-import { GameRoom } from '../../worker/index';
+import { GameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { makeEntity, type World } from '../../shared/game';
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 
 export class NoSpawnGameRoom extends GameRoom {
   private seeded=false;
-  override fetch(request?:Request):Response {
+  override async fetch(request:Request):Promise<Response> {
     const world=(this as unknown as {world:World}).world;
     if(!this.seeded){
       let id=0;
@@ -14,11 +15,11 @@ export class NoSpawnGameRoom extends GameRoom {
       for(let x=-220;x<=220;x+=20)for(const z of [210,-210])block(x,z);
       this.seeded=true;
     }
-    if(request&&new URL(request.url).pathname==='/release'){
+    if(new URL(request.url).pathname==='/release'){
       world.entities=world.entities.filter(entity=>!entity.id.startsWith('no-spawn-blocker-'));
       return new Response('released');
     }
-    return super.fetch();
+    return super.fetch(request);
   }
 }
 

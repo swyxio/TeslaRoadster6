@@ -79,15 +79,18 @@ test('completed matches award only participating players still in the dome',()=>
   touch(world.soccer,stock.id,'model-3');
   assert.equal(travelDome(world,gone.id),true,'participant leaves before the match finishes');
   assert.deepEqual(roadster.achievements.unlocked,[],'touches do not unlock until match completion');
+  const roadsterCash=roadster.delivery.cash,roadsterIncome=roadster.delivery.lifetimeIncome;
   finish(world);
   assert.deepEqual(world.soccer.winningPlayers,[stock.id]);
   assert.ok(roadster.achievements.unlocked.includes('rocket-rookie'));
+  assert.equal(roadster.delivery.cash,roadsterCash+500);assert.equal(roadster.delivery.lifetimeIncome,roadsterIncome+500);
   assert.ok(!roadster.achievements.unlocked.includes('roadster-champion'));
   assert.ok(stock.achievements.unlocked.includes('no-rockets-needed'));
   assert.deepEqual(spectator.achievements.unlocked,[]);
   assert.deepEqual(gone.achievements.unlocked,[]);
   const seq=stock.achievements.lastUnlock?.id;step(world,new Map(),.05);
   assert.equal(stock.achievements.lastUnlock?.id,seq,'win display does not award twice');
+  assert.equal(roadster.delivery.cash,roadsterCash+500,'the one-off award is not paid again');
 });
 
 test('a departed leading scorer does not prevent a present player winning',()=>{

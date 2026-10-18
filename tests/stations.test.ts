@@ -1,25 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,enterMinigame,parkingAction,step} from '../shared/game';
 import {BUILDINGS,ROADS,STATION_VENUES,terrainHeight} from '../shared/map';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
-import {CHARGER_LOT,STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
-
-test('station lookup preserves circular and bay boundaries and first-match order',()=>{
-  const reference=(x:number,z:number)=>STATIONS.find(s=>Math.hypot(x-s.x,z-s.z)<9||
-    (Math.abs(z-s.z-CHARGER_LOT.bayZ)<=CHARGER_LOT.bayLength/2&&
-      [-12,-4,4,12].some(offset=>Math.abs(x-s.x-offset)<=CHARGER_LOT.bayWidth/2)));
-  for(const station of STATIONS){
-    for(const radius of [0,8.999999,9,9.000001,15,30])for(let i=0;i<16;i++){
-      const angle=i*Math.PI/8,x=station.x+radius*Math.cos(angle),z=station.z+radius*Math.sin(angle);
-      assert.equal(chargingStationAt(x,z)?.id,reference(x,z)?.id,`${station.id}: ${radius}, ${i}`);
-    }
-    for(const dx of [-14.500001,-14.5,-12,-9.5,-1.5,1.5,9.5,14.5,14.500001])
-      for(const dz of [-20.000001,-20,-15,-10,-9.999999])
-        assert.equal(chargingStationAt(station.x+dx,station.z+dz)?.id,reference(station.x+dx,station.z+dz)?.id,`${station.id}: bay ${dx}, ${dz}`);
-  }
-});
+import {STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
 
 test('each represented Bay area has two uniquely identified and honestly sourced lots',()=>{
   for(const area of ['San Francisco','Oakland','Berkeley','Emeryville','Mill Valley','Corte Madera','San Mateo','Palo Alto','Mountain View','Hayward','Fremont','San Jose'])
@@ -56,7 +42,7 @@ test('every station supports Park It and Cut the queue in the authoritative simu
   for(const station of STATIONS){
     const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
     const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-    player.delivery.level=3;world.entities=[car];world.pickups=[];
+    player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
     Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,yaw:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0});
     assert.equal(parkingAction(world,'p','park'),true,`${station.id}: park join`);
     const round=world.parking.rounds[0],stall=lot.stalls.find(s=>s.id===round.entrants[0].targetId)!;
@@ -75,7 +61,7 @@ test('the mini-game menu uses the current station, including its queue approach'
     const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
     for(const game of ['park','queue'] as const){
       const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-      player.delivery.level=3;world.entities=[car];world.pickups=[];
+      player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
       Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,supportId:'ground',autopilot:true});
       assert.equal(enterMinigame(world,'p',game),true,`${station.id}: ${game}`);
       assert.equal(world.parking.rounds[0].lotId,lot.id);
@@ -83,7 +69,7 @@ test('the mini-game menu uses the current station, including its queue approach'
       assert.equal(car.autopilot,false);
     }
     const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-    player.delivery.level=3;world.entities=[car];world.pickups=[];
+    player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
     Object.assign(car,{x:lot.area.x,z:lot.area.z-10,y:0,supportId:'ground'});
     assert.equal(enterMinigame(world,'p','queue'),true,`${station.id}: move to local approach`);
     assert.equal(world.parking.rounds[0].lotId,lot.id);

@@ -12,14 +12,12 @@ type RocketPad = { x: number; z: number; active: boolean; readyAt?: number };
  * IDs break simultaneous claims independently of array or connection order.
  * Returns the winning entity ID, or null when no claim was made.
  */
-export function updateRocketPickup(pad: RocketPad, entities: Entity[], time: number): string | null {
+export function updateRocketPickup(pad: RocketPad, entities: Entity[], time: number, canCollect?: (driverId:string)=>boolean): string | null {
   if (!pad.active && time >= (pad.readyAt ?? Infinity)) pad.active = true;
   if (!pad.active) return null;
   let ground:number|null|undefined, winner:Entity|undefined;
   for(const e of entities){
-    if(e.kind==='person'||!e.driver||e.supportId!=='ground')continue;
-    const dx=e.x-pad.x,dz=e.z-pad.z;
-    if(Math.abs(dx)>=4||Math.abs(dz)>=4||Math.hypot(dx,dz)>=4)continue;
+    if(e.kind==='person'||!e.driver||e.supportId!=='ground'||Math.hypot(e.x-pad.x,e.z-pad.z)>=4||(canCollect&&!canCollect(e.driver)))continue;
     if(ground===undefined)ground=terrainHeight(pad.x,pad.z);
     if(ground===null)return null;
     if(Math.abs(e.y-ground)>=2||(hasRockets(e)&&e.air>=99.99))continue;

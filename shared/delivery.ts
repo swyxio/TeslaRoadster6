@@ -2,17 +2,28 @@ import type { Entity, Input, Player, World } from './game';
 import { BUILDINGS, FERRY_DOCKS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
 import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
-import { onRoof } from './achievements';
 import { initialOta, type OtaSubscription } from './ota';
+import { dropoffPayouts, pickupPayout, resolveDeliveryPayout, type DeliveryPayoutResolver, type ResolvedDeliveryPayout } from './delivery-payout';
 
-// Session milestones use lifetime delivery rewards, not spendable cash.
+// Current spendable cash determines level; ownership and awards survive a drop.
 export const LEVELS = [
-  { level:0, name:'San Francisco', deliveries:0, earned:0 },
-  { level:1, name:'Oakland & Berkeley', deliveries:2, earned:50 },
-  { level:2, name:'Peninsula & East Bay', deliveries:5, earned:140 },
-  { level:3, name:'San Jose', deliveries:8, earned:350 },
+  {level:0,name:'San Francisco',cash:0},
+  {level:1,name:'Oakland & Berkeley',cash:10_000},
+  {level:2,name:'Peninsula & East Bay',cash:50_000},
+  {level:3,name:'San Jose',cash:250_000},
+  {level:4,name:'Professional',cash:500_000},
+  {level:5,name:'Level 5',cash:1_000_000},
+  {level:6,name:'Level 6',cash:2_000_000},
+  {level:7,name:'Level 7',cash:4_000_000},
+  {level:8,name:'Level 8',cash:8_000_000},
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
+export function levelForCash(cash:number):Level {
+  let level:Level=0;
+  for(const milestone of LEVELS)if(cash>=milestone.cash)level=milestone.level;
+  return level;
+}
+const BASE_FARES=[1_200,1_600,2_500,4_000,5_500,7_000,9_000,12_000,16_000] as const;
 // Vertical gates also apply to flyers; the northern island approach remains open.
 const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
@@ -71,7 +82,35 @@ for (const {x,z,district,name} of [
 }
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
-export type DeliveryState = { cash: number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery' | 'supply-repair' | 'supply-air'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
+export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+
+/** Immutable physical facts needed to evaluate a delivery stop against an order. */
+type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
+export type DeliveryStop = DeliveryPose & {canFly:boolean};
+export function captureDeliveryStop(entity:Entity):DeliveryStop {
+  const {x,y,z,vy,speed,supportId,kind}=entity;
+  return {x,y,z,vy,speed,supportId,kind,canFly:hasRockets(entity)};
+}
+function matchesTarget(stop:DeliveryPose,target:{x:number;y?:number;z:number;rooftop?:boolean}):boolean {
+  if(stop.vy>.1||Math.abs(stop.speed)>4)return false;
+  if(target.rooftop){
+    return stop.kind!=='person'&&stop.supportId?.startsWith('roof:')===true&&
+      Math.abs(stop.y-target.y!)<=.05&&Math.hypot(stop.x-target.x,stop.z-target.z)<=6;
+  }
+  if(stop.supportId!=='ground'||Math.abs(stop.x-target.x)>9||Math.abs(stop.z-target.z)>9)return false;
+  const targetHeight=terrainHeight(target.x,target.z);
+  return targetHeight!==null&&Math.hypot(stop.x-target.x,stop.y-targetHeight,stop.z-target.z)<=9;
+}
+export function matchesDeliveryStop(order:Order,stop:DeliveryPose):boolean {return matchesTarget(stop,orderTarget(order));}
+/** Qualifying targets are independent of the currently projected order. */
+export function deliveryStopSignature(stop:DeliveryPose):string {
+  if(stop.vy>.1||Math.abs(stop.speed)>4)return '';
+  const matches:string[]=[];
+  for(let i=0;i<RESTAURANTS.length;i++)if(matchesTarget(stop,RESTAURANTS[i]))matches.push(`r${i}`);
+  for(let i=0;i<CUSTOMERS.length;i++)if(matchesTarget(stop,CUSTOMERS[i]))matches.push(`c${i}`);
+  return matches.join(',');
+}
 
 function orderFor(index: number, origin: { x: number; z: number }, level:Level, canFly = false): Order {
   const restaurants = RESTAURANTS.map((place,i)=>({place,i})).filter(({place})=>requiredLevelAt(place.x,place.z)<=level);
@@ -85,23 +124,34 @@ function orderFor(index: number, origin: { x: number; z: number }, level:Level, 
     customer.rooftop===rooftop && requiredLevelAt(customer.x,customer.z)<=level &&
     Math.hypot(customer.x-pickup.x,customer.z-pickup.z)>100);
   // Keep returning to Peninsula/East Bay landmarks after San Jose opens.
-  const exploreLevel:Level = level===3 && index%4===2 ? 2 : level;
+  const exploreLevel:Level = level>=3 && index%4===2 ? 2 : Math.min(3,level) as Level;
   const newest = explore ? available.filter(({customer})=>requiredLevelAt(customer.x,customer.z)===exploreLevel) : [];
   const candidates = newest.length ? newest : available;
   const choice = newest.length ? Math.floor(index/2)+1 : Math.floor(index/restaurants.length+index*3);
   const customer = candidates[choice % candidates.length].i;
   const distance = Math.hypot(CUSTOMERS[customer].x - pickup.x, CUSTOMERS[customer].z - pickup.z);
   const pickupDistance = Math.hypot(origin.x - pickup.x, origin.z - pickup.z);
-  return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
+  const jobLevel=level;
+  const distanceFactor=Math.max(.5,Math.min(2,distance/700));
+  return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: Math.round(BASE_FARES[jobLevel]*distanceFactor) };
 }
 export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
-  return { cash: 0, ota:initialOta(), earned:0, level:0, lastBlocked:null, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin, 0), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
+  return { cash: 2_500, lifetimeIncome:0, ota:initialOta(), earned:0, level:0, lastBlocked:null, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin, 0), lastPayout: null, lastReroute:null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
 }
-function updateLevel(delivery:DeliveryState):void {
-  for(const milestone of LEVELS)if(delivery.completed>=milestone.deliveries&&delivery.earned>=milestone.earned)delivery.level=milestone.level;
-}
+export function updateLevel(delivery:DeliveryState):void { delivery.level=levelForCash(delivery.cash); }
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
+}
+/** Move an active job back into regions available at the new balance. */
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},canFly=false):boolean {
+  const old=delivery.order;
+  const pickup=RESTAURANTS[old.restaurant],customer=CUSTOMERS[old.customer];
+  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level)return false;
+  const next=orderFor(delivery.completed,origin,delivery.level,canFly);
+  // A collected order stays collected; never grant a second pickup bonus.
+  if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
+  delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1};
+  return true;
 }
 export function pickupBonusFor(order: Order): number {
   return Math.round(order.base * .4 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
@@ -110,10 +160,13 @@ export function payoutFor(order: Order): number {
   const difference = order.estimate - order.elapsed;
   const bonus = difference > 0 ? Math.round(order.base * .75 * Math.min(1, difference / order.estimate)) : 0;
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
-  return Math.max(0, order.base + bonus - latePenalty);
+  // Even a very late delivery should pay for the trip. Round the half-dollar
+  // up so an odd quoted base never falls below the 50% minimum.
+  return Math.max(Math.ceil(order.base / 2), order.base + bonus - latePenalty);
 }
-export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false): void {
+export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false, resolvePayout?:DeliveryPayoutResolver): ResolvedDeliveryPayout[] | null | undefined {
   const delivery = player.delivery;
+  const elapsedBefore=delivery.order.elapsed;
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
@@ -122,32 +175,47 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     if(!orderPaused&&!entity.inDome)delivery.order.elapsed += dt;
   }
   if(orderPaused||entity.inDome)return;
-  const target = orderTarget(delivery.order);
-  if(entity.vy>.1||Math.abs(entity.speed)>4)return;
-  if(target.rooftop){
-    if(!entity.supportId?.startsWith('roof:')||!onRoof(entity)||Math.abs(entity.y-target.y)>.05||Math.hypot(entity.x-target.x,entity.z-target.z)>6)return;
-  }else{
-    const targetHeight=terrainHeight(target.x,target.z);
-    if(entity.supportId!=='ground'||targetHeight===null||Math.hypot(entity.x-target.x,entity.y-targetHeight,entity.z-target.z)>9)return;
-  }
+  const payouts=applyDeliveryStop(delivery,entity,resolvePayout);
+  if(payouts===null)delivery.order.elapsed=elapsedBefore;
+  return payouts;
+}
+
+/** Apply a physical stop to the current order, which may differ from the observed draft. */
+export function applyDeliveryStop(delivery:DeliveryState,stop:DeliveryStop|Entity,resolvePayout?:DeliveryPayoutResolver):ResolvedDeliveryPayout[]|null|undefined {
+  if(!matchesDeliveryStop(delivery.order,stop))return;
   if (delivery.order.stage === 'pickup') {
-    const bonus = pickupBonusFor(delivery.order);
+    const component=pickupPayout(delivery.completed+1,pickupBonusFor(delivery.order));
+    const bonus=resolveDeliveryPayout(component,resolvePayout);
+    if(bonus===null)return null;
     if (bonus > 0) reward(delivery, 'pickup', bonus);
     delivery.order.stage = 'dropoff';
     delivery.order.elapsed = 0;
     delivery.lastPayout = null;
+    return [{component,amount:bonus}];
   } else {
-    const payout = payoutFor(delivery.order);
+    const components=dropoffPayouts(delivery.completed+1,payoutFor(delivery.order));
+    const fare=resolveDeliveryPayout(components[0],resolvePayout);
+    if(fare===null)return null;
+    const parts:ResolvedDeliveryPayout[]=[{component:components[0],amount:fare}];
+    if(components[1])parts.push({component:components[1],amount:components[1].amount});
+    const payout=parts[0].amount,checkpoint=parts[1]?.amount??0;
     if (payout > 0) reward(delivery, 'delivery', payout);
+    if(checkpoint){
+      delivery.cash+=checkpoint;delivery.lifetimeIncome+=checkpoint;
+      const previous=delivery.lastReward;
+      delivery.lastReward={id:payout>0?previous!.id:(previous?.id??0)+1,kind:'delivery-research',amount:payout+checkpoint};
+    }
     delivery.lastPayout = payout;
     delivery.completed++;
     updateLevel(delivery);
-    delivery.order = orderFor(delivery.completed, entity, delivery.level, hasRockets(entity));
+    delivery.order = orderFor(delivery.completed, stop, delivery.level, 'canFly' in stop?stop.canFly:hasRockets(stop));
+    return parts;
   }
 }
 
 function reward(delivery: DeliveryState, kind: 'pickup' | 'delivery', amount: number): void {
   delivery.cash += amount;
+  delivery.lifetimeIncome += amount;
   delivery.earned += amount;
   updateLevel(delivery);
   delivery.lastReward = { id: (delivery.lastReward?.id ?? 0) + 1, kind, amount };

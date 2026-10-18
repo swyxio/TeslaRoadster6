@@ -21,21 +21,21 @@ test('fictional shops sit on clear supported ground for the largest vehicles',()
   }
 });
 test('shop validates location, funds, eligibility and one-time purchases on the simulation',()=>{
-  const {world,player,car}=setup();
+  const {world,player,car}=setup();player.delivery.cash=0;
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"__proto__","requestId":1}'),null);
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket"}'),null);
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket","requestId":0}'),null);
   assert.deepEqual(parseMessage('{"type":"upgrade","upgrade":"rocket","requestId":1}'),{type:'upgrade',upgrade:'rocket',requestId:1});
   assert.equal(buyUpgrade(world,'p','rocket'),false,'no cash');
-  player.delivery.cash=200;car.x+=50;assert.equal(buyUpgrade(world,'p','rocket'),false,'outside shop');car.x-=50;
+  player.delivery.cash=8_215;car.x+=50;assert.equal(buyUpgrade(world,'p','rocket'),false,'outside shop');car.x-=50;
   car.supportId=null;assert.equal(buyUpgrade(world,'p','rocket'),false,'airborne');car.supportId='ground';
   car.speed=2;assert.equal(buyUpgrade(world,'p','rocket'),false,'moving');car.speed=0;
   car.pushX=2;assert.equal(buyUpgrade(world,'p','rocket'),false,'sliding');car.pushX=0;
   assert.equal(buyUpgrade(world,'p','economy'),false,'rocket required');
-  assert.equal(buyUpgrade(world,'p','rocket'),true);assert.equal(player.delivery.cash,200-UPGRADES.rocket.price);assert.ok(hasRockets(car));
+  assert.equal(buyUpgrade(world,'p','rocket'),true);assert.equal(player.delivery.cash,8_215-UPGRADES.rocket.price);assert.ok(hasRockets(car));
   assert.equal(buyUpgrade(world,'p','rocket'),false,'no double charge');
   for(const id of ['economy','motor','armor'] as const){assert.equal(buyUpgrade(world,'p',id),true,id);assert.equal(buyUpgrade(world,'p',id),false,id);}
-  assert.equal(player.delivery.cash,15);car.health=45;car.air=30;assert.equal(buyUpgrade(world,'p','service'),true);assert.equal(car.health,100);assert.equal(car.air,100);assert.equal(player.delivery.cash,3);
+  assert.equal(player.delivery.cash,215);car.health=45;car.air=30;assert.equal(buyUpgrade(world,'p','service'),true);assert.equal(car.health,100);assert.equal(car.air,100);assert.equal(player.delivery.cash,15);
   assert.equal(buyUpgrade(world,'p','service'),false);
 });
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
@@ -54,7 +54,7 @@ test('shop purchases deduct funds once and refill a tank in the shared simulatio
   assert.equal(buyUpgrade(world,'p','rocket'),true);
   assert.equal(player.delivery.cash,0);assert.ok(car.upgrades.rocket);
   assert.equal(buyUpgrade(world,'p','rocket'),false);
-  player.delivery.cash=30;car.air=12;
+  player.delivery.cash=1_500;car.air=12;
   assert.equal(buyUpgrade(world,'p','tank'),true);
   assert.equal(car.tankLevel,2);assert.equal(car.air,100);assert.equal(player.delivery.cash,0);
 });
@@ -78,11 +78,24 @@ test('upgrades stay with a taken vehicle when its driver exits and returns',()=>
   const {world,player,car}=setup('zoox');car.upgrades.rocket=true;car.upgrades.armor=true;
   interact(world,'p');assert.notEqual(player.entityId,car.id);interact(world,'p');assert.equal(player.entityId,car.id);assert.ok(car.upgrades.rocket&&car.upgrades.armor);
 });
+test('self-driving tiers require rockets and are bought in order, once each',()=>{
+  const {world,player,car}=setup('model-3');player.delivery.cash=20_000;
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),false);
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false);
+  car.upgrades.rocket=true;
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false,'Leap comes first');
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),true);
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),false,'no duplicate charge');
+  assert.equal(buyUpgrade(world,'p','autonomySky'),true);
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false,'no duplicate charge');
+  assert.equal(player.delivery.cash,20_000-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
+  assert.equal(car.upgrades.autonomyJump,true);assert.equal(car.upgrades.autonomySky,true);
+});
 test('tank upgrades charge escalating prices, refill, and double usable flight each level',()=>{
-  const {world,player,car}=setup();player.delivery.cash=1000;
+  const {world,player,car}=setup();player.delivery.cash=30_000;
   assert.equal(buyUpgrade(world,'p','tank'),false,'requires a rocket kit');
   car.upgrades.rocket=true;car.air=20;
-  for(const [level,price] of [[2,30],[3,60],[4,120],[5,240]] as const){
+  for(const [level,price] of [[2,1_500],[3,3_000],[4,6_000],[5,12_000]] as const){
     const before=player.delivery.cash;
     assert.equal(buyUpgrade(world,'p','tank'),true);assert.equal(car.tankLevel,level);
     assert.equal(player.delivery.cash,before-price);assert.equal(car.air,100);
@@ -105,16 +118,16 @@ test('an island kit remains installed and enables the shop after crossing back',
   Object.assign(car,{x:0,z:-1160,y:0,supportId:'ground',air:10});
   step(world,new Map(),.05);assert.ok(car.upgrades.rocket);assert.equal(car.air,100);
   world.time+=120;Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,supportId:'ground',speed:0});
-  player.delivery.cash=200;
-  assert.equal(buyUpgrade(world,'p','rocket'),false);assert.equal(player.delivery.cash,200);
-  assert.equal(buyUpgrade(world,'p','economy'),true);assert.equal(player.delivery.cash,200-UPGRADES.economy.price);
+  player.delivery.cash=2_500;
+  assert.equal(buyUpgrade(world,'p','rocket'),false);assert.equal(player.delivery.cash,2_500);
+  assert.equal(buyUpgrade(world,'p','economy'),true);assert.equal(player.delivery.cash,2_500-UPGRADES.economy.price);
   car.supportId='ferry';assert.equal(buyUpgrade(world,'p','motor'),false);
 });
 
 test('rocket economy and sport motor affect real island-cliff physics',()=>{
   function run(motor:boolean,economy:boolean,jump:boolean,tankLevel:TankLevel=1,throttle=1){
     const {world,car}=setup(),pose=cliffPose(.4);
-    car.upgrades={rocket:true,motor,economy,armor:false};
+    Object.assign(car.upgrades,{rocket:true,motor,economy,armor:false});
     Object.assign(car,{x:pose.point.x,y:pose.point.y,z:pose.point.z,yaw:-Math.PI/2,pitch:.4,
       supportId:'island-cliff',loopAngle:.4,speed:20,vx:pose.tangent.x*20,vy:pose.tangent.y*20,vz:0,tankLevel});
     step(world,new Map([['p',{...NEUTRAL,throttle,jump:jump?1:0}]]),.05);

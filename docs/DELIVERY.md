@@ -1,25 +1,30 @@
 # Food runs and police
 
-A small optional arcade loop: pick up from a real restaurant identity, drive or fly to a fictional customer, and stop at the gold ring. Scores are per player and per current session. This game is independent and does not represent Uber, any restaurant, its menu, or its real delivery service. There is no ordering, payment, or affiliation. All money and flying are fictional.
+A small optional arcade loop: pick up from a real restaurant identity, drive or fly to a fictional customer, and stop at the gold ring. The room leaderboard ranks the drivers currently connected by their spendable cash. This game is independent and does not represent Uber, any restaurant, its menu, or its real delivery service. There is no ordering, payment, or affiliation. All money and flying are fictional.
 
 ## How to play
 
 The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; any rocket-equipped vehicle can fly shortcuts. After Oakland opens, some orders for rocket-equipped vehicles go to a flat rooftop: fly to the marked height, land, and stop near the center. Exploration orders to newly opened areas take priority over rooftop jobs. The marker sits on the physical roof. Use a rocket pickup, visit a shop, or select the Roadster in Fleet if you changed to a non-flying car before finishing a rooftop order.
 
-A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to zero. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
+A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to half the quoted base fare, rounded up. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
+
+Every third completed delivery also pays a repeatable $350 checkpoint. The mission card shows progress toward the next checkpoint and identifies the bonus when it is paid. It is separate from one-off achievements. The completed order, bonus and wallet are saved together for a saved driver.
 
 ## Unlocking the Bay
 
-Every driver starts at level 0 in San Francisco. Complete deliveries and earn rewards to unlock level 1 (Oakland and Berkeley), level 2 (the Peninsula and East Bay, including SFO, Stanford and Fremont), and level 3 (San Jose). The mission card shows the next delivery and lifetime-earnings targets. Lifetime earned includes pickup bonuses and delivery pay before purchases or tickets, so spending cash never closes a region. An attempted crossing reports the requirements. Boundaries apply to flying and driving alike; Marin, the separate Rocket Dome, North Bay Playground and the SF parking playground remain available from the start. Milestones are per player and per game session, including in multiplayer. Restoring a chat identity does not restore game progress.
+Each driver starts with $2,500 and level 0. Current cash determines level, so buying upgrades, paying fines, or buying a vehicle can lower it. Achievements and owned vehicles stay with the saved driver. If a purchase or fine locks an active delivery destination, the job is rerouted to an open area; a driver already in a higher-level area can still leave it.
 
-| Level | Area | Completed deliveries | Total earned |
-| --- | --- | ---: | ---: |
-| 0 | San Francisco | 0 | $0 |
-| 1 | Oakland and Berkeley | 2 | $50 |
-| 2 | Peninsula and East Bay | 5 | $140 |
-| 3 | San Jose | 8 | $350 |
+| Level | Cash | Areas opened |
+| --- | ---: | --- |
+| 0 | $0 | San Francisco |
+| 1 | $10,000 | Oakland and Berkeley |
+| 2 | $50,000 | Peninsula and East Bay, including SFO, Stanford and Fremont |
+| 3 | $250,000 | San Jose |
+| 4–8 | $500,000 / $1m / $2m / $4m / $8m | Higher fare tiers |
 
-For a ground-car starter sequence, the first five base fares are roughly $43, $36, $65, $42 and $29. On-time drops with partial pickup bonuses would earn about $95 after two and $258 after five; slow or missed bonuses can require additional runs. Long-distance orders pay more. These are examples, not a guaranteed reward.
+The next threshold appears on the mission card. Boundaries apply to flying and driving; Marin, Rocket Dome, North Bay Playground and the SF parking playground remain accessible from the start. The driver's saved wallet retains cash, completed deliveries, current order, achievements and owned luxury vehicles across rooms and reconnects. The active-time leaderboard remains room-local.
+
+Each new job starts with a level-based base fare of $1,200, $1,600, $2,500, $4,000, $5,500, $7,000, $9,000, $12,000 or $16,000 for levels 0–8. The route's distance scales that base between 0.5× and 2× before pickup and delivery timing adjustments. One-off delivery, region and research awards can add cash as the driver progresses.
 
 Orders only select locations already available to that driver. As the world opens, some runs go to the newly unlocked landmark destinations while other jobs stay local or use rooftops. These destinations are fictional deliveries to artistic, compressed versions of real places.
 
@@ -27,15 +32,15 @@ For a rough sense of scale, the complete loop is about 19.9 game km: at a steady
 
 The active clock counts input and three seconds after input, or a moving player AV. Both pickup and delivery clocks use the same rule. Standing idle eventually pauses both. An AV driving without input still counts; a parked AV does not. A browser or network stall can suspend simulation or disconnect the room; the clocks are not a competitive anti-cheat guarantee.
 
-Police patrol the city in marked vehicles. Flying 3–80 m above street level within 85 m of police starts a chase (a stationary car on a roof is not flying). Escape beyond 110 m for 10 seconds to shake a pursuer. Police within 12 m slow a grounded driver; within 7 m at under 4 m/s they stop the vehicle and issue a citation. The 80 m ceiling limits initial detection; once tracked, higher flight still adds to the fine. Supported roofs, ramps and the stunt loop are not flight. The fine is $60 plus $8 per full two seconds of airborne flight (up to $120), $10 per full 10 m of peak altitude (up to $80), and $35 per previous citation in the session. A prominent citation explains the fine and requires acknowledgement; the room simulation continues while the dialog is open. There is a 20-second grace period after a ticket. These are simple arcade rules, not real policing or legal advice. Police use approximate routing around the compressed city and cannot be taken by players.
+Police patrol the city in marked vehicles. Flying 3–80 m above street level within 85 m of police starts a chase (a stationary car on a roof is not flying). Escape beyond 110 m for 10 seconds to shake a pursuer. Police within 12 m slow a grounded driver; within 7 m at under 4 m/s they stop the vehicle and issue a citation. The 80 m ceiling limits initial detection; once tracked, higher flight still adds to the fine. Supported roofs, ramps and the stunt loop are not flight. The fine is $60 plus $8 per full two seconds of airborne flight (up to $120), $10 per full 10 m of peak altitude (up to $80), and $35 per previous citation. A prominent citation explains the fine and requires acknowledgement; the room simulation continues while the dialog is open. There is a 20-second grace period after a ticket. These are simple arcade rules, not real policing or legal advice. Police use approximate routing around the compressed city and cannot be taken by players.
 
-Open **L · Scores** to see the room's current drivers, ranked by cash, alongside active time and cash per active minute. It is not a persistent leaderboard: leaving removes your score, and a room resets when empty or restarted. Cash and time are simulation-owned by the room; no client sends a fare or delivery result.
+Open **L · Scores** to see the room's current drivers, ranked by cash, alongside active time and cash per active minute. Leaving removes a driver's row from the room leaderboard. Cash is saved with the driver's wallet; active time is room-local. The room decides fares and delivery results.
 
 Press **C** or choose **Actions → Camera** for cockpit view; press again for a wide chase view. Inside a vehicle, the view rolls and pitches with it. The small dashboard shows the current pickup or dropoff, its direction and time estimate; a private floating sign appears when the destination is in view. The minimap and police warnings remain available. The leaderboard also shows first-person active time and deliveries whose entire active pickup-and-dropoff run was in cockpit. Camera choice is reported by the client and can be spoofed; it is recognition for this session, not a verified competitive ranking or extra cash. Backgrounding, switching views or stale input during active play can make the current run ineligible. A paused interval does not.
 
-## Session achievements
+## Achievements
 
-Open **T · Awards** to see progress. **Bay Hopper** rewards flying from San Francisco to Oakland or back without landing on the bridge or Yerba Buena Island; flying over the bridge is fine. **Roof Rider** is for landing on a building, **Sky Delivery** for completing a rooftop order, and **Neighborhood Regular** for three deliveries. These are session-only and shared simulation decides unlocks.
+Open **T · Awards** to see progress. **Bay Hopper** rewards flying from San Francisco to Oakland or back without landing on the bridge or Yerba Buena Island; flying over the bridge is fine. **Roof Rider** is for landing on a building, **Sky Delivery** for completing a rooftop order, and **Neighborhood Regular** for three deliveries. Land on Coit Tower or Salesforce Tower for their awards, or stop at Mission San José and San José City Hall to discover them. Each pays a one-off cash award. Shared simulation decides unlocks, and a saved driver retains earned achievements. The delivery ladder pays one-off awards at 1, 10, 25, 50 and 100 deliveries, with smaller check-ins between and after those milestones. Reaching each geographic unlock also pays a one-off award. The Vault adds discovery, purchase and collection awards; see [the showroom](LUXURY_SHOWROOM.md).
 
 ## Content and attribution
 

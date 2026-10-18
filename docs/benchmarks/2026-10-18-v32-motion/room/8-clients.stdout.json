@@ -1,0 +1,19 @@
+{
+  "clients": 8,
+  "elapsedSeconds": 60,
+  "closed": 0,
+  "sentInputs": 9472,
+  "inputRejections": 0,
+  "clientsWithAppliedInput": 8,
+  "snapshots": 4552,
+  "clientsSeeingAll": 8,
+  "minSnapshots": 569,
+  "snapshotRatePerClient": 9.48,
+  "p95SnapshotGapMs": 108,
+  "maxSnapshotGapMs": 137,
+  "decodedJsonMiB": 142.89,
+  "minSimulatedSeconds": 56.8,
+  "medianSimulatedSeconds": 56.8,
+  "clientEventLoopP95Ms": 21.4,
+  "note": "Bounded local synthetic clients send input at 20 Hz and parse all received JSON. Same-host client parsing and contention affect the result; no WAN, sustained, mobile or production capacity claim."
+}

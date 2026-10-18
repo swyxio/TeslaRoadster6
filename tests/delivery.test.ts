@@ -2,27 +2,56 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
+import { updateAchievements } from '../shared/achievements';
 import { newPolice, updatePolice } from '../shared/police';
 import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
 import { DOME } from '../shared/dome';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
-  world.entities=[car];world.pickups=[];return {world,player,car};
+  world.entities=[car];world.pickups=[];player.delivery.cash=0;return {world,player,car};
 }
 function tick(world:World,input=NEUTRAL,n=1){for(let i=0;i<n;i++)step(world,new Map([['p',input]]),.05);}
+test('a fast first delivery pays a useful reward without immediately unlocking Oakland',()=>{
+  const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  const order=player.delivery.order;
+  assert.equal(player.delivery.cash,2_500);
+  assert.equal(order.base,600);
+  const pickup=orderTarget(order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  assert.equal(player.delivery.cash,2_740);
+  const dropoff=orderTarget(order);Object.assign(car,{x:dropoff.x,z:dropoff.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290);
+  assert.equal(player.delivery.lifetimeIncome,1_790);
+  assert.equal(player.delivery.level,0);
+  assert.ok(player.achievements.unlocked.includes('deliveries-1'));
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290,'the first-delivery award is one-off');
+});
 test('restaurant and fictional customer markers are on clear, reachable ground',()=>{
   for(const place of [...RESTAURANTS,...CUSTOMERS.filter(c=>!c.rooftop)]){
     assert.ok(isSurface(place.x,place.z),place.name);
     assert.ok(!nearbyBuildings(place.x,place.z,4).some(b=>Math.abs(place.x-b.x)<b.w/2+2&&Math.abs(place.z-b.z)<b.d/2+2),place.name);
   }
 });
-test('early bonus and late penalty change the base fare in the expected direction',()=>{
-  const order=initialDelivery({x:40,z:60}).order;
-  const early=payoutFor({...order,elapsed:order.estimate/2});
-  const onTime=payoutFor({...order,elapsed:order.estimate});
-  const late=payoutFor({...order,elapsed:order.estimate*1.5});
-  assert.ok(early>onTime&&onTime>late&&late>=0);assert.equal(onTime,order.base);assert.equal(payoutFor({...order,elapsed:order.estimate*5}),0);
+test('delivery pay keeps the fast bonus and late penalty until the 50% floor',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:600,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:0}),1_050);
+  assert.equal(payoutFor({...order,elapsed:50}),825);
+  assert.equal(payoutFor({...order,elapsed:100}),600);
+  assert.equal(payoutFor({...order,elapsed:125}),500);
+  assert.equal(payoutFor({...order,elapsed:175}),300);
+  assert.equal(payoutFor({...order,elapsed:500}),300,'very late deliveries still pay');
+});
+test('the minimum fare rounds up for odd-dollar quotes',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:601,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:100}),601);
+  assert.equal(payoutFor({...order,elapsed:125}),501);
+  assert.equal(payoutFor({...order,elapsed:175}),301);
+  assert.equal(payoutFor({...order,elapsed:500}),301);
 });
 test('pickup bonus decreases with active time and expires at the estimate',()=>{
   const order=initialDelivery({x:40,z:60}).order;
@@ -47,11 +76,12 @@ test('pickup and delivery require stopping on the ground; payment occurs exactly
   const pickup=player.delivery.cash;assert.ok(pickup>0);assert.deepEqual(player.delivery.lastReward,{id:1,kind:'pickup',amount:pickup});
   const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,speed:0});tick(world);
   assert.equal(player.delivery.completed,1);const payout=player.delivery.cash-pickup;assert.ok(payout>order.base);
-  assert.deepEqual(player.delivery.lastReward,{id:2,kind:'delivery',amount:payout});
+  assert.deepEqual(player.delivery.lastReward,{id:2,kind:'delivery-research',amount:payout});
+  assert.ok(player.achievements.unlocked.includes('deliveries-1'));
   tick(world,NEUTRAL,20);assert.equal(player.delivery.completed,1);assert.equal(player.delivery.cash,pickup+payout);assert.equal(player.delivery.lastReward?.id,2);
 });
 test('active clock and delivery estimate pause after inactivity; player scores are independent',()=>{
-  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');other.delivery.cash=0;
   const target=orderTarget(player.delivery.order);Object.assign(car,{x:target.x,z:target.z});tick(world);assert.equal(player.delivery.order.stage,'dropoff');
   tick(world,{...NEUTRAL,steer:1},20);const afterInput=player.delivery.activeSeconds;assert.ok(afterInput>.9);
   tick(world,NEUTRAL,160);const stopped=player.delivery.activeSeconds;assert.ok(stopped>=3.9&&stopped<4.1);
@@ -168,7 +198,7 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
 
 test('eligible Roadster orders can be rooftop after Oakland unlock; ordinary cars receive ground orders',()=>{
   for(const kind of ['roadster','model-3'] as const){
-    const {world,player,car}=setup();car.kind=kind;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
+    const {world,player,car}=setup();car.kind=kind;player.delivery.cash=10_000;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
     const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
     Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world);
     assert.equal(player.delivery.completed,7);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');
