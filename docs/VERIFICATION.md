@@ -255,3 +255,11 @@ After integrating the shop confirmation follow-up, 161 tests and `pnpm build` pa
 One additional local integration run timed out at the existing Tesla fleet-change assertion while Wrangler reloaded; a subsequent run passed. The preview integration also passed.
 
 After integrating main's global chat, 173 tests and `pnpm build` passed. Both the room and global-chat integrations passed against local Wrangler. Chrome portrait emulation showed the combined game and remote shop; no physical device was tested.
+
+## 2026-10-18 · Bay delivery progression and landmarks
+
+In the isolated release worktree, `pnpm test` passed 182 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. The local Wrangler two-client room integration passed on protocol v16. Shared-simulation tests exercise the delivery and earnings thresholds, per-player access, locked boundaries on the ground and in flight, collisions and takeover, and supported, collision-clear landmark arrivals. The integration is not a load test.
+
+In Chrome local solo play, the level-zero objective pointed into SF, attempting to cross the locked Bay Bridge showed the Oakland requirements and stopped the car, and the expanded map concealed locked regions. The desktop cockpit, invalid-room feedback, and 390×844 portrait and 844×390 landscape emulated layouts were inspected; a landscape HUD overlap and the starting heading were corrected. Keyboard driving moved the car. Emulated pointer actions did not reliably target the requested control in this browser session, so mobile touch behavior was not verified by this playtest. No physical device or complete manual drive through all unlocks was tested. Lake Merritt and its islands are decorative, not physical water.
+
+After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.
