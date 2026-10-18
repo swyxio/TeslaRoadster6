@@ -6,6 +6,11 @@
 - Local Wrangler room integration passed two-client play on protocol v20, including five goals, the authoritative winner and Roadster awards, spectator exclusion, and exit. Local chat integration also passed. These are functional checks, not a load test.
 - Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
 
+## Economy planning model · 2026-10-18 Pacific
+
+- On checkout `8625bf0`, `pnpm test` passed 273 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The standalone planning script also passed a separate TypeScript check.
+- Ran both `node --experimental-strip-types scripts/economy-scenarios.ts --ledger` and the `--smooth --ledger` variant. Their cash ledgers balanced, and the first-home scenarios agreed with an independent calculation. These are hypothetical projections, not gameplay, device, live-room or production measurements. The economy proposal does not change gameplay or protocol.
+
 ## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
 
 - After integrating main's flight controls, tank levels, progression and chat, `pnpm test` passed 261 tests and `pnpm build` passed. The build retains Vite's existing large-chunk warning. Tests cover the ferry crossing, temporary Rocket expiry, parking and races, island surfaces, and level-zero access to the island and SF playground.
