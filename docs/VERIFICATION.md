@@ -27,6 +27,21 @@ These entries describe separate historical builds. Check the version and scope i
 - In desktop Chrome against a funded local fixture, a $25,000 cab purchase with its $5,000 award committed once, $18 mint paint persisted, and map follow and its pause control worked. No console warning or error was captured. Actual mobile portrait, landscape and touch behavior remain unverified; no physical device was tested.
 - Release remains blocked: an open or not-yet-staged income interval can be lost on a room crash or a failed-session disconnect, and a stalled profile can delay staging. Invalid or out-of-order staged records block the affected driver with no repair tool yet. Event-history multipliers are not integrated. Property resale has only pure decision logic and needs a transferable property registry and crash-safe atomic buyer/seller settlement. These checks do not cover a production deploy.
 
+## Driving-smoothness article lead visual · 2026-10-18 Pacific
+
+- The lead graphics plot all consecutive display-position steps from the archived 150 ms slalom traces and reproduce the reported maximum step, speed-ratio percentiles and steering-response threshold. Both SVGs parsed, and the local article and both assets returned HTTP 200.
+- The content worktree passed 734 tests and built successfully; Vite retained its existing large-chunk warning. Chrome displayed the lead graphic in the article at desktop and emulated 390×844 widths, with the mobile layout selected at the narrow size.
+
+## Economy article Bay map · 2026-10-18 Pacific
+
+- After merging current main, `pnpm test` passed 734 tests and `pnpm build` passed. The regenerated SVG parsed, and the article retained the published research-reward text and OpenStreetMap attribution.
+- The landmark map was regenerated from the shared Bay, Caltrain and campus data. Its SVG parsed successfully, and the article legend was updated alongside it.
+- Chrome displayed the article and map at desktop size and at an emulated 390 × 844 phone viewport. At phone width the map scrolls horizontally to keep labels legible; both edges and the 20-item landmark list were inspected. No physical phone was tested.
+
+## Driving-smoothness development blog · 2026-10-18 Pacific
+
+- The content worktree passed `pnpm test` (734 tests) before the final prose and asset edits; `pnpm build` passed after them, with Vite's existing large-chunk warning. Linked performance measurements retain their original fixture and production-test limitations in the article.
+- Local Wrangler preview in desktop Chrome and emulated 433×938 portrait and 938×433 landscape CSS viewports showed the article, navigation and responsive diagram without horizontal overflow. The side-by-side replay loaded and played in the portrait preview. This is a content check, not a game performance or physical-device measurement.
 
 ## Self-driving and driver awards · combined protocol v37 · 2026-10-18 Pacific
 
