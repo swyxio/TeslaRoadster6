@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Gamepad and keyboard bindings · 2026-10-18 Pacific
+
+- `pnpm test` passed 177 tests on rerun and `pnpm build` passed; one prior run failed an unrelated timing-sensitive global-chat test while the build was running concurrently. Vite's existing chunk-size warning remains. Unit tests cover simulated standard-controller analog steering, braking/reverse, flight, button edges, disconnect and safe resume, keyboard remapping, storage errors and touch independence. No physical controller was tested.
+- Chrome desktop: rebound forward from W to I, confirmed focus returned to its binding, and drove a solo Roadster to 82 km/h with I. Chrome emulation at 390×844 portrait and 844×390 landscape showed the scrollable settings dialog. Mobile interaction through the emulated browser targeted a different button, so touch activation and physical devices remain unverified.
+
+
 ## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
 
 - After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.

@@ -115,3 +115,45 @@ test('Tab navigates the HUD and Space activates a focused button instead of brak
   buttonFocused=true;const space=key('Space');fakeWindow.dispatchEvent(space);assert.equal(space.defaultPrevented,false);assert.equal(controls.read().brake,false);
   buttonFocused=false;const brake=key('Space');fakeWindow.dispatchEvent(brake);assert.equal(brake.defaultPrevented,true);assert.equal(controls.read().brake,true);
 });
+
+test('custom keyboard bindings preserve touch controls and browser shortcuts',()=>{
+  const steering=new FakeButton('KeyA');
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=selector=>selector==='[data-control]'?[steering]:[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;controls.bindings.forward=['KeyI',''];
+  const key=(code:string,ctrl=false)=>{const event=new Event('keydown',{cancelable:true});Object.defineProperties(event,{code:{value:code},ctrlKey:{value:ctrl}});fakeWindow.dispatchEvent(event);return event;};
+  const shortcut=key('KeyW',true);assert.equal(shortcut.defaultPrevented,false);assert.equal(controls.read().throttle,0);
+  key('KeyW');assert.equal(controls.read().throttle,0);key('KeyI');assert.equal(controls.read().throttle,1);
+  controls.bindings.left=['KeyZ',''];steering.dispatchEvent(pointer('pointerdown',1));assert.equal(controls.read().steer,1);
+});
+
+test('standard gamepad drives, brakes, reverses, flies, and triggers tricks once per press',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const buttons=Array.from({length:16},()=>({pressed:false,value:0}));const axes=[0,0,0,0];
+  const pad={connected:true,mapping:'standard',index:0,buttons,axes} as Gamepad;
+  let connected=true;const controls=new Controls(()=>connected?[pad]:[]);controls.enabled=true;
+  controls.read();axes[0]=-.575;buttons[7].value=.75;
+  let input=controls.read();assert.ok(Math.abs(input.steer-.5)<.001);assert.equal(input.throttle,.75);
+  buttons[0].pressed=true;buttons[2].pressed=true;buttons[1].pressed=true;buttons[3].pressed=true;
+  input=controls.read();assert.equal(input.jump,1);assert.equal(input.flip,1);assert.equal(input.boost,true);assert.equal(input.hover,true);
+  assert.equal(controls.read().jump,1);assert.equal(controls.read().flip,1);
+  buttons[0].pressed=false;buttons[2].pressed=false;controls.read();buttons[0].pressed=true;assert.equal(controls.read().jump,2);
+  controls.observeFlight(false,2,10);buttons[7].value=0;buttons[6].value=1;input=controls.read();assert.equal(input.brake,true);assert.equal(input.throttle,0);
+  controls.observeFlight(false,2,0);input=controls.read();assert.equal(input.brake,false);assert.equal(input.throttle,-1);
+  controls.observeFlight(true,2,10);input=controls.read();assert.equal(input.brake,false);assert.equal(input.throttle,-1);
+  connected=false;input=controls.read();assert.equal(input.throttle,0);assert.equal(input.steer,0);
+  connected=true;assert.equal(controls.read().throttle,0,'reconnect requires controls to return to neutral');
+  axes.fill(0);buttons.forEach(button=>{button.value=0;button.pressed=false;});controls.read();buttons[7].value=1;assert.equal(controls.read().throttle,1);
+  controls.enabled=false;assert.equal(controls.read().throttle,0);controls.enabled=true;assert.equal(controls.read().throttle,0,'resuming requires controls to return to neutral');
+});
+
+test('controller action edges pause driving immediately when a menu opens',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const buttons=Array.from({length:16},()=>({pressed:false,value:0}));const pad={connected:true,mapping:'standard',index:0,buttons,axes:[0,0,0,0]} as Gamepad;
+  const controls=new Controls(()=>[pad]);controls.enabled=true;let menus=0;controls.onAction=action=>{if(action==='menu'){menus++;controls.enabled=false;}};
+  controls.read();buttons[9].pressed=true;buttons[7].value=1;assert.equal(controls.read().throttle,0);assert.equal(menus,1);
+  controls.enabled=true;controls.read();assert.equal(menus,1,'held menu button does not fire twice');
+});
