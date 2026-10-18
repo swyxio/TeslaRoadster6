@@ -25,7 +25,7 @@ export function communityTimeline(scenario: CommunityScenario, target = 1_000_00
   let index = 0;
   const players = scenario.counts.flatMap((count, profileIndex) => Array.from({ length: count }, () => {
     const run = simulate(profiles[profileIndex], 'candidate', 1729 + index++, 40,
-      { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, trackWindows: true });
+      { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, cadenceRedesign: true, trackWindows: true });
     // Beyond 40 hours, repeat each player's final eight-hour recurring rate; no one-off awards recur.
     const tail = run.windows.slice(32 * 12).reduce((sum, w) => sum + w.recurring, 0) / (8 * 12);
     return { windows: run.windows, tail };

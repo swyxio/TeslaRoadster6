@@ -38,11 +38,11 @@ The [delivery-led player model](ECONOMY_FIVE_MINUTE.md) supplies a second estima
 
 | Population and active time | $100m | $250m | $500m | $750m | $900m | $1bn |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 10 players × 1 hour/day | day 91 | day 234 | day 472 | day 710 | day 853 | day 949 |
-| 50 players × 1 hour/day | day 17 | day 43 | day 91 | day 139 | day 168 | day 187 |
-| 250 players × 30 minutes/day | day 8 | day 19 | day 34 | day 50 | day 60 | day 67 |
+| 10 players × 1 hour/day | day 105 | day 281 | day 575 | day 869 | day 1045 | day 1162 |
+| 50 players × 1 hour/day | day 17 | day 46 | day 105 | day 164 | day 199 | day 223 |
+| 250 players × 30 minutes/day | day 8 | day 18 | day 33 | day 49 | day 61 | day 70 |
 
-With 50 daily players, the model earns $181.9m by day 30 and $497.1m by day 90. A larger community can reach the same target in just over two months, so **$1bn is not automatically a long season**. These runs keep the same people and schedule throughout; they omit new arrivals, departures, research contracts, trading, changing event schedules, and all changes in earning behavior after the first 40 hours. They are a design instrument, not a traffic forecast. `pnpm exec tsx scripts/economy-community.ts --json` reproduces the daily thresholds. Set the opening target before a season using observed player-hours and income; retain it throughout that season.
+With 50 daily players, the model earns $179.1m by day 30 and $438.2m by day 90. A larger community can reach the same target in just over two months, so **$1bn is not automatically a long season**. The first 40 hours include the selected players’ assumed university or SFO contracts. These runs keep the same people and schedule throughout; they omit new arrivals, departures, trading, changing event schedules, and all changes in earning behavior after the first 40 hours. They are a design instrument, not a traffic forecast. `pnpm exec tsx scripts/economy-community.ts --json` reproduces the daily thresholds. Set the opening target before a season using observed player-hours and income; retain it throughout that season. The separate [developer experiment](ECONOMY_FIVE_MINUTE.md#developer-path) reaches 20 floors in a median 101–163 active hours, compared with 223 active hours per person at the finish of the 50-player scenario. The player mix and spending choices differ, so these results do not guarantee any particular tower is completed before a launch.
 
 ## Launch, retirement and recognition
 

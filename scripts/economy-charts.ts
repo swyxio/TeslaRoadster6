@@ -9,6 +9,7 @@ let LEFT = 80;
 let RIGHT = 690;
 let MOBILE = false;
 const BLUE = '#1268a3';
+const GOLD = '#bd6a00';
 const GRID = '#d6dde2';
 const TEXT = '#1e2933';
 const MUTED = '#4d5f6d';
@@ -63,7 +64,9 @@ type ChartPath = {
   wallet: number[];
   earnings: number[];
   achievements: number[];
+  notifications: number[];
   inTargetPct: number;
+  notificationTargetPct: number;
   homeReached: number;
   homeMedianHours: number | null;
 };
@@ -74,10 +77,13 @@ function makeData(name: string, results: Result[]): ChartPath {
   const blocks = (index: number) => windows.map(ws => ws.slice(index * 6, (index + 1) * 6));
   const earnings = Array.from({ length: 16 }, (_, i) => pct(blocks(i).map(ws => ws.reduce((sum, w) => sum + w.gross, 0) / 6), .5));
   const achievements = Array.from({ length: 16 }, (_, i) => mean(blocks(i).map(ws => ws.reduce((sum, w) => sum + w.achievements, 0))));
+  const notifications = Array.from({ length: 16 }, (_, i) => mean(blocks(i).map(ws => ws.reduce((sum, w) => sum + w.achievementNotifications, 0))));
+  const earlyNotificationBlocks = Array.from({ length: 4 }, (_, i) => blocks(i).map(ws => ws.reduce((sum, w) => sum + w.achievementNotifications, 0))).flat();
   const earlyAchievementBlocks = Array.from({ length: 4 }, (_, i) => blocks(i).map(ws => ws.reduce((sum, w) => sum + w.achievements, 0))).flat();
   const inTargetPct = earlyAchievementBlocks.filter(n => n >= 2 && n <= 4).length / earlyAchievementBlocks.length * 100;
+  const notificationTargetPct = earlyNotificationBlocks.filter(n => n >= 2 && n <= 4).length / earlyNotificationBlocks.length * 100;
   const home = summarize(results);
-  return { name, wallet, earnings, achievements, inTargetPct, homeReached: home.homeReached, homeMedianHours: home.homeP50 };
+  return { name, wallet, earnings, achievements, notifications, inTargetPct, notificationTargetPct, homeReached: home.homeReached, homeMedianHours: home.homeP50 };
 }
 
 function walletChart(data: ChartPath[], players: number): string {
@@ -118,21 +124,21 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   const top = 120, panelH = MOBILE && kind === 'achievements' ? 171 : 149, plotH = 90;
   const height = top + panelH * data.length + (MOBILE ? 190 : 130);
   const achievement = kind === 'achievements';
-  const maxValue = Math.max(...data.flatMap(p => p[kind]));
+  const maxValue = Math.max(...data.flatMap(p => achievement ? [...p.achievements, ...p.notifications] : p.earnings));
   const step = achievement ? 4 : 5000;
   const max = Math.max(step * 2, Math.ceil(maxValue / step) * step);
   const tickValues = Array.from({ length: Math.floor(max / step) + 1 }, (_, i) => i * step);
-  const details = data.map(p => `${p.name} ${achievement ? `${fmt(p.inTargetPct)}% of first-two-hour blocks have 2–4 achievements` : `first 30-minute block earns a median $${Math.round(p.earnings[0] * 6).toLocaleString('en-US')} gross`}`).join('; ');
-  let svg = header(achievement ? 'Achievements arrive in bursts' : 'Earnings per five active minutes',
-    MOBILE ? (achievement ? `Mean achievements per 30m · ${players} runs` : `Median gross per 5m · ${players} runs`)
-      : (achievement ? `Mean one-off achievements per 30-minute block · ${players} simulated players` : `Median 30-minute gross, divided by six · ${players} simulated players`), height,
-    `${achievement ? 'Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings; purchases and fines affect wallet balance.'} Event bonuses are off. ${details}.`);
+  const details = data.map(p => `${p.name} ${achievement ? `${fmt(p.inTargetPct)}% of early blocks have 2–4 awards; ${fmt(p.notificationTargetPct)}% have 2–4 notifications` : `first 30-minute block earns a median $${Math.round(p.earnings[0] * 6).toLocaleString('en-US')} gross`}`).join('; ');
+  let svg = header(achievement ? 'Awards and notifications' : 'Earnings per five active minutes',
+    MOBILE ? (achievement ? `Mean per 30m · blue awards, gold alerts` : `Median gross per 5m · ${players} runs`)
+      : (achievement ? `Mean per 30m · blue awards, gold notifications · ${players} runs` : `Median 30-minute gross, divided by six · ${players} simulated players`), height,
+    `${achievement ? 'Each chart compares mean individual one-off awards with notifications grouped by the action that earned them, in 30-minute blocks. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings; purchases and fines affect wallet balance.'} Event bonuses are off. ${details}.`);
   data.forEach((p, i) => {
     const y = top + i * panelH, chartY = y + (MOBILE && achievement ? 56 : 34);
     svg += t(24, y + 20, labels[p.name] ?? p.name, 'font-size="21" font-weight="700"');
     if (achievement) svg += MOBILE
-      ? t(24, y + 43, `${fmt(p.inTargetPct, 0)}% of early blocks: 2–4`, `font-size="17" fill="${MUTED}"`)
-      : t(RIGHT, y + 20, `${fmt(p.inTargetPct, 0)}% of early blocks: 2–4`, `font-size="17" fill="${MUTED}" text-anchor="end"`);
+      ? t(24, y + 43, `${fmt(p.inTargetPct, 0)}% awards / ${fmt(p.notificationTargetPct, 0)}% alerts: 2–4`, `font-size="17" fill="${MUTED}"`)
+      : t(RIGHT, y + 20, `${fmt(p.inTargetPct, 0)}% awards / ${fmt(p.notificationTargetPct, 0)}% alerts: 2–4`, `font-size="17" fill="${MUTED}" text-anchor="end"`);
     svg += horizontal(chartY, plotH, max, tickValues, v => achievement ? `${v}` : `$${v / 1000}k`);
     if (achievement) {
       const y2 = yFor(4, max, chartY, plotH), y4 = yFor(2, max, chartY, plotH);
@@ -141,7 +147,12 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
     const barWidth = (RIGHT - LEFT) / 16;
     p[kind].forEach((value, j) => {
       const yValue = yFor(value, max, chartY, plotH);
-      svg += `<rect x="${(LEFT + j * barWidth + 2).toFixed(1)}" y="${yValue.toFixed(1)}" width="${(barWidth - 4).toFixed(1)}" height="${(chartY + plotH - yValue).toFixed(1)}" fill="${BLUE}"/>`;
+      const width = achievement ? (barWidth - 4) / 2 : barWidth - 4;
+      svg += `<rect x="${(LEFT + j * barWidth + 2).toFixed(1)}" y="${yValue.toFixed(1)}" width="${width.toFixed(1)}" height="${(chartY + plotH - yValue).toFixed(1)}" fill="${BLUE}"/>`;
+      if (achievement) {
+        const yNotification = yFor(p.notifications[j], max, chartY, plotH);
+        svg += `<rect x="${(LEFT + j * barWidth + 2 + width).toFixed(1)}" y="${yNotification.toFixed(1)}" width="${width.toFixed(1)}" height="${(chartY + plotH - yNotification).toFixed(1)}" fill="${GOLD}"/>`;
+      }
     });
   });
   const end = top + panelH * data.length;
@@ -149,16 +160,16 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   svg += t((LEFT + RIGHT) / 2, end + 25, 'Active hours · one bar = 30 minutes', `font-size="18" fill="${MUTED}" text-anchor="middle"`);
   const lines = MOBILE ? (achievement ? [
     'Shading: 2–4 one-off achievements per', '30-minute block, first two active hours.',
-    'City badges count; initial SF, check-ins and', 'repeatable goals do not. Means can hide dry spells.',
-    'Economy model · events off.',
+    'A notification groups awards from one action.', 'Check-ins and repeatables are excluded.',
+    'Means can hide dry spells · events off.',
   ] : [
     'Gross includes task pay, awards and cab income.', 'Wallet balance also reflects purchases and fines.',
     'Each bar is the 30-minute median divided by six.', 'Five-minute windows can be empty during a task.',
     'Economy model · events off.',
   ]) : achievement ? [
     'Shaded band: target 2–4 one-off achievements per block, first 2h only.',
-    'City badges count; initial SF, check-ins and repeatable goals do not.',
-    'Core redesign, events off. Means can hide individual dry spells.',
+    'A notification groups all awards from one action. Check-ins and repeatables are excluded.',
+    'Means can hide individual dry spells · events off.',
   ] : [
     'Gross includes task pay, cash awards and active-cab income.',
     'Each bar is a median across 250 runs; longer tasks can leave five-minute gaps.',
@@ -177,7 +188,7 @@ const data = names.map(name => {
   const path = paths.find(item => item.name === name);
   if (!path) throw new Error(`Missing profile: ${name}`);
   const runs = Array.from({ length: players }, (_, i) => simulate(path.profile, 'candidate', 1729 + i, 40,
-    { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, winChance: path.winChance, trackWindows: true }));
+    { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, cadenceRedesign: true, winChance: path.winChance, trackWindows: true }));
   if (runs.some(run => run.windows.length !== 480)) throw new Error(`Expected 480 five-minute windows per run: ${name}`);
   return makeData(name, runs);
 });
@@ -191,5 +202,5 @@ writeFileSync(`${target}/wallet-curves-mobile.svg`, walletChart(data, players));
 writeFileSync(`${target}/achievement-cadence-mobile.svg`, blocksChart(data, players, 'achievements'));
 writeFileSync(`${target}/earnings-cadence-mobile.svg`, blocksChart(data, players, 'earnings'));
 writeFileSync(`${target}/simulation-data.json`, JSON.stringify({ players, seedStart: 1729, activeHours: 40,
-  events: false, candidate: 'core-redesign', walletSampleMinutes: 5, blockMinutes: 30, data }, null, 2) + '\n');
+  events: false, candidate: 'cadence-redesign-v2', walletSampleMinutes: 5, blockMinutes: 30, data }, null, 2) + '\n');
 console.log(`Wrote six SVG charts and source data to ${target} for ${players} seeds per path.`);

@@ -7,7 +7,7 @@ import { simulate } from '../scripts/economy-progression.ts';
 test('community counter includes the initial grant once and the first-day earned events', () => {
   const scenario = { name: 'one', counts: [1, 0, 0, 0] as const, activeMinutesPerDay: 60 as const };
   const player = simulate(paths[0].profile, 'candidate', 1729, 40,
-    { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, trackWindows: true });
+    { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, cadenceRedesign: true, trackWindows: true });
   const expected = 2500 + player.windows.slice(0, 12).reduce((sum, w) => sum + w.gross, 0);
   const timeline = communityTimeline(scenario, expected - 1);
   assert.equal(timeline.firstIncome, 2500);
