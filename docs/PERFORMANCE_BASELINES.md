@@ -132,6 +132,8 @@ than treating historical rows as matched pairs.
 
 A [hosted same-game reproducibility check](performance-baselines/2026-10-18-two-delivery-fixture/) completed the controlled two-delivery route on `1f722dd` and `4d7cee4`. Its heavily loaded no-video pair is a fixture check, not a performance budget or game regression comparison.
 
+A separate [hosted cross-version pair](performance-baselines/2026-10-18-two-delivery-cross-version/) completed the same controlled route on 0.0.31 `26fc934` and 0.0.32 `4d7cee4`, both without video and in separate recorded runs. Timing attribution and any performance verdict are **HOLD** under differing, heavy virtual-runner load; the video pair is not a performance delta.
+
 The [0.0.25/0.0.28 paired video proof](performance-baselines/2026-10-18-paired-video-route/)
 confirms delivery, jump and flight coverage with closely aligned paths. Video
 encoding and concurrent host work make its timings unsuitable as a no-video
