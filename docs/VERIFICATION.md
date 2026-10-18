@@ -37,6 +37,13 @@ These entries describe separate historical builds. Check the version and scope i
 - Local Wrangler room integration passed two-client play on protocol v20, including five goals, the authoritative winner and Roadster awards, spectator exclusion, wall refill visible to both clients, and exit. Local chat integration also passed. These are functional checks, not a load test.
 - Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. Gold wall markings and the refill hint were visible in desktop solo. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
 
+## Economy progression simulations · 2026-10-18 Pacific
+
+- On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `6456933`, `pnpm test` passed 310 tests and `pnpm build` passed, with the same warning.
+- Automated review found an omitted level-six contract in the modeled option count; after correcting it, `pnpm test` passed 311 tests, `pnpm build` passed and the standalone TypeScript check and 250-seed run passed. The reported median option samples did not change.
+- Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
