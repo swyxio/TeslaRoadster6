@@ -1,4 +1,4 @@
-import { BUILDINGS, MAP_BOUNDS, isSurface, nearbyBuildings } from './map';
+import { BUILDINGS, MAP_BOUNDS, STUNT_LOOP, STUNT_RAMP, rampHeight, isSurface, nearbyBuildings } from './map';
 export { BUILDINGS } from './map';
 import { STATIONS } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
@@ -7,15 +7,15 @@ import { engageAutopilot, routePose, trafficInput } from './traffic';
 import { initialDelivery, updateDelivery, type DeliveryState } from './delivery';
 import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 
-export const PROTOCOL_VERSION=4;
-export type Input = { throttle:number;steer:number;boost:boolean;lift:boolean;roll:number;brake:boolean };
-export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;roll:number;speed:number;health:number;air:number;driver:string|null;vy:number;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number;police?:PoliceState};
+export const PROTOCOL_VERSION=5;
+export type Input = { throttle:number;steer:number;boost:boolean;hover:boolean;roll:number;brake:boolean;jump:number;flip:number };
+export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;pitch:number;roll:number;vx:number;vy:number;vz:number;pitchRate:number;yawRate:number;rollRate:number;speed:number;health:number;air:number;driver:string|null;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number;lastJump:number;lastFlip:number;flipRemaining:number;stunts:number;loopAngle:number|null;loopDirection:number;police?:PoliceState};
 export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air';active:boolean;readyAt?:number};
 export type World = {entities:Entity[];players:Player[];pickups:Pickup[];time:number};
-export const NEUTRAL:Input={throttle:0,steer:0,boost:false,lift:false,roll:0,brake:false};
+export const NEUTRAL:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
-export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:string|null=null):Entity=>({id,kind,x,y:0,z,yaw:0,roll:0,speed:0,health:100,air:100,driver,vy:0,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,routeId:0,waypoint:0,pauseUntil:0});
+export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:string|null=null):Entity=>({id,kind,x,y:0,z,yaw:0,pitch:0,roll:0,vx:0,vy:0,vz:0,pitchRate:0,yawRate:0,rollRate:0,speed:0,health:100,air:100,driver,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,routeId:0,waypoint:0,pauseUntil:0,lastJump:0,lastFlip:0,flipRemaining:0,stunts:0,loopAngle:null,loopDirection:1});
 export function createWorld():World {
   const world:World={entities:[],players:[],time:0,pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-120+(i%5)*60,z:i<6?-60:120,kind:i%2?'air':'repair',active:true}))};
   VEHICLE_IDS.forEach((kind,i)=>{
@@ -78,13 +78,13 @@ export function interact(world:World,playerId:string):void {
   if(e.kind==='person'){
     const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&!other.police&&other.y<.5&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
     if(!car)return;
-    car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);
+    car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;car.lastJump=e.lastJump;car.lastFlip=e.lastFlip;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);
   }else{
     const width=dimensions(e.kind).width/2+1.3,length=dimensions(e.kind).length/2+1.3;
     const exits=[{angle:Math.PI/2,distance:width},{angle:-Math.PI/2,distance:width},{angle:Math.PI,distance:length},{angle:0,distance:length}];
     const person=exits.map(({angle,distance})=>makeEntity(`person-${playerId}`,'person',e.x-Math.sin(e.yaw+angle)*distance,e.z-Math.cos(e.yaw+angle)*distance,playerId)).find(p=>fits(world,p));
     if(!person)return;
-    release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);
+    person.lastJump=e.lastJump;person.lastFlip=e.lastFlip;release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);
   }
 }
 export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
@@ -92,7 +92,7 @@ export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
   if(!player||!old||old.y>.5||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind))return false;
   release(old,world);
   world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
-  const spawn=spawnPosition(world,kind),car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
+  const spawn=spawnPosition(world,kind),car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;car.lastJump=old.lastJump;car.lastFlip=old.lastFlip;
   world.entities.push(car);player.entityId=car.id;return true;
 }
 export function toggleAutopilot(world:World,id:string):boolean {
@@ -102,45 +102,131 @@ export function toggleAutopilot(world:World,id:string):boolean {
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e)return;
-  Object.assign(e,spawnPosition(world,e.kind),{y:0,vy:0,roll:0,speed:0,pushX:0,pushZ:0,autopilot:false,steering:0});
+  Object.assign(e,spawnPosition(world,e.kind),{y:0,vx:0,vy:0,vz:0,pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,steering:0});
 }
-function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;}
+function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;e.vx+=x;e.vz+=z;}
 export function step(world:World,inputs:Map<string,Input>,dt:number):void {
   if(!Number.isFinite(dt)||dt<=0)return;dt=Math.min(dt,.05);world.time+=dt;
   updatePolice(world,dt);
+  const stuntPlayers=new Set<string>();
   for(const e of world.entities){
-    const manual=e.driver?inputs.get(e.driver)??NEUTRAL:NEUTRAL;
-    if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.lift||manual.boost||manual.roll))e.autopilot=false;
+    // Counters are retained when input expires, so releasing a control cannot
+    // accidentally replay a jump or flip. Only the server consumes the edge.
+    const manual=e.driver?inputs.get(e.driver)??{...NEUTRAL,jump:e.lastJump,flip:e.lastFlip}:NEUTRAL;
+    const jump=manual.jump!==e.lastJump,flip=manual.flip!==e.lastFlip;
+    e.lastJump=manual.jump;e.lastFlip=manual.flip;
+    if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.boost||manual.hover||manual.roll||jump||flip))e.autopilot=false;
+    if(e.driver&&(jump||flip))stuntPlayers.add(e.driver);
     const input=e.police?.targetId?policeInput(e,world):e.autopilot?trafficInput(e,world):manual;
     const person=e.kind==='person',spec=person?null:VEHICLES[e.kind as VehicleId];
-    const oldX=e.x,oldZ=e.z,oldY=e.y;
-    const boosting=!!spec?.airThrusters&&input.boost&&e.air>0,lifting=!!spec?.airThrusters&&input.lift&&e.air>0;
-    const top=person?8:boosting?Math.max(72,spec!.maxSpeed):spec!.maxSpeed;
-    e.speed+=input.throttle*(person?28:boosting?32:spec!.acceleration)*dt;
-    e.speed*=Math.exp(-(input.throttle===0?.65:.12)*dt);
-    if(input.brake){const delta=(person?20:spec!.brakeDecel)*dt;e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-delta);}
-    e.speed=clamp(e.speed,-Math.min(top*.35,12),top)*(e.health<20?.995:1);
-    e.steering+=(input.steer-e.steering)*Math.min(1,dt*8);
-    if(person)e.yaw+=input.steer*2.7*dt;
-    else {
-      // Bicycle steering: wheelbase sets turning radius; four-wheel steer helps at low speed.
-      const rearFactor=spec!.fourWheelSteering?1+.55*Math.max(0,1-Math.abs(e.speed)/25):1;
-      const yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*rearFactor;
-      e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*dt;
+    const rocket=!!spec?.airThrusters,oldX=e.x,oldZ=e.z,oldY=e.y;
+    const roof=nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))
+      .some(b=>Math.abs(e.y-b.h)<.02&&e.vy<=0&&!!contact(body(e),{...b,yaw:0}));
+    const height=rampHeight(e.x,e.z),onRamp=height!==null&&Math.abs(e.y-height)<.08;
+    const rampSlope=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
+    let grounded=e.loopAngle===null&&(onRamp||((e.y<=0||roof)&&e.vy<=0));
+    if(grounded){e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;e.vy=onRamp?e.vx*rampSlope:0;}
+    if(jump&&rocket&&e.air>=24){
+      e.air-=24;
+      const angle=e.loopAngle;
+      // The first jump points away from the surface; air jumps are arcade lifts.
+      e.vx+=angle===null?0:-Math.sin(angle)*11;
+      e.vy+=angle===null?11:Math.cos(angle)*11;
+      e.loopAngle=null;grounded=false;
     }
-    e.x+=(-Math.sin(e.yaw)*e.speed+e.pushX)*dt;e.z+=(-Math.cos(e.yaw)*e.speed+e.pushZ)*dt;
-    e.pushX*=Math.exp(-3*dt);e.pushZ*=Math.exp(-3*dt);
-    if(lifting)e.vy=Math.min(20,e.vy+30*dt);
-    if(e.y>0||lifting){e.vy-=12*dt;e.y+=e.vy*dt;}
-    if(e.y>0&&spec?.airThrusters)e.roll+=input.roll*3.6*dt;
-    if(e.y<=0){e.y=0;e.vy=0;e.roll=0;}
-    if(e.y>=100){e.y=100;e.vy=Math.min(e.vy,0);}
-    e.air=clamp(e.air-(boosting?14:0)*dt-(lifting?22:0)*dt,0,100);
-    for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width)))if(e.vy<=0&&e.y<=b.h&&oldY>=b.h&&contact(body(e),{...b,yaw:0})){e.y=b.h;e.vy=0;e.roll=0;}
+    if(flip&&rocket&&!grounded&&e.loopAngle===null&&e.air>=9&&e.flipRemaining<=0){e.air-=9;e.flipRemaining=Math.PI*2;}
+    const boosting=rocket&&input.boost&&e.air>0&&(input.throttle!==0||!grounded);
+    const boostFraction=boosting?Math.min(1,e.air/(14*dt)):0;
+    e.air=Math.max(0,e.air-14*dt*boostFraction);
+    const hoverFraction=rocket&&input.hover&&!grounded&&e.loopAngle===null?Math.min(1,e.air/(18*dt)):0;
+    e.air=Math.max(0,e.air-18*dt*hoverFraction);
+    e.steering+=(input.steer-e.steering)*Math.min(1,dt*8);
+    if(e.loopAngle!==null){
+      // Adhesion is a surface force powered by fans, not by the air tank.
+      const angle=e.loopAngle,dir=e.loopDirection;
+      e.speed+=((input.throttle*(spec!.acceleration+boostFraction*(45.46-spec!.acceleration)))-9.81*Math.sin(angle)*dir)*dt;
+      if(input.brake)e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-spec!.brakeDecel*dt);
+      if(!input.throttle)e.speed*=Math.exp(-.2*dt);
+      e.speed=clamp(e.speed,-12,72);
+      const next=angle+dir*e.speed/STUNT_LOOP.radius*dt;
+      if(Math.abs(next)>=Math.PI*2 || (angle*dir>0 && next*dir<0)){
+        e.loopAngle=null;e.y=0;e.vy=0;e.pitch=0;e.pitchRate=0;e.x=STUNT_LOOP.x;
+        e.vx=-Math.sin(e.yaw)*e.speed;e.vz=0;
+      }else{
+        e.loopAngle=next;e.x=STUNT_LOOP.x+STUNT_LOOP.radius*Math.sin(next);e.y=STUNT_LOOP.radius*(1-Math.cos(next));
+        e.yaw=dir>0?-Math.PI/2:Math.PI/2;e.pitch=dir*next;e.roll=0;
+        e.pitchRate=e.speed/STUNT_LOOP.radius;e.yawRate=0;e.rollRate=0;
+        e.vx=dir*Math.cos(next)*e.speed;e.vy=dir*Math.sin(next)*e.speed;e.vz=0;
+      }
+    }else if(grounded){
+      const top=person?8:boostFraction?Math.max(72,spec!.maxSpeed):spec!.maxSpeed;
+      const accel=person?28:rocket?spec!.acceleration+boostFraction*(45.46-spec!.acceleration):spec!.acceleration;
+      e.speed+=input.throttle*accel*dt;
+      e.speed*=Math.exp(-(input.throttle===0?.65:rocket?0:.12)*dt);
+      if(input.brake){const delta=(person?20:spec!.brakeDecel)*dt;e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-delta);}
+      e.speed=clamp(e.speed,-Math.min(top*.35,12),top)*(e.health<20?.995:1);
+      const oldYaw=e.yaw;
+      if(person)e.yaw+=input.steer*2.7*dt;
+      else {
+        const rearFactor=spec!.fourWheelSteering?1+.55*Math.max(0,1-Math.abs(e.speed)/25):1;
+        const yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*rearFactor;
+        e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*dt;
+      }
+      e.pitch=0;e.roll=0;e.pitchRate=0;e.yawRate=(e.yaw-oldYaw)/dt;e.rollRate=0;
+      e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;
+      e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-3*dt);e.pushZ*=Math.exp(-3*dt);
+      const nextHeight=rampHeight(e.x,e.z);
+      if(nextHeight!==null&&(onRamp||(oldY===0&&oldX<=STUNT_RAMP.start&&e.x>=STUNT_RAMP.start))){
+        e.y=nextHeight;e.vy=e.vx*rampSlope;e.pitch=Math.atan(-Math.sin(e.yaw)*rampSlope);
+      }else if(onRamp&&e.x>STUNT_RAMP.end){
+        e.y=STUNT_RAMP.height+(e.x-STUNT_RAMP.end)*rampSlope;e.vy=e.vx*rampSlope;e.pitch=Math.atan(-Math.sin(e.yaw)*rampSlope);
+      }else if(!onRamp&&oldX>=STUNT_RAMP.end&&e.x<STUNT_RAMP.end&&Math.abs(e.z-STUNT_RAMP.z)<STUNT_RAMP.width/2&&e.y<STUNT_RAMP.height){
+        e.x=oldX;e.speed*=-.25;e.vx=-Math.sin(e.yaw)*e.speed;
+      }
+      // The bottom of the loop is tangent to the street. Either direction works.
+      if(rocket&&e.y===0&&Math.abs(e.z-STUNT_LOOP.z)<STUNT_LOOP.width/2-1&&Math.abs(e.vx)>3&&
+        (oldX-STUNT_LOOP.x)*(e.x-STUNT_LOOP.x)<=0){
+        e.loopDirection=e.vx>0?1:-1;e.loopAngle=0;e.x=STUNT_LOOP.x;e.yaw=e.loopDirection>0?-Math.PI/2:Math.PI/2;e.speed=Math.abs(e.vx);e.pushX=0;e.pushZ=0;
+      }
+    }else{
+      // World velocity remains independent of where the car is pointing.
+      if(rocket){
+        e.yawRate+=(input.steer*1.6-e.yawRate)*Math.min(1,dt*4);e.yaw+=e.yawRate*dt;
+        e.pitchRate+=((-input.throttle*.9-e.pitch*2)-e.pitchRate*2)*dt;e.pitch=clamp(e.pitch+e.pitchRate*dt,-1.3,1.3);
+        if(e.flipRemaining>0){const turn=Math.min(e.flipRemaining,Math.PI*2/.8*dt);e.roll+=turn;e.flipRemaining-=turn;e.rollRate=turn/dt;if(e.flipRemaining<1e-8){e.flipRemaining=0;e.stunts++;}}
+        else if(input.roll&&e.air>0){const fraction=Math.min(1,e.air/(3*dt));e.air-=3*dt*fraction;e.rollRate=input.roll*3.6*fraction;e.roll+=e.rollRate*dt;}
+        else if(!hoverFraction){const upright=Math.atan2(Math.sin(e.roll),Math.cos(e.roll)),bank=input.steer*.65;e.rollRate=(bank-upright)*3;e.roll+=(bank-upright)*Math.min(1,dt*3);}
+        else e.rollRate=0;
+        const thrust=45.46*boostFraction;
+        e.vx+=-Math.sin(e.yaw)*Math.cos(e.pitch)*thrust*dt;e.vy+=Math.sin(e.pitch)*thrust*dt;e.vz+=-Math.cos(e.yaw)*Math.cos(e.pitch)*thrust*dt;
+      }
+      // Fictional thruster hover holds any orientation; it is not suction.
+      if(hoverFraction){const damping=Math.exp(-3*dt*hoverFraction);e.vx*=damping;e.vy*=damping;e.vz*=damping;e.vy+=9.81*dt*hoverFraction;}
+      e.vy-=9.81*dt;e.x+=e.vx*dt;e.y+=e.vy*dt;e.z+=e.vz*dt;
+      // Crossing the inside of the ribbon engages the underbody fans. Other
+      // vehicles bounce from this physical surface instead of passing through.
+      const dx=e.x-STUNT_LOOP.x,dy=e.y-STUNT_LOOP.radius,oldRadius=Math.hypot(oldX-STUNT_LOOP.x,oldY-STUNT_LOOP.radius),radius=Math.hypot(dx,dy);
+      if(Math.abs(e.z-STUNT_LOOP.z)<STUNT_LOOP.width/2-1&&oldY>0&&e.y>0&&oldRadius<STUNT_LOOP.radius&&radius>=STUNT_LOOP.radius){
+        const angle=Math.atan2(dx,-dy),tx=Math.cos(angle),ty=Math.sin(angle),along=e.vx*tx+e.vy*ty;
+        e.x=STUNT_LOOP.x+STUNT_LOOP.radius*Math.sin(angle);e.y=STUNT_LOOP.radius*(1-Math.cos(angle));
+        if(rocket){e.loopDirection=along>=0?1:-1;e.loopAngle=angle;e.speed=Math.abs(along);e.yaw=e.loopDirection>0?-Math.PI/2:Math.PI/2;e.pitch=e.loopDirection*angle;e.roll=0;e.flipRemaining=0;}
+        else{const normalX=dx/radius,normalY=dy/radius,dot=e.vx*normalX+e.vy*normalY;e.vx-=1.2*dot*normalX;e.vy-=1.2*dot*normalY;}
+      }
+      if(e.y<=0){
+        const impact=-e.vy;if(impact>12)e.health=Math.max(5,e.health-(impact-12)*.5);
+        e.y=0;e.vy=0;e.pitch=0;e.roll=0;e.pitchRate=0;e.rollRate=0;e.flipRemaining=0;
+        e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
+      }
+      if(e.y>=100){e.y=100;e.vy=Math.min(e.vy,0);}
+      const landingHeight=rampHeight(e.x,e.z);
+      if(landingHeight!==null&&oldY>=landingHeight&&e.y<=landingHeight&&e.vy<=0){e.y=landingHeight;e.vy=e.vx*rampSlope;e.pitch=Math.atan(-Math.sin(e.yaw)*rampSlope);e.roll=0;e.flipRemaining=0;e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;}
+      for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width)))if(e.vy<=0&&e.y<=b.h&&oldY>=b.h&&contact(body(e),{...b,yaw:0})){e.y=b.h;e.vy=0;e.pitch=0;e.roll=0;e.flipRemaining=0;e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;}
+      if(e.loopAngle===null&&e.y>0){e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;}
+    }
     // Landing in the bay returns the driver to a safe street; grounded cars stop at shore.
-    if(e.y===0&&oldY>0&&!isSurface(e.x,e.z))Object.assign(e,spawnPosition(world,e.kind),{speed:0,pushX:0,pushZ:0,autopilot:false});
-    if(solid(e)){e.x=oldX;e.z=oldZ;e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25);e.speed*=e.autopilot?0:-.25;e.pushX=0;e.pushZ=0;}
-    if(!person&&e.y<1&&Math.abs(e.speed)<1&&STATIONS.some(s=>Math.hypot(e.x-s.x,e.z-s.z)<9))e.air=Math.min(100,e.air+28*dt);
+    if(e.y===0&&oldY>0&&!isSurface(e.x,e.z))Object.assign(e,spawnPosition(world,e.kind),{speed:0,vx:0,vz:0,pushX:0,pushZ:0,autopilot:false});
+    if(solid(e)){e.x=oldX;e.z=oldZ;e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25);e.speed*=e.autopilot?0:-.25;e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;}
+    if(!person&&e.loopAngle===null&&e.y<1&&Math.abs(e.speed)<1&&STATIONS.some(s=>Math.hypot(e.x-s.x,e.z-s.z)<9))e.air=Math.min(100,e.air+28*dt);
   }
   for(let i=0;i<world.entities.length;i++)for(let j=i+1;j<world.entities.length;j++){
     const a=world.entities[i],b=world.entities[j];
@@ -158,7 +244,7 @@ export function step(world:World,inputs:Map<string,Input>,dt:number):void {
   }
   for(const player of world.players){
     const entity=world.entities.find(e=>e.id===player.entityId);
-    if(entity)updateDelivery(world,player,entity,inputs.get(player.id)??NEUTRAL,dt);
+    if(entity)updateDelivery(world,player,entity,inputs.get(player.id)??NEUTRAL,dt,stuntPlayers.has(player.id));
   }
   for(const pickup of world.pickups){
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;
