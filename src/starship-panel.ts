@@ -7,7 +7,7 @@ const LAUNCH_DURATION_MS=MARS_LAUNCH_SECONDS*1000;
 const dollars=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
 
 export type StarshipContributorPage = {
-  status:'idle'|'loading'|'ready'|'error';
+  status:'idle'|'loading'|'building'|'ready'|'error';
   /** The page being displayed or requested; null is the first page. */
   cursor:string|null;
   entries:readonly StarshipContributor[];
@@ -42,7 +42,8 @@ function duration(ms:number):string {
  * Host mounts this view inside its closable Mars dialog and calls update(state, performance.now()) as state or
  * the monotonic clock changes. The host owns all loading, pagination, stale
  * detection, replay, dialog and input-control behavior. onLoad must transition
- * the page to loading and return one page for the requested cursor.
+ * the page to loading and return one page for the requested cursor. When the
+ * service is building the frozen list, expose building and retry the first page.
  */
 export function createStarshipPanel(options:{onLoadContributors:(cursor:string|null)=>void;onReplay:()=>void;onSetPublicName:(name:string|null)=>void}) {
   const root=element('section','starship-panel');root.setAttribute('aria-label','Game-wide Starship mission');
@@ -149,7 +150,7 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     contributors.hidden=!completed&&!unknown;
     text(contributorsCopy,unknown?'Confirmed earnings when launch tracking began are shown here.':'Confirmed earnings at the goal are shown here. Earnings still being reconciled may arrive later.');
     const page=state.contributors;
-    const entries=page.entries.slice(0,20).filter(entry=>typeof entry.name==='string'&&(entry.amount===null||amount(entry.amount)));
+    const entries=(page.status==='building'?[]:page.entries).slice(0,20).filter(entry=>typeof entry.name==='string'&&(entry.amount===null||amount(entry.amount)));
     const entriesKey=JSON.stringify(entries);
     if(entriesKey!==lastEntries){
       lastEntries=entriesKey;
@@ -161,12 +162,12 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
       });
       list.replaceChildren(...rows);
     }
-    text(contributorStatus,page.status==='loading'?'Loading contributors…':page.status==='error'?'Could not load contributors. Please try again.':
+    text(contributorStatus,page.status==='loading'?'Loading contributors…':page.status==='building'?'Building the contributor list. Check again shortly.':page.status==='error'?'Could not load contributors. Please try again.':
       page.status==='idle'?'Explore the frozen contributor list.':entries.length?(unknown?'Confirmed contributors at cutover.':'Confirmed contributors at launch.'):'No contributors on this page.');
     first.hidden=page.cursor===null;first.disabled=page.status==='loading';
     load.hidden=page.status==='ready'&&page.next===null;
     load.disabled=page.status==='loading';
-    text(load,page.status==='loading'?'Loading…':page.status==='error'?'Try again':page.status==='ready'?'Next page':'View contributors');
+    text(load,page.status==='loading'?'Loading…':page.status==='building'?'Check again':page.status==='error'?'Try again':page.status==='ready'?'Next page':'View contributors');
   }
   return {element:root,update};
 }

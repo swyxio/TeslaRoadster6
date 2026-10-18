@@ -4,9 +4,11 @@ import { normalizeName } from './global-chat-core';
 type Completion =
   | {kind:'recorded';completedAt:number;launchAt:number;launchId:string;total:number}
   | {kind:'unknown';observedAt:number;total:number};
+type ContributorIndex = {upper:string|null;after:string|null;done:boolean};
 const incomeKey=(driverId:string)=>`income:${driverId}`;
 const launchKey=(driverId:string)=>`launch-income:${driverId}`;
 const nameKey=(driverId:string)=>`launch-name:${driverId}`;
+const indexKey=(driverId:string)=>`launch-index:${driverId}`;
 const PAGE_SIZE=20, SCAN_SIZE=50;
 
 function validId(driverId:string):void {
@@ -27,12 +29,21 @@ function status(total:number,personal:number,completion:Completion|undefined):St
     cutoverTotal:cutover?.total??null,cutoverAt:cutover?.observedAt??null};
 }
 
+/** The upper bound and completion marker must describe the same transaction. */
+async function saveCompletion(txn:DurableObjectTransaction,completion:Completion,crossingKey?:string):Promise<void> {
+  const last=await txn.list<number>({prefix:'income:',reverse:true,limit:1});
+  let upper=[...last.keys()][0]??null;
+  if(crossingKey && (upper===null||crossingKey>upper))upper=crossingKey;
+  const index:ContributorIndex={upper,after:null,done:upper===null};
+  await txn.put({'launch-completion':completion,'launch-index-state':index});
+}
+
 /** Freeze the cutover state before a new credit can change a legacy counter. */
 async function captureExisting(txn:DurableObjectTransaction,total:number):Promise<Completion|undefined> {
   let completion=await txn.get<Completion>('launch-completion');
   if(!completion && total>=STARSHIP_GOAL){
     completion={kind:'unknown',observedAt:Date.now(),total};
-    await txn.put('launch-completion',completion);
+    await saveCompletion(txn,completion);
   }
   return completion;
 }
@@ -63,7 +74,7 @@ export class StarshipLedger {
       }
       if(!completion && next>=STARSHIP_GOAL){
         completion=complete(next);
-        await txn.put('launch-completion',completion);
+        await saveCompletion(txn,completion,key);
       }
       return next;
     });
@@ -94,31 +105,45 @@ export class StarshipLedger {
     return normalized;
   }
 
-  /** Bounded scan over the frozen launch amounts. Cursors contain no plain driver ID. */
+  /** Build the frozen read model in bounded transactions, then page only that fixed index. */
   async contributors(cursor?:string):Promise<StarshipContributors> {
     const startAfter=cursor===undefined?undefined:await this.decodeCursor(cursor);
     const page=await this.storage.transaction(async txn=>{
       const total=await txn.get<number>('total')??0;validIncome(total);
-      if(!await captureExisting(txn,total))return {contributors:[],after:undefined as string|undefined};
-      const rows=await txn.list<number>({prefix:'income:',...(startAfter?{startAfter}:{}),limit:SCAN_SIZE});
-      const ids=[...rows.keys()].map(key=>key.slice('income:'.length));
-      const details=ids.length?await txn.get<unknown>(ids.flatMap(id=>[launchKey(id),nameKey(id)])):new Map<string,unknown>();
-      const entries:StarshipContributors['contributors']=[];
-      let last:string|undefined,seen=0;
-      for(const [key,current] of rows){
-        seen++;last=key;
-        const id=key.slice('income:'.length),frozen=details.get(launchKey(id));
-        const amount=typeof frozen==='number'?frozen:current;
-        if(amount>0){
-          const publicName=details.get(nameKey(id));
-          entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount:typeof publicName==='string'?amount:null});
+      if(!await captureExisting(txn,total))return {state:'pending' as const,contributors:[],after:undefined as string|undefined};
+      const index=await txn.get<ContributorIndex>('launch-index-state');
+      if(!index)throw new Error('Missing contributor index snapshot');
+      if(!index.done){
+        const rows=await txn.list<number>({prefix:'income:',...(index.after?{startAfter:index.after}:{}),limit:SCAN_SIZE});
+        const frozenRows=[...rows].filter(([key])=>index.upper!==null&&key<=index.upper);
+        const ids=frozenRows.map(([key])=>key.slice('income:'.length));
+        const snapshots=ids.length?await txn.get<number>(ids.map(launchKey)):new Map<string,number>();
+        const writes:Record<string,number|ContributorIndex>={};
+        for(const [key,current] of frozenRows){
+          const id=key.slice('income:'.length),amount=snapshots.get(launchKey(id))??current;
+          validIncome(amount);
+          if(amount>0)writes[indexKey(id)]=amount;
         }
-        if(entries.length===PAGE_SIZE)break;
+        const last=frozenRows.at(-1)?.[0]??index.after;
+        const done=frozenRows.length<rows.size||rows.size<SCAN_SIZE||last===index.upper;
+        writes['launch-index-state']={...index,after:last,done};
+        await txn.put(writes);
+        // The next request observes the committed index, including the final batch.
+        return {state:'building' as const,contributors:[],after:undefined as string|undefined};
       }
-      const more=seen<rows.size||rows.size===SCAN_SIZE;
-      return {contributors:entries,after:more?last:undefined};
+      const rows=await txn.list<number>({prefix:'launch-index:',...(startAfter?{startAfter}:{}),limit:PAGE_SIZE+1});
+      const selected=[...rows].slice(0,PAGE_SIZE);
+      const ids=selected.map(([key])=>key.slice('launch-index:'.length));
+      const names=ids.length?await txn.get<string>(ids.map(nameKey)):new Map<string,string>();
+      const entries:StarshipContributors['contributors']=[];
+      for(const [key,amount] of selected){
+        validIncome(amount);
+        const id=key.slice('launch-index:'.length),publicName=names.get(nameKey(id));
+        entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount:typeof publicName==='string'?amount:null});
+      }
+      return {state:'ready' as const,contributors:entries,after:rows.size>PAGE_SIZE?selected.at(-1)?.[0]:undefined};
     });
-    return {contributors:page.contributors,next:page.after?await this.encodeCursor(page.after):null};
+    return {state:page.state,contributors:page.contributors,next:page.after?await this.encodeCursor(page.after):null};
   }
 
   private async cursorKey():Promise<CryptoKey> {
@@ -144,8 +169,8 @@ export class StarshipLedger {
       if(bytes.length<29)throw new Error('Invalid cursor');
       const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.slice(0,12)},await this.cursorKey(),bytes.slice(12));
       const key=new TextDecoder().decode(plaintext);
-      if(!key.startsWith('income:'))throw new Error('Invalid cursor');
-      validId(key.slice('income:'.length));
+      if(!key.startsWith('launch-index:'))throw new Error('Invalid cursor');
+      validId(key.slice('launch-index:'.length));
       return key;
     }catch{throw new Error('Invalid contributor cursor');}
   }

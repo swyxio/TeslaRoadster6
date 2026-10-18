@@ -25,4 +25,5 @@ export type StarshipStatus = {
 };
 
 export type StarshipContributor = { name: string; amount: number | null };
-export type StarshipContributors = { contributors: StarshipContributor[]; next: string | null };
+/** While building, retry the first page; no partial roster is published. */
+export type StarshipContributors = { state: 'pending' | 'building' | 'ready'; contributors: StarshipContributor[]; next: string | null };

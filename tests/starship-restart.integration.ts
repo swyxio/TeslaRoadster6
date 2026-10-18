@@ -52,8 +52,23 @@ async function page(cursor?:string,instance?:string):Promise<StarshipContributor
 }
 async function all(instance?:string){
   const entries:StarshipContributors['contributors']=[];let cursor:string|null=null,pages=0;
-  do{const result=await page(cursor??undefined,instance);entries.push(...result.contributors);cursor=result.next;assert.ok(++pages<20);}while(cursor);
+  do{
+    const result=await page(cursor??undefined,instance);assert.ok(++pages<100);
+    if(result.state==='building'){
+      assert.equal(cursor,null);assert.deepEqual(result.contributors,[]);assert.equal(result.next,null);continue;
+    }
+    assert.equal(result.state,'ready');entries.push(...result.contributors);cursor=result.next;
+    if(!cursor)break;
+  }while(true);
   return entries;
+}
+async function firstReadyPage(instance?:string){
+  for(let i=0;i<100;i++){
+    const result=await page(undefined,instance);
+    if(result.state==='building')continue;
+    assert.equal(result.state,'ready');return result;
+  }
+  throw new Error('Contributor index did not finish building');
 }
 try{
   child=start();await ready();
@@ -70,6 +85,7 @@ try{
   assert.equal((await status('guest-a')).personal,300);
   const pending=await status();assert.equal(pending.total,13_300,'legacy rows and retry share one counter');
   assert.equal(pending.crossing,'pending');assert.equal(pending.cutoverTotal,null);assert.equal(pending.cutoverAt,null);
+  assert.deepEqual(await page(),{state:'pending',contributors:[],next:null});
   const before=Date.now();
   const crossing=await Promise.all([credit('threshold-a',600_000_000),credit('threshold-b',400_000_000)]);
   assert.ok(crossing.every(response=>response.ok));
@@ -79,7 +95,7 @@ try{
   assert.ok(completed.completedAt!==null&&completed.completedAt>=before);
   assert.equal(completed.launchAt,completed.completedAt+STARSHIP_LAUNCH_DELAY_MS);
   assert.ok(completed.launchId);assert.ok(completed.total>=STARSHIP_GOAL);
-  const firstPage=await page();assert.equal(firstPage.contributors.length,20);assert.ok(firstPage.next);
+  const firstPage=await firstReadyPage();assert.equal(firstPage.contributors.length,20);assert.ok(firstPage.next);
   assert.ok(!firstPage.next!.includes('legacy-'),'cursor does not expose an identity');
   const altered=(firstPage.next![0]==='A'?'B':'A')+firstPage.next!.slice(1);
   assert.equal((await fetch(base+'/contributors?cursor='+encodeURIComponent(altered))).status,400);
@@ -106,6 +122,7 @@ try{
   assert.ok(prior.cutoverAt!==null);assert.equal(prior.launchTotal,null);
   assert.equal(prior.completedAt,null);assert.equal(prior.launchAt,null);assert.equal(prior.launchId,null);
   assert.ok((await credit('prior-driver',STARSHIP_GOAL+100,false,'prior')).ok);
+  assert.ok((await credit('aaa-late',20,false,'prior')).ok);
   assert.deepEqual(await all('prior'),[{name:'Prior',amount:STARSHIP_GOAL}],'status-first cutover freezes the pre-credit amount');
   assert.equal((await status(undefined,'prior')).cutoverAt,prior.cutoverAt);
 
@@ -119,15 +136,47 @@ try{
   assert.equal(creditFirst.crossing,'unknown');assert.equal(creditFirst.cutoverTotal,STARSHIP_GOAL);
   assert.equal(creditFirst.total,STARSHIP_GOAL+500);assert.equal(creditFirst.personal,STARSHIP_GOAL+400);
   assert.equal(creditFirst.completedAt,null);assert.equal(creditFirst.launchAt,null);assert.equal(creditFirst.launchId,null);assert.equal(creditFirst.launchTotal,null);
-  assert.deepEqual((await all('credit-first')).find(row=>row.name==='First'),{name:'First',amount:STARSHIP_GOAL-100});
   assert.ok((await credit('late-driver',10,false,'credit-first')).ok);
+  assert.ok((await credit('aaa-late',10,false,'credit-first')).ok);
+  assert.deepEqual((await all('credit-first')).find(row=>row.name==='First'),{name:'First',amount:STARSHIP_GOAL-100});
   assert.equal((await all('credit-first')).length,2,'new identities after the cutover do not join the frozen roster');
 
   // A roster can also be the first operation on the legacy counter.
   assert.ok((await post('/seed?instance=roster-first',{driverId:'roster-driver',total:STARSHIP_GOAL})).ok);
   assert.deepEqual(await all('roster-first'),[{name:'Anonymous driver',amount:null}]);
   assert.equal((await status(undefined,'roster-first')).crossing,'unknown');
+
+  // Long post-launch prefixes cannot be published as pages or grow the fixed index.
+  // Restart after one build batch must resume at the persisted position.
+  const indexInstance='index-restart';
+  for(let i=0;i<105;i++)assert.ok((await post(path('/seed',indexInstance),{driverId:`m-${String(i).padStart(3,'0')}`,total:1})).ok);
+  assert.ok((await post(path('/seed',indexInstance),{driverId:'z-owner',total:STARSHIP_GOAL-106})).ok);
+  assert.ok((await post(path('/name',indexInstance),{driverId:'m-100',name:'Mid'})).ok);
+  assert.ok((await post(path('/name',indexInstance),{driverId:'z-owner',name:'Owner'})).ok);
+  assert.ok((await credit('zz-crossing',1,false,indexInstance)).ok);
+  assert.ok((await post(path('/name',indexInstance),{driverId:'zz-crossing',name:'Crossing'})).ok);
+  for(let i=0;i<110;i++)assert.ok((await credit(`a-${String(i).padStart(3,'0')}`,1,false,indexInstance)).ok);
+  assert.ok((await credit('zzz-after',1,false,indexInstance)).ok);
+  const building=await page(undefined,indexInstance);
+  assert.deepEqual(building,{state:'building',contributors:[],next:null});
+  assert.ok((await credit('m-100',9,false,indexInstance)).ok,'copy-on-write freezes an unindexed contributor');
   await stop(child);child=undefined;child=start();await ready();
+  // Exactly four further bounded batches remain; restarting from zero would need five.
+  for(let i=0;i<4;i++)assert.deepEqual(await page(undefined,indexInstance),{state:'building',contributors:[],next:null});
+  const indexedFirst=await page(undefined,indexInstance);
+  assert.equal(indexedFirst.state,'ready');assert.equal(indexedFirst.contributors.length,20);
+  const indexed=await all(indexInstance);
+  assert.equal(indexed.length,107,'only contributors frozen at crossing appear');
+  assert.deepEqual(indexed.find(row=>row.name==='Mid'),{name:'Mid',amount:1});
+  assert.deepEqual(indexed.find(row=>row.name==='Owner'),{name:'Owner',amount:STARSHIP_GOAL-106});
+  assert.deepEqual(indexed.find(row=>row.name==='Crossing'),{name:'Crossing',amount:1},'a new highest crossing key is included');
+  assert.ok(indexed.filter(row=>row.name==='Anonymous driver').every(row=>row.amount===null));
+  assert.ok((await post(path('/name',indexInstance),{driverId:'z-owner',name:null})).ok);
+  assert.ok((await post(path('/name',indexInstance),{driverId:'m-100',name:'Renamed'})).ok);
+  const renamed=await all(indexInstance);
+  assert.equal(renamed.length,107);assert.ok(!renamed.some(row=>row.name==='Owner'));
+  assert.deepEqual(renamed.find(row=>row.name==='Renamed'),{name:'Renamed',amount:1});
+  assert.ok(renamed.filter(row=>row.name==='Anonymous driver').every(row=>row.amount===null),'privacy is resolved at read time');
   const restarted=await status('legacy-a');
   assert.equal(restarted.total,completed.total+555);assert.equal(restarted.launchId,completed.launchId);assert.equal(restarted.launchAt,completed.launchAt);
   assert.ok((await page(firstPage.next!)).contributors.length,'encrypted cursor survives restart');
@@ -142,5 +191,5 @@ try{
   const creditFirstAgain=await status(undefined,'credit-first');
   assert.equal(creditFirstAgain.cutoverAt,creditFirst.cutoverAt);assert.equal(creditFirstAgain.cutoverTotal,STARSHIP_GOAL);assert.equal(creditFirstAgain.launchAt,null);
   assert.deepEqual((await all('credit-first')).find(row=>row.name==='First'),{name:'First',amount:STARSHIP_GOAL-100});
-  console.log('PASS: canonical-key upgrade, unknown legacy crossing, credit-first cutover, frozen roll, anonymous amounts, opt-out and restart.');
+  console.log('PASS: bounded frozen index, cutovers, privacy, pagination and restart.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}
