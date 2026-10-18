@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity } from '../shared/game';
+import { supportNormal } from '../shared/map';
+import { ovalBankSurface } from '../shared/oval-bank';
 import { AMBIENT_INTEREST_METERS, snapshotFor } from '../worker/snapshot';
 
 test('snapshots retain players and owned cars, while ambient traffic follows the viewer', () => {
@@ -26,4 +28,18 @@ test('snapshots retain players and owned cars, while ambient traffic follows the
   assert.ok(world.entities.includes(ambient), 'filtering does not mutate the authoritative world');
   ambient.x=viewer.x+AMBIENT_INTEREST_METERS*3;ambient.supportId='ferry';
   assert.ok(snapshotFor(world,'one').entities.includes(ambient),'ferry passengers remain visible outside ambient interest');
+});
+
+test('a remote snapshot preserves the banked oval support needed to orient a car', () => {
+  const world = createWorld();
+  const one = addPlayer(world, 'one', 'One');
+  const two = addPlayer(world, 'two', 'Two');
+  const car = world.entities.find(e => e.id === two.entityId)!;
+  const surface = ovalBankSurface(710, -1650)!;
+  Object.assign(car, {x:710, z:-1650, y:surface.height, supportId:'island-oval'});
+  const wire = JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,one.id)}));
+  const remote = wire.world.entities.find((e:{id:string}) => e.id === car.id);
+  assert.equal(remote.supportId, 'island-oval');
+  assert.equal(remote.y, surface.height);
+  assert.deepEqual(supportNormal(remote.supportId, remote.x, remote.z), surface.normal);
 });

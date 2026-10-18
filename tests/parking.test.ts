@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEntity, type Entity, type World } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, NEUTRAL, parkingAction, removePlayer, step, type Entity, type World } from '../shared/game';
 import { initialDelivery } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { createFerry } from '../shared/ferry';
 import { createRace } from '../shared/race';
+import { body, contact } from '../shared/physics';
 import {
   createParking, fitsParkingStall, joinParking, leaveParking, startQueue, updateParking,
   PARKING_QUEUE_WAIT, PARKING_QUEUE_DURATION, PARKING_PARK_DURATION, PARKING_RESULTS_DURATION,
@@ -101,9 +102,56 @@ test('queue order, simultaneous claims and overtakes are authoritative and deter
     const round=state.rounds[0],a=round.entrants.find(e=>e.playerId==='a')!,z=round.entrants.find(e=>e.playerId==='z')!;
     assert.equal(a.overtakes,1,'later entrant claims first and passes the leader');
     assert.equal(a.targetId,'a');assert.equal(z.finishedAt,null,'one winner for a simultaneous stall claim');
+    assert.deepEqual(round.claimedStallIds,['a'],'same-tick claim is recorded once');
     place(ahead,lot.stalls[1]);tick(state,w);
     assert.equal(z.overtakes,0);assert.equal(round.phase,'results');
+    assert.deepEqual(round.claimedStallIds,['a','b']);
     const at=a.finishedAt;tick(state,w);assert.equal(a.finishedAt,at,'each arrival scores only once');
+  }
+});
+
+test('claimed queue stalls stay claimed after their winner leaves or disconnects',()=>{
+  for(const departure of ['drive away','disconnect'] as const){
+    const w=world(),state=createParking();w.parking=state;
+    const winner=add(w,'a','roadster',-30),next=add(w,'b','roadster',-30);
+    assert.equal(joinParking(state,lot,w,'a','queue'),true);
+    assert.equal(joinParking(state,lot,w,'b','queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'a'),true);
+    place(winner);tick(state,w);
+    const round=state.rounds[0];assert.deepEqual(round.claimedStallIds,['a']);
+    if(departure==='drive away'){winner.x=300;tick(state,w);}
+    else {winner.owner='a';removePlayer(w,'a');}
+    assert.deepEqual(round.entrants.map(e=>e.playerId),['b'],departure);
+    place(next);tick(state,w);
+    assert.equal(round.entrants[0].finishedAt,null,`${departure}: claimed stall is unavailable`);
+    assert.deepEqual(round.claimedStallIds,['a']);
+    place(next,lot.stalls[1]);tick(state,w);
+    assert.equal(round.entrants[0].targetId,'b');assert.equal(round.phase,'results');
+    tick(state,w,PARKING_RESULTS_DURATION);assert.equal(state.rounds.length,0);
+    Object.assign(next,{x:-30,z:0});assert.equal(joinParking(state,lot,w,'b','queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'b'),true);
+    place(next);tick(state,w);
+    assert.equal(state.rounds[0].entrants[0].targetId,'a','new round can claim the old stall');
+  }
+});
+
+test('a queue ends when all stalls are claimed even if entrants are still waiting',()=>{
+  for(const winnerLeaves of [false,true]){
+    const w=world(),state=createParking(),cars=['a','b','c','d','e','f'].map(id=>add(w,id,'roadster',-30));
+    for(const id of ['a','b','c','d','e','f'])assert.equal(joinParking(state,lot,w,id,'queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'a'),true);
+    const round=state.rounds[0];
+    for(let i=0;i<lot.stalls.length;i++){
+      place(cars[i],lot.stalls[i]);tick(state,w);
+      assert.deepEqual(round.claimedStallIds,lot.stalls.slice(0,i+1).map(stall=>stall.id));
+      assert.equal(round.phase,i===lot.stalls.length-1?'results':'active');
+      if(i===0&&winnerLeaves){cars[i].x=300;tick(state,w);}
+    }
+    assert.deepEqual(round.entrants.filter(entrant=>entrant.finishedAt===null).map(entrant=>entrant.playerId),['e','f']);
+    assert.equal(round.endsAt,w.time+PARKING_RESULTS_DURATION);
+    tick(state,w,PARKING_RESULTS_DURATION);assert.equal(state.rounds.length,0);
+    assert.equal(joinParking(state,lot,w,'e','queue'),true);
+    assert.deepEqual(state.rounds[0].claimedStallIds,[],'a new round has no claimed stalls');
   }
 });
 
@@ -146,14 +194,36 @@ test('the entire painted approach at each authored lot can join and stay queued'
   }
 });
 
-test('every Supercharger lot supports parking and queue games',()=>{
-  for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
-    const w=world(),car=add(w,'p','roadster',lot.approach.x,lot.approach.z);
-    const queue=createParking();
-    assert.equal(joinParking(queue,lot,w,'p','queue'),true,lot.id);
-    assert.equal(startQueue(queue,lot.id,w,'p'),true,lot.id);
-    Object.assign(car,{x:lot.area.x,z:lot.area.z});
-    assert.equal(joinParking(createParking(),lot,w,'p','park'),true,lot.id);
+test('each charger lot supports Park It and an eight-truck queue',()=>{
+  for(const lot of PARKING_LOTS.filter(lot=>lot.id.startsWith('charger-'))){
+    const w=createWorld();w.entities=[];w.players=[];w.pickups=[];
+    for(let i=0;i<8;i++){
+      const id=`p${i}`,player=addPlayer(w,id,id),car=w.entities.find(e=>e.id===player.entityId)!;
+      Object.assign(car,{kind:'waymo-peterbilt',x:lot.area.x+[-12,-4,4,12][i%4],z:lot.area.z+(i<4?-3.5:5.5),
+        y:0,yaw:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0});
+      assert.equal(parkingAction(w,id,'queue'),true,`${lot.id}: ${id} joins`);
+    }
+    for(let i=0;i<w.entities.length;i++)for(let j=i+1;j<w.entities.length;j++)
+      assert.equal(contact(body(w.entities[i]),body(w.entities[j])),null,`${lot.id}: queue bodies overlap`);
+    assert.equal(parkingAction(w,'p0','start'),true);
+    for(let i=0;i<4;i++){
+      const id=`p${i}`,car=w.entities.find(e=>e.driver===id)!,stall=lot.stalls[i];
+      for(let n=0;n<200&&w.parking.rounds[0].entrants.find(e=>e.playerId===id)!.finishedAt===null;n++){
+        const gap=car.z-stall.z,brake=gap<=.5+car.speed**2/19;
+        step(w,new Map([[id,{...NEUTRAL,throttle:brake?0:1,brake}]]),.05);
+      }
+      assert.equal(w.parking.rounds[0].entrants.find(e=>e.playerId===id)!.targetId,stall.id,`${lot.id}: ${id} drove into its stall`);
+    }
+    assert.equal(w.parking.rounds[0].phase,'results',`${lot.id}: all stalls claimed`);
+    assert.equal(w.parking.rounds[0].entrants.filter(e=>e.finishedAt===null).length,4);
+
+    const solo=createWorld();solo.entities=[];solo.players=[];solo.pickups=[];
+    const player=addPlayer(solo,'park','park'),car=solo.entities.find(e=>e.id===player.entityId)!;
+    Object.assign(car,{kind:'waymo-peterbilt',x:lot.area.x,z:lot.area.z,y:0,yaw:0,supportId:'ground'});
+    assert.equal(parkingAction(solo,'park','park'),true,lot.id);
+    const round=solo.parking.rounds[0],stall=lot.stalls.find(s=>s.id===round.entrants[0].targetId)!;
+    place(car,stall);for(let i=0;i<40;i++)step(solo,new Map(),.05);
+    assert.equal(round.phase,'results',`${lot.id}: Park It completes`);
   }
 });
 

@@ -10,7 +10,7 @@ A delivery pays its base fare at the estimate, up to 75% extra for earlier deliv
 
 ## Unlocking the Bay
 
-Every driver starts at level 0 in San Francisco. Complete deliveries and earn rewards to unlock level 1 (Oakland and Berkeley), level 2 (the Peninsula and East Bay, including SFO, Stanford and Fremont), and level 3 (San Jose). The mission card shows the next delivery and lifetime-earnings targets. Lifetime earned includes pickup bonuses and delivery pay before purchases or tickets, so spending cash never closes a region. An attempted crossing reports the requirements. Boundaries apply to flying and driving alike; Marin and the separate Rocket Dome remain available from the start. Milestones are per player and per game session, including in multiplayer. Restoring a chat identity does not restore game progress.
+Every driver starts at level 0 in San Francisco. Complete deliveries and earn rewards to unlock level 1 (Oakland and Berkeley), level 2 (the Peninsula and East Bay, including SFO, Stanford and Fremont), and level 3 (San Jose). The mission card shows the next delivery and lifetime-earnings targets. Lifetime earned includes pickup bonuses and delivery pay before purchases or tickets, so spending cash never closes a region. An attempted crossing reports the requirements. Boundaries apply to flying and driving alike; Marin, the separate Rocket Dome, Rocket Island and the SF parking playground remain available from the start. Milestones are per player and per game session, including in multiplayer. Restoring a chat identity does not restore game progress.
 
 | Level | Area | Completed deliveries | Total earned |
 | --- | --- | ---: | ---: |

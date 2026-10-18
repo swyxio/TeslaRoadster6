@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
+import { BUILDINGS, FERRY_DOCKS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
 import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
@@ -14,14 +14,21 @@ export const LEVELS = [
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
 // Vertical gates also apply to flyers; the northern Alcatraz approach remains open.
-const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, alcatrazNorthZ:-650, alcatrazMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
+const sfPlayground = PARKING_LOTS.find(lot=>lot.id==='sf-playground')!;
 export function requiredLevelAt(x:number,z:number):Level {
-  // The whole fictional island and its SF parking playground are available
-  // from the start, including the short approach across the Peninsula gate.
-  if(isRocketIsland(x,z)||(Math.abs(x-SF_PARKING.area.x)<=SF_PARKING.area.width/2+6&&z>=ACCESS_BOUNDARIES.bayMaxZ&&z<=SF_PARKING.area.z+SF_PARKING.area.length/2+6))return 0;
+  // The island, Dome, and their connecting approach are open from the start.
+  if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
-  if(z>ACCESS_BOUNDARIES.bayMaxZ)return 2;
+  if(z>ACCESS_BOUNDARIES.bayMaxZ){
+    // Connect the SF playground to the city without opening a route onward.
+    const area=sfPlayground.area;
+    if(Math.abs(x-area.x)<=area.width/2&&z<=area.z+area.length/2)return 0;
+    return 2;
+  }
+  // The island and adjacent air remain open; the narrower Alcatraz corridor
+  // still prevents flying south into locked Oakland.
+  if(z<=FERRY_DOCKS.island.z)return 0;
   const alcatrazApproach=z<ACCESS_BOUNDARIES.alcatrazNorthZ&&x<ACCESS_BOUNDARIES.alcatrazMaxX;
   return x>ACCESS_BOUNDARIES.oaklandX&&!alcatrazApproach?1:0;
 }

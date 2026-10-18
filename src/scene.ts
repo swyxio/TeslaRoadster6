@@ -11,14 +11,13 @@ import { createProgressionGates } from './progression-gates';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
-import { hasRocket } from '../shared/rocket';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
 import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { cockpitPose } from './camera';
-import { SHOPS } from '../shared/upgrades';
+import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
@@ -46,6 +45,7 @@ export class GameScene {
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
+  private parkingClaims = new Map<string,T.Group>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
@@ -116,6 +116,14 @@ export class GameScene {
       const x=side*6.25;
       box(this.ferry,x,.095,0,1.25,.03,34,0x75b6ac);
       for(const z of [-13,-6,1,8,15])box(this.ferry,x,.12,z,1,.025,.2,0xf4ead0);
+      // Painted foot spaces remain within the shared deck's existing walk lanes.
+      for(const z of [-12,-6,6,12]){
+        for(const edge of [-1,1]){
+          box(this.ferry,x+edge*.43,.14,z,.07,.025,1.5,0xf4ead0);
+          box(this.ferry,x,.14,z+edge*.75,.9,.025,.07,0xf4ead0);
+          box(this.ferry,x+edge*.16,.14,z,.12,.025,.38,0x173e3d);
+        }
+      }
       const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;
       const ctx=canvas.getContext('2d')!;ctx.fillStyle='#173e3d';ctx.font='bold 42px system-ui';ctx.textAlign='center';ctx.fillText('WALK',128,47);
       const mark=new T.Mesh(new T.PlaneGeometry(2.5,.65),new T.MeshBasicMaterial({map:new T.CanvasTexture(canvas),transparent:true,depthWrite:false,side:T.DoubleSide}));
@@ -130,10 +138,10 @@ export class GameScene {
     this.scene.add(this.ferry);
     for(const side of ['sf','island'] as const){
       const dock=FERRY_DOCKS[side],z=dock.z+(side==='sf'?15:-15);
-      box(scene,16,2,z,.35,4,.35,0x394e4e);
+      box(scene,18,2,z,.35,4,.35,0x394e4e);
       const canvas=document.createElement('canvas');canvas.width=768;canvas.height=160;
       const texture=new T.CanvasTexture(canvas);
-      const sign=new T.Sprite(new T.SpriteMaterial({map:texture,transparent:true}));sign.position.set(16,5,z);sign.scale.set(24,5,1);scene.add(sign);
+      const sign=new T.Sprite(new T.SpriteMaterial({map:texture,transparent:true}));sign.position.set(18,5,z);sign.scale.set(12,2.5,1);scene.add(sign);
       this.dockSigns.push({side,canvas,texture,text:''});
     }
     for(const lot of PARKING_LOTS){
@@ -144,6 +152,12 @@ export class GameScene {
         box(scene,stall.x,.19,stall.z-stall.length/2,stall.width,.04,.12,0xf4ebcb);
         const ring=new T.Mesh(new T.RingGeometry(2.6,3,32),new T.MeshBasicMaterial({color:0xffc46a,side:T.DoubleSide,transparent:true,opacity:.9}));
         ring.rotation.x=-Math.PI/2;ring.position.set(stall.x,.23,stall.z);ring.visible=false;scene.add(ring);this.parkingTargets.set(stall.id,ring);
+        const claim=new T.Group();claim.position.set(stall.x,stall.y+.25,stall.z);claim.rotation.y=stall.yaw;claim.visible=false;
+        for(const side of [-1,1]){
+          const bar=box(claim,0,0,0,.45,.06,Math.hypot(stall.width,stall.length)*.8,0xef6255);
+          bar.rotation.y=side*Math.atan2(stall.width,stall.length);
+        }
+        scene.add(claim);this.parkingClaims.set(stall.id,claim);
       }
       const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
     }
@@ -175,6 +189,7 @@ export class GameScene {
         box(scene,stall.x,2.28,z,1.16,.24,.6,0xf3e8d6);
         box(scene,stall.x,1.2,z,.68,1.7,.14,0xd34537);
       }
+      const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
     });
     const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
     const sign=signCanvas.getContext('2d')!;sign.fillStyle='#192332';sign.fillRect(0,0,512,128);sign.strokeStyle='#c997ff';sign.lineWidth=5;sign.strokeRect(3,3,506,122);sign.textAlign='center';sign.fillStyle='#fff0d2';sign.font='bold 37px system-ui';sign.fillText('SPACEX  /  SHOP',256,56);sign.fillStyle='#d5adff';sign.font='bold 22px system-ui';sign.fillText('ROCKETS · UPGRADES',256,95);
@@ -231,8 +246,10 @@ export class GameScene {
         sign.texture.needsUpdate=true;
       }
     }
-    const parkingTarget=world.parking.rounds.flatMap(round=>round.entrants).find(entrant=>entrant.playerId===playerId)?.targetId;
+    const parkingTarget=world.parking.rounds.filter(round=>round.mode==='park').flatMap(round=>round.entrants).find(entrant=>entrant.playerId===playerId)?.targetId;
     for(const [id,marker] of this.parkingTargets)marker.visible=id===parkingTarget;
+    const claimedStalls=new Set(world.parking.rounds.filter(round=>round.mode==='queue').flatMap(round=>round.claimedStallIds));
+    for(const [id,marker] of this.parkingClaims)marker.visible=claimedStalls.has(id);
     const racing=playerRace(world.races,playerId),race=racing?.round,entrant=racing?.entrant;
     const course=RACE_COURSES.find(item=>item.id===race?.courseId);
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';
@@ -261,8 +278,8 @@ export class GameScene {
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,hasRocket(e,world.time));
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRocket(e,world.time));
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
       }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
