@@ -56,6 +56,7 @@ export class Radio {
         const data = await response.json() as { episodes?: Episode[] };
         episodes = data.episodes?.filter(e => typeof e.title === 'string' && typeof e.audio === 'string' && e.audio.startsWith('https://'));
         if (!episodes?.length) throw new Error('No episodes');
+        if (generation !== this.generation) return;
         this.catalogs.set(station, episodes);
         this.fetchedAt.set(station, Date.now());
         this.remaining.delete(station);

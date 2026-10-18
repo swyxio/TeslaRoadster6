@@ -98,3 +98,17 @@ test('an ended episode advances automatically and long-lived tabs refresh their 
     assert.equal(calls, 2); assert.equal(radio.episode!.title, 'New episode'); assert.equal(radio.playing, true);
   } finally { Date.now = realNow; env.cleanup(); }
 });
+
+
+test('a stale response cannot replace a newer catalog for the same station', async () => {
+  let resolveOld!: (response: Response) => void;
+  const old = new Promise<Response>(resolve => { resolveOld = resolve; });
+  let latentRequests = 0;
+  const env = setup(async input => String(input).includes('latent-space') && ++latentRequests === 1 ? old : Response.json({ episodes: [{ ...episodes[0], title: 'Fresh' }] }));
+  try {
+    const radio = new Radio(() => {}); radio.select('latent-space'); radio.select('thursdai'); radio.select('latent-space'); await tick();
+    assert.equal(radio.episode?.title, 'Fresh');
+    resolveOld(Response.json({ episodes })); await tick(); await radio.next(false);
+    assert.equal(radio.episode?.title, 'Fresh');
+  } finally { env.cleanup(); }
+});
