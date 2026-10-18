@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island, shared Bay and device playtests · 2026-10-18 Pacific
+
+- A local two-client fixture staged a car at the island oval's start. Normal driving inputs completed all eight race gates in 115.37 simulation seconds, with a 2.06 m peak bank elevation; this did not test the ferry journey or production.
+- On the earlier protocol v22 local preview, Chrome auto-joined the Bay, drove, switched to solo, and recovered from a simulated offline connection. Calibrated emulated touch drove and jumped in portrait and landscape. The user reported that Drive and steering worked in both orientations on an iPhone 15 Pro Max against that preview; this predates the Dome and prediction integration.
+- On the separate v21 shared-room checkout, two local sockets negotiated `permessage-deflate` and median raw snapshot frames were approximately 42.7 KB uncompressed versus 2.8 KB compressed in a four-second sample. This excludes TCP/IP, WAN and production behavior and is not a capacity measurement.
+
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 
 - After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.

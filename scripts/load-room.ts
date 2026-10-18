@@ -16,6 +16,7 @@ const sockets:WebSocket[]=[],lastSnapshot=new Array<number>(count).fill(0),snaps
 const seenPlayers=new Array<number>(count).fill(0),firstTime=new Array<number|undefined>(count),lastTime=new Array<number|undefined>(count),gaps:number[]=[];
 const loopDelay=monitorEventLoopDelay({resolution:20});
 let measuring=false,snapshots=0,bytes=0,sent=0,closed=0;
+let inputSeq=0;
 let timer:ReturnType<typeof setInterval>|undefined;
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 try {
@@ -35,7 +36,7 @@ try {
   }));
   timer=setInterval(()=>{
     for(let i=0;i<sockets.length;i++)if(sockets[i].readyState===WebSocket.OPEN){
-      sockets[i].send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:.5,steer:Math.sin(i)*.2}}));if(measuring)sent++;
+      sockets[i].send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:.5,steer:Math.sin(i)*.2}}));if(measuring)sent++;
     }
   },50);
   let joinTimeout:ReturnType<typeof setTimeout>;

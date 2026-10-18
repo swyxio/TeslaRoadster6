@@ -8,6 +8,7 @@ const url=base.replace(/^http/,'ws')+`/api/room/latency-${Date.now()}`;
 const sockets=[new WebSocket(url),new WebSocket(url)];
 const ids:string[]=[],worlds:(World|undefined)[]=[],seen:(number|undefined)[]=[];
 let started:number|undefined,initial:{x:number;z:number}|undefined,timer:ReturnType<typeof setInterval>|undefined;
+let inputSeq=0;
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 try {
   for(let i=0;i<sockets.length;i++)sockets[i].addEventListener('message',event=>{
@@ -25,7 +26,7 @@ try {
   assert.ok(ids[0]&&ids[1]&&worlds[0]&&worlds[1]&&worlds[0]!.players.length===2&&worlds[1]!.players.length===2,'both clients joined');
   const player=worlds[0]!.players.find(p=>p.id===ids[0])!,car=worlds[0]!.entities.find(entity=>entity.id===player.entityId)!;
   initial={x:car.x,z:car.z};started=performance.now();
-  const send=()=>{for(let i=0;i<sockets.length;i++)if(sockets[i].readyState===WebSocket.OPEN)sockets[i].send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:i===0?1:0}}));};
+  const send=()=>{for(let i=0;i<sockets.length;i++)if(sockets[i].readyState===WebSocket.OPEN)sockets[i].send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:i===0?1:0}}));};
   send();timer=setInterval(send,50);
   while((seen[0]===undefined||seen[1]===undefined)&&performance.now()-started<5000)await wait(20);
   assert.ok(seen[0]!==undefined&&seen[1]!==undefined,'both clients observe authoritative driving');
