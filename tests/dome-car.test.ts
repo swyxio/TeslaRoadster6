@@ -116,23 +116,12 @@ test('an airborne fly-in joins the capsule and can hit the ball before landing',
   assert.equal(car.air,42);assert.equal(car.health,83);
 });
 
-test('descent from above the roof enters and lands inside without resetting the car',()=>{
+test('descent from above lands on the arena roof rather than clipping through',()=>{
   const {world,car}=setup();world.pickups=[];
-  Object.assign(car,{x:DOME.x-15,z:DOME.z,y:52,supportId:null,vy:-8,vx:0,air:42,health:83,autopilot:true});
-  for(let i=0;i<20&&!car.inDome;i++){
-    step(world,new Map(),.05);
-    if(!car.inDome)assert.ok(car.y+VEHICLES.roadster.height>2*DOME.radius);
-  }
-  assert.equal(car.inDome,true);assert.equal(car.autopilot,false);assert.equal(car.supportId,null);
-  assert.equal(car.x,DOME.x-15);assert.equal(car.air,42);assert.equal(car.health,83);
-  for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
-  // The landing substep selects ground; a later substep attaches the Rocket
-  // to the dome floor, possibly within the same public step.
-  assert.equal(car.inDome,true);assert.ok(car.supportId==='ground'||car.supportId==='dome');assert.equal(car.y,0);
-  assert.equal(car.x,DOME.x-15,'landing remains inside the arena');
-  step(world,new Map(),.05);
-  assert.equal(car.supportId,'dome');assert.ok(Math.abs(car.domeS!-DOME.flatHalfWidth)<1e-9);
-  assert.equal(car.y,0);assert.equal(car.x,DOME.x-15);
+  Object.assign(car,{x:DOME.x-15,z:DOME.z,y:52,supportId:null,vy:-8,vx:0,air:42,health:83,autopilot:false});
+  for(let i=0;i<30&&car.supportId===null;i++)step(world,new Map(),.05);
+  assert.equal(car.inDome,false);assert.equal(car.supportId,'dome-roof');assert.equal(car.y,2*DOME.radius);
+  assert.equal(car.air,42);assert.equal(car.health,83);
 });
 
 test('passing above the roof or landing outside the capsule does not enter the dome',()=>{

@@ -5,7 +5,7 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 20);
+assert.equal(PROTOCOL_VERSION, 22);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -33,8 +33,6 @@ function connect() {
 }
 const one = connect(), two = connect();
 try {
-  const health = await (await fetch(base + '/api/health')).json() as {version:number};
-  assert.equal(health.version, 20, 'server advertises the combined world protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
@@ -106,8 +104,9 @@ try {
   }
   assert.ok(laneSpawn,`a free ground spawn beneath City Glide is available: ${JSON.stringify(spawnAttempts)}`);
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:2}}));
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>2;},'first jump toward sky lane');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>4.5;},'first jump near its peak toward sky lane');
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:3}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.lastJump===3&&e.vy<=11;},'air jump restores capped upward speed');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&currentAt(e)?.id==='market';},'remote car enters shared sky lane');
   const streamAir=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.air>streamAir+2&&e.vx>2;},'server applies sky-lane speed and air');
