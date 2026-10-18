@@ -1,5 +1,10 @@
 # Verification · 2026-10-17 Pacific
 
+## Keyboard controls · 2026-10-17 Pacific
+
+- `pnpm test` passed 41 tests and `pnpm build` passed; the input tests cover Space braking without jumping, J jumping, and touch brake and jump. The existing Vite chunk-size warning remains.
+- Local Chrome desktop solo: accelerated, used Space to stop, then pressed J and observed the Roadster airborne with air use. Touch-emulated 390×844 portrait and 844×390 landscape layouts showed the controls. Physical touch and multi-touch remain unverified.
+
 ## Drift controls · 2026-10-17 Pacific
 
 - `pnpm test` passed 41 tests and `pnpm build` passed, including authoritative sliding, return to grip, straight braking and Ctrl/touch input release. The existing Vite chunk-size warning remains.

@@ -36,8 +36,8 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 
 ## Play
 
-- **WASD / arrows:** accelerate, reverse, steer. **Ctrl** (or B): brake. While moving forward, steer and brake or reverse to drift; release the brake and steer to regain grip. Release W before using Ctrl: browsers may reserve Ctrl+W for closing the tab. S plus steering also starts a drift.
-- **Space:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
+- **WASD / arrows:** accelerate, reverse, steer. **Space:** brake; steer while braking or reversing to drift, then release to regain grip.
+- **J:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** fleet catalog; select a new ride while stopped.
 - **L:** room leaderboard with cash and active play time.
