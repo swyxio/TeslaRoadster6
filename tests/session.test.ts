@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
+import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
 
 class Socket {
   static OPEN = 1;
@@ -204,6 +205,40 @@ test('identity replies match the latest request and recovery is replayed on rejo
   session.join('friends','Alex');const next=Socket.last;
   next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
   assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'second-code',requestId:latest});
+  session.disconnect();
+});
+
+test('a new chat driver binds the guest wallet when browser storage is denied',()=>{
+  const session=new Session();session.join('bay','Guest');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Guest');socket.message({type:'state',world});
+  const stored=connectDriverWallet('new-driver',code=>stageDriverRecovery(null,code!)==='ok',code=>session.setIdentity(code));
+  assert.equal(stored,false);
+  const request=JSON.parse(socket.sent.at(-1)!);
+  assert.equal(request.type,'identity');assert.equal(request.code,'new-driver');assert.equal(session.walletBlocked,true);
+  const sent=socket.sent.length;session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');assert.equal(socket.sent.length,sent);
+  socket.message({type:'identityResult',requestId:request.requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world});assert.equal(session.walletStatus,'ready');
+  session.disconnect();
+});
+
+test('an unstaged chat switch cannot keep playing with the previous wallet',()=>{
+  const entries=new Map([[DRIVER_RECOVERY_KEY,'old-driver'],[DRIVER_PENDING_KEY,'unfinished-driver']]);
+  const storage={getItem:(key:string)=>entries.get(key)??null,setItem:(key:string,value:string)=>{entries.set(key,value);},removeItem:(key:string)=>{entries.delete(key);}};
+  const session=new Session(),old=session.setIdentity('old-driver');session.join('bay','Old');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Old');socket.message({type:'state',world});
+  socket.message({type:'identityResult',requestId:old,ok:true,message:'connected'});socket.message({type:'state',world});
+  assert.equal(session.walletStatus,'ready');
+  const stored=connectDriverWallet('new-driver',code=>stageDriverRecovery(storage,code!)==='ok',code=>session.setIdentity(code));
+  assert.equal(stored,false);assert.equal(entries.get(DRIVER_RECOVERY_KEY),'old-driver');assert.equal(entries.get(DRIVER_PENDING_KEY),'unfinished-driver');
+  const request=JSON.parse(socket.sent.at(-1)!);assert.equal(request.code,'new-driver');assert.equal(session.walletBlocked,true);
+  socket.message({type:'identityResult',requestId:old,ok:true,message:'stale'});assert.equal(session.identityResult,null);
+  socket.message({type:'identityResult',requestId:request.requestId,ok:false,message:'Rejoin with this driver.'});
+  const sent=socket.sent.length;session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');assert.equal(socket.sent.length,sent);
+  session.disconnect();session.join('bay','New');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:8});
+  assert.equal(JSON.parse(next.sent.at(-1)!).code,'new-driver');
   session.disconnect();
 });
 
