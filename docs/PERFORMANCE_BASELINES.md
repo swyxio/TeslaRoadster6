@@ -106,7 +106,7 @@ separate rows. Repeated, comparable paired runs are needed before treating a
 change as a regression or proposing a numerical budget. Existing aspirational
 targets and additional coverage remain in [performance release gates](PERFORMANCE_RELEASE_GATES.md).
 
-The historical rows below used the earlier short drive and idle room scenario,
+The earlier local M5 Pro rows below used the short drive and idle room scenario,
 not the two-delivery route. Compare new observations by rerunning both versions
 with the same current harness rather than treating these rows as matched pairs.
 
