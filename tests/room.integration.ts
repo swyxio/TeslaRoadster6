@@ -4,8 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
-// Version 26 adds the shared Fremont spaceport and room-wide Mars fund.
-assert.equal(PROTOCOL_VERSION, 26);
+// Version 27 combines the charging lots with the Fremont spaceport and Mars fund.
+assert.equal(PROTOCOL_VERSION, 27);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

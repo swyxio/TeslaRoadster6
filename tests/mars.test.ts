@@ -5,6 +5,7 @@ import { BUILDINGS, FREMONT_SPACEPORT, ROADS, isLand, terrainHeight } from '../s
 import { body, contact } from '../shared/physics';
 import { MARS_GOAL, applyMarsContribution, atMarsBoarding, boardMars, marsContribution } from '../shared/mars';
 import { parseMessage } from '../worker/protocol';
+import { PARKING_LOTS } from '../shared/parking-lots';
 
 test('different players fund one shared mission with exact cash and a capped final contribution',()=>{
   const world=createWorld(),a=addPlayer(world,'a','A'),b=addPlayer(world,'b','B');
@@ -41,6 +42,8 @@ test('spaceport collision footprints and boarding ring occupy supported, clear F
       assert.ok(isLand(x,z));assert.equal(terrainHeight(x,z),0);
     }
     assert.ok(!ROADS.some(road=>contact({...part,yaw:0},{...road,yaw:road.angle??0})),'spaceport does not block a road');
+    assert.ok(!BUILDINGS.some(b=>b.style!=='spaceport'&&contact({...part,yaw:0},{...b,yaw:0})),'spaceport does not overlap other buildings');
+    assert.ok(!PARKING_LOTS.some(lot=>contact({...part,yaw:0},{...lot.area,w:lot.area.width,d:lot.area.length})),'spaceport does not obstruct a parking or charging lot');
   }
   assert.equal(terrainHeight(entrance.x,entrance.z),0);
   const world=createWorld(),player=addPlayer(world,'a','A'),car=world.entities.find(e=>e.id===player.entityId)!;

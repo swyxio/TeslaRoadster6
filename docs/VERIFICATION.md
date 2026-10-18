@@ -2,10 +2,52 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Fremont Mars mission with Bay charging lots · protocol v27 · 2026-10-18 Pacific
+
+- After integrating main at `5d454c9`, `pnpm test` passed 358 tests and `pnpm build` passed with Vite's existing large-chunk warning. Focused follow-up checks verified that all spaceport collision envelopes clear the expanded charging and parking lots, other buildings and roads.
+- The combined local Wrangler v27 two-client room integration passed. A separate isolated Wrangler test used endgame cash and Fremont positioning fixtures: simultaneous contributions debited each player's cash once, both players boarded, and the room fund survived last disconnect and a full local Worker restart while another room stayed empty. These are functional checks, not load measurements.
+- Chrome displayed the factory and rocket/tower from a temporary Fremont test spawn on the combined map. The contribution, boarding and victory screens and emulated portrait/landscape controls were reviewed on the preceding Mars build; landscape requires scrolling. No physical mobile device was tested, and current delivery payouts are not sufficient to practically reach the final goal.
+
 ## Fremont Mars mission · pre-integration protocol v26 · 2026-10-18 Pacific
 
 - On the branch based on `9ec81f0`, `pnpm test` passed 347 tests and `pnpm build` passed, with Vite's existing large-chunk warning. The local standard Wrangler two-client room integration passed, including rejected unfunded/remote Mars actions. An isolated Wrangler restart integration used a test-only endgame cash and position fixture to verify simultaneous contributions, exact debits, both players boarding, room isolation, and fund survival after the last disconnect and after a real local Worker restart. It did not measure load.
 - Local Chrome showed the Fremont factory, pad and lower rocket/tower from a temporary relocated test spawn. Desktop contribution and victory, and emulated 390×844 portrait and 844×390 landscape mission controls were inspected; landscape boarding is reachable by scrolling. This used a test-only funded fixture, not real progression. No physical mobile device was tested. These observations precede integration with the newer charging-location changes and do not verify the combined build.
+
+## Bay charging lots and Tesland monuments · protocol v26 branch · 2026-10-18 Pacific
+
+- Automated review identified moving cars leaving a newly joined local parking game and outdated protocol examples. After the fixes, `pnpm test` passed 354 tests, including a moving-car regression, and `pnpm build` passed with the existing Vite chunk warning.
+- After integrating the economy article and simulations, `pnpm test` passed 353 tests and `pnpm build` passed; Vite retained its large-chunk warning. That integration changed documentation, public assets and planning scripts rather than game or room behavior.
+- After integrating the Tesland landmarks and relocating the conflicting Marin lot and storefront, `pnpm test` reported 347 passed and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v26 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- After a further small lot move to clear the monument visually, the focused map, station and billboard tests, `pnpm build`, and the two-client room integration passed. Those tests cover monument, road, building and lot clearance. Chrome desktop joined a local shared room using a temporary server spawn fixture, showed the fictional Mill Valley lot and started Park It at its local stall; the fixture was removed. No physical device was tested.
+
+## Bay charging lots with mini-games · protocol v25 branch · 2026-10-18 Pacific
+
+- After integrating the navigation and mini-game menus, `pnpm test` passed 346 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v25 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- Simulation checks join Park It and Cut the Queue from each of the 24 charging lots, including moving to the same lot's queue approach. Chrome desktop solo, with a temporary Mill Valley spawn fixture removed afterward, showed its fictional sign and started both games locally; Park It highlighted a Mill Valley stall. The earlier v24 entry records touch emulation; no physical device was tested, and manual reachability and play at every lot remain unverified.
+
+## Bay charging lots with shared rooms · protocol v24 branch · 2026-10-18 Pacific
+
+- After integrating shared-room changes and adding two fictional Marin air stations, `pnpm test` passed 340 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v24 passed the two-client room and global-chat integrations. The full-room and slot-reuse check passed on the preceding v24 build. This was not a load test.
+- Chrome desktop joined a local shared room; touch driving reached 60 km/h in emulated portrait and 78 km/h in landscape on the preceding v24 build. No physical device was tested.
+
+## Bay charging lots and relocated Dome · protocol v23 · 2026-10-18 Pacific
+
+- After integrating main’s relocated China Basin Dome and awards, `pnpm test` passed 337 tests and `pnpm build` passed, retaining the Vite large-chunk warning. Local Wrangler v23 passed the updated two-client room integration, including a five-goal match and wall refill, and global chat integration. A v22 hosted preview passed its earlier two-client room test. Neither is a load test.
+- A temporary low-air spawn fixture showed the SF 16th Street warning at 20 m on desktop and emulated 844×390 landscape; the fixture was removed. No physical device was tested.
+
+## Bay charging lots · historical protocol v22 branch · 2026-10-18 Pacific
+
+- After integrating main's v21 driving changes, `pnpm test` passed 316 tests and `pnpm build` passed both typechecks and production generation; Vite retained its large-chunk warning. Local Wrangler advertised v22 and passed the two-client room and global-chat integrations. An earlier v20 room run timed out on its post-Dome reset check; the subsequent v22 run passed. These are local checks, not production or load evidence.
+- Shared simulation tests checked at least two lots per represented area, site provenance and fictional labels, charging at every bay, Park It completion and queue start at every lot, and clearance for lots and venue-building collision footprints.
+- After integrating main’s economy simulations, `pnpm test` passed 322 tests. Review prompted the low-air warning to stay visible near a station until the car can refill.
+- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in portrait. Touch Drive accelerated to 57 km/h in portrait; after reversing away from a building, touch Drive moved the car in landscape. An initial touch attempt hit the wrong control because of the emulator coordinate mapping. No browser console errors were captured during the fixture pass; no physical device was tested.
+## Five-minute economy design experiment · 2026-10-18 Pacific
+
+- On the checkout integrating main at `7b48759`, `pnpm test` passed 341 tests. `pnpm build` passed the two project typechecks, Vite and public-page generation; Vite retained its large-chunk warning. The standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `5986edb`, `pnpm test` passed 346 tests and `pnpm build` passed, with the same large-chunk warning.
+- Ran `node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json`, then the same command with `--events` and with `--events --all-activities`. These seeded hypothetical paths have balanced ledgers; the report records five-minute payouts, separate achievement categories, 30-minute distributions and their unmet pacing targets. The multiplier test covers the triggering match and later eligible payouts. None of this verifies player behavior, matchmaking, gameplay, devices or production, and no game or protocol rules changed.
+- After integrating Tesland main at `9ec81f0`, `pnpm test` passed 349 tests and `pnpm build` passed; Vite retains its large-chunk warning. Standalone strict TypeScript checked the chart and economy scripts and tests. The 250-seed first-visit and 20-landmarks-per-city sensitivities ran with balanced ledgers; seven 250-seed chart series were generated, checked as SVG XML and spot-checked by independent recomputation.
+- Local Wrangler served the article and correct Tesland canonical URL. Chrome showed the article and charts at desktop, portrait and landscape; the responsive sources loaded and page width matched viewport width at observed CSS viewport sizes of 433×937 and 937×433. These are browser previews, not physical-device tests. The preview preceded a main integration that changed the game menu stylesheet, not the public article layout.
 
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 

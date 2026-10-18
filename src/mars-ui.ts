@@ -48,8 +48,9 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     $('.mars-cash').textContent=`${money(cash)} available`;
     const busy=!!pending||performance.now()<busyUntil||session.status!=='online';
     submit.disabled=busy||cash<1||remaining<=0;
-    const distance=entity?Math.round(Math.hypot(entity.x-FREMONT_SPACEPORT.entrance.x,entity.z-FREMONT_SPACEPORT.entrance.z)):0;
-    $('.mars-location').textContent=entity?`${distance} m away · ${player&&player.delivery.level<2?'Unlock the South Bay at level 2. ':''}Stop in the gold ring to board once the fund is complete.`:'Connect to your room to board.';
+    const dx=entity?FREMONT_SPACEPORT.entrance.x-entity.x:0,dz=entity?FREMONT_SPACEPORT.entrance.z-entity.z:0;
+    const distance=Math.round(Math.hypot(dx,dz)),direction=['north','northeast','east','southeast','south','southwest','west','northwest'][(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8];
+    $('.mars-location').textContent=entity?`${distance} m ${distance>25?direction:'away'} · ${player&&player.delivery.level<2?'Unlock the South Bay at level 2. ':''}Stop in the gold ring to board once the fund is complete.`:'Connect to your room to board.';
     board.disabled=busy||remaining>0||!entity||!atMarsBoarding(entity);
   }
   return {open(){if(session.status!=='online')return;onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close,update};
