@@ -131,6 +131,7 @@ test('flight above police sight ceiling continues to increase citation severity 
   const {world,player,car}=setup(),cop=makeEntity('cop','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
   Object.assign(car,{x:0,z:6,y:90,vy:0});world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
   car.y=50;world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+  car.y=2;world.time+=.05;updatePolice(world,.05);assert.ok(player.delivery.flight.seconds>=.15);
   car.y=90;for(let i=0;i<240;i++){world.time+=.05;updatePolice(world,.05);}
   assert.ok(player.delivery.flight.seconds>=12);assert.equal(player.delivery.flight.peakHeight,90);
   Object.assign(car,{y:0,vy:0,speed:0});world.time+=.05;updatePolice(world,.05);
