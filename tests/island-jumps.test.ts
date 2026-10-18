@@ -4,6 +4,7 @@ import * as T from 'three';
 import { addPlayer, chooseVehicle, createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
 import { FERRY_DOCKS, ISLAND_TRACK, ROADS, isRocketIsland, supportHeight, supportNormal } from '../shared/map';
 import { ISLAND_BANK, ISLAND_CLIFF } from '../shared/island-stunts';
+import { ovalBankSurface } from '../shared/oval-bank';
 import { ISLAND_JUMPS, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from '../shared/island-jumps';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { body, contact, dimensions } from '../shared/physics';
@@ -24,9 +25,10 @@ function setup(kind:'model-3'|'roadster'){
 test('jump footprints, approaches and fast landing corridors remain on the island and clear of its attractions',()=>{
   for(const jump of ISLAND_JUMPS)for(let x=jump.start-30;x<=jump.end+150;x+=5)for(const z of [jump.z-jump.width/2,jump.z,jump.z+jump.width/2]){
     assert.ok(isRocketIsland(x,z),`${jump.id}: unsupported corridor at ${x},${z}`);
-    // The planned banked oval has a 30 m shoulder around this same route.
+    // The active banked oval has a 30 m shoulder around this route.
     for(let i=0;i<ISLAND_TRACK.length;i++)assert.ok(distanceToSegment(x,z,ISLAND_TRACK[i],ISLAND_TRACK[(i+1)%ISLAND_TRACK.length])>31,
       `${jump.id}: oval at ${x},${z}`);
+    assert.equal(ovalBankSurface(x,z),null,`${jump.id}: banked oval at ${x},${z}`);
     assert.ok(x<ISLAND_BANK.startX||x>ISLAND_BANK.endX||Math.abs(z-ISLAND_BANK.z)>ISLAND_BANK.halfWidth);
     assert.ok(Math.hypot(x-ISLAND_CLIFF.x,z-ISLAND_CLIFF.z)>ISLAND_CLIFF.radius+ISLAND_CLIFF.width);
     assert.ok(Math.hypot(x-FERRY_DOCKS.island.x,z-FERRY_DOCKS.island.z)>100);

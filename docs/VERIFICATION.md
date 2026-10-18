@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Integrated Rocket Island ramps · protocol v22 · 2026-10-18 Pacific
+
+- Against main after the driving-feel merge, `pnpm test` passed 328 tests and `pnpm build` passed both typechecks and public-page generation; Vite retained its existing large-chunk warning. Focused ramp and banked-oval tests drove ordinary and Rocket cars over both ramps, checked oriented wall and swept top contacts, and completed a simulated oval lap. The tested ramp approaches and landing corridors clear the actual banked oval.
+- Local Wrangler's two-client room integration passed. A separate test-only Wrangler fixture staged the first car 25 m before the west ramp; normal throttle then drove it up, and a second real WebSocket observed ramp support, takeoff and landing at a 5.10 m peak. This was not a ferry traversal or a capacity test.
+- In Chrome, the same fixture staged a Roadster at the west ramp; keyboard driving reached the airborne state at 4 m and then returned to ground, with no console errors observed. This was a local desktop playtest, not a natural journey to the island or a physical-device test.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
