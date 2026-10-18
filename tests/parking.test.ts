@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEntity, type Entity, type World } from '../shared/game';
+import { makeEntity, removePlayer, type Entity, type World } from '../shared/game';
 import { initialDelivery } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { VEHICLE_IDS } from '../shared/vehicles';
@@ -101,9 +101,36 @@ test('queue order, simultaneous claims and overtakes are authoritative and deter
     const round=state.rounds[0],a=round.entrants.find(e=>e.playerId==='a')!,z=round.entrants.find(e=>e.playerId==='z')!;
     assert.equal(a.overtakes,1,'later entrant claims first and passes the leader');
     assert.equal(a.targetId,'a');assert.equal(z.finishedAt,null,'one winner for a simultaneous stall claim');
+    assert.deepEqual(round.claimedStallIds,['a'],'same-tick claim is recorded once');
     place(ahead,lot.stalls[1]);tick(state,w);
     assert.equal(z.overtakes,0);assert.equal(round.phase,'results');
+    assert.deepEqual(round.claimedStallIds,['a','b']);
     const at=a.finishedAt;tick(state,w);assert.equal(a.finishedAt,at,'each arrival scores only once');
+  }
+});
+
+test('claimed queue stalls stay claimed after their winner leaves or disconnects',()=>{
+  for(const departure of ['drive away','disconnect'] as const){
+    const w=world(),state=createParking();w.parking=state;
+    const winner=add(w,'a','roadster',-30),next=add(w,'b','roadster',-30);
+    assert.equal(joinParking(state,lot,w,'a','queue'),true);
+    assert.equal(joinParking(state,lot,w,'b','queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'a'),true);
+    place(winner);tick(state,w);
+    const round=state.rounds[0];assert.deepEqual(round.claimedStallIds,['a']);
+    if(departure==='drive away'){winner.x=300;tick(state,w);}
+    else {winner.owner='a';removePlayer(w,'a');}
+    assert.deepEqual(round.entrants.map(e=>e.playerId),['b'],departure);
+    place(next);tick(state,w);
+    assert.equal(round.entrants[0].finishedAt,null,`${departure}: claimed stall is unavailable`);
+    assert.deepEqual(round.claimedStallIds,['a']);
+    place(next,lot.stalls[1]);tick(state,w);
+    assert.equal(round.entrants[0].targetId,'b');assert.equal(round.phase,'results');
+    tick(state,w,PARKING_RESULTS_DURATION);assert.equal(state.rounds.length,0);
+    Object.assign(next,{x:-30,z:0});assert.equal(joinParking(state,lot,w,'b','queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'b'),true);
+    place(next);tick(state,w);
+    assert.equal(state.rounds[0].entrants[0].targetId,'a','new round can claim the old stall');
   }
 });
 
