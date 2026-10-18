@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'More room to drive',
+    intro: 'Bring more drivers together in the Bay.',
+    sections: [
+      { title: 'Room for more', items: [
+        'Rooms can now admit up to 64 drivers. This limit is still being tested, and busy rooms may slow down.',
+        'If a room is full, retry or choose another named room. Automatic overflow is planned.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.25-alpha',
+    label: '0.0.25 Alpha',
+    date: '2026-10-18',
     title: 'A little direction',
     intro: 'Find your next delivery and see the victories you are working toward.',
     sections: [

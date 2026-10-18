@@ -109,6 +109,32 @@ test('input cadence keeps fractional frame time without catching up in a burst',
   session.disconnect();
 });
 
+test('rejected inputs retry on the normal cadence while changes and presses remain prompt',()=>{
+  let now=0;
+  const session=new Session(()=>now);session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});
+  session.tick(.05,NEUTRAL);
+  const inputs=()=>socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+  const rejected=inputs().at(-1)!;
+  socket.message({type:'inputRejected',seq:rejected.seq,targetTick:rejected.targetTick,reason:'late'});
+  now=20;session.tick(.02,NEUTRAL);
+  assert.equal(inputs().length,1,'a late rejection does not force an early unchanged retry');
+  now=50;session.tick(.03,NEUTRAL);
+  assert.equal(inputs().length,2,'unchanged controls retry on the normal heartbeat');
+  const retry=inputs().at(-1)!;
+  socket.message({type:'inputRejected',seq:retry.seq,targetTick:retry.targetTick,reason:'late'});
+  now=70;session.tick(.02,NEUTRAL);
+  assert.equal(inputs().length,2,'repeated rejections do not accelerate retries');
+  now=90;session.tick(.02,{...NEUTRAL,throttle:1});
+  assert.equal(inputs().at(-1)!.input.throttle,1,'changed controls send promptly');
+  session.queueEdge('jump',1);now=110;session.tick(.02,{...NEUTRAL,throttle:1,jump:1});
+  assert.equal(inputs().at(-1)!.input.jump,1,'button presses send promptly');
+  now=130;session.tick(.02,NEUTRAL);
+  assert.equal(inputs().at(-1)!.input.throttle,0,'releases send promptly');
+  session.disconnect();
+});
+
 test('the first snapshot holds remote poses until interpolation has a second sample',()=>{
   let now=0;
   const session=new Session(()=>now);session.join('bay','Alex');const socket=Socket.last;
