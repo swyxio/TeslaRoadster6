@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Rocket Island production deployment · protocol v20 · 2026-10-18 Pacific
+
+- Cloudflare Workers Builds deployed merge commit `a138abc5ec193f3598a1f71868fe5b73e80242af` successfully. Both `bay-drive.swyxio.workers.dev` and `polyav.swyx.io` reported protocol v20 and capacity 64, and served the locally built `index-D95rBsxU.js` and `index-C4HCFfI4.css` assets.
+- The live two-client room integration passed movement, traffic, deliveries, sky currents, ferry and activity snapshots, Rocket kits, the Dome, cockpit, shop and OTA, invalid-input isolation and disconnect cleanup. It did not complete a ferry crossing or measure production load. The current build's local scripted two-client ferry and Island–Dome trips are recorded below; physical-device play and sustained peak-traffic capacity remain unverified.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
