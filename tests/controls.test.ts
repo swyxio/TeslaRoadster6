@@ -72,6 +72,20 @@ test('braking before a jump in the same tick does not trigger a flip',()=>{
   assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,88);
 });
 
+test('pending jump preserves flip until acknowledged, even with a delayed snapshot',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const key=(type:string,code:string)=>{const event=new Event(type);Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);};
+  key('keydown','KeyE');key('keyup','KeyE');
+  controls.observeFlight(false,0); // A stale grounded snapshot does not cancel the pending jump.
+  key('keydown','Space');key('keyup','Space');assert.equal(controls.read().flip,1);
+  controls.observeFlight(false,1); // The jump was processed but could not launch.
+  key('keydown','Space');key('keyup','Space');assert.equal(controls.read().flip,1);
+  controls.observeFlight(true,1);key('keydown','Space');assert.equal(controls.read().flip,2);
+});
+
 
 test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   const jump=new FakeButton('KeyE'),brake=new FakeButton('Space');
