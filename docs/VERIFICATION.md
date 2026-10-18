@@ -1,5 +1,10 @@
 # Verification · 2026-10-17 Pacific
 
+## Bay circuit deployment · 2026-10-17 Pacific
+
+- Cloudflare Workers Builds deployed merge commit `a0dff9546de09c8d626300a1a5125d9b11ef0d73` successfully. Worker version `2f7d5efe-11b7-40c6-a6a6-b19ce5ddc775` served `/api/health` with protocol 9 and capacity 64.
+- The deployed two-client room integration passed for join, traffic, clock, support, movement, delivery, police, stunts, vehicle selection, autonomous mode, invalid input and disconnect cleanup. This was not a production load test; touch and peak-traffic limitations below still apply.
+
 ## Bay circuit, achievements and citations · protocol v9, local build
 
 - `pnpm test` passed 104/104, including first-frame and support-aware achievements, severity-based police citations, rooftop delivery, Bay traffic and keyboard/touch input simulation. `pnpm build` passed; Vite warns about the 655 kB main JavaScript chunk (181 kB gzip).
