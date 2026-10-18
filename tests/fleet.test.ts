@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { LEVELS } from '../shared/delivery';
 import { MAP_BOUNDS } from '../shared/map';
-import { VEHICLES,VEHICLE_IDS } from '../shared/vehicles';
+import { LUXURY_VEHICLE_IDS, VEHICLES,VEHICLE_IDS } from '../shared/vehicles';
 import { addPlayer,chooseVehicle,createWorld,interact,makeEntity,NEUTRAL,step,toggleAutopilot } from '../shared/game';
 import { body,contact } from '../shared/physics';
 import { parseMessage } from '../worker/protocol';
@@ -24,10 +25,20 @@ test('small seeded cohorts cover the whole catalog; only Teslas are selectable',
   }
   assert.equal(world.entities.filter(e=>e.owner==='p').length,1,'swapping never leaks personal cars');
 });
+test('luxury vehicles do not appear in ambient traffic or the free fleet',()=>{
+  const world=createWorld();addPlayer(world,'p','P');
+  for(const id of LUXURY_VEHICLE_IDS){
+    assert.equal(world.entities.some(e=>e.kind===id),false,id);
+    assert.equal(chooseVehicle(world,'p',id),false,id);
+    assert.ok(VEHICLES[id].sourceUrls.length&&VEHICLES[id].estimates.length,id);
+    assert.ok(VEHICLES[id].maxSpeed<=VEHICLES.roadster.maxSpeed,id);
+  }
+  assert.equal(VEHICLE_IDS.length,26);
+});
 test('every parked family can be taken from the street',()=>{
   for(const id of VEHICLE_IDS){
     const seed=(VEHICLE_IDS.indexOf(id)+VEHICLE_IDS.length-13)%VEHICLE_IDS.length;
-    const world=createWorld(seed),player=addPlayer(world,'p','P');player.delivery.level=3;interact(world,'p');
+    const world=createWorld(seed),player=addPlayer(world,'p','P');player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;interact(world,'p');
     const person=world.entities.find(e=>e.id===player.entityId)!,car=world.entities.find(e=>e.kind===id&&!e.npc&&!e.driver)!;
     world.entities=[person,car];Object.assign(person,{x:car.x+2,z:car.z,y:car.y,supportId:car.supportId});
     interact(world,'p');assert.equal(player.entityId,car.id,id);assert.equal(car.driver,'p');

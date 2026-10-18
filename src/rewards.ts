@@ -1,4 +1,4 @@
-type Reward = { kind: 'pickup' | 'delivery' | 'supply-repair' | 'supply-air'; amount: number };
+type Reward = { kind: 'pickup' | 'delivery' | 'pickup-research' | 'delivery-research' | 'supply-repair' | 'supply-air' | 'research'; amount: number };
 let popup: HTMLElement | null = null;
 let timeout = 0;
 function getPopup(): HTMLElement {
@@ -31,7 +31,7 @@ export function celebrateReward(reward: Reward) {
   element.classList.remove('celebrate');
   // Restart CSS animations even when two rewards arrive close together.
   void element.offsetWidth;
-  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : reward.kind === 'delivery' ? 'DELIVERY COMPLETE' : reward.kind === 'supply-repair' ? 'REPAIR + CASH' : 'AIR REFILL + CASH';
+  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : reward.kind === 'delivery' ? 'DELIVERY COMPLETE' : reward.kind === 'pickup-research' ? 'PICKUP + AWARDS' : reward.kind === 'delivery-research' ? 'DELIVERY + AWARDS' : reward.kind === 'supply-repair' ? 'REPAIR + CASH' : reward.kind === 'research' ? 'ACHIEVEMENT AWARD' : 'AIR REFILL + CASH';
   element.querySelector('#reward-amount')!.textContent = `+$${reward.amount}`;
   element.classList.add('celebrate');
   timeout = window.setTimeout(resetCelebration, 3000);

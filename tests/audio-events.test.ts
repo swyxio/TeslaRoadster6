@@ -18,7 +18,18 @@ test('audio cues follow authoritative pickup, delivery, ticket and achievement c
   player.delivery.order.stage='dropoff';assert.deepEqual(names(observe()),['pickup']);
   assert.deepEqual(names(observe()),[]);
   player.delivery.completed++;player.delivery.order.stage='pickup';assert.deepEqual(names(observe()),['delivery']);
-  player.delivery.tickets++;player.achievements.unlocked.push('roof-rider');assert.deepEqual(names(observe()),['ticket','achievement']);
+  player.delivery.tickets++;player.achievements.unlocked.push('roof-rider');player.achievements.lastUnlock={id:1,achievement:'roof-rider'};
+  assert.deepEqual(names(observe()),['ticket','achievement']);
+  assert.deepEqual(names(observe()),[]);
+});
+
+test('restored awards are quiet, while a newly committed achievement sounds once',()=>{
+  const {world,player,tracker,observe}=setup();
+  player.achievements.unlocked.push('luxury-visit','region-oakland');
+  assert.deepEqual(names(observe()),[]);
+  player.achievements.unlocked.push('roof-rider');player.achievements.lastUnlock={id:1,achievement:'roof-rider'};
+  // A commit may arrive without advancing world time.
+  assert.deepEqual(names(tracker.update(world,player.id,false)),['achievement']);
   assert.deepEqual(names(observe()),[]);
 });
 

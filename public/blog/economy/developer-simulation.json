@@ -1,0 +1,240 @@
+{
+  "players": 250,
+  "seedStart": 1729,
+  "horizonHours": 1500,
+  "developerGate": 2000000,
+  "developerPlot": 800000,
+  "floorCosts": [
+    1200000,
+    200000,
+    220000,
+    242000,
+    266000,
+    293000,
+    322000,
+    354000,
+    390000,
+    429000,
+    472000,
+    519000,
+    571000,
+    628000,
+    690000,
+    759000,
+    835000,
+    919000,
+    1011000,
+    1112000
+  ],
+  "totalConstruction": 11432000,
+  "totalWithPlot": 12232000,
+  "milestoneAwards": [
+    [
+      1,
+      5000
+    ],
+    [
+      5,
+      10000
+    ],
+    [
+      10,
+      25000
+    ],
+    [
+      20,
+      50000
+    ]
+  ],
+  "output": [
+    {
+      "path": "Delivery saver",
+      "players": 250,
+      "homeHoursMedian": 17.4,
+      "plotHoursMedian": 26.4,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 36.4,
+        "p10Hours": 35.7,
+        "p90Hours": 37
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 55.6,
+        "p10Hours": 54.5,
+        "p90Hours": 56.6
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 134.7,
+        "p10Hours": 131.2,
+        "p90Hours": 137.7
+      },
+      "lateHourlyNetMedian": 114999,
+      "localEfficiencyMedian": 0.894,
+      "cabPerHourMedian": 0
+    },
+    {
+      "path": "First cab",
+      "players": 250,
+      "homeHoursMedian": 16,
+      "plotHoursMedian": 24.2,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 33.2,
+        "p10Hours": 32.5,
+        "p90Hours": 33.7
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 50.4,
+        "p10Hours": 49.2,
+        "p90Hours": 51.2
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 121.5,
+        "p10Hours": 118.3,
+        "p90Hours": 123.8
+      },
+      "lateHourlyNetMedian": 134257,
+      "localEfficiencyMedian": 0.888,
+      "cabPerHourMedian": 11250
+    },
+    {
+      "path": "Fleet reinvestor",
+      "players": 250,
+      "homeHoursMedian": 14.8,
+      "plotHoursMedian": 21.7,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 29,
+        "p10Hours": 28.6,
+        "p90Hours": 29.3
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 43,
+        "p10Hours": 42.5,
+        "p90Hours": 43.7
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 101.3,
+        "p10Hours": 99.8,
+        "p90Hours": 103.2
+      },
+      "lateHourlyNetMedian": 172963,
+      "localEfficiencyMedian": 0.893,
+      "cabPerHourMedian": 33750
+    },
+    {
+      "path": "Customizer",
+      "players": 250,
+      "homeHoursMedian": 16.7,
+      "plotHoursMedian": 24.9,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 33.9,
+        "p10Hours": 33.4,
+        "p90Hours": 34.3
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 51.2,
+        "p10Hours": 50.2,
+        "p90Hours": 52
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 122.5,
+        "p10Hours": 119.6,
+        "p90Hours": 124.9
+      },
+      "lateHourlyNetMedian": 130962,
+      "localEfficiencyMedian": 0.893,
+      "cabPerHourMedian": 10500
+    },
+    {
+      "path": "Delivery explorer",
+      "players": 250,
+      "homeHoursMedian": 17.7,
+      "plotHoursMedian": 26.6,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 36.3,
+        "p10Hours": 35.6,
+        "p90Hours": 36.9
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 55,
+        "p10Hours": 53.9,
+        "p90Hours": 56
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 132.2,
+        "p10Hours": 128.8,
+        "p90Hours": 135.2
+      },
+      "lateHourlyNetMedian": 115473,
+      "localEfficiencyMedian": 0.816,
+      "cabPerHourMedian": 10500
+    },
+    {
+      "path": "30-minute casual",
+      "players": 250,
+      "homeHoursMedian": 21.9,
+      "plotHoursMedian": 32.9,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 44.9,
+        "p10Hours": 44,
+        "p90Hours": 45.7
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 67.9,
+        "p10Hours": 66.3,
+        "p90Hours": 69.7
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 163.3,
+        "p10Hours": 158.7,
+        "p90Hours": 168
+      },
+      "lateHourlyNetMedian": 93437,
+      "localEfficiencyMedian": 0.658,
+      "cabPerHourMedian": 9000
+    },
+    {
+      "path": "Mixed economy",
+      "players": 250,
+      "homeHoursMedian": 18.6,
+      "plotHoursMedian": 27.6,
+      "floors5": {
+        "reached": 250,
+        "medianHours": 37.3,
+        "p10Hours": 36.5,
+        "p90Hours": 38
+      },
+      "floors10": {
+        "reached": 250,
+        "medianHours": 55.8,
+        "p10Hours": 54.5,
+        "p90Hours": 57.1
+      },
+      "floors20": {
+        "reached": 250,
+        "medianHours": 132.8,
+        "p10Hours": 128.6,
+        "p90Hours": 136.8
+      },
+      "lateHourlyNetMedian": 113956,
+      "localEfficiencyMedian": 0.735,
+      "cabPerHourMedian": 19500
+    }
+  ]
+}

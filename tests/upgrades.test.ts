@@ -21,7 +21,7 @@ test('fictional shops sit on clear supported ground for the largest vehicles',()
   }
 });
 test('shop validates location, funds, eligibility and one-time purchases on the simulation',()=>{
-  const {world,player,car}=setup();
+  const {world,player,car}=setup();player.delivery.cash=0;
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"__proto__","requestId":1}'),null);
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket"}'),null);
   assert.equal(parseMessage('{"type":"upgrade","upgrade":"rocket","requestId":0}'),null);

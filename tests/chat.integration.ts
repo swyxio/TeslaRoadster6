@@ -134,6 +134,7 @@ try {
   const roomOne = connect(roomUrl), roomTwo = connect(roomUrl);
   await Promise.all([open(roomOne), open(roomTwo)]);
   await eventually(() => [roomOne, roomTwo].every(client => client.events.some(event => event.type === 'welcome')), 'two room players join');
+  for(const client of [roomOne,roomTwo])send(client.socket,{type:'identity',code:null,requestId:1});
   const roomIdOne = roomOne.events.find(event => event.type === 'welcome')!.id;
   const roomIdTwo = roomTwo.events.find(event => event.type === 'welcome')!.id;
   send(roomOne.socket, { type: 'name', name });

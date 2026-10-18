@@ -415,7 +415,7 @@ export class TickPrediction {
       let relocated=false;
       const before=new Map(simulation.entities.map(entity=>[entity.id,{...entity}]));
       const inputs=new Map(this.peerInputs);inputs.set(this.playerId,input);
-      step(simulation,inputs,TICK,{substeps:count,onRelocation:id=>{
+      step(simulation,inputs,TICK,{substeps:count,economy:{update:()=>{},pickup:()=>{},canCollect:()=>false},onRelocation:id=>{
         if(id===this.playerId)relocated=true;
         else for(const entity of simulation.entities)if(entity.driver===id)unsafePeers.add(entity.id);
       }});

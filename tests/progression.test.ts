@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,buyUpgrade,chooseVehicle,createWorld,interact,makeEntity,NEUTRAL,resetPlayer,step,travelDome} from '../shared/game';
-import {ACCESS_BOUNDARIES,CUSTOMERS,LEVELS,orderTarget,requiredLevelAt,updateDelivery} from '../shared/delivery';
+import {ACCESS_BOUNDARIES,CUSTOMERS,LEVELS,orderTarget,requiredLevelAt,updateDelivery,updateLevel} from '../shared/delivery';
 import {FERRY_DOCKS,ISLAND_TRACK,ROCKET_ISLAND} from '../shared/map';
 import {ovalBankSurface} from '../shared/oval-bank';
 import {PARKING_LOTS} from '../shared/parking-lots';
@@ -26,46 +26,33 @@ function completeGroundOrder(s:ReturnType<typeof setup>, late=false){
   return order;
 }
 
-test('milestones require both earned delivery rewards and completed runs, and generate harder unlocked orders',()=>{
-  const s=setup(),{world,player,car}=s;car.kind='model-3';
-  const other=addPlayer(world,'other','Other');
-  for(let i=1;i<=8;i++){
-    const order=completeGroundOrder(s,true);
-    assert.ok(requiredLevelAt(CUSTOMERS[order.customer].x,CUSTOMERS[order.customer].z)<=player.delivery.level);
-    if(i===1)assert.equal(player.delivery.level,0);
-    if(i===2){assert.equal(player.delivery.level,1);assert.ok(player.delivery.earned>=LEVELS[1].earned);}
-    if(i===5){assert.equal(player.delivery.level,2);assert.ok(player.delivery.earned>=LEVELS[2].earned);}
-    if(i===7)assert.ok(order.base>200,'unlocked long-distance runs pay more');
-    if(i===8){assert.equal(player.delivery.level,3);assert.ok(player.delivery.earned>=LEVELS[3].earned);}
+test('current cash opens regions and new orders stay in accessible areas',()=>{
+  for(const tier of [0,1,2,3] as const){
+    const s=setup(),{player,car}=s;car.kind='model-3';
+    player.delivery.cash=LEVELS[tier].cash;updateLevel(player.delivery);
+    assert.equal(player.delivery.level,tier);
+    completeGroundOrder(s,true);
+    const target=CUSTOMERS[player.delivery.order.customer];
+    assert.ok(requiredLevelAt(target.x,target.z)<=player.delivery.level);
   }
-  assert.equal(other.delivery.level,0);assert.equal(other.delivery.completed,0);assert.equal(other.delivery.earned,0);
-  const target=CUSTOMERS[player.delivery.order.customer];assert.equal(requiredLevelAt(target.x,target.z),3);
 });
 
-test('pickup bonus contributes to earned; purchases cannot relock progression',()=>{
-  const s=setup(),{player,world,car}=s;car.kind='model-3';
-  const pickup=orderTarget(player.delivery.order);
-  Object.assign(car,{x:pickup.x,z:pickup.z,y:pickup.y,speed:0,vy:0,supportId:'ground'});
-  updateDelivery(world,player,car,NEUTRAL,.05);
-  assert.ok(player.delivery.earned>0);assert.equal(player.delivery.earned,player.delivery.cash);
-  const dropoff=orderTarget(player.delivery.order);
-  Object.assign(car,{x:dropoff.x,z:dropoff.z,y:dropoff.y});updateDelivery(world,player,car,NEUTRAL,.05);
-  completeGroundOrder(s);
-  assert.equal(player.delivery.level,1);
-  const earned=player.delivery.earned,cash=player.delivery.cash;
+test('a workshop purchase can lower level without erasing lifetime earnings',()=>{
+  const {player,world,car}=setup();car.kind='model-3';
+  player.delivery.cash=LEVELS[1].cash+10;player.delivery.earned=12_000;updateLevel(player.delivery);
   Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,speed:0,vy:0,vx:0,vz:0,pushX:0,pushZ:0,supportId:'ground'});
-  assert.ok(buyUpgrade(world,'p','armor'));assert.ok(player.delivery.cash<cash);
-  assert.equal(player.delivery.earned,earned);assert.equal(player.delivery.level,1);
+  assert.ok(buyUpgrade(world,'p','armor'));
+  assert.equal(player.delivery.level,0);assert.equal(player.delivery.earned,12_000);
 });
 
-test('both milestone conditions are needed even when an order has a zero payout',()=>{
+test('a zero-payout delivery does not open a region; a later pickup can',()=>{
   const {world,player,car}=setup();car.kind='model-3';
-  player.delivery.completed=LEVELS[1].deliveries-1;player.delivery.earned=LEVELS[1].earned-1;
+  player.delivery.cash=LEVELS[1].cash-1;updateLevel(player.delivery);
   const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';player.delivery.order.elapsed=player.delivery.order.estimate*5;
   Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0,supportId:'ground'});updateDelivery(world,player,car,NEUTRAL,.05);
-  assert.equal(player.delivery.completed,2);assert.equal(player.delivery.level,0);
+  assert.equal(player.delivery.completed,1);assert.equal(player.delivery.level,0);
   const pickup=orderTarget(player.delivery.order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0});
-  updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.level,1,'a later positive pickup bonus can complete the milestone');
+  updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.level,1);
 });
 
 test('level gates stop ground driving, jumps and the north approach while leaving NPCs and unlocked drivers free',()=>{
@@ -76,7 +63,7 @@ test('level gates stop ground driving, jumps and the north approach while leavin
   step(world,new Map(),.05);assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX,'flight cannot bypass the bridge gate');
   Object.assign(car,{x:200,z:ACCESS_BOUNDARIES.islandNorthZ-.1,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
   step(world,new Map(),.05);assert.ok(car.z<ACCESS_BOUNDARIES.islandNorthZ,'the northern corridor cannot enter Oakland');
-  player.delivery.level=1;Object.assign(car,{x:109.9,z:60,y:0,yaw:-Math.PI/2,speed:70,vx:0,vz:0,supportId:'ground'});
+  player.delivery.cash=LEVELS[1].cash;player.delivery.level=1;Object.assign(car,{x:109.9,z:60,y:0,yaw:-Math.PI/2,speed:70,vx:0,vz:0,supportId:'ground'});
   step(world,new Map(),.05);assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);
   const npc=makeEntity('npc','model-3',109.9,60);Object.assign(npc,{yaw:-Math.PI/2,speed:70,npc:true});world.entities=[npc];
   step(world,new Map(),.05);assert.ok(npc.x>ACCESS_BOUNDARIES.oaklandX,'NPC traffic is not restricted');
@@ -137,10 +124,10 @@ test('the SF playground has a connected, bounded level-zero pocket for driving a
 
 test('Peninsula and San Jose gates apply in the air and allow the next unlocked level',()=>{
   for(const [level,z,boundary] of [[1,299.9,ACCESS_BOUNDARIES.bayMaxZ],[2,7599.9,ACCESS_BOUNDARIES.sanJoseMinZ]] as const){
-    const {world,player,car}=setup();player.delivery.level=level;
+    const {world,player,car}=setup();player.delivery.cash=LEVELS[level].cash;player.delivery.level=level;
     Object.assign(car,{x:0,z,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
     step(world,new Map(),.05);assert.ok(car.z<=boundary);assert.equal(player.delivery.lastBlocked?.level,level+1);
-    player.delivery.level=(level+1) as 2|3;Object.assign(car,{speed:70,vx:0,vz:70,vy:0});
+    player.delivery.level=(level+1) as 2|3;player.delivery.cash=LEVELS[player.delivery.level].cash;Object.assign(car,{speed:70,vx:0,vz:70,vy:0});
     step(world,new Map(),.05);assert.ok(car.z>boundary);
   }
 });
@@ -179,7 +166,7 @@ test('a vehicle collision cannot push a locked player through the bridge boundar
 test('the default Roadster starts with two ground deliveries',()=>{
   const s=setup();
   for(let i=0;i<2;i++)completeGroundOrder(s);
-  assert.equal(s.player.delivery.level,1);
+  assert.equal(s.player.delivery.completed,2);assert.ok(s.player.delivery.cash>0);
 });
 
 

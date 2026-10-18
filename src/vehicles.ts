@@ -1,7 +1,9 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
-import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { VEHICLES, isLuxuryVehicle, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { buildLuxuryModel, MOTORCYCLE_FAIRING_WIDTH } from './luxury-models';
+import { PAINTS, type VehicleStyle } from '../shared/vehicle-style';
 import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
 // Geometry and materials belong to the fleet, not individual entities: never dispose
@@ -192,6 +194,9 @@ function distantVehicle(kind:VehicleId):T.Mesh {
 /** Hysteresis avoids flickering detail at the boundary. Player/police stay detailed. */
 export function setVehicleDetail(root:T.Group,distanceSquared:number,forceDetailed=false):boolean {
   if(root.name==='person')return true;
+  // The motorcycle rider is independently visible when the bike is occupied.
+  // A flattened distant mesh would otherwise display a rider on parked bikes.
+  if(isLuxuryVehicle(root.name)&&VEHICLES[root.name].shape==='motorcycle')return true;
   let state=vehicleDetails.get(root);
   const detailed=forceDetailed||distanceSquared<(state?.near.visible===false?100**2:125**2);
   if(!state){
@@ -231,7 +236,49 @@ export function createVehicle(kind:VehicleId|'person'):T.Group {
   }
   return templates.get(kind)!.clone(true);
 }
+/** Materials and decal geometry are shared; styles change only the individual mesh references. */
+export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
+  const key=`${style.paint}:${style.decal}`;
+  if(root.userData.vehicleStyle===key)return;
+  const spec=VEHICLES[kind],color=PAINTS[style.paint].color,detail=vehicleDetails.get(root)?.near??root;
+  detail.traverse(node=>{
+    if(!(node instanceof T.Mesh)||Array.isArray(node.material)||node.name==='vehicle-distant')return;
+    const current=node.material;
+    if(node.userData.originalVehiclePaint===undefined&&current instanceof T.MeshStandardMaterial&&current.color.getHex()===spec.color)
+      node.userData.originalVehiclePaint=current;
+    const original=node.userData.originalVehiclePaint as T.Material|undefined;
+    if(original)node.material=color===null?original:paint(color);
+  });
+  let decal=detail.getObjectByName('vehicle-decal') as T.Group|undefined;
+  if(decal)decal.removeFromParent();
+  if(style.decal!=='none'){
+    decal=new T.Group();decal.name='vehicle-decal';
+    for(const side of [-1,1]){
+      if(spec.shape==='motorcycle'){
+        // The overall bike width includes handlebars; decals follow the narrower front fairing.
+        const x=side*(MOTORCYCLE_FAIRING_WIDTH*.5+.004),y=.66,z=-.48;
+        if(style.decal==='stripe')box(decal,x,y,z,.008,.08,.66,0xffe9b9);
+        else for(let i=0;i<6;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+          box(decal,x,y+(row-.5)*.04,z+(i-2.5)*.11,.008,.04,.11,0xffe9b9);
+        continue;
+      }
+      const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
+      if(style.decal==='stripe')box(decal,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
+      else for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+        box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+    }
+    detail.add(decal);
+  }
+  root.userData.vehicleStyle=key;
+}
 function buildVehicle(kind: VehicleId | 'person', distant=false): T.Group {
+  if (isLuxuryVehicle(kind)) {
+    const root=buildLuxuryModel(kind);
+    const hardware=new T.Group();hardware.name='rocket_hardware';hardware.visible=false;
+    const jets=new T.Group();jets.name='jets';jets.visible=false;
+    root.add(hardware,jets);
+    return root;
+  }
   const bodyProfile=(parent:T.Object3D,width:number,points:[number,number][],color:number)=>profile(parent,width,points,color,distant);
   const root = new T.Group(); root.name = kind;
   if (kind === 'person') {

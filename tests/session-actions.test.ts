@@ -33,6 +33,23 @@ function online(edges?:()=>{jump:number;flip:number}){
   return {session,socket,world,state,advance:(ms:number)=>{now+=ms;}};
 }
 
+test('a finish purchase waits for the room result and post-action snapshot',()=>{
+  const {session,socket,world,state}=online();
+  const requestId=session.buyVehicleStyle({category:'paint',choice:'violet'});
+  assert.deepEqual(socket.sent.slice(-2),[
+    {type:'vehicleStyle',category:'paint',choice:'violet',requestId},{type:'sync',token:1}
+  ]);
+  assert.equal(session.vehicleStyleResult,null);
+  socket.message({type:'vehicleStyleResult',requestId,category:'paint',choice:'violet',ok:true});
+  assert.deepEqual(session.vehicleStyleResult,{type:'vehicleStyleResult',requestId,category:'paint',choice:'violet',ok:true});
+  assert.equal(session.world.entities[0].style.paint,'stock','the result does not change the authoritative car');
+  assert.equal(session.renderWorld().entities[0].style.paint,'stock','prediction keeps the committed finish');
+  world.entities[0].style.paint='violet';
+  state(world,1,0,0,1);
+  assert.equal(session.world.entities[0].style.paint,'violet','the next confirmed state applies the finish');
+  session.disconnect();
+});
+
 test('a new session stays empty until a completed room join',()=>{
   const session=new Session();assert.equal(session.status,'disconnected');
   assert.equal(session.world.players.length,0);session.tick(.1,drive);
@@ -181,4 +198,36 @@ test('a mini-game relocation cuts the camera when confirmed by authority',()=>{
   advance(100);state(entered,2,1,1,1);
   assert.deepEqual(session.world.races.rounds,entered.races.rounds);
   assert.equal(session.takeCameraSnap(),true);session.disconnect();
+});
+
+test('wallet recovery discards queued edges and resumes from the confirmed control generation',()=>{
+  const edges={jump:0,flip:0};
+  const {session,socket,world,state,advance}=online(()=>({...edges}));
+  session.tick(.05,NEUTRAL);edges.jump=1;session.queueEdge('jump',1);
+  const requestId=session.setIdentity('saved-driver');
+  edges.jump=2;session.queueEdge('jump',2);
+  const count=socket.sent.length;
+  advance(50);session.tick(.05,{...NEUTRAL,throttle:1,jump:2});
+  assert.equal(socket.sent.length,count,'pending recovery sends no controls');
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  const control=new ScheduledInput(NEUTRAL).snapshot();control.revision=1;control.edgeFloorRevision=1;
+  state(world,1,1,1,undefined,control);
+  advance(50);session.tick(.05,{...NEUTRAL,jump:2});
+  assert.equal(socket.sent.at(-1).input.jump,0,'pre-recovery and blocked presses are not replayed');
+  edges.jump=3;session.queueEdge('jump',3);advance(25);session.tick(.025,{...NEUTRAL,jump:3});
+  assert.equal(socket.sent.at(-1).input.jump,3,'new presses work after recovery');
+  session.disconnect();
+});
+
+test('luxury collection carries a control fence while a purchase does not',()=>{
+  const edges={jump:2,flip:1};
+  const {session,socket}=online(()=>({...edges}));socket.sent.length=0;
+  const buy=session.luxury('buy','ducati-panigale-v4');
+  assert.deepEqual(socket.sent,[{type:'luxury',action:'buy',vehicle:'ducati-panigale-v4',requestId:buy}]);
+  const collect=session.luxury('collect','ducati-panigale-v4');
+  assert.deepEqual(socket.sent.slice(-2),[
+    {type:'luxury',action:'collect',vehicle:'ducati-panigale-v4',requestId:collect,actionSeq:1,edgeBaseline:edges},
+    {type:'sync',token:1},
+  ]);
+  session.disconnect();
 });

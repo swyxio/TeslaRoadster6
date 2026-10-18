@@ -23,6 +23,7 @@ test('OTA charges once per game hour, pauses without debt, resumes on income, an
 test('enrollment with no cash waits; paid remote shopping is authoritative and independent',()=>{
   const world=createWorld(),p=addPlayer(world,'p','Player'),other=addPlayer(world,'q','Other');
   const car=world.entities.find(e=>e.id===p.entityId)!;
+  p.delivery.cash=0;
   assert.equal(subscribeOta(world,'p',true),true);assert.equal(p.delivery.ota.active,false);
   p.delivery.cash=100;updateOta(p,world.time);assert.equal(p.delivery.cash,95);
   Object.assign(car,{x:1000,z:1000,supportId:null,vy:3});
