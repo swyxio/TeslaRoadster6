@@ -6,7 +6,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
-**Delivery:** Pick up at a gold marker and stop at the customer. Beat the active-time estimate for a bonus; late deliveries pay less. Flying near police starts a chase and a possible ticket. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
+**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and a possible ticket. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
 
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 

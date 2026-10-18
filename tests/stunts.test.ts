@@ -6,7 +6,7 @@ import {initialDelivery} from '../shared/delivery';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery()}],pickups:[],time:0};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z})}],pickups:[],time:0};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }

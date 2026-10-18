@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
-import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor } from '../shared/delivery';
+import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
 import { newPolice, updatePolice } from '../shared/police';
 import { BUILDINGS, isSurface, nearbyBuildings } from '../shared/map';
 
@@ -17,20 +17,36 @@ test('restaurant and fictional customer markers are on clear, reachable ground',
   }
 });
 test('early bonus and late penalty change the base fare in the expected direction',()=>{
-  const order=initialDelivery().order;
+  const order=initialDelivery({x:40,z:60}).order;
   const early=payoutFor({...order,elapsed:order.estimate/2});
   const onTime=payoutFor({...order,elapsed:order.estimate});
   const late=payoutFor({...order,elapsed:order.estimate*1.5});
   assert.ok(early>onTime&&onTime>late&&late>=0);assert.equal(onTime,order.base);assert.equal(payoutFor({...order,elapsed:order.estimate*5}),0);
+});
+test('pickup bonus decreases with active time and expires at the estimate',()=>{
+  const order=initialDelivery({x:40,z:60}).order;
+  const early=pickupBonusFor(order),later=pickupBonusFor({...order,elapsed:order.pickupEstimate/2});
+  assert.ok(early>later&&later>0);assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate}),0);
+  assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate*2}),0);
+});
+test('pickup time pauses while idle and a late pickup awards no bonus',()=>{
+  const {world,player,car}=setup(),order=player.delivery.order;
+  tick(world,{...NEUTRAL,steer:1},20);tick(world,NEUTRAL,160);
+  const elapsed=order.elapsed;tick(world,NEUTRAL,100);assert.equal(order.elapsed,elapsed);
+  order.elapsed=order.pickupEstimate+1;
+  const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,y:0,speed:0});tick(world);
+  assert.equal(order.stage,'dropoff');assert.equal(player.delivery.cash,0);assert.equal(player.delivery.lastReward,null);
 });
 test('pickup and delivery require stopping on the ground; payment occurs exactly once',()=>{
   const {world,player,car}=setup(),order=player.delivery.order,restaurant=orderTarget(order);
   Object.assign(car,{x:restaurant.x,z:restaurant.z,y:10,speed:0});tick(world);assert.equal(order.stage,'pickup');
   Object.assign(car,{y:0,speed:10});tick(world);assert.equal(order.stage,'pickup');
   Object.assign(car,{x:restaurant.x,z:restaurant.z,y:0,speed:0});tick(world);assert.equal(order.stage,'dropoff');
+  const pickup=player.delivery.cash;assert.ok(pickup>0);assert.deepEqual(player.delivery.lastReward,{id:1,kind:'pickup',amount:pickup});
   const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,speed:0});tick(world);
-  assert.equal(player.delivery.completed,1);const payout=player.delivery.cash;assert.ok(payout>order.base);
-  tick(world,NEUTRAL,20);assert.equal(player.delivery.completed,1);assert.equal(player.delivery.cash,payout);
+  assert.equal(player.delivery.completed,1);const payout=player.delivery.cash-pickup;assert.ok(payout>order.base);
+  assert.deepEqual(player.delivery.lastReward,{id:2,kind:'delivery',amount:payout});
+  tick(world,NEUTRAL,20);assert.equal(player.delivery.completed,1);assert.equal(player.delivery.cash,pickup+payout);assert.equal(player.delivery.lastReward?.id,2);
 });
 test('active clock and delivery estimate pause after inactivity; player scores are independent',()=>{
   const {world,player,car}=setup(),other=addPlayer(world,'other','Other');

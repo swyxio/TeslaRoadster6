@@ -24,7 +24,7 @@ const one = connect(), two = connect();
 try {
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
-    assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'));
+    assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null));
     assert.equal(state.world!.entities.filter(e=>e.police).length,4);
   }
   const id = one.state.id!;
@@ -33,7 +33,7 @@ try {
   const origin={x:initial.x,z:initial.z,yaw:initial.yaw};
   for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 1 } })); await delay(50); }
   await eventually(() => {const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&((e.x-origin.x)*-Math.sin(origin.yaw)+(e.z-origin.z)*-Math.cos(origin.yaw)>4);}, 'remote player receives authoritative movement');
-  await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5;},'active delivery time replicated');
+  await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5&&p.delivery.order.elapsed>.5;},'active pickup time replicated');
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1,boost:true}}));
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_REAR),'remote boost exhaust replicated');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
