@@ -1,6 +1,6 @@
 # Audio design and integration contract
 
-Poly AV's audio is a locally synthesized, low-key arcade mix. The music is an original 108 BPM, four-chord chiptune loop; soft filtered square and triangle voices leave room for the driving cues. No third-party recordings, music files, remote requests or additional audio dependencies are used. The composition and generated sounds are first-party MIT-licensed project assets.
+Tesland's audio is a locally synthesized, low-key arcade mix. The music is an original 108 BPM, four-chord chiptune loop; soft filtered square and triangle voices leave room for the driving cues. No third-party recordings, music files, remote requests or additional audio dependencies are used. The composition and generated sounds are first-party MIT-licensed project assets.
 
 ## Player controls
 

@@ -27,7 +27,7 @@ export function createChatPanel(options: ChatPanelOptions) {
   const heading = document.createElement('div');
   const kicker = document.createElement('span');
   kicker.className = 'chat-kicker';
-  kicker.textContent = 'POLY AV / EVERY ROOM';
+  kicker.textContent = 'TESLAND / EVERY ROOM';
   const title = document.createElement('h2');
   title.id = 'chat-title';
   title.textContent = 'Global chat';

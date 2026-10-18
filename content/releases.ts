@@ -1,6 +1,20 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.4-alpha',
+    label: '0.0.4 Alpha',
+    date: '2026-10-18',
+    title: 'Welcome to Tesland',
+    intro: 'Poly AV becomes Tesland: a fictional Bay Area in 2050, where the Roadsters have finally arrived.',
+    sections: [
+      { title: 'A new future', items: [
+        'Explore the 2050 backstory and find the Elon Colossus and First Delivery Monument in the Marin headlands near the Golden Gate.',
+        'The monuments have solid, landable bases and appear on the local map. The sculptures themselves are decorative.',
+        'The game now lives at tesland.swyx.io. Browser-local preferences and saved identity shortcuts do not transfer automatically between addresses; recovery codes still work.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.3-alpha',
     label: '0.0.3 Alpha',
     date: '2026-10-18',

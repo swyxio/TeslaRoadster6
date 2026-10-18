@@ -56,6 +56,12 @@ export const PARKS=[
 export const LAKE_MERRITT={x:480,z:150,rx:18,rz:21,islands:[{x:474,z:145,r:4},{x:484,z:148,r:3.5},{x:480,z:157,r:3}]} as const;
 // A fictional sightseeing easter egg, not a depiction of any real person's vessel.
 export const MYSTERY_YACHT={x:210,z:-115,name:'Larry’s Imaginary Yacht'} as const;
+// Fictional monuments on flat Marin land, clear of the Golden Gate approach.
+// Their bases are shared collision buildings; the sculptures above are decorative.
+export const TESLAND_MONUMENTS=[
+ {id:'colossus',name:'Elon Colossus',x:-205,z:-445,w:22,d:22,h:12},
+ {id:'first-delivery',name:'First Delivery Monument',x:-185,z:-510,w:14,d:14,h:6},
+] as const;
 export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   let inside=false;
   for(let i=0,j=points.length-1;i<points.length;j=i++){
@@ -254,7 +260,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'|'monument'};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -321,6 +327,7 @@ for(let i=BUILDINGS.length-1;i>=0;i--){
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }
 BUILDINGS.push(...landmarkBuildings);
+BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){
