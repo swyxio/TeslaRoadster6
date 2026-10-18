@@ -1,4 +1,4 @@
-# Poly AV game design · simple fun first
+# Tesland game design · simple fun first
 
 ## Product decisions
 
@@ -36,7 +36,7 @@ Controls: steering plus forward/reverse; separate brake. While a player car is m
 
 Warm coastal daylight, desaturated sea/teal city, cream type, amber player/actions, mint charger markers. Car silhouettes and roadway contrast matter more than texture detail. Vehicle airborne state, remaining air, repair state, nearest station distance and visible other players must remain readable. Keep minimal instruments; do not turn the screen into a dashboard of implementation metrics.
 
-Alternatives can change style, HUD organization and models. Preserve the same gameplay entry points, touch equivalents and state transitions. See ASSETS.md for geometry/attachment budgets. Brand name is Poly AV (formerly Bay Drive); Poly Ave is an in-world street. Tesla Roadster is an in-game vehicle identity, with no claim of official affiliation or real flight capability.
+Alternatives can change style, HUD organization and models. Preserve the same gameplay entry points, touch equivalents and state transitions. See ASSETS.md for geometry/attachment budgets. Brand name is Tesland (formerly Poly AV and Bay Drive); Poly Ave remains an in-world street. The setting is an independently fictional and satirical 2050 Bay Area. Tesla Roadster is an in-game vehicle identity, with no claim of official affiliation or real flight capability.
 
 ## Multiplayer scale
 
@@ -66,7 +66,7 @@ Snapshots always retain players and occupied cars, plus nearby ambient entities;
 
 Avoid adding inventories, persistent currencies, matchmaking services, chat moderation burdens or a broad asset pipeline before the delivery and driving loops are satisfying.
 
-## Poly AV fleet layer
+## Tesland fleet layer
 
 26 researched vehicle/platform families: 11 Tesla, 9 Waymo, 4 Cruise, 2 Zoox. Catalog scope includes historical and announced designs; trims and unnamed internal chassis are not extra models. See FLEET_RESEARCH.md for every source and uncertainty.
 

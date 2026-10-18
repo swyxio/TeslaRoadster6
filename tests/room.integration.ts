@@ -4,8 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
-// Navigation and mini-game entry share the expanded Bay charging-lot world.
-assert.equal(PROTOCOL_VERSION, 25);
+// Version 26 combines the Tesland monuments with the expanded charging lots.
+assert.equal(PROTOCOL_VERSION, 26);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

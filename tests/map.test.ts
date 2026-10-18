@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,TESLAND_MONUMENTS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {STATIONS} from '../shared/stations';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {fitsParkingStall} from '../shared/parking';
@@ -191,6 +191,18 @@ test('new building landmarks share collision identities and remain distinct from
   const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
   if(place.id==='mission-peak')assert.equal(matching.length,0);
   else {assert.equal(matching.length,1,place.id);assert.equal(matching[0].h,place.h,place.id);}
+ }
+});
+
+test('Tesland monument bases are supported, collision-backed and clear of roads and landmarks',()=>{
+ for(const monument of TESLAND_MONUMENTS){
+  const base=BUILDINGS.find(b=>b.style==='monument'&&b.x===monument.x&&b.z===monument.z);
+  assert.ok(base,monument.id);
+  assert.equal(base.h,monument.h);
+  for(const sx of [-1,1])for(const sz of [-1,1])assert.equal(terrainHeight(monument.x+sx*monument.w/2,monument.z+sz*monument.d/2),0,monument.id);
+  const footprint={...monument,yaw:0};
+  for(const road of ROADS)assert.equal(contact(footprint,{...road,yaw:road.angle??0}),null,`${monument.id} overlaps a road`);
+  for(const building of BUILDINGS)if(building!==base)assert.equal(contact(footprint,{...building,yaw:0}),null,`${monument.id} overlaps a building`);
  }
 });
 

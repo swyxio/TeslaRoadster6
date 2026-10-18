@@ -1,4 +1,4 @@
-Poly AV bundles three.js. Its license follows.
+Tesland bundles three.js. Its license follows.
 
 The MIT License
 

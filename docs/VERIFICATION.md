@@ -2,6 +2,10 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Bay charging lots and Tesland monuments · protocol v26 branch · 2026-10-18 Pacific
+
+- After integrating the Tesland landmarks and relocating the conflicting Marin lot and storefront, `pnpm test` reported 347 passed and `pnpm build` passed; Vite retained its large-chunk warning. The map and station checks cover monument, road, building and lot clearance. Local Wrangler v26 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+
 ## Bay charging lots with mini-games · protocol v25 branch · 2026-10-18 Pacific
 
 - After integrating the navigation and mini-game menus, `pnpm test` passed 346 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v25 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
@@ -534,3 +538,12 @@ After integrating the relocated China Basin Dome, `pnpm test` passed 338 tests a
 The local protocol v23 two-client room integration also passed, including destination-route replication, direct race entry and the relocated Dome's five-goal match and awards. It is not a load test.
 
 After integrating automatic shared-room entry, `pnpm test` passed 341 tests and `pnpm build` passed; an additional focused session test passed for explicit solo play and stale-socket isolation. Local Wrangler room and chat integrations passed on protocol v24, and a separate two-seat capacity test checked full-room handling and a freed slot. In Chrome desktop, the game automatically joined the Bay room, the menu switched explicitly to solo, and map-selected self-driving continued with phone chat open (the displayed speed and destination distance changed). These checks do not establish physical-device behavior or playable room capacity.
+
+
+## 2026-10-18 · Tesland rebrand and monuments
+
+After integrating the navigation and social changes from main, `pnpm test` passed 343 tests and `pnpm build` passed, including client and Worker typechecks. The existing Vite large-chunk warning remains. Shared-map tests cover the two land-supported monument bases, their collision footprints and clearance from roads and other buildings. The sculptures are decorative; only the bases are solid and landable.
+
+Local Wrangler advertised protocol v25 and the chat integration passed. One room integration run failed at the existing moving-wall refill assertion while other checks were running; an isolated rerun passed the full two-client integration. Chrome desktop showed the colossus across the Golden Gate, the Tesland menu and automatic Bay-room connection. The menu was also inspected at emulated 390×844 portrait and 844×390 landscape sizes, and the story page was opened. Emulated pointer targeting did not reliably activate menu controls in this session; touch behavior and physical devices were not verified. These checks are not a multiplayer load test.
+
+The new custom domain `tesland.swyx.io` was connected to the existing Worker and served its pre-release health endpoint over HTTPS. Browser-local settings and identity shortcuts do not automatically transfer between origins; a saved identity can be recovered with its recovery code.

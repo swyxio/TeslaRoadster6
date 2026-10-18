@@ -1,10 +1,10 @@
-# Poly AV
+# Tesland
 
-Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, swap cars, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Start in San Francisco and unlock Oakland, the Peninsula, Fremont and San Jose through deliveries; the full circuit is about 19.9 game km. The Golden Gate and Rocket Dome are available from the start.
+Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finally arrived and Tesla and SpaceX run the Bay. You are a delivery driver making your own way through it. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, swap cars, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Start in San Francisco and unlock Oakland, the Peninsula, Fremont and San Jose through deliveries; the full circuit is about 19.9 game km. The Golden Gate and Rocket Dome are available from the start.
 
-**[Play Poly AV](https://polyav.swyx.io)** · [Changelog](https://polyav.swyx.io/changelog/) · [Dev blog](https://polyav.swyx.io/blog/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
+**[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-This checkout contains the Rocket Island expansion and Rocket Dome; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
@@ -15,6 +15,8 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 **Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose ⚽ Rocket Dome in Actions. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out or use Leave Dome to return to the Bay or island where you entered.
 
 **Global chat:** Pick a driver name and chat with players across rooms. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+
+**Tesland in 2050:** An enormous fictional Elon Musk colossus watches the Golden Gate from Marin; nearby, the First Delivery Monument celebrates the Bay’s most important cargo. Their bases are solid and landable. See [the setting](content/lore.md).
 
 **Bay sights:** Explore 100 additional low-poly landmarks around San Francisco, Marin, Oakland, Berkeley, the Peninsula, Fremont and San Jose, plus Twin Peaks and Mount Tamalpais. Three small, drivable hills evoke those summits and Mission Peak. Locations, sizes and slopes are playful approximations. Roadside billboards advertise fictional parody tech companies. See [map details](docs/MAP.md) and the [northern](docs/BAY_LANDMARKS_NORTH.md) and [southern](docs/BAY_LANDMARKS_SOUTH.md) place references.
 
@@ -78,7 +80,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
 - Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry, enter another room code, or explicitly choose Drive solo for a local session.
+- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code.
 
 ## Boundaries
 
