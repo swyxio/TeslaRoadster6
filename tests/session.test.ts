@@ -238,6 +238,32 @@ test('a saved driver cannot drive or spend until recovery and its following snap
   session.disconnect();
 });
 
+test('chat reconnecting the same driver does not interrupt a room route or rebind the wallet',()=>{
+  const session=new Session(),requestId=session.setIdentity('saved-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const sentDuringRecovery=socket.sent.length;
+  assert.equal(session.setIdentity('saved-code'),requestId);
+  assert.equal(socket.sent.length,sentDuringRecovery,'an in-flight bind is not duplicated');
+  socket.message({type:'wallet',level:0,eligibleIncome:0,cash:2_500,earned:0,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world,inputAck:0});
+  assert.equal(session.walletStatus,'ready');
+  session.setDestination(-180,60);
+  const sentWithRoute=socket.sent.length;
+  assert.equal(session.setIdentity('saved-code'),requestId);
+  assert.equal(socket.sent.length,sentWithRoute,'no new identity message can cancel the route');
+  assert.equal(session.walletStatus,'ready');
+  session.join('friends','Alex');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'saved-code',requestId},'a new room still binds the driver');
+  const replacement=session.setIdentity('other-code');
+  assert.notEqual(replacement,requestId);
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'other-code',requestId:replacement},'a different driver still rebinds');
+  session.disconnect();
+});
+
 test('a failed saved-driver lookup stays blocked until a deliberate guest rejoin',()=>{
   const session=new Session(),requestId=session.setIdentity('bad-code');
   session.join('bay','Alex');const socket=Socket.last;

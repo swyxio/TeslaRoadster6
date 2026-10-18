@@ -234,6 +234,10 @@ export class Session {
   }
   /** Recovery codes are sent only to the room and never added to snapshots. */
   setIdentity(code?:string) {
+    // Chat can reconnect independently of the room. Rebinding the same
+    // in-flight or confirmed driver would suspend an active route for no
+    // reason; a new room still sends its own identity on welcome.
+    if(code&&code===this.identityCode&&this.id&&this.socket?.readyState===WebSocket.OPEN&&this.walletStatus!=='failed')return this.identityRequestId;
     const requestId=++this.nextUpgradeRequest;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
     if(this.id&&this.socket?.readyState===WebSocket.OPEN){
