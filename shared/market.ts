@@ -35,6 +35,7 @@ export type MarketDecision = { result:MarketResult; receipt:MarketReceipt|null; 
 const id = (value:unknown):value is string => typeof value==='string' && value.length>0 && value.length<=128;
 const price = (value:number) => Number.isSafeInteger(value) && value>=0;
 const revision = (value:number) => Number.isSafeInteger(value) && value>=1 && value<Number.MAX_SAFE_INTEGER;
+const assetRevision = (value:number) => Number.isSafeInteger(value) && value>=1;
 const account = (value:MarketAccount|null):value is MarketAccount => !!value && id(value.id) && Number.isSafeInteger(value.cash) &&
   Number.isSafeInteger(value.earned) && (value.purchasedHomeAssetId===null || id(value.purchasedHomeAssetId));
 
@@ -68,7 +69,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   if((command.type==='create'||command.type==='reprice')&&!price(command.price))return reject('invalid');
   if(command.type!=='create'&&!revision(command.expectedRevision))return reject('invalid');
   const asset=records.asset, listing=records.listing;
-  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!revision(asset.revision)||typeof asset.tradable!=='boolean'||
+  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!assetRevision(asset.revision)||typeof asset.tradable!=='boolean'||
     asset.kind!=='property'||typeof asset.completedHome!=='boolean')return reject('invalid');
 
   if(command.type==='create'){
@@ -97,6 +98,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   }
   if(command.type!=='buy')return reject('invalid');
   if(asset.revision!==listing.assetRevision||asset.completedHome!==listing.completedHome)return reject('asset-changed');
+  if(asset.revision===Number.MAX_SAFE_INTEGER)return reject('invalid');
   if(!asset.tradable)return reject('not-tradable');
   if(command.actorId===listing.sellerId)return reject('self-purchase');
   const buyer=records.buyer,seller=records.seller;
@@ -110,7 +112,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   if(!Number.isSafeInteger(sellerCash))return reject('balance-overflow');
   const completedHome=asset.completedHome;
   return finish({ok:true,type:'buy',listingId:listing.id,buyerId:buyer.id,sellerId:seller.id,price:listing.price,sellerCredit,fee},{
-    asset:{...asset,ownerId:buyer.id,listingId:null},
+    asset:{...asset,ownerId:buyer.id,listingId:null,revision:asset.revision+1},
     listing:{...listing,status:'sold',buyerId:buyer.id,revision:listing.revision+1},
     buyer:{...buyer,cash:buyer.cash-listing.price,purchasedHomeAssetId:completedHome?asset.id:buyer.purchasedHomeAssetId},
     seller:{...seller,cash:sellerCash,purchasedHomeAssetId:completedHome&&seller.purchasedHomeAssetId===asset.id?null:seller.purchasedHomeAssetId},

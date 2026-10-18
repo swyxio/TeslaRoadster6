@@ -72,6 +72,7 @@ test('a sale transfers custody and funds once; competing or replayed operations 
   assert.deepEqual(f.accounts.get('buyer'),account('buyer',1_999_899));
   assert.deepEqual(f.accounts.get('seller'),account('seller',175));
   assert.equal(f.assets.get('plot')?.ownerId,'buyer');assert.equal(f.assets.get('plot')?.listingId,null);
+  assert.equal(f.assets.get('plot')?.revision,2,'transferring ownership invalidates prior asset revisions');
   assert.equal(f.listings.get('listing')?.status,'sold');
   assert.equal(reason(f.run(buy('plot','buyer2','competing'))),'listing-unavailable');
   const retry=f.run(command);assert.equal(retry.replayed,true);assert.equal(retry.writes,null);assert.deepEqual(retry.result,first.result);
@@ -168,5 +169,14 @@ test('revision exhaustion cannot leave an open listing permanently locked',()=>{
   const expectedRevision=Number.MAX_SAFE_INTEGER-1;
   assert.equal(reason(f.run({type:'reprice',assetId:'plot',listingId:'listing',actorId:'seller',operationId:'exhaust',expectedRevision,price:5})),'invalid');
   assert.equal(f.run({type:'cancel',assetId:'plot',listingId:'listing',actorId:'seller',operationId:'cancel-last',expectedRevision}).result.ok,true);
+  assert.equal(f.assets.get('plot')?.listingId,null);
+});
+
+test('an exhausted asset revision prevents transfer but still permits cancellation',()=>{
+  const asset={...property(false,'plot'),revision:Number.MAX_SAFE_INTEGER};
+  const f=new Fixture(asset);
+  assert.equal(f.run(create('plot')).result.ok,true);
+  assert.equal(reason(f.run(buy('plot'))),'invalid');
+  assert.equal(f.run({type:'cancel',assetId:'plot',listingId:'listing',actorId:'seller',operationId:'cancel-max-asset',expectedRevision:1}).result.ok,true);
   assert.equal(f.assets.get('plot')?.listingId,null);
 });
