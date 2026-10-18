@@ -109,7 +109,8 @@ test('protocol rejects malformed, non-finite, oversized and out-of-range input',
   assert.equal(parseMessage('{"type":"race","action":"finish","courseId":"short","elapsed":0}'),null);
   assert.equal(parseMessage('{"type":"race","action":"join","courseId":"__proto__"}'),null);
   assert.equal(roomSlug('/api/room/bay-1'), 'bay-1'); assert.equal(roomSlug('/api/room/../../bad'), null);
-  assert.equal(roomCapacity(), 8); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 8);
+  assert.equal(roomCapacity(), 64); assert.equal(roomCapacity('64'), 64);
+  assert.equal(roomCapacity('1'), 2); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 64);
 });
 test('wire action fences require positive sequences and valid edge baselines',()=>{
   const fence={actionSeq:1,edgeBaseline:{jump:0,flip:2147483647}};

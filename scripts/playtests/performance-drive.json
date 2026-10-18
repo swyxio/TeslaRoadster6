@@ -1,0 +1,22 @@
+{
+  "viewport": { "width": 1280, "height": 720, "deviceScaleFactor": 1 },
+  "steps": [
+    { "type": "waitFor", "selector": "#connection:has-text(\"LIVE\")", "timeoutMs": 60000 },
+    { "type": "waitForPoseRevision", "value": 1, "timeoutMs": 30000 },
+    { "type": "wait", "ms": 5000 },
+    { "type": "recordStart" },
+    { "type": "keyDown", "key": "KeyW" },
+    { "type": "wait", "ms": 2000 },
+    { "type": "frameStart" },
+    { "type": "wait", "ms": 4000 },
+    { "type": "keyDown", "key": "KeyD" },
+    { "type": "wait", "ms": 1000 },
+    { "type": "keyUp", "key": "KeyD" },
+    { "type": "wait", "ms": 1000 },
+    { "type": "frameStop" },
+    { "type": "sample" },
+    { "type": "keyUp", "key": "KeyW" },
+    { "type": "wait", "ms": 54000 },
+    { "type": "recordStop" }
+  ]
+}

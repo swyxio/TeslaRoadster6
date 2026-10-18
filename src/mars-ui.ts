@@ -22,7 +22,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
   document.body.append(dialog,win);
   const $=<T extends HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
   const feedback=$<HTMLElement>('.mars-feedback'),board=$<HTMLButtonElement>('.mars-board'),input=$<HTMLInputElement>('#mars-amount'),submit=$<HTMLButtonElement>('.mars-submit'),all=$<HTMLButtonElement>('.mars-all');
-  const viewer=createStarshipViewer({animation:now=>starship.animation(now),stage:()=>starship.stage()??0,message:now=>starship.viewerMessage(now),onOpen,onClose});
+  const viewer=createStarshipViewer({animation:now=>starship.animation(now),total:()=>starship.total(),message:now=>starship.viewerMessage(now),onOpen,onClose});
   const watch=()=>{if(!viewer.open())feedback.textContent='The launch view could not start on this device.';};
   const panel=createStarshipPanel({onLoadContributors:(group,cursor)=>{void starship.loadContributors(group,cursor);},onWatch:watch,onReplay:preview=>{starship.replay(preview);watch();},onSetPublicName:name=>starship.setName(name)});
   $('.mars-global').append(panel.element);
@@ -58,7 +58,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     }
     if(!dialog.open)return;
     $('.mars-eyebrow').textContent='TESLAND 2050 / A GLOBAL MISSION';
-    $('.mars-intro').textContent='Earn together across every room, or fund a launch for this room. Reach $1 billion and board Starship at the Fremont spaceport.';
+    $('.mars-intro').textContent='Earn together across every room, or fund a launch for this room. Reach $1 billion, unlock Fremont at level 2, and stop in the gold ring at the spaceport to board.';
     panel.update(starship.state());
     const player=session.world.players.find(p=>p.id===session.id);
     const roomRemaining=MARS_GOAL-session.world.mars.roomFund,cash=player?.delivery.cash??0;

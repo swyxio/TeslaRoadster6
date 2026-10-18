@@ -68,8 +68,9 @@ Mars funds. Review and remove obsolete prediction paths after the new path works
 end to end; do not retain competing prediction engines.
 
 Feature branches must incorporate main at `6e6067c` or later before integration.
-Keep the v32 tick/action/relocation contract, reduced traffic, vehicle LOD and
-provisional eight-player cap unless measurements justify changing them.
+Keep the v32 tick/action/relocation contract, reduced traffic and vehicle LOD.
+The user requested restoration of the provisional 64-player admission limit;
+the room-throughput and playable-capacity gates remain open at that occupancy.
 
 Use ordinary focused tests/build and the relevant room or UI checks for each
 feature. Run matching motion, scene or persistence checks when those paths
