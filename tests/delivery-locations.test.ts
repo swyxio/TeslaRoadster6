@@ -65,15 +65,18 @@ test('new handoffs fit supported land, clear geometry and do not overlap other s
  }
 });
 
-test('each town has ten pickups and ten fictional customers excluding landmark arrivals',()=>{
+test('each town has ten pickups and at least ten ground customers excluding landmarks',()=>{
  for(const cityId of cities){
   const pickups=historicRestaurants.filter(place=>HISTORIC_RESTAURANT_DETAILS[place.id].areaId===cityId).length+
    ADDED_RESTAURANTS.filter(place=>place.areaId===cityId).length;
-  const customers=historicCustomers.filter(place=>!place.id.startsWith('landmark-')&&
-   HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS]?.areaId===cityId).length+
-   ADDED_CUSTOMERS.filter(place=>place.areaId===cityId).length;
-  assert.equal(pickups,10,cityId);assert.equal(customers,10,cityId);
+  const customers=[...historicCustomers.filter(place=>!place.id.startsWith('landmark-')&&
+   HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS]?.areaId===cityId),
+   ...ADDED_CUSTOMERS.filter(place=>place.areaId===cityId)];
+  assert.equal(pickups,10,cityId);assert.equal(customers.filter(place=>!place.rooftop).length,10,cityId);
+  assert.equal(customers.length,cityId==='san-francisco'?12:cityId==='oakland'?11:10,cityId);
  }
+ assert.deepEqual(ADDED_CUSTOMERS.slice(-3).map(place=>place.id),
+  ['customer-san-francisco-05','customer-san-francisco-06','customer-oakland-07']);
 });
 
 test('SFO has its own sourced pickup and fictional customer, plus its historical landmark',()=>{

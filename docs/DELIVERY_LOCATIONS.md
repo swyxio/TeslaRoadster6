@@ -12,12 +12,12 @@ The new catalog is a staging layer until the progression owner integrates it wit
 
 ## Coverage of the current staged catalog
 
-The catalog has 171 pickups, 171 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. These figures count authored data, not jobs already enabled by the scheduler. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops; visual and traffic checks remain.
+The catalog has 171 pickups, 174 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. Every town has ten ground customers, with two additional rooftop customers in San Francisco and one in Oakland. These figures count authored data, not jobs already enabled by the scheduler. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops; visual and traffic checks remain.
 
 | Town or subarea | Pickups | Fictional customers | Additional landmark arrivals |
 | --- | ---: | ---: | ---: |
-| San Francisco | 10 | 10 | 1 |
-| Oakland | 10 | 10 | 0 |
+| San Francisco | 10 | 12 | 1 |
+| Oakland | 10 | 11 | 0 |
 | Berkeley | 10 | 10 | 1 |
 | Emeryville | 10 | 10 | 0 |
 | Mill Valley | 10 | 10 | 0 |

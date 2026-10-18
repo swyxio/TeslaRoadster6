@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Additional ground customers candidate · 2026-10-18 Pacific
+
+- Two San Francisco ground customers and one Oakland ground customer are appended after the existing catalog, giving both cities ten ground customers while preserving their rooftop stops. On the local protocol-v41 catalog baseline, the focused catalog and drive tests passed: 6,044 sampled-heading same-area plans and one empty-world Model 3 round trip for each new customer. Typecheck passed. These are not live-traffic or integrated-scheduler checks.
+- A separate Oakland probe exposed a planner/physics mismatch: some routes go west through the back of the existing stunt ramp at `x=398`, `z=180`, where the car stalls despite the planner accepting the path. This can affect other Oakland destinations too. The combined scheduler and navigation must handle or exclude those paths before release; the sampled route plans above do not prove every planned trip can be driven.
+
 ## Bay-wide delivery catalog checkpoint · 2026-10-18 Pacific
 
 - The staged catalog has ten sourced pickups and ten fictional customers per 17 towns, with one airport pickup, one fictional airport customer and six preserved landmark arrivals in addition. It is not yet connected to scheduling. The sampled-heading route fixture passed 5,974 ordered same-area plans; the historic Berkeley, SFO, Stanford, Mission San José and San José City Hall coordinates are preserved and have tested access. The new streets and routes are fictional, compressed layouts.

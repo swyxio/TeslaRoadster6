@@ -464,4 +464,7 @@ export const ADDED_CUSTOMERS:readonly AddedCustomer[] = [
   {"id":"customer-san-francisco-04","name":"SoMa Lantern Studio · San Francisco","cityId":"san-francisco","areaId":"san-francisco","x":57,"y":0,"z":87,"rooftop":false},
   {"id":"customer-berkeley-10","name":"Southside Sketch Club · Berkeley","cityId":"berkeley","areaId":"berkeley","x":413,"y":0,"z":-117,"rooftop":false},
   {"id":"customer-sfo-01","name":"Airport Plane Spotters · SFO","cityId":"south-san-francisco","areaId":"sfo","x":-744.5041850803275,"y":0,"z":1131.5321110600971,"rooftop":false},
+  {"id":"customer-san-francisco-05","name":"Market Street Printmakers · San Francisco","cityId":"san-francisco","areaId":"san-francisco","x":-181,"y":0,"z":-177,"rooftop":false},
+  {"id":"customer-san-francisco-06","name":"Fog City Music Room · San Francisco","cityId":"san-francisco","areaId":"san-francisco","x":-157,"y":0,"z":-177,"rooftop":false},
+  {"id":"customer-oakland-07","name":"Grand Avenue Makers · Oakland","cityId":"oakland","areaId":"oakland","x":487,"y":0,"z":117,"rooftop":false},
 ];
