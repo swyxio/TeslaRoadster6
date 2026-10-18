@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Mesh,Box3 } from 'three';
-import {createVehicle,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
+import { Mesh,InstancedMesh,Box3 } from 'three';
+import {createVehicle,setVehicleDetail,setVehicleStyle,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
 import {LUXURY_VEHICLE_IDS,VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {THRUSTER_REAR,THRUSTER_SIDE_LEFT} from '../shared/game';
 test('fleet meshes retain scale, bounded complexity and independent articulated transforms',()=>{
  for(const id of VEHICLE_IDS){
   const first=createVehicle(id),second=createVehicle(id),spec=VEHICLES[id];let triangles=0;
-  first.traverse(o=>{if(o instanceof Mesh){triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;for(const v of o.geometry.attributes.position.array)assert.ok(Number.isFinite(v));}});
+  first.traverse(o=>{if(o instanceof Mesh){triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o instanceof InstancedMesh?o.count:1);for(const v of o.geometry.attributes.position.array)assert.ok(Number.isFinite(v));}});
   assert.ok(triangles<12000,`${id}: ${triangles}`);
   const jets=first.getObjectByName('jets')!;first.remove(jets);
   const bounds=new Box3().setFromObject(first);first.add(jets);
@@ -76,4 +76,49 @@ test('Rocket has ten nozzles and independently controlled vapor on each clone',(
  assert.equal(first.getObjectByName('plume_down_l_f')!.visible,false);
  assert.equal(second.getObjectByName('jets')!.visible,false);
  setThrusterEffects(first,0,2);assert.equal(first.getObjectByName('jets')!.visible,false);
+});
+
+test('distant fleet preserves silhouettes, bounds geometry and restores independent upgrades',()=>{
+ for(const id of VEHICLE_IDS){
+  const car=createVehicle(id),other=createVehicle(id);
+  setThrusterEffects(car,THRUSTER_REAR,1,true);
+  assert.equal(setVehicleDetail(car,130**2),false,id);
+  const far=car.getObjectByName('vehicle-distant') as Mesh;
+  assert.ok(far instanceof Mesh);
+  assert.ok((far.geometry.index?.count??far.geometry.attributes.position.count)/3<4000,id);
+  assert.equal(car.getObjectByName('vehicle-detail')!.visible,false);
+  assert.equal(other.getObjectByName('vehicle-distant'),undefined);
+  assert.equal(setVehicleDetail(car,110**2),false,'hysteresis retains distant detail');
+  setRocketKit(car,id,true);
+  assert.equal(car.getObjectByName('rocket-kit')!.parent!.name,'vehicle-detail');
+  assert.equal(setVehicleDetail(car,99**2),true);
+  assert.equal(far.visible,false);assert.equal(car.getObjectByName('jets')!.visible,true);
+  assert.equal(setVehicleDetail(car,120**2),true,'hysteresis retains near detail');
+  assert.equal(setVehicleDetail(car,2000**2,true),true,'controlled and police detail is retained');
+ }
+});
+
+test('luxury cars use distant silhouettes while bikes retain independent riders',()=>{
+ for(const id of LUXURY_VEHICLE_IDS){
+  const car=createVehicle(id),other=createVehicle(id);
+  if(VEHICLES[id].shape==='motorcycle'){
+   const rider=car.getObjectByName('rider')!;rider.visible=false;
+   assert.equal(setVehicleDetail(car,200**2),true,id);
+   assert.equal(rider.visible,false,id);
+   assert.equal(other.getObjectByName('rider')!.visible,true,id);
+   assert.equal(car.getObjectByName('vehicle-distant'),undefined,id);
+   continue;
+  }
+  assert.equal(setVehicleDetail(car,200**2),false,id);
+  const far=car.getObjectByName('vehicle-distant') as Mesh,material=far.material;
+  assert.ok(far instanceof Mesh,id);
+  assert.equal(setVehicleDetail(car,200**2,true),true,id);
+  setVehicleStyle(car,id,{paint:'mint',decal:'stripe'});
+  assert.equal(far.material,material,id);
+  assert.equal(car.getObjectByName('vehicle-decal')?.parent?.name,'vehicle-detail',id);
+  setVehicleStyle(car,id,{paint:'stock',decal:'none'});
+  assert.equal(car.getObjectByName('vehicle-decal'),undefined,id);
+  assert.equal(setVehicleDetail(car,200**2),false,id);
+  assert.equal(other.getObjectByName('vehicle-distant'),undefined,id);
+ }
 });

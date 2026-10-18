@@ -1,0 +1,15 @@
+{
+  // Local-only profiling fixture. Never deploy this configuration.
+  "name": "tesland-fast-room-profile-local",
+  "main": "./fast-room-profile-worker.ts",
+  "compatibility_date": "2026-10-17",
+  "vars": { "MAX_PLAYERS": "2" },
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "GameRoom" },
+    { "name": "CHAT", "class_name": "GlobalChat" }
+  ] },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["GlobalChat"] }
+  ]
+}
