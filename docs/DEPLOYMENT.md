@@ -2,7 +2,7 @@
 
 The game uses one Worker for the Vite assets and API, with one Durable Object per multiplayer room. The checked-in `wrangler.jsonc` names the existing production Worker `bay-drive`. Room state is ephemeral; a deployment, runtime restart or last disconnect can reset it. Rooms are public by code, not private, and active rooms incur Durable Object and WebSocket usage.
 
-The project's [production game](https://bay-drive.swyxio.workers.dev) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. Cloudflare Workers Builds is connected to the public repository: pushes to `main` build and deploy production, while pushes to `staging` build and deploy that preview. Staging does not automatically follow `main`.
+The project's [production game](https://tesland.swyx.io) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. Cloudflare Workers Builds is connected to the public repository: pushes to `main` build and deploy production, while pushes to `staging` build and deploy that preview. Staging does not automatically follow `main`.
 
 ## Deploy your own copy
 
