@@ -1,6 +1,23 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.2-alpha',
+    label: '0.0.2 Alpha',
+    date: '2026-10-18',
+    title: 'Rocket Island playground',
+    intro: 'Take a ferry to a fictional island made for flying, racing and parking games.',
+    sections: [
+      { title: 'Ride and explore', items: [
+        'Board the shared ferry on foot or in a car, then explore Rocket Island’s cliff, banked oval and race courses. The island is open from the start of a session.',
+        'Collect Rocket kits on the island and at selected Supercharger playgrounds to add flight to any vehicle for the session.'
+      ] },
+      { title: 'Play a round', items: [
+        'Join short or oval races on the island, or try Park It and Cut the queue at the parking playgrounds.',
+        'Supercharger site names refer to real locations, but their game placement and air refill service are fictional.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.1-alpha',
     label: '0.0.1 Alpha',
     date: '2026-10-18',

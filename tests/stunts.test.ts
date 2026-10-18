@@ -63,14 +63,14 @@ test('jump reaches the proposed height and duration and the starter tank lasts t
     assert.ok(peak>5.5&&peak<6.2,`peak ${peak}`);assert.ok(steps*.05>2.1&&steps*.05<2.35,`duration ${steps*.05}`);
     assert.equal(car.stunts,sequence+1);assert.equal(car.pitch,0);assert.equal(car.roll,0);
   }
-  assert.equal(car.air,50.5);
+  assert.equal(car.air,68.5);
 });
 test('two deliberate flips fit in one jump and airborne steering banks',()=>{
   const {car,send}=playground();send({...NEUTRAL,jump:1});send({...NEUTRAL,jump:1,flip:1});
   for(let i=0;i<16;i++)send({...NEUTRAL,jump:1,flip:1});
   assert.equal(car.stunts,1);send({...NEUTRAL,jump:1,flip:2});
   for(let i=0;i<16;i++)send({...NEUTRAL,jump:1,flip:2});
-  assert.equal(car.stunts,2);assert.ok(car.y>0);assert.equal(car.air,79);
+  assert.equal(car.stunts,2);assert.ok(car.y>0);assert.equal(car.air,85);
   for(let i=0;i<4;i++)send({...NEUTRAL,jump:1,flip:2,steer:1});assert.ok(Math.sin(car.roll)>.05);assert.ok(car.yawRate>0);
 });
 test('empty tank disables thrust, jumps and flips while driving and gravity still work',()=>{
@@ -131,7 +131,17 @@ test('loop has a real attached ceiling, fans do not consume tank air, and jump d
 test('jump and flip edges fire once when a fast tick uses substeps',()=>{
   const {car,send}=playground();car.speed=60;
   send({...NEUTRAL,jump:1,flip:1});
-  assert.equal(car.supportId,null);assert.equal(car.air,83.5);
+  assert.equal(car.supportId,null);assert.equal(car.air,89.5);
   assert.equal(car.lastJump,1);assert.equal(car.lastFlip,1);
-  send({...NEUTRAL,jump:1,flip:1});assert.equal(car.air,83.5);
+  send({...NEUTRAL,jump:1,flip:1});assert.equal(car.air,89.5);
+});
+
+test('low air gives a proportional jump and hover works with the remainder',()=>{
+  const {car,send}=playground();car.air=9;send({...NEUTRAL,jump:1});
+  assert.equal(car.supportId,null);assert.ok(car.y>0);assert.equal(car.air,3);
+  const air=car.air;send({...NEUTRAL,jump:1,hover:true,throttle:1});assert.ok(car.air<air);assert.ok(car.vz<0);
+  Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',air:3});send({...NEUTRAL,jump:2});
+  assert.equal(car.air,0);assert.ok(car.y>0);assert.ok(car.vy>0&&car.vy<6);
+  Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',air:0});send({...NEUTRAL,jump:3});
+  assert.equal(car.supportId,'ground');assert.equal(car.y,0);
 });

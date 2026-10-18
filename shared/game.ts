@@ -589,13 +589,16 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       const surface=domeSurface(e.domeS!);e.vx=-Math.sin(e.yaw)*e.speed;
       e.vy=-Math.cos(e.yaw)*e.speed*surface.tangentY;e.vz=-Math.cos(e.yaw)*e.speed*surface.tangentZ;
     }else if(grounded){e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;e.vy=onRamp?e.vx*rampSlope:e.supportId==='island-bank'?bankVerticalVelocity(e.x,e.z,e.vx,e.vz):e.supportId==='island-oval'?ovalBankVerticalVelocity(e.x,e.z,e.vx,e.vz):0;}
-    if(jump&&rocket&&e.air>=24*airUse){
-      e.air-=24*airUse;e.jumpBurstUntil=world.time+.25;
+    if(jump&&rocket&&e.air>0){
+      // A partly empty tank fires a proportional jump; a full starter jump costs 6%.
+      const jumpCost=12*airUse,jumpFraction=Math.min(1,e.air/jumpCost);
+      e.air=Math.max(0,e.air-jumpCost*jumpFraction);e.jumpBurstUntil=world.time+.25;
       const angle=e.loopAngle,surface=onDome?domeSurface(e.domeS!):null;
       const normal=surface?{x:0,y:surface.normalY,z:surface.normalZ}:e.supportId==='island-cliff'&&angle!==null?cliffPose(angle).normal:e.supportId==='island-bank'?bankSurface(e.x,e.z)?.normal:e.supportId==='island-oval'?ovalBankSurface(e.x,e.z)?.normal:null;
-      e.vx+=(normal?.x??(angle===null?0:-Math.sin(angle)))*11;
-      e.vy+=(normal?.y??(angle===null?1:Math.cos(angle)))*11;
-      e.vz+=(normal?.z??0)*11;
+      const impulse=11*jumpFraction;
+      e.vx+=(normal?.x??(angle===null?0:-Math.sin(angle)))*impulse;
+      e.vy+=(normal?.y??(angle===null?1:Math.cos(angle)))*impulse;
+      e.vz+=(normal?.z??0)*impulse;
       e.loopAngle=null;e.domeS=null;e.supportId=null;grounded=false;
     }
     if(flip&&rocket&&!grounded&&e.loopAngle===null&&e.air>=9*airUse&&e.flipRemaining<=0){e.air-=9*airUse;e.flipRemaining=Math.PI*2;}
@@ -616,7 +619,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       if((boostFraction||hoverFraction||flightFraction)&&input.steer>0)e.thrusters|=THRUSTER_SIDE_RIGHT;
       if((boostFraction||hoverFraction||flightFraction)&&input.steer<0)e.thrusters|=THRUSTER_SIDE_LEFT;
     }
-    e.steering+=(input.steer-e.steering)*Math.min(1,dt*8);
+    const manualDriver=!!e.driver&&!e.autopilot;
+    e.steering+=(input.steer-e.steering)*Math.min(1,dt*(manualDriver?14:8));
     if(e.supportId==='dome'&&e.domeS!==null){
       // Steering and speed live on the unwrapped capsule, then map back to 3D.
       const before=domeSurface(e.domeS),roadTop=spec!.maxSpeed*(e.upgrades.motor?1.1:1),top=boostFraction?Math.max(72,roadTop):roadTop;
@@ -625,8 +629,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       if(input.brake)e.speed=Math.sign(e.speed)*Math.max(0,Math.abs(e.speed)-spec!.brakeDecel*dt);
       if(!input.throttle)e.speed*=Math.exp(-.65*dt);
       e.speed=clamp(e.speed,-Math.min(top*.35,12),top);
-      const oldYaw=e.yaw,yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle);
-      e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*dt;
+      const oldYaw=e.yaw,yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*(manualDriver?1.3:1);
+      const yawLimit=Math.min(manualDriver?2.4:2.2,(manualDriver?20:10)/Math.max(4,Math.abs(e.speed)));
+      e.yaw+=clamp(yawRate,-yawLimit,yawLimit)*dt;
       e.x+=-Math.sin(e.yaw)*e.speed*dt;
       e.domeS=((e.domeS-Math.cos(e.yaw)*e.speed*dt)%DOME_PERIMETER+DOME_PERIMETER)%DOME_PERIMETER;
       const surface=domeSurface(e.domeS);e.y=surface.y;e.z=surface.z;
@@ -667,8 +672,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       if(person)e.yaw+=input.steer*2.7*dt;
       else {
         const rearFactor=spec!.fourWheelSteering?1+.55*Math.max(0,1-Math.abs(e.speed)/25):1;
-        const yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*rearFactor;
-        e.yaw+=clamp(yawRate,-Math.min(2.2,10/Math.max(4,Math.abs(e.speed))),Math.min(2.2,10/Math.max(4,Math.abs(e.speed))))*(drifting?1.5:1)*dt;
+        const yawRate=e.speed/spec!.wheelbase*Math.tan(e.steering*spec!.steerAngle)*rearFactor*(manualDriver?1.3:1);
+        const yawLimit=Math.min(manualDriver?2.4:2.2,(manualDriver?20:10)/Math.max(4,Math.abs(e.speed)));
+        e.yaw+=clamp(yawRate,-yawLimit,yawLimit)*(drifting?1.5:1)*dt;
       }
       if(drifting){
         const side=oldVX*Math.cos(e.yaw)-oldVZ*Math.sin(e.yaw);

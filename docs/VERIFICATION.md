@@ -2,10 +2,16 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island with release history · protocol v18 · 2026-10-18 Pacific
+
+- At merge `e697757`, `pnpm test` passed 280 tests and `pnpm build` passed both TypeScript checks, Vite and generation of the public blog and changelog. The main JavaScript was 795.37 kB (228.66 kB gzip), with Vite's large-chunk warning. Local Wrangler room and global-chat integrations passed; `/blog/` and `/changelog/` returned HTML. These checks preceded the subsequent flight-steering integration.
+- Chrome opened the changelog, blog index and article, returned to the game, and opened Actions and Controls & gamepad in solo play. After driving and reloading, the menu showed the last-play time and linked to the changelog with the prior release. At 390×844 touch emulation, Drive accelerated 0→72 km/h and Jump reached 5 m. No console errors were observed; no physical device was tested.
+
 ## Island with Bay progression, currents and controls · protocol v18 · 2026-10-18 Pacific
 
 - `pnpm test` passed 276 tests; `pnpm build` passed both TypeScript checks and Vite. The main JavaScript was 792.39 kB (227.48 kB gzip), with Vite's large-chunk warning. Local Wrangler reported protocol v18; the two-client room integration, global chat integration and isolated chat-restart integration passed. The Cloudflare branch preview for `1623aba` returned protocol v18, served the same asset hashes as the local build and passed the two-client room integration against its live Worker. These checks do not describe the shared production deployment.
 - The local eight-second 64-client smoke passed: minimum 61 snapshots per client, p95 snapshot gap 153 ms, maximum per-recipient snapshot 138,906 bytes. A separate five-second same-process benchmark with 64 players, six ferry passengers, four parking entrants, four racers, four dome players and four oval drivers passed: p95 simulation step 8.30 ms, p95 64-recipient batch 23.11 ms, maximum recipient snapshot 124,866 bytes. Neither is evidence of sustained, peak-traffic, WAN, mobile-rendering or production capacity.
+- The Cloudflare branch preview for `1623aba` passed a separate two-client natural-input car crossing: boarding at 160.0 s, secured departure at 180.3 s, fixed-offset transit at 196.1 s, island arrival at 225.2 s and drive-off onto ground at 231.5 s. Both sockets closed normally; this was a preview, not the shared production deployment.
 - Two local Wrangler clients observed a natural-input v18 car crossing: boarding at 159.9 s, secured departure at 180.2 s, fixed-offset transit at 196.1 s, arrival at 225.2 s and drive-off onto island ground at 231.4 s. Both sockets closed normally, with no progression block or state injection.
 - Focused shared-simulation tests cover level-zero access to the island and SF playground while preserving the mainland gates, plus flight-speed limits after ordinary and dome collisions and time-based low-condition damping. A separate simulation run completed a level-zero ferry crossing and all eight oval gates; a 64-player spawn check placed no controlled vehicle in a locked region. Simulation is not a browser or production playtest. An automated review of the combined merge reported no actionable regressions.
 - Chrome desktop rendered the combined scene and Level 0 requirements, Controls & gamepad, parking and race Actions, and the neutral Park It request message. At 390×844 portrait emulation, touch Drive accelerated 0→151 km/h and Jump reached 5 m. At 844×390 landscape, Drive accelerated 4→103 km/h, Jump reached 5 m and touch opened Actions. Sky-current guidance was visible but entering a current was not tested in this pass. No console errors were observed. No physical device was tested.
@@ -37,6 +43,12 @@ These entries describe separate historical builds. Check the version and scope i
 
 - In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
 - This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
+
+## Flight and steering feel · 2026-10-18 Pacific
+
+- `pnpm test` passed 198 tests after integrating the latest main branch, and `pnpm build` passed. Vite retains its existing large-chunk warning. Tests cover held jump/hover across keyboard, touch and simulated gamepad, rebound controls, proportional low-air launches, forward thrust while hovering, steering at road speeds and in reverse, and existing drift/autopilot behavior. No physical controller or phone was tested.
+- Local Wrangler two-client room integration passed movement, jump/flip/landing, sky currents and the existing room checks; this is not a load test.
+- Chrome desktop solo: holding E launched and hovered at 4 m; a steering input visibly turned the moving car. A temporary, removed local fixture set the tank to 9%: the HUD showed a low-air refill direction, and a 350 ms E press launched to 4 m with 2% remaining. Chrome emulation showed the combined Jump / Hover control at 390×844 portrait and 844×390 landscape. Touch activation and subjective handling on a physical device remain unverified.
 
 ## Release notes and dev blog · 2026-10-18 Pacific
 
