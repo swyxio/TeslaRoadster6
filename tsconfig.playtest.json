@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["scripts/playtest-record.ts", "tests/playtest-recorder.integration.ts"]
+}

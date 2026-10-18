@@ -11,6 +11,7 @@ import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
 import { orderTarget } from '../shared/delivery';
+import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
@@ -68,6 +69,7 @@ export class GameScene {
   private shopLabels:T.Sprite[]=[];
   private spaceport?:ReturnType<typeof buildFremontSpaceport>;
   private objective=new T.Group();
+  private goalArt=createGoalArt();
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
   private skyCurrents=createSkyCurrents();
@@ -115,6 +117,7 @@ export class GameScene {
     this.scene.add(this.propertyScene.group);
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
     this.objectiveBeam.position.y=9;this.objective.add(this.objectiveBeam);
+    this.objective.add(this.goalArt.mesh);
     this.scene.add(this.objective);
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
     window.addEventListener('resize',resize); resize();
@@ -393,7 +396,8 @@ export class GameScene {
     else this.ballPosition.lerp(ballTarget,alpha);
     this.dome.update(this.ballPosition);
     const e=controlled;
-    this.objective.visible=!!player&&!menu&&!e?.inDome;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    const target=player?orderTarget(player.delivery.order):undefined;
+    this.objective.visible=!!player&&!menu&&!e?.inDome;if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
     if(menu){
@@ -434,6 +438,8 @@ export class GameScene {
     }
     this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();
+    if(player&&target)this.goalArt.update(goalArtKind(player.delivery.order.stage,target.rooftop),goalArtNearby(target,e,menu),world.time,this.camera);
+    else this.goalArt.mesh.visible=false;
     // Choose detail against the final camera pose, including reset/cockpit cuts.
     for(const e of world.entities){
       const mesh=this.entities.get(e.id)!;

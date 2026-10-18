@@ -5,7 +5,8 @@ import { MARS_GOAL, marsGoalReached } from '../shared/mars';
 import { playerRace } from '../shared/race';
 import { RACE_COURSES } from '../shared/race-courses';
 import { domeGoals } from '../shared/soccer';
-import type { AchievementId } from '../shared/achievements';
+import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { selectAchievementTiers, type AchievementTierId, type AchievementTierProgress, type AchievementTierRow } from '../shared/achievement-tiers';
 
 export type GameResult = { key:string; game:string; detail:string };
 export type GameScores = { current:GameResult[]; recent:GameResult[] };
@@ -80,6 +81,85 @@ export function awardDeliveryTarget(id:AchievementId):number|null {
   if(id==='regular')return 3;
   const match=/^deliveries-(\d+)$/.exec(id);
   return match?Number(match[1]):null;
+}
+
+export const AWARD_GROUPS=[
+  {id:'delivery',name:'Delivery'},
+  {id:'flight',name:'Flight'},
+  {id:'exploration',name:'Exploration'},
+  {id:'games',name:'Games'},
+  {id:'collection',name:'Collection'},
+] as const;
+type AwardGroup=(typeof AWARD_GROUPS)[number]['id'];
+
+/** Keep every catalog award in one place; grouping does not affect its rules. */
+export function awardGroup(id:AchievementId):AwardGroup {
+  if(awardDeliveryTarget(id)||id==='sky-delivery'||id==='sfo-express')return 'delivery';
+  if(['rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner'].includes(id))return 'games';
+  if(['bay-hopper','roof-rider','coit-landing','salesforce-landing'].includes(id))return 'flight';
+  if(id.startsWith('luxury-'))return 'collection';
+  return 'exploration';
+}
+
+const familyGroups:Record<AchievementTierId,AwardGroup>={
+  deliveries:'delivery',pickups:'delivery','early-pickups':'delivery','early-deliveries':'delivery','rooftop-deliveries':'delivery',
+  'roof-landings':'flight','bay-crossings':'flight','supply-pickups':'exploration',
+  'parking-successes':'games','queue-successes':'games','races-finished':'games','races-won':'games','dome-matches':'games','dome-wins':'games',
+};
+export function awardFamilyGroup(id:AchievementTierId):AwardGroup {return familyGroups[id];}
+
+export const AWARD_FAMILY_DESCRIPTIONS:Record<AchievementTierId,string>={
+  deliveries:'Complete food deliveries.',
+  pickups:'Pick up food orders at restaurants.',
+  'early-pickups':'Pick up orders before the pickup estimate.',
+  'early-deliveries':'Deliver orders before the delivery estimate.',
+  'rooftop-deliveries':'Complete deliveries on rooftops.',
+  'roof-landings':'Fly and land on a rooftop.',
+  'bay-crossings':'Fly across the water between San Francisco and Oakland.',
+  'parking-successes':'Finish a Park It challenge.',
+  'queue-successes':'Finish a Cut the Queue challenge.',
+  'races-finished':'Finish a race.',
+  'races-won':'Win a race with at least two starters.',
+  'dome-matches':'Touch the ball in a completed Rocket Dome match.',
+  'dome-wins':'Score a goal and win a completed Rocket Dome match.',
+  'supply-pickups':'Collect air or repair supplies.',
+};
+
+/** A wallet row is committed; guests and disconnected wallets have no durable counters. */
+export function savedAwardTiers(online:boolean,status:AwardWalletStatus,progress:AchievementTierProgress|null):AchievementTierRow[]|null {
+  return online&&status==='ready'&&progress?selectAchievementTiers(progress):null;
+}
+
+const deliveryTiers=(Object.keys(ACHIEVEMENTS) as AchievementId[])
+  .filter(id=>awardDeliveryTarget(id)!==null)
+  .sort((a,b)=>awardDeliveryTarget(a)!-awardDeliveryTarget(b)!);
+const collectionTiers:AchievementId[]=['luxury-collection-2','luxury-collection-4','luxury-collection-6'];
+const regionTiers:AchievementId[]=['region-oakland','region-peninsula','region-san-jose'];
+export function awardTier(id:AchievementId):string {
+  for(const [name,tiers] of [['Delivery',deliveryTiers],['Collection',collectionTiers],['Region',regionTiers]] as const){
+    const index=tiers.indexOf(id);
+    if(index!==-1)return `${name} milestone ${index+1} / ${tiers.length}`;
+  }
+  return 'One-time award';
+}
+
+/** The shared catalog already describes rewards; keep that as the source of truth. */
+export function awardDetails(id:AchievementId):{description:string;reward:string} {
+  const description:string=ACHIEVEMENTS[id].description;
+  const cash=/^(.*?)\s+Reward: (\$[\d,]+)\.$/.exec(description);
+  if(cash)return {description:cash[1],reward:`${cash[2]} cash`};
+  const research=/^(.*?)\s+Earn (\$[\d,]+ and 20% off .*?)\.$/.exec(description);
+  if(research)return {description:research[1],reward:research[2]};
+  return {description,reward:description.includes('$')?'See details':'Award only'};
+}
+
+export type AwardCardState='saved'|'pending'|'guest'|'locked'|'unavailable';
+export function awardCardState(available:boolean,saved:boolean,observed:boolean,status:AwardWalletStatus):{state:AwardCardState;label:string;save:string} {
+  if(!available)return {state:'unavailable',label:'Unavailable',save:'Connect to see progress'};
+  if(saved)return {state:'saved',label:'Earned',save:'Saved to your driver'};
+  if(observed&&status==='guest')return {state:'guest',label:'Earned',save:'Guest drive · not saved'};
+  if(observed)return {state:'pending',label:'Earned',save:'Awaiting wallet confirmation'};
+  return {state:'locked',label:'Locked',save:status==='guest'?'Guest drive · not saved':'Saves when earned'};
 }
 export type AwardWalletStatus='guest'|'connecting'|'syncing'|'ready'|'failed';
 export function awardSaveView(online:boolean,status:AwardWalletStatus,wallet:readonly AchievementId[]|null,current:readonly AchievementId[]){

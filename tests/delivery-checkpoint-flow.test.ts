@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, NEUTRAL, step, type EconomyHooks } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, orderTarget, rerouteInaccessibleOrder, updateDelivery } from '../shared/delivery';
 import { updateAchievements } from '../shared/achievements';
+import { activityPayout, recordRoomWin } from '../shared/earnings-events';
 
 function readyDropoff(completed:number,elapsed=100) {
   const world=createWorld(),player=addPlayer(world,'driver','Driver');
@@ -32,16 +33,35 @@ test('a completed drop-off pays the checkpoint on every third job without inflat
   }
 });
 
-test('a third delivery still pays its checkpoint when the late fare is zero',()=>{
+test('a very late third delivery pays the fare floor and its checkpoint',()=>{
   const {world,player,car}=readyDropoff(2,1_000);
   const delivery=player.delivery as typeof player.delivery & {lifetimeIncome:number};
   const cash=delivery.cash,income=delivery.lifetimeIncome,earned=delivery.earned;
   updateDelivery(world,player,car,NEUTRAL,0);
-  assert.equal(delivery.lastPayout,0);
-  assert.equal(delivery.cash-cash,350);
-  assert.equal(delivery.lifetimeIncome-income,350);
-  assert.equal(delivery.earned,earned);
-  assert.equal(delivery.lastReward?.amount,350);
+  assert.equal(delivery.lastPayout,500);
+  assert.equal(delivery.cash-cash,850);
+  assert.equal(delivery.lifetimeIncome-income,850);
+  assert.equal(delivery.earned-earned,500);
+  assert.equal(delivery.lastReward?.amount,850);
+});
+
+test('a room multiplier applies to the late fare floor but not the checkpoint',()=>{
+  const {world,player,car}=readyDropoff(2,1_000);
+  player.delivery.order.base=601;
+  const cash=player.delivery.cash,income=player.delivery.lifetimeIncome,earned=player.delivery.earned;
+  const events={room:recordRoomWin([],0),global:[]};
+  const seen:string[]=[];
+  const parts=updateDelivery(world,player,car,NEUTRAL,0,false,false,component=>{
+    seen.push(component.kind);
+    return activityPayout(component.amount,component.kind,0,events);
+  })!;
+  assert.deepEqual(seen,['delivery']);
+  assert.deepEqual(parts.map(part=>[part.component.kind,part.component.amount,part.amount]),[['delivery',301,452],['checkpoint',350,350]]);
+  assert.equal(player.delivery.lastPayout,452);
+  assert.equal(player.delivery.cash-cash,802);
+  assert.equal(player.delivery.lifetimeIncome-income,802);
+  assert.equal(player.delivery.earned-earned,452);
+  assert.equal(player.delivery.lastReward?.amount,802);
 });
 
 test('a checkpoint, delivery milestone and region unlock can be grouped in one completion',()=>{
