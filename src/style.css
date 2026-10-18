@@ -60,6 +60,7 @@
 /* Road-first HUD: keep the view open and put secondary actions on demand. */
 .mission{top:112px;left:24px;border:1px solid #c5dfd142;border-radius:12px;padding:14px 17px;max-width:360px;background:#142d34e8;gap:5px}
 .mission strong{font-size:15px;line-height:1.3}
+.mission #property-name{color:#ffd095;font-size:10px;font-weight:700}
 .action-drawer{position:fixed;top:112px;right:24px;z-index:12}
 .hud-toggle{min-height:42px;padding:0 15px;border:1px solid #c5dfd166;border-radius:10px;background:#142d34ed;color:#f7ecd6;font-size:12px;font-weight:700;box-shadow:0 5px 20px #071d2740}
 .hud-toggle span{margin-left:14px;color:#ffd095}
