@@ -31,11 +31,11 @@ const lines = [
   `| Browser animation interval p95 | ${fmt(fm(base))} ms | ${fmt(fm(head))} ms | ${delta(fm(base), fm(head), browserComparable && routeComparable, ' ms')} |`,
   `| Modeled display / body speed p05–p95 | ${tuple(speed(base))} | ${tuple(speed(head))} | ${motionComparable ? 'see ranges' : 'HOLD'} |`,
   `| Modeled steering onset left / right | ${onset(steering(base))} | ${onset(steering(head))} | ${motionComparable ? 'see times' : 'HOLD'} |`,
-  `| Room simulated / wall seconds | ${fmt(room(base))}× | ${fmt(room(head))}× | ${delta(room(base), room(head), browserComparable, '×')} |`, '',
+  `| Room simulated / wall seconds | ${fmt(room(base))}× | ${fmt(room(head))}× | ${delta(room(base), room(head), browserComparable && routeComparable, '×')} |`, '',
   `Bunched 150 ms synthetic speed ratio: base ${tuple(model(base, 'bunched150')?.speedRatio)}, candidate ${tuple(model(head, 'bunched150')?.speedRatio)}.`,
   `Browser renderer: ${head?.environment?.runner?.webgl?.renderer ?? 'HOLD'}. Route endpoint difference: ${n(distance) ? `${fmt(distance)} m` : 'HOLD'}.`, '',
   'Animation intervals are browser callback timing, not GPU completion or actual display presentation. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks over a local single-client window, mostly idle after a short drive. Video is off.',
-  'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Traffic, collisions and paths can vary. Frame deltas are held if environments differ or endpoints differ by more than 10 m. Raw traces and conditions are in the uploaded artifact.',
+  'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Traffic, collisions and paths can vary. Frame and room deltas are held if environments differ or endpoints differ by more than 10 m. Raw traces and conditions are in the uploaded artifact.',
 ];
 const markdown = lines.join('\n') + '\n';
 if (outputPath) await writeFile(outputPath, markdown);

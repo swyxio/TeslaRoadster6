@@ -71,6 +71,11 @@ test('comparison holds modeled changes if the measurement adapter changes', () =
     const result = execFileSync(process.execPath, [script, before, after], { encoding: 'utf8' });
     assert.match(result.split('\n').find(line => line.startsWith('| Modeled display')) ?? '', /\| HOLD \|$/);
     assert.match(result.split('\n').find(line => line.startsWith('| Modeled steering')) ?? '', /\| HOLD \|$/);
+    baseline.fixture.motionAdapterSha256 = JSON.parse(readFileSync(before, 'utf8')).fixture.motionAdapterSha256;
+    baseline.route.last.x += 20;
+    writeFileSync(after, JSON.stringify(baseline));
+    const divergent = execFileSync(process.execPath, [script, before, after], { encoding: 'utf8' });
+    assert.match(divergent.split('\n').find(line => line.startsWith('| Room simulated')) ?? '', /\| HOLD \|$/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -88,9 +93,11 @@ test('frame intervals report a real percentile and reject missing or truncated d
 
 test('room progress requires a long continuous monotonic tick stream', () => {
   const pose = (atMs: number, tick: number, poseRevision = 1) => ({ atMs, tick, poseRevision });
-  const ticks = [pose(100, 100), pose(30100, 700), pose(60100, 1300)];
-  assert.deepEqual(roomProgress(ticks, 0, 61000), { status: 'available', wallSeconds: 60, simulationSeconds: 60, ratio: 1, snapshots: 3 });
-  assert.equal(roomProgress(ticks.slice(0, 2), 0, 61000).status, 'unavailable');
+  const ticks = Array.from({ length: 601 }, (_, i) => pose(100 + i * 100, 100 + i * 2));
+  assert.deepEqual(roomProgress(ticks, 0, 61000), { status: 'available', wallSeconds: 60, simulationSeconds: 60, ratio: 1, snapshots: 601, maxGapMs: 100 });
+  assert.equal(roomProgress(ticks.slice(0, 100), 0, 61000).status, 'unavailable');
+  assert.equal(roomProgress([ticks[0], ticks.at(-1)!], 0, 61000).status, 'unavailable');
+  assert.equal(roomProgress(ticks.filter(p => p.atMs < 20000 || p.atMs > 23000), 0, 61000).status, 'unavailable');
   assert.equal(roomProgress([pose(100, 100), pose(60100, 90)], 0, 61000).status, 'unavailable');
   assert.equal(roomProgress([pose(100, 100), pose(60100, 1300, 2)], 0, 61000).status, 'unavailable');
 });

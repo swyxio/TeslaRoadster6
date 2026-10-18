@@ -27,8 +27,11 @@ export function roomProgress(poses, from, to) {
     return { status: 'unavailable', reason: 'non-monotonic samples or pose revision changed' };
   const first = selected[0], last = selected.at(-1), wallSeconds = (last.atMs - first.atMs) / 1000;
   if (wallSeconds < 58) return { status: 'unavailable', reason: 'less than 58 seconds of observed snapshots', wallSeconds: round(wallSeconds) };
+  const maxGapMs = Math.max(...selected.slice(1).map((p, i) => p.atMs - selected[i].atMs));
+  if (selected.length < 200 || maxGapMs > 2000)
+    return { status: 'unavailable', reason: 'insufficient continuous snapshot coverage', snapshots: selected.length, maxGapMs: round(maxGapMs) };
   const simulationSeconds = (last.tick - first.tick) * .05;
-  return { status: 'available', wallSeconds: round(wallSeconds), simulationSeconds: round(simulationSeconds), ratio: round(simulationSeconds / wallSeconds), snapshots: selected.length };
+  return { status: 'available', wallSeconds: round(wallSeconds), simulationSeconds: round(simulationSeconds), ratio: round(simulationSeconds / wallSeconds), snapshots: selected.length, maxGapMs: round(maxGapMs) };
 }
 
 export function frameMetrics(sample) {

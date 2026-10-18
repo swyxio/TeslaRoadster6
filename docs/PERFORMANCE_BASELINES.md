@@ -9,7 +9,7 @@ measurements. The performance workflow records four recurring observations:
 | Browser animation interval p95 (ms) | The 95th percentile of `requestAnimationFrame` intervals during the scripted drive, with movement, live render telemetry and no recorded browser errors. | A render-activity guard is not proof of correct pixels. Callback timing is not GPU completion or actual display presentation. Lower is better for this matched scenario. |
 | Modeled display/body speed p05–p95 (×) | Frame-to-frame modeled visual speed divided by predicted-body speed, when the latter exceeds 10 m/s. Ideally near 1. | Synthetic 120 Hz slalom and simulated network, not a live rendered car. Retain max movement per sample and traces too. |
 | Modeled steering onset (ms) | Left/right first modeled yaw response relative to a no-steer counterfactual. | Synthetic 120 Hz samples quantize response to 8.333 ms; not human input-to-photon latency. |
-| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
+| Room simulation / wall time (×) | Tick advance × 0.05 s divided by elapsed snapshot-arrival time in a roughly 60-second local run. Requires at least 200 snapshots with no gap over two seconds. | One player drives briefly, then stays connected without held controls for 54 seconds. Browser and Worker share a host; not sustained driving throughput, production capacity or WAN latency. |
 
 The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
@@ -94,5 +94,7 @@ authoritative pose rather than the displayed pose. The synthetic traces are
 retained separately. No physical device or GPU-completion timing was measured.
 The adapter hash was added to the saved report after capture by hashing the file
 from the recorded commit; subsequent runs record it automatically. The first
-report predates reporter-method hashing, so automatic deltas against it are
+report predates reporter-method hashing. The repeat predates the continuous
+snapshot coverage guard; rechecking the saved streams found 593 snapshots each,
+with maximum gaps of 122 ms and 110 ms. Deltas against a later reporter are
 `HOLD`; rerun both versions with the same current harness for a paired result.
