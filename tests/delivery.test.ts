@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, isSurface, nearbyBuildings } from '../shared/map';
+import { BUILDINGS, STUNT_LOOP, STUNT_RAMP, rampHeight, isSurface, nearbyBuildings } from '../shared/map';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -124,4 +124,24 @@ test('citations increase with flight duration, height and repeat offenses withou
   }
   const first=fine(2,10,0),long=fine(12,10,0),high=fine(2,50,0),repeat=fine(2,10,2);
   assert.ok(long.amount>first.amount);assert.ok(high.amount>first.amount);assert.equal(repeat.amount,first.amount+70);
+});
+
+
+test('flight above police sight ceiling continues to increase citation severity during a pursuit',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:0,z:6,y:90,vy:0});world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  car.y=50;world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+  car.y=90;for(let i=0;i<240;i++){world.time+=.05;updatePolice(world,.05);}
+  assert.ok(player.delivery.flight.seconds>=12);assert.equal(player.delivery.flight.peakHeight,90);
+  Object.assign(car,{y:0,vy:0,speed:0});world.time+=.05;updatePolice(world,.05);
+  assert.ok(player.delivery.lastTicket!.durationFine>=48);assert.equal(player.delivery.lastTicket!.heightFine,80);
+});
+
+test('supported stunt-loop and ramp travel is not police-detectable flight',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',STUNT_LOOP.x,STUNT_LOOP.z);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:STUNT_LOOP.x,z:STUNT_LOOP.z,y:24,vy:3,loopAngle:Math.PI});
+  world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
+  const x=STUNT_RAMP.end-1,z=STUNT_RAMP.z;Object.assign(cop,{x,z});
+  Object.assign(car,{x,z,y:rampHeight(x,z),vy:2,loopAngle:null});
+  world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
 });

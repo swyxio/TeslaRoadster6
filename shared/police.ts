@@ -1,6 +1,7 @@
 import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
-import { isSurface, nearbyBuildings } from './map';
+import { isSurface, nearbyBuildings, rampHeight } from './map';
+import { onRoof } from './achievements';
 import { engageAutopilot } from './traffic';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
@@ -32,9 +33,10 @@ function route(from:Point,to:Point):Point[]{
 }
 export function newPolice():PoliceState{return {targetId:null,lastSeen:0,nextPlan:0,path:[]};}
 function airborne(e:Entity){
-  if(e.y<=3||e.y>80||e.kind==='person')return false;
-  // A car sitting on a roof is not flying.
-  return Math.abs(e.vy)>.1||!nearbyBuildings(e.x,e.z,4).some(b=>Math.abs(e.y-b.h)<.2&&Math.abs(e.x-b.x)<b.w/2+1&&Math.abs(e.z-b.z)<b.d/2+1);
+  if(e.y<=3||e.kind==='person'||e.loopAngle!==null)return false;
+  const ramp=rampHeight(e.x,e.z);
+  if(ramp!==null&&Math.abs(e.y-ramp)<.08)return false;
+  return !onRoof(e);
 }
 export function updatePolice(world:World,dt:number):void {
   for (const player of world.players) {
@@ -48,7 +50,7 @@ export function updatePolice(world:World,dt:number):void {
     let target=world.entities.find(e=>e.id===player?.entityId);
     if(!player||!target||world.time<player.delivery.ticketGraceUntil){state.targetId=null;player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&airborne(e)&&distance(cop,e)<SIGHT).sort((a,b)=>distance(cop,a.e!)-distance(cop,b.e!))[0];
+      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&e.y<=80&&airborne(e)&&distance(cop,e)<SIGHT).sort((a,b)=>distance(cop,a.e!)-distance(cop,b.e!))[0];
       if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target)continue;
