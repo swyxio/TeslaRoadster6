@@ -292,7 +292,7 @@ export function canCollectLuxury(entity:Entity):boolean {
 export function collectLuxury(world:World,id:string,kind:LuxuryVehicleId):boolean {
   const player=world.players.find(p=>p.id===id),old=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!old||!luxuryVehicle(kind)||!canCollectLuxury(old))return false;
-  const removed=old.owner===id||old.id===`person-${id}`;
+  const removed=(old.owner===id&&!old.cab)||old.id===`person-${id}`;
   let spawn:{x:number;z:number;yaw:number}|null=null;
   for(const radius of [0,4,8,12]){
     for(let n=0;n<8;n++){
@@ -304,7 +304,8 @@ export function collectLuxury(world:World,id:string,kind:LuxuryVehicleId):boolea
   }
   if(!spawn)return false;
   leaveParking(world.parking,id);leaveRace(world.races,id);release(old,world);
-  world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
+  world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver&&!e.cab));
+  cleanupCars(world);
   const car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;
   placeEntity(car,spawn,false);car.lastJump=old.lastJump;car.lastFlip=old.lastFlip;
   world.entities.push(car);player.entityId=car.id;resetAchievementFlight(player);return true;

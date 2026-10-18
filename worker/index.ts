@@ -366,7 +366,14 @@ export class GameRoom extends DurableObject<Env> {
     if(hold.newFence!==fence||session.economy.currentFence!==fence)throw new Error('Market fence not installed');
     if(hold.resume)return hold.resume;
     const flight=(async()=>{
-      const restored=restoreMarketHold(this.world,hold);if(!restored.ok)throw new Error('Market resume has no safe position');
+      const restored=restoreMarketHold(this.world,hold);
+      if(!restored.ok){
+        // The wallet is already unsealed. Disconnect the paused session so a
+        // blocked room cannot prevent either participant's release; rejoining
+        // loads the durable wallet and reroutes any inaccessible order.
+        this.disconnect(socket,ROOM_NO_SPAWN_CODE,'No safe starting space');
+        return;
+      }
       session.economy.setMarketPaint(hold.marketPaint??null);
       await session.economy.resumeMarket();
       if(this.sessions.get(socket)!==session||session.marketHold!==hold)return;

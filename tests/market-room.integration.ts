@@ -7,7 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
+import { NEUTRAL, PROTOCOL_VERSION, ROOM_NO_SPAWN_CODE, type World } from '../shared/game';
 import { propertyRoom, PROPERTY_HOME_SITE } from '../shared/property';
 import type { MarketRequest, MarketResultView, MarketState } from '../shared/market-protocol';
 import type { DriverProgress } from '../worker/driver-profile';
@@ -140,6 +140,30 @@ try{
   const guest=await joinGuest('market-guest');
   const guestResult=await settle(guest,{action:'acquire',operationId:randomUUID(),catalogId:'starter-home'});
   assert.equal(guestResult.status,'rejected');assert.equal(guestResult.reason,'save-driver');
+
+  // A fully blocked resume disconnects the held buyer rather than trapping
+  // either wallet in the sale; the durable result survives a fresh room.
+  const blockedSeller=await makeDriver('BlockedSeller',10_000),blockedBuyer=await makeDriver('BlockedBuyer',10_000);
+  const blockedSellerClient=await joinSaved('market-blocked-seller',blockedSeller,10_000);
+  const blockedBuyerClient=await joinSaved('market-blocked-buyer',blockedBuyer,10_000);
+  completed(await settle(blockedSellerClient,{action:'acquire',operationId:randomUUID(),catalogId:'sunrise-gold-paint'}));
+  const blockedAsset=(await browse(blockedSellerClient)).owned.find(item=>item.name==='Sunrise Gold');assert.ok(blockedAsset);
+  completed(await settle(blockedSellerClient,{action:'list',operationId:randomUUID(),assetId:blockedAsset.assetId,price:2_000}));
+  const blockedListing=(await browse(blockedBuyerClient)).listings.find(item=>item.assetId===blockedAsset.assetId);assert.ok(blockedListing);
+  const blockedSellerCash=(await inspect(blockedSeller.driverId)).progress.cash,blockedBuyerCash=(await inspect(blockedBuyer.driverId)).progress.cash;
+  await rpc('market','block-resume',{room:'market-blocked-buyer'});
+  const blockedOp=randomUUID();send(blockedBuyerClient,{type:'market',requestId:++requestId,action:'buy',operationId:blockedOp,assetId:blockedAsset.assetId,listingId:blockedListing.listingId,expectedRevision:blockedListing.revision});
+  await until(()=>!!blockedBuyerClient.closed,'blocked market buyer disconnects',30_000);
+  assert.equal(blockedBuyerClient.closed!.code,ROOM_NO_SPAWN_CODE);
+  await until(async()=>(await rpc<MarketResultView>('market','status',{driverId:blockedBuyer.driverId,operationId:blockedOp})).status==='completed','blocked sale finishes',30_000);
+  assert.equal((await inspect(blockedBuyer.driverId)).progress.cash,blockedBuyerCash-2_000);
+  assert.equal((await inspect(blockedSeller.driverId)).progress.cash,blockedSellerCash+1_900);
+  const blockedRejoined=await joinSaved('market-blocked-recovery',blockedBuyer,blockedBuyerCash-2_000);
+  assert.equal((await browse(blockedRejoined)).owned.filter(item=>item.assetId===blockedAsset.assetId).length,1);
+  completed(await settle(blockedRejoined,{action:'status',operationId:blockedOp}));
+  assert.ok(!(await browse(blockedSellerClient)).owned.some(item=>item.assetId===blockedAsset.assetId));
+  blockedRejoined.socket.close();blockedSellerClient.socket.close();
+
   await delay(600);await sync(sellerClient);await sync(buyerClient);await sync(limitedClient);
   const sellerStart=(await inspect(seller.driverId)).progress,buyerStart=(await inspect(buyer.driverId)).progress;
   assert.ok(sellerStart.cash>=4_000_000);assert.ok(buyerStart.cash>=4_000_000);

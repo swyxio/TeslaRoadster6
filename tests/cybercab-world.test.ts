@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, chooseVehicle, createEmptyWorld, createWorld, dispatchCybercab, interact, makeEntity, MAX_DISPATCHED_CABS_PER_ROOM, removePlayer, step } from '../shared/game';
+import { addPlayer, chooseVehicle, collectLuxury, createEmptyWorld, createWorld, dispatchCybercab, interact, makeEntity, MAX_DISPATCHED_CABS_PER_ROOM, removePlayer, step } from '../shared/game';
+import { body, contact } from '../shared/physics';
 import { snapshotFor } from '../worker/snapshot';
 import { routePose } from '../shared/traffic';
 
@@ -18,6 +19,33 @@ test('owned cabs dispatch once, move autonomously and survive fleet selection', 
   const car=world.entities.find(entity=>entity.id===player.entityId)!;
   car.x=cab.x+3000;car.z=cab.z;
   assert.ok(snapshotFor(world,player.id).entities.includes(cab),'owner can locate it across the map');
+});
+
+test('collecting a luxury car preserves owned cabs and leaves room for both vehicles', () => {
+  const world=createEmptyWorld(),owner=addPlayer(world,'owner','Owner');
+  const cab=dispatchCybercab(world,owner.id,'driven')!,other=dispatchCybercab(world,owner.id,'unattended')!;
+  world.entities=world.entities.filter(entity=>entity.id!==owner.entityId);
+  cab.driver=owner.id;cab.autopilot=false;owner.entityId=cab.id;
+  Object.assign(cab,{x:345,z:120,y:0,yaw:0,speed:0,supportId:'ground'});
+  assert.equal(collectLuxury(world,owner.id,'lamborghini-temerario'),true);
+  const luxury=world.entities.find(entity=>entity.id===owner.entityId)!;
+  assert.equal(luxury.kind,'lamborghini-temerario');assert.equal(luxury.driver,owner.id);
+  assert.ok(world.entities.includes(cab));assert.ok(world.entities.includes(other));
+  assert.equal(cab.owner,owner.id);assert.deepEqual(cab.cab,{assetId:'driven'});
+  assert.equal(cab.driver,null);assert.equal(cab.autopilot,true);
+  assert.equal(contact(body(cab),body(luxury)),null,'the replacement cannot overlap the retained cab');
+  assert.equal(dispatchCybercab(world,owner.id,'driven'),cab,'the same dispatched entity remains active');
+});
+
+test('collecting a luxury car removes a retired borrowed cab after its owner leaves', () => {
+  const world=createEmptyWorld(),owner=addPlayer(world,'owner','Owner'),borrower=addPlayer(world,'borrower','Borrower');
+  const cab=dispatchCybercab(world,owner.id,'borrowed')!;
+  world.entities=world.entities.filter(entity=>entity.id!==borrower.entityId);
+  cab.driver=borrower.id;cab.autopilot=false;borrower.entityId=cab.id;
+  removePlayer(world,owner.id);
+  Object.assign(cab,{x:345,z:120,y:0,yaw:0,speed:0,supportId:'ground'});
+  assert.equal(collectLuxury(world,borrower.id,'lamborghini-temerario'),true);
+  assert.equal(world.entities.includes(cab),false,'the released temporary ride no longer reserves a cab slot');
 });
 
 test('another driver can take and release a cab without changing its owner', () => {
