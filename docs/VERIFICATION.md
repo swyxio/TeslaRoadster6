@@ -4,8 +4,9 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Mars and predictive shared driving · protocol v29 · 2026-10-18 Pacific
 
-- The combined build passed 422 tests and `pnpm build`, including both TypeScript checks. Local Wrangler prediction/acknowledgement/barrier integration passed. An isolated Mars fixture verified simultaneous contributions, ordered post-action snapshots, boarding, room isolation and fund persistence after the last disconnect and a Worker restart; it used test-only funded players and positions.
+- The combined build passed 422 tests and `pnpm build`, including both TypeScript checks. Local Wrangler two-client room, prediction/acknowledgement/barrier, chat, room-full and blocked-spawn integrations passed. An isolated Mars fixture verified simultaneous contributions, ordered post-action snapshots, boarding, room isolation and fund persistence after the last disconnect and a Worker restart; it used test-only funded players and positions.
 - On the pre-launch-animation-smoothing build, Chrome on an Apple M5 Pro drove online and steered in explicit solo, with no console errors. The Mars dialog showed the room fund online and correctly explained that the solo fund and awards last only for that drive. A 6.65-second online driving capture at 1413×939 CSS pixels, rendered at DPR 1.0 on WebGL2/Metal, averaged 58.7 FPS with 33.6 ms p95 frame intervals and no frames over 50 ms. Host load was high; this is one short local sample, not a sustained FPS guarantee or a controlled before/after comparison.
+- The final launch-smoothing build drove and steered in a live local room without console errors. A 6.58-second Chrome capture at 1413×939 CSS pixels averaged 80.1 FPS, with a 16.5 ms p95 frame interval and no frames over 50 ms. The same M5 Pro, WebGL2/Metal and DPR 1.0 applied; host load remained high. This is another short sample, not proof of sustained performance or a controlled comparison.
 
 ## Predictive shared driving · protocol v28 · 2026-10-18 Pacific
 
