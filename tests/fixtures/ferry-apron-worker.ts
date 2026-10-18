@@ -1,12 +1,12 @@
 // Local-only deterministic staging. The real room still receives and applies
 // the frames, runs the ferry/physics step, and emits its ordinary messages.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { FERRY_DOCKS } from '../../shared/map';
 import type { World } from '../../shared/game';
 import type { ScheduledInput } from '../../shared/tick-input';
 
 export default worker;
-export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 
 export class GameRoom extends ProductionGameRoom {
   override async fetch(request:Request):Promise<Response> {

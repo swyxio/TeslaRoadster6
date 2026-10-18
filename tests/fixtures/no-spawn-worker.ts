@@ -1,7 +1,7 @@
 // Local-only fixture: fill every checked SF spawn without changing production state.
-import { GameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
+import { GameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { makeEntity, type World } from '../../shared/game';
-export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 
 export class NoSpawnGameRoom extends GameRoom {
   private seeded=false;
