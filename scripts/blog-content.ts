@@ -7,6 +7,15 @@ export async function renderPost(markdown: string): Promise<{ html: string; head
   const headings: Heading[] = [];
   const used = new Set(['related-heading', ...[...markdown.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1])]);
   const marked = new Marked();
+  // Reserve authored fragments first, so generated slugs cannot steal them.
+  const tokens = marked.lexer(markdown);
+  marked.walkTokens(tokens, token => {
+    if (token.type !== 'heading') return;
+    const explicit = token.text.match(/\s*\{#([a-z0-9]+(?:-[a-z0-9]+)*)\}$/);
+    if (!explicit) return;
+    if (used.has(explicit[1])) throw new Error(`Duplicate heading ID: ${explicit[1]}`);
+    used.add(explicit[1]);
+  });
   marked.use({ renderer: {
     heading({ tokens, depth }) {
       const rendered = this.parser.parseInline(tokens);
@@ -15,7 +24,6 @@ export async function renderPost(markdown: string): Promise<{ html: string; head
       const title = inline.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
       const base = title.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/[\s-]+/g, '-') || 'section';
       let id = explicit?.[1] ?? base;
-      if (explicit && used.has(id)) throw new Error(`Duplicate heading ID: ${id}`);
       if (!explicit) for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
       used.add(id);
       headings.push({ id, title, depth });
