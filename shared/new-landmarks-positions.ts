@@ -117,24 +117,24 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     76
   ],
   "muir-woods": [
-    -378,
-    -457
+    -410,
+    -479
   ],
   "marin-civic-center": [
-    -200,
-    -530
+    -234,
+    -506
   ],
   "bay-model": [
-    -145,
-    -502
+    -155,
+    -416
   ],
   "mission-san-rafael": [
-    -165,
-    -535
+    -231,
+    -487
   ],
   "china-camp": [
-    -130,
-    -530
+    -174,
+    -406
   ],
   "sanchez-adobe": [
     -670,
@@ -158,7 +158,7 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
   ],
   "stanford-theatre": [
     -800,
-    3900
+    3918
   ],
   "palo-alto-junior-museum": [
     -650,
@@ -173,8 +173,8 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     6520
   ],
   "intel-museum": [
-    174,
-    6650
+    182,
+    6628
   ],
   "our-lady-of-peace": [
     220,
@@ -209,7 +209,7 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     7300
   ],
   "montalvo-arts": [
-    230,
+    216,
     7420
   ],
   "forbes-mill": [
@@ -281,7 +281,7 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     -161
   ],
   "new-california-memorial-stadium": [
-    529,
+    531,
     -164
   ],
   "new-south-hall": [
@@ -294,15 +294,15 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
   ],
   "new-berkeley-city-club": [
     467,
-    -102
+    -92
   ],
   "new-berkeley-rose-garden": [
     550,
-    -140
+    -142
   ],
   "new-tilden-merry-go-round": [
-    549,
-    -102
+    545,
+    -92
   ],
   "new-tilden-steam-trains": [
     592,
@@ -318,11 +318,11 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
   ],
   "new-sixteenth-street-station": [
     311,
-    20
+    22
   ],
   "new-camron-stanford": [
-    493,
-    139
+    483,
+    141
   ],
   "new-dunsmuir-hellman": [
     940,
@@ -341,8 +341,8 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     141
   ],
   "new-aamlo": [
-    373,
-    -41
+    371,
+    -17
   ],
   "new-uss-hornet": [
     334,
@@ -365,7 +365,7 @@ export const NEW_LANDMARK_POSITIONS:Readonly<Record<string,readonly [number,numb
     -278
   ],
   "new-casa-peralta": [
-    1030,
+    1028,
     1750
   ],
   "new-meek-mansion": [
