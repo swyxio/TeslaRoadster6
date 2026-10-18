@@ -1,4 +1,4 @@
-# Implementation contracts · v12
+# Implementation contracts · v13
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -64,11 +64,21 @@ Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Ea
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v14 prevents older clients from connecting without the current markers. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms, names trimmed/control characters stripped/24-character max. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
+Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
 Upgrade requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. Solo mode returns the same result from the shared simulation.
 
-Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Shared room state is memory-only. Start timer with first connection; stop and reset when empty. No persistent promise of garages/accounts. Do not replace with a global room object or client-authoritative coordinates.
+Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Shared room state is memory-only. Start timer with first connection; stop and reset when empty. No persistent promise of garages or game progress. Do not replace with a global room object or client-authoritative coordinates.
+
+## Global chat and saved identities
+
+Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms and available in solo. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. An active saved identity is reported with `code:"identity_active"`; the client retries briefly before requiring action. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
+
+Names are NFKC-normalized, stripped of control and invisible direction/format characters, whitespace-collapsed and capped at 20 Unicode code points; an empty name becomes `Driver`. Active names are compared case-insensitively. A conflict adds the first available ` #2`, ` #3`, and so on, trimming the base if needed. Names are not reserved when disconnected. Game rooms use the same rule independently, so a room display name can differ from the global chat name. Room labels are self-asserted: they are not proof of a saved chat identity. The full server-issued UUID identifies a chat sender; a short on-screen prefix is for convenience and is not guaranteed unique.
+
+An unsaved identity lasts for the connection. Saving generates a random 256-bit bearer secret; the code contains the public player UUID and secret. Only the SHA-256 verifier and saved name are stored in the chat object's durable storage. Saving again returns the same code, including after a successful recovery. A valid code restores the chat ID and saved name, subject to the active-name collision rule; a second simultaneous connection using the same identity is rejected. Anyone with a code can use that identity, so it is shown only to its owner and must never appear in URLs, broadcasts, history or logs. Losing the code loses access to the saved identity. This restores neither the room session nor cars, cash, achievements or game progress.
+
+Chat messages are normalized and limited to 240 Unicode code points. The server accepts at most five messages per connection per 10 seconds and limits all chat requests. The in-memory hub permits at most 512 sockets, 24 simultaneous sockets and 60 connections per IP per minute, and 30 new saved identities per IP and 240 globally per hour; missing IPs share an unknown bucket. Connections inactive for three minutes are closed; the client sends a heartbeat every 25 seconds. These limits reset on object restart and are modest abuse brakes, not a capacity measurement or comprehensive moderation. At most 50 recent messages are kept in memory and supplied on join; a runtime restart clears them. Chat sockets currently keep the object awake while connected. Reconnect and failure states must remain visible; chat failure must not silently change solo or room play. Render names and messages as text, never interpolated HTML.
 
 ## Client adapters
 
@@ -123,7 +133,7 @@ Geometry/materials in the renderer are shared static caches. Removing an entity 
 
 Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m or when the player is ticketed. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 
-`L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; there is no persistent identity or global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
+`L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; saved chat identities do not save scores and there is no global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
 
 ## Rocket Dome soccer
 
