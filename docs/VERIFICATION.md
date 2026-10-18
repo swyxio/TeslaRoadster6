@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Room performance follow-up · protocol v31 · 2026-10-18 Pacific
+
+- After integrating main at `3307584`, `pnpm test` passed 465 tests and `pnpm build` passed both typechecks and the production build; Vite retained its large-chunk warning. The benchmark and integration scripts also passed a standalone TypeScript check.
+- The standard local Wrangler `room.integration.ts` passed two-client movement, acknowledgements, flight and landing, Dome scoring, race and parking actions, and disconnect cleanup. A separate local-only fixture staged cars and a shortened dock countdown: it verified a ferry crossing with secured inputs, passenger disconnect and manifest cleanup, fresh reconnect and activity cleanup, and identical post-collision state at the same tick for two recipients. It did not exercise natural boarding.
+- Deterministic baseline/change scenarios retained identical world hashes and recipient JSON, with a modest simulation-process CPU reduction in two instrumented Node pairs. Local 32- and 64-client runs fell behind real time; the candidate's one 64-client sample was slower than the baseline's. The methodology, wire sizes, control sample, commands and limitations are in [the performance audit](PERFORMANCE_AUDIT.md). These are not production, physical-device or playable-capacity results.
+
 ## Caltrain stops and Bay landmarks · protocol v31 · 2026-10-18 Pacific
 
 - After integrating main's performance changes, `pnpm test` passed 463 tests and `pnpm build` passed both TypeScript checks and Vite, with the existing large-chunk warning. Station tests drove to all seven new lots from both highway directions, checked supported and unobstructed decorative tracks, and exercised parking games. Current tests covered directional force, normal unboosted escape and locked-region safeguards at the new stops. Landmark tests checked supported terrain, collision envelopes and clearances; the grove tests checked road, rail and building clearances.

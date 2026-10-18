@@ -55,17 +55,23 @@ for(let i=0;i<60;i++){setInputs(i);step(world,inputs,.05);if(i%2===1){const prep
 verifySnapshots(world);
 const initialTime=world.time,cpuStart=process.cpuUsage(),started=performance.now();
 const stepTimes:number[]=[],prepareTimes:number[]=[],assembleTimes:number[]=[],tickTimes:number[]=[],bytes:number[]=[];
+const phaseCpuMs={simulation:0,snapshotPreparation:0,recipientAssemblyAndByteCount:0};
+const addCpu=(phase:keyof typeof phaseCpuMs,start:NodeJS.CpuUsage)=>{
+  const usage=process.cpuUsage(start);phaseCpuMs[phase]+=(usage.user+usage.system)/1000;
+};
 let minActiveRaceRounds=Infinity,minActiveParkingRounds=Infinity;
 const measuredTicksWith={domeDriver:0,airborneDriver:0,ferryUnderway:0,ferryPassenger:0};
 for(let tick=0;tick<ticks;tick++){
   setInputs(tick+60);
-  const tickStart=performance.now(),stepStart=performance.now();
-  step(world,inputs,.05);stepTimes.push(performance.now()-stepStart);
+  const tickStart=performance.now(),stepStart=performance.now(),stepCpu=process.cpuUsage();
+  step(world,inputs,.05);addCpu('simulation',stepCpu);stepTimes.push(performance.now()-stepStart);
   if(tick%2===1){
-    const prepareStart=performance.now(),prepare=prepareSnapshots(world);
+    const prepareStart=performance.now(),prepareCpu=process.cpuUsage(),prepare=prepareSnapshots(world);
+    addCpu('snapshotPreparation',prepareCpu);
     prepareTimes.push(performance.now()-prepareStart);
-    const assembleStart=performance.now();
+    const assembleStart=performance.now(),assembleCpu=process.cpuUsage();
     for(const id of ids){const json=prepare(id,tick+60);bytes.push(Buffer.byteLength(json));}
+    addCpu('recipientAssemblyAndByteCount',assembleCpu);
     assembleTimes.push(performance.now()-assembleStart);
   }
   tickTimes.push(performance.now()-tickStart);
@@ -94,8 +100,9 @@ console.log(JSON.stringify({
     airborne:ids.filter(id=>byPlayer.get(id)?.supportId===null).length,ferryPassengers:world.ferry.passengers.length,
     parkingRounds:world.parking.rounds.length,raceRounds:world.races.rounds.length,sha256:createHash('sha256').update(JSON.stringify(world)).digest('hex')},
   elapsedMs:+elapsed.toFixed(1),cpuMs:+((cpu.user+cpu.system)/1000).toFixed(1),
+  phaseCpuMs:Object.fromEntries(Object.entries(phaseCpuMs).map(([phase,ms])=>[phase,+ms.toFixed(1)])),
   simulation:describe(stepTimes),snapshotPreparation:describe(prepareTimes),recipientAssemblyAndByteCount:describe(assembleTimes),roomTickExcludingInput:describe(tickTimes),
   decodedJson:{totalBytes,perSnapshotP50Bytes:sortedBytes[Math.floor((sortedBytes.length-1)*.5)],perSnapshotP95Bytes:sortedBytes[Math.floor((sortedBytes.length-1)*.95)],
     aggregateBytesPerSimulatedSecond:Math.round(totalBytes/(world.time-initialTime))},
-  note:'Same-process deterministic workload on Node, not the Cloudflare runtime. Mixed actions are scripted; ferry cars are fixture-positioned. Timings include host contention, exclude socket delivery, transport compression, client parsing, incoming message handling and rendering. Decoded JSON is not network-wire bandwidth or a playable-capacity claim.'
+  note:'Same-process deterministic workload on Node, not the Cloudflare runtime. Mixed actions are scripted; ferry cars are fixture-positioned. Phase CPU uses process.cpuUsage around each phase and includes instrumentation overhead. Timings include host contention, exclude socket delivery, transport compression, client parsing, incoming message handling and rendering. Decoded JSON is not network-wire bandwidth or a playable-capacity claim.'
 },null,2));
