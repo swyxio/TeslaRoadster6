@@ -222,8 +222,8 @@ export class GameScene {
   }
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
-  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false) {
-    if(snapLocal)this.cameraReady=false;
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false) {
+    if(snapCamera)this.cameraReady=false;
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
     // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
