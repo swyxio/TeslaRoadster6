@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
-import { canAssignDeliveryRoof, CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { deliveryRoofAccess, CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -1197,21 +1197,21 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     if(entity){
       const evidence:AchievementEvidence[]=[];
       update(player,()=>{
-      // Repair a saved or switched-vehicle job before accepting a new stop.
-      // Keep roof jobs while on foot; unavailable jobs use the bounded retry path.
-      const roofEligible=canAssignDeliveryRoof(entity);
-      if(entity.kind!=='person'&&player.delivery.lastReroute?.reason!=='unavailable'&&economy?.decisionsAvailable?.(player)!==false&&
-        rerouteInaccessibleOrder(player.delivery,entity,roofEligible))return;
+      // Preserve an accessible roof on foot while still repairing locked regions.
+      // Unavailable jobs use the bounded retry path.
+      const roofAccess=deliveryRoofAccess(entity);
+      if(player.delivery.lastReroute?.reason!=='unavailable'&&economy?.decisionsAvailable?.(player)!==false&&
+        rerouteInaccessibleOrder(player.delivery,entity,roofAccess))return;
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       // A pure simulation without economy hooks must initiate or retry a relocked order.
       // Once a failed search is unavailable, retry only after reaching open ground.
-      if(!economy&&!player.delivery.order.search&&!isOrderAccessible(player.delivery.order,player.delivery.level,entity.kind==='person'||roofEligible)&&
+      if(!economy&&!player.delivery.order.search&&!isOrderAccessible(player.delivery.order,player.delivery.level,roofAccess)&&
         (player.delivery.lastReroute?.reason!=='unavailable'||
           (entity.supportId==='ground'&&!entity.inDome&&requiredLevelAt(entity.x,entity.z)<=player.delivery.level)))
-        rerouteInaccessibleOrder(player.delivery,entity,roofEligible);
+        rerouteInaccessibleOrder(player.delivery,entity,roofAccess);
       const stopPaused=islandProtected(entity)||entity.inDome||
-        (player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,entity.kind==='person'||roofEligible));
+        (player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,roofAccess));
       const orderPaused=!!player.delivery.order.search||stopPaused;
       // Keep sampling physical stops behind an unresolved wallet event. Their
       // immutable pose is replayed after the preceding assignment commits.
