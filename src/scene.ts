@@ -2,6 +2,10 @@ import * as T from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { VEHICLES } from '../shared/vehicles';
 import { type World } from '../shared/game';
+import { dayMinute } from '../shared/day';
+import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
+import { isTrafficIncident } from '../shared/traffic';
+import { DISTRICTS, supportNormal } from '../shared/map';
 import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
@@ -10,6 +14,13 @@ import { box, material, createVehicle, setThrusterEffects } from './vehicles';
 export class GameScene {
   private renderer: T.WebGLRenderer;
   private scene = new T.Scene();
+  private sky = new T.Color();
+  private nightSky = new T.Color(0x334b62);
+  private daySky = new T.Color(0xa8cbd0);
+  private hemisphere = new T.HemisphereLight(0xe9f5ff,0x626953,1.4);
+  private sun = new T.DirectionalLight(0xffdfb5,2.2);
+  private signalRed = new T.MeshBasicMaterial({color:0x551b19});
+  private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
   private pickups = new Map<string,T.Mesh>();
@@ -18,6 +29,15 @@ export class GameScene {
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
   private focus = new T.Vector3(0,1,24);
   private follow = new T.Vector3();
+  private surfaceUp = new T.Vector3();
+  private surfaceBack = new T.Vector3();
+  private surfaceRight = new T.Vector3();
+  private orientation = new T.Quaternion();
+  private pitchRotation = new T.Quaternion();
+  private pitchAxis = new T.Vector3(1,0,0);
+  private rollRotation = new T.Quaternion();
+  private rollAxis = new T.Vector3(0,0,1);
+  private basis = new T.Matrix4();
   private cameraReady = false;
   wideCamera = false;
   constructor(canvas: HTMLCanvasElement) {
@@ -28,8 +48,8 @@ export class GameScene {
     this.renderer.toneMappingExposure = .82;
     this.scene.background = new T.Color(0xa8cbd0);
     this.scene.fog = new T.Fog(0xa8cbd0,350,1200);
-    this.scene.add(new T.HemisphereLight(0xe9f5ff,0x626953,1.4));
-    const sun = new T.DirectionalLight(0xffdfb5,2.2); sun.position.set(-100,160,80); this.scene.add(sun);
+    this.scene.add(this.hemisphere);
+    this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
@@ -41,6 +61,15 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    const signal=BAY_BRIDGE_SIGNAL;
+    // The meter is visual only: the same shared fixture controls NPCs and AVs.
+    box(scene,signal.stopX,.06,signal.centerZ+signal.halfWidth/2,.35,.1,signal.halfWidth,0xf7f1db);
+    box(scene,signal.lightX,2.2,signal.lightZ,.35,4.4,.35,0x303b3b);
+    box(scene,signal.lightX,4.45,signal.lightZ,.85,1.5,.85,0x202a2c);
+    const red=new T.Mesh(new T.SphereGeometry(.23,12,8),this.signalRed);
+    red.position.set(signal.lightX-.44,4.8,signal.lightZ);scene.add(red);
+    const green=new T.Mesh(new T.SphereGeometry(.23,12,8),this.signalGreen);
+    green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
       box(scene,s.x,.1,s.z,9,.15,12,0x65776f);
       for(const offset of [-3,0,3]) {
@@ -51,7 +80,7 @@ export class GameScene {
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
       const label=this.label('ϟ  '+s.name);label.position.set(s.x,6,s.z);scene.add(label);
     });
-    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60]];
+    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
 
   }
@@ -61,6 +90,18 @@ export class GameScene {
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
   render(world: World, playerId: string, dt: number, menu: boolean) {
+    const signal=bayBridgeSignal(world.time).state;
+    this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
+    this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
+    // The shared clock advances the sky; vehicle physics always use real simulation seconds.
+    const phase=(dayMinute(world.time)-360)/1440*Math.PI*2;
+    const daylight=Math.max(0,Math.min(1,(Math.sin(phase)+.22)/.55));
+    this.sky.copy(this.nightSky).lerp(this.daySky,daylight);
+    (this.scene.background as T.Color).copy(this.sky);
+    (this.scene.fog as T.Fog).color.copy(this.sky);
+    this.hemisphere.intensity=.8+daylight*.6;
+    this.sun.intensity=.5+daylight*1.7;
+    this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -76,11 +117,21 @@ export class GameScene {
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
-      mesh.rotation.order='YXZ';
-      const delta=(target:number,current:number)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
-      mesh.rotation.y+=delta(e.yaw,mesh.rotation.y)*alpha;mesh.rotation.x+=delta(e.pitch,mesh.rotation.x)*alpha;mesh.rotation.z+=delta(e.roll,mesh.rotation.z)*alpha;
       if(e.kind==='roadster')setThrusterEffects(mesh,e.thrusters,world.time);
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
+      const normal=e.supportId===null||e.supportId==='stunt-loop'?null:supportNormal(e.supportId,e.x,e.z);
+      this.surfaceUp.set(normal?.x??0,normal?.y??1,normal?.z??0);
+      this.surfaceBack.set(Math.sin(e.yaw),0,Math.cos(e.yaw));
+      this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
+      this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
+      this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
+      this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'?e.pitch:0));
+      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
+      mesh.quaternion.slerp(this.orientation,alpha);
+      const incident=isTrafficIncident(e,world.time);
+      let hazard=mesh.getObjectByName('traffic-hazard');
+      if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
+      if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
     for(const pickup of world.pickups){

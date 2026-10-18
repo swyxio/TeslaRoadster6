@@ -1,6 +1,6 @@
 # Poly AV
 
-Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, drive through an inverted stunt loop, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Cross the Bay Bridge from San Francisco to Oakland via Yerba Buena Island, or take the Golden Gate north to Marin.
+Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, drive through an inverted stunt loop, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Drive a 19.9 km circuit through the Peninsula, San Jose, Fremont and Oakland, cross the Bay Bridge via Yerba Buena Island, or take the Golden Gate north to Marin.
 
 **[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
@@ -11,6 +11,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
+
+**Proposal:** [Rocket Island and parking playgrounds](docs/ROCKET_ISLAND_PLAN.md) are planned, not yet implemented.
 
 ## Run
 
@@ -52,7 +54,7 @@ This is a working foundation, not GTA-scale content or a persistent MMO. Four st
 
 Rooms are ephemeral and public-by-code. No authentication, persistent progression, saving, shooting, or death/respawn yet. Delivery money is fictional and session-only. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control.
 
-Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Full snapshots and all-pairs collisions intentionally favor simplicity; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
+Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
 ## Layout
 
@@ -61,10 +63,12 @@ shared/game.ts      Pure authoritative simulation and world schema
 shared/map.ts       Shared land, bridges, road and collision geometry
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/physics.ts   Oriented bodies and mass-based collisions
-shared/traffic.ts   Deterministic autonomous street loops
+shared/traffic.ts   Deterministic autonomous routes and traffic demand
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
 shared/police.ts    Police detection, chase and severity-based tickets
 shared/achievements.ts  Session awards and flight tracking
+shared/day.ts       Accelerated day clock and demand profiles
+shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
@@ -82,4 +86,4 @@ No framework is needed for this small HUD. Keep the simulation independent from 
 
 ## License and attribution
 
-First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Restaurant names identify real places, with fictional in-game locations and no affiliation. Tesla, Waymo, Cruise and Zoox names identify the vehicles that inspired this independent project; they do not imply endorsement, and the MIT license does not grant trademark rights.
+First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). The highway source extract and generated traces are © OpenStreetMap contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); see [map provenance and the reproducible bake](docs/MAP.md). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Restaurant names identify real places, with fictional in-game locations and no affiliation. Tesla, Waymo, Cruise and Zoox names identify the vehicles that inspired this independent project; they do not imply endorsement, and the MIT license does not grant trademark rights.

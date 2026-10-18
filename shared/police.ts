@@ -1,8 +1,7 @@
 import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
-import { isSurface, nearbyBuildings, rampHeight } from './map';
-import { onRoof } from './achievements';
-import { engageAutopilot } from './traffic';
+import { OVERPASS, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
+import { engageAutopilot, ROUTES } from './traffic';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -19,6 +18,7 @@ function lineClear(a:Point,b:Point){
 }
 const edges=points.map((a,i)=>points.map((b,j)=>({b,j})).filter(({b,j})=>j!==i&&(a.x===b.x||a.z===b.z)&&!points.some((p,k)=>k!==i&&k!==j&&((p.x===a.x&&p.x===b.x&&p.z>Math.min(a.z,b.z)&&p.z<Math.max(a.z,b.z))||(p.z===a.z&&p.z===b.z&&p.x>Math.min(a.x,b.x)&&p.x<Math.max(a.x,b.x))))&&lineClear(a,b)).map(({j})=>j));
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
+const separation=(a:Entity,b:Entity)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function nearest(p:Point){let best=0;for(let i=1;i<points.length;i++)if(distance(p,points[i])<distance(p,points[best]))best=i;return best;}
 function route(from:Point,to:Point):Point[]{
   if(lineClear(from,to))return [{x:to.x,z:to.z}];
@@ -32,32 +32,54 @@ function route(from:Point,to:Point):Point[]{
   return result;
 }
 export function newPolice():PoliceState{return {targetId:null,lastSeen:0,nextPlan:0,path:[]};}
-function flying(e:Entity){
-  if(e.y<=.05||e.kind==='person'||e.loopAngle!==null)return false;
-  const ramp=rampHeight(e.x,e.z);
-  if(ramp!==null&&Math.abs(e.y-ramp)<.08)return false;
-  return !onRoof(e);
+function resumePatrol(cop:Entity){
+  const state=cop.police!;state.targetId=null;state.path=[];
+  if(engageAutopilot(cop))return;
+  // A pursuit may end beyond the normal patrol grid or on the upper road.
+  // Return to an existing route rather than leaving a marked car stranded.
+  const destinations=ROUTES.flat();
+  const destination=destinations.reduce((best,p)=>distance(cop,p)<distance(cop,best)?p:best);
+  cop.autopilot=true;
+  if(cop.supportId==='overpass'){
+    const exit=-Math.sin(cop.yaw)>=0?OVERPASS.end+10:OVERPASS.start-10;
+    state.path=[{x:exit,z:OVERPASS.z-OVERPASS.width/2-20},destination];
+  }else state.path=route(cop,destination);
 }
+function heightAboveSurface(e:Entity){
+  // Measure height above the nearest surface below the car, including the
+  // upper roadway or a rooftop, instead of treating world altitude as flight.
+  let floor=terrainHeight(e.x,e.z)??0;
+  const deck=overpassHeight(e.x,e.z);if(deck!==null&&deck<=e.y)floor=Math.max(floor,deck);
+  const ramp=rampHeight(e.x,e.z);if(ramp!==null&&ramp<=e.y)floor=Math.max(floor,ramp);
+  for(const b of nearbyBuildings(e.x,e.z,0))if(b.h<=e.y&&Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2)floor=Math.max(floor,b.h);
+  return e.y-floor;
+}
+function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
+function detectableFlight(e:Entity){const height=flightHeight(e);return height>3&&height<=80;}
 export function updatePolice(world:World,dt:number):void {
   for (const player of world.players) {
     const e=world.entities.find(e=>e.id===player.entityId), flight=player.delivery.flight;
-    if(e && flying(e)){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,e.y);flight.lastAirborneAt=world.time;}
+    const height=e?flightHeight(e):0;
+    if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
     else if(world.time-flight.lastAirborneAt>3&&!world.entities.some(c=>c.police?.targetId===player.id)){flight.seconds=0;flight.peakHeight=0;}
   }
   for(const cop of world.entities){
     const state=cop.police;if(!state)continue;
     let player=world.players.find(p=>p.id===state.targetId);
     let target=world.entities.find(e=>e.id===player?.entityId);
-    if(!player||!target||world.time<player.delivery.ticketGraceUntil){state.targetId=null;player=undefined;target=undefined;}
+    if(state.targetId&&(!player||!target||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&e.y>3&&e.y<=80&&flying(e)&&distance(cop,e)<SIGHT).sort((a,b)=>distance(cop,a.e!)-distance(cop,b.e!))[0];
+      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
       if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
-    if(!player||!target)continue;
-    const d=distance(cop,target);
+    if(!player||!target){
+      if(state.path.length&&cop.supportId==='ground'&&engageAutopilot(cop))state.path=[];
+      continue;
+    }
+    const d=separation(cop,target);
     if(d<PURSUIT_RANGE)state.lastSeen=world.time;
-    if(world.time-state.lastSeen>ESCAPE_SECONDS){state.targetId=null;state.path=[];engageAutopilot(cop);continue;}
-    if(target.y<1&&d<12){
+    if(world.time-state.lastSeen>ESCAPE_SECONDS){resumePatrol(cop);continue;}
+    if(cop.supportId!==null&&target.supportId===cop.supportId&&d<12){
       target.speed*=Math.exp(-2.2*dt);
       if(d<7&&Math.abs(target.speed)<4){
         const delivery=player.delivery, flight=delivery.flight;
@@ -66,7 +88,7 @@ export function updatePolice(world:World,dt:number):void {
         delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(flight.seconds),peakHeight:Math.round(flight.peakHeight),durationFine,heightFine,repeatFine};
         delivery.cash-=amount;delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
         target.autopilot=false;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
-        for(const other of world.entities)if(other.police?.targetId===player.id){other.police.targetId=null;other.police.path=[];engageAutopilot(other);}
+        for(const other of world.entities)if(other.police?.targetId===player.id)resumePatrol(other);
         continue;
       }
     }
@@ -75,9 +97,16 @@ export function updatePolice(world:World,dt:number):void {
 }
 export function policeInput(cop:Entity,world:World):Input {
   const state=cop.police,player=world.players.find(p=>p.id===state?.targetId),target=world.entities.find(e=>e.id===player?.entityId);
-  if(!state||!target)return NEUTRAL;
-  while(state.path.length>1&&distance(cop,state.path[0])<8)state.path.shift();
-  const next=state.path[0]??target;
+  if(!state||cop.supportId===null)return NEUTRAL;
+  let next:Point;
+  if(cop.supportId==='overpass'){
+    // The pursuit graph is on ground roads. Continue off the ramp in the
+    // direction the car is facing before trying to follow that graph again.
+    next={x:-Math.sin(cop.yaw)>=0?OVERPASS.end+10:OVERPASS.start-10,z:OVERPASS.z};
+  }else if(cop.supportId==='ground'){
+    while(state.path.length>1&&distance(cop,state.path[0])<8)state.path.shift();
+    const destination=state.path[0]??target;if(!destination)return NEUTRAL;next=destination;
+  }else return NEUTRAL;
   const angle=Math.atan2(Math.sin(Math.atan2(-(next.x-cop.x),-(next.z-cop.z))-cop.yaw),Math.cos(Math.atan2(-(next.x-cop.x),-(next.z-cop.z))-cop.yaw));
   const reversing=Math.abs(angle)>2.25&&cop.speed<1;
   const steer=Math.max(-1,Math.min(1,angle*1.6))*(reversing?-1:1);

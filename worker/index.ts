@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, removePlayer, resetPlayer, step, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
+import { snapshotFor } from './snapshot';
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; MAX_PLAYERS?: string };
 type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number };
@@ -44,7 +45,7 @@ export class GameRoom extends DurableObject<Env> {
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
     server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
-    server.send(JSON.stringify({ type: 'state', world: this.world }));
+    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id) }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -82,9 +83,8 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.sessions.size) return;
     step(this.world, this.inputs, 0.05);
     if (++this.tickCount % 2) return;
-    const snapshot = JSON.stringify({ type: 'state', world: this.world });
-    for (const socket of this.sessions.keys()) {
-      try { socket.send(snapshot); } catch { this.disconnect(socket); }
+    for (const [socket, session] of this.sessions) {
+      try { socket.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, session.id) })); } catch { this.disconnect(socket); }
     }
   }
 

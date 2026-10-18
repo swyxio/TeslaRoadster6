@@ -43,14 +43,14 @@ test('fleet commands reject forged kinds, airborne swaps and occupied player car
   assert.equal(parseMessage('{"type":"selectVehicle","kind":"spaceship"}'),null);
   assert.ok(parseMessage('{"type":"autopilot"}'));
   const world=createWorld();addPlayer(world,'a','A');addPlayer(world,'b','B');
-  const car=world.entities.find(e=>e.driver==='a')!;car.y=10;assert.equal(chooseVehicle(world,'a','zoox'),false);car.y=0;
+  const car=world.entities.find(e=>e.driver==='a')!;car.y=10;car.supportId=null;assert.equal(chooseVehicle(world,'a','zoox'),false);car.y=0;car.supportId='ground';
   interact(world,'a');const person=world.entities.find(e=>e.driver==='a')!,other=world.entities.find(e=>e.driver==='b')!;
   person.x=other.x;person.z=other.z;interact(world,'a');assert.equal(other.driver,'b');
 });
-test('two minutes of traffic remain finite and do not grow entity count',()=>{
+test('two minutes of traffic remain finite and ambient population stays bounded',()=>{
   const world=createWorld(),count=world.entities.length;
   for(let i=0;i<2400;i++)step(world,new Map(),.05);
-  assert.equal(world.entities.length,count);
+  assert.ok(world.entities.length<=count+38);
   assert.ok(world.entities.every(e=>[e.x,e.z,e.yaw,e.speed,e.health].every(Number.isFinite)));
   assert.ok(world.entities.every(e=>e.x>MAP_BOUNDS.minX&&e.x<MAP_BOUNDS.maxX&&e.z>MAP_BOUNDS.minZ&&e.z<MAP_BOUNDS.maxZ));
 });

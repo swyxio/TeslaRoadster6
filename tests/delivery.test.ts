@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, STUNT_LOOP, STUNT_RAMP, rampHeight, isSurface, nearbyBuildings } from '../shared/map';
+import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -39,8 +39,9 @@ test('pickup time pauses while idle and a late pickup awards no bonus',()=>{
 });
 test('pickup and delivery require stopping on the ground; payment occurs exactly once',()=>{
   const {world,player,car}=setup(),order=player.delivery.order,restaurant=orderTarget(order);
-  Object.assign(car,{x:restaurant.x,z:restaurant.z,y:10,speed:0});tick(world);assert.equal(order.stage,'pickup');
-  Object.assign(car,{y:0,speed:10});tick(world);assert.equal(order.stage,'pickup');
+  Object.assign(car,{x:restaurant.x,z:restaurant.z,y:10,speed:0,supportId:null});tick(world);assert.equal(order.stage,'pickup');
+  Object.assign(car,{y:.8,vy:0,speed:0,supportId:null});tick(world);assert.equal(order.stage,'pickup','a low hover is not grounded');
+  Object.assign(car,{y:0,vy:0,speed:10,supportId:'ground'});tick(world);assert.equal(order.stage,'pickup');
   Object.assign(car,{x:restaurant.x,z:restaurant.z,y:0,speed:0});tick(world);assert.equal(order.stage,'dropoff');
   const pickup=player.delivery.cash;assert.ok(pickup>0);assert.deepEqual(player.delivery.lastReward,{id:1,kind:'pickup',amount:pickup});
   const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,speed:0});tick(world);
@@ -58,34 +59,33 @@ test('active clock and delivery estimate pause after inactivity; player scores a
 });
 test('police see nearby flight, chase, slow and ticket once; grace prevents instant repeat',()=>{
   const {world,player,car}=setup(),cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
-  Object.assign(car,{x:0,z:30,y:10,vy:1});tick(world);assert.equal(cop.police.targetId,'p');
-  Object.assign(car,{x:0,z:6,y:0,vy:0,speed:10});const before=car.speed;updatePolice(world,.05);assert.ok(car.speed<before);assert.equal(player.delivery.tickets,0);
+  Object.assign(car,{x:0,z:30,y:10,vy:1,supportId:null});tick(world);assert.equal(cop.police.targetId,'p');
+  Object.assign(car,{x:0,z:6,y:0,vy:0,speed:10,supportId:'ground'});const before=car.speed;updatePolice(world,.05);assert.ok(car.speed<before);assert.equal(player.delivery.tickets,0);
   car.speed=1;updatePolice(world,.05);assert.ok(player.delivery.cash<=-60);assert.equal(player.delivery.cash,-player.delivery.lastTicket!.amount);assert.equal(player.delivery.tickets,1);assert.equal(cop.police.targetId,null);
-  Object.assign(car,{y:10,vy:1});updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.tickets,1);
+  Object.assign(car,{y:10,vy:1,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.tickets,1);
 });
 test('police do not see grounded, distant or rooftop cars; an escaped chase expires',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
   Object.assign(car,{x:0,z:10,y:0});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
-  Object.assign(car,{x:0,z:200,y:10});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
-  const roof=BUILDINGS[0];Object.assign(cop,{x:roof.x,z:roof.z});Object.assign(car,{x:roof.x,z:roof.z,y:roof.h});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  Object.assign(car,{x:0,z:200,y:10,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  const roof=BUILDINGS[0];Object.assign(cop,{x:roof.x,z:roof.z});Object.assign(car,{x:roof.x,z:roof.z,y:roof.h,supportId:'roof:0'});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
   Object.assign(cop,{x:0,z:0});
-  Object.assign(car,{x:0,z:10,y:10});updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
+  Object.assign(car,{x:0,z:10,y:10,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
   Object.assign(car,{x:0,z:200});world.time+=11;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
 });
 test('a chasing police car drives toward a target on an unobstructed street',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,60);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
-  Object.assign(car,{x:0,z:15,y:20,vy:0});cop.yaw=0;tick(world);assert.equal(cop.police.targetId,'p');
+  Object.assign(car,{x:0,z:15,y:20,vy:0,supportId:null});cop.yaw=0;tick(world);assert.equal(cop.police.targetId,'p');
   for(let i=0;i<80;i++){car.y=20;car.vy=0;tick(world);}
   assert.ok(cop.z<45,`police should advance: z=${cop.z}`);
 });
 
 test('police follow a turn instead of circling back to an intersection',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,60);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
-  Object.assign(car,{x:-60,z:0,y:20,vy:0});cop.yaw=0;
+  Object.assign(car,{x:-60,z:0,y:20,vy:0,supportId:null});cop.yaw=0;
   for(let i=0;i<210;i++){car.y=20;car.vy=0;tick(world);}
   assert.ok(Math.hypot(cop.x-car.x,cop.z-car.z)<20,`police should follow the corner: ${cop.x}, ${cop.z}`);
 });
-
 
 test('rooftop customers use flat physical roofs and require an actual landing',()=>{
   const {world,player,car}=setup();
@@ -97,10 +97,11 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
   Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});
   // Direct update proves a car below the roof cannot collect the delivery.
   updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
-  Object.assign(car,{y:target.y+.03,vy:-5});updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
-  Object.assign(car,{x:target.x,z:target.z,y:target.y+2,speed:0,vy:-4});
+  Object.assign(car,{y:target.y+.03,vy:0,supportId:null});updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0,'a near-roof hover is not a landing');
+  Object.assign(car,{y:target.y+.03,vy:-5,supportId:null});updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
+  Object.assign(car,{x:target.x,z:target.z,y:target.y+2,speed:0,vy:-4,supportId:null});
   tick(world,NEUTRAL,20);
-  assert.equal(car.y,target.y);assert.equal(player.delivery.completed,1);
+  assert.equal(car.y,target.y);assert.ok(car.supportId?.startsWith('roof:'));assert.equal(player.delivery.completed,1);
   assert.ok(player.achievements.unlocked.includes('roof-rider'));assert.ok(player.achievements.unlocked.includes('sky-delivery'));
 });
 
@@ -129,20 +130,98 @@ test('citations increase with flight duration, height and repeat offenses withou
 
 test('flight above police sight ceiling continues to increase citation severity during a pursuit',()=>{
   const {world,player,car}=setup(),cop=makeEntity('cop','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
-  Object.assign(car,{x:0,z:6,y:90,vy:0});world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  Object.assign(car,{x:0,z:6,y:90,vy:0,supportId:null});world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
   car.y=50;world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
   car.y=2;world.time+=.05;updatePolice(world,.05);assert.ok(player.delivery.flight.seconds>=.15);
   car.y=90;for(let i=0;i<240;i++){world.time+=.05;updatePolice(world,.05);}
   assert.ok(player.delivery.flight.seconds>=12);assert.equal(player.delivery.flight.peakHeight,90);
-  Object.assign(car,{y:0,vy:0,speed:0});world.time+=.05;updatePolice(world,.05);
+  Object.assign(car,{y:0,vy:0,speed:0,supportId:'ground'});world.time+=.05;updatePolice(world,.05);
   assert.ok(player.delivery.lastTicket!.durationFine>=48);assert.equal(player.delivery.lastTicket!.heightFine,80);
 });
 
 test('supported stunt-loop and ramp travel is not police-detectable flight',()=>{
   const {world,player,car}=setup(),cop=makeEntity('cop','model-3',STUNT_LOOP.x,STUNT_LOOP.z);cop.police=newPolice();world.entities.push(cop);
-  Object.assign(car,{x:STUNT_LOOP.x,z:STUNT_LOOP.z,y:24,vy:3,loopAngle:Math.PI});
+  Object.assign(car,{x:STUNT_LOOP.x,z:STUNT_LOOP.z,y:24,vy:3,loopAngle:Math.PI,supportId:'stunt-loop'});
   world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
   const x=STUNT_RAMP.end-1,z=STUNT_RAMP.z;Object.assign(cop,{x,z});
-  Object.assign(car,{x,z,y:rampHeight(x,z),vy:2,loopAngle:null});
+  Object.assign(car,{x,z,y:rampHeight(x,z),vy:2,loopAngle:null,supportId:'stunt-ramp'});
   world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
+});
+
+test('police measure flight above local ground and can ticket on a hill',()=>{
+  const {world,player,car}=setup(),x=(HILL.minX+HILL.maxX)/2,z=(HILL.minZ+HILL.maxZ)/2;
+  const cop=makeEntity('police-hill','model-3',x+4,z);cop.police=newPolice();world.entities.push(cop);
+  const ground=terrainHeight(x,z)!;Object.assign(car,{x,z,y:ground,speed:0,supportId:'ground'});
+  updatePolice(world,.05);assert.equal(cop.police.targetId,null,'a supported hill is not flight');
+  Object.assign(car,{y:ground+2,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null,'height is relative to the hill');
+  car.y=ground+4;updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
+  Object.assign(car,{y:ground,supportId:'ground'});updatePolice(world,.05);
+  assert.equal(player.delivery.tickets,1,'grounded drivers on the hill are eligible for a ticket');
+  assert.equal(player.delivery.lastTicket?.peakHeight,4,'citation height is above local terrain');
+});
+
+test('police distinguish the elevated deck from ground and measure flight above it',()=>{
+  const {world,player,car}=setup(),x=(OVERPASS.deckStart+OVERPASS.deckEnd)/2,z=OVERPASS.z;
+  const cop=makeEntity('police-below','model-3',x,z);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x,z,y:OVERPASS.height,speed:10,supportId:'overpass'});
+  updatePolice(world,.05);assert.equal(cop.police.targetId,null,'the upper deck is not flight');
+  Object.assign(car,{y:OVERPASS.height+2,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  car.y=OVERPASS.height+4;updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
+  Object.assign(car,{y:OVERPASS.height,supportId:'overpass',speed:10});updatePolice(world,.05);
+  assert.equal(car.speed,10,'a car on the upper deck is not slowed from below');assert.equal(player.delivery.tickets,0);
+});
+
+test('pursuing police leave the overpass at either ramp before resuming ground routes',()=>{
+  for(const direction of [1,-1]){
+    const {world,player,car}=setup();
+    Object.assign(car,{x:(OVERPASS.deckStart+OVERPASS.deckEnd)/2,z:OVERPASS.z,y:20,supportId:null});
+    const cop=makeEntity('police-ramp','model-3',direction===1?OVERPASS.start-10:OVERPASS.end+10,OVERPASS.z);
+    Object.assign(cop,{yaw:direction===1?-Math.PI/2:Math.PI/2,speed:20,npc:true,autopilot:true,police:newPolice()});
+    cop.police!.targetId=player.id;world.entities.push(cop);let reachedDeck=false,leftDeck=false;
+    for(let i=0;i<800;i++){
+      Object.assign(car,{y:20,vy:0,supportId:null});tick(world);
+      reachedDeck ||= cop.supportId==='overpass';
+      if(reachedDeck&&cop.supportId==='ground'&&(direction===1?cop.x>OVERPASS.end:cop.x<OVERPASS.start)){leftDeck=true;break;}
+    }
+    assert.ok(reachedDeck,`cop did not enter ramp from direction ${direction}`);
+    assert.ok(leftDeck,`cop stuck on ramp from direction ${direction}: ${cop.x}, ${cop.supportId}`);
+  }
+});
+
+test('a chase expiring on the ramp returns the officer to a ground patrol',()=>{
+  for(const direction of [1,-1]){
+    const {world,player,car}=setup(),start=direction===1?OVERPASS.start+5:OVERPASS.end-5;
+    Object.assign(car,{x:1000,z:1000,y:20,supportId:null});
+    const cop=makeEntity('police-recovery','model-3',start,OVERPASS.z);
+    Object.assign(cop,{y:8*5/90,supportId:'overpass',yaw:direction===1?-Math.PI/2:Math.PI/2,speed:10,npc:true,autopilot:true,police:newPolice()});
+    cop.police!.targetId=player.id;world.entities.push(cop);let expiredOnDeck=false,rejoined=false;
+    for(let i=0;i<2400;i++){
+      Object.assign(car,{y:20,vy:0,supportId:null});tick(world);
+      if(cop.police!.targetId===null&&cop.supportId==='overpass')expiredOnDeck=true;
+      if(expiredOnDeck&&cop.supportId==='ground'&&cop.autopilot&&cop.police!.path.length===0){rejoined=true;break;}
+    }
+    assert.ok(expiredOnDeck,`pursuit did not expire on ramp from direction ${direction}`);
+    assert.ok(rejoined,`cop failed to rejoin patrol from direction ${direction}: ${cop.x},${cop.z}, ${cop.supportId}`);
+  }
+});
+
+test('delivery active time is independent of high-speed simulation subdivision',()=>{
+  const slow=setup(),fast=setup(),moving=makeEntity('fast','roadster',-180,-100);
+  moving.speed=60;fast.world.entities.push(moving);
+  for(let i=0;i<20;i++){
+    tick(slow.world,{...NEUTRAL,steer:1});tick(fast.world,{...NEUTRAL,steer:1});
+  }
+  assert.ok(Math.abs(slow.player.delivery.activeSeconds-1)<1e-9);
+  assert.ok(Math.abs(fast.player.delivery.activeSeconds-slow.player.delivery.activeSeconds)<1e-9);
+  assert.ok(Math.abs(fast.world.time-slow.world.time)<1e-9);
+});
+
+
+test('police measure flight above the stunt ramp rather than world zero',()=>{
+  const {world,car}=setup(),x=STUNT_RAMP.end-1,z=STUNT_RAMP.z;
+  const cop=makeEntity('police-stunt','model-3',x+5,z);cop.police=newPolice();world.entities.push(cop);
+  const height=rampHeight(x,z)!;Object.assign(car,{x,z,y:height,supportId:'stunt-ramp'});
+  updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  Object.assign(car,{y:height+2,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  car.y=height+4;updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
 });
