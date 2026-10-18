@@ -12,6 +12,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Repeatable achievement tiers · protocol v43 candidate · 2026-10-18 Pacific
+
+- On the economy PR #75 tree, the combined candidate passed all 866 tests and `pnpm build`, with the existing Vite large-chunk warning. Rebasing onto the deployed merge `82c37f1` left the tested source tree unchanged.
+- After that rebase, a local two-client Wrangler room passed movement, delivery, a five-goal Dome match and winner awards, and advertised capacity eight. The local tick-prediction integration also passed. These are functional checks, not a complete ferry crossing or a load, latency or capacity test.
+- Isolated local Wrangler fixtures passed saved-profile seeding, repeated tier awards, duplicate receipts, malformed profiles, stale writes and accepted-stage recovery after a process kill. Real room ticks completed a roof landing and a contested race after a rejected predecessor, and recovered an accepted achievement after a crash. The award-wallet fixture passed held and rejected writes, identity boundaries and race recovery. Separate delivery and supply fixtures passed event-time reprojection, journal ordering, lost replies, and crash recovery. These are functional checks, not capacity or production evidence.
+- The built game entry JavaScript was 1,088,433 raw bytes and 325,869 bytes with local gzip, compared with 1,086,305 and 323,415 bytes for the preceding v42 build. This compares the local entry asset, excludes Cloudflare-injected scripts and does not measure startup transfer or performance.
+
 ## Repeatable achievement tiers · local candidate · 2026-10-18 Pacific
 
 - On the pre-rebase local candidate, `pnpm test` passed 854 tests and `pnpm build` passed with the existing Vite large-chunk warning. A local two-client Wrangler room passed movement, delivery, a five-goal Dome match and its winner awards, and advertised capacity eight; this is a functional check, not a load or capacity test.
