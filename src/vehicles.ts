@@ -76,6 +76,12 @@ export function addRocketKit(root:T.Group,kind:VehicleId){
   }
 }
 
+/** Reconcile cached meshes when an entity ID is reused by a new session. */
+export function setRocketKit(root:T.Group,kind:VehicleId,installed:boolean){
+  if(installed)addRocketKit(root,kind);
+  const kit=root.getObjectByName('rocket-kit');if(kit)kit.visible=installed;
+}
+
 /** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
 function profile(parent: T.Object3D, width: number, points: [number, number][], color: number) {
   const key = JSON.stringify([width, points]);
