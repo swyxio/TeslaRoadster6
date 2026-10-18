@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deliveryTier, levelFor, profiles, simulate } from '../scripts/economy-progression.ts';
+import { deliveryTier, levelFor, premiumContractChoices, profiles, simulate } from '../scripts/economy-progression.ts';
 
 test('candidate levels use the current wallet and keep property late', () => {
   assert.equal(levelFor(-100), 0);
@@ -19,6 +19,12 @@ test('a lower wallet relocks premium work but preserves jobs at the current city
   assert.equal(deliveryTier(10000, 0), 1);
   assert.equal(deliveryTier(500000, 4), 4);
   assert.equal(deliveryTier(10000, 4, false), 1);
+});
+
+test('option counts include the level-six contract as well as the property market', () => {
+  assert.equal(premiumContractChoices(5), 2);
+  assert.equal(premiumContractChoices(6), 3);
+  assert.equal(premiumContractChoices(8), 5);
 });
 
 test('seeded player simulations balance their ledger and cannot buy early property', () => {

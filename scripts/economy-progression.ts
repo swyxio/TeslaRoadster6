@@ -77,6 +77,10 @@ export function deliveryTier(wallet: number, city: number, retainLocalJobs = tru
   return retainLocalJobs ? Math.max(levelFor(wallet), cityContractTiers[city]) : levelFor(wallet);
 }
 
+export function premiumContractChoices(level: number): number {
+  return [4, 5, 6, 7, 8].filter(tier => level >= tier).length;
+}
+
 type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean };
 export function simulate(profile: Profile, rules: RuleSet, seed: number, hours = 40,
   events: SimulationOptions = {}): Result {
@@ -126,7 +130,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     // Playable activity families and owned amenities, not every item or a fun score.
     const level = tier();
     const contractChoices = rules === 'candidate'
-      ? Number(level >= 4) + Number(level >= 5) + Number(level >= 7) + Number(level >= 8)
+      ? premiumContractChoices(level)
       : Math.max(0, level - 1);
     const localException = cityThresholds[city] > cash ? 1 : 0;
     return 6 + Math.min(level, 3) + localException + (level >= marketLevel ? 1 : 0) + contractChoices

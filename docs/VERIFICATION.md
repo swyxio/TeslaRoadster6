@@ -6,6 +6,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 - On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
 - After integrating main at `6456933`, `pnpm test` passed 310 tests and `pnpm build` passed, with the same warning.
+- Automated review found an omitted level-six contract in the modeled option count; after correcting it, `pnpm test` passed 311 tests, `pnpm build` passed and the standalone TypeScript check and 250-seed run passed. The reported median option samples did not change.
 - Ran `node --experimental-strip-types scripts/economy-progression.ts --players 250 --hours 40 --json`: seeded 40-active-hour profiles and comparisons completed with balanced cash ledgers. The report records model inputs, conditional results, and outstanding gaps; it is not evidence of player behavior, gameplay, device, live-room or production performance. No game or protocol rules changed.
 
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific

@@ -25,7 +25,7 @@ Use the **current spendable wallet** for levels; no XP or career-earnings gate. 
 | $250,000 | 3: San Jose |
 | $500,000 | 4: professional delivery contracts |
 | $1,000,000 | 5: higher-paying fleet and delivery contracts |
-| $2,000,000 | 6: property market, including the $1m starter home and $400k starter plot |
+| $2,000,000 | 6: advanced contracts and property market, including the $1m starter home and $400k starter plot |
 | $4,000,000 | 7: luxury contracts |
 | $8,000,000 | 8: estate contracts |
 
