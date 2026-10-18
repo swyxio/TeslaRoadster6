@@ -12,7 +12,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
-**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena connected to Rocket Island by a drivable approach. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-capable cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay or island where you entered.
+**Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose ⚽ Rocket Dome in Actions. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out or use Leave Dome to return to the Bay or island where you entered.
 
 **Global chat:** Pick a driver name and chat with players across rooms. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 
@@ -28,7 +28,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Planning:** [economy, achievements and property proposal](docs/ECONOMY.md) (not yet implemented).
+**Planning:** [economy, achievements and property proposal](docs/ECONOMY.md) and [player progression simulations](docs/ECONOMY_SIMULATIONS.md) (not yet implemented).
 
 **Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff and a short circuit. Rocket pickups on the island and at parking playgrounds equip any vehicle with the Roadster's fictional air moves for its session lifetime. The two playgrounds and four fictional Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
