@@ -2,10 +2,16 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Combined Rocket Island and expanded charging lots · protocol v27 · 2026-10-18 Pacific
+
+- After integrating the 24 charging lots and their venue geometry, `pnpm test` passed 399 tests and `pnpm build` passed; Vite retains its large-chunk warning. Tests cover both parking games across all registered charging lots and island playgrounds, temporary Rocket capability, the ferry, island ramps and Dome.
+- Isolated local Wrangler checks passed two-client room and global-chat integration, room-full signaling, and a two-client ramp fixture observing launch and landing at a 5.10 m peak. These are functional checks, not load tests. The natural-input two-client ferry crossing below was on the preceding v26 build, before the charging-lot integration.
+- Chrome desktop joined a shared room and started and left a parking queue on v27. The earlier v26 Chrome playtest included the island oval and portrait and landscape browser emulation. No physical device was tested.
+
 ## Island controls with economy research integration · protocol v26 · 2026-10-18 Pacific
 
 - After integrating the mini-game control fix and the separate economy research materials, `pnpm test` passed 394 tests and `pnpm build` passed. Vite retains its large-chunk warning. The latest local room, chat, capacity, jump and browser checks are recorded under the v26 entries below; the economy merge changed no gameplay or wire code.
-- A two-client natural-input car crossing passed on an isolated local Wrangler snapshot at `59a8225`, the same gameplay and wire code as this integration: both clients observed SF boarding at 154.50 s, secured departure at 180.20 s, island arrival at 225.20 s and drive-off onto ground at 227.90 s. Both sockets closed normally. This is not a full-deck, load or production test.
+- A two-client natural-input car crossing passed on an isolated local Wrangler snapshot at `59a8225`, the same gameplay and wire code as that v26 integration: both clients observed SF boarding at 154.50 s, secured departure at 180.20 s, island arrival at 225.20 s and drive-off onto ground at 227.90 s. Both sockets closed normally. This is not a full-deck, load or production test.
 - The Cloudflare preview for `59a8225` passed the two-client room integration, including five-goal soccer and immediate parking start/leave. The later integration changed research and public content, not gameplay or wire code. This is not a load test.
 
 ## Integrated Tesland and island playground · protocol v26 · 2026-10-18 Pacific
@@ -55,6 +61,34 @@ These entries describe separate historical builds. Check the version and scope i
 - Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
 - A temporary solo spawn at the SF lot's approach allowed a desktop keyboard playthrough: joined Cut the queue, started it, reversed into a marked stall, and saw a scored finish in 11.3 seconds. This was a single-player check, not a competitive queue playthrough.
 - With a temporary spawn near the SF ferry dock, a desktop solo Roadster drove aboard, departed secured with controls locked, crossed to Rocket Island and drove off. The HUD marked the ferry and island police-free. This was a single-car trip, not a full-deck or multiplayer crossing.
+## Bay charging lots and Tesland monuments · protocol v26 branch · 2026-10-18 Pacific
+
+- Automated review identified moving cars leaving a newly joined local parking game and outdated protocol examples. After the fixes, `pnpm test` passed 354 tests, including a moving-car regression, and `pnpm build` passed with the existing Vite chunk warning.
+- After integrating the economy article and simulations, `pnpm test` passed 353 tests and `pnpm build` passed; Vite retained its large-chunk warning. That integration changed documentation, public assets and planning scripts rather than game or room behavior.
+- After integrating the Tesland landmarks and relocating the conflicting Marin lot and storefront, `pnpm test` reported 347 passed and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v26 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- After a further small lot move to clear the monument visually, the focused map, station and billboard tests, `pnpm build`, and the two-client room integration passed. Those tests cover monument, road, building and lot clearance. Chrome desktop joined a local shared room using a temporary server spawn fixture, showed the fictional Mill Valley lot and started Park It at its local stall; the fixture was removed. No physical device was tested.
+
+## Bay charging lots with mini-games · protocol v25 branch · 2026-10-18 Pacific
+
+- After integrating the navigation and mini-game menus, `pnpm test` passed 346 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v25 passed the two-client room and global-chat integrations. These are functional checks, not a load test.
+- Simulation checks join Park It and Cut the Queue from each of the 24 charging lots, including moving to the same lot's queue approach. Chrome desktop solo, with a temporary Mill Valley spawn fixture removed afterward, showed its fictional sign and started both games locally; Park It highlighted a Mill Valley stall. The earlier v24 entry records touch emulation; no physical device was tested, and manual reachability and play at every lot remain unverified.
+
+## Bay charging lots with shared rooms · protocol v24 branch · 2026-10-18 Pacific
+
+- After integrating shared-room changes and adding two fictional Marin air stations, `pnpm test` passed 340 tests and `pnpm build` passed; Vite retained its large-chunk warning. Local Wrangler v24 passed the two-client room and global-chat integrations. The full-room and slot-reuse check passed on the preceding v24 build. This was not a load test.
+- Chrome desktop joined a local shared room; touch driving reached 60 km/h in emulated portrait and 78 km/h in landscape on the preceding v24 build. No physical device was tested.
+
+## Bay charging lots and relocated Dome · protocol v23 · 2026-10-18 Pacific
+
+- After integrating main’s relocated China Basin Dome and awards, `pnpm test` passed 337 tests and `pnpm build` passed, retaining the Vite large-chunk warning. Local Wrangler v23 passed the updated two-client room integration, including a five-goal match and wall refill, and global chat integration. A v22 hosted preview passed its earlier two-client room test. Neither is a load test.
+- A temporary low-air spawn fixture showed the SF 16th Street warning at 20 m on desktop and emulated 844×390 landscape; the fixture was removed. No physical device was tested.
+
+## Bay charging lots · historical protocol v22 branch · 2026-10-18 Pacific
+
+- After integrating main's v21 driving changes, `pnpm test` passed 316 tests and `pnpm build` passed both typechecks and production generation; Vite retained its large-chunk warning. Local Wrangler advertised v22 and passed the two-client room and global-chat integrations. An earlier v20 room run timed out on its post-Dome reset check; the subsequent v22 run passed. These are local checks, not production or load evidence.
+- Shared simulation tests checked at least two lots per represented area, site provenance and fictional labels, charging at every bay, Park It completion and queue start at every lot, and clearance for lots and venue-building collision footprints.
+- After integrating main’s economy simulations, `pnpm test` passed 322 tests. Review prompted the low-air warning to stay visible near a station until the car can refill.
+- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in portrait. Touch Drive accelerated to 57 km/h in portrait; after reversing away from a building, touch Drive moved the car in landscape. An initial touch attempt hit the wrong control because of the emulator coordinate mapping. No browser console errors were captured during the fixture pass; no physical device was tested.
 ## Five-minute economy design experiment · 2026-10-18 Pacific
 
 - On the checkout integrating main at `7b48759`, `pnpm test` passed 341 tests. `pnpm build` passed the two project typechecks, Vite and public-page generation; Vite retained its large-chunk warning. The standalone simulation and its tests also passed a separate TypeScript check.

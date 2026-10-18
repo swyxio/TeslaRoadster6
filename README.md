@@ -34,7 +34,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -86,7 +86,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 
 ## Boundaries
 
-This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
+This is a working foundation, not GTA-scale content or a persistent MMO. Twenty station identities are sourced from Tesla; four air stations in Berkeley, Mill Valley and Corte Madera are fictional. Their game positions and surroundings are compressed artistic placements; see [station sources](docs/STATIONS.md). Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
 
 Rooms are ephemeral and public-by-code. Delivery money is fictional and session-only; there is no persistent game progression, shooting, or death/respawn yet. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 

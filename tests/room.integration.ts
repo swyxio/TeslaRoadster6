@@ -6,6 +6,8 @@ import { currentAt } from '../shared/sky-currents';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
+// Version 27 combines the expanded charging lots and Rocket Island geometry.
+assert.equal(PROTOCOL_VERSION, 27);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
