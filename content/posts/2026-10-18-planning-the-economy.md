@@ -83,7 +83,7 @@ A home comes with two garage spaces and a free teleport back home. Extra spaces 
 
 Bigger plots and builds come in $2m, $4m, $8m and $16m starting packages. You can own one ready-built home bought from the city or another player, plus homes you build yourself on additional plots. Starter plots should always be available; a limited number of special world locations give players something to hunt for. Players set their own resale prices. On a $2m sale, a 5% fee removes $100k and the seller receives $1.9m.
 
-For players who want to keep building, the property career can grow upward. Buy a development plot, put up the first floor, and add stories as your business earns the next construction payment. A home can become a taller building, and a large development can eventually become a skyline-defining tower. Each floor is a visible purchase and a new achievement; the building remains yours even when its cost drops your wallet level. We'll price this as a late-game path and test it against the same delivery and cab income as the rest of the economy.
+For players who want to keep building, the property career can grow upward. A development plot costs $800k and its foundation and first floor cost $1.2m. The next floor costs $200k, with each additional floor 10% more than the last. By the twentieth floor you've spent $12.232m on land and construction, before achievement awards. Milestones at floors 1, 5, 10 and 20 pay once, and the building remains yours even when its cost drops your wallet level. We haven't assumed any rental income: a tower is a place to make your mark and, eventually, a property another player might want to buy.
 
 <figure>
 <img src="/blog/economy/developer-tower.webp" alt="A Bay Area residential tower rises above a small neighborhood, with a crane adding its upper floors." loading="lazy">
@@ -99,7 +99,7 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 <figcaption>The full Tesland map, drawn from the game's coastlines, roads and landmark positions.</figcaption>
 </figure>
 
-<ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>
+<ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>
 
 The next delivery can take you somewhere new, and the place should give you a reason to come back. The blue research rings already pay for a visit: UCSF's Homes Lab gives $20 and a badge; Berkeley's Energy Lab gives $35 and a discount on efficient nozzles; Stanford's Speed Lab gives $50 and a motor discount; SFO's Flight Lab gives $40 and an air-tank discount. Your first delivery to SFO earns an extra $80. These rewards and discounts last for the drive.
 

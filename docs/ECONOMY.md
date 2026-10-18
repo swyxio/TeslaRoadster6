@@ -131,6 +131,19 @@ An account may own **at most one ready-built home it acquired by purchase** at a
 
 These are example matched packages, not a requirement to buy only that pairing: any design that physically fits may be built on a plot. The first city-supplied ready-made home is also $1 million. For the first implementation, choose a preset exterior and pay for immediate construction; add material-delivery missions and deeper customization later. The $2m market gate means a player buying the $400k plot can immediately afford the $600k build; dividing it into four payments therefore creates no extra progression in the model. Include a two-car garage with each home. Decorations, chargers and launch pads are separate purchases.
 
+### Build upward
+
+A developer can buy a larger $800k plot, build a $1.2m foundation and first story, then add floors. The second floor costs $200k; each following floor costs 10% more, rounded to the nearest $1,000. The foundation includes the larger building's initial structure; the increasing incremental payments fund the stories above it. A 20-floor limit keeps the tower within the game's flight space. Players may continue building on a plot they already own after their wallet falls below the market gate.
+
+| Building | Plot and construction | Latest floor |
+| --- | ---: | ---: |
+| 1 story | $2m | $1.2m foundation |
+| 5 stories | $2.928m | $266k |
+| 10 stories | $4.716m | $429k |
+| 20 stories | $12.232m | $1.112m |
+
+The figures exclude achievement awards and optional upgrades. Propose one-time awards of $5k / $10k / $25k / $50k at floors 1 / 5 / 10 / 20. Building floors gives owners a visible skyline to shape and a reason to keep earning; any eventual sale transfers the whole parcel and building under the existing market rules, including the purchased-home slot if it contains a home. Avoid automatic rental income until there is a separately balanced tenant and payout system. An individual instance can establish the build-and-visit loop first; scarce shared physical plots require the cross-room registry and collision-safe placement described below.
+
 ### Scarcity and supply
 
 1. **Guaranteed starter access:** offer every account one city-sold, instanced starter plot for $400,000, as well as access to a $1 million instanced ready-made starter home. A shared neighborhood entrance leads to individually persistent, visitable spaces; this avoids promising unique visible street lots for unlimited players. A player's one subsidized starter-plot purchase is once per account; additional plots can be bought on the market or from other city releases. The one purchased-home limit still applies. Authentication/account abuse needs its own design; this rule alone does not stop multiple accounts.

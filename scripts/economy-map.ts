@@ -13,17 +13,19 @@ const place=(id:string)=>LANDMARKS.find(p=>p.id===id)!;
 const building=(style:string)=>BUILDINGS.find(p=>p.style===style)!;
 const markers=[
   {n:1,name:'North Bay Playground',sub:'Races, ramps & ferry',p:{x:200,z:-1700},side:'left',labelY:245},
-  {n:2,name:'Golden Gate Bridge',sub:'Marin to San Francisco',p:{x:-240,z:-330},side:'left',labelY:323},
-  {n:3,name:'UCSF · Homes Lab',sub:'Property & building',p:place('ucsf'),side:'left',labelY:401},
-  {n:4,name:'Salesforce Tower',sub:'Downtown San Francisco',p:building('salesforce'),side:'left',labelY:479},
-  {n:5,name:'SFO · Flight Lab',sub:'Airport & flight research',p:place('sfo'),side:'left',labelY:590},
-  {n:6,name:'Stanford · Speed Lab',sub:'Hoover Tower & the Quad',p:place('stanford'),side:'left',labelY:864},
-  {n:7,name:'UC Berkeley · Energy Lab',sub:'The Campanile',p:place('berkeley'),side:'right',labelY:245},
-  {n:8,name:'Oakland Tribune Tower',sub:'Downtown Oakland',p:building('tribune'),side:'right',labelY:323},
-  {n:9,name:'Bay Bridge',sub:'San Francisco to Oakland',p:{x:195,z:60},side:'right',labelY:401},
-  {n:10,name:'Rocket Dome',sub:'China Basin',p:DOME,side:'right',labelY:479},
-  {n:11,name:'Fremont Spaceport',sub:'Starship launch pad',p:FREMONT_SPACEPORT.entrance,side:'right',labelY:1070},
-  {n:12,name:'San José City Hall',sub:'The South Bay',p:place('san-jose-city-hall'),side:'right',labelY:1340},
+  {n:2,name:'Golden Gate Bridge',sub:'Marin to San Francisco',p:{x:-240,z:-330},side:'left',labelY:315},
+  {n:3,name:'UCSF · Homes Lab',sub:'Property & building',p:place('ucsf'),side:'left',labelY:385},
+  {n:4,name:'Coit Tower',sub:'Telegraph Hill',p:building('coit'),side:'left',labelY:455},
+  {n:5,name:'Salesforce Tower',sub:'Downtown San Francisco',p:building('salesforce'),side:'left',labelY:525},
+  {n:6,name:'SFO · Flight Lab',sub:'Airport & flight research',p:place('sfo'),side:'left',labelY:650},
+  {n:7,name:'Stanford · Speed Lab',sub:'Hoover Tower & the Quad',p:place('stanford'),side:'left',labelY:880},
+  {n:8,name:'UC Berkeley · Energy Lab',sub:'The Campanile',p:place('berkeley'),side:'right',labelY:245},
+  {n:9,name:'Oakland Tribune Tower',sub:'Downtown Oakland',p:building('tribune'),side:'right',labelY:315},
+  {n:10,name:'Bay Bridge',sub:'San Francisco to Oakland',p:{x:195,z:60},side:'right',labelY:385},
+  {n:11,name:'Ferry Building',sub:'San Francisco waterfront',p:building('ferry'),side:'right',labelY:455},
+  {n:12,name:'Rocket Dome',sub:'China Basin',p:DOME,side:'right',labelY:525},
+  {n:13,name:'Fremont Spaceport',sub:'Starship launch pad',p:FREMONT_SPACEPORT.entrance,side:'right',labelY:1070},
+  {n:14,name:'San José City Hall',sub:'The South Bay',p:place('san-jose-city-hall'),side:'right',labelY:1340},
 ] as const;
 const polygon=(points:MapPoint[])=>points.map(pt).join(' ');
 const lines=HIGHWAYS.map(road=>`<polyline points="${polygon(road.points)}" fill="none" stroke="#e6bc7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
