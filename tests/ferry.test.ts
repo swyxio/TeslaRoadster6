@@ -62,7 +62,7 @@ test('a jump processed while secured does not fire after disembarking',()=>{
   const {world,car}=setup();Object.assign(car,{x:0,z:world.ferry.z,y:0,supportId:'ferry'});world.ferry.remaining=.05;
   advance(world,.1);assert.equal(world.ferry.phase,'to-island');
   const controls=new ScheduledInput(NEUTRAL);
-  controls.receive({seq:1,targetTick:1,controlRevision:0,input:{...NEUTRAL,jump:1}},0,0);
+  controls.receive({seq:1,targetTick:1,controlRevision:0,actionSeq:0,input:{...NEUTRAL,jump:1}},0,0);
   step(world,new Map([['p',controls.advance(1,50).input]]),.05);
   assert.equal(car.lastJump,1);assert.equal(car.supportId,'ferry');
   world.ferry.passengers=[];

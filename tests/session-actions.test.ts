@@ -139,6 +139,14 @@ test('actions that cannot change control revision do not delay a new jump',()=>{
   session.disconnect();
 });
 
+test('every potentially invalidating control action carries a new fence',()=>{
+  const {session,socket}=online();socket.sent.length=0;
+  for(const type of ['interact','autopilot','dome','reset'] as const)session.action(type);
+  assert.deepEqual(socket.sent.filter(message=>message.type!=='sync'),
+    ['interact','autopilot','dome','reset'].map((type,index)=>({type,actionSeq:index+1,edgeBaseline:{jump:0,flip:0}})));
+  session.disconnect();
+});
+
 test('a rejected action keeps motion visible while its ordered result arrives',()=>{
   const {session,socket,world,state,advance}=online();
   session.tick(.05,drive);assert.notEqual(session.renderWorld(),session.world);
