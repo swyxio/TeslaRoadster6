@@ -34,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=42;
+export const PROTOCOL_VERSION=43;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -1191,7 +1191,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       const activeTime=player.delivery.activeSeconds-activeBefore;
       economy?.deliveryEnd?.(player,orderPaused?0:activeTime,payouts);
       if(payouts===null){
-        if(economy?.achievement)updateAchievements(player,entity,false,undefined,false,evidence,true);
+        if(economy?.achievement)updateAchievements(player,entity,false,undefined,false,evidence,true,dt);
         return null;
       }
       const decisionsAvailable=economy?.decisionsAvailable?.(player)!==false;
@@ -1207,24 +1207,36 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
         cockpit.orderEligible=true;cockpit.orderSeconds=0;
       }
       updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined,(player.delivery.lastReward?.id??0)>rewardBefore,economy?.achievement?evidence:undefined,
-        !decisionsAvailable&&!Array.isArray(payouts));
+        !decisionsAvailable&&!Array.isArray(payouts),dt);
       updateLevel(player.delivery);
       return payouts;
       });
       for(const item of evidence)economy?.achievement?.(player,item);
     }
   }
+  // Remember the unfinished entrants, not their continuously visible results.
+  // The authoritative updates below mutate these same objects exactly once.
+  const hasGames=!!(world.parking.rounds.length||world.races.rounds.length);
+  const unfinishedParking=economy?.achievement&&hasGames?new Set(world.parking.rounds.flatMap(round=>round.entrants.filter(entrant=>entrant.finishedAt===null))):null;
+  const unfinishedRace=economy?.achievement&&hasGames?new Set(world.races.rounds.flatMap(round=>round.entrants.filter(entrant=>entrant.status==='entered'))):null;
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
-  if(world.parking.rounds.length||world.races.rounds.length)for(const player of world.players){
+  if(economy?.achievement&&hasGames){
+    const players=new Map(world.players.map(player=>[player.id,player]));
+    for(const round of world.parking.rounds)for(const entrant of round.entrants){
+      const player=players.get(entrant.playerId);
+      if(player&&entrant.finishedAt!==null&&unfinishedParking!.has(entrant))
+        economy.achievement(player,{kind:'parking',mode:round.mode,finished:true});
+    }
+    for(const round of world.races.rounds)for(const entrant of round.entrants){
+      const player=players.get(entrant.playerId);
+      if(player&&entrant.status==='finished'&&unfinishedRace!.has(entrant))
+        economy.achievement(player,{kind:'race',status:entrant.status,phase:round.phase,rank:entrant.rank,starterCount:round.starterCount});
+    }
+  }else if(hasGames&&!economy?.achievement)for(const player of world.players){
     const finishedParking=world.parking.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.finishedAt!==null));
     const finishedRace=world.races.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.status==='finished'));
-    if((finishedParking||finishedRace)&&economy?.achievement){
-      for(const round of world.parking.rounds)for(const entrant of round.entrants)if(entrant.playerId===player.id&&entrant.finishedAt!==null)
-        economy.achievement(player,{kind:'parking',mode:round.mode,finished:true});
-      for(const round of world.races.rounds)for(const entrant of round.entrants)if(entrant.playerId===player.id&&entrant.status==='finished')
-        economy.achievement(player,{kind:'race',status:entrant.status,phase:round.phase,rank:entrant.rank,starterCount:round.starterCount});
-    }else if(finishedParking||finishedRace)gameAward(player,()=>updateGameAchievements(world,player),()=>{
+    if(finishedParking||finishedRace)gameAward(player,()=>updateGameAchievements(world,player),()=>{
       // Capture only when a new award entered the wallet queue; these results
       // expire before a delayed earlier transaction necessarily settles.
       const evidence={...world,parking:structuredClone(world.parking),races:structuredClone(world.races)};

@@ -79,7 +79,9 @@ async function localPickup(client:Client){
 }
 async function moveAway(client:Client){await rpc('pickup','car',{room:client.room,playerId:client.playerId,moveAway:true});}
 function credit(before:DriverProgress,after:DriverProgress){
-  assert.equal(after.cash,before.cash+5);assert.equal(after.eligibleIncome,before.eligibleIncome+5);assert.equal(after.earned,before.earned);
+  assert.deepEqual(before.achievementTiers!['supply-pickups'],{count:0,claimed:0});
+  assert.deepEqual(after.achievementTiers!['supply-pickups'],{count:1,claimed:1});
+  assert.equal(after.cash,before.cash+105);assert.equal(after.eligibleIncome,before.eligibleIncome+105);assert.equal(after.earned,before.earned);
 }
 
 try{

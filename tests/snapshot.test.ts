@@ -77,3 +77,16 @@ test('cached snapshots include owner-only controls and optional sync metadata',(
   const ordered=JSON.parse(prepare(player.id,new ScheduledInput(NEUTRAL).snapshot(),1,7));
   assert.equal(ordered.control.receivedSeq,0);assert.deepEqual(ordered.control.queued,[]);assert.equal(ordered.sync,7);
 });
+
+test('flight samples stay server-side and tier progress is not replicated with players',()=>{
+  const world=createWorld(),player=addPlayer(world,'viewer','Viewer');
+  player.achievements.roofFlight={entityId:player.entityId,x:1,y:2,z:3,supported:false,
+    flight:{seconds:1,startY:0,rise:2,travel:6}};
+  const sample=player.achievements.roofFlight;
+  const direct=snapshotFor(world,player.id);
+  const wire=JSON.parse(prepareSnapshots(world,0,'epoch',1)(player.id,new ScheduledInput(NEUTRAL).snapshot(),0));
+  assert.equal(direct.players[0].achievements.roofFlight,null);
+  assert.equal(wire.world.players[0].achievements.roofFlight,null);
+  assert.ok(!('achievementTiers' in wire.world.players[0]));
+  assert.equal(player.achievements.roofFlight,sample,'serialization must not mutate the authoritative tracker');
+});

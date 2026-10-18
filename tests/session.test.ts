@@ -4,6 +4,7 @@ import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
 import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
+import { normalizeAchievementTiers } from '../shared/achievement-tiers';
 
 class Socket {
   static OPEN = 1;
@@ -18,13 +19,47 @@ class Socket {
   close() { this.readyState = 3; }
   message(value:unknown) {
     const message=value as Record<string,unknown>;
-    const defaults=message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
+    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[])}:
+      message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
   }
   closed(code=1000,reason='') { this.readyState = 3; this.onclose?.({code,reason}); }
 }
 Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
+
+test('committed reward messages queue in order without crossing identity changes',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Driver');socket.message({type:'state',world});
+  const delivery={id:1,kind:'delivery-research' as const,amount:800},research={id:2,kind:'research' as const,amount:250};
+  socket.message({type:'reward',reward:delivery});socket.message({type:'reward',reward:research});
+  socket.message({type:'reward',reward:delivery});
+  world.players[0].delivery.lastReward=research;
+  socket.message({type:'state',world,tick:1});
+  assert.deepEqual(session.takeRewards(),[delivery,research]);assert.deepEqual(session.takeRewards(),[]);
+  socket.message({type:'reward',reward:{id:3,kind:'pickup',amount:100}});
+  const requestId=session.setIdentity('recovery-code');
+  socket.message({type:'reward',reward:{id:4,kind:'research',amount:250}});
+  assert.deepEqual(session.takeRewards(),[],'rewards wait until binding is resolved');
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world,tick:2});
+  assert.deepEqual(session.takeRewards(),[{id:4,kind:'research',amount:250}], 'an in-flight reward for the same driver is preserved');
+  session.disconnect();
+});
+
+test('owner wallet accepts valid tier progress and rejects malformed progress',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  const tiers=normalizeAchievementTiers(undefined,0,[]);
+  socket.message({type:'wallet',achievementTiers:tiers});
+  assert.deepEqual(session.wallet?.achievementTiers,tiers);
+  const log=console.error;console.error=()=>{};
+  try{socket.message({type:'wallet',achievementTiers:{deliveries:{count:-1,claimed:0}}});}finally{console.error=log;}
+  assert.equal(socket.readyState,3);
+  assert.equal(session.error,'Invalid server message. Please reconnect.');
+  assert.deepEqual(session.wallet?.achievementTiers,tiers);
+  session.disconnect();
+});
 
 test('a shared room connects and a disconnect never starts a solo simulation',()=>{
   assert.equal(DEFAULT_ROOM,'bay'); assert.ok(validRoom('friends-2')); assert.ok(!validRoom('../bay'));

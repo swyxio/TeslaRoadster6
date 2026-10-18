@@ -82,7 +82,8 @@ for (const {x,z,district,name} of [
 }
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
-export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number} | null; lastReward: { id: number; kind: 'pickup' | 'delivery' | 'pickup-research' | 'delivery-research' | 'supply-repair' | 'supply-air' | 'research'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
+export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
