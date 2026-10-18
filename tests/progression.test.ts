@@ -76,16 +76,14 @@ test('simulation without economy hooks retries an unavailable order after reachi
   assert.ok(requiredLevelAt(orderTarget(player.delivery.order).x,orderTarget(player.delivery.order).z)<=player.delivery.level);
 });
 
-test('a zero-payout delivery does not open a region; a later pickup can',()=>{
+test('a late delivery minimum can open a region',()=>{
   const {world,player,car}=setup();car.kind='model-3';
   player.delivery.cash=LEVELS[1].cash-1;updateLevel(player.delivery);
   const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';player.delivery.order.elapsed=player.delivery.order.estimate*5;
+  const minimum=Math.ceil(player.delivery.order.base/2);
   Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0,supportId:'ground'});updateDelivery(world,player,car,NEUTRAL,.05);
-  assert.equal(player.delivery.completed,1);assert.equal(player.delivery.level,0);
-  for(let i=0;player.delivery.order.search&&i<100;i++)updateDelivery(world,player,car,NEUTRAL,.05);
-  assert.equal(player.delivery.order.search,undefined,'the next assignment becomes ready');
-  const pickup=orderTarget(player.delivery.order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0});
-  updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.level,1);
+  assert.equal(player.delivery.completed,1);assert.equal(player.delivery.lastPayout,minimum);
+  assert.equal(player.delivery.cash,LEVELS[1].cash-1+minimum);assert.equal(player.delivery.level,1);
 });
 
 test('level gates stop ground driving, jumps and the north approach while leaving NPCs and unlocked drivers free',()=>{

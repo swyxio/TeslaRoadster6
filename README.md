@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-See [verification](docs/VERIFICATION.md) for observed checks and known limitations, and the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks and next steps.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, [performance baselines](docs/PERFORMANCE_BASELINES.md) for selective regression reports, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
@@ -12,7 +12,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Research tour:** Find the blue rings at UCSF Parnassus in SF, the Berkeley Campanile, Stanford’s Hoover Tower and SFO’s control tower; the map labels each landmark. Stop in each ring for a one-time award: UCSF pays $250; Berkeley pays $400 and gives 20% off efficient nozzles; Stanford pays $600 and gives 20% off sport motors; SFO pays $600 and gives 20% off air tanks. Complete a delivery to SFO for an additional $1,000 achievement. Open **Actions → Awards** to see each goal.
 
-**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. Once funded, reach level 5, stop in the gold ring at the fictional Fremont spaceport and board for the To Mars achievement and victory. You can keep exploring afterwards.
+**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 5, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
 
 **Sound and radio:** Use **♫** to choose the original 8-bit soundtrack or a random episode from the last two months of Latent Space or ThursdAI. Play, pause and skip episodes while driving; master, music/radio and effects levels are separate. The station and sound preferences stay on this browser. Podcast audio streams from the publisher. See [audio design](docs/AUDIO.md).
 
@@ -102,9 +102,9 @@ This is a working foundation, not GTA-scale content or a persistent MMO. Twenty 
 
 Rooms are public-by-code. Room simulation resets on deployment, runtime restart, or last disconnect; saved driver progress and the global Mars goal persist. Room codes are not access control, and room labels are self-asserted. Global chat retains a recent, transient history, which disappears on server restart. Traffic is deterministic arcade driving; shooting and death/respawn are not implemented.
 
-Rooms default to **eight players**, with retry or another named room when full. This conservative limit replaces 64 after local load tests showed substantial simulation slowdown at 64. The eight-player sample also narrowly missed the simulation-time target on the busy test host; it is not validated production capacity. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Raise the deployed limit only after measuring playable performance. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
+Rooms default to **64 players**, with retry or another named room when full. Automatic overflow is not implemented; see the [overflow plan](docs/ROOM_OVERFLOW_PLAN.md). This limit is provisional, not validated playable capacity: a previous same-host 64-client test showed substantial simulation slowdown. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
 
-To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8787 8 60` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. For larger local experiments, start Wrangler with an explicit override such as `pnpm exec wrangler dev --var MAX_PLAYERS:64`. This is a synthetic check, not proof of player experience or sustained production capacity.
+To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8787 8 60` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage; choose a client count up to the configured room limit. This is a synthetic check, not proof of player experience or sustained production capacity.
 
 ## Layout
 

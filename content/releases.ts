@@ -6,6 +6,67 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Build Starship together',
+    intro: 'Watch the Fremont launch site grow as Tesland earns.',
+    sections: [
+      { title: 'A mission in the making', items: [
+        'The Starship rises with confirmed game-wide earnings, while workers, vehicles and rocket parts bring the construction yard to life.',
+        'Find the Fremont mission sign or open the nearby mission shortcut to learn how to board for Mars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.26-alpha',
+    label: '0.0.26 Alpha',
+    date: '2026-10-18',
+    title: 'More room to drive',
+    intro: 'Bring more drivers together in the Bay.',
+    sections: [
+      { title: 'Room for more', items: [
+        'Rooms can now admit up to 64 drivers. This limit is still being tested, and busy rooms may slow down.',
+        'If a room is full, retry or choose another named room. Automatic overflow is planned.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.25-alpha',
+    label: '0.0.25 Alpha',
+    date: '2026-10-18',
+    title: 'A little direction',
+    intro: 'Find your next delivery and see the victories you are working toward.',
+    sections: [
+      { title: 'Your next move', items: [
+        'The mission card offers a route to your pickup or dropoff and a steady next award to work toward.',
+        'Look for a floating food bag at your pickup and a distinct marker at ground and rooftop dropoffs.',
+        'On mobile, expand or minimize the mission, map and driving stats independently. Your choices stay on this device.'
+      ] },
+      { title: 'Your awards', items: [
+        'Explore grouped awards for delivery, flight, exploration, games and collection.',
+        'Open repeatable awards to see all five ranks, progress, bonuses and save status.'
+      ] },
+      { title: 'Fairer fares', items: [
+        'Completed deliveries pay at least half the quoted base fare, even if they take longer than expected.',
+        'The shop warns you when a purchase will lower your cash-based level.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.24-alpha',
+    label: '0.0.24 Alpha',
+    date: '2026-10-18',
+    title: 'Steadier earnings status',
+    intro: 'Small timing differences between game services no longer discard a valid earnings-bonus update.',
+    sections: [
+      { title: 'Keep driving', items: [
+        'Earnings updates can wait briefly for their confirmed start time while the room keeps running.',
+        'Expired or unavailable bonus data still waits for confirmation; rewards never assume a missing rate.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.23-alpha',
+    label: '0.0.23 Alpha',
+    date: '2026-10-18',
     title: 'Keep the victories coming',
     intro: 'Find more milestones as you keep exploring and playing.',
     sections: [

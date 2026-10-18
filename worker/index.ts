@@ -87,6 +87,7 @@ export class GameRoom extends DurableObject<Env> {
   private refreshing=false;
   private earningsSnapshot:RoomEarningsSnapshot|null=null;
   private earningsGeneration=0;
+  private lastEarningsFailureLog=0;
   private winFlight:Promise<void>|null=null;
   private hasPendingWin=false;
   private winJournalGeneration=0;
@@ -152,15 +153,33 @@ export class GameRoom extends DurableObject<Env> {
   private async refreshEarnings(){
     if(!this.roomId||this.hasPendingWin){this.earningsSnapshot=null;this.publishEarningsStatus();return;}
     const observedAt=Date.now(),generation=this.earningsGeneration,roomId=this.roomId;
+    let source='validation',receivedLease:GlobalEventLease|undefined;
     try{
       const [roomUntil,lease]=await Promise.all([
-        this.ledger().earningsAt(observedAt),this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global')).lease(),
+        this.ledger().earningsAt(observedAt).catch(error=>{source='room';throw error;}),
+        this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global')).lease().catch(error=>{source='global';throw error;}),
       ]);
+      receivedLease=lease;
+      const receivedAt=Date.now();
+      // A remote DO can issue its lease ahead of this callback's cached clock.
+      // Yield to a timer rather than discarding it or paying before it begins.
+      // Never wait past our existing room-observation freshness budget.
+      if(lease.issuedAtMs>receivedAt&&lease.issuedAtMs<observedAt+ROOM_EARNINGS_STALE_MS)
+        await new Promise(resolve=>setTimeout(resolve,lease.issuedAtMs-receivedAt));
       if(generation!==this.earningsGeneration||roomId!==this.roomId||this.hasPendingWin)return;
       const room=roomUntil===null?[]:[{startsAtMs:roomUntil-ROOM_WIN_DURATION_MS,endsAtMs:roomUntil}];
       const now=Date.now();globalWindowsForInstant(lease,now);
       this.earningsSnapshot={observedAt,lease,events:{room,global:lease.windows}};
-    }catch{if(generation===this.earningsGeneration)this.earningsSnapshot=null;}
+    }catch(error){
+      if(generation===this.earningsGeneration)this.earningsSnapshot=null;
+      const now=Date.now();
+      if(now-this.lastEarningsFailureLog>=30_000){
+        this.lastEarningsFailureLog=now;
+        // No driver, room name, recovery code or wallet data in diagnostics.
+        console.warn('earnings-refresh-failed',{source,reason:error instanceof Error?error.message.slice(0,160):'Unknown error',
+          observedAt,now,issuedAtMs:receivedLease?.issuedAtMs,validUntilMs:receivedLease?.validUntilMs});
+      }
+    }
     this.publishEarningsStatus();
   }
   private resumeWins():Promise<void>{

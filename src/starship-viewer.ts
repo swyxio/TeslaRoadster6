@@ -7,7 +7,7 @@ import './starship-viewer.css';
 /** A spectator view uses its own small scene; the player's room never moves. */
 export function createStarshipViewer(options:{
   animation:(now:number)=>StarshipAnimation|null;
-  stage:()=>number;
+  total:()=>number|null;
   message:(now:number)=>string;
   onOpen:()=>void;
   onClose:()=>void;
@@ -33,14 +33,14 @@ export function createStarshipViewer(options:{
     const ground=new T.Mesh(new T.PlaneGeometry(800,800),new T.MeshStandardMaterial({color:0x7b9185}));
     ground.rotation.x=-Math.PI/2;ground.position.set(pad.x,-.1,pad.z);scene.add(ground);
     spaceport=buildFremontSpaceport(scene);
-    camera=new T.PerspectiveCamera(48,1,.1,1800);camera.position.set(pad.x+180,pad.h+115,pad.z+235);camera.lookAt(pad.x,pad.h+62,pad.z);
+    camera=new T.PerspectiveCamera(48,1,.1,1800);camera.position.set(pad.x+125,pad.h+62,pad.z+175);camera.lookAt(pad.x-12,pad.h+62,pad.z);
   }
   function render(now:number){
     if(!dialog.open||!renderer||!scene||!camera||!spaceport)return;
     const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
     if(canvas.width!==width||canvas.height!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
     const animation=options.animation(now);
-    spaceport.update(animation?.elapsed??0,animation?0:null,animation?5:options.stage());
+    spaceport.update(animation?.elapsed??0,animation?0:null,options.total(),now/1000);
     const message=options.message(now);if(status.textContent!==message)status.textContent=message;
     renderer.render(scene,camera);frame=requestAnimationFrame(render);
   }

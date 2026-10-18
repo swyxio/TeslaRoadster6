@@ -160,7 +160,9 @@ export class Session {
             this.pendingVehicle=undefined;
           }
         }
-        if(message.type==='inputRejected'&&Number.isSafeInteger(message.seq)){this.prediction.reject(message.seq);this.lastSentInput=null;}
+        // Rejected controls retry on the regular heartbeat. Forcing an early
+        // unchanged send for every rejection can amplify a delayed connection.
+        if(message.type==='inputRejected'&&Number.isSafeInteger(message.seq))this.prediction.reject(message.seq);
         if(message.type==='inputEdge'&&(message.kind==='jump'||message.kind==='flip')&&Number.isSafeInteger(message.id)&&
           Number.isSafeInteger(message.targetTick)&&['accepted','rescheduled','processed','expired','superseded'].includes(message.status))
           this.prediction.edgeOutcome(message.kind,message.id,message.status,message.targetTick);

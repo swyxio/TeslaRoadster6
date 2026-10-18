@@ -1,0 +1,177 @@
+name: Performance observations
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    # Keep these in sync with scripts/performance-select.mjs.
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'worker/**'
+      - 'public/assets/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.nvmrc'
+      - 'vite.config.ts'
+      - 'wrangler.jsonc'
+      - 'index.html'
+      - 'scripts/motion-*'
+      - 'scripts/motion-*/**'
+      - 'scripts/performance-*'
+      - 'scripts/performance-*/**'
+      - 'scripts/playtest*'
+      - 'scripts/playtest*/**'
+      - 'tests/fixtures/playtest-stage-worker.ts'
+      - 'tests/fixtures/wrangler.playtest-stage.jsonc'
+      - '.github/workflows/performance.yml'
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Base revision to compare
+        required: true
+        default: main
+      candidate_ref:
+        description: Candidate revision (blank uses the selected workflow ref)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    name: Select performance run
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'performance-required' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - id: select
+        name: Classify changed files and size
+        working-directory: candidate
+        run: node scripts/performance-select.mjs
+      - name: Explain selection
+        env:
+          REASON: ${{ steps.select.outputs.reason }}
+          SELECTED: ${{ steps.select.outputs.run }}
+        run: |
+          echo "Performance run: $SELECTED ($REASON)." >> "$GITHUB_STEP_SUMMARY"
+
+  measure:
+    name: Paired local performance observation
+    needs: select
+    if: ${{ needs.select.outputs.run == 'true' }}
+    runs-on: macos-15
+    concurrency:
+      group: performance-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
+    timeout-minutes: 35
+    steps:
+      - name: Check out candidate and measurement harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Check out base game
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || inputs.base_ref || 'main' }}
+          path: base
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install and build candidate
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm exec playwright install chromium
+      - name: Install and build base
+        working-directory: base
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Prepare reports
+        run: mkdir -p "$RUNNER_TEMP/tesland-performance"
+      - id: base
+        name: Measure base
+        continue-on-error: true
+        run: |
+          node candidate/scripts/performance-report.mjs \
+            --target-root "$GITHUB_WORKSPACE/base" \
+            --out "$RUNNER_TEMP/tesland-performance/base" --gpu metal \
+            > "$RUNNER_TEMP/tesland-performance/base.log" 2>&1
+      - id: candidate
+        name: Measure candidate
+        continue-on-error: true
+        run: |
+          node candidate/scripts/performance-report.mjs \
+            --target-root "$GITHUB_WORKSPACE/candidate" \
+            --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu metal \
+            > "$RUNNER_TEMP/tesland-performance/candidate.log" 2>&1
+      - name: Summarize available observations
+        if: ${{ always() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/tesland-performance"
+          if [ -f candidate/scripts/performance-compare.mjs ]; then
+            node candidate/scripts/performance-compare.mjs \
+              "$RUNNER_TEMP/tesland-performance/base/report.json" \
+              "$RUNNER_TEMP/tesland-performance/candidate/report.json" \
+              "$RUNNER_TEMP/tesland-performance/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Performance observations: HOLD (candidate harness unavailable).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload measurements and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tesland-performance/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Require complete observations
+        if: ${{ always() }}
+        env:
+          BASE_OUTCOME: ${{ steps.base.outcome }}
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+        run: |
+          if [ "$BASE_OUTCOME" != success ] || [ "$CANDIDATE_OUTCOME" != success ]; then
+            echo 'A measurement did not finish; inspect the artifact and HOLD summary.'
+            exit 1
+          fi
+          node - "$RUNNER_TEMP/tesland-performance/base/report.json" "$RUNNER_TEMP/tesland-performance/candidate/report.json" <<'NODE'
+          const fs = require('node:fs');
+          let missing = false;
+          for (const path of process.argv.slice(2)) {
+            try {
+              const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const m = report.metrics;
+              const complete = m?.browserFrameIntervalP95?.status === 'available' &&
+                m?.modeledMotion?.steady150?.status === 'available' &&
+                m?.modeledMotion?.bunched150?.status === 'available' &&
+                m?.roomProgress?.status === 'available';
+              const renderer = report.environment?.runner?.webgl?.renderer;
+              if (!complete || typeof renderer !== 'string' || !/ANGLE Metal Renderer/i.test(renderer) || /swiftshader|software/i.test(renderer)) {
+                console.error(`${path}: missing metrics or unexpected renderer: ${renderer ?? 'unavailable'}`);
+                missing = true;
+              }
+            } catch (error) {
+              console.error(`${path}: report unavailable: ${error.message}`);
+              missing = true;
+            }
+          }
+          if (missing) process.exitCode = 1;
+          NODE

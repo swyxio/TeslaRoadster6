@@ -1,54 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, step } from '../shared/game';
+import { addPlayer, createWorld } from '../shared/game';
 import { BUILDINGS, FREMONT_SPACEPORT, ROADS, isLand, terrainHeight } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { MARS_GOAL, MARS_LAUNCH_SECONDS, atMarsBoarding, boardMars } from '../shared/mars';
+import { MARS_GOAL, marsGoalReached } from '../shared/mars';
+import { awardMarsAchievement } from '../shared/achievements';
 import { parseMessage } from '../worker/protocol';
 import { PARKING_LOTS } from '../shared/parking-lots';
 
-test('each player must be stopped at the spaceport with a fully funded mission to win',()=>{
-  const world=createWorld(),a=addPlayer(world,'a','A'),b=addPlayer(world,'b','B');
-  const car=world.entities.find(e=>e.id===a.entityId)!;
-  Object.assign(car,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
-  assert.ok(atMarsBoarding(car));assert.equal(boardMars(world,'a'),false);
-  world.mars.fund=MARS_GOAL;assert.equal(boardMars(world,'b'),false);
-  car.speed=2;assert.equal(boardMars(world,'a'),false);car.speed=0;car.supportId=null;assert.equal(boardMars(world,'a'),false);
-  car.supportId='ground';world.time=123;assert.ok(boardMars(world,'a'));
-  assert.equal(world.mars.launchAt,123);assert.deepEqual(a.achievements.unlocked,['to-mars']);
-  assert.deepEqual(b.achievements.unlocked,[]);world.time=124;assert.equal(boardMars(world,'a'),false);assert.equal(world.mars.launchAt,123);assert.deepEqual(a.achievements.unlocked,['to-mars']);
-  const carB=world.entities.find(e=>e.id===b.entityId)!;Object.assign(carB,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
-  const cash=b.delivery.cash,income=b.delivery.lifetimeIncome;assert.ok(boardMars(world,'b'));assert.equal(b.delivery.cash,cash+10_000);assert.equal(b.delivery.lifetimeIncome,income+10_000);assert.deepEqual(b.achievements.unlocked,['to-mars']);assert.equal(world.mars.launchAt,123,'a second driver joins the launch without restarting it');
-  const c=addPlayer(world,'c','C'),carC=world.entities.find(e=>e.id===c.entityId)!;Object.assign(carC,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
-  world.time=123+MARS_LAUNCH_SECONDS;assert.ok(boardMars(world,'c'));assert.equal(world.mars.launchAt,world.time,'a later driver starts a new launch');
-});
-
-test('boarding rejects sideways movement until the car settles',()=>{
-  const world=createWorld(),player=addPlayer(world,'a','A');
-  const car=world.entities.find(e=>e.id===player.entityId)!;
-  world.mars.fund=MARS_GOAL;world.entities=[car];world.pickups=[];
-  Object.assign(car,FREMONT_SPACEPORT.entrance,{supportId:'ground',speed:0,pushX:3,pushZ:0});
-  step(world,new Map(),.05);
-  assert.ok(car.x>FREMONT_SPACEPORT.entrance.x,'the slide moves the car sideways');
-  assert.equal(atMarsBoarding(car),false,'a sideways slide is not stopped');
-  assert.equal(boardMars(world,'a'),false);
-  assert.equal(world.mars.launchAt,null);
-  assert.ok(!player.achievements.unlocked.includes('to-mars'));
-  car.pushX=0;car.pushZ=-1;
-  assert.equal(boardMars(world,'a'),false,'the threshold applies in either direction');
-  car.pushX=.6;car.pushZ=.6;
-  assert.equal(boardMars(world,'a'),true,'the same stopped threshold as the workshop permits small residual movement');
-});
-
-test('a completed room fund independently unlocks boarding',()=>{
-  const world=createWorld(),player=addPlayer(world,'a','A');
-  const car=world.entities.find(e=>e.id===player.entityId)!;
-  Object.assign(car,FREMONT_SPACEPORT.entrance,{supportId:'ground',speed:0,pushX:0,pushZ:0});
-  world.mars.roomFund=MARS_GOAL-1;
-  assert.equal(boardMars(world,'a'),false);
+test('room funding remains independent of global income',()=>{
+  const world=createWorld();world.mars.roomFund=MARS_GOAL-1;
+  assert.equal(marsGoalReached(world.mars),false);
   world.mars.roomFund=MARS_GOAL;
-  assert.equal(boardMars(world,'a'),true);
-  assert.equal(world.mars.fund,0,'the room fund does not become global income');
+  assert.equal(marsGoalReached(world.mars),true);
+  assert.equal(world.mars.fund,0);
+});
+
+test('the Mars reward credits cash and eligible income once',()=>{
+  const player=addPlayer(createWorld(),'a','A');
+  const cash=player.delivery.cash,income=player.delivery.lifetimeIncome;
+  awardMarsAchievement(player);awardMarsAchievement(player);
+  assert.equal(player.delivery.cash,cash+10_000);
+  assert.equal(player.delivery.lifetimeIncome,income+10_000);
+  assert.deepEqual(player.achievements.unlocked,['to-mars']);
 });
 
 test('spaceport collision footprints and boarding ring occupy supported, clear Fremont ground',()=>{

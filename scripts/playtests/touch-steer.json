@@ -1,0 +1,21 @@
+{
+  "steps": [
+    { "type": "waitFor", "selector": "#connection:has-text(\"LIVE\")", "timeoutMs": 60000 },
+    { "type": "waitFor", "selector": "#hud:not(.hidden)", "state": "attached", "timeoutMs": 60000 },
+    { "type": "waitForPoseRevision", "value": 1, "timeoutMs": 30000 },
+    { "type": "recordStart" },
+    { "type": "touchDown", "id": 0, "selector": "#drive-control" },
+    { "type": "wait", "ms": 1000 },
+    { "type": "touchDown", "id": 1, "selector": "[data-control=\"KeyD\"]" },
+    { "type": "wait", "ms": 1200 },
+    { "type": "screenshot", "name": "steering" },
+    { "type": "assertNumberAbove", "selector": "#speed", "value": 0 },
+    { "type": "touchUp", "id": 1 },
+    { "type": "wait", "ms": 500 },
+    { "type": "screenshot", "name": "steering-released" },
+    { "type": "touchUp", "id": 0 },
+    { "type": "wait", "ms": 500 },
+    { "type": "screenshot", "name": "all-released" },
+    { "type": "recordStop" }
+  ]
+}
