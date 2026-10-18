@@ -1040,10 +1040,13 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
+  // Pickups cannot change a car's driver or support, so find eligible cars
+  // once while retaining entity order for supply pickup tie-breaking.
+  const pickupCars=world.entities.filter(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground');
   for(const pickup of world.pickups){
-    if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time);continue;}
+    if(pickup.kind==='rocket'){updateRocketPickup(pickup,pickupCars,world.time);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;
-    const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2);if(!car)continue;
+    const car=pickupCars.find(e=>Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2);if(!car)continue;
     if(pickup.kind==='repair')car.health=100;else car.air=100;
     const player=world.players.find(p=>p.id===car.driver);
     if(player){player.delivery.cash+=5;player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:pickup.kind==='repair'?'supply-repair':'supply-air',amount:5};}

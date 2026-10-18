@@ -4,7 +4,22 @@ import {addPlayer,createWorld,enterMinigame,parkingAction,step} from '../shared/
 import {BUILDINGS,ROADS,STATION_VENUES,terrainHeight} from '../shared/map';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
-import {STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
+import {CHARGER_LOT,STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
+
+test('station lookup preserves circular and bay boundaries and first-match order',()=>{
+  const reference=(x:number,z:number)=>STATIONS.find(s=>Math.hypot(x-s.x,z-s.z)<9||
+    (Math.abs(z-s.z-CHARGER_LOT.bayZ)<=CHARGER_LOT.bayLength/2&&
+      [-12,-4,4,12].some(offset=>Math.abs(x-s.x-offset)<=CHARGER_LOT.bayWidth/2)));
+  for(const station of STATIONS){
+    for(const radius of [0,8.999999,9,9.000001,15,30])for(let i=0;i<16;i++){
+      const angle=i*Math.PI/8,x=station.x+radius*Math.cos(angle),z=station.z+radius*Math.sin(angle);
+      assert.equal(chargingStationAt(x,z)?.id,reference(x,z)?.id,`${station.id}: ${radius}, ${i}`);
+    }
+    for(const dx of [-14.500001,-14.5,-12,-9.5,-1.5,1.5,9.5,14.5,14.500001])
+      for(const dz of [-20.000001,-20,-15,-10,-9.999999])
+        assert.equal(chargingStationAt(station.x+dx,station.z+dz)?.id,reference(station.x+dx,station.z+dz)?.id,`${station.id}: bay ${dx}, ${dz}`);
+  }
+});
 
 test('each represented Bay area has two uniquely identified and honestly sourced lots',()=>{
   for(const area of ['San Francisco','Oakland','Berkeley','Emeryville','Mill Valley','Corte Madera','San Mateo','Palo Alto','Mountain View','Hayward','Fremont','San Jose'])

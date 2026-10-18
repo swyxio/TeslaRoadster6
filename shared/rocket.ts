@@ -17,7 +17,9 @@ export function updateRocketPickup(pad: RocketPad, entities: Entity[], time: num
   if (!pad.active) return null;
   let ground:number|null|undefined, winner:Entity|undefined;
   for(const e of entities){
-    if(e.kind==='person'||!e.driver||e.supportId!=='ground'||Math.hypot(e.x-pad.x,e.z-pad.z)>=4)continue;
+    if(e.kind==='person'||!e.driver||e.supportId!=='ground')continue;
+    const dx=e.x-pad.x,dz=e.z-pad.z;
+    if(Math.abs(dx)>=4||Math.abs(dz)>=4||Math.hypot(dx,dz)>=4)continue;
     if(ground===undefined)ground=terrainHeight(pad.x,pad.z);
     if(ground===null)return null;
     if(Math.abs(e.y-ground)>=2||(hasRockets(e)&&e.air>=99.99))continue;

@@ -192,6 +192,20 @@ test('supply diamonds award cash without advancing delivery earnings',()=>{
  }
 });
 
+test('overlapping supply and rocket pickups keep their distinct winner rules',()=>{
+ const world=createWorld(),a=addPlayer(world,'a','A'),b=addPlayer(world,'b','B');
+ const carA=world.entities.find(e=>e.id===a.entityId)!,carB=world.entities.find(e=>e.id===b.entityId)!;
+ Object.assign(carA,{kind:'model-3',x:-2,z:0,y:0,speed:0,supportId:'ground',air:20});
+ Object.assign(carB,{kind:'model-3',x:2,z:0,y:0,speed:0,supportId:'ground',air:20});
+ world.entities=[carB,carA]; // Supplies use entity order; Rockets use entity ID order.
+ world.pickups=[{id:'air',kind:'air',x:0,z:0,active:true},{id:'rocket',kind:'rocket',x:0,z:0,active:true}];
+ step(world,new Map(),.05);
+ assert.equal(b.delivery.cash,5);assert.equal(a.delivery.cash,0);
+ assert.equal(carB.air,100);assert.equal(carB.upgrades.rocket,false);
+ assert.equal(carA.air,100);assert.equal(carA.upgrades.rocket,true);
+ assert.ok(world.pickups.every(p=>!p.active));
+});
+
 test('curved landmark roofs support a descending vehicle at their visible surface',async()=>{
  const {buildingRoofHeight}=await import('../shared/map');
  const examples=[
