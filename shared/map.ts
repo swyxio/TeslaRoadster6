@@ -3,6 +3,8 @@ import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
 import { DOME } from './dome';
+import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
+import { SOUTH_LANDMARKS } from './south-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
@@ -70,19 +72,34 @@ export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridg
 
 /** A small authored hill south of SF. Its height and gradient taper to zero at every edge. */
 export const HILL={minX:-200,maxX:-15,minZ:500,maxZ:760,height:10,columns:32,rows:48} as const;
+// Small arcade-scale landforms echo real Bay peaks; these are not elevation data.
+// Their extents stay off the shared road and are sampled by both physics and rendering.
+const twin=NORTH_NATURAL_LANDMARKS.find(place=>place.id==='twin-peaks')!;
+const tam=NORTH_NATURAL_LANDMARKS.find(place=>place.id==='mount-tamalpais')!;
+const missionPeak=SOUTH_LANDMARKS.find(place=>place.id==='mission-peak')!;
+export const NATURAL_HILLS=[
+ {id:'twin-peaks',minX:twin.x-20,maxX:twin.x+20,minZ:twin.z-20,maxZ:twin.z+20,height:12,columns:32,rows:32,twin:true},
+ {id:'mount-tamalpais',minX:tam.x-25,maxX:tam.x+25,minZ:tam.z-25,maxZ:tam.z+25,height:30,columns:32,rows:32,twin:false},
+ {id:'mission-peak',minX:missionPeak.x-32,maxX:missionPeak.x+32,minZ:missionPeak.z-32,maxZ:missionPeak.z+32,height:35,columns:32,rows:32,twin:false},
+] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
 export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-cliff'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
-function hillSurface(x:number,z:number):{height:number;dx:number;dz:number} {
- if(x<=HILL.minX||x>=HILL.maxX||z<=HILL.minZ||z>=HILL.maxZ)return {height:0,dx:0,dz:0};
- const width=(HILL.maxX-HILL.minX)/HILL.columns,depth=(HILL.maxZ-HILL.minZ)/HILL.rows;
- const gx=(x-HILL.minX)/width,gz=(z-HILL.minZ)/depth,i=Math.floor(gx),j=Math.floor(gz),u=gx-i,v=gz-j;
- const vertex=(a:number,b:number)=>HILL.height*Math.sin(Math.PI*a/HILL.columns)**2*Math.sin(Math.PI*b/HILL.rows)**2;
+function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
+ if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
+ const width=(hill.maxX-hill.minX)/hill.columns,depth=(hill.maxZ-hill.minZ)/hill.rows;
+ const gx=(x-hill.minX)/width,gz=(z-hill.minZ)/depth,i=Math.floor(gx),j=Math.floor(gz),u=gx-i,v=gz-j;
+ const vertex=(a:number,b:number)=>hill.height*Math.sin((hill.twin?2:1)*Math.PI*a/hill.columns)**2*Math.sin(Math.PI*b/hill.rows)**2;
  const h00=vertex(i,j),h10=vertex(i+1,j),h01=vertex(i,j+1),h11=vertex(i+1,j+1);
  return u+v<=1
   ? {height:h00+u*(h10-h00)+v*(h01-h00),dx:(h10-h00)/width,dz:(h01-h00)/depth}
   : {height:h11+(1-u)*(h01-h11)+(1-v)*(h10-h11),dx:(h11-h01)/width,dz:(h11-h10)/depth};
+}
+function hillSurface(x:number,z:number):{height:number;dx:number;dz:number} {
+ let surface=sampledHill(HILL,x,z);
+ for(const hill of NATURAL_HILLS){const next=sampledHill(hill,x,z);if(next.height>surface.height)surface=next;}
+ return surface;
 }
 export function terrainHeight(x:number,z:number):number|null {
  if(!isSurface(x,z))return null;
@@ -202,7 +219,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -256,6 +273,19 @@ for(const district of DISTRICTS){
  }
 }
 for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,district,style});
+// Replace only generated background blocks where a hand-authored landmark or
+// a physical hill stands. Existing special landmarks keep their own identity.
+export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
+const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
+ .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
+for(let i=BUILDINGS.length-1;i>=0;i--){
+ const b=BUILDINGS[i];
+ if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
+ const overlapsLandmark=landmarkBuildings.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
+ const overlapsHill=NATURAL_HILLS.some(h=>b.x+b.w/2>h.minX&&b.x-b.w/2<h.maxX&&b.z+b.d/2>h.minZ&&b.z-b.d/2<h.maxZ);
+ if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
+}
+BUILDINGS.push(...landmarkBuildings);
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

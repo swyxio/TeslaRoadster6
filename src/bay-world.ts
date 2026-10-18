@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, ISLAND_TRACK, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, ISLAND_TRACK, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 
@@ -48,17 +48,20 @@ export function buildBay(scene:T.Scene) {
   const shorelineGeometry=new T.BufferGeometry();shorelineGeometry.setAttribute('position',new T.Float32BufferAttribute(shoreline,3));
   scene.add(new T.LineSegments(shorelineGeometry,new T.LineBasicMaterial({color:0xb7bea4})));
   // The hill triangles use the exact lattice and diagonals sampled by shared physics.
-  const hillVertices:number[]=[],hillIndices:number[]=[];
-  for(let z=0;z<=HILL.rows;z++)for(let x=0;x<=HILL.columns;x++){
-    const px=HILL.minX+(HILL.maxX-HILL.minX)*x/HILL.columns,pz=HILL.minZ+(HILL.maxZ-HILL.minZ)*z/HILL.rows;
-    hillVertices.push(px,terrainHeight(px,pz)??0,pz);
+  const hillMaterial=new T.MeshStandardMaterial({color:0xc3c9aa,roughness:1,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
+  for(const hill of [HILL,...NATURAL_HILLS]){
+    const hillVertices:number[]=[],hillIndices:number[]=[];
+    for(let z=0;z<=hill.rows;z++)for(let x=0;x<=hill.columns;x++){
+      const px=hill.minX+(hill.maxX-hill.minX)*x/hill.columns,pz=hill.minZ+(hill.maxZ-hill.minZ)*z/hill.rows;
+      hillVertices.push(px,terrainHeight(px,pz)??0,pz);
+    }
+    for(let z=0;z<hill.rows;z++)for(let x=0;x<hill.columns;x++){
+      const a=z*(hill.columns+1)+x,b=a+1,c=a+hill.columns+1,d=c+1;
+      hillIndices.push(a,c,b,b,c,d);
+    }
+    const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(hillVertices,3));geometry.setIndex(hillIndices);geometry.computeVertexNormals();
+    scene.add(new T.Mesh(geometry,hillMaterial));
   }
-  for(let z=0;z<HILL.rows;z++)for(let x=0;x<HILL.columns;x++){
-    const a=z*(HILL.columns+1)+x,b=a+1,c=a+HILL.columns+1,d=c+1;
-    hillIndices.push(a,c,b,b,c,d);
-  }
-  const hillGeometry=new T.BufferGeometry();hillGeometry.setAttribute('position',new T.Float32BufferAttribute(hillVertices,3));hillGeometry.setIndex(hillIndices);hillGeometry.computeVertexNormals();
-  scene.add(new T.Mesh(hillGeometry,new T.MeshStandardMaterial({color:0xc3c9aa,roughness:1,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})));
   // Flat, muted meadow and field patches give the long intercity corridors
   // variety without introducing decorative collision or invented terrain.
   const fields:{x:number;z:number;rx:number;rz:number;angle:number}[][]=[[],[],[]];
@@ -209,6 +212,8 @@ export function buildBay(scene:T.Scene) {
   // Distinct roofs and facade colors make districts less repetitive; windows share one draw call.
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
+    // The landmark renderers use these same shared collision envelopes.
+    if(b.style==='landmark')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
     if(!landmark&&!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
@@ -320,6 +325,7 @@ export function buildBay(scene:T.Scene) {
   for(const p of PARKS)for(let x=p.x-p.w/2+7;x<p.x+p.w/2-4;x+=16)for(let z=p.z-p.d/2+7;z<p.z+p.d/2-4;z+=15){
     if(p.id==='lake-merritt'&&Math.abs(x-480)<22&&Math.abs(z-150)<25)continue;
     if(ROADS.some(r=>Math.abs(x-r.x)<r.w/2+3&&Math.abs(z-r.z)<r.d/2+3))continue;
+    if(BUILDINGS.some(b=>b.style==='landmark'&&Math.abs(x-b.x)<b.w/2+2.7&&Math.abs(z-b.z)<b.d/2+2.7))continue;
     trees.push({x,z});
   }
   batches(0x78674f,trees.map(p=>({...p,y:1.4,w:.55,h:2.8,d:.55})));

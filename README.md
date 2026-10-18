@@ -16,6 +16,8 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Global chat:** Pick a driver name and chat with players across rooms, including from solo play. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 
+**Bay sights:** Explore 100 additional low-poly landmarks around San Francisco, Marin, Oakland, Berkeley, the Peninsula, Fremont and San Jose, plus Twin Peaks and Mount Tamalpais. Three small, drivable hills evoke those summits and Mission Peak. Locations, sizes and slopes are playful approximations. Roadside billboards advertise fictional parody tech companies. See [map details](docs/MAP.md) and the [northern](docs/BAY_LANDMARKS_NORTH.md) and [southern](docs/BAY_LANDMARKS_SOUTH.md) place references.
+
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
 **Rocket shops:** Collect a purple rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
@@ -89,6 +91,9 @@ Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up t
 ```
 shared/game.ts      Pure authoritative simulation and world schema
 shared/map.ts       Shared land, bridges, road and collision geometry
+shared/north-landmarks.ts  Northern Bay place identities and footprints
+shared/south-landmarks.ts  Peninsula, Fremont and South Bay place identities
+shared/billboards.ts  Fictional roadside signs and placement
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/upgrades.ts  Fictional shop locations, prices and eligibility
 shared/sky-currents.ts  Shared sky-lane and thermal volumes
@@ -118,6 +123,8 @@ src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera
 src/sky-currents.ts  Animated sky-lane and thermal markers
 src/bay-world.ts   Compressed Bay Area environment and landmarks
+src/north-landmarks.ts, src/south-landmarks.ts  Original procedural landmark art
+src/billboards.ts  Original parody billboard art
 src/island-stunts.ts  Bank and cliff meshes from shared geometry
 src/rocket-dome.ts  Dome, goals and ball visuals
 src/vehicles.ts    Replaceable procedural visual models

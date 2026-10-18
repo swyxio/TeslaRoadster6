@@ -72,7 +72,7 @@ test('roof identity distinguishes a landing from an overlapping airborne or othe
   Object.assign(car,{kind:'person'});assert.equal(onRoof(car),false);
 });
 test('flying to an Oakland rooftop can earn both achievements',()=>{
-  const {player,car}=setup(),index=BUILDINGS.findIndex(b=>b.district==='oakland'&&b.x===350&&b.z===30),roof=BUILDINGS[index];
+  const {player,car}=setup(),index=BUILDINGS.findIndex(b=>b.district==='oakland'&&b.x>=330&&b.x<=420&&Math.abs(b.z-30)<=80&&b.style==='midrise'),roof=BUILDINGS[index];
   assert.ok(roof);point(player,car,50,30,0);
   for(let x=55;x<=roof.x;x+=5)point(player,car,x,30,roof.h+5);
   point(player,car,roof.x,roof.z,roof.h,`roof:${index}`);

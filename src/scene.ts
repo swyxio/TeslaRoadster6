@@ -22,6 +22,9 @@ import { SHOPS } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
+import { buildNorthLandmarks } from './north-landmarks';
+import { buildSouthLandmarks } from './south-landmarks';
+import { buildBillboards } from './billboards';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -96,6 +99,9 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    buildNorthLandmarks(scene);
+    buildSouthLandmarks(scene);
+    buildBillboards(scene);
     addIslandStunts(scene);
     // The hull travels with the authoritative deck; its top is the physical y=0 support.
     box(this.ferry,0,-.65,0,FERRY_DECK.width,1.3,FERRY_DECK.length,0x485e63);
