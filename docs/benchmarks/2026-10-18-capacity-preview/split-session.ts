@@ -37,7 +37,7 @@ const loop = monitorEventLoopDelay({resolution:20});
 const loadSamples:{utc:string;load:number[];cpuMicros:NodeJS.CpuUsage}[] = [];
 const iso = () => new Date().toISOString();
 const delay = (ms:number) => new Promise(resolve => setTimeout(resolve,ms));
-const deadline = performance.now() + 150_000;
+const deadline = performance.now() + 210_000;
 let measurementStart = Infinity, measurementEnd = Infinity;
 let startedUtc:string|null = null, endedUtc:string|null = null;
 let barrierTick:number|null = null, targetTick:number|null = null;
@@ -98,7 +98,7 @@ class MonitoringWebSocket extends NativeWebSocket {
             }
             if (this.index === 0 && targetTick !== null && measurementStart === Infinity && tick >= targetTick) {
               if (tick !== targetTick) { fail(`Missed start tick ${targetTick}; saw ${tick}`); return; }
-              measurementStart = performance.now(); measurementEnd = measurementStart + 20_000;
+              measurementStart = performance.now(); measurementEnd = measurementStart + 60_000;
               startedUtc = iso(); lastProgressAt = measurementStart; loop.enable();
             }
             if (receivedAt >= measurementStart && receivedAt < measurementEnd) {
@@ -235,7 +235,7 @@ try {
     slots:slots.map(slot=>({snapshots:slot.snapshots,firstTick:slot.firstTick,lastTick:slot.lastMeasuredTick,
       firstTime:slot.firstTime,lastTime:slot.lastTime,lastPlayers:slot.lastPlayers,closed:slot.closed})),
     rejections,loadSamples,host:{platform:process.platform,node:process.version,cpus:cpus().length,totalMemoryBytes:totalmem()},
-    note:'One 20-second preview sample using 4 independent 16-Session runners, no browser renderer or prediction render. The first shared ready snapshot defines the start tick; network delivery can shift wall-clock windows. A one-second drain can miss delayed rejections. Health does not prove deployed commit. No server tick-work, production, sustained or physical-device claim.',
+    note:'One 60-second preview sample using 4 independent 16-Session runners, no browser renderer or prediction render. The first shared ready snapshot defines the start tick; network delivery can shift wall-clock windows. A one-second drain can miss delayed rejections. Health does not prove deployed commit. No server tick-work, production, sustained or physical-device claim.',
   };
   mkdirSync(outputDir,{recursive:true});
   writeFileSync(join(outputDir,`group-${group}.json.gz`),gzipSync(JSON.stringify(result)));

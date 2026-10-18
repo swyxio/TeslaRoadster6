@@ -16,7 +16,7 @@ concurrency:
 jobs:
   session-sample:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
