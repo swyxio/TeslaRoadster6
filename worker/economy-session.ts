@@ -1,7 +1,7 @@
 import { levelForCash, rerouteInaccessibleOrder, type DeliveryState } from '../shared/delivery';
 import { hasRockets } from '../shared/upgrades';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
-import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type Entity, type Pickup, type Player, type World } from '../shared/game';
+import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type EconomyUpdateResult, type Entity, type Pickup, type Player, type World } from '../shared/game';
 import { awardMarsAchievement, type AchievementState } from '../shared/achievements';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
@@ -104,7 +104,7 @@ export class EconomySession {
     this.wallet();
   }
   hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),gameAward:(player,apply,capture)=>this.gameAward(player,apply,capture),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
-  update(player:Player,apply:()=>void){
+  update(player:Player,apply:()=>EconomyUpdateResult){
     if(this.failed)return;
     // Bound memory during an extended backend outage. The pending events keep
     // retrying after this driver leaves; the rest of the room is unaffected.
@@ -309,7 +309,7 @@ export class EconomySession {
   }
   ota(enabled:boolean,requestId:number){
     if(this.failed||this.queue.length>=32){this.send({type:'otaResult',requestId,enabled,ok:false});return;}
-    this.update(this.player,()=>subscribeOta(this.world,this.player.id,enabled));
+    this.update(this.player,()=>{subscribeOta(this.world,this.player.id,enabled);});
     const latest=this.queue.at(-1);
     const send=(ok:boolean)=>this.send({type:'otaResult',requestId,enabled,ok});
     if(latest&&!latest.result){const old=latest.onApplied;latest.onApplied=result=>{old?.(result);send(result.ok);};}else send(true);

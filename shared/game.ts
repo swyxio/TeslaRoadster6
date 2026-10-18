@@ -8,6 +8,7 @@ import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import { upgradePrice } from './research';
 import { setOta, updateOta } from './ota';
 import { awardDomeMatchAchievements, updateGameAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
@@ -24,7 +25,7 @@ import { ISLAND_BANK, advanceCliff, bankSurface, bankVerticalVelocity, cliffPose
 import { ovalBankSurface, ovalBankVerticalVelocity, sweepOvalBank } from './oval-bank';
 import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
 import { airCost, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
-import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
+import { initialSoccer, stepSoccer, type DomeParticipant, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
@@ -737,13 +738,17 @@ function constrainDome(e:Entity,rocket:boolean):void {
   }
 }
 
+/** A host may capture settled components from the apply callback in its transaction. */
+export type EconomyUpdateResult = readonly ResolvedDeliveryPayout[] | null | void;
 /** Optional authoritative transaction boundary. */
 export type EconomyHooks = {
-  update(player:Player,apply:()=>void):void;
+  update(player:Player,apply:()=>EconomyUpdateResult):void;
   /** Attribute completed mini-games to the wallet driving at that moment. */
   gameAward?(player:Player,apply:()=>void,capture?:()=>()=>void):void;
   pickup(player:Player,car:Entity,pickup:Pickup):void;
   canCollect?(driverId:string):boolean;
+  resolveDeliveryPayout?(player:Player,component:DeliveryPayoutComponent):number|null;
+  onDomeWin?(result:{participants:readonly DomeParticipant[];winners:readonly string[]}):void;
 };
 export function simulationSubsteps(world:World,dt:number):number {
   if(!Number.isFinite(dt)||dt<=0)return 1;
@@ -762,7 +767,7 @@ export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{su
   for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy);
 }
 function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
-  const update=(player:Player,apply:()=>void)=>economy?economy.update(player,apply):apply();
+  const update=(player:Player,apply:()=>EconomyUpdateResult)=>economy?economy.update(player,apply):apply();
   const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
   world.time+=dt;
   updateFerry(world,dt,(entity,side)=>{const moved=moveToSide(world,entity,side);if(moved&&entity.driver)onRelocation?.(entity.driver);return moved;});
@@ -1088,7 +1093,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
   const soccerWasPlaying=world.soccer.phase==='play';
   stepSoccer(world.soccer,world.entities,dt,world.time);
   if(soccerWasPlaying&&world.soccer.phase==='win'){
-    for(const participant of world.soccer.participants){
+    const participants:DomeParticipant[]=world.soccer.participants.filter(participant=>{
+      const player=world.players.find(p=>p.id===participant.playerId);
+      return !!player&&!!world.entities.find(e=>e.id===player.entityId)?.inDome;
+    });
+    economy?.onDomeWin?.({participants:participants.map(participant=>({playerId:participant.playerId,touches:{...participant.touches},goals:{...participant.goals}})),winners:[...world.soccer.winningPlayers]});
+    for(const participant of participants){
       const player=world.players.find(p=>p.id===participant.playerId);
       const entity=world.entities.find(e=>e.id===player?.entityId);
       if(player&&entity?.inDome){
@@ -1103,7 +1113,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       const orderPaused=islandProtected(entity)||entity.inDome;
-      updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused);
+      const payouts=updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused,
+        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined);
+      if(payouts===null)return null;
       updateOta(player,world.time);
       const cockpit=player.cockpit, activeTime=player.delivery.activeSeconds-activeBefore;
       cockpit.active=input.cockpit&&entity.kind!=='person';
@@ -1117,6 +1129,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       }
       updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined,(player.delivery.lastReward?.id??0)>rewardBefore);
       updateLevel(player.delivery);
+      return payouts;
     });
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);
