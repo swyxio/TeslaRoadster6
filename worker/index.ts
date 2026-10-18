@@ -12,10 +12,12 @@ import { initialDelivery } from '../shared/delivery';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
 import { RoomEconomy } from './room-economy';
+import { GlobalEarningsEvent } from './global-earnings-event';
+import { scheduleGlobalEarnings } from './global-earnings-admin';
 
-export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent };
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; GLOBAL_EVENTS: DurableObjectNamespace<GlobalEarningsEvent>; STARSHIP_ADMIN_TOKEN?:string; MAX_PLAYERS?: string };
 type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -25,6 +27,21 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (url.pathname.startsWith('/api/radio/')) return radioFeed(request, ctx);
     if (url.pathname === '/api/health') return Response.json({ ok: true, version: PROTOCOL_VERSION, capacity: roomCapacity(env.MAX_PLAYERS) });
+    if (url.pathname === '/api/admin/earnings-events') return scheduleGlobalEarnings(request,env);
+    if (url.pathname === '/api/starship/status' || url.pathname === '/api/starship/contributors'){
+      if(request.method!=='GET')return reply('GET required',405);
+      const income=env.INCOME.get(env.INCOME.idFromName('global'));
+      try{
+        if(url.pathname.endsWith('/status'))return Response.json({status:await income.status(),serverTime:Date.now()},{headers:{'Cache-Control':'no-store'}});
+        const group=url.searchParams.get('group')??'at-goal',cursor=url.searchParams.get('cursor');
+        if(group!=='at-goal'&&group!=='later')return reply('Invalid contributor group',400);
+        const page=await income.contributors(group,cursor??undefined);
+        return Response.json(page,{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        if(error instanceof Error&&error.message==='Invalid contributor cursor')return reply('Invalid contributor cursor',400);
+        return reply('Starship service unavailable',503);
+      }
+    }
     const slug = roomSlug(url.pathname);
     const chat = url.pathname === '/api/chat';
     if (!slug && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
@@ -238,6 +255,25 @@ export class GameRoom extends DurableObject<Env> {
     }
     if(message.type==='sync'){session.economy.barrier(message.token);return;}
     if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
+    if(message.type==='starship'){
+      const driverId=session.economy.walletId,fence=session.economy.currentFence,identitySequence=session.identitySequence;
+      const current=()=>this.sessions.get(socket)===session&&!session.attachPending&&session.identitySequence===identitySequence&&session.economy.walletId===driverId&&session.economy.currentFence===fence;
+      const send=(value:unknown)=>{if(current())try{socket.send(JSON.stringify(value));}catch{}};
+      const run=async()=>{
+        if(!current())return;
+        const driver=this.env.DRIVERS.get(this.env.DRIVERS.idFromName(driverId));
+        if(message.action==='name'){
+          try{const result=await driver.setStarshipName(driverId,fence,message.name);send({type:'starshipNameResult',requestId:message.requestId,...result});}
+          catch{send({type:'starshipNameResult',requestId:message.requestId,ok:false,publicName:null});}
+        }else try{
+          if(!await driver.checkFence(fence)||!current())return;
+          const income=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
+          const [status,publicName]=await Promise.all([income.status(driverId),income.publicName(driverId)]);
+          send({type:'starshipStatus',requestId:message.requestId,status,publicName,serverTime:Date.now()});
+        }catch{/* The client marks an unanswered status as stale. */}
+      };
+      const operation=run();this.ctx.waitUntil(operation);return;
+    }
     // Even rejected actions advance the action fence so later inputs remain ordered.
     if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
       this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;

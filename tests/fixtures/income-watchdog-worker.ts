@@ -10,7 +10,7 @@ export class DriverProfile extends ProductionDriver {
     await this.acquire(id,'fixture-fence',initial,'fixture-room');
     await this.activateIncome('fixture-fence');
   }
-  async fixtureState(){return {pending:await this.ctx.storage.get<number>('income-pending')??null,alarm:await this.ctx.storage.getAlarm()};}
+  async fixtureState(){return {pending:await this.ctx.storage.get<number>('income-pending')??null,privacy:await this.ctx.storage.get('privacy-pending')??null,alarm:await this.ctx.storage.getAlarm()};}
   async fixturePurchase(){
     const id='luxury-income-test',fence='luxury-income-fence',roomId='luxury-income-room';
     const delivery=initialDelivery({x:0,z:0});delivery.cash=2_000_000;
@@ -21,11 +21,18 @@ export class DriverProfile extends ProductionDriver {
 export class GlobalIncome extends ProductionIncome {
   private hold=false;
   private held=false;
+  private holdPrivacy=false;
+  private privacyHeld=false;
   async fixtureHold(){this.hold=true;}
-  async fixtureState(){return {held:this.held,total:await this.total()};}
+  async fixtureHoldPrivacy(){this.holdPrivacy=true;}
+  async fixtureState(){return {held:this.held,privacyHeld:this.privacyHeld,total:await this.total(),publicName:await this.publicName('income-test')};}
   override async credit(id:string,cumulative:number){
     if(this.hold){this.held=true;await new Promise<void>(()=>{});}
     return super.credit(id,cumulative);
+  }
+  override async setName(id:string,name:string|null,revision:number){
+    if(this.holdPrivacy){this.privacyHeld=true;await new Promise<void>(()=>{});}
+    return super.setName(id,name,revision);
   }
 }
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;INCOME:DurableObjectNamespace<GlobalIncome>};
@@ -33,6 +40,8 @@ export default {
   async fetch(request:Request,env:Env):Promise<Response>{
     const path=new URL(request.url).pathname,driver=env.DRIVERS.get(env.DRIVERS.idFromName('income-test')),income=env.INCOME.get(env.INCOME.idFromName('global'));
     if(path==='/hold'){await income.fixtureHold();return Response.json({ok:true});}
+    if(path==='/hold-privacy'){await income.fixtureHoldPrivacy();return Response.json({ok:true});}
+    if(path==='/set-privacy')return Response.json(await driver.setStarshipName('income-test','fixture-fence','Test driver'));
     if(path==='/start'){await driver.fixtureStart('income-test');return Response.json({ok:true});}
     if(path==='/profile')return Response.json(await driver.fixtureState());
     if(path==='/income')return Response.json(await income.fixtureState());

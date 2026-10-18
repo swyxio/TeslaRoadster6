@@ -1,6 +1,7 @@
 import './starship-panel.css';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
-import { STARSHIP_GOAL, STARSHIP_STAGE_PERCENTAGES, type StarshipContributor, type StarshipContributorGroup, type StarshipStatus } from '../shared/starship';
+import { STARSHIP_GOAL, STARSHIP_STAGE_PERCENTAGES, type StarshipContributor, type StarshipContributorGroup } from '../shared/starship';
+import type { StarshipViewStatus } from './starship-model';
 import type { StarshipClock } from './starship-timeline';
 
 const LAUNCH_DURATION_MS=MARS_LAUNCH_SECONDS*1000;
@@ -17,13 +18,13 @@ export type StarshipContributorPage = {
 export type StarshipPanelState = {
   freshness:'loading'|'live'|'stale'|'unavailable';
   /** Last confirmed coordinator result, retained when a refresh fails. */
-  confirmed:StarshipStatus|null;
+  confirmed:StarshipViewStatus|null;
   /** Committed local income awaiting global confirmation; null means unknown. */
   pendingContribution:number|null;
   /** Server UTC at receipt and the local monotonic receipt time; never a browser wall clock. */
   clock:StarshipClock|null;
   contributors:StarshipContributorPage;
-  privacy:{status:'loading'|'ready'|'saving'|'error';publicName:string|null};
+  privacy:{status:'loading'|'ready'|'saving'|'error'|'unavailable';publicName:string|null};
 };
 
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,text?:string):HTMLElementTagNameMap[K] {
@@ -46,7 +47,7 @@ function duration(ms:number):string {
  * the page to loading for the requested group and cursor, ignore stale responses,
  * and expose building when the frozen list needs another first-page retry.
  */
-export function createStarshipPanel(options:{onLoadContributors:(group:StarshipContributorGroup,cursor:string|null)=>void;onReplay:()=>void;onSetPublicName:(name:string|null)=>void}) {
+export function createStarshipPanel(options:{onLoadContributors:(group:StarshipContributorGroup,cursor:string|null)=>void;onWatch:()=>void;onReplay:(preview:boolean)=>void;onSetPublicName:(name:string|null)=>void}) {
   const root=element('section','starship-panel');root.setAttribute('aria-label','Game-wide Starship mission');
   const eyebrow=element('span','starship-eyebrow','ALL TESLAND / ONE MISSION');
   const heading=element('h3','starship-heading','Build the Starship together');
@@ -61,9 +62,11 @@ export function createStarshipPanel(options:{onLoadContributors:(group:StarshipC
   const personal=element('p','starship-personal');
   const pending=element('p','starship-pending');
   const stage=element('p','starship-stage');
-  const launch=element('p','starship-launch');launch.setAttribute('role','status');
-  const replay=element('button','starship-replay','Replay the launch');replay.type='button';replay.onclick=()=>options.onReplay();
-  progressBox.append(progressLabel,progress,lifetime,personal,pending,stage,launch,replay);
+  const launch=element('p','starship-launch');launch.setAttribute('role','timer');launch.setAttribute('aria-live','off');
+  const watch=element('button','starship-watch','Watch the launch site');watch.type='button';watch.onclick=()=>options.onWatch();
+  let previewReplay=false;
+  const replay=element('button','starship-replay','Replay the launch');replay.type='button';replay.onclick=()=>options.onReplay(previewReplay);
+  progressBox.append(progressLabel,progress,lifetime,personal,pending,stage,launch,watch,replay);
 
   const privacy=element('form','starship-privacy');
   const privacyTitle=element('h4','starship-privacy-title','Your launch crew name');
@@ -116,7 +119,7 @@ export function createStarshipPanel(options:{onLoadContributors:(group:StarshipC
   function update(state:StarshipPanelState,now=performance.now()):void {
     current=state;
     const confirmed=state.confirmed;
-    const valid=!!confirmed&&amount(confirmed.total)&&amount(confirmed.personal)&&confirmed.personal<=confirmed.total;
+    const valid=!!confirmed&&amount(confirmed.total)&&(confirmed.personal===null||(amount(confirmed.personal)&&confirmed.personal<=confirmed.total));
     const freshness=state.freshness;
     text(status,!valid?(freshness==='loading'?'Connecting to the game-wide mission…':'Game-wide progress is unavailable.'):
       freshness==='live'?'Live · confirmed game-wide':freshness==='loading'?'Last confirmed · refreshing…':'Last confirmed · updates unavailable');
@@ -126,8 +129,8 @@ export function createStarshipPanel(options:{onLoadContributors:(group:StarshipC
       text(progressTitle,confirmed!.crossing==='recorded'?'CONFIRMED AT THE GOAL':confirmed!.crossing==='unknown'?'CONFIRMED AT TRACKING START':'GAME-WIDE EARNINGS');
       text(total,`${money(actual)} / ${money(STARSHIP_GOAL)}`);progress.value=Math.min(actual,STARSHIP_GOAL);
       text(lifetime,confirmed!.crossing==='pending'?'':`Current confirmed lifetime earnings: ${money(confirmed!.total)}.`);
-      text(personal,`Your confirmed lifetime earnings: ${money(confirmed!.personal)}`);
-      text(pending,amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
+      text(personal,confirmed!.personal===null?'Connect a driver to see your confirmed contribution.':`Your confirmed lifetime earnings: ${money(confirmed!.personal)}`);
+      text(pending,confirmed!.personal===null?'':amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
       const next=STARSHIP_STAGE_PERCENTAGES.find(percent=>actual<STARSHIP_GOAL*percent/100);
       text(stage,next?`Next construction milestone: ${next}% · ${money(STARSHIP_GOAL*next/100)}.`:'All construction milestones reached.');
     }else{
@@ -145,21 +148,26 @@ export function createStarshipPanel(options:{onLoadContributors:(group:StarshipC
     else if(!completed)text(launch,'The launch begins after the $1 billion goal is reached.');
     else if(!validClock)text(launch,'Launch timing is unavailable.');
     else if(freshness!=='live'){
-      replayReady=clock!.serverTime>=launchAt!+LAUNCH_DURATION_MS;
-      text(launch,replayReady?'Launch complete.':'Launch timing is unavailable while updates are stale.');
+      replayReady=estimatedServerTime!>=launchAt!+LAUNCH_DURATION_MS;
+      text(launch,replayReady?'Replay available · current status unavailable.':'Launch timing is unavailable while updates are stale.');
     }else if(estimatedServerTime!<launchAt!)text(launch,`Launch in ${duration(launchAt!-estimatedServerTime!)}`);
     else if(estimatedServerTime!<launchAt!+LAUNCH_DURATION_MS)text(launch,'Launch in progress.');
     else {replayReady=true;text(launch,'Launch complete.');}
-    replay.hidden=!replayReady;
+    previewReplay=!valid||unknown||(!completed&&freshness!=='live');
+    replay.hidden=!replayReady&&!previewReplay;
+    text(replay,previewReplay?'Preview a launch':'Replay the launch');
 
     const choice=state.privacy;
+    if(choice.status==='unavailable'&&lastPrivacy!==undefined){
+      lastPrivacy=undefined;showName.checked=false;nameInput.value='';nameLabel.hidden=nameInput.hidden=true;
+    }
     if((choice.status==='ready'||choice.status==='error')&&choice.publicName!==lastPrivacy){
       lastPrivacy=choice.publicName;showName.checked=choice.publicName!==null;nameInput.value=choice.publicName??'';
       nameLabel.hidden=nameInput.hidden=!showName.checked;
     }
-    const privacyBusy=choice.status==='loading'||choice.status==='saving';
+    const privacyBusy=choice.status==='loading'||choice.status==='saving'||choice.status==='unavailable';
     showName.disabled=nameInput.disabled=privacySave.disabled=privacyBusy;
-    text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':'');
+    text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':choice.status==='unavailable'?'Connect a driver to choose a public name.':'');
 
     contributors.hidden=!completed&&!unknown;
     const page=state.contributors;

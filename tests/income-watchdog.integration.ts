@@ -40,5 +40,15 @@ try{
   assert.deepEqual(await get('/purchase'),purchase,'later retries retain the original result');
   await delay(1200);
   assert.equal((await get<{total:number}>('/income')).total,57_345,'purchase replay does not duplicate global earnings');
+  await get('/hold-privacy');
+  void fetch(base+'/set-privacy',{signal:AbortSignal.timeout(1500)}).catch(()=>{});
+  await until(async()=>(await get<{privacyHeld:boolean}>('/income')).privacyHeld,'privacy RPC held');
+  const waiting=await get<{privacy:{revision:number;name:string}|null;alarm:number|null}>('/profile');
+  assert.deepEqual(waiting.privacy,{revision:1,name:'Test driver'});
+  assert.ok(waiting.alarm!==null,'privacy reconciliation has a watchdog');
+  await stop(child);child=undefined;child=start();await ready();
+  await until(async()=>(await get<{publicName:string|null}>('/income')).publicName==='Test driver','privacy choice retried after restart');
+  await until(async()=>(await get<{privacy:unknown}>('/profile')).privacy===null,'delivered privacy choice is cleared');
+  assert.equal((await get<{total:number}>('/income')).total,57_345,'privacy recovery does not change income');
   console.log('PASS: income watchdog survives termination; luxury awards and replay credit eligible and global income exactly once.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

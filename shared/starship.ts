@@ -11,7 +11,8 @@ export function starshipStage(total:number):number {
 
 export type StarshipStatus = {
   total: number;
-  personal: number;
+  /** Null when the caller has no authenticated room identity. */
+  personal: number | null;
   /** Unknown means the existing counter had already reached the goal before tracking began. */
   crossing: 'pending' | 'recorded' | 'unknown';
   /** The un-capped confirmed total at the threshold; lifetime total continues. */

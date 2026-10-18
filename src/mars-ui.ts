@@ -3,13 +3,15 @@ import type { Entity } from '../shared/game';
 import { FREMONT_SPACEPORT } from '../shared/map';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL } from '../shared/mars';
 import type { Session } from './session';
+import type { StarshipClient } from './starship-client';
+import { createStarshipPanel } from './starship-panel';
+import { createStarshipViewer } from './starship-viewer';
 
-export function createMarsUI(session:Session,money:(amount:number)=>string,onOpen:()=>void,onClose:()=>void) {
+export function createMarsUI(session:Session,money:(amount:number)=>string,onOpen:()=>void,onClose:()=>void,starship:StarshipClient) {
   const dialog=document.createElement('dialog');dialog.className='mars-dialog';dialog.setAttribute('aria-labelledby','mars-title');
   dialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow mars-eyebrow"></span><h2 id="mars-title">Let’s go to Mars.</h2></div><button type="button" class="mars-close" aria-label="Close Mars mission">✕</button></div>
     <p class="mars-intro"></p>
-    <div class="mars-progress"><span>GLOBAL EARNINGS <b class="mars-total"></b></span><progress max="1000000000" value="0" aria-label="Global earnings toward the Mars mission"></progress><small class="mars-remaining"></small></div>
-    <p class="mars-note">Every driver's earnings move the mission forward. You keep the money you earn.</p>
+    <div class="mars-global"></div>
     <details class="mars-progress mars-room"><summary>Optional room fund · <b class="mars-room-total"></b></summary>
       <p class="mars-note">Room donations use your cash and fund a launch for this room, separately from the global earnings goal.</p>
       <form class="mars-form"><label for="mars-amount">Contribute from your cash <small class="mars-cash"></small></label><div class="mars-contribute"><input id="mars-amount" type="number" min="1" max="1000000000" step="1" inputmode="numeric" value="5" required><button type="button" class="mars-all">All</button><button type="submit" class="primary mars-submit">Contribute →</button></div></form>
@@ -20,6 +22,10 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
   document.body.append(dialog,win);
   const $=<T extends HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
   const feedback=$<HTMLElement>('.mars-feedback'),board=$<HTMLButtonElement>('.mars-board'),input=$<HTMLInputElement>('#mars-amount'),submit=$<HTMLButtonElement>('.mars-submit'),all=$<HTMLButtonElement>('.mars-all');
+  const viewer=createStarshipViewer({animation:now=>starship.animation(now),stage:()=>starship.stage()??0,message:now=>starship.viewerMessage(now),onOpen,onClose});
+  const watch=()=>{if(!viewer.open())feedback.textContent='The launch view could not start on this device.';};
+  const panel=createStarshipPanel({onLoadContributors:(group,cursor)=>{void starship.loadContributors(group,cursor);},onWatch:watch,onReplay:preview=>{starship.replay(preview);watch();},onSetPublicName:name=>starship.setName(name)});
+  $('.mars-global').append(panel.element);
   let pending:{id:number;action:'board'|'contribute';sent:number}|null=null,winQueued=false,busyUntil=0;
   let playerId=session.id,room=session.room;
   const close=()=>{if(dialog.open)dialog.close();};
@@ -53,13 +59,11 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     if(!dialog.open)return;
     $('.mars-eyebrow').textContent='TESLAND 2050 / A GLOBAL MISSION';
     $('.mars-intro').textContent='Earn together across every room, or fund a launch for this room. Reach $1 billion and board Starship at the Fremont spaceport.';
-    const fund=session.world.mars.fund,remaining=Math.max(0,MARS_GOAL-fund),player=session.world.players.find(p=>p.id===session.id);
-    $('.mars-total').textContent=`${money(fund)} / ${money(MARS_GOAL)}`;
-    $<HTMLProgressElement>('progress').value=fund;
-    $('.mars-remaining').textContent=remaining>0?`${money(remaining)} to the global launch`:'Global goal reached · ready to board';
+    panel.update(starship.state());
+    const player=session.world.players.find(p=>p.id===session.id);
     const roomRemaining=MARS_GOAL-session.world.mars.roomFund,cash=player?.delivery.cash??0;
-    $('.mars-room-total').textContent=`${money(session.world.mars.roomFund)} / ${money(MARS_GOAL)} goal`;
-    $('.mars-cash').textContent=`${money(cash)} available`;
+    $('.mars-room-total').textContent=session.status==='online'?`${money(session.world.mars.roomFund)} / ${money(MARS_GOAL)} goal`:'Connect to a room';
+    $('.mars-cash').textContent=session.status==='online'?`${money(cash)} available`:'Connect to a room';
     input.max=String(Math.max(1,Math.min(cash,roomRemaining)));
     const busy=!!pending||performance.now()<busyUntil||session.status!=='online'||session.walletBlocked;
     submit.disabled=busy||cash<1||roomRemaining<1;all.disabled=submit.disabled;
@@ -69,5 +73,5 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     $('.mars-location').textContent=boarded?'You already boarded for Mars.':entity?`${distance} m ${distance>25?direction:'away'} · ${player&&player.delivery.level<2?'Unlock Fremont at level 2. ':''}Stop in the gold ring to board once the mission is complete.`:'Connect to your room to board.';
     board.disabled=busy||!marsGoalReached(session.world.mars)||boarded||!entity||!atMarsBoarding(entity);
   }
-  return {open(){if(session.status!=='online')return;onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close,update};
+  return {open(){onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close(){viewer.close();close();},update,isOpen:()=>dialog.open,isViewing:()=>viewer.openState};
 }

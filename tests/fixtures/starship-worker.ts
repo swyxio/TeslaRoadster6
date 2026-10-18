@@ -8,7 +8,12 @@ export class GlobalIncome extends DurableObject {
   credit(driverId:string,total:number){return this.ledger.credit(driverId,total);}
   status(driverId?:string){return this.ledger.status(driverId);}
   contributors(group:StarshipContributorGroup,cursor?:string){return this.ledger.contributors(group,cursor);}
-  setName(driverId:string,name:string|null){return this.ledger.setPublicName(driverId,name);}
+  async setName(driverId:string,name:string|null,revision?:number){
+    const next=revision??await this.ctx.storage.transaction(async txn=>{
+      const key=`fixture-privacy:${driverId}`,n=(await txn.get<number>(key)??0)+1;await txn.put(key,n);return n;
+    });
+    return this.ledger.setPublicName(driverId,name,next);
+  }
   publicName(driverId:string){return this.ledger.publicName(driverId);}
   async seed(driverId:string,total:number){
     await this.ctx.storage.transaction(async txn=>{
@@ -32,7 +37,7 @@ export default {
         const input=await request.json() as {driverId:string;total:number};await income.seed(input.driverId,input.total);return new Response('ok');
       }
       if(url.pathname==='/name'&&request.method==='POST'){
-        const input=await request.json() as {driverId:string;name:string|null};return Response.json(await income.setName(input.driverId,input.name));
+        const input=await request.json() as {driverId:string;name:string|null;revision?:number};return Response.json(await income.setName(input.driverId,input.name,input.revision));
       }
       if(url.pathname==='/name')return Response.json(await income.publicName(url.searchParams.get('driver')??''));
       if(url.pathname==='/status')return Response.json(await income.status(url.searchParams.get('driver')??undefined));

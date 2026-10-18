@@ -7,6 +7,9 @@ import type { VehicleStyle } from '../shared/vehicle-style';
 import type { TankLevel } from '../shared/air-tank';
 import type { GameRoom } from './index';
 import type { RoomEconomy } from './room-economy';
+import { StarshipLedger } from './starship';
+import { normalizeName } from './global-chat-core';
+import type { StarshipContributorGroup } from '../shared/starship';
 
 export type SavedVehicle = { upgrades:VehicleUpgrades; tankLevel:TankLevel; style:VehicleStyle };
 export type SavedVehicles = Record<string,SavedVehicle>;
@@ -25,6 +28,7 @@ export type DriverOutcome =
   | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready';available?:number};
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean};
 type Receipt = {payload:string;outcome:DriverOutcome};
+type PrivacyPending = {revision:number;name:string|null};
 
 
 type Env = { INCOME:DurableObjectNamespace<GlobalIncome>; ROOMS:DurableObjectNamespace<GameRoom>; ECONOMIES:DurableObjectNamespace<RoomEconomy> };
@@ -175,6 +179,39 @@ export class DriverProfile extends DurableObject<Env> {
 
   async checkFence(fence:string):Promise<boolean>{const record=await this.ctx.storage.get<DriverRecord>('driver');return record?.fence===fence&&!record.sealed;}
 
+  /** Privacy changes are ordered at the profile and retried independently of income. */
+  async setStarshipName(driverId:string,fence:string,name:string|null):Promise<{ok:boolean;publicName:string|null}>{
+    if(name!==null&&(typeof name!=='string'||name.length>256))throw new Error('Invalid public name');
+    const normalized=name===null?null:normalizeName(name);
+    const pending=await this.ctx.storage.transaction(async txn=>{
+      const record=await txn.get<DriverRecord>('driver');
+      if(!record||record.driverId!==driverId||record.fence!==fence||record.sealed)return null;
+      const previous=await txn.get<number>('privacy-revision')??0,revision=previous+1;
+      if(!Number.isSafeInteger(revision))throw new Error('Privacy revision overflow');
+      const change={revision,name:normalized};
+      await txn.put({'privacy-revision':revision,'privacy-pending':change});
+      const alarm=await txn.getAlarm(),next=Date.now()+500;
+      if(alarm===null||alarm>next)await txn.setAlarm(next);
+      return change;
+    });
+    if(!pending)return {ok:false,publicName:null};
+    try{
+      const publicName=await this.flushPrivacy(driverId,pending);
+      const latest=await this.ctx.storage.get<number>('privacy-revision');
+      return {ok:latest===pending.revision&&publicName===normalized,publicName};
+    }catch{return {ok:false,publicName:null};}
+  }
+
+  private async flushPrivacy(driverId:string,pending:PrivacyPending):Promise<string|null>{
+    const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
+    const publicName=await global.setName(driverId,pending.name,pending.revision);
+    await this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<PrivacyPending>('privacy-pending');
+      if(current?.revision===pending.revision)await txn.delete('privacy-pending');
+    });
+    return publicName;
+  }
+
   async alarm():Promise<void>{
     // Arm before reading the outbox or awaiting its remote credit, preserving
     // any earlier deadline set by another operation.
@@ -184,14 +221,15 @@ export class DriverProfile extends DurableObject<Env> {
       if(alarm!==null&&alarm<=watchdog)return false;
       await txn.setAlarm(watchdog);return true;
     });
-    const [record,pending]=await Promise.all([this.ctx.storage.get<DriverRecord>('driver'),this.ctx.storage.get<number>('income-pending')]);
-    if(!record||pending===undefined){
-      if(armed&&pending===undefined)await this.ctx.storage.transaction(async txn=>{
-        if(await txn.getAlarm()===watchdog && await txn.get('income-pending')===undefined)await txn.deleteAlarm();
+    const [record,pending,privacy]=await Promise.all([this.ctx.storage.get<DriverRecord>('driver'),this.ctx.storage.get<number>('income-pending'),this.ctx.storage.get<PrivacyPending>('privacy-pending')]);
+    if(!record||(pending===undefined&&!privacy)){
+      if(armed&&pending===undefined&&!privacy)await this.ctx.storage.transaction(async txn=>{
+        if(await txn.getAlarm()===watchdog && await txn.get('income-pending')===undefined && await txn.get('privacy-pending')===undefined)await txn.deleteAlarm();
       });
       return;
     }
-    try {
+    if(privacy)try{await this.flushPrivacy(record.driverId,privacy);}catch{}
+    if(pending!==undefined)try {
       const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
       await global.credit(record.driverId,pending);
       await this.ctx.storage.transaction(async txn=>{
@@ -210,18 +248,13 @@ export class DriverProfile extends DurableObject<Env> {
 
 /** Cumulative-per-driver credits are safe to retry and can arrive out of order. */
 export class GlobalIncome extends DurableObject {
-  async credit(driverId:string,cumulative:number):Promise<number>{
-    if(!driverId||!Number.isSafeInteger(cumulative)||cumulative<0)throw new Error('Invalid income credit');
-    return this.ctx.storage.transaction(async txn=>{
-      const key=`income:${driverId}`,previous=await txn.get<number>(key)??0,total=await txn.get<number>('total')??0;
-      if(cumulative<=previous)return total;
-      const next=total+cumulative-previous;
-      if(!Number.isSafeInteger(next))throw new Error('Income total exceeds safe integer');
-      await txn.put({[key]:cumulative,total:next});
-      return next;
-    });
-  }
+  private starship=new StarshipLedger(this.ctx.storage);
+  credit(driverId:string,cumulative:number):Promise<number>{return this.starship.credit(driverId,cumulative);}
   async total():Promise<number>{return await this.ctx.storage.get<number>('total')??0;}
+  status(driverId?:string){return this.starship.status(driverId);}
+  publicName(driverId:string){return this.starship.publicName(driverId);}
+  setName(driverId:string,name:string|null,revision:number){return this.starship.setPublicName(driverId,name,revision);}
+  contributors(group:StarshipContributorGroup,cursor?:string){return this.starship.contributors(group,cursor);}
 }
 
 export function progressFrom(delivery:DeliveryState,unlocked:AchievementId[],vehicles:SavedVehicles,ownedLuxury:LuxuryVehicleId[],time:number,eligibleIncome:number):DriverProgress {

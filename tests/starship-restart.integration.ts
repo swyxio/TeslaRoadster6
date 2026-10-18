@@ -88,6 +88,11 @@ try{
   assert.deepEqual(await page(),{group:'at-goal',state:'pending',contributors:[],next:null});
   assert.deepEqual(await page(undefined,undefined,'later'),{group:'later',state:'pending',contributors:[],next:null});
   assert.equal((await fetch(base+'/contributors?group=invalid')).status,400);
+  assert.ok((await post('/name',{driverId:'privacy-race',name:'Hidden later',revision:2})).ok);
+  assert.ok((await post('/name',{driverId:'privacy-race',name:null,revision:3})).ok);
+  assert.ok((await post('/name',{driverId:'privacy-race',name:'Stale write',revision:2})).ok);
+  assert.equal(await (await fetch(base+'/name?driver=privacy-race')).json(),null,'a delayed older privacy write cannot undo an opt-out');
+  assert.equal((await post('/name',{driverId:'privacy-race',name:'Conflicting write',revision:3})).status,400);
   const before=Date.now();
   const crossing=await Promise.all([credit('threshold-a',600_000_000),credit('threshold-b',400_000_000)]);
   assert.ok(crossing.every(response=>response.ok));
@@ -210,6 +215,8 @@ try{
   assert.equal((await status()).total,restarted.total,'retry after restart remains a no-op');
   assert.equal(restarted.launchTotal,completed.total,'later income does not change the completed season');
   assert.equal(await (await fetch(base+'/name?driver=legacy-a')).json(),null,'opt-out survives restart');
+  assert.ok((await post('/name',{driverId:'privacy-race',name:'Still stale',revision:2})).ok);
+  assert.equal(await (await fetch(base+'/name?driver=privacy-race')).json(),null,'the privacy revision survives restart');
   assert.ok((await all()).every(row=>row.amount===null),'anonymous amounts remain hidden after restart');
   assert.ok((await all(undefined,'later')).every(row=>row.amount===null),'later amounts remain hidden after restart');
   const priorAgain=await status(undefined,'prior');

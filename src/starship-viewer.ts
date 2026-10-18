@@ -17,7 +17,7 @@ export function createStarshipViewer(options:{
   const overlay=document.createElement('div');overlay.className='starship-viewer-overlay';
   const title=document.createElement('h2');title.id='starship-viewer-title';title.textContent='Fremont launch view';
   const status=document.createElement('p');status.setAttribute('role','status');
-  const close=document.createElement('button');close.type='button';close.textContent='Back to driving';close.onclick=()=>dialog.close();
+  const close=document.createElement('button');close.type='button';close.textContent='Close launch view';close.onclick=()=>dialog.close();
   overlay.append(title,status,close);dialog.append(canvas,overlay);document.body.append(dialog);
   let renderer:T.WebGLRenderer|null=null,scene:T.Scene|null=null,camera:T.PerspectiveCamera|null=null;
   let spaceport:ReturnType<typeof buildFremontSpaceport>|null=null,frame=0;
@@ -40,7 +40,7 @@ export function createStarshipViewer(options:{
     const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
     if(canvas.width!==width||canvas.height!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
     const animation=options.animation(now);
-    spaceport.update(animation?.elapsed??0,animation?0:null,options.stage());
+    spaceport.update(animation?.elapsed??0,animation?0:null,animation?5:options.stage());
     const message=options.message(now);if(status.textContent!==message)status.textContent=message;
     renderer.render(scene,camera);frame=requestAnimationFrame(render);
   }

@@ -5,6 +5,7 @@ import { RoomEarningsEvents, type RoomEventCursor } from '../../worker/room-earn
 export class RoomEconomy extends DurableObject {
   private events=new RoomEarningsEvents(this.ctx.storage);
   prepareWin(id:string,time:number){return this.events.prepareWin(id,time);}
+  recordWithoutPayout(id:string,time:number){return this.events.recordWinWithoutPayout(id,time);}
   commitWin(id:string){return this.events.commitWin(id);}
   pendingWin(){return this.events.pendingWin();}
   activeUntil(time:number){return this.events.activeUntil(time);}
@@ -21,6 +22,10 @@ export default {
       }
       if(url.pathname==='/prepare'){
         const input=await request.json() as {id:string;time:number};return Response.json(await room.prepareWin(input.id,input.time));
+      }
+      if(url.pathname==='/no-payout'){
+        const input=await request.json() as {id:string;time:number};const result=await room.recordWithoutPayout(input.id,input.time);
+        return url.searchParams.has('lose-reply')?new Response('Simulated lost reply',{status:503}):Response.json(result);
       }
       if(url.pathname==='/commit'){
         const input=await request.json() as {id:string};const result=await room.commitWin(input.id);

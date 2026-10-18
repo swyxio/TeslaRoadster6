@@ -40,6 +40,15 @@ export class RoomEarningsEvents {
    * The host must recover and settle an interrupted reservation before releasing it.
    */
   prepareWin(eventId:string,requestedAtMs:number):PreparedRoomWin {
+    return this.record(eventId,requestedAtMs,false);
+  }
+
+  /** The present Dome match has no repeatable payout; publish its win atomically. */
+  recordWinWithoutPayout(eventId:string,requestedAtMs:number):PreparedRoomWin {
+    return this.record(eventId,requestedAtMs,true);
+  }
+
+  private record(eventId:string,requestedAtMs:number,settled:boolean):PreparedRoomWin {
     validId(eventId);validTime(requestedAtMs);
     if(requestedAtMs>Date.now())throw new RangeError('A room win cannot be in the future');
     return this.storage.transactionSync(()=>{
@@ -48,6 +57,8 @@ export class RoomEarningsEvents {
         UNION ALL SELECT * FROM room_earnings_pending WHERE event_id=?`,eventId,eventId).toArray()[0];
       if(existing){
         if(existing.requested_at!==requestedAtMs)throw new Error('Room win ID already used for another time');
+        if(settled&&sql.exec<WinRow>('SELECT * FROM room_earnings_pending WHERE event_id=?',eventId).toArray().length)
+          throw new Error('Room win is awaiting settlement');
         return prepared(existing);
       }
       if(sql.exec<WinRow>('SELECT * FROM room_earnings_pending LIMIT 1').toArray().length)
@@ -59,7 +70,8 @@ export class RoomEarningsEvents {
       const startsAtMs=Math.max(requestedAtMs,fence);validTime(startsAtMs);
       const previous=sql.exec<{ends_at:number}>('SELECT ends_at FROM room_earnings_wins WHERE won_at<=? AND ends_at>? ORDER BY won_at DESC LIMIT 1',startsAtMs,startsAtMs).toArray()[0];
       const row={event_id:eventId,requested_at:requestedAtMs,won_at:startsAtMs,ends_at:startsAtMs+ROOM_WIN_DURATION_MS,prior_until:previous?.ends_at??null};
-      sql.exec('INSERT INTO room_earnings_pending (event_id,requested_at,won_at,ends_at,prior_until) VALUES (?,?,?,?,?)',row.event_id,row.requested_at,row.won_at,row.ends_at,row.prior_until);
+      const table=settled?'room_earnings_wins':'room_earnings_pending';
+      sql.exec(`INSERT INTO ${table} (event_id,requested_at,won_at,ends_at,prior_until) VALUES (?,?,?,?,?)`,row.event_id,row.requested_at,row.won_at,row.ends_at,row.prior_until);
       return prepared(row);
     });
   }

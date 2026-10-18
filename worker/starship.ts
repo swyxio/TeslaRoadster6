@@ -21,7 +21,7 @@ function complete(total:number):Completion {
   const completedAt=Date.now();
   return {kind:'recorded',completedAt,launchAt:completedAt+STARSHIP_LAUNCH_DELAY_MS,launchId:crypto.randomUUID(),total};
 }
-function status(total:number,personal:number,completion:Completion|undefined):StarshipStatus {
+function status(total:number,personal:number|null,completion:Completion|undefined):StarshipStatus {
   const recorded=completion?.kind==='recorded'?completion:null;
   const cutover=completion?.kind==='unknown'?completion:null;
   return {total,personal,crossing:completion?.kind??'pending',launchTotal:recorded?.total??null,
@@ -84,7 +84,7 @@ export class StarshipLedger {
     if(driverId!==undefined)validId(driverId);
     return this.storage.transaction(async txn=>{
       const total=await txn.get<number>('total')??0;validIncome(total);
-      const personal=driverId===undefined?0:await txn.get<number>(incomeKey(driverId))??0;
+      const personal=driverId===undefined?null:await txn.get<number>(incomeKey(driverId))??0;
       const completion=await captureExisting(txn,total);
       return status(total,personal,completion);
     });
@@ -96,13 +96,24 @@ export class StarshipLedger {
     return await this.storage.get<string>(nameKey(driverId))??null;
   }
 
-  async setPublicName(driverId:string,name:string|null):Promise<string|null> {
+  async setPublicName(driverId:string,name:string|null,revision:number):Promise<string|null> {
     validId(driverId);
+    if(!Number.isSafeInteger(revision)||revision<1)throw new Error('Invalid privacy revision');
     if(name!==null && (typeof name!=='string'||name.length>256))throw new Error('Invalid public name');
     const normalized=name===null?null:normalizeName(name);
-    if(normalized===null)await this.storage.delete(nameKey(driverId));
-    else await this.storage.put(nameKey(driverId),normalized);
-    return normalized;
+    return this.storage.transaction(async txn=>{
+      const key=nameKey(driverId),versionKey=`launch-name-version:${driverId}`;
+      const previous=await txn.get<number>(versionKey)??0;
+      if(revision<previous)return await txn.get<string>(key)??null;
+      if(revision===previous){
+        const current=await txn.get<string>(key)??null;
+        if(current!==normalized)throw new Error('Privacy revision conflict');
+        return current;
+      }
+      await txn.put(versionKey,revision);
+      if(normalized===null)await txn.delete(key);else await txn.put(key,normalized);
+      return normalized;
+    });
   }
 
   /** The goal index is frozen. Later confirmations page the live copy-on-write keys. */
