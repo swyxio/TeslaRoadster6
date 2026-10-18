@@ -33,11 +33,11 @@ async function closeCleanly(socket:WebSocket):Promise<void> {
 }
 function connect() {
   const socket=new WebSocket(room);
-  const state:{id?:string;version?:number;world?:World;history:World[];closed?:number}={history:[]};
+  const state:{id?:string;version?:number;inputAck?:number;world?:World;history:World[];closed?:number}={history:[]};
   socket.addEventListener('message',event=>{
     const message=JSON.parse(String(event.data));
     if(message.type==='welcome'){state.id=message.id;state.version=message.version;}
-    if(message.type==='state'){state.world=message.world;state.history.push(message.world);}
+    if(message.type==='state'){state.world=message.world;state.inputAck=message.inputAck;state.history.push(message.world);}
   });
   socket.addEventListener('close',event=>{state.closed=event.code;});
   return {socket,state};
@@ -46,6 +46,7 @@ const driver=connect();
 await eventually(()=>!!driver.state.id,'driver joins');
 const observer=connect();
 let inputTimer:ReturnType<typeof setInterval>|undefined;
+let inputSeq=0;
 let finalCar:Entity|undefined, lowestNeutral=Infinity;
 try {
   await eventually(()=>!!observer.state.id&&observer.state.history.some(world=>world.players.length===2),'observer joins');
@@ -79,7 +80,7 @@ try {
   }),'the level-zero boundary remains enforced');
 
   // Face west and apply ordinary forward flight, without boost or hover.
-  inputTimer=setInterval(()=>driver.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1}})),50);
+  inputTimer=setInterval(()=>driver.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1}})),50);
   await eventually(()=>observer.state.history.some(world=>{
     const car=world.entities.find(entity=>entity.id===pilot.entityId);
     return !!car&&car.x<ACCESS_BOUNDARIES.oaklandX-20&&car.vx<0;
@@ -87,6 +88,8 @@ try {
   const after=observer.state.history.at(-1)!;
   finalCar=after.entities.find(entity=>entity.id===pilot.entityId)!;
   assert.ok(finalCar.x<ACCESS_BOUNDARIES.oaklandX-20);
+  await eventually(()=>(driver.state.inputAck??0)>0,'the driver input is acknowledged');
+  assert.equal(observer.state.inputAck,0,'acknowledgements belong to each connection');
   assert.equal(requiredLevelAt(finalCar.x,finalCar.z),0);
   assert.ok(observer.state.history.some(world=>{
     const car=world.entities.find(entity=>entity.id===pilot.entityId);

@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.9-alpha',
-    label: '0.0.9 Alpha',
+    version: '0.0.10-alpha',
+    label: '0.0.10 Alpha',
     date: '2026-10-18',
     title: 'The scenic way around',
     intro: 'A greener North Bay, more ways down the Peninsula and friendlier skies.',
@@ -11,6 +11,21 @@ export const RELEASES = [
         'Explore the wooded Marin headlands and North Bay Playground; its races, ramps and ferry remain open.',
         'At level 2, take US 101, I-280 or El Camino Real down the Peninsula. Drive the split yourself or place a map pin on the road you want to visit.',
         'Skyline Express is much higher, its current is gentler, and fewer thermals fill the sky. Wind stops pushing you into locked areas so you can escape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.9-alpha',
+    label: '0.0.9 Alpha',
+    date: '2026-10-18',
+    title: 'Drive together',
+    intro: 'Smoother shared driving and longer-lasting Rocket pickups.',
+    sections: [
+      { title: 'Drive together', items: [
+        'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
+        'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
+        'A Rocket pickup now equips its car for the rest of the session.',
+        'Choose an explicit solo drive from the menu when you want a private local session.'
       ] }
     ]
   },
@@ -54,7 +69,7 @@ export const RELEASES = [
         'Try the two new launch ramps, speed oval, inverted cliff and island parking games.',
         'Play Park It or Cut the Queue at any registered parking lot. Rocket pickups give any car 90 seconds of flight.',
         'The Rocket Dome moves to the China Basin ballpark area, with car soccer to five goals and wall charging.',
-        'Join the shared Bay automatically.'
+        'Join the shared Bay automatically or choose a solo drive from the menu.'
       ] },
       { title: 'Play and explore', items: [
         'Start or leave a mini-game immediately after joining, with confirmation while the room responds.',
@@ -91,7 +106,7 @@ export const RELEASES = [
       { title: 'Play together', items: [
         'Choose Rocket Dome, parking games or a race from the mini-games picker and jump straight into a round.',
         'Scores and awards now explain your session progress and what resets when you leave.',
-        'Join the shared Bay and named rooms with other drivers.'
+        'Choose Drive solo for a local session on your own, or join the shared Bay and named rooms.'
       ] }
     ]
   },

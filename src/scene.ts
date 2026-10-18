@@ -8,7 +8,7 @@ import { isTrafficIncident } from '../shared/traffic';
 import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
-import { STATIONS, stationStalls } from '../shared/stations';
+import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
@@ -19,8 +19,7 @@ import { box, material, createVehicle, setRocketKit, setThrusterEffects } from '
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
-import { SHOPS } from '../shared/upgrades';
-import { hasRocket } from '../shared/rocket';
+import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
@@ -77,6 +76,7 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private predictedEntity?:string;
   cameraMode:CameraMode = 'chase';
   private renderedCockpit=false;
   private marker = new T.Vector3();
@@ -87,7 +87,9 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+    // Keep high-density desktop displays from multiplying the game's fill cost;
+    // HUD text remains native-resolution DOM and touch keeps its existing cap.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer: fine)').matches?1:1.5));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -190,15 +192,6 @@ export class GameScene {
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
       addStationArt(scene,s);
-      for(const stall of stationStalls(s)) {
-        // Charger posts and mint stop bars identify the fictional air-refill bays.
-        box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);
-        const z=stall.z-stall.length/2-.8;
-        box(scene,stall.x-.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x+.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x,2.28,z,1.16,.24,.6,0xf3e8d6);
-        box(scene,stall.x,1.2,z,.68,1.7,.14,0xd34537);
-      }
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
     });
     const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
@@ -225,13 +218,13 @@ export class GameScene {
   }
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
-  render(world: World, playerId: string, dt: number, menu: boolean) {
-    this.spaceport?.update(world.time,world.mars.launchAt);
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false) {
+    if(snapLocal)this.cameraReady=false;
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
-    // Continue the last observed velocity between fixed simulation snapshots.
-    // This is presentation only; authoritative positions are never changed.
+    // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
     const elapsed=Math.min(.1,Math.max(0,(now-this.worldUpdatedAt)/1000));
+    this.spaceport?.update(world.time+elapsed,world.mars.launchAt);
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
@@ -294,25 +287,30 @@ export class GameScene {
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       mesh.visible=!(cockpit&&e.id===controlled?.id);
-      const target=new T.Vector3(e.x+e.vx*elapsed,e.y+e.vy*elapsed,e.z+e.vz*elapsed);
-      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
+      const ahead=e.id===controlled?.id?0:elapsed;
+      const target=new T.Vector3(e.x+e.vx*ahead,e.y+e.vy*ahead,e.z+e.vz*ahead);
+      // When a preview is suspended, return directly to authority rather than
+      // interpolating the car through a newly reported obstacle or shoreline.
+      const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
+      const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
+      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
       if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,hasRocket(e,world.time));
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRocket(e,world.time));
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
       }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
       this.surfaceUp.set(0,surface?.normalY??normal?.y??1,surface?.normalZ??normal?.z??0);
       if(!surface)this.surfaceUp.x=normal?.x??0;
-      const visualYaw=e.yaw+e.yawRate*elapsed;
+      const visualYaw=e.yaw+e.yawRate*(e.id===controlled?.id?0:elapsed);
       this.surfaceBack.set(Math.sin(visualYaw),surface?Math.cos(visualYaw)*surface.tangentY:0,surface?Math.cos(visualYaw)*surface.tangentZ:Math.cos(visualYaw));
       this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
       this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'?e.pitch:0));
       this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
-      mesh.quaternion.slerp(this.orientation,alpha);
+      mesh.quaternion.slerp(this.orientation,blend);
       const incident=isTrafficIncident(e,world.time);
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
@@ -388,6 +386,7 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
+    this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}

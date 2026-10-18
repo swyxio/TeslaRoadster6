@@ -37,7 +37,19 @@ const originalThresholds = [0, 10000, 50000, 250000, 1250000, 6250000];
 const candidateThresholds = [0, 10000, 50000, 250000, 500000, 1000000, 2000000, 4000000, 8000000];
 const cabPrices = [25000, 50000, 100000, 200000, 400000];
 const cabAwards = [5000, 10000, 20000, 40000, 80000];
-const cityThresholds = [0, 10000, 10000, 50000, 250000]; // SF, Oakland, Berkeley, Fremont, San Jose
+// These are access gates and the achievement trigger, not a timed notification schedule.
+export const cityUnlocks = [
+  { name: 'Oakland', threshold: 10000, reward: 1000 },
+  { name: 'Berkeley', threshold: 20000, reward: 1500 },
+  { name: 'Fremont', threshold: 50000, reward: 2000 },
+  { name: 'San Mateo', threshold: 75000, reward: 2500 },
+  { name: 'Palo Alto', threshold: 100000, reward: 3000 },
+  { name: 'Mountain View', threshold: 150000, reward: 4000 },
+  { name: 'San Jose', threshold: 250000, reward: 5000 },
+];
+// The travel model only physically visits SF plus these four; the other three are unlocks only.
+const cityThresholds = [0, ...[0, 1, 2, 6].map(i => cityUnlocks[i].threshold)];
+const previousCityThresholds = [0, 10000, 10000, 50000, 250000];
 const cityContractTiers = [0, 1, 1, 2, 3];
 const deliveryFares = [3000, 4000, 6000, 9500, 11000, 13000, 15000, 20000, 26000];
 const deliveryMinutes = [3, 3.5, 4.5, 5.5, 6, 6.5, 7, 7.5, 8];
@@ -46,14 +58,16 @@ const buildCost = 600000;
 const sampleMinutes = [30, 60, 120, 240, 480, 960, 1440, 2400];
 
 type Task = { kind: 'delivery' | 'dome' | 'explore' | 'tour' | 'travel' | 'race' | 'park'; remaining: number; fare?: number; landmark?: number; target?: number };
-type Ledger = { fares: number; cabs: number; matchPay: number; activityPay: number; checkpoints: number; achievements: number; unlocks: number; spending: number; fines: number };
+type Ledger = { fares: number; cabs: number; matchPay: number; activityPay: number; checkpoints: number; deliveryRepeatable: number; achievements: number; unlocks: number; spending: number; fines: number };
 export type FiveMinuteWindow = {
   endMinute: number; gross: number; recurring: number; cabIncome: number;
   achievementCash: number; checkinCash: number; unlockCash: number; spending: number; fines: number; cashChange: number;
-  achievements: number; cityAchievements: number; checkins: number; unlocks: number; repeatableGoals: number; tasks: number; wallet: number; level: number; cabs: number;
+  achievements: number; cityAchievements: number; checkins: number; unlocks: number; repeatableGoals: number; contractProgress: number; tasks: number; wallet: number; level: number; cabs: number;
 };
 export type Result = {
   profile: string; rules: RuleSet; activeMinutes: number; sessions: number; deliveries: number; wins: number; cityVisitsAwarded: number;
+  cleanStreakAwards: number; destinationAwards: number; onTimeAwards: number; cabRevenueAwards: number; distinctDestinations: number;
+  cityUnlockBalances: Record<string, number>;
   cabs: number; cash: number; level: number; plotMinute: number | null; homeMinute: number | null;
   secondPlotMinute: number | null; secondHomeMinute: number | null;
   marketUnlockMinute: number | null; homeBalance: number | null;
@@ -94,15 +108,18 @@ export function premiumContractChoices(level: number): number {
 // Pay is set from an expected duration at task acceptance, not how long a player waits.
 export function branchPayout(level: number, kind: 'dome' | 'race' | 'park' | 'tour'): number {
   const expectedMinutes = { dome: 6.5, race: 5.5, park: 5.5, tour: 6 }[kind];
-  const share = { dome: 0.85, race: 0.9, park: 0.85, tour: 0.8 }[kind];
-  return Math.round(deliveryFares[level] / deliveryMinutes[level] * expectedMinutes * share / 10) * 10;
+  // Minigames are optional diversions; scenic contracts are modest delivery-adjacent work.
+  const share = { dome: 0.3, race: 0.35, park: 0.3, tour: 0.65 }[kind];
+  return Math.round(deliveryFares[level] / deliveryMinutes[level] * expectedMinutes * share / 10 + 1e-9) * 10;
 }
 
 type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean;
-  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean; cityVisitAwards?: boolean };
+  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean; cityVisitAwards?: boolean; coreMilestones?: boolean; cabRevenueLevels?: boolean; contracts?: boolean };
 export function simulate(profile: Profile, rules: RuleSet, seed: number, hours = 40,
   events: SimulationOptions = {}): Result {
   const rng = random(seed);
+  // A separate stream stops optional milestone rolls from perturbing activity choices.
+  const challengeRng = random(seed ^ 0x6e624eb7);
   const initialSeed = seed;
   let cash = 2500, minute = 0, session = 0, inSession = 0;
   let sessionStart = Math.floor(rng() * 240), roomBonusUntil = 0;
@@ -128,22 +145,37 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   ];
   const cityJobs = [0, 0, 0, 0, 0];
   const activities = { race: 0, park: 0, tour: 0 };
+  const travelThresholds = events.coreMilestones ? cityThresholds : previousCityThresholds;
   const landmarksPerCity = profile.landmarksPerCity ?? 3;
   if (!Number.isInteger(landmarksPerCity) || landmarksPerCity < 1) throw new Error('landmarksPerCity must be a positive integer');
   const landmarks = Array.from({ length: 5 * landmarksPerCity }, () => ({ discovered: false, deliveries: 0 }));
   const unlocked = new Set<number>([0]);
+  const unlockedCityBadges = new Set<number>();
+  const cityUnlockBalances: Record<string, number> = {};
   const visitedCities = new Set<number>([0]);
-  let cityVisitsAwarded = 0;
+  // Exactly one optional rotating delivery contract is active at a time.
+  let contractIndex = 0, contractCount = 0;
+  const contractDestinations = new Set<string>();
+  let cityVisitsAwarded = 0, cleanStreak = 0, cleanStreakAwards = 0, destinationAwards = 0, onTime = 0, onTimeAwards = 0, firstCabGross = 0, cabRevenueAwards = 0;
+  const destinations = new Set<string>();
+  // One award per threshold across all attempts; a broken streak must be rebuilt.
+  const cleanMilestones = new Map([[13, 500], [22, 1000], [37, 2000], [60, 4000], [100, 8000]]);
+  const destinationMilestones = new Map([[6, 500], [10, 1000], [15, 2000], [20, 4000], [25, 8000]]);
+  const onTimeMilestones = new Map([[10, 500], [20, 1000], [50, 2000], [100, 4000], [200, 8000]]);
+  // At $20k the first $25k cab has earned back its price net of the $5k purchase award.
+  const cabRevenueMilestones = new Map(events.cabRevenueLevels
+    ? [[20000, 2000], [50000, 4000], [100000, 8000], [200000, 16000], [400000, 32000]]
+    : [[20000, 2000]]);
   const milestoneTimes: number[] = [0];
   const progress: number[] = [0];
   const optionSamples: number[] = [];
   const affordableSamples: number[] = [];
-  const ledger: Ledger = { fares: 0, cabs: 0, matchPay: 0, activityPay: 0, checkpoints: 0, achievements: 0, unlocks: 2500, spending: 0, fines: 0 };
+  const ledger: Ledger = { fares: 0, cabs: 0, matchPay: 0, activityPay: 0, checkpoints: 0, deliveryRepeatable: 0, achievements: 0, unlocks: 2500, spending: 0, fines: 0 };
   const windows: FiveMinuteWindow[] = [];
-  let achievementCount = 0, cityAchievementCount = 0, checkinCount = 0, unlockCount = 0, repeatableCount = 0, taskCount = 0;
+  let achievementCount = 0, cityAchievementCount = 0, checkinCount = 0, unlockCount = 0, repeatableCount = 0, contractProgressCount = 0, taskCount = 0;
   let achievementCash = 0, checkinCash = 0;
   let previousLedger = { ...ledger }, previousCash = cash;
-  let previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, taskCount, achievementCash, checkinCash };
+  let previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, contractProgressCount, taskCount, achievementCash, checkinCash };
   const recordProgress = () => { if (progress[progress.length - 1] !== minute) progress.push(minute); };
   const record = () => { if (milestoneTimes[milestoneTimes.length - 1] !== minute) milestoneTimes.push(minute); recordProgress(); };
   const award = (amount: number, kind: 'achievement' | 'checkin' = 'achievement') => {
@@ -165,7 +197,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     const contractChoices = rules === 'candidate'
       ? premiumContractChoices(level)
       : Math.max(0, level - 1);
-    const localException = cityThresholds[city] > cash ? 1 : 0;
+    const localException = travelThresholds[city] > cash ? 1 : 0;
     return 6 + Math.min(level, 3) + localException + (level >= marketLevel ? 1 : 0) + contractChoices
       + (cosmeticIndex > 0 ? 1 : 0) + (cabs > 0 ? 1 : 0) + (plotMinute !== null ? 1 : 0)
       + (earlyUpgradeIndex > 0 ? 1 : 0)
@@ -188,16 +220,28 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     const thresholds = rules === 'original' ? originalThresholds : candidateThresholds;
     // Unlock awards can cross the next threshold. Dropping and recovering cannot repay them.
     const unlockRewards = rules === 'candidate'
-      ? [[1, 5000], [2, 10000], [3, 2500], [4, 2500], [5, 5000], [6, 5000], [7, 10000], [8, 20000]]
+      ? (events.coreMilestones
+        // The separate named-city rewards replace the old level 1–3 bundle.
+        ? [[1, 0], [2, 0], [3, 0], [4, 2500], [5, 5000], [6, 5000], [7, 10000], [8, 20000]]
+        : [[1, 5000], [2, 10000], [3, 2500], [4, 2500], [5, 5000], [6, 5000], [7, 10000], [8, 20000]])
       : [[1, 5000], [2, 10000], [3, 2500], [4, 0], [5, 0]];
     for (const [level, amount] of unlockRewards) {
       if (cash >= thresholds[level] && !unlocked.has(level)) {
         unlocked.add(level); cash += amount; ledger.unlocks += amount; if (amount) unlockCount++;
         // Each named city has its own one-off achievement, even when unlocked in a group.
-        if (rules === 'candidate' && level <= 3) cityAchievementCount += [0, 2, 4, 1][level];
+        if (rules === 'candidate' && !events.coreMilestones && level <= 3) cityAchievementCount += [0, 2, 4, 1][level];
         record();
         if (level === marketLevel) marketUnlockMinute = minute;
       }
+    }
+    if (rules === 'candidate' && events.coreMilestones) {
+      // Unlock each named city once at its own balance threshold, not in level-sized badge bursts.
+      cityUnlocks.forEach(({ name, threshold, reward }, i) => {
+        if (cash >= threshold && !unlockedCityBadges.has(i)) {
+          unlockedCityBadges.add(i); cityUnlockBalances[name] = cash; cityAchievementCount++; unlockCount++;
+          cash += reward; ledger.unlocks += reward; record();
+        }
+      });
     }
     if (plotMinute !== null && plotRecoveryMinutes === null && tier() >= plotRecoveryTarget) plotRecoveryMinutes = minute - plotMinute;
     if (homeMinute !== null && homeRecoveryMinutes === null && tier() >= homeRecoveryTarget) homeRecoveryMinutes = minute - homeMinute;
@@ -250,10 +294,11 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     updateUnlocks();
   }
 
-  function discover(id: number) {
-    if (landmarks[id].discovered) return;
+  function discover(id: number, pay = true) {
+    if (landmarks[id].discovered) return false;
     landmarks[id].discovered = true;
-    award(rules === 'candidate' ? 500 : 2500);
+    if (pay) award(rules === 'candidate' ? 500 : 2500);
+    return true;
   }
 
   function finish(t: Task) {
@@ -330,24 +375,59 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
       award(deliveryCheckins[deliveries] ?? 0, 'checkin');
       award(cityCheckins[cityJobs[city]] ?? 0, 'checkin');
     }
-    if (rules === 'candidate' && deliveries % 3 === 0) { cash += 750; ledger.checkpoints += 750; repeatableCount++; recordProgress(); }
+    if (rules === 'candidate' && !(events.contracts && events.coreMilestones) && deliveries % 3 === 0) {
+      cash += 750; ledger.checkpoints += 750; ledger.deliveryRepeatable += 750; repeatableCount++; recordProgress();
+    }
     award(cityMilestones[cityJobs[city]] ?? 0);
     if (t.landmark !== undefined) {
-      discover(t.landmark);
+      // Finding and first delivering to a landmark in the same action is one achievement,
+      // with the same combined cash, rather than two notifications for one accomplishment.
+      const combineDiscovery = rules === 'candidate' && !!events.coreMilestones;
+      const firstDiscovery = discover(t.landmark, !combineDiscovery);
       const landmark = landmarks[t.landmark]; landmark.deliveries++;
       const landmarkMilestones: Record<number, number> = rules === 'candidate'
         ? { 1: 1000, 3: 2000, 5: 4000, 10: 8000 }
         : { 1: 5000, 3: 10000, 5: 20000, 10: 40000 };
-      award(landmarkMilestones[landmark.deliveries] ?? 0);
+      award((landmarkMilestones[landmark.deliveries] ?? 0) + (firstDiscovery && combineDiscovery ? 500 : 0));
     }
     // A small random citation; repeat-severity and full police simulation are not modeled.
-    if (rng() < 0.04) { const fine = Math.min(cash, 750 + Math.floor(rng() * 2250)); cash -= fine; ledger.fines += fine; }
+    const cited = rng() < 0.04;
+    if (cited) { const fine = Math.min(cash, 750 + Math.floor(rng() * 2250)); cash -= fine; ledger.fines += fine; }
+    if (rules === 'candidate' && events.coreMilestones) {
+      // Abstract destination IDs are illustrative: each modeled city has six unique delivery stops.
+      const destination = `${city}:${Math.floor(challengeRng() * 6)}`;
+      destinations.add(destination);
+      const destinationReward = destinationMilestones.get(destinations.size);
+      if (destinationReward) { award(destinationReward); destinationAwards++; destinationMilestones.delete(destinations.size); }
+      cleanStreak = cited ? 0 : cleanStreak + 1;
+      // A provisional independent 80% on-time rate, not a measured player skill distribution.
+      const isOnTime = challengeRng() < .8;
+      if (isOnTime) onTime++;
+      if (events.contracts) {
+        // Rotate 2 on-time, 3 consecutive uncited, 2 distinct destinations; replace the old checkpoint.
+        const before = contractIndex === 2 ? contractDestinations.size : contractCount;
+        if (contractIndex === 0 && isOnTime) contractCount++;
+        if (contractIndex === 1) contractCount = cited ? 0 : contractCount + 1;
+        if (contractIndex === 2) contractDestinations.add(destination);
+        if ((contractIndex === 2 ? contractDestinations.size : contractCount) > before) contractProgressCount++;
+        const complete = contractIndex === 0 ? contractCount >= 2
+          : contractIndex === 1 ? contractCount >= 3 : contractDestinations.size >= 2;
+        if (complete) {
+          cash += 650; ledger.checkpoints += 650; ledger.deliveryRepeatable += 650; repeatableCount++; recordProgress();
+          contractIndex = (contractIndex + 1) % 3; contractCount = 0; contractDestinations.clear();
+        }
+      }
+      const onTimeReward = onTimeMilestones.get(onTime);
+      if (onTimeReward) { award(onTimeReward); onTimeAwards++; onTimeMilestones.delete(onTime); }
+      const cleanReward = cleanMilestones.get(cleanStreak);
+      if (cleanReward) { award(cleanReward); cleanStreakAwards++; cleanMilestones.delete(cleanStreak); }
+    }
   }
 
   function nextTask(): Task {
     // Voluntary city travel after 25 jobs, only if entry is currently unlocked.
     const readyToTravel = profile.travelAfterTasks === undefined ? totalCityJobs >= 25 : totalCityTasks >= profile.travelAfterTasks;
-    if (readyToTravel && city < 4 && cash >= cityThresholds[city + 1]) {
+    if (readyToTravel && city < 4 && cash >= travelThresholds[city + 1]) {
       return { kind: 'travel', remaining: 5, target: city + 1 };
     }
     const rank = rules === 'candidate' ? deliveryTier(cash, city, events.retainLocalJobs !== false) : tier();
@@ -382,6 +462,13 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     // Cabs earn only during the player's active session; utilization is an assumed average.
     const income = cabs * 15000 / 60 * profile.utilization * multiplier();
     cash += income; ledger.cabs += income;
+    if (rules === 'candidate' && events.coreMilestones && cabs > 0) {
+      // Credit lifetime revenue of the first cab only, so owning a fleet does not stack a badge per cab.
+      firstCabGross += income / cabs;
+      for (const [threshold, reward] of cabRevenueMilestones) {
+        if (firstCabGross >= threshold) { award(reward); cabRevenueAwards++; cabRevenueMilestones.delete(threshold); }
+      }
+    }
     minute++; inSession++; task.remaining--;
     if (task.remaining <= 0) { finish(task); task = null; }
     updateUnlocks();
@@ -396,9 +483,9 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
         achievements: achievementCount - previousCounts.achievementCount + cityAchievementCount - previousCounts.cityAchievementCount,
         cityAchievements: cityAchievementCount - previousCounts.cityAchievementCount, checkins: checkinCount - previousCounts.checkinCount,
         unlocks: unlockCount - previousCounts.unlockCount, repeatableGoals: repeatableCount - previousCounts.repeatableCount,
-        tasks: taskCount - previousCounts.taskCount, wallet: cash, level: tier(), cabs });
+        contractProgress: contractProgressCount - previousCounts.contractProgressCount, tasks: taskCount - previousCounts.taskCount, wallet: cash, level: tier(), cabs });
       previousLedger = { ...ledger }; previousCash = cash;
-      previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, taskCount, achievementCash, checkinCash };
+      previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, contractProgressCount, taskCount, achievementCash, checkinCash };
     }
     if (sampleMinutes.includes(minute)) { optionSamples.push(options()); affordableSamples.push(affordable()); }
     if (inSession === profile.sessionMinutes) { session++; inSession = 0; sessionStart = Math.floor(rng() * 240); }
@@ -412,6 +499,7 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   const earned = ledger.fares + ledger.cabs + ledger.matchPay + ledger.activityPay + ledger.checkpoints + ledger.achievements + ledger.unlocks;
   if (Math.abs(cash - (earned - ledger.spending - ledger.fines)) > 1e-5) throw new Error(`Ledger mismatch: ${profile.name} ${initialSeed}`);
   return { profile: profile.name, rules, activeMinutes: minute, sessions: Math.ceil(minute / profile.sessionMinutes), deliveries, wins, cityVisitsAwarded,
+    cleanStreakAwards, destinationAwards, onTimeAwards, cabRevenueAwards, distinctDestinations: destinations.size, cityUnlockBalances,
     cabs, cash, level: tier(), plotMinute, homeMinute, secondPlotMinute, secondHomeMinute, marketUnlockMinute, homeBalance,
     secondHomeBalance, secondHomeBeforeLevel, secondHomeAfterLevel, secondHomeRecoveryMinutes, firstCabMinute, afterPlotLevel, afterHomeLevel,
     plotRecoveryMinutes, homeRecoveryMinutes, maxMilestoneGap: maxGap(milestoneTimes, minute), maxMilestoneGapFirstHome: maxGap(milestoneTimes, homeMinute ?? minute),
@@ -465,7 +553,8 @@ export function summarize(results: Result[]) {
     totalEarned: med(results.map(r => r.totalEarned), 0), fares: med(results.map(r => r.ledger.fares), 0),
     cabIncome: med(results.map(r => r.ledger.cabs), 0), achievements: med(results.map(r => r.ledger.achievements), 0),
     matchPay: med(results.map(r => r.ledger.matchPay), 0), activityPay: med(results.map(r => r.ledger.activityPay), 0),
-    checkpoints: med(results.map(r => r.ledger.checkpoints), 0), spending: med(results.map(r => r.ledger.spending), 0),
+    checkpoints: med(results.map(r => r.ledger.checkpoints), 0),
+    deliveryRepeatable: med(results.map(r => r.ledger.deliveryRepeatable), 0), spending: med(results.map(r => r.ledger.spending), 0),
     fines: med(results.map(r => r.ledger.fines), 0), remaining: med(results.map(r => r.cash), 0),
     finalLevel: med(results.map(r => r.level), 0), finalCabs: med(results.map(r => r.cabs), 0),
   };

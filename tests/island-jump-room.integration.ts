@@ -49,6 +49,7 @@ await eventually(() => !!driver.state.id, 'first driver joined');
 const observer = connect();
 let inputTimer:ReturnType<typeof setInterval>|undefined;
 let highestY = 0;
+let inputSeq = 0;
 try {
   await eventually(() => !!observer.state.id && observer.state.world?.players.length === 2, 'observer joined the same room');
   const playerId = driver.state.id!;
@@ -76,7 +77,7 @@ try {
     if (sawLaunch && entity.supportId === 'ground' && entity.x > jump.end + 1) sawLanding = true;
   });
   inputTimer = setInterval(() => {
-    driver.socket.send(JSON.stringify({ type:'input', input:{ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 } }));
+    driver.socket.send(JSON.stringify({ type:'input', seq:++inputSeq, input:{ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 } }));
   }, 50);
   await eventually(() => sawRamp && sawLaunch && sawLanding, 'observer sees ramp support, takeoff and landing');
   assert.ok(highestY > jump.height, 'launch reaches above the lip');

@@ -3,8 +3,8 @@ import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
-import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps';
 import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
+import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps';
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
@@ -99,7 +99,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-cliff'|'island-jump'|'ferry'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-jump'|'island-cliff'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -158,8 +158,8 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
  if(id==='island-bank')return bankSurface(x,z)?.height??null;
- if(id==='island-jump')return islandJumpHeight(x,z);
  if(id==='island-oval')return ovalBankSurface(x,z)?.height??null;
+ if(id==='island-jump')return islandJumpHeight(x,z);
  // Curved surfaces can have multiple heights at one point; ferry support moves.
  if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
  const b=BUILDINGS[Number(id.slice(5))];

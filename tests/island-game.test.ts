@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,chooseVehicle,createWorld,makeEntity,NEUTRAL,raceAction,step} from '../shared/game';
-import {hasRocket} from '../shared/rocket';
+import {hasRockets} from '../shared/upgrades';
 import {newPolice} from '../shared/police';
 import {snapshotFor} from '../worker/snapshot';
 import { ISLAND_BANK, ISLAND_CLIFF, bankSurface, cliffPose } from '../shared/island-stunts';
@@ -22,12 +22,12 @@ test('two passengers retain their distinct physical positions and replicate in t
   assert.ok(snapshotFor(world,'p').entities.includes(other));assert.ok(snapshotFor(world,'two').entities.includes(car));
 });
 
-test('a driven non-Rocket car collects a pad and can jump until its flight expires',()=>{
+test('a driven non-Rocket car collects a permanent pad kit and can still jump later',()=>{
   const {world,car}=setup();car.kind='model-3';Object.assign(car,{x:0,z:-1160,y:0,supportId:'ground',air:3});
-  step(world,new Map(),.05);assert.ok(hasRocket(car,world.time));assert.equal(car.air,100);
+  step(world,new Map(),.05);assert.ok(hasRockets(car));assert.equal(car.air,100);
   step(world,new Map([['p',{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null);assert.ok(car.y>0);assert.ok(car.air<100);
-  world.time=car.rocketUntil;step(world,new Map(),.05);
-  assert.equal(hasRocket(car,world.time),false);
+  world.time+=120;step(world,new Map(),.05);
+  assert.equal(hasRockets(car),true);
 });
 
 test('island boundary clears pursuit and prevents detection at any height',()=>{

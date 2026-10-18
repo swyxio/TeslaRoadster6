@@ -32,7 +32,7 @@ export function awardDomeMatchAchievements(player:Player,participant:DomePartici
   if(!won)return;
   if(participant.touches.roadster&&participant.goals.roadster>0)unlock(state,'roadster-champion');
   if(participant.touches.retrofit&&participant.goals.retrofit>0)unlock(state,'garage-champion');
-  if(participant.touches.stock&&participant.goals.stock>0&&!participant.touches.roadster&&!participant.touches.retrofit&&!participant.touches.pickup)unlock(state,'no-rockets-needed');
+  if(participant.touches.stock&&participant.goals.stock>0&&!participant.touches.roadster&&!participant.touches.retrofit)unlock(state,'no-rockets-needed');
 }
 // Region polygons also contain the Peninsula and East Bay; the achievement's
 // endpoints are the SF and Oakland city grids, not the full Bay corridor.

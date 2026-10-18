@@ -23,16 +23,16 @@ export function snapshotFor(world: World, playerId: string): World {
 // Serialize common data and each entity once per tick, then assemble a complete
 // recipient-filtered snapshot. This avoids re-stringifying every player and car
 // for every socket while preserving the normal JSON wire shape.
-export function prepareSnapshots(world: World): (playerId: string) => string {
+export function prepareSnapshots(world: World): (playerId: string, inputAck: number, sync?: number) => string {
   const playerEntities = new Set(world.players.map(player=>player.entityId));
   const entities = world.entities.map(entity=>({entity,json:JSON.stringify(entity)}));
   const byId = new Map(world.entities.map(entity=>[entity.id,entity]));
   const controlled = new Map(world.players.map(player=>[player.id,byId.get(player.entityId)]));
   const common = Object.entries(world).filter(([key,value])=>key!=='entities'&&value!==undefined)
     .map(([key,value])=>`${JSON.stringify(key)}:${JSON.stringify(value)}`).join(',');
-  return playerId => {
+  return (playerId,inputAck,sync) => {
     const current=controlled.get(playerId);
     const selected=current?entities.filter(({entity})=>visible(entity,current,playerId,playerEntities)):entities;
-    return `{"type":"state","world":{${common},"entities":[${selected.map(item=>item.json).join(',')}]}}`;
+    return `{"type":"state","world":{${common},"entities":[${selected.map(item=>item.json).join(',')}]},"inputAck":${inputAck}${sync===undefined?'':`,"sync":${sync}`}}`;
   };
 }

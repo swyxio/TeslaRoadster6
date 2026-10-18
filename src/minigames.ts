@@ -15,7 +15,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
   dialog.className='minigames-dialog';
   dialog.setAttribute('aria-labelledby','minigames-title');
   dialog.innerHTML=`<div class="fleet-header"><div><span class="eyebrow">TAKE A DETOUR / PLAY TOGETHER</span><h2 id="minigames-title">Pick a mini-game</h2></div><button type="button" class="minigames-close" aria-label="Close mini-games">✕</button></div>
-    <p class="minigames-intro">Choose a game to play with your room. Parking games use your current lot, or take you to a playground if you’re elsewhere.</p>
+    <p class="minigames-intro">Choose a game to play solo or with your room. Parking games use your current lot, or take you to a playground if you’re elsewhere.</p>
     <div class="minigames-grid">
       <button type="button" data-game="dome"><span class="game-icon" aria-hidden="true">⚽</span><span><strong>Rocket Dome</strong><small>Car soccer! Score in either goal. First color to five ends the match.</small></span><b>Play ↗</b></button>
       <button type="button" data-game="park"><span class="game-icon" aria-hidden="true">🅿</span><span><strong>Park It</strong><small>Find your assigned space and park neatly against the clock.</small></span><b>Play ↗</b></button>
@@ -41,7 +41,7 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
   let pending:Pending|null=null;
   let starting:Starting|null=null;
   let leaving:Game|null=null,leavingAt=0;
-  let playerId=session.id,room=session.room;
+  let playerId=session.id,room=session.room,soloWorld=session.status==='solo'?session.world:null;
 
   function car(){
     const player=session.world.players.find(p=>p.id===session.id);
@@ -74,9 +74,11 @@ export function setupMinigames({session,controls,closeDrawer,canDrive,notice}:{
     if(dialog.open)feedback.textContent=message;else notice(message);
   }
   function update(){
-    // Snapshots replace the world on every tick; track room and player identity.
-    if(playerId!==session.id||room!==session.room){
-      playerId=session.id;room=session.room;
+    // Online snapshots replace world on every tick; only solo world identity is
+    // stable enough to distinguish starting a fresh drive with the same ID.
+    const currentSoloWorld=session.status==='solo'?session.world:null;
+    if(playerId!==session.id||room!==session.room||soloWorld!==currentSoloWorld){
+      playerId=session.id;room=session.room;soloWorld=currentSoloWorld;
       pending=null;starting=null;leaving=null;leavingAt=0;feedback.textContent='';setBusy();
     }
     const park=parking(),racing=race();

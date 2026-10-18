@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, buyUpgrade, chooseVehicle, createWorld, NEUTRAL, step, subscribeOta } from '../shared/game';
-import { hasRocket } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 import { bankSurface, cliffPose } from '../shared/island-stunts';
 
 test('an island Rocket pad refills an upgraded tank and enables its scaled jump', () => {
@@ -11,11 +11,10 @@ test('an island Rocket pad refills an upgraded tank and enables its scaled jump'
   const car = world.entities.find(entity => entity.id === player.entityId)!;
   world.entities = [car];
   Object.assign(car, { x: 0, y: 0, z: -1160, supportId: 'ground', tankLevel: 3, air: 2 });
-  assert.equal(hasRocket(car, world.time), false);
+  assert.equal(hasRockets(car), false);
 
   step(world, new Map([[player.id, NEUTRAL]]), .05);
-  assert.equal(hasRocket(car, world.time), true);
-  assert.equal(car.upgrades.rocket, false);
+  assert.equal(hasRockets(car), true);
   assert.equal(car.tankLevel, 3);
   assert.equal(car.air, 100);
   assert.equal(world.pickups.find(pickup => pickup.id === 'rocket-island')!.active, false);

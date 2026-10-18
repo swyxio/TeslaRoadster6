@@ -15,8 +15,8 @@ const MUTED = '#4d5f6d';
 const SAND = '#fff2d8';
 const INK = '#7a4b00';
 
-const names = ['Courier', 'Explorer', 'Dome player', 'Dome player, no wins', 'Racer and parker', 'Cab operator', 'Mixed activities'];
-const labels: Record<string, string> = { 'Dome player': 'Dome player (50% wins)', 'Dome player, no wins': 'Dome player (no wins)', 'Racer and parker': 'Race + parking' };
+const names = paths.map(path => path.name);
+const labels: Record<string, string> = {};
 
 function escape(text: string): string {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -87,7 +87,7 @@ function walletChart(data: ChartPath[], players: number): string {
   const max = Math.ceil(maxWallet / 500_000) * 500_000;
   const ticks = Array.from({ length: Math.floor(max / 1_000_000) + 1 }, (_, i) => i * 1_000_000);
   const details = data.map(p => `${p.name}: ${p.homeReached}/${players} first homes, median ${p.homeMedianHours ?? 'unreached'} hours`).join('; ');
-  let svg = header('Wallets on seven possible paths',
+  let svg = header('Seven ways to grow a wallet',
     MOBILE ? `Median · ${players} runs per path · bonuses off` : `Median wallet · ${players} simulated players per path · event bonuses off`, height,
     `Seven charts show the median simulated wallet every five active minutes over 40 hours. The dashed line marks the $2 million current-cash property market gate. Purchases lower cash, and the median does not track one individual. ${details}. These are proposed rules, not player telemetry.`);
   data.forEach((p, i) => {
@@ -108,9 +108,9 @@ function walletChart(data: ChartPath[], players: number): string {
   svg += t((LEFT + RIGHT) / 2, end + 23, 'Active hours', `font-size="18" fill="${MUTED}" text-anchor="middle"`);
   svg += footer(MOBILE ? ['Dashed line: $2m cash gate. Purchases',
     'lower the wallet.', 'Each point is a median, not one player.',
-    'Balanced candidate; events off. Simulated data.'] : ['Dashed line = $2m cash gate. Buying a home or upgrades lowers the wallet.',
+    'Core redesign; events off. Simulated data.'] : ['Dashed line = $2m cash gate. Buying a home or upgrades lowers the wallet.',
     'Each point is a fresh median; the line is not one person’s wallet history.',
-    'Balanced candidate, no event bonuses. Simulated data, not gameplay telemetry.'], end + 55);
+    'Core redesign, no event bonuses. Simulated data, not gameplay telemetry.'], end + 55);
   return svg;
 }
 
@@ -126,7 +126,7 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   let svg = header(achievement ? 'Achievements arrive in bursts' : 'Earnings per five active minutes',
     MOBILE ? (achievement ? `Mean achievements per 30m · ${players} runs` : `Median gross per 5m · ${players} runs`)
       : (achievement ? `Mean one-off achievements per 30-minute block · ${players} simulated players` : `Median 30-minute gross, divided by six · ${players} simulated players`), height,
-    `${achievement ? 'Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings, and excludes purchases and fines.'} Event bonuses are off, and this is a simulated balanced candidate, not game telemetry. ${details}.`);
+    `${achievement ? 'Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings, and excludes purchases and fines.'} Event bonuses are off, and this is a simulated core economy design, not game telemetry. ${details}.`);
   data.forEach((p, i) => {
     const y = top + i * panelH, chartY = y + (MOBILE && achievement ? 56 : 34);
     svg += t(24, y + 20, labels[p.name] ?? p.name, 'font-size="21" font-weight="700"');
@@ -150,19 +150,19 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   const lines = MOBILE ? (achievement ? [
     'Shading: 2–4 one-off achievements per', '30-minute block, first two active hours.',
     'City badges count; initial SF, check-ins and', 'repeatable goals do not. Means can hide dry spells.',
-    'Balanced candidate, events off. Simulated data.',
+    'Core redesign, events off. Simulated data.',
   ] : [
     'Gross includes task pay, awards and cab income.', 'Purchases and fines do not count.',
     'Each bar is the 30-minute median divided by six.', 'Five-minute windows can be empty during a task.',
-    'Balanced candidate, events off. Simulated data.',
+    'Core redesign, events off. Simulated data.',
   ]) : achievement ? [
     'Shaded band: target 2–4 one-off achievements per block, first 2h only.',
     'City badges count; initial SF, check-ins and repeatable goals do not.',
-    'Balanced candidate, events off. Means can hide individual dry spells.',
+    'Core redesign, events off. Means can hide individual dry spells.',
   ] : [
     'Gross includes task pay, cash awards and active-cab income; it is not wallet change.',
     'Each bar is a median across 250 runs; longer tasks can leave five-minute gaps.',
-    'Balanced candidate, event bonuses off. Simulated data, not telemetry.',
+    'Core redesign, event bonuses off. Simulated data, not telemetry.',
   ];
   // Match the player count in the caption when using a non-default run size.
   if (!achievement && !MOBILE) lines[1] = `Each bar is a median across ${players} runs; longer tasks can leave five-minute gaps.`;
@@ -177,7 +177,7 @@ const data = names.map(name => {
   const path = paths.find(item => item.name === name);
   if (!path) throw new Error(`Missing profile: ${name}`);
   const runs = Array.from({ length: players }, (_, i) => simulate(path.profile, 'candidate', 1729 + i, 40,
-    { global: false, room: false, branchBalance: true, winChance: path.winChance, trackWindows: true }));
+    { global: false, room: false, branchBalance: true, coreMilestones: true, cityVisitAwards: true, winChance: path.winChance, trackWindows: true }));
   if (runs.some(run => run.windows.length !== 480)) throw new Error(`Expected 480 five-minute windows per run: ${name}`);
   return makeData(name, runs);
 });
@@ -191,5 +191,5 @@ writeFileSync(`${target}/wallet-curves-mobile.svg`, walletChart(data, players));
 writeFileSync(`${target}/achievement-cadence-mobile.svg`, blocksChart(data, players, 'achievements'));
 writeFileSync(`${target}/earnings-cadence-mobile.svg`, blocksChart(data, players, 'earnings'));
 writeFileSync(`${target}/simulation-data.json`, JSON.stringify({ players, seedStart: 1729, activeHours: 40,
-  events: false, candidate: 'balanced', walletSampleMinutes: 5, blockMinutes: 30, data }, null, 2) + '\n');
+  events: false, candidate: 'core-redesign', walletSampleMinutes: 5, blockMinutes: 30, data }, null, 2) + '\n');
 console.log(`Wrote six SVG charts and source data to ${target} for ${players} seeds per path.`);
