@@ -48,7 +48,7 @@ import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '.
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
 import { CURRENT_RELEASE, releaseLabel } from '../content/version';
 import { browserStorage, readLastPlayed, writeLastPlayed } from './release-tracker';
-import { readDriverRecovery, stageDriverRecovery, confirmDriverRecovery, setDriverRemember, forgetDriverRecovery } from './driver-recovery';
+import { readDriverRecovery, stageDriverRecovery, confirmDriverRecovery, setDriverRemember, forgetDriverRecovery, connectDriverWallet } from './driver-recovery';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -92,7 +92,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores show drivers in this room. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
 <dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, deliver, and play. Stop in the blue research rings to earn cash and explore each lab. Save your driver to keep your achievements.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">Choose a soundtrack for your drive. Sound effects stay on their own channel.</p><div class="radio-panel"><label for="radio-station">RADIO STATION</label><select id="radio-station"><option value="chiptune">Tesland 8-bit</option><option value="latent-space">Latent Space podcast</option><option value="thursdai">ThursdAI podcast</option></select><div id="radio-episode" class="radio-episode" hidden><span id="radio-label">UP NEXT</span><a id="radio-title" target="_blank" rel="noopener noreferrer"></a></div><div id="radio-controls" class="radio-controls" hidden><button id="radio-play" type="button">Play</button><button id="radio-next" type="button">Next random episode ↗</button></div><p id="radio-status" role="status"></p></div><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music / radio <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music and radio volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
-<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>This browser remembers your driver by default. Copy the recovery code to use the same ID on another device. Your wallet, delivery progress, achievements, and luxury collection follow your saved driver.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Save your current guest before switching, or its progress cannot be recovered. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div><div class="identity-actions"><button id="identity-pending" type="button" class="identity-button" hidden>Recover unfinished driver</button><button id="identity-previous" type="button" class="identity-button" hidden>Use previously saved driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p><button id="identity-rejoin" type="button" class="identity-button" hidden>Rejoin with this driver</button></dialog>
+<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><p id="identity-storage-warning" class="identity-feedback" role="alert" hidden></p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>This browser remembers your driver by default. Copy the recovery code to use the same ID on another device. Your wallet, delivery progress, achievements, and luxury collection follow your saved driver.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Save your current guest before switching, or its progress cannot be recovered. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div><div class="identity-actions"><button id="identity-pending" type="button" class="identity-button" hidden>Recover unfinished driver</button><button id="identity-previous" type="button" class="identity-button" hidden>Use previously saved driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p><button id="identity-rejoin" type="button" class="identity-button" hidden>Rejoin with this driver</button></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
@@ -186,6 +186,8 @@ try { driverStorage=localStorage; } catch { /* Report unavailable storage in the
 const recovery=readDriverRecovery(driverStorage);
 let rememberedCode=recovery.remembered,stagedCode=recovery.pending,rememberRequested=recovery.remember;
 let currentCode:string|undefined=rememberedCode||stagedCode;
+let recoveryWarning='';
+let warnedRecoveryCode:string|undefined;
 let pendingRememberCode:string|undefined=currentCode===stagedCode&&stagedCode!==rememberedCode?stagedCode:undefined;
 let walletBoundCode:string|undefined;
 let identityRequestId=0,identityRequestCode:string|undefined;
@@ -202,12 +204,16 @@ function recoveryProblem(message:string){
   if(!identityDialog.open)notice(message);
 }
 function rememberWhenBound(code:string|undefined){
-  if(!rememberRequested||!code||code===rememberedCode)return true;
+  if(!rememberRequested||!code||code===rememberedCode){recoveryWarning='';warnedRecoveryCode=undefined;return true;}
   const staged=stageDriverRecovery(driverStorage,code);
   if(staged!=='ok'){
-    recoveryProblem(staged==='pending'?'Recover your unfinished driver before saving another. Copy this code to keep it.':'Browser storage is unavailable. Copy your recovery code before continuing.');
+    recoveryWarning=staged==='pending'?'An unfinished driver is still saved here. Copy this recovery code; this browser cannot remember it yet.':'This browser could not remember your driver. Copy your recovery code to keep it.';
+    const firstWarning=warnedRecoveryCode!==code;warnedRecoveryCode=code;
+    recoveryProblem(recoveryWarning);
+    if(firstWarning&&!identityDialog.open)openIdentity();
     return false;
   }
+  recoveryWarning='';warnedRecoveryCode=undefined;
   stagedCode=code;pendingRememberCode=code;
   if(walletBoundCode===code)return rememberCode(code);
   return true;
@@ -215,13 +221,16 @@ function rememberWhenBound(code:string|undefined){
 function rememberCode(code:string){
   const result=confirmDriverRecovery(driverStorage,code);
   if(result.saved){rememberedCode=code;if(result.cleared&&stagedCode===code)stagedCode=undefined;pendingRememberCode=undefined;}
-  if(!result.saved||!result.cleared){recoveryProblem('Browser storage could not finish saving your driver. Copy your recovery code.');return false;}
+  if(!result.saved||!result.cleared){recoveryWarning='Browser storage could not finish saving your driver. Copy your recovery code.';recoveryProblem(recoveryWarning);return false;}
+  recoveryWarning='';warnedRecoveryCode=undefined;
   return true;
 }
 function refreshIdentity(){
   $('identity-current').textContent=chat.playerId&&chat.status==='online'?`${chat.name} · #${chat.playerId.slice(0,8)}`:chat.status==='connecting'?'Connecting to chat…':'Chat is offline';
   $('identity-code-group').hidden=!currentCode||!showRecoveryCode;
   identityCode.value=showRecoveryCode?currentCode||'':'';
+  $('identity-storage-warning').textContent=recoveryWarning;
+  $('identity-storage-warning').hidden=!recoveryWarning;
   rememberInput.checked=rememberRequested;
   $<HTMLButtonElement>('identity-pending').hidden=!stagedCode||stagedCode===rememberedCode;
   $<HTMLButtonElement>('identity-previous').hidden=!rememberedCode||rememberedCode===currentCode;
@@ -235,7 +244,7 @@ const chat=new GlobalChat({
   onReady(id,name,messages){
     const desired=normalizeName(nameInput.value);
     const needsRename=nameEdited&&desired!==name;
-    currentCode=chat.code;const stored=rememberWhenBound(currentCode);if(stored)setWalletIdentity(currentCode);authError=false;
+    currentCode=chat.code;const stored=connectDriverWallet(currentCode,rememberWhenBound,setWalletIdentity);authError=false;
     if(!needsRename){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;}
     chatPanel.setIdentity(id,name);chatPanel.setMessages(messages);session.setName(name);
     if(pendingRecovery){pendingRecovery=false;if(stored){identityEntry.value='';identityFeedback(session.status==='disconnected'?`Recovered ${name}. Join a room to finish saving.`:'Checking your game wallet…');}}
@@ -256,7 +265,7 @@ const chat=new GlobalChat({
     if(newer)requestName(normalizeName(nameInput.value));
   },
   onMessage(message){chatPanel.append(message);if(!chatPanel.element.open&&message.playerId!==chat.playerId){unread++;updateChatBadge();}},
-  onRecovery(code){savingDriver=false;currentCode=code;if(pendingShowCode){showRecoveryCode=true;pendingShowCode=false;}const stored=rememberWhenBound(code);if(stored)setWalletIdentity(code);refreshIdentity();if(stored)identityFeedback(session.status==='disconnected'?'Join a room to finish saving your driver.':'Connecting your driver to the game wallet…');},
+  onRecovery(code){savingDriver=false;currentCode=code;if(pendingShowCode){showRecoveryCode=true;pendingShowCode=false;}const stored=connectDriverWallet(code,rememberWhenBound,setWalletIdentity);refreshIdentity();if(stored)identityFeedback(session.status==='disconnected'?'Join a room to finish saving your driver.':'Connecting your driver to the game wallet…');},
   onError(message,code,requestId){
     if(code==='save_failed')savingDriver=false;
     if(code==='rename_failed'&&requestId!==activeRenameId)return;
@@ -297,7 +306,7 @@ function requestName(name:string){
 nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
 nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
 $('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
-function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();if(!recovery.available)identityFeedback('Browser storage is unavailable. Copy your recovery code to keep your driver.');controls.clear();controls.enabled=false;}
+function openIdentity(){setDrawer(null);ensureChat();if(recoveryWarning&&currentCode)showRecoveryCode=true;refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();if(recoveryWarning)identityFeedback(recoveryWarning);else if(!recovery.available)identityFeedback('Browser storage is unavailable. Copy your recovery code to keep your driver.');controls.clear();controls.enabled=false;}
 $('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;
 $('identity-close').onclick=()=>identityDialog.close();
 identityDialog.addEventListener('close',()=>{showRecoveryCode=false;pendingShowCode=false;refreshIdentity();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
@@ -335,7 +344,7 @@ rememberInput.addEventListener('change',()=>{
     else if(chat.status==='online'){savingDriver=chat.save();identityFeedback(savingDriver?'Saving your driver…':'Could not save this driver. Try again.');}
     else identityFeedback('Connect to chat to save this driver.');
   } else {
-    rememberedCode=undefined;stagedCode=undefined;pendingRememberCode=undefined;
+    rememberedCode=undefined;stagedCode=undefined;pendingRememberCode=undefined;recoveryWarning='';warnedRecoveryCode=undefined;
     if(currentCode)setWalletIdentity(currentCode);
     if(updated)identityFeedback('This browser will no longer remember this driver. Copy your recovery code to keep it.');
     else recoveryProblem('Browser storage could not be cleared. Copy your recovery code; older saved codes may remain on this browser.');
@@ -354,7 +363,7 @@ $('identity-previous').onclick=()=>{if(rememberedCode)recoverDriver(rememberedCo
 $('identity-guest').onclick=()=>{
   const wasSaved=!!currentCode;
   if(!forgetDriverRecovery(driverStorage)&&(rememberedCode||stagedCode)){recoveryProblem('Could not clear browser storage. Copy your recovery code before starting a new driver.');refreshIdentity();return;}
-  clearTimeout(renameTimer);activeRenameId=0;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=false;pendingSave=false;savingDriver=false;pendingName=false;renameInFlight=false;authError=false;nameEdited=false;currentCode=undefined;rememberedCode=undefined;stagedCode=undefined;pendingRememberCode=undefined;walletBoundCode=undefined;setWalletIdentity(undefined);
+  clearTimeout(renameTimer);activeRenameId=0;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=false;pendingSave=false;savingDriver=false;pendingName=false;renameInFlight=false;authError=false;nameEdited=false;currentCode=undefined;rememberedCode=undefined;stagedCode=undefined;pendingRememberCode=undefined;walletBoundCode=undefined;recoveryWarning='';warnedRecoveryCode=undefined;setWalletIdentity(undefined);
   requestedName=nameInput.value.trim()||'Driver';identityFeedback('Starting a new driver…');chat.connect(requestedName,undefined,true);
   if(wasSaved&&started&&session.status!=='disconnected'){session.disconnect();begin(false);}
 };
