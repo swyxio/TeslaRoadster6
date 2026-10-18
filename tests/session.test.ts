@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 
 class Socket {
@@ -67,6 +67,12 @@ test('joining the current room keeps its seat and may select a car',()=>{
   socket.closed();
 });
 
+test('offline navigation requests fail without starting a local session',()=>{
+  const session=new Session(), requestId=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId,ok:false});
+  assert.equal(session.world.players.length,0);
+});
+
 test('solo is explicit, advances locally and ignores an old room socket',()=>{
   const session=new Session();session.join('bay','Alex');const old=Socket.last;
   session.solo('model-3','Scout');
@@ -78,4 +84,42 @@ test('solo is explicit, advances locally and ignores an old room socket',()=>{
   assert.equal(session.status,'solo');assert.equal(session.id,'local');
   const id=session.setDestination(-180,60);
   assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
+});
+
+test('a displayed Tesla can be requested again after taking a same-kind street car',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld(),player=addPlayer(world,'p','Alex');
+  const borrowed=world.entities.find(entity=>entity.id===player.entityId)!;
+  borrowed.owner=null;world.entities=[borrowed];world.pickups=[];
+  socket.message({type:'state',world,inputAck:0});
+  session.join('bay','Alex','roadster');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'roadster'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'state',world,inputAck:0});assert.equal(session.vehicleResult,null);
+  const accepted=structuredClone(world);assert.equal(chooseVehicle(accepted,'p','roadster'),true);
+  socket.message({type:'state',world:accepted,inputAck:0,sync:1});
+  assert.deepEqual(session.vehicleResult,{kind:'roadster',ok:true});
+  assert.notEqual(accepted.players[0].entityId,borrowed.id);
+  socket.closed();
+});
+
+test('a rejected vehicle change stays unconfirmed until its ordered state and reports failure',()=>{
+  for(const condition of ['moving','ferry'] as const){
+    const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+    socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+    const world=createWorld(),player=addPlayer(world,'p','Alex'),car=world.entities.find(entity=>entity.id===player.entityId)!;
+    world.entities=[car];world.pickups=[];
+    if(condition==='moving')car.speed=4;else car.supportId='ferry';
+    socket.message({type:'state',world,inputAck:0});
+    session.selectVehicle('model-3');
+    assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3'});
+    assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+    assert.equal(chooseVehicle(world,'p','model-3'),false);
+    socket.message({type:'state',world,inputAck:0,sync:0});assert.equal(session.vehicleResult,null);
+    socket.message({type:'state',world,inputAck:0,sync:1});
+    assert.deepEqual(session.vehicleResult,{kind:'model-3',ok:false},condition);
+    assert.equal(session.world.players[0].entityId,car.id);
+    socket.closed();
+  }
 });

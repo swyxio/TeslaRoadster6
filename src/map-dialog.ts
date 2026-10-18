@@ -1,5 +1,5 @@
 import './map-dialog.css';
-import { BRIDGES, DISTRICTS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, type MapPoint } from '../shared/map';
+import { BRIDGES, DISTRICTS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 
@@ -89,6 +89,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       if (!visible(place.arrival)) continue;
       const p = screen(place.arrival); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#fff1c4'; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#173a40'; c.font = '600 10px system-ui'; c.fillText(place.name, p.x + 6, p.y + 5);
+    }
+    if (scale > .13) for (const place of TESLAND_MONUMENTS) {
+      if (!visible(place)) continue;
+      const p = screen(place); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
+      c.fillStyle = '#ffd080'; c.beginPath(); c.arc(p.x, p.y, 4, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#173a40'; c.font = '600 10px system-ui'; c.fillText(place.name, p.x + 6, p.y + 5);
     }
     dirty = false;

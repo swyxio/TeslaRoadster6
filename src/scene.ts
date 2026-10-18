@@ -5,7 +5,7 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, domeSurface, supportNormal, terrainHeight } from '../shared/map';
+import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS, stationStalls } from '../shared/stations';
@@ -25,6 +25,7 @@ import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
 import { buildBillboards } from './billboards';
+import { buildTeslandMonuments } from './tesland-monuments';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -83,7 +84,9 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+    // Keep high-density desktop displays from multiplying the game's fill cost;
+    // HUD text remains native-resolution DOM and touch keeps its existing cap.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer: fine)').matches?1:1.5));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -104,6 +107,7 @@ export class GameScene {
     buildBay(scene);
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
+    buildTeslandMonuments(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
     addIslandJumps(scene);
@@ -207,6 +211,7 @@ export class GameScene {
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.id==='colossus'?122:25,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }
@@ -217,7 +222,8 @@ export class GameScene {
   }
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
-  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false) {
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false) {
+    if(snapLocal)this.cameraReady=false;
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
     // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
@@ -288,7 +294,7 @@ export class GameScene {
       const target=new T.Vector3(e.x+e.vx*ahead,e.y+e.vy*ahead,e.z+e.vz*ahead);
       // When a preview is suspended, return directly to authority rather than
       // interpolating the car through a newly reported obstacle or shoreline.
-      const returningToAuthority=this.predictedEntity===e.id&&!localPredicted;
+      const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
       const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
       if(e.kind!=='person'){

@@ -19,10 +19,12 @@ export class Session {
   private inputSeq = 0;
   private syncToken = 0;
   private waitingSync = 0;
+  private pendingVehicle?: {kind:VehicleId;previousId:string|undefined;token:number};
   private prediction = new LocalPrediction();
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
+  vehicleResult: {kind:VehicleId;ok:boolean}|null = null;
   error = '';
   room = '';
   roomFull = false;
@@ -36,7 +38,7 @@ export class Session {
       this.setName(name);
       const player = this.world.players.find(player => player.id === this.id);
       const vehicle = this.world.entities.find(entity => entity.id === player?.entityId);
-      if (kind && vehicle?.kind !== kind) this.selectVehicle(kind);
+      if (kind && (vehicle?.kind !== kind || vehicle.owner !== this.id)) this.selectVehicle(kind);
       return;
     }
     kind ??= 'roadster';
@@ -60,6 +62,13 @@ export class Session {
           const passed=Number.isSafeInteger(message.sync)&&this.waitingSync>0&&message.sync>=this.waitingSync;
           if(passed)this.waitingSync=0;
           this.prediction.snapshot(this.world,this.id,message.inputAck,this.lastState,passed);
+          if(this.pendingVehicle&&Number.isSafeInteger(message.sync)&&message.sync>=this.pendingVehicle.token){
+            const {kind,previousId}=this.pendingVehicle;
+            const player=this.world.players.find(player=>player.id===this.id);
+            const vehicle=this.world.entities.find(entity=>entity.id===player?.entityId);
+            this.vehicleResult={kind,ok:vehicle?.kind===kind&&vehicle.owner===this.id&&vehicle.id!==previousId};
+            this.pendingVehicle=undefined;
+          }
         }
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
@@ -84,7 +93,15 @@ export class Session {
     }
   }
   renderWorld():World {return this.status==='online'?this.prediction.renderWorld(performance.now())??this.world:this.world;}
-  selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.actionWithBarrier({type:'selectVehicle',kind});}
+  takePresentationSnap():boolean {return this.prediction.takeSnap();}
+  selectVehicle(kind:VehicleId){
+    this.vehicleResult=null;
+    if(this.status==='solo'){this.vehicleResult={kind,ok:chooseVehicle(this.world,this.id,kind)};return;}
+    const player=this.world.players.find(player=>player.id===this.id);
+    if(this.status==='online'&&this.actionWithBarrier({type:'selectVehicle',kind})){
+      this.pendingVehicle={kind,previousId:player?.entityId,token:this.syncToken};
+    }else this.vehicleResult={kind,ok:false};
+  }
   parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')return parkingAction(this.world,this.id,action);this.actionWithBarrier({type:'parking',action});}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.actionWithBarrier({type:'race',action,courseId});}
   enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status==='solo')return enterMinigame(this.world,this.id,game);if(this.status!=='online'||!this.actionWithBarrier({type:'minigame',game}))return false;}
@@ -123,5 +140,5 @@ export class Session {
     const token=++this.syncToken;this.waitingSync=token;return this.send({type:'sync',token});
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.sendTime=0;this.status='disconnected'; }
 }

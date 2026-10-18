@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Island, shared Bay and device playtests · 2026-10-18 Pacific
 
+- On the combined local protocol v25 preview at commit `89a107d`, the user reported that holding Drive and steering worked on an iPhone 15 Pro Max in both portrait and landscape. This preceded the Tesland rebrand and protocol v26 integration.
 - A local two-client fixture staged a car at the island oval's start. Normal driving inputs completed all eight race gates in 115.37 simulation seconds, with a 2.06 m peak bank elevation; this did not test the ferry journey or production.
 - On the earlier protocol v22 local preview, Chrome auto-joined the Bay, drove, switched to solo, and recovered from a simulated offline connection. Calibrated emulated touch drove and jumped in portrait and landscape. The user reported that Drive and steering worked in both orientations on an iPhone 15 Pro Max against that preview; this predates the Dome and prediction integration.
 - On the separate v21 shared-room checkout, two local sockets negotiated `permessage-deflate` and median raw snapshot frames were approximately 42.7 KB uncompressed versus 2.8 KB compressed in a four-second sample. This excludes TCP/IP, WAN and production behavior and is not a capacity measurement.
@@ -539,3 +540,12 @@ After integrating the relocated China Basin Dome, `pnpm test` passed 338 tests a
 The local protocol v23 two-client room integration also passed, including destination-route replication, direct race entry and the relocated Dome's five-goal match and awards. It is not a load test.
 
 After integrating automatic shared-room entry, `pnpm test` passed 341 tests and `pnpm build` passed; an additional focused session test passed for explicit solo play and stale-socket isolation. Local Wrangler room and chat integrations passed on protocol v24, and a separate two-seat capacity test checked full-room handling and a freed slot. In Chrome desktop, the game automatically joined the Bay room, the menu switched explicitly to solo, and map-selected self-driving continued with phone chat open (the displayed speed and destination distance changed). These checks do not establish physical-device behavior or playable room capacity.
+
+
+## 2026-10-18 · Tesland rebrand and monuments
+
+After integrating the navigation and social changes from main, `pnpm test` passed 343 tests and `pnpm build` passed, including client and Worker typechecks. The existing Vite large-chunk warning remains. Shared-map tests cover the two land-supported monument bases, their collision footprints and clearance from roads and other buildings. The sculptures are decorative; only the bases are solid and landable.
+
+Local Wrangler advertised protocol v25 and the chat integration passed. One room integration run failed at the existing moving-wall refill assertion while other checks were running; an isolated rerun passed the full two-client integration. Chrome desktop showed the colossus across the Golden Gate, the Tesland menu and automatic Bay-room connection. The menu was also inspected at emulated 390×844 portrait and 844×390 landscape sizes, and the story page was opened. Emulated pointer targeting did not reliably activate menu controls in this session; touch behavior and physical devices were not verified. These checks are not a multiplayer load test.
+
+The new custom domain `tesland.swyx.io` was connected to the existing Worker and served its pre-release health endpoint over HTTPS. Browser-local settings and identity shortcuts do not automatically transfer between origins; a saved identity can be recovered with its recovery code.

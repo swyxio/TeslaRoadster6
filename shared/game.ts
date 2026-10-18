@@ -26,7 +26,7 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt } from './sky-currents';
 
-export const PROTOCOL_VERSION=25;
+export const PROTOCOL_VERSION=26;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {

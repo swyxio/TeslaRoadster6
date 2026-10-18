@@ -1,6 +1,6 @@
 # Bay route names and geography
 
-Poly AV's roads and attractions are a compressed arcade interpretation. These references establish real place and route identities, not the geometry, distances, access ramps, building scale, or driving rules in the game. The traced highway provenance and fictional joins are documented in [MAP.md](MAP.md).
+Tesland's roads and attractions are a compressed arcade interpretation. These references establish real place and route identities, not the geometry, distances, access ramps, building scale, or driving rules in the game. The traced highway provenance and fictional joins are documented in [MAP.md](MAP.md).
 
 | Real route | Primary-source reference | In-game interpretation |
 | --- | --- | --- |
