@@ -1,5 +1,5 @@
 import './map-dialog.css';
-import { BRIDGES, DISTRICTS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
+import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
@@ -89,6 +89,10 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const p = screen(place); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#ffd080'; c.beginPath(); c.arc(p.x, p.y, 4, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#173a40'; c.font = '600 10px system-ui'; c.fillText(place.name, p.x + 6, p.y + 5);
+    }
+    if(visible(FREMONT_SPACEPORT.entrance)){
+      const p=screen(FREMONT_SPACEPORT.entrance);c.fillStyle='#ffad70';c.beginPath();c.arc(p.x,p.y,5,0,Math.PI*2);c.fill();
+      if(scale>.13){c.fillStyle='#173a40';c.font='700 10px system-ui';c.fillText('FREMONT MARS SPACEPORT',p.x+7,p.y+5);}
     }
     dirty = false;
   }

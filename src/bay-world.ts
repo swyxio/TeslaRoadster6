@@ -210,7 +210,7 @@ export function buildBay(scene:T.Scene) {
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
-    if(b.style==='landmark'||b.style==='monument')return;
+    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
     if(!landmark&&!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});

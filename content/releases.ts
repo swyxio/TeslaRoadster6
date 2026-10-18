@@ -1,6 +1,21 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.6-alpha',
+    label: '0.0.6 Alpha',
+    date: '2026-10-18',
+    title: 'The road to Mars',
+    intro: 'A new Fremont spaceport gives every room a wildly ambitious shared destination.',
+    sections: [
+      { title: 'Build the mission together', items: [
+        'Visit the fictional Tesla × SpaceX gigafactory and Starship/Super Heavy launch complex in Fremont, unlocked with the South Bay at level 2.',
+        'Contribute earned session cash to your room’s permanent $1 billion Mars fund. Other drivers in the same room can contribute too; every dollar counts once.',
+        'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
+        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.5-alpha',
     label: '0.0.5 Alpha',
     date: '2026-10-18',

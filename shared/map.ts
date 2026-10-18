@@ -62,6 +62,14 @@ export const TESLAND_MONUMENTS=[
  {id:'colossus',name:'Elon Colossus',x:-205,z:-445,w:22,d:22,h:12},
  {id:'first-delivery',name:'First Delivery Monument',x:-185,z:-510,w:14,d:14,h:6},
 ] as const;
+// A fictional 2050 expansion near the compressed Fremont/I-880 corridor.
+// These shared envelopes are solid; the rocket above the pad is decorative.
+export const FREMONT_SPACEPORT={
+ factory:{x:1825,z:6190,w:130,d:80,h:24},
+ pad:{x:1960,z:6190,w:34,d:34,h:4},
+ tower:{x:1990,z:6190,w:12,d:12,h:125},
+ entrance:{x:1929,z:6223},
+} as const;
 export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   let inside=false;
   for(let i=0,j=points.length-1;i<points.length;j=i++){
@@ -260,7 +268,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'|'monument'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'|'monument'|'spaceport'};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -328,6 +336,7 @@ for(let i=BUILDINGS.length-1;i>=0;i--){
 }
 BUILDINGS.push(...landmarkBuildings);
 BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
+BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

@@ -4,8 +4,8 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
-// Version 25 includes the shared Tesland monument collision bases.
-assert.equal(PROTOCOL_VERSION, 25);
+// Version 26 adds the shared Fremont spaceport and room-wide Mars fund.
+assert.equal(PROTOCOL_VERSION, 26);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -20,7 +20,7 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
@@ -28,6 +28,7 @@ function connect() {
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
     if (data.type === 'destinationResult') (state.destinationResults??=[]).push(data);
+    if (data.type === 'marsResult') (state.marsResults??=[]).push(data);
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
   return { socket, state };
@@ -52,7 +53,14 @@ try {
     assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
     assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
     assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
+    assert.deepEqual(state.world!.mars,{fund:0,launchAt:null});
   }
+  one.socket.send(JSON.stringify({type:'mars',action:'contribute',amount:1,requestId:90}));
+  await eventually(()=>one.state.marsResults?.some(r=>r.requestId===90&&!r.ok)??false,'unfunded contribution is rejected');
+  await delay(500);one.socket.send(JSON.stringify({type:'mars',action:'board',requestId:91}));
+  await eventually(()=>one.state.marsResults?.some(r=>r.requestId===91&&!r.ok)??false,'early remote boarding is rejected');
+  assert.equal(two.state.marsResults?.length??0,0,'Mars action results are private');
+  await delay(500);
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
   await delay(450);
   assert.equal(two.state.world!.parking.rounds.length,0,'remote parking intent cannot join from outside a lot');

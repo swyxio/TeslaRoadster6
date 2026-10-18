@@ -25,6 +25,7 @@ import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
 import { buildBillboards } from './billboards';
 import { buildTeslandMonuments } from './tesland-monuments';
+import { buildFremontSpaceport } from './fremont-spaceport';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -50,6 +51,7 @@ export class GameScene {
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
+  private spaceport?:ReturnType<typeof buildFremontSpaceport>;
   private objective=new T.Group();
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
@@ -104,6 +106,7 @@ export class GameScene {
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
     buildTeslandMonuments(scene);
+    this.spaceport=buildFremontSpaceport(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
     // The hull travels with the authoritative deck; its top is the physical y=0 support.
@@ -218,6 +221,7 @@ export class GameScene {
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
   render(world: World, playerId: string, dt: number, menu: boolean) {
+    this.spaceport?.update(world.time,world.mars.launchAt);
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
     // Continue the last observed velocity between fixed simulation snapshots.

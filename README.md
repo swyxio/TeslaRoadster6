@@ -10,6 +10,8 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Deliveries and total earnings unlock more of the map for your session, with longer runs as it opens. Spending money or paying a ticket does not undo an unlock. The HUD shows the next milestone. Flying near police can lead to a citation; some rocket-equipped orders lead to rooftops. See [delivery design](docs/DELIVERY.md).
 
+**Mars mission:** Open 🚀 Mars mission and contribute session cash toward your room’s shared $1 billion fund. It persists when everyone leaves or the Worker restarts; named rooms have separate funds. Once funded, reach level 2, stop in the gold ring at the fictional Fremont spaceport and board for the To Mars achievement and victory. You can keep exploring afterwards. Current payouts make this a long-term target; higher-paying levels are planned, not yet implemented. Cash and personal achievements remain session-only.
+
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
 **Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose ⚽ Rocket Dome in Actions. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out or use Leave Dome to return to the Bay or island where you entered.
@@ -53,6 +55,7 @@ pnpm run ci # tests, TypeScript checks and production build
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
+pnpm exec tsx tests/mars-restart.integration.ts # isolated Worker with endgame test fixture
 pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
 ```
 
@@ -86,7 +89,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 
 This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
 
-Rooms are ephemeral and public-by-code. Delivery money is fictional and session-only; there is no persistent game progression, shooting, or death/respawn yet. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
+Rooms are public-by-code. Delivery money is fictional and session-only; shooting and death/respawn are not implemented. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room simulation resets on deployment, runtime restart, or last disconnect; only each room’s shared Mars fund persists. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 

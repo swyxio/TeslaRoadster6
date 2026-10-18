@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Fremont Mars mission · pre-integration protocol v26 · 2026-10-18 Pacific
+
+- On the branch based on `9ec81f0`, `pnpm test` passed 347 tests and `pnpm build` passed, with Vite's existing large-chunk warning. The local standard Wrangler two-client room integration passed, including rejected unfunded/remote Mars actions. An isolated Wrangler restart integration used a test-only endgame cash and position fixture to verify simultaneous contributions, exact debits, both players boarding, room isolation, and fund survival after the last disconnect and after a real local Worker restart. It did not measure load.
+- Local Chrome showed the Fremont factory, pad and lower rocket/tower from a temporary relocated test spawn. Desktop contribution and victory, and emulated 390×844 portrait and 844×390 landscape mission controls were inspected; landscape boarding is reachable by scrolling. This used a test-only funded fixture, not real progression. No physical mobile device was tested. These observations precede integration with the newer charging-location changes and do not verify the combined build.
+
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 
 - After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.

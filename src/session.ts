@@ -22,6 +22,7 @@ export class Session {
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
+  marsResult: {requestId:number;action:'contribute'|'board';ok:boolean;amount:number}|null = null;
 
   join(room: string, name: string, kind: VehicleId = 'roadster') {
     if (this.status === 'online' && this.room === room) {
@@ -32,7 +33,7 @@ export class Session {
     this.disconnect();
     this.room = room;
     this.status = 'connecting'; this.error = ''; this.roomFull = false; this.id = ''; this.capacity = 0;
-    this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.destinationResult = null; this.world = createWorld();
+    this.sendTime = 0; this.upgradeResult = null; this.otaResult = null; this.destinationResult = null; this.marsResult = null; this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => {
@@ -52,6 +53,7 @@ export class Session {
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
+        if (message.type === 'marsResult') this.marsResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
     socket.onclose = event => {
@@ -82,6 +84,12 @@ export class Session {
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
     if(this.status!=='online'||!this.send({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
+    return requestId;
+  }
+  mars(action:'contribute'|'board',amount=0){
+    const requestId=++this.nextUpgradeRequest;this.marsResult=null;
+    const message=action==='board'?{type:'mars',action,requestId}:{type:'mars',action,amount,requestId};
+    if(this.status!=='online'||!this.send(message))this.marsResult={requestId,action,ok:false,amount:0};
     return requestId;
   }
   setOta(enabled:boolean){
