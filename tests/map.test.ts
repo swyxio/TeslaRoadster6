@@ -118,6 +118,7 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
   assert.equal(contact(area,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id}: stadium plaza`);
   assert.equal(contact(pad,approach),null,`${station.id}: pickup clears queue`);
   assert.equal(contact(area,ferry),null,`${station.id}: ferry`);
+  for(const other of PARKING_LOTS)if(other.id!==lot.id)assert.equal(contact(area,{x:other.area.x,z:other.area.z,w:other.area.width,d:other.area.length,yaw:other.area.yaw}),null,`${station.id}: overlaps ${other.id}`);
   for(const dx of [-20,-10,0,10,20])for(const dz of [-20,-10,0,10,20])
    assert.equal(terrainHeight(station.x+dx,station.z+dz),0,`${station.id}: land`);
   for(const r of ROADS){

@@ -19,7 +19,7 @@ export const PARKING_LOTS:readonly (ParkingLot & {name:string; pickup:{x:number;
     pickup:{x:116,z:-1172},
   },
   ...STATIONS.map(station=>({
-    id:`charger-${station.id}`,name:`${station.name} · Supercharger`,
+    id:`charger-${station.id}`,name:`${station.name} · ${station.sourceUrl?'Supercharger':'air station'}`,
     area:{x:station.x,z:station.z,yaw:0,width:CHARGER_LOT.width,length:CHARGER_LOT.length},
     approach:{x:station.x,z:station.z+.75,yaw:0,width:26,length:11.5},
     stalls:stationStalls(station),

@@ -9,6 +9,7 @@ import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, do
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS, stationStalls } from '../shared/stations';
+import { addStationArt } from './station-art';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -182,6 +183,7 @@ export class GameScene {
     const green=new T.Mesh(new T.SphereGeometry(.23,12,8),this.signalGreen);
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
+      addStationArt(scene,s);
       for(const stall of stationStalls(s)) {
         // Charger posts and mint stop bars identify the fictional air-refill bays.
         box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);

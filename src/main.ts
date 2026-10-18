@@ -692,8 +692,10 @@ scene.start(dt=>{
   if(skyId&&skyId!==lastSkyCurrent&&!menu)notice(skyCurrent!.kind==='thermal'?'THERMAL · Lift + air refilling':'SKY LANE · Speed + air refilling');
   lastSkyCurrent=skyId;
   const wallCharge=chargingDomeWall(e,rocket);
-  $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name} · ${refilling.venue}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:distance<24?`ϟ ${nearest.name} · ${nearest.venue}`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').title=`${nearest.venue} · ${nearest.address??'Fictional game location'}`;
   $('station-status').classList.toggle('refilling',!!refilling||!!skyCurrent||wallCharge);
+  $('station-status').classList.toggle('air-warning',!e.inDome&&!skyCurrent&&!refilling&&rocket&&e.air<12);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);
   $('station-status').classList.toggle('dome-active',e.inDome);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
