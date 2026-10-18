@@ -16,6 +16,7 @@ import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
 import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
+import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
@@ -104,6 +105,7 @@ export class GameScene {
     buildSouthLandmarks(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
+    addIslandJumps(scene);
     // The hull travels with the authoritative deck; its top is the physical y=0 support.
     box(this.ferry,0,-.65,0,FERRY_DECK.width,1.3,FERRY_DECK.length,0x485e63);
     box(this.ferry,0,-1.5,0,FERRY_DECK.width-1,1,FERRY_DECK.length-2,0x254b54);

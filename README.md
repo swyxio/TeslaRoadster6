@@ -30,7 +30,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md) and [player progression simulations](docs/ECONOMY_SIMULATIONS.md) (not yet implemented).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff and a short circuit. Rocket pickups on the island and at parking playgrounds equip any vehicle with the Roadster's fictional air moves for its session lifetime. The two playgrounds and four fictional Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a banked speed oval, a separate banked lane, an inverted cliff, two launch ramps and a short circuit. Rocket pickups on the island and at parking playgrounds equip any vehicle with the Roadster's fictional air moves for its session lifetime. The two playgrounds and four fictional Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -110,6 +110,7 @@ shared/stations.ts  Curated real station provenance + game placements
 shared/ferry.ts     Authoritative ferry and passenger attachment
 shared/island-stunts.ts  Shared bank and cliff surfaces
 shared/oval-bank.ts  Shared speed-oval geometry and surface contacts
+shared/island-jumps.ts  Shared launch ramps and wall contacts
 shared/dome*.ts     Rocket Dome geometry and surface collisions
 shared/soccer.ts    Authoritative ball, goals and match state
 shared/parking*.ts  Parking playground definitions and rounds

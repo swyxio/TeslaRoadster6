@@ -3,15 +3,18 @@ import assert from 'node:assert/strict';
 import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_RIGHT, type World } from '../shared/game';
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
+import { ISLAND_JUMPS } from '../shared/island-jumps';
+import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 21);
+assert.equal(PROTOCOL_VERSION, 22);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
 const health = await fetch(base + '/api/health');
 assert.equal(health.status, 200);
 assert.equal((await health.json() as {version:number}).version, PROTOCOL_VERSION);
+for(const jump of ISLAND_JUMPS)assert.equal(supportHeight('island-jump',(jump.start+jump.end)/2,jump.z),jump.height/2);
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
   const deadline = Date.now() + timeout;

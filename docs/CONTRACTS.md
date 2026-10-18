@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade` and `subscribeOta`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v21
+## Wire protocol v22
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:21,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:22,capacity:number}`.
 
 Client messages:
 
@@ -63,7 +63,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:21, capacity:number}
+{type:"welcome", id:string, version:22, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -71,7 +71,7 @@ Server messages:
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
-Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v21 versions curved roof and loop collision changes and supply reward kinds, preventing older clients from connecting with incompatible world behavior. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
+Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v22 versions the island jump surfaces and collisions, preventing older clients from connecting with incompatible world behavior. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -141,6 +141,8 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 `shared/island-stunts.ts` defines a bank with tapered ground transitions and a separate parametric inverted cliff. Meshes and physics use the same vertices. Cliff attachment retains a local angle; Rocket-capable cars can adhere beyond vertical and ordinary cars detach or bounce. Airborne crossings use swept contacts and detachments preserve world velocity. Island and ferry support clear police pursuits and prevent detection; the current order timer pauses there while active-play time retains its normal rules. Previous tickets remain charged.
 
 `shared/oval-bank.ts` defines the speed oval's triangulated height and normals, shoulders and swept landing; banked support uses `supportId: 'island-oval'`, and the renderer follows those triangles. The race start/grid, short-course overlap and dock junction are flat and blend into the bank. The oval still uses the general arcade steering and traction model, not a realistic simulation of banking or a guarantee of high-speed grip.
+
+`shared/island-jumps.ts` defines two eastbound ramp tops, their normals and swept landing contacts. Cars enter from the level end, follow the shared slope and leave the lip with its upward velocity. The rendered wedges use the same coordinates; their bounded sides and high ends block grounded and airborne cars, including displacement from other cars.
 
 `shared/parking-lots.ts` defines two playgrounds and four Supercharger lots and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 
