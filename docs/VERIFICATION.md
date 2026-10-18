@@ -7,6 +7,16 @@
 - All 893 tests and `pnpm build` passed before integration with subsequent main-branch releases; the build retained its existing large-chunk warning.
 - After integrating main through PR #93, all 899 tests and the 0.0.28 build passed, with the same large-chunk warning.
 
+## Recovered room-behavior fixture · protocol v43 · 2026-10-18 Pacific
+
+- On main `1ca0eeb`, the restored local-only Wrangler fixture passed a three-client staged ferry crossing: secured throttle and jump, a mid-crossing disconnect and manifest cleanup, a new guest session and activity cleanup, and island arrival. A separate staged collision in the same run gave two recipients identical vehicle state at the same room tick. The fixture sets player poses and shortens the dock countdown; it does not exercise natural boarding, production transport, load or playable capacity. The room advertised a test-only capacity of 8.
+- Both the integration script and its Worker fixture passed standalone strict TypeScript checks. Focused ferry and Dome tests passed 24 tests. No gameplay optimization, protocol change, browser or physical-device check was included.
+
+## Historical room performance follow-up · protocol v31 · 2026-10-18 Pacific
+
+- On the earlier PR #58 candidate based on `3307584`, 465 tests and the build passed, as did standalone script typechecks and the standard two-client local room integration. Its then-current staged fixture checked a ferry crossing and collision replication; natural boarding was not exercised in that fixture.
+- Deterministic baseline and experimental scenarios retained identical state hashes and recipient JSON, with lower simulation process CPU in two instrumented Node pairs. Local 32- and 64-client runs fell behind real time; the experimental 64-client sample was slower than its baseline. The measurement method, units and limitations are preserved in [the performance audit](PERFORMANCE_AUDIT.md). The experimental proximity changes were not carried forward, and the observations are not production or capacity results.
+
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
 - After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.
