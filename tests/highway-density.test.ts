@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {addPlayer,createWorld,makeEntity,step} from '../shared/game';
+import {addPlayer,createWorld,interact,makeEntity,step} from '../shared/game';
 import {HIGHWAY_ROUTE_IDS,ROUTES,TRAFFIC_INCIDENT,updateHighwayTraffic} from '../shared/traffic';
 import {VEHICLES} from '../shared/vehicles';
 
@@ -71,6 +71,36 @@ test('only an isolated, hidden, moving highway car is recycled',()=>{
   assert.equal(added.length,1,'replacement enters during the same reconciliation');
   const distance=Math.hypot(added[0].x-viewer.x,added[0].z-viewer.z);
   assert.ok(distance>1600&&distance<3000,'replacement stays hidden but is closer to the driver');
+});
+
+test('recycling followed by a takeover replenishes with a unique ID',()=>{
+  const world=createWorld(),viewer=placeOnHighway(world,'observer',3000);
+  world.entities=world.entities.filter(entity=>!entity.id.startsWith('ambient-'));
+  const add=(id:string,x:number,z:number)=>{
+    const car=makeEntity(id,'model-3',x,z);
+    Object.assign(car,{npc:true,autopilot:true,routeId:HIGHWAY_ROUTE_IDS[0],speed:20});
+    world.entities.push(car);return car;
+  };
+  const far=add('ambient-far',1000,9000);
+  const visible=Array.from({length:11},(_,i)=>add(`ambient-visible-${i}`,viewer.x+100+i*100,viewer.z));
+  world.time=240;updateHighwayTraffic(world,5,makeEntity);
+  assert.ok(!world.entities.includes(far));
+  const replacement=world.entities.find(entity=>entity.id==='ambient-49');
+  assert.ok(replacement,'recycling assigned the next reconciliation tick');
+
+  const taker=addPlayer(world,'take','Take');taker.delivery.level=3;taker.delivery.cash=1_000_000;
+  const target=visible[0],person=makeEntity('person-take','person',target.x+3,target.z,'take');
+  world.entities=world.entities.filter(entity=>entity.id!==taker.entityId);
+  world.entities.push(person);taker.entityId=person.id;interact(world,'take');
+  assert.equal(taker.entityId,target.id);assert.equal(target.driver,'take');
+
+  world.time=245;updateHighwayTraffic(world,5,makeEntity);
+  const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
+  assert.equal(ambient.length,13);
+  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot).length,12);
+  assert.equal(new Set(ambient.map(entity=>entity.id)).size,ambient.length);
+  assert.ok(world.entities.includes(replacement));
+  assert.equal(target.driver,'take');
 });
 
 test('owned and ferry-supported vehicles are never reclaimed outside the normal view radius',()=>{

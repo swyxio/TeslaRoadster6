@@ -470,6 +470,8 @@ function oncomingEntrySpeed(car:Entity,world:World):number {
   return speed;
 }
 function ambientCandidate(world:World,id:string,clockwise:boolean,make:EntityFactory,nearOnly=false):Entity|null {
+  const baseId=id;let suffix=0;
+  while(world.entities.some(entity=>entity.id===id))id=`${baseId}-${++suffix}`;
   // Spread the same bounded ambient fleet among the main route and both
   // Peninsula alternatives. Preserve the incident's original main route.
   const alternative=id==='ambient-seed-0'?0:hash(`road-${id}`)%(HIGHWAY_ROUTE_IDS.length/2);
