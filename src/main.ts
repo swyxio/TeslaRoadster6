@@ -472,7 +472,7 @@ function begin(userGesture=true){
   pendingShop=null;pendingOta=null;pendingStyle=null;pendingLuxury=null;luxuryStatus='';lastLuxuryKey='';stylePreviewKey='';pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   achievementEvents.reset();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
-  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
+  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);if(!userGesture)audio.prepare();history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);

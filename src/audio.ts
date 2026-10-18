@@ -68,22 +68,31 @@ export class GameAudio {
     this.target(this.music.gain,this.active&&this.musicEnabled?this.settings.music/100:0);
     this.target(this.effects.gain,this.settings.effects/100);
   }
+  // Creating an audio context can block the first driving gesture while the
+  // browser opens its audio backend. Prepare only the silent context during
+  // room startup; the graph and resume still require a user gesture.
+  prepare():void {
+    if(this.ctx)return;
+    try { this.ctx=new AudioContext(); } catch {/* Retry on the next gesture. */}
+  }
   async unlock():Promise<boolean> {
     try {
-      if(!this.ctx)this.createGraph();
+      if(!this.ctx)this.prepare();
+      if(!this.ctx)return false;
+      if(!this.master)this.createGraph();
       if(this.ctx?.state!=='running')await this.ctx?.resume();
       return this.ctx?.state==='running';
     } catch { return false; }
   }
   async visibility(hidden:boolean):Promise<void> {
-    if(!this.ctx)return;
+    if(!this.ctx||!this.master)return;
     try {
       if(hidden&&this.ctx.state==='running')await this.ctx.suspend();
       else if(!hidden&&this.ctx.state==='suspended')await this.ctx.resume();
     } catch {/* Another user gesture can resume audio. */}
   }
   private createGraph():void {
-    const ctx=new AudioContext();this.ctx=ctx;
+    const ctx=this.ctx;if(!ctx)return;
     const compressor=ctx.createDynamicsCompressor();
     compressor.threshold.value=-15;compressor.knee.value=12;compressor.ratio.value=8;compressor.attack.value=.005;compressor.release.value=.25;
     this.master=ctx.createGain();this.music=ctx.createGain();this.effects=ctx.createGain();
