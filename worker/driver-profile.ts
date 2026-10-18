@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
-import { applyAchievementAwards, applyDeliveryAwards, initialAchievements, type AchievementId } from '../shared/achievements';
-import { evaluateAchievementEvidence, isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
+import { applyAchievementAwards, initialAchievements, type AchievementId } from '../shared/achievements';
+import { isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
+import { normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
+import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
 import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
 import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
@@ -30,6 +32,8 @@ export type DriverProgress = {
   deliveryClock?:number;
   /** Omitted only by profiles written before fleets existed. */
   cybercabs?:CybercabFleet;
+  /** Missing only on profiles saved before repeatable tiers were introduced. */
+  achievementTiers?:AchievementTierProgress;
 };
 export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:SettledDeliveryEarning[]} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order}
   | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
@@ -134,7 +138,8 @@ export class DriverProfile extends DurableObject<Env> {
         const current=await txn.get<DriverRecord>('driver');
         if(current?.fence!==previous?.fence || current?.roomId!==previous?.roomId)return null;
         const progress=current?.progress??initial;
-        const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet()};
+        const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet(),
+          achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked)};
         const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false,progress:normalized}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:normalized,incomeActivated:false};
         await txn.put('driver',record);
         return {revision:record.revision,sequence:record.sequence,progress:record.progress,marketPaint:record.marketPaint??null,resumed:!!current};
@@ -164,7 +169,8 @@ export class DriverProfile extends DurableObject<Env> {
       const record=await txn.get<DriverRecord>('driver');
       let result:DriverOutcome;
       if(!record || record.driverId!==intent.driverId || record.fence!==intent.fence || record.roomId!==intent.roomId || record.sealed)return {ok:false,reason:'superseded'};
-      record.progress={...record.progress,cybercabs:record.progress.cybercabs??emptyCybercabFleet()};
+      record.progress={...record.progress,cybercabs:record.progress.cybercabs??emptyCybercabFleet(),
+        achievementTiers:normalizeAchievementTiers(record.progress.achievementTiers,record.progress.completed,record.progress.unlocked)};
       if(!Number.isSafeInteger(intent.sequence)||intent.sequence<=record.sequence)return {ok:false,reason:'revision'};
       if(!Number.isSafeInteger(intent.revision)||intent.revision<0)return {ok:false,reason:'invalid'};
       if(record.revision<intent.revision)return {ok:false,reason:'not-ready'};
@@ -189,7 +195,8 @@ export class DriverProfile extends DurableObject<Env> {
             const order=next.order,clock=next.deliveryClock;
             const same=next.completed===progress.completed&&order.restaurant===progress.order.restaurant&&order.customer===progress.order.customer&&order.stage===progress.order.stage&&
               order.pickupEstimate===progress.order.pickupEstimate&&order.estimate===progress.order.estimate&&order.base===progress.order.base;
-            Object.assign(next,structuredClone(progress));next.cybercabs=structuredClone(record.progress.cybercabs);next.deliveryClock=clock;
+            Object.assign(next,structuredClone(progress));next.cybercabs=structuredClone(record.progress.cybercabs);
+            next.achievementTiers=structuredClone(record.progress.achievementTiers);next.deliveryClock=clock;
             if(intent.clock!==undefined&&same)next.order.elapsed=order.elapsed;
           }
         } else if(intent.action.kind==='cab-buy' || intent.action.kind==='cab-income' || intent.action.kind==='cab-paint'){
@@ -235,14 +242,14 @@ export class DriverProfile extends DurableObject<Env> {
              !Number.isSafeInteger(atMs)||atMs<0||![null,1,1.5,2,3].includes(multiplier))error='invalid';
           else {
             let projected:DeliveryState|undefined,projectedAwards:AchievementId[]=[];
-            let projectedUnlocked:AchievementId[]|undefined,matched=false;
+            let projectedUnlocked:AchievementId[]|undefined,projectedTiers:AchievementTierProgress|undefined,matched=false;
             try{
               const rate=multiplier??(cabEvents?earningsMultiplier(cabEvents,atMs).multiplier:null);
               if(rate===null)return {ok:false,reason:'not-ready'};
               const delivery=initialDelivery(stop);
               Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,earned:next.earned,completed:next.completed,
                 level:levelForCash(next.cash),order:{...next.order},tickets:next.tickets});
-              const previous=delivery.order,wasDropoff=previous.stage==='dropoff',customer=CUSTOMERS[previous.customer]?.id,rooftop=wasDropoff&&orderTarget(previous).rooftop;
+              const previous={...delivery.order},wasDropoff=previous.stage==='dropoff',customer=CUSTOMERS[previous.customer]?.id,rooftop=wasDropoff&&orderTarget(previous).rooftop;
               const rewardBefore=delivery.lastReward?.id??0;
               const parts=applyDeliveryStop(delivery,stop,component=>{
                 const amount=(BigInt(component.amount)*BigInt(rate*2)+1n)/2n;
@@ -254,7 +261,8 @@ export class DriverProfile extends DurableObject<Env> {
                 atMs,multiplier:component.kind==='checkpoint'?1:rate}))??[];
               if(parts){
                 const state=initialAchievements();state.unlocked=[...next.unlocked];
-                projectedAwards=applyDeliveryAwards(delivery,state,rooftop,wasDropoff?customer:undefined,(delivery.lastReward?.id??0)>rewardBefore);
+                const tier=applyAcceptedDelivery(delivery,state,next.achievementTiers!,previous,rooftop,wasDropoff?customer:undefined,(delivery.lastReward?.id??0)>rewardBefore);
+                projectedAwards=tier.awards;projectedTiers=tier.progress;
                 projectedUnlocked=state.unlocked;
               }
               if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome)||!validAmount(delivery.earned)||!validAmount(delivery.completed))error='invalid';
@@ -263,6 +271,7 @@ export class DriverProfile extends DurableObject<Env> {
             if(!error&&deliveryEarnings?.length&&[...(await txn.get(deliveryEarnings.map(part=>`earned-source:${part.sourceId}`))).values()].some(value=>value!==undefined))error='invalid';
             if(!error&&projected&&deliveryEarnings){
               awards=projectedAwards;if(projectedUnlocked)next.unlocked=projectedUnlocked;
+              if(projectedTiers)next.achievementTiers=projectedTiers;
               Object.assign(next,{cash:projected.cash,eligibleIncome:projected.lifetimeIncome,earned:projected.earned,completed:projected.completed,order:projected.order});
               deliveryResult={matched,earnings:deliveryEarnings,lastReward:projected.lastReward,lastPayout:projected.lastPayout};
             }
@@ -274,10 +283,11 @@ export class DriverProfile extends DurableObject<Env> {
             const delivery=initialDelivery({x:0,z:0});
             Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,level:levelForCash(next.cash)});
             const state=initialAchievements();state.unlocked=[...next.unlocked];
-            awards=applyAchievementAwards(delivery,state,evaluateAchievementEvidence(next.unlocked,evidence));
+            const tier=applyObservedAchievement(delivery,state,next.achievementTiers!,evidence);
+            awards=tier.awards;
             if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
             else {
-              next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;
+              next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;next.achievementTiers=tier.progress;
               achievementResult={lastReward:delivery.lastReward};
             }
           }
@@ -288,9 +298,10 @@ export class DriverProfile extends DurableObject<Env> {
             const delivery=initialDelivery({x:0,z:0});
             Object.assign(delivery,{cash:next.cash+5,lifetimeIncome:next.eligibleIncome+5,level:levelForCash(next.cash+5)});
             const state=initialAchievements();state.unlocked=[...next.unlocked];
+            const tiers=applyTierProgress(delivery,next.achievementTiers!,['supply-pickups']);
             awards=applyAchievementAwards(delivery,state,[]);
             if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
-            else {next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;}
+            else {next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;next.achievementTiers=tiers;}
           }
         } else if(intent.action.kind==='contribute'){
           const amount=intent.action.amount;

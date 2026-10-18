@@ -1,9 +1,11 @@
 // Local characterization of an arrival behind a rejected balance change.
 import { EconomySession } from '../../worker/economy-session';
+import { applyAcceptedDelivery, applyTierProgress } from '../../worker/achievement-progress';
 import { progressFrom, type DriverOutcome, type EconomyIntent } from '../../worker/driver-profile';
 import { addPlayer, createEmptyWorld, NEUTRAL, step } from '../../shared/game';
 import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, payoutFor, pickupBonusFor, RESTAURANTS, updateDelivery } from '../../shared/delivery';
-import { applyDeliveryAwards, initialAchievements } from '../../shared/achievements';
+import { applyAchievementAwards, initialAchievements } from '../../shared/achievements';
+import { normalizeAchievementTiers } from '../../shared/achievement-tiers';
 import { terrainHeight } from '../../shared/map';
 
 async function scenario(visit:'committed'|'speculative') {
@@ -13,6 +15,7 @@ async function scenario(visit:'committed'|'speculative') {
   player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,base:3_000,elapsed:40};
   player.achievements.unlocked.push('region-oakland');
   const initial=progressFrom(player.delivery,player.achievements.unlocked,{},[],0,0);
+  initial.achievementTiers=normalizeAchievementTiers(undefined,initial.completed,initial.unlocked);
   let saved=structuredClone(initial),release=()=>{},started=()=>{};
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const writes:EconomyIntent[]=[];
@@ -25,12 +28,12 @@ async function scenario(visit:'committed'|'speculative') {
         const action=intent.action,delivery=initialDelivery(action.stop),clock=intent.clock??0;
         Object.assign(delivery,{cash:saved.cash,lifetimeIncome:saved.eligibleIncome,earned:saved.earned,completed:saved.completed,
           level:saved.level,order:{...saved.order,elapsed:saved.order.elapsed+clock-(saved.deliveryClock??0)},tickets:saved.tickets});
-        const order=delivery.order,dropoff=order.stage==='dropoff',customer=CUSTOMERS[order.customer]?.id,rooftop=dropoff&&orderTarget(order).rooftop;
+        const order={...delivery.order},dropoff=order.stage==='dropoff',customer=CUSTOMERS[order.customer]?.id,rooftop=dropoff&&orderTarget(order).rooftop;
         const parts=applyDeliveryStop(delivery,action.stop,part=>Math.round(part.amount*(action.multiplier??1)));
         const state=initialAchievements();state.unlocked=[...saved.unlocked];
-        if(parts)applyDeliveryAwards(delivery,state,rooftop,dropoff?customer:undefined,!!delivery.lastReward);
+        const tiers=parts?applyAcceptedDelivery(delivery,state,saved.achievementTiers!,order,rooftop,dropoff?customer:undefined,!!delivery.lastReward).progress:saved.achievementTiers;
         saved={...saved,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,earned:delivery.earned,completed:delivery.completed,
-          level:delivery.level,order:delivery.order,unlocked:state.unlocked,deliveryClock:clock};
+          level:delivery.level,order:delivery.order,unlocked:state.unlocked,achievementTiers:tiers,deliveryClock:clock};
       }else if(intent.action.kind==='progress')saved=structuredClone(intent.action.progress);
       else throw new Error(`Unexpected ${intent.action.kind}`);
       return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
@@ -68,6 +71,7 @@ async function unknownRateScenario(){
   player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,base:3_000,elapsed:40};
   player.achievements.unlocked.push('region-oakland');
   const initial=progressFrom(player.delivery,player.achievements.unlocked,{},[],0,0);
+  initial.achievementTiers=normalizeAchievementTiers(undefined,initial.completed,initial.unlocked);
   let saved=structuredClone(initial),release=()=>{},started=()=>{};
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const writes:EconomyIntent[]=[],messages:unknown[]=[];
@@ -79,20 +83,27 @@ async function unknownRateScenario(){
       if(writes.length===1){started();await held;}
       if(intent.action.kind==='supply'){
         const clock=intent.clock??0;
-        saved={...saved,cash:saved.cash+5,eligibleIncome:saved.eligibleIncome+5,level:levelForCash(saved.cash+5),deliveryClock:clock,
+        const delivery=initialDelivery({x:0,z:0});
+        Object.assign(delivery,{cash:saved.cash+5,lifetimeIncome:saved.eligibleIncome+5,level:levelForCash(saved.cash+5)});
+        const achievements=initialAchievements();achievements.unlocked=[...saved.unlocked];
+        const tiers=applyTierProgress(delivery,saved.achievementTiers!,['supply-pickups']);
+        const awards=applyAchievementAwards(delivery,achievements,[]);
+        saved={...saved,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,level:delivery.level,
+          unlocked:achievements.unlocked,achievementTiers:tiers,deliveryClock:clock,
           order:{...saved.order,elapsed:saved.order.elapsed+clock-(saved.deliveryClock??0)}};
-        return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+        return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards};
       }
       if(intent.action.kind!=='delivery')throw new Error(`Unexpected ${intent.action.kind}`);
       const action=intent.action,delivery=initialDelivery(action.stop),clock=intent.clock??0;
       Object.assign(delivery,{cash:saved.cash,lifetimeIncome:saved.eligibleIncome,earned:saved.earned,completed:saved.completed,
         level:saved.level,order:{...saved.order,elapsed:saved.order.elapsed+clock-(saved.deliveryClock??0)},tickets:saved.tickets});
-      const order=delivery.order,dropoff=order.stage==='dropoff',customer=CUSTOMERS[order.customer]?.id,rooftop=dropoff&&orderTarget(order).rooftop;
+      const order={...delivery.order},dropoff=order.stage==='dropoff',customer=CUSTOMERS[order.customer]?.id,rooftop=dropoff&&orderTarget(order).rooftop;
       const parts=applyDeliveryStop(delivery,action.stop,part=>Math.round(part.amount*(action.multiplier??2)));
       const achievements=initialAchievements();achievements.unlocked=[...saved.unlocked];
-      const awards=parts?applyDeliveryAwards(delivery,achievements,rooftop,dropoff?customer:undefined,!!delivery.lastReward):[];
+      const tier=parts?applyAcceptedDelivery(delivery,achievements,saved.achievementTiers!,order,rooftop,dropoff?customer:undefined,!!delivery.lastReward):undefined;
+      const awards=tier?.awards??[];
       saved={...saved,cash:delivery.cash,eligibleIncome:delivery.lifetimeIncome,earned:delivery.earned,completed:delivery.completed,
-        level:delivery.level,order:delivery.order,unlocked:achievements.unlocked,deliveryClock:clock};
+        level:delivery.level,order:delivery.order,unlocked:achievements.unlocked,achievementTiers:tier?.progress??saved.achievementTiers,deliveryClock:clock};
       return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards,
         delivery:{matched:!!parts,earnings:[],lastReward:delivery.lastReward,lastPayout:delivery.lastPayout}};
     },
@@ -126,10 +137,13 @@ async function unknownRateScenario(){
   session.pickup(player,car,pickup);
   const preview=initialDelivery(car);Object.assign(preview,{cash:initial.cash,lifetimeIncome:initial.eligibleIncome,earned:initial.earned,
     completed:initial.completed,level:initial.level,order:{...initial.order,elapsed:initial.order.elapsed+.05}});
-  const expectedFare=2*payoutFor(preview.order);
+  const previousOrder={...preview.order},expectedFare=2*payoutFor(previousOrder),earlyDelivery=previousOrder.elapsed<previousOrder.estimate;
   applyDeliveryStop(preview,stop,part=>2*part.amount);
-  const awards=initialAchievements();awards.unlocked=[...initial.unlocked];applyDeliveryAwards(preview,awards,false,first.id,true);
-  const next=RESTAURANTS[preview.order.restaurant],expectedPickup=Math.round(1.5*pickupBonusFor({...preview.order,elapsed:afterDrivingClock-firstClock+.05}));
+  const awards=initialAchievements();awards.unlocked=[...initial.unlocked];
+  applyAcceptedDelivery(preview,awards,initial.achievementTiers!,previousOrder,false,first.id,true);
+  const pickupOrder={...preview.order,elapsed:afterDrivingClock-firstClock+.05};
+  const next=RESTAURANTS[preview.order.restaurant],expectedPickup=Math.round(1.5*pickupBonusFor(pickupOrder));
+  const earlyPickup=pickupOrder.elapsed<pickupOrder.pickupEstimate;
   Object.assign(car,{x:next.x,z:next.z,y:terrainHeight(next.x,next.z),speed:0,vy:0,supportId:'ground'});world.time=2;
   session.update(player,()=>{session.deliveryStart(player,car,false);const before=player.delivery.activeSeconds;
     const result=updateDelivery(world,player,car,NEUTRAL,.05,false,false,part=>Math.round(1.5*part.amount));
@@ -139,7 +153,7 @@ async function unknownRateScenario(){
   release();
   for(let i=0;i<2_000&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
   if(Reflect.get(session,'processing'))throw new Error('Historical-rate queue did not drain');
-  return {saved,writes,initial,expectedFare,expectedPickup,deferredSpend,driverMoved,otherMoved,health:car.health};
+  return {saved,writes,initial,expectedFare,expectedPickup,earlyDelivery,earlyPickup,deferredSpend,driverMoved,otherMoved,health:car.health};
 }
 
 async function backlogScenario(){

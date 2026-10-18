@@ -126,7 +126,10 @@ try{
   achievements.unlocked=[...before.unlocked];
   const target=orderTarget(order),parts=applyDeliveryStop(expected,stage.action.stop,part=>part.amount*2);
   assert.ok(parts);applyDeliveryAwards(expected,achievements,target.rooftop,CUSTOMERS[order.customer]?.id,true);
-  assert.equal(after.cash,expected.cash);assert.equal(after.eligibleIncome,expected.lifetimeIncome);
+  const early=order.elapsed<order.estimate;
+  assert.equal(after.cash,expected.cash+(early?100:0));assert.equal(after.eligibleIncome,expected.lifetimeIncome+(early?100:0));
+  assert.equal(after.achievementTiers?.deliveries.count,before.achievementTiers!.deliveries.count+1);
+  assert.equal(after.achievementTiers?.['early-deliveries'].count,before.achievementTiers!['early-deliveries'].count+Number(early));
   assert.deepEqual(after.unlocked,achievements.unlocked);
   assert.equal(await rpc('delivery-crash','replay-stage',{room,stage}),'superseded');
   const replay=await rpc<DriverOutcome>('delivery-crash','replay-intent',{driverId,eventId:stage.eventId});

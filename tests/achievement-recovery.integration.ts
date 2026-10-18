@@ -106,13 +106,16 @@ async function rejectedPredecessor(kind:'roof'|'race'){
   const after=(await inspect(driver.driverId)).progress;
   if(kind==='roof'){
     assert.equal(after.unlocked.filter(id=>id==='roof-rider').length,1,'transient roof achievement survives earlier rejection');
+    assert.equal(after.achievementTiers!['roof-landings'].count,before.achievementTiers!['roof-landings'].count+1);
     assert.equal(after.cash,before.cash+500,'only the roof reward is credited');
     assert.equal(after.eligibleIncome,before.eligibleIncome+500);
   }else{
     assert.equal(after.unlocked.filter(id=>id==='race-finisher').length,1,'race completion survives earlier rejection');
     assert.equal(after.unlocked.filter(id=>id==='race-winner').length,1,'race win survives earlier rejection');
-    assert.equal(after.cash,before.cash,'rejected income must not be resurrected');
-    assert.equal(after.eligibleIncome,before.eligibleIncome);
+    assert.equal(after.achievementTiers!['races-finished'].count,before.achievementTiers!['races-finished'].count+1);
+    assert.equal(after.achievementTiers!['races-won'].count,before.achievementTiers!['races-won'].count+1);
+    assert.equal(after.cash,before.cash+200,'only the first finish and contested-win tiers are credited');
+    assert.equal(after.eligibleIncome,before.eligibleIncome+200);
   }
   client.socket.close();
 }
@@ -143,8 +146,11 @@ async function crashAfterAcceptedEvidence(){
   assert.equal(after.unlocked.filter(id=>id==='roof-rider').length,1,'roof evidence settles exactly once after crash');
   assert.equal(after.unlocked.filter(id=>id==='race-finisher').length,1,'race finish settles exactly once after crash');
   assert.equal(after.unlocked.filter(id=>id==='race-winner').length,1,'race win settles exactly once after crash');
-  assert.equal(after.cash,before.cash+501,'the original accepted income and roof reward are applied once');
-  assert.equal(after.eligibleIncome,before.eligibleIncome+501);
+  assert.equal(after.achievementTiers!['roof-landings'].count,before.achievementTiers!['roof-landings'].count+1);
+  assert.equal(after.achievementTiers!['races-finished'].count,before.achievementTiers!['races-finished'].count+1);
+  assert.equal(after.achievementTiers!['races-won'].count,before.achievementTiers!['races-won'].count+1);
+  assert.equal(after.cash,before.cash+701,'the accepted income, roof reward and race tiers are applied once');
+  assert.equal(after.eligibleIncome,before.eligibleIncome+701);
   recovered.socket.close();
 }
 
