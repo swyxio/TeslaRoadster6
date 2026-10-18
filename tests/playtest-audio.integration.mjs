@@ -77,7 +77,7 @@ try {
       child.once('exit', () => { clearTimeout(timer); reject(new Error('Interactive runner exited before starting')); });
     });
     const action = async (body, status = 200) => {
-      const response = await fetch(`${endpoint}/actions`, {method:'POST', headers:{authorization:`Bearer ${secret}`, 'content-type':'application/json'}, body:JSON.stringify(body)});
+      const response = await fetch(`${endpoint}/actions`, {method:'POST', headers:{authorization:`Bearer ${secret}`, 'content-type':'application/json'}, body:JSON.stringify(body), signal:AbortSignal.timeout(15000)});
       assert.equal(response.status, status);
     };
     await action({type:'keyPress',key:'KeyA'});
@@ -86,7 +86,11 @@ try {
     await action({type:'keyPress',key:'KeyC'});
     await action({type:'recordStop'}, 400);
     await action({type:'finish'}, 202);
-    assert.equal(await exited, 1);
+    const exitCode = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Interactive runner did not finish')), 15000);
+      exited.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+    });
+    assert.equal(exitCode, 1);
     const interactive = JSON.parse(await readFile(join(interactiveRun, 'manifest.json'), 'utf8'));
     assert.equal(interactive.status, 'failed');
     assert.equal(interactive.capture.audioFinalizationFailed, true);
