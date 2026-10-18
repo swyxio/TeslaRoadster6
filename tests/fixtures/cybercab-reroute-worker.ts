@@ -5,7 +5,7 @@ import { createEmptyWorld, addPlayer, chooseVehicle, makeEntity, step } from '..
 import { applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder } from '../../shared/delivery';
 import { applyAchievementAwards, applyDeliveryAwards, initialAchievements, updateAchievements, type AchievementId } from '../../shared/achievements';
 import { evaluateAchievementEvidence } from '../../shared/achievement-evidence';
-import { applyTicketEvidence, newPolice, updatePolice } from '../../shared/police';
+import { applyTicketEvidence, ticketRoofAccess, newPolice, updatePolice } from '../../shared/police';
 import { BUILDINGS, terrainHeight } from '../../shared/map';
 import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
 import type { CabIncomeStage } from '../../worker/room-economy';
@@ -48,7 +48,7 @@ function ticketProgress(saved:DriverProgress,action:Extract<EconomyIntent['actio
   const delivery=initialDelivery(action.evidence);
   Object.assign(delivery,{cash:saved.cash,level:levelForCash(saved.cash),tickets:saved.tickets,completed:saved.completed,order:{...saved.order}});
   const previous=delivery.level;applyTicketEvidence(delivery,action.evidence);
-  if(delivery.level<previous)rerouteInaccessibleOrder(delivery,action.evidence,action.evidence.roofEligible===true);
+  if(delivery.level<previous)rerouteInaccessibleOrder(delivery,action.evidence,ticketRoofAccess(action.evidence));
   return {...saved,cash:delivery.cash,tickets:delivery.tickets,level:delivery.level,order:delivery.order};
 }
 
@@ -368,11 +368,44 @@ async function roofRepair(mode:'restore'|'switch'){
   if(session.pending)throw new Error('Roof repair failed to drain');
   return {initial,saved,writes,visible:player.delivery.order};
 }
+async function roofOnFoot(mode:'ticket'|'replay'|'locked'){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const person=world.entities.find(entity=>entity.id===player.entityId)!;
+  const roof=CUSTOMERS.findIndex(customer=>customer.rooftop&&(mode==='locked'?customer.id.includes('oakland'):customer.id.includes('sf')));
+  player.delivery.cash=mode==='locked'?10_020:50_020;player.delivery.level=levelForCash(player.delivery.cash);player.delivery.completed=7;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:roof,elapsed:37,base:900};
+  Object.assign(person,{kind:'person',x:0,z:6,y:0,speed:0,vy:0,supportId:'ground'});
+  const initial=progressFrom(player.delivery,[],{},[],0,0),writes:EconomyIntent[]=[];
+  let saved=structuredClone(initial),release=()=>{},started=()=>{};
+  const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
+  const ledger={async stageTicket(){return 'accepted' as const;},async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+    writes.push(structuredClone(intent));
+    if(mode==='replay'&&writes.length===1){started();await held;return {ok:false,reason:'invalid'};}
+    saved=advanceClock(saved,intent);
+    if(intent.action.kind==='ticket')saved=ticketProgress(saved,intent.action);
+    else if(intent.action.kind==='progress')saved=structuredClone(intent.action.progress);
+    else throw new Error('Unexpected on-foot action');
+    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+  },async acknowledge(){return true;}};
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  await session.ensureAccessibleOrder();
+  if(mode==='replay'){session.update(player,()=>{player.delivery.cash--;});await began;}
+  const cop=makeEntity('police','model-3',0,0);cop.police=newPolice();cop.police.targetId=player.id;cop.police.lastSeen=world.time;world.entities.push(cop);
+  updatePolice(world,.05,(p,apply,evidence)=>session.update(p,apply,null,evidence));
+  if(cop.police.targetId!==null)throw new Error('Ticket did not stop the on-foot driver');
+  release();
+  for(let i=0;i<2000&&(Reflect.get(session,'processing')||session.pending);i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(session.pending||Reflect.get(session,'failed'))throw new Error('On-foot ticket failed to drain');
+  return {initial,saved,writes,visible:player.delivery.order};
+}
 export default {async fetch(request:Request){
   const path=new URL(request.url).pathname;
   return Response.json(path==='/history'?await transient('history'):path==='/profile'?await transient('profile'):
     path==='/spend-history'?await scenario('history'):path==='/rejected'?await rejected():path==='/rejected-transient'?await rejectedTransient():
       path==='/backpressure'?await backpressure('history'):path==='/backpressure-fence'?await backpressure('fence'):
         path==='/cadence'?await cadence():path==='/market-handoff'?await marketHandoff():
-          path==='/roof-restore'?await roofRepair('restore'):path==='/roof-switch'?await roofRepair('switch'):await scenario());
+          path==='/roof-restore'?await roofRepair('restore'):path==='/roof-switch'?await roofRepair('switch'):
+            path==='/roof-foot-ticket'?await roofOnFoot('ticket'):path==='/roof-foot-replay'?await roofOnFoot('replay'):
+              path==='/roof-foot-locked'?await roofOnFoot('locked'):await scenario());
 }};

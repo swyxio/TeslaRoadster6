@@ -89,6 +89,10 @@ export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubsc
 export function canAssignDeliveryRoof(entity:Entity):boolean {
   return hasRockets(entity)&&entity.tankLevel>=3;
 }
+/** On foot, defer checking vehicle capability until the driver enters one. */
+export function deliveryRoofAccess(entity:Entity):boolean|null {
+  return entity.kind==='person'?null:canAssignDeliveryRoof(entity);
+}
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
 // Older journaled stops may lack roofEligible; replay treats them as ineligible.
@@ -148,11 +152,11 @@ export function orderTarget(order: Order): {x:number; z:number; y:number; name:s
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
 }
 /** Move an active job back into regions available at the new balance. */
-export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},roofEligible=false):boolean {
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number},roofEligible:boolean|null=false):boolean {
   const old=delivery.order;
   const pickup=RESTAURANTS[old.restaurant],customer=CUSTOMERS[old.customer];
-  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level && (!customer.rooftop||roofEligible))return false;
-  const next=orderFor(delivery.completed,origin,delivery.level,roofEligible);
+  if((old.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=delivery.level) && requiredLevelAt(customer.x,customer.z)<=delivery.level && (!customer.rooftop||roofEligible!==false))return false;
+  const next=orderFor(delivery.completed,origin,delivery.level,roofEligible===true);
   // A collected order stays collected; never grant a second pickup bonus.
   if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
   delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1};
