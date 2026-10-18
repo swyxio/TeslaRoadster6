@@ -15,6 +15,7 @@ export class GameScene {
   private pickups = new Map<string,T.Mesh>();
   private labels:T.Sprite[]=[];
   private objective=new T.Group();
+  private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
   private focus = new T.Vector3(0,1,24);
   private follow = new T.Vector3();
   private cameraReady = false;
@@ -31,7 +32,7 @@ export class GameScene {
     const sun = new T.DirectionalLight(0xffdfb5,2.2); sun.position.set(-100,160,80); this.scene.add(sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
-    const ring=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.25;this.objective.add(ring);
+    this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
     const beam=new T.Mesh(new T.CylinderGeometry(.5,1,18,8,1,true),new T.MeshBasicMaterial({color:0xffcf75,transparent:true,opacity:.24,depthWrite:false,side:T.DoubleSide}));beam.position.y=9;this.objective.add(beam);
     this.scene.add(this.objective);
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
@@ -89,7 +90,7 @@ export class GameScene {
     }
     const player=world.players.find(p=>p.id===playerId);
     const e=world.entities.find(e=>e.id===player?.entityId);
-    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y,target.z);}
+    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e){
