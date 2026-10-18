@@ -1,5 +1,7 @@
 import './map-dialog.css';
 import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, PARKS, REGIONS, ROADS, TESLAND_MONUMENTS, type MapPoint } from '../shared/map';
+import { TECH_CAMPUSES } from '../shared/tech-campuses';
+import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 
@@ -54,6 +56,9 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     }
     c.fillStyle = '#9eaf91';
     for (const park of PARKS) { const p = screen(park); c.fillRect(p.x - park.w * scale / 2, p.y - park.d * scale / 2, park.w * scale, park.d * scale); }
+    c.strokeStyle = '#c46c5b'; c.lineWidth = Math.max(1, 4 * scale); c.setLineDash([4, 3]); c.beginPath();
+    CALTRAIN_TRACK.forEach((point, i) => { const p = screen(point); if (i) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y); });
+    c.stroke(); c.setLineDash([]);
     c.fillStyle = '#7d8983';
     for (const road of ROADS) {
       if (road.kind === 'highway') continue;
@@ -78,10 +83,10 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     // Keep locked regions subdued while retaining their coastline silhouettes.
     c.fillStyle = '#193b48b8';
     for (let y = 0; y < height; y += 10) for (let x = 0; x < width; x += 10) if (!visible(world(x + 5, y + 5))) c.fillRect(x, y, 10, 10);
+    const placed: { left: number; top: number; right: number; bottom: number }[] = [];
+    const playerScreen = screen(player);
     // Label actual shared routes in the part of the map the player can reach.
     if (scale > .06) {
-      const placed: { left: number; top: number; right: number; bottom: number }[] = [];
-      const playerScreen = screen(player);
       c.font = '700 10px system-ui'; c.textBaseline = 'middle';
       for (const highway of HIGHWAYS) {
         const textWidth = c.measureText(highway.name).width;
@@ -115,18 +120,44 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
         placed.push(labelBox(point));
       }
     }
+    // Prefer the first clear position near each marker, then omit crowded text
+    // until the player zooms in. Markers themselves always remain visible.
+    const drawLabel = (p: {x:number;y:number}, text:string, font:string, firstY:number) => {
+      c.font = font; c.textBaseline = 'middle';
+      const textWidth = c.measureText(text).width;
+      for (const [dx,dy] of [[6,firstY],[6,-16],[6,25],[-textWidth-6,12],[-textWidth-6,-16]]) {
+        const box={left:p.x+dx,top:p.y+dy-7,right:p.x+dx+textWidth,bottom:p.y+dy+7};
+        if(box.left<2||box.right>width-2||box.top<2||box.bottom>height-2)continue;
+        if(playerScreen.x>=box.left-7&&playerScreen.x<=box.right+7&&playerScreen.y>=box.top-7&&playerScreen.y<=box.bottom+7)continue;
+        if(placed.some(other=>box.right+3>=other.left&&box.left-3<=other.right&&box.bottom+3>=other.top&&box.top-3<=other.bottom))continue;
+        c.strokeStyle='#eee9d1';c.lineWidth=3;c.lineJoin='round';c.strokeText(text,box.left,p.y+dy);
+        c.fillStyle='#173a40';c.fillText(text,box.left,p.y+dy);placed.push(box);return;
+      }
+    };
     c.font = '700 11px system-ui'; c.textBaseline = 'middle';
     const labels = [{ name: 'SAN FRANCISCO', x: -180, z: 0 }, { name: 'MARIN HEADLANDS', x: -310, z: -475 }, { name: 'OAKLAND', x: 450, z: -80 }, { name: 'NORTH BAY PLAYGROUND', x: 150, z: -1750 }, ...DISTRICTS.map(d => ({ name: d.name.toUpperCase(), x: d.x, z: d.z }))];
     for (const label of labels) {
       if (!visible(label)) continue;
       const p = screen(label); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
-      c.fillStyle = '#173a40'; c.fillText(label.name, p.x + 7, p.y - 7);
+      drawLabel(p,label.name,'700 11px system-ui',-7);
     }
     if (scale > .24) for (const place of LANDMARKS) {
       if (!visible(place.arrival)) continue;
       const p = screen(place.arrival); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#fff1c4'; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#173a40'; c.font = '600 10px system-ui'; c.fillText(place.name, p.x + 6, p.y + 5);
+      drawLabel(p,place.name,'600 10px system-ui',12);
+    }
+    if (scale > .16) for (const campus of TECH_CAMPUSES) {
+      if (!visible(campus)) continue;
+      const p = screen(campus); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
+      c.fillStyle = '#b9a7dc'; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
+      drawLabel(p,campus.name,'600 10px system-ui',12);
+    }
+    for (const stop of CALTRAIN_STOPS) {
+      if (!visible(stop)) continue;
+      const p = screen(stop); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
+      c.fillStyle = '#cf6a57'; c.fillRect(p.x - 3, p.y - 3, 6, 6);
+      if (scale > .12) drawLabel(p,`Caltrain · ${stop.name}`,'600 10px system-ui',12);
     }
     if (scale > .24) for (const place of TESLAND_MONUMENTS) {
       if (!visible(place)) continue;

@@ -5,6 +5,7 @@ import { PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 import { buildNorthBayScenery } from './north-bay-scenery';
+import { buildCaltrain } from './caltrain';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
@@ -218,7 +219,7 @@ export function buildBay(scene:T.Scene) {
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
-    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport')return;
+    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
     if(!landmark&&!['pyramid','coit','salesforce','station-venue'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
@@ -350,6 +351,7 @@ export function buildBay(scene:T.Scene) {
   const crown=new T.InstancedMesh(new T.IcosahedronGeometry(2.7,1),material(0x678764),trees.length),m=new T.Matrix4();
   trees.forEach((p,i)=>crown.setMatrixAt(i,m.makeTranslation(p.x,4,p.z)));crown.computeBoundingSphere();scene.add(crown);
   buildNorthBayScenery(scene);
+  buildCaltrain(scene);
   for(const bridge of BRIDGES)drawBridge(bridge);
   function drawBridge(b:Bridge){
     const color=b.id==='golden-gate'?0xc2563d:0x99a7a5;

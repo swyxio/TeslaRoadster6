@@ -25,6 +25,7 @@ import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
+import { buildTechCampuses } from './tech-campuses';
 import { buildBillboards } from './billboards';
 import { buildTeslandMonuments } from './tesland-monuments';
 import { buildFremontSpaceport } from './fremont-spaceport';
@@ -110,6 +111,7 @@ export class GameScene {
     buildBay(scene);
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
+    buildTechCampuses(scene);
     buildTeslandMonuments(scene);
     this.spaceport=buildFremontSpaceport(scene);
     buildBillboards(scene);
