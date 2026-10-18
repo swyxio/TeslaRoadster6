@@ -79,7 +79,7 @@ let replayable = true;
 const replaySteps: Record<string, unknown>[] = [];
 let replayLastActionEnd: number | undefined;
 let replayFinishedAt: number | undefined;
-type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null };
+type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null; deliveryRestaurant: number | null; deliveryCustomer: number | null; deliverySearching: boolean | null };
 const poses: Pose[] = [];
 const inputEvents: Record<string, unknown>[] = [];
 let posesTruncated = false;
@@ -122,7 +122,10 @@ function observeRoom(socket: PlaywrightWebSocket) {
         jumpBurstUntil: typeof car.jumpBurstUntil === 'number' && Number.isFinite(car.jumpBurstUntil) ? car.jumpBurstUntil : null,
         lastJump: Number.isSafeInteger(car.lastJump) ? car.lastJump : null,
         deliveryCompleted: Number.isSafeInteger(player?.delivery?.completed) ? player.delivery.completed : null,
-        deliveryStage: order?.stage === 'pickup' || order?.stage === 'dropoff' ? order.stage : null };
+        deliveryStage: order?.stage === 'pickup' || order?.stage === 'dropoff' ? order.stage : null,
+        deliveryRestaurant: Number.isSafeInteger(order?.restaurant) ? order.restaurant : null,
+        deliveryCustomer: Number.isSafeInteger(order?.customer) ? order.customer : null,
+        deliverySearching: order && typeof order === 'object' ? !!order.search : null };
       if (poses.length < 100000) poses.push(latestPose); else posesTruncated = true;
     } catch { /* Other protocol versions may not have this snapshot shape. */ }
   });
@@ -253,7 +256,7 @@ async function act(action: Action): Promise<unknown> {
         if (!result) throw new Error('Jump was not observed after five keyboard attempts.');
         break;
       }
-      case 'waitForRoomReady': case 'beginRoom': {
+      case 'waitForRoomReady': case 'beginRoom': case 'stageRepeatDelivery': {
         const room = target.searchParams.get('room');
         if (!['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || !room || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)) throw new Error('Room control requires a local fixture and a valid room.');
         const stageSecret = process.env.PLAYTEST_STAGE_SECRET;
@@ -269,6 +272,33 @@ async function act(action: Action): Promise<unknown> {
             await page!.waitForTimeout(100);
           } while (performance.now() < deadline);
           if (!result) throw new Error('Timed out waiting for a ready local playtest room.');
+          break;
+        }
+        if (action.type === 'stageRepeatDelivery') {
+          if (!values.trajectory) throw new Error('stageRepeatDelivery requires --trajectory.');
+          const deadline = performance.now() + timeout(action, 120000, 240000);
+          let staged: { order: { restaurant: { index: number }; customer: { index: number } }; stagedTick: number; poseRevision: number } | undefined;
+          while (performance.now() < deadline) {
+            const response = await fetch(new URL(`/api/playtest/repeat/${room}`, target), { method: 'POST', headers, signal: AbortSignal.timeout(Math.max(1, Math.min(30000, Math.ceil(deadline - performance.now())))) });
+            const body = await response.json() as { ok?: boolean; retry?: boolean; order?: { restaurant?: { index?: number }; customer?: { index?: number } }; stagedTick?: number; poseRevision?: number };
+            if (response.ok && body.ok === true && Number.isSafeInteger(body.order?.restaurant?.index) && Number.isSafeInteger(body.order?.customer?.index) && Number.isSafeInteger(body.stagedTick) && Number.isSafeInteger(body.poseRevision)) {
+              staged = body as typeof staged; break;
+            }
+            if (response.status !== 409 || body.ok !== false || body.retry !== true) throw new Error('Local second-delivery staging was rejected.');
+            await page!.waitForTimeout(100);
+          }
+          if (!staged) throw new Error('Timed out waiting to stage the second delivery.');
+          while (performance.now() < deadline) {
+            if (!activeRoom) throw new Error('Room disconnected after second-delivery staging.');
+            if (latestPose?.tick !== null && latestPose?.tick !== undefined && latestPose.tick > staged.stagedTick) {
+              if (latestPose.poseRevision !== staged.poseRevision || latestPose.deliveryCompleted !== 1 || latestPose.deliveryStage !== 'pickup' ||
+                  latestPose.deliverySearching !== false || latestPose.deliveryRestaurant !== staged.order.restaurant.index ||
+                  latestPose.deliveryCustomer !== staged.order.customer.index) throw new Error('The staged second delivery was not confirmed by the room.');
+              result = { order: staged.order, stagedTick: staged.stagedTick, confirmedTick: latestPose.tick }; break;
+            }
+            await page!.waitForTimeout(50);
+          }
+          if (!result) throw new Error('Timed out waiting for the staged order snapshot.');
           break;
         }
         const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers });
@@ -457,7 +487,7 @@ try {
           if (!incoming || typeof incoming !== 'object' || typeof incoming.type !== 'string') throw new Error('Invalid action');
           // These fixture-specific actions can block longer than the control
           // server's interactive limit; use them in scripted scenarios only.
-          if (['waitForTicks', 'waitForGround', 'jumpUntilAirborne'].includes(incoming.type)) throw new Error('Scripted action only');
+          if (['waitForTicks', 'waitForGround', 'jumpUntilAirborne', 'stageRepeatDelivery'].includes(incoming.type)) throw new Error('Scripted action only');
           if (incoming.type === 'wait' && duration(incoming, 'ms', 0, 60000) > 1000) throw new Error('Interactive wait too long');
           if ((incoming.type === 'waitFor' || incoming.type === 'waitForPoseRevision' || incoming.type === 'waitForDelivery' || incoming.type === 'waitForRoomReady') && timeout(incoming, 30000, 240000) > 1000) throw new Error('Interactive wait too long');
         } catch { if (!res.destroyed) json(res, 400, { error: 'Invalid request or interactive wait over 1000 ms' }); return; }

@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Controlled two-delivery fixture · 2026-10-18 Pacific
+
+- The current fixture mounted against `26fc934` and historical `009af539` passed isolated local Wrangler checks for authenticated one-use staging, guest/identity/pose/access/catalog guards, waiting for a pending assignment, and preserving the car and delivery progress. The test confirms the committed second order appears in room snapshots and that the normal wallet processes its pickup and drop-off after test-only synthetic stops. These positions are test setup, not a driven route or video proof.
+- Twelve focused report and comparison tests and the recorder/fixture TypeScript checks passed. The two-delivery route, jumps and flight still require a newly coordinated paired recording and path comparison before interpreting frame or room deltas. No timed benchmark was run in this check.
+
 ## Service-area release preparation · protocol v45 candidate · 2026-10-18 Pacific
 
 - `pnpm run ci` passed all 975 tests and the build on `d1fb968`; Vite retains its large-chunk warning. After the on-foot fixes, local Wrangler also passed the rooftop repair, delivery journal and Cybercab reroute integrations, including event-time eligibility, ticket replay, geographically locked roofs, and purchases and spending on foot.

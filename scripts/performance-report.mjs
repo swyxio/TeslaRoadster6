@@ -79,23 +79,58 @@ function pathSummary(poses) {
   return { lengthM: round(length), points };
 }
 
-export function deliveryRoute(poses, initialOrder) {
-  const restaurant = initialOrder?.restaurant, customer = initialOrder?.customer;
-  if (typeof restaurant?.id !== 'string' || !restaurant.id || ![restaurant.x, restaurant.z].every(number) ||
-      typeof customer?.id !== 'string' || !customer.id || ![customer.x, customer.y, customer.z].every(number) || typeof customer.rooftop !== 'boolean')
-    return { status: 'unavailable', reason: 'initial delivery identity or coordinates unavailable' };
-  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup']];
-  const indices = [];
-  let searchFrom = 0;
-  for (const [completed, stage] of milestones) {
-    const offset = poses.slice(searchFrom).findIndex(p => p.deliveryCompleted === completed && p.deliveryStage === stage);
-    if (offset < 0) return { status: 'unavailable', reason: `missing delivery ${completed} ${stage}` };
-    const index = searchFrom + offset;
-    indices.push(index); searchFrom = index + 1;
-  }
+function validOrder(order) {
+  const restaurant = order?.restaurant, customer = order?.customer;
+  return typeof restaurant?.id === 'string' && !!restaurant.id && [restaurant.x, restaurant.z].every(number) &&
+    Number.isSafeInteger(restaurant.index) && restaurant.index >= 0 &&
+    typeof customer?.id === 'string' && !!customer.id && [customer.x, customer.y, customer.z].every(number) &&
+    typeof customer.rooftop === 'boolean' && Number.isSafeInteger(customer.index) && customer.index >= 0;
+}
+
+const matchesOrder = (pose, order) => pose.deliveryRestaurant === order.restaurant.index &&
+  pose.deliveryCustomer === order.customer.index && pose.deliverySearching === false;
+
+// Completion is observed in the next broadcast, not at the exact simulation
+// tick at which the stop was credited. Allow a small sampling margin.
+const atStop = (pose, target) => pose.supported === true &&
+  Math.abs(pose.x - target.x) <= 12 && Math.abs(pose.z - target.z) <= 12 &&
+  (!target.rooftop || Math.abs(pose.y - target.y) <= 1);
+
+export function deliveryRoute(poses, initialOrder, stageRepeat) {
+  const secondOrder = stageRepeat?.order;
+  if (!validOrder(initialOrder) || !validOrder(secondOrder))
+    return { status: 'unavailable', reason: 'both delivery identities, coordinates and catalog indices are required' };
+  const { stagedTick, confirmedTick } = stageRepeat;
+  if (!Number.isSafeInteger(stagedTick) || !Number.isSafeInteger(confirmedTick) || stagedTick < 0 || confirmedTick <= stagedTick)
+    return { status: 'unavailable', reason: 'second delivery staging ticks unavailable or invalid' };
+  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']];
+  const find = (from, predicate) => {
+    const offset = poses.slice(from).findIndex(predicate);
+    return offset < 0 ? -1 : from + offset;
+  };
+  const start = find(0, p => p.deliveryCompleted === 0 && p.deliveryStage === 'pickup' && matchesOrder(p, initialOrder));
+  if (start < 0) return { status: 'unavailable', reason: 'missing initial delivery pickup' };
+  const pickupOne = find(start + 1, p => p.deliveryCompleted === 0 && p.deliveryStage === 'dropoff' && matchesOrder(p, initialOrder) && atStop(p, initialOrder.restaurant));
+  if (pickupOne < 0) return { status: 'unavailable', reason: 'first restaurant stop or initial order identity missing' };
+  // After a completed order, search may temporarily expose the old order as a
+  // placeholder, or finish before the next broadcast. Neither is proof of the
+  // second assignment; require its confirmed snapshot separately below.
+  const completedOne = find(pickupOne + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'pickup' && p.tick <= stagedTick && atStop(p, initialOrder.customer));
+  if (completedOne < 0) return { status: 'unavailable', reason: 'first delivery completion at its customer not observed before staging' };
+  if (poses.slice(start, completedOne).some(p => p.deliveryCompleted !== 0 || !matchesOrder(p, initialOrder)))
+    return { status: 'unavailable', reason: 'first delivery order changed before completion' };
+  const second = find(completedOne + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'pickup' && p.tick >= confirmedTick && matchesOrder(p, secondOrder));
+  if (second < 0) return { status: 'unavailable', reason: 'confirmed second delivery pickup not observed' };
+  const pickupTwo = find(second + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'dropoff' && matchesOrder(p, secondOrder) && atStop(p, secondOrder.restaurant));
+  if (pickupTwo < 0) return { status: 'unavailable', reason: 'second restaurant stop or order identity missing' };
+  const completedTwo = find(pickupTwo + 1, p => p.deliveryCompleted === 2 && p.deliveryStage === 'pickup' && atStop(p, secondOrder.customer));
+  if (completedTwo < 0) return { status: 'unavailable', reason: 'second delivery completion at its customer not observed' };
+  if (poses.slice(second, completedTwo).some(p => p.deliveryCompleted !== 1 || !matchesOrder(p, secondOrder)))
+    return { status: 'unavailable', reason: 'second delivery order changed before completion' };
+  const indices = [start, pickupOne, second, pickupTwo, completedTwo];
   const flight = poses.slice(indices.at(-1));
   const routePoses = poses.slice(indices[0]);
-  if (!Number.isSafeInteger(routePoses[0]?.poseRevision) || routePoses.some((p, i) => p.poseRevision !== routePoses[0].poseRevision || (i && (p.tick < routePoses[i - 1].tick || p.atMs < routePoses[i - 1].atMs))))
+  if (!Number.isSafeInteger(routePoses[0]?.poseRevision) || routePoses.some((p, i) => !Number.isSafeInteger(p.tick) || ![p.atMs, p.x, p.y, p.z].every(number) || p.poseRevision !== routePoses[0].poseRevision || (i && (p.tick < routePoses[i - 1].tick || p.atMs < routePoses[i - 1].atMs))))
     return { status: 'unavailable', reason: 'route respawned or snapshots moved backwards' };
   const jumpChanges = [];
   for (let i = 1; i < flight.length; i++) {
@@ -124,7 +159,7 @@ export function deliveryRoute(poses, initialOrder) {
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
-  return { status: 'available', initialOrder, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
+  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
 }
 
 function run(command, args, cwd) {
@@ -251,14 +286,14 @@ async function main() {
   const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
     ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
     : { status: 'unavailable', reason: 'room was not live for the measurement window' };
-  const route = deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder);
+  const route = deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, event('stageRepeatDelivery')?.sample);
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
     fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes the initial delivery, then keyboard jump and flight; the next assignment is not driven.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

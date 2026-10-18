@@ -108,7 +108,7 @@ and `recordStop`. `waitForDelivery`, `waitForTicks`, `waitForGround`, and
 The jump action retries a keyboard press at most five times and fails if no
 real lift is observed; `hold: true` retains E for flight. The tick, ground and
 jump actions are scripted only, to keep the interactive API responsive.
-`waitForRoomReady` and `beginRoom` operate only
+`waitForRoomReady`, `beginRoom` and `stageRepeatDelivery` operate only
 on the loopback fixture described below. `frameStart` and `frameStop` capture raw requestAnimationFrame
 callback intervals without recording video; these are not GPU completion or
 display presentation times. Hold controls across a wait by pairing down/up actions.
@@ -188,16 +188,26 @@ same-tick snapshots keep the browser connected; they are not advancing game
 time. Only one driver may join during this pause, and begin is one-use per room
 incarnation. With this option a blocked start fails instead of waiting for
 traffic to move. The loopback-only `GET /api/playtest/status/<room>` and
-`POST /api/playtest/begin/<room>` endpoints require this secret as a bearer
+`POST /api/playtest/begin/<room>` and `POST /api/playtest/repeat/<room>` endpoints require this secret as a bearer
 token. The recorder sends it directly from its environment; it is not saved in
 the recording. These endpoints belong to the fixture, not the deployed game.
 Never expose or deploy this fixture.
 
-The script invokes the game's Street Pilot through keyboard input, waits for
-pickup and drop-off of the initial order, then uses jump and hover controls.
-The saved trajectory and report must confirm that delivery, matching initial
-order IDs and coordinates across the pair, two separate
-jump bursts with upward movement and sustained airborne thrust. The scenario
+The script invokes the game's Street Pilot through keyboard input and completes
+the first delivery. After the next normal assignment finishes searching, the
+fixture replaces only the guest's order using that revision's own initial-order
+factory at the car's current position. It verifies the same accessible target
+IDs and coordinates and never moves the car. It waits for the local guest's
+wallet and assignment queue to settle and commits the replacement through the
+normal progress queue, so the room projection, draft and disposable profile
+agree. That extra commit is part of the measured workload. This controlled second assignment
+is not a test of natural second-job selection. It is allowed once, for the
+same connected guest, vehicle and room, without a pose revision change.
+
+The saved trajectory and report must confirm both pickups and both completed
+drop-offs at their authoritative targets, with both order IDs and coordinates
+matching across the pair, then two separate jump bursts with upward movement
+and sustained airborne thrust. The scenario
 waits for the first landing, briefly accelerates during the second flight and
 waits to land again. A respawn invalidates the route. Identical setup and inputs do not ensure
 identical trajectories if contacts or timing change; see the full-path

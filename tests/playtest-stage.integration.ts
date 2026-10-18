@@ -3,15 +3,16 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createWorld, NEUTRAL, PROTOCOL_VERSION, type Entity, type World } from '../shared/game';
+import { pathToFileURL } from 'node:url';
+import type { Entity, World } from '../shared/game';
 import { RoomInputClient } from './room-input-client';
 
 type Message = { type:string; [key:string]:any };
-type Status = { paused:boolean; started:boolean; ready:boolean; tick:number; poseRevision:number|null; initialOrder: {restaurant:{id:string;x:number;z:number};customer:{id:string;x:number;y:number;z:number;rooftop:boolean}}|null };
+type Status = { paused:boolean; started:boolean; ready:boolean; tick:number; poseRevision:number|null; initialOrder: {restaurant:{id:string;x:number;z:number;index:number};customer:{id:string;x:number;y:number;z:number;rooftop:boolean;index:number}}|null };
 const delay = (ms:number) => new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
 async function until(check:()=>boolean|Promise<boolean>, label:string, timeout=15_000) {
   const deadline=Date.now()+timeout;
@@ -33,8 +34,12 @@ async function stop(child:ChildProcess) {
 }
 
 const directory=await mkdtemp(join(tmpdir(),'tesland-playtest-stage-'));
+const targetRoot=resolve(process.env.PLAYTEST_TEST_TARGET_ROOT ?? '.');
+const { createWorld, NEUTRAL, PROTOCOL_VERSION }=await import(pathToFileURL(join(targetRoot,'shared/game.ts')).href);
 const port=await freePort(),base=`http://127.0.0.1:${port}`;
 const stageSecret=randomBytes(32).toString('hex'),secretFile=join(directory,'stage.env');
+const suffix=randomUUID(),integrationConfig=resolve(`tests/fixtures/.wrangler.playtest-stage-test-${suffix}.jsonc`);
+const mountedStage=resolve(`tests/fixtures/.playtest-stage-${suffix}.ts`),mountedWrapper=resolve(`tests/fixtures/.playtest-test-${suffix}.ts`);
 const authorization={Authorization:`Bearer ${stageSecret}`};
 const sockets:WebSocket[]=[];
 let worker:ChildProcess|undefined,logs='';
@@ -51,6 +56,11 @@ function connect(room:string) {
   });
   return {socket,input,messages,
     last(type:string){return messages.filter(message=>message.type===type).at(-1);},
+    player() {
+      const id=messages.find(message=>message.type==='welcome')?.id;
+      const world=this.last('state')?.world as World|undefined;
+      return world?.players.find(candidate=>candidate.id===id);
+    },
     car():Entity|undefined {
       const id=messages.find(message=>message.type==='welcome')?.id;
       const world=this.last('state')?.world as World|undefined;
@@ -70,8 +80,17 @@ function ambient(client:ReturnType<typeof connect>) {
 
 try {
   await writeFile(secretFile,`PLAYTEST_STAGE_SECRET=${stageSecret}\n`,{mode:0o600,flag:'wx'});
+  // Mount the candidate fixture against the selected target's own Worker and
+  // simulation, just as the performance reporter does for each revision.
+  const mount=(source:string)=>source.replace(/(['"])\.\.\/\.\.\/(worker|shared)\/([^'"]+)\1/g,(_match,_quote,dir,module)=>JSON.stringify(join(targetRoot,dir,`${module}.ts`)));
+  const stage=mount(await readFile(resolve('tests/fixtures/playtest-stage-worker.ts'),'utf8'));
+  const wrapper=mount(await readFile(resolve('tests/fixtures/playtest-stage-test-worker.ts'),'utf8')).replace("'./playtest-stage-worker'",JSON.stringify(mountedStage));
+  await writeFile(mountedStage,stage,{mode:0o600,flag:'wx'});
+  await writeFile(mountedWrapper,wrapper,{mode:0o600,flag:'wx'});
+  const config=(await readFile(resolve('tests/fixtures/wrangler.playtest-stage.jsonc'),'utf8')).replace('./playtest-stage-worker.ts',`./.playtest-test-${suffix}.ts`);
+  await writeFile(integrationConfig,config,{mode:0o600,flag:'wx'});
   worker=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev',
-    '--config','tests/fixtures/wrangler.playtest-stage.jsonc','--env-file',secretFile,'--local','--ip','127.0.0.1','--port',String(port),
+    '--config',integrationConfig,'--env-file',secretFile,'--local','--ip','127.0.0.1','--port',String(port),
     '--var','PLAYTEST_X:-190','--var','PLAYTEST_Z:120','--var',`PLAYTEST_YAW:${-Math.PI/2}`,
     '--var','PLAYTEST_SEED:0','--var','PLAYTEST_PAUSE:1',
     '--persist-to',join(directory,'storage'),'--show-interactive-dev-session','false'],
@@ -90,7 +109,7 @@ try {
     const status=await getStatus(room),car=client.car();
     assert.deepEqual({paused:status.paused,started:status.started,tick:status.tick,revision:status.poseRevision},
       {paused:true,started:false,tick:2,revision:1});
-    assert.deepEqual(status.initialOrder,{restaurant:{id:'tartine',x:-180,z:120},customer:{id:'cable',x:0,y:0,z:-180,rooftop:false}});
+    assert.deepEqual(status.initialOrder,{restaurant:{id:'tartine',x:-180,z:120,index:0},customer:{id:'cable',x:0,y:0,z:-180,rooftop:false,index:2}});
     assert.ok(car);assert.deepEqual({x:car.x,y:car.y,z:car.z,yaw:car.yaw,speed:car.speed,supportId:car.supportId},
       {x:-190,y:0,z:120,yaw:-Math.PI/2,speed:0,supportId:'ground'});
   }
@@ -112,10 +131,17 @@ try {
     assert.equal(status.status,401,'status requires the correct bearer token');
     const denied=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers,signal:AbortSignal.timeout(5000)});
     assert.equal(denied.status,401,'begin requires the correct bearer token');
+    const deniedRepeat=await fetch(`${base}/api/playtest/repeat/${firstRoom}`,{method:'POST',headers,signal:AbortSignal.timeout(5000)});
+    assert.equal(deniedRepeat.status,401,'repeat requires the correct bearer token');
     assert.equal((await getStatus(firstRoom)).tick,2,'unauthorized begin leaves the room paused');
   }
   const crossOrigin=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers:{...authorization,Origin:'https://example.invalid'},signal:AbortSignal.timeout(5000)});
   assert.equal(crossOrigin.status,403,'cross-origin controls remain blocked');
+  const crossRepeat=await fetch(`${base}/api/playtest/repeat/${firstRoom}`,{method:'POST',headers:{...authorization,Origin:'https://example.invalid'},signal:AbortSignal.timeout(5000)});
+  assert.equal(crossRepeat.status,403,'cross-origin repeat remains blocked');
+  assert.equal((await fetch(`${base}/api/playtest/repeat/${firstRoom}`,{headers:authorization})).status,405,'repeat requires POST');
+  const premature=await fetch(`${base}/api/playtest/repeat/${firstRoom}`,{method:'POST',headers:authorization});
+  assert.equal(premature.status,409,'repeat cannot run before begin');
   const begin=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers:authorization,signal:AbortSignal.timeout(5000)});
   assert.equal(begin.status,200);const started=await begin.json() as {ok:boolean;tick:number};
   assert.equal(started.ok,true);assert.equal(started.tick,2);
@@ -130,10 +156,60 @@ try {
   }
   await until(()=>Math.abs((first.car()?.x??startX)-startX)>1,'new input moves the car after begin');
   assert.equal((await getStatus(secondRoom)).tick,2,'starting one room leaves the other paused');
+
+  // Exercise the real authorized HTTP/RPC path and confirm the next published
+  // room snapshot contains the staged order. Preparation is synthetic only.
+  assert.equal((await fetch(`${base}/api/playtest/begin/${secondRoom}`,{method:'POST',headers:authorization})).status,200);
+  assert.equal((await fetch(`${base}/api/test-prepare/${secondRoom}`,{method:'POST',headers:authorization})).status,200);
+  const repeatResponse=await fetch(`${base}/api/playtest/repeat/${secondRoom}`,{method:'POST',headers:authorization});
+  assert.equal(repeatResponse.status,200);
+  const repeatText=await repeatResponse.text();assert.ok(!repeatText.includes(stageSecret),'repeat response does not expose its secret');
+  const repeated=JSON.parse(repeatText) as {ok:boolean;stagedTick:number;poseRevision:number;order:{restaurant:{index:number};customer:{index:number}}};
+  assert.equal(repeated.ok,true);
+  try {
+    await until(()=>second.input.tick>repeated.stagedTick&&second.input.poseRevision===repeated.poseRevision&&
+      second.player()?.delivery.completed===1&&second.player()?.delivery.order.restaurant===repeated.order.restaurant.index&&
+      second.player()?.delivery.order.customer===repeated.order.customer.index,'staged order broadcast');
+  } catch (error) {
+    const delivery=second.player()?.delivery;
+    throw new Error(`Staged order broadcast missing: ${JSON.stringify({stagedTick:repeated.stagedTick,tick:second.input.tick,expectedRevision:repeated.poseRevision,revision:second.input.poseRevision,completed:delivery?.completed,restaurant:delivery?.order.restaurant,customer:delivery?.order.customer,searching:!!delivery?.order.search,connected:second.socket.readyState})}`,{cause:error});
+  }
+  assert.equal((await fetch(`${base}/api/playtest/repeat/${secondRoom}`,{method:'POST',headers:authorization})).status,409,'repeat cannot be applied twice');
+  for(const [stage,completed,nextStage] of [['pickup',1,'dropoff'],['dropoff',2,'pickup']] as const){
+    const stop=await fetch(`${base}/api/test-stop/${secondRoom}?stage=${stage}`,{method:'POST',headers:authorization});
+    assert.deepEqual(await stop.json(),{ok:true});
+    await until(()=>second.player()?.delivery.completed===completed&&second.player()?.delivery.order.stage===nextStage,`ordinary ${stage} after staged order`);
+  }
+
+  // A separate, disposable room tests the actual local stage method on
+  // synthetic post-delivery states without running a timed playtest.
+  const testRoom=`repeat-${randomUUID().slice(0,8)}`,test=connect(testRoom);
+  await until(async()=>test.input.active&&test.input.poseRevision===1&&(await getStatus(testRoom)).ready,'repeat test guest');
+  assert.equal((await fetch(`${base}/api/playtest/begin/${testRoom}`,{method:'POST',headers:authorization})).status,200);
+  const response=await fetch(`${base}/api/test-repeat/${testRoom}`,{method:'POST',headers:authorization});
+  assert.equal(response.status,200);const cases=await response.json() as Record<string,any>;
+  assert.equal(cases.first.reason,'delivery-state-changed');
+  assert.deepEqual(cases.pending,{ok:false,retry:true,reason:'assignment-pending'});
+  assert.deepEqual(cases.pendingWallet,{ok:false,retry:true,reason:'assignment-pending'});
+  for(const key of ['notGuest','attaching','identity','relocated'])assert.equal(cases[key].reason,'driver-changed',key);
+  assert.equal(cases.level.reason,'delivery-state-changed');
+  assert.deepEqual(cases.moving,{ok:false,retry:true,reason:'awaiting-first-stop'});
+  assert.equal(cases.catalog.reason,'catalog-or-access-changed');
+  assert.equal(cases.duplicate.reason,'catalog-or-access-changed');
+  assert.equal(cases.access.reason,'catalog-or-access-changed');
+  assert.equal(cases.success.ok,true);assert.deepEqual(cases.success.order,(await getStatus(testRoom)).initialOrder);
+  assert.equal(cases.twice.reason,'room-not-eligible');
+  assert.equal(cases.carUnchanged,true,'staging never changes the pose or vehicle');
+  assert.equal(cases.deliveryUnchanged,true,'staging preserves delivery progress and money');
+  assert.equal(cases.orderReplaced,true);
+  assert.equal(cases.rejectsPreserveOrder,true,'rejected staging does not replace the order');
   assert.ok(!logs.includes(stageSecret),'Wrangler output must not reveal the stage secret');
-  console.log('PASS: authenticated seeded rooms start at the same paused pose and fleet, unauthorized starts are rejected, begin is one-use, and ticks and new input resume.');
+  console.log('PASS: seeded local starts and controls; repeat rejects pending search, changed guest, pose, level and catalog, then changes only the order once.');
 } finally {
   for(const socket of sockets)try{socket.close();}catch{ /* already closed */ }
   if(worker)await stop(worker);
+  await rm(integrationConfig,{force:true});
+  await rm(mountedStage,{force:true});
+  await rm(mountedWrapper,{force:true});
   await rm(directory,{recursive:true,force:true});
 }

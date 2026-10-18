@@ -30,16 +30,31 @@ const browserComparable = !!(targetsIdentified && base.environment?.runner?.webg
 const motionComparable = !!(targetsIdentified && base.fixture?.reporterSha256 && base.fixture.reporterSha256 === head.fixture?.reporterSha256 && base.fixture?.motionBenchmarkSha256 && base.fixture?.motionAdapterSha256 && base.fixture.motionBenchmarkSha256 === head.fixture?.motionBenchmarkSha256 && base.fixture.motionAdapterSha256 === head.fixture?.motionAdapterSha256);
 const steadyComparable = motionComparable && validModel(base, 'steady150') && validModel(head, 'steady150');
 function compareRoutes(before, after) {
-  if (before?.status !== 'available' || after?.status !== 'available' || before.legs?.length !== 3 || after.legs?.length !== 3) return { comparable: false, reason: 'one-delivery route milestones, jumps, flight, or three leg traces unavailable; prior five-leg reports are incompatible with this scenario' };
+  if (before?.status !== 'available' || after?.status !== 'available' || before.legs?.length !== 5 || after.legs?.length !== 5) return { comparable: false, reason: 'two-delivery route milestones, jumps, flight, or five leg traces unavailable; three-leg reports are incompatible with this scenario' };
   const validOrder = order => typeof order?.restaurant?.id === 'string' && !!order.restaurant.id &&
-    [order.restaurant.x, order.restaurant.z].every(n) && typeof order?.customer?.id === 'string' && !!order.customer.id &&
-    [order.customer.x, order.customer.y, order.customer.z].every(n) && typeof order.customer.rooftop === 'boolean';
+    [order.restaurant.x, order.restaurant.z].every(n) && Number.isSafeInteger(order.restaurant.index) && order.restaurant.index >= 0 &&
+    typeof order?.customer?.id === 'string' && !!order.customer.id &&
+    [order.customer.x, order.customer.y, order.customer.z].every(n) && typeof order.customer.rooftop === 'boolean' &&
+    Number.isSafeInteger(order.customer.index) && order.customer.index >= 0;
+  // Catalog indices are only meaningful inside their own revision.
   const orderKey = order => [order.restaurant.id, order.restaurant.x, order.restaurant.z, order.customer.id, order.customer.x, order.customer.y, order.customer.z, order.customer.rooftop];
   if (!validOrder(before.initialOrder) || !validOrder(after.initialOrder) || JSON.stringify(orderKey(before.initialOrder)) !== JSON.stringify(orderKey(after.initialOrder)))
     return { comparable: false, reason: 'initial delivery identity or coordinates differ or are unavailable' };
+  if (!validOrder(before.secondOrder) || !validOrder(after.secondOrder) || JSON.stringify(orderKey(before.secondOrder)) !== JSON.stringify(orderKey(after.secondOrder)))
+    return { comparable: false, reason: 'second delivery identity or coordinates differ or are unavailable' };
+  const validMilestones = route => {
+    const expected = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']];
+    if (!Array.isArray(route.milestones) || route.milestones.length !== expected.length || route.milestones.some((m, i) =>
+      m?.completed !== expected[i][0] || m.stage !== expected[i][1] || !Number.isSafeInteger(m.tick) || m.tick < 0 || ![m.x, m.z].every(n) || (i && m.tick < route.milestones[i - 1].tick))) return false;
+    const first = route.firstCompletion, staging = route.staging;
+    return Number.isSafeInteger(first?.tick) && [first.x, first.z].every(n) && first.tick >= route.milestones[1].tick &&
+      Number.isSafeInteger(staging?.stagedTick) && Number.isSafeInteger(staging?.confirmedTick) && first.tick <= staging.stagedTick &&
+      staging.stagedTick < staging.confirmedTick && staging.confirmedTick <= route.milestones[2].tick;
+  };
+  if (!validMilestones(before) || !validMilestones(after)) return { comparable: false, reason: 'five delivery milestones or second-order staging evidence unavailable' };
   const errors = [];
   const legs = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const a = before.legs[i], b = after.legs[i];
     if (!n(a?.lengthM) || !n(b?.lengthM) || a.points?.length !== 41 || b.points?.length !== 41 || Math.abs(a.lengthM - b.lengthM) > Math.max(20, a.lengthM * .25)) return { comparable: false, reason: `leg ${i + 1} length or samples differ` };
     const legErrors = [];
@@ -54,7 +69,7 @@ function compareRoutes(before, after) {
   errors.sort((a, b) => a - b);
   const p95 = errors[Math.floor((errors.length - 1) * .95)], max = errors.at(-1);
   const divergent = legs.find(leg => leg.p95 > 25 || leg.max > 50);
-  return { comparable: !divergent, p95, max, legs, reason: divergent ? `leg ${divergent.leg} path divergence exceeds tolerance` : 'all three legs aligned' };
+  return { comparable: !divergent, p95, max, legs, reason: divergent ? `leg ${divergent.leg} path divergence exceeds tolerance` : 'all five legs aligned' };
 }
 const route = compareRoutes(base?.route, head?.route);
 const routeComparable = route.comparable && targetsIdentified;
@@ -74,8 +89,8 @@ const lines = [
   `Browser renderer: ${head?.environment?.runner?.webgl?.renderer ?? 'HOLD'}. Route: ${routeReason}; path difference p95 ${fmt(route.p95)} m, max ${fmt(route.max)} m.`, '',
   `Path difference by leg (p95 / max, m): ${route.legs?.map(leg => `${leg.leg}: ${fmt(leg.p95)} / ${fmt(leg.max)}`).join('; ') ?? 'HOLD'}.`, '',
   `Required observations: ${metricsComplete(base) && metricsComplete(head) ? 'available' : 'HOLD (one or more metrics are missing or unavailable)'}.`, '',
-  `Animation intervals are browser callback timing, not GPU completion or actual display presentation. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks during one delivery and flight in one local room. Video capture: base ${capture(base)}, candidate ${capture(head)}; video observations do not produce performance deltas.`,
-  'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Frame and room deltas are held if environments or initial delivery targets differ, video is enabled, milestones are missing, or the three sampled paths diverge beyond the documented tolerances. Five-leg reports are incompatible with this three-leg scenario. Raw traces and conditions are in the uploaded artifact.',
+  `Animation intervals are browser callback timing, not GPU completion or actual display presentation. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks during two deliveries and flight in one local room. Video capture: base ${capture(base)}, candidate ${capture(head)}; video observations do not produce performance deltas.`,
+  'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Frame and room deltas are held if environments or either delivery target differ, video is enabled, milestones are missing, or any of the five sampled paths diverges beyond the documented tolerances. Three-leg reports are incompatible with this scenario. Raw traces and conditions are in the uploaded artifact.',
 ];
 const markdown = lines.join('\n') + '\n';
 if (outputPath) await writeFile(outputPath, markdown);
