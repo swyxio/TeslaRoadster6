@@ -5,6 +5,37 @@ from a real player's experience. See [performance release gates](PERFORMANCE_REL
 for the motion, latency, rendering and evidence requirements, and
 [verification](VERIFICATION.md) for observations actually made.
 
+## Record a video for the dev blog
+
+With dependencies and the Playwright Chromium browser installed, plus `ffmpeg`
+and `ffprobe` on the path, an agent can capture and prepare a public clip:
+
+```sh
+pnpm playtest:blog-video --slug my-playtest --gpu metal
+```
+
+This builds the checkout, starts the staged fixture bound to loopback with
+fresh temporary storage, opens a fresh browser profile, drives the checked-in
+`scripts/playtests/blog-drive.json` scenario, and records WebGL pixels. A
+successful run must have exactly one finalized segment and an available room
+trajectory. It transcodes silent H.264 MP4, creates a poster, checks the output
+and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
+different staged scenario, `--name NAME` for another clip, and `--gpu default`,
+`metal`, `vulkan` or `swiftshader` as supported. Existing files are preserved
+unless `--force` is supplied. Video files are limited to 25,000,000 bytes,
+below the [Workers static asset limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets).
+
+The original WebM, manifest and trajectory stay in the gitignored
+`playtest-runs/` directory. The helper labels a dirty checkout in the manifest;
+the revision is otherwise the local Git HEAD, not a remotely verified build.
+Review the captured frames and scenario for sensitive content before including
+the generated paths in a post. The fixture uses local chat and storage; do not
+put real credentials or third-party content in a scenario. A normal blog build
+and the authorized GitHub/Cloudflare release workflow publish the MP4 and post
+together. The helper itself does not push or deploy.
+
+For the fuller recording and interactive-control API, use the runner directly.
+
 ## Runner
 
 Install the project and the matching Playwright browser once:

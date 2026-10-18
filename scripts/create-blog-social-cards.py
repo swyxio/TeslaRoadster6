@@ -1,5 +1,6 @@
 """Create 1200x630 social cards from checked-in Tesland screenshots. Requires Pillow."""
 from pathlib import Path
+import argparse
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,8 +17,14 @@ cards = [
     ('making-driving-feel-smooth', 'DEVELOPMENT NOTES', 'Why our browser\ndriving game felt jerky', 'Frame pacing · prediction · multiplayer', 'public/blog/smooth-driving/manual-driving-poster.png'),
     ('planning-the-economy', 'DESIGN & SIMULATION', 'The Tesland economy:\nfrom deliveries to Mars', 'Cybercabs · property · a shared launch', 'public/blog/economy/cybercab-current.jpg'),
     ('building-poly-av', 'DEVELOPMENT NOTES', 'A flying Roadster.\nA Bay Area sandbox.', 'How Tesland began', 'public/blog/building-poly-av/airborne.jpg'),
+    ('recording-webgl-playtests', 'DEVELOPMENT NOTES', 'How we record\nWebGL playtests', 'Real pixels · repeatable inputs', 'public/blog/recording-webgl-playtests/playtest-poster.jpg'),
 ]
+parser = argparse.ArgumentParser()
+parser.add_argument('--only', choices=[card[0] for card in cards])
+args = parser.parse_args()
 for slug, label, title, subtitle, source in cards:
+    if args.only and slug != args.only:
+        continue
     image = Image.new('RGB', (1200, 630), '#102b31')
     photo = ImageOps.contain(Image.open(ROOT / source).convert('RGB'), (480, 500), method=Image.Resampling.LANCZOS)
     image.paste(photo, (702 + (480 - photo.width) // 2, (630 - photo.height) // 2))
