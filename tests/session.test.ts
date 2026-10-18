@@ -73,7 +73,7 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
 });
 
 test('an incompatible protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,46);
+  assert.equal(PROTOCOL_VERSION,47);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:45,capacity:64});
   assert.equal(socket.readyState,3);
@@ -154,6 +154,24 @@ test('rejected inputs retry on the normal cadence while changes and presses rema
   assert.equal(inputs().at(-1)!.input.jump,1,'button presses send promptly');
   now=130;session.tick(.02,NEUTRAL);
   assert.equal(inputs().at(-1)!.input.throttle,0,'releases send promptly');
+  session.disconnect();
+});
+
+test('a late rejection message preserves held driving before the next heartbeat',()=>{
+  let now=0;
+  const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld(),player=addPlayer(world,'p','Driver');
+  const car=world.entities.find(entity=>entity.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  Object.assign(car,{x:-300,z:-2050,y:0,yaw:-Math.PI/2,speed:0,vx:0,vz:0,supportId:'ground'});
+  socket.message({type:'state',world,tick:34});
+  session.tick(.05,{...NEUTRAL,throttle:1});
+  const command=socket.sent.map(value=>JSON.parse(value)).find(value=>value.type==='input');
+  socket.message({type:'inputRejected',seq:command.seq,targetTick:command.targetTick,reason:'late'});
+  now=20;const shown=session.renderWorld().entities.find(entity=>entity.driver==='p')!;
+  assert.ok(shown.speed>0,'the latest held level remains visible');
+  assert.equal(session.world.entities[0].speed,0,'the room remains authoritative');
   session.disconnect();
 });
 

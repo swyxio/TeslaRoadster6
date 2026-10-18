@@ -3,6 +3,7 @@ import { NEUTRAL, type Input } from './game';
 export const FUTURE_TICKS = 8;
 export const HOLD_TICKS = 6;
 export const EDGE_LATE_TICKS = 3;
+export const LEVEL_LATE_TICKS = 2;
 export const INPUT_TIMEOUT_MS = 300;
 
 export type InputCommand = { seq:number; targetTick:number; controlRevision:number; actionSeq:number; input:Input };
@@ -11,7 +12,7 @@ export type EdgeOutcome = { kind:'jump'|'flip'; id:number; targetTick:number; st
 type PendingEdge = { id:number; targetTick:number };
 type TimedEdge = PendingEdge & { receivedAtMs:number };
 type EdgeState = { seen:number; processed:number; pending:TimedEdge[] };
-type Slot = { seq:number; targetTick:number; input:Input };
+type Slot = { seq:number; targetTick:number; input:Input; retimed?:true };
 export type ControlSnapshot = {
   revision:number; actionSeq:number; edgeFloorRevision:number; receivedSeq:number; appliedSeq:number; held:Input; heldUntilTick:number;
   queued:Slot[]; jump:{seen:number;processed:number;pending:PendingEdge[]}; flip:{seen:number;processed:number;pending:PendingEdge[]};
@@ -26,6 +27,10 @@ function newer(id:number, previous:number):boolean {
   return distance>0 && distance<COUNTER_HALF;
 }
 function neutral(jump:number,flip:number):Input { return {...NEUTRAL,jump,flip}; }
+function sameLevel(a:Input,b:Input):boolean {
+  return a.throttle===b.throttle&&a.steer===b.steer&&a.brake===b.brake&&a.boost===b.boost&&
+    a.hover===b.hover&&a.roll===b.roll&&a.cockpit===b.cockpit;
+}
 
 /** Pure per-connection control scheduler. Call advance exactly once per room tick. */
 export class ScheduledInput {
@@ -77,7 +82,7 @@ export class ScheduledInput {
     return true;
   }
 
-  receive(command:InputCommand,currentTick:number,nowMs:number):{rejection?:'late'|'future'|'revision'|'order'|'action';outcomes:EdgeOutcome[]} {
+  receive(command:InputCommand,currentTick:number,nowMs:number):{rejection?:'late'|'future'|'revision'|'order'|'action';retimedTargetTick?:number;outcomes:EdgeOutcome[]} {
     if(command.seq<=this.receivedSeq)return {rejection:'order',outcomes:[]};
     const outcomes=this.expireTimedOut(nowMs);
     this.receivedSeq=command.seq;
@@ -85,8 +90,13 @@ export class ScheduledInput {
     const stale=command.controlRevision<this.revision;
     const bridge=stale&&!actionMismatch&&command.controlRevision>=this.edgeFloorRevision;
     const invalidRevision=command.controlRevision!==this.revision;
+    // A recently active connection may recover a slightly late level on the
+    // next tick. It cannot restart or extend the accepted-control watchdog.
+    // Edges below still use the original target and their independent rules.
+    const late=command.targetTick<=currentTick;
+    const retime=late&&currentTick-command.targetTick<=LEVEL_LATE_TICKS&&this.lastControlInputMs!==null;
     const rejection=actionMismatch?'action':invalidRevision?'revision':
-      command.targetTick<=currentTick?'late':command.targetTick>currentTick+FUTURE_TICKS?'future':undefined;
+      late&&!retime?'late':command.targetTick>currentTick+FUTURE_TICKS?'future':undefined;
     const canSchedule=!actionMismatch&&(!invalidRevision||bridge);
     for(const kind of ['jump','flip'] as const){
       const state=this[kind],id=command.input[kind];
@@ -108,13 +118,16 @@ export class ScheduledInput {
       else if(bridge)outcomes.push({kind,id,targetTick,status:'accepted'});
     }
     if(rejection)return {rejection,outcomes};
-    this.lastControlInputMs=nowMs;
+    if(!retime)this.lastControlInputMs=nowMs;
+    const targetTick=retime?currentTick+1:command.targetTick;
     // If target ticks move backwards, a later-tick slot from an older sequence
     // must not reinstate obsolete held controls after this one has run.
-    this.queued=this.queued.filter(slot=>slot.targetTick<command.targetTick);
-    this.queued.push({seq:command.seq,targetTick:command.targetTick,input:{...command.input}});
+    // A newer different level also supersedes an earlier retimed level that
+    // has not yet run; an unchanged heartbeat keeps that earlier opportunity.
+    this.queued=this.queued.filter(slot=>slot.targetTick<targetTick&&(!slot.retimed||sameLevel(slot.input,command.input)));
+    this.queued.push({seq:command.seq,targetTick,input:{...command.input},...(retime?{retimed:true as const}:{})});
     this.queued.sort((a,b)=>a.targetTick-b.targetTick);
-    return {outcomes};
+    return retime?{outcomes,retimedTargetTick:targetTick}:{outcomes};
   }
 
   advance(tick:number,nowMs:number):{input:Input;outcomes:EdgeOutcome[]} {

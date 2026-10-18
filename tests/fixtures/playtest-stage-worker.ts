@@ -132,8 +132,7 @@ export class GameRoom extends ProductionGameRoom {
     this.publishPausedSnapshot();
     this.pausedWorld = undefined;
     this.startedWorld = world;
-    const timer = setInterval(() => Reflect.apply(Reflect.get(this, 'tick'), this, []), 50);
-    Reflect.set(this, 'timer', timer);
+    Reflect.apply(Reflect.get(this, 'startTicks'), this, []);
     return { ok: true, tick: status.tick, poseRevision: session.poseRevision };
   }
 
@@ -182,11 +181,9 @@ export class GameRoom extends ProductionGameRoom {
     if (response.status !== 101 || this.stagedWorld === world || !world.players.length) return response;
 
     if (options.pause) {
-      // super.fetch starts the normal interval immediately before returning.
+      // super.fetch starts the normal timer immediately before returning.
       // Stop it synchronously before yielding to the event loop.
-      const timer = Reflect.get(this, 'timer') as ReturnType<typeof setInterval> | null;
-      if (timer !== null) clearInterval(timer);
-      Reflect.set(this, 'timer', null);
+      Reflect.apply(Reflect.get(this, 'stopTicks'), this, []);
       this.pausedWorld = world;
     }
 

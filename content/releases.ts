@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A steadier drive',
+    intro: 'Driving and room timing feel more consistent.',
+    sections: [
+      { title: 'On the road', items: [
+        'Driving controls stay responsive as the room catches up, and cars move more smoothly between updates.',
+        'Rooms keep their simulation on a steadier schedule when a tick runs late.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.32-alpha',
+    label: '0.0.32 Alpha',
+    date: '2026-10-18',
     title: 'A little more lift',
     intro: 'Boosts and landings bring more of the drive to life.',
     sections: [

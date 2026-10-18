@@ -7,7 +7,7 @@ import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8787');
 assert.ok(base.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(base.hostname),'run only against local Wrangler');
 const health=await fetch(new URL('/api/health',base));assert.equal((await health.json() as {version:number}).version,PROTOCOL_VERSION);
-assert.equal(PROTOCOL_VERSION,46);
+assert.equal(PROTOCOL_VERSION,47);
 const url=new URL(`/api/room/predict-${Date.now()}`,base);url.protocol='ws:';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean,label:string,timeout=6000){
@@ -54,6 +54,20 @@ try{
   catch(error) { throw new Error(`${error}: ${JSON.stringify({control:driver.input.control,car:driver.state.world?.entities.find(entity=>entity.driver===driver.state.id),rejections:driver.input.rejections})}`); }
   assert.ok(!driver.input.rejections.some(item=>[a,b,c].includes(item.seq)),'scheduled frames were not rejected');
 
+  // A slightly late level is retimed by the room to its next tick, while the
+  // owner snapshot reports the applied sequence and held controls. Wait for a
+  // fresh accepted neutral frame so the 300 ms watchdog is live first.
+  const baseline=send(NEUTRAL);
+  await until(()=>(driver.input.control?.appliedSeq??0)>=baseline,'fresh baseline level applies');
+  const retimed=send({...NEUTRAL,throttle:1},{targetTick:driver.input.tick});
+  await until(()=>driver.input.control?.appliedSeq===retimed,'near-late level applies');
+  assert.equal(driver.input.control!.held.throttle,1);
+  assert.ok(!driver.input.rejections.some(item=>item.seq===retimed),'near-late level was accepted');
+  assert.equal(observer.input.control!.receivedSeq,0,'the retimed owner state is private');
+  const released=send(NEUTRAL);
+  await until(()=>(driver.input.control?.appliedSeq??0)>=released,'release after retimed level applies');
+  assert.equal(driver.input.control!.held.throttle,0);
+
   // Explicit late/future, revision, epoch and order rejections are private.
   await until(()=>driver.input.tick>=5,'room advances before late-frame checks');
   const late=send(NEUTRAL,{targetTick:Math.max(1,driver.input.tick-4)});await waitReject(late,'late');
@@ -68,14 +82,14 @@ try{
 
   // An edge aimed at the last observed tick is late but within the grace
   // window locally. The server schedules it once at the next tick; repetition
-  // of the same counter cannot trigger a second jump.
+  // of the same counter cannot trigger a second jump. Its continuous level is
+  // separately accepted when the level watchdog is live.
   const lateTarget=driver.input.tick;
   const jump=send({...NEUTRAL,jump:1},{targetTick:lateTarget});
-  await waitReject(jump,'late');
+  await until(()=>(driver.input.control?.appliedSeq??0)>=jump,'near-late jump level applied');
+  assert.ok(!driver.input.rejections.some(item=>item.seq===jump),'near-late jump level was accepted');
   assert.equal(edge('jump',1,'rescheduled').length,1,'late press is acknowledged immediately');
   assert.ok(edge('jump',1,'rescheduled')[0].targetTick>lateTarget,'acknowledgement supplies the new target tick');
-  assert.ok(timeline.findIndex(item=>item.type==='inputEdge'&&item.id===1&&item.status==='rescheduled')<
-    timeline.findIndex(item=>item.type==='inputRejected'&&item.seq===jump),'edge acknowledgement precedes the level rejection');
   await until(()=>edge('jump',1,'processed').length===1,'near-late jump processed once');
   const repeat=send({...NEUTRAL,jump:1});
   await until(()=>(driver.input.control?.appliedSeq??0)>=repeat,'repeated counter frame applied');

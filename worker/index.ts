@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { RoomClock } from './room-clock';
 import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input } from '../shared/game';
 import { planCybercabDispatch } from '../shared/cybercabs';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
@@ -77,7 +78,7 @@ export class GameRoom extends DurableObject<Env> {
   private sessions=new Map<WebSocket,Session>();
   private inputs=new Map<string,Input>();
   private draining=new Map<string,EconomySession>();
-  private timer:ReturnType<typeof setInterval>|null=null;
+  private timer:ReturnType<typeof setTimeout>|null=null;
   private tickCount=0;
   private roomEpoch=crypto.randomUUID();
   private lastSubsteps=1;
@@ -337,7 +338,7 @@ export class GameRoom extends DurableObject<Env> {
     server.send(JSON.stringify({type:'welcome',id,playtestMode:this.playtest,version:PROTOCOL_VERSION,capacity,tick:this.tickCount,roomEpoch:this.roomEpoch,substeps:this.lastSubsteps,poseRevision:0}));
     server.send(JSON.stringify({type:'state',world:snapshotFor(this.world,id),tick:this.tickCount,roomEpoch:this.roomEpoch,substeps:this.lastSubsteps,poseRevision:0,control:control.snapshot()}));
     economy?.initialWallet();this.refresh();
-    if(!this.timer)this.timer=setInterval(()=>this.tick(),50);
+    if(this.timer===null)this.startTicks();
     return new Response(null,{status:101,webSocket:client});
   }
 
@@ -698,6 +699,23 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
+  private startTicks():void{
+    if(this.timer!==null)return;
+    const clock=new RoomClock(Date.now());
+    const run=()=>{
+      this.timer=null;
+      try{this.tick();}finally{
+        if(this.sessions.size)this.timer=setTimeout(run,clock.afterStep(Date.now()));
+      }
+    };
+    this.timer=setTimeout(run,50);
+  }
+
+  private stopTicks():void{
+    if(this.timer!==null)clearTimeout(this.timer);
+    this.timer=null;
+  }
+
   private tick():void{
     const now=Date.now();
     for(const [socket,session] of this.sessions)if(now-session.lastMessage>30_000)this.disconnect(socket,1001,'Connection inactive');
@@ -825,8 +843,8 @@ export class GameRoom extends DurableObject<Env> {
     removePlayer(this.world,session.id);
     try{socket.close(code,reason);}catch{}
     if(!this.sessions.size){
-      if(this.timer)clearInterval(this.timer);
-      const {fund,roomFund}=this.world.mars;this.timer=null;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;this.world.mars.roomFund=roomFund;
+      this.stopTicks();
+      const {fund,roomFund}=this.world.mars;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;this.world.mars.roomFund=roomFund;
       this.ready=null;this.propertyRevision=0;this.pickupGenerations=new Map();this.pendingPickups=new Set();
     }
   }
