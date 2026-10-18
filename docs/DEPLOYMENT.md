@@ -2,7 +2,7 @@
 
 The game uses one Worker for the Vite assets and API, with one Durable Object per multiplayer room. The checked-in `wrangler.jsonc` names the existing production Worker `bay-drive`. Room state is ephemeral; a deployment, runtime restart or last disconnect can reset it. Rooms are public by code, not private, and active rooms incur Durable Object and WebSocket usage.
 
-The project's [production game](https://bay-drive.swyxio.workers.dev) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. The staging preview was initially deployed manually; it updates automatically only after the Git integration and preview builds are connected and verified.
+The project's [production game](https://bay-drive.swyxio.workers.dev) and [staging preview](https://staging-bay-drive.swyxio.workers.dev) are public. Cloudflare Workers Builds is connected to the public repository; the first automatic deployments still need verification.
 
 ## Deploy your own copy
 
@@ -12,7 +12,7 @@ The project's [production game](https://bay-drive.swyxio.workers.dev) and [stagi
 
 ## Native Workers Builds
 
-Cloudflare [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) connects an existing Worker to a GitHub repository. The intended project setup is:
+Cloudflare [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) connects an existing Worker to a GitHub repository. The project is configured as follows:
 
 | Setting | Value |
 | --- | --- |
@@ -24,6 +24,8 @@ Cloudflare [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/buil
 | Build variable | `PNPM_VERSION=10.33.1` |
 
 Workers Builds installs dependencies based on the pnpm lockfile. `.nvmrc` selects Node 22.23.2. Enable preview builds for non-production branches. The production command runs only after the tests and build succeed. Cloudflare creates GitHub check runs and can post preview links on pull requests; branch/fork behavior depends on the GitHub App's access and Cloudflare settings.
+
+The dedicated `bay-drive Workers Builds` user token has Workers Scripts edit and Account Settings read for the Cloudflare account. Workers Scripts edit is account-wide, so anyone able to execute a build with that token has access to other Workers in the account. Review changes to build scripts and restrict who can push to build-triggering branches; do not place untrusted contributor code in a privileged build without review.
 
 The checked-in `previews` block supplies `MAX_PLAYERS` and the `ROOMS` binding separately. Cloudflare [automatically isolates each Preview's Durable Object namespace](https://developers.cloudflare.com/workers/previews/resources/); preview rooms do not join production rooms. Worker Previews are a Cloudflare open beta. A preview URL is shareable, not an access-control mechanism. Previews and production have separate settings: if new bindings or secrets are added, configure preview-safe equivalents explicitly. Do not put production secrets in previews or Git.
 
