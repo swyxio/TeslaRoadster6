@@ -10,7 +10,7 @@ export const RELEASES = [
     intro: 'Visit four research stops, give your car a new look and explore the economy taking shape.',
     sections: [
       { title: 'Explore and customize', items: [
-        'Stop by UCSF, UC Berkeley, Stanford and SFO for a research award and a related workshop discount.',
+        'Stop by UCSF, UC Berkeley, Stanford and SFO for research awards; the latter three also unlock workshop discounts.',
         'Buy paint and decals at a workshop; other drivers can see your finish and your name above the car.',
         'Read the economy story for delivery and fleet simulations, a Bay landmark map and an interactive tower planner.'
       ] }
