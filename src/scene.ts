@@ -10,6 +10,9 @@ import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { box, material, createVehicle, setThrusterEffects } from './vehicles';
+import { cockpitPose } from './camera';
+
+export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
@@ -27,6 +30,7 @@ export class GameScene {
   private labels:T.Sprite[]=[];
   private objective=new T.Group();
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
+  private objectiveBeam=new T.Mesh(new T.CylinderGeometry(.5,1,18,8,1,true),new T.MeshBasicMaterial({color:0xffcf75,transparent:true,opacity:.24,depthWrite:false,side:T.DoubleSide}));
   private focus = new T.Vector3(0,1,24);
   private follow = new T.Vector3();
   private surfaceUp = new T.Vector3();
@@ -39,7 +43,14 @@ export class GameScene {
   private rollAxis = new T.Vector3(0,0,1);
   private basis = new T.Matrix4();
   private cameraReady = false;
-  wideCamera = false;
+  cameraMode:CameraMode = 'chase';
+  private renderedCockpit=false;
+  private marker = new T.Vector3();
+  cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'wide':'chase';this.cameraReady=false;}
+  objectiveScreen(){
+    this.marker.copy(this.objective.position);this.marker.y+=3;this.marker.project(this.camera);
+    return {x:(this.marker.x+1)/2,y:(1-this.marker.y)/2,visible:this.objective.visible&&this.marker.z>=-1&&this.marker.z<=1&&Math.abs(this.marker.x)<1&&Math.abs(this.marker.y)<1};
+  }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
@@ -53,7 +64,7 @@ export class GameScene {
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
-    const beam=new T.Mesh(new T.CylinderGeometry(.5,1,18,8,1,true),new T.MeshBasicMaterial({color:0xffcf75,transparent:true,opacity:.24,depthWrite:false,side:T.DoubleSide}));beam.position.y=9;this.objective.add(beam);
+    this.objectiveBeam.position.y=9;this.objective.add(this.objectiveBeam);
     this.scene.add(this.objective);
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
     window.addEventListener('resize',resize); resize();
@@ -102,6 +113,10 @@ export class GameScene {
     this.hemisphere.intensity=.8+daylight*.6;
     this.sun.intensity=.5+daylight*1.7;
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
+    const player=world.players.find(p=>p.id===playerId);
+    const controlled=world.entities.find(e=>e.id===player?.entityId);
+    const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
+    if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -115,6 +130,7 @@ export class GameScene {
         const blue=box(mesh,.23,h+.15,0,.4,.15,.28,0x3caaff);blue.name='police-blue';
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
+      mesh.visible=!(cockpit&&e.id===controlled?.id);
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       if(e.kind==='roadster')setThrusterEffects(mesh,e.thrusters,world.time);
@@ -139,20 +155,26 @@ export class GameScene {
       if(!mesh){mesh=new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024}));mesh.position.set(pickup.x,1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);}
       mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=1.7+Math.sin(performance.now()*.002)*.3;
     }
-    const player=world.players.find(p=>p.id===playerId);
-    const e=world.entities.find(e=>e.id===player?.entityId);
+    const e=controlled;
     this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    this.objectiveBeam.visible=!cockpit;
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
-    }else if(e){
+    }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
-      const distance=this.wideCamera?30:portrait?18:15;
+      const distance=this.cameraMode==='wide'?30:portrait?18:15;
       const lookAhead=portrait?-6:5;
-      this.follow.set(e.x+Math.sin(e.yaw)*distance,e.y+(this.wideCamera?23:8),e.z+Math.cos(e.yaw)*distance);
+      this.follow.set(e.x+Math.sin(e.yaw)*distance,e.y+(this.cameraMode==='wide'?23:8),e.z+Math.cos(e.yaw)*distance);
       this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*lookAhead,e.y+1.3,e.z-Math.cos(e.yaw)*lookAhead),1-Math.exp(-8*dt));
     }
-    if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
-    this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;this.renderer.render(this.scene,this.camera);
+    if(cockpit&&e&&e.kind!=='person'){
+      const mesh=this.entities.get(e.id)!;const pose=cockpitPose(mesh.position,mesh.quaternion,VEHICLES[e.kind]);
+      this.camera.position.copy(pose.position);this.camera.quaternion.copy(pose.quaternion);this.cameraReady=true;
+    }else{
+      if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
+      this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);
+    }
+    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
 }

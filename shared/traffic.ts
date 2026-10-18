@@ -62,7 +62,7 @@ export function engageAutopilot(e:Entity):boolean {
   Object.assign(e,{autopilot:true,routeId,waypoint,pauseUntil:0});return true;
 }
 export function trafficInput(e:Entity,world:World):Input {
-  const neutral:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0};
+  const neutral:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
   if(e.kind==='person')return neutral;
   if(e.supportId===null)return neutral; // Resume the ground route after landing.
   if(e.supportId!=='ground'){e.autopilot=false;return neutral;}

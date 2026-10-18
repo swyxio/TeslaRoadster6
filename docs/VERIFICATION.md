@@ -1,5 +1,10 @@
 # Verification · 2026-10-17 Pacific
 
+## Cockpit view · protocol v10 · 2026-10-17 Pacific
+
+- On the pre-HUD-integration checkout, `pnpm run ci` passed 115 tests and the production build; local Wrangler two-client integration replicated cockpit selection, active time and switching back, alongside existing multiplayer checks. Camera pose tests cover pitch and roll; simulation tests cover complete and mixed-view runs, paused intervals, on-foot use and malformed flags. Camera claims are not anti-cheat proof.
+- Chrome desktop solo: switched to cockpit, drove, jumped and flipped with the view rolling with the vehicle, and saw first-person active time in the leaderboard. Chrome 390×844 portrait and 844×390 landscape emulation showed dashboard guidance and driving controls; the on-foot chase fallback and a switch to Model 3 were observed. The destination began behind the car, so the projected in-view sign was not manually verified in this pass. These are browser emulation, not physical touch, frame-rate or motion-comfort tests.
+
 ## Synthesized audio with Bay integration · 2026-10-17 Pacific
 
 - After integrating the protocol-v9 Bay expansion, `pnpm run ci` passed 111 tests and the build. The existing chunk-size warning remains. Audio tests include supported landing on elevated roads and rooftops and a near-full station refill.
