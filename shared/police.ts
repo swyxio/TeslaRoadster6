@@ -2,6 +2,7 @@ import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
 import { OVERPASS, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
+import { islandProtected } from './ferry';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -67,9 +68,9 @@ export function updatePolice(world:World,dt:number):void {
     const state=cop.police;if(!state)continue;
     let player=world.players.find(p=>p.id===state.targetId);
     let target=world.entities.find(e=>e.id===player?.entityId);
-    if(state.targetId&&(!player||!target||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
+    if(state.targetId&&(!player||!target||islandProtected(target)||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
+      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&!islandProtected(e)&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
       if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target){

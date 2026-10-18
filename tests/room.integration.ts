@@ -30,6 +30,18 @@ try {
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
+  for(const state of [one.state,two.state]){
+    assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
+    assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);
+    assert.ok(state.world!.pickups.some(p=>p.kind==='rocket'),'Rocket pads are replicated');
+    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'vehicle capability expiry is replicated');
+  }
+  one.socket.send(JSON.stringify({type:'parking',action:'park'}));
+  await delay(450);
+  assert.equal(two.state.world!.parking.rounds.length,0,'remote parking intent cannot join from outside a lot');
+  one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
+  await delay(450);
+  assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
@@ -62,5 +74,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, traffic snapshot, room clock, surface identity, remote movement and drift, delivery state, police, jump, flip, landing, fleet selection, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, ferry and activity snapshots, rejected remote activity intents, Rocket pads, traffic, movement, delivery, police, stunts, fleet selection, invalid-input isolation and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
 } finally { one.socket.close(); two.socket.close(); }

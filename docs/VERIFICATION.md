@@ -1,5 +1,13 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket Island · protocol v10, local checkout · 2026-10-17 Pacific
+
+- Local Wrangler two-client room integration passed, including ferry/activity snapshots, Rocket pads and rejection of activity requests from outside their locations. It did not exercise a two-client ferry crossing or a load test.
+- Shared simulation tests exercise ferry boarding, crossing and return, passenger safety and recovery, island protection, temporary Rocket capability, bank support, cliff attachment and detachment. These are simulation checks rather than completed browser routes.
+- Local Chrome desktop and 390×844 portrait emulation exercised driving and Jump; the portrait run accelerated from 0 to 72 km/h and reached 4 m during Jump. The portrait Actions drawer eventually scrolled to `scrollTop` 194.
+- After same-tab Chrome recovery, 844×390 coarse-pointer emulation opened and closed Actions, held Drive from 0 to 66 km/h, and jumped to 5 m. Park It was tapped away from a lot, so joining a parking game was not verified.
+- The first local 64-client smoke was interrupted by a Wrangler reload while source files changed; it produced no capacity result. Real-device touch, complete island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified. These local observations do not establish a production deployment or performance budget.
+
 ## Synthesized audio with Bay integration · 2026-10-17 Pacific
 
 - After integrating the protocol-v9 Bay expansion, `pnpm run ci` passed 111 tests and the build. The existing chunk-size warning remains. Audio tests include supported landing on elevated roads and rooftops and a near-full station refill.

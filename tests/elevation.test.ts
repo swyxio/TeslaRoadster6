@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import {makeEntity,NEUTRAL,step,type Entity,type World} from '../shared/game';
 import {BUILDINGS,HIGHWAYS,HILL,OVERPASS,isLand,overpassHeight,supportHeight,supportNormal,terrainHeight} from '../shared/map';
 import {dimensions} from '../shared/physics';
+import {createFerry} from '../shared/ferry';
+import {createParking} from '../shared/parking';
+import {createRace} from '../shared/race';
 
-const isolated=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0});
+const isolated=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace()});
 const drive=new Map([['p',{...NEUTRAL,throttle:1}]]);
 
 test('hill is supported land with shared triangular heights and normals',()=>{

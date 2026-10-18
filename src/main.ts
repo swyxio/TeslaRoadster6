@@ -10,12 +10,17 @@ import { Controls } from './controls';
 import { GameAudio } from './audio';
 import { STATIONS } from '../shared/stations';
 import { type Entity } from '../shared/game';
+import { ferryDocked, ferrySecured, islandProtected, FERRY_DECK } from '../shared/ferry';
+import { hasRocket } from '../shared/rocket';
+import { PARKING_LOTS } from '../shared/parking-lots';
+import { RACE_COURSES } from '../shared/race-courses';
+import { playerRace } from '../shared/race';
 import { orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
 import { celebrateReward, resetCelebration } from './rewards';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
-import { BRIDGES, DISTRICTS, HIGHWAYS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, terrainHeight } from '../shared/map';
+import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, terrainHeight } from '../shared/map';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -39,11 +44,11 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="invite">↗ Invite</button><button id="camera">C · Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
- <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
- <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive, reverse, pitch &amp; bank</p><p><kbd>SPACE</kbd> brake · steer while moving to drift</p><p><kbd>J</kbd> jump &nbsp; <kbd>X</kbd> flip &nbsp; <kbd>H</kbd> hover</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / E</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>R</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Flight controls are available in the Roadster Rocket.</small></div></div>
+ <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="invite">↗ Invite</button><button id="camera">C · Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button><button id="parking-park">Park It</button><button id="parking-queue">Cut the queue</button><button id="parking-start">Start queue</button><button id="parking-leave">Leave parking game</button></div></div>
+ <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
+ <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div id="rocket-status" hidden></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive, reverse, pitch &amp; bank</p><p><kbd>SPACE</kbd> brake · steer while moving to drift</p><p><kbd>J</kbd> jump &nbsp; <kbd>X</kbd> flip &nbsp; <kbd>H</kbd> hover</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / E</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>R</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Find the SF dock north of the city and drive onto the ferry for Rocket Island. Pick up a Rocket pad to give any car temporary flight. At a parking lot, use Actions for Park It or Cut the queue.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyJ" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / VEHICLE COLLECTION</span><h2 id="fleet-title">See other vehicles.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Every model is driving around town and parked nearby. Borrow one, or choose your next ride here.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
@@ -98,7 +103,7 @@ function setDrawer(drawer: 'actions' | 'controls' | null) {
 }
 $('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
 $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
-$('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button'))setDrawer(null);},{capture:true});
+$('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button')){setDrawer(null);if(event.detail===0)$('actions-toggle').focus();}},{capture:true});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const roomParam = new URLSearchParams(location.search).get('room');
@@ -125,6 +130,26 @@ function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'sco
 controls.onAction=action;
 $('autopilot').onclick=()=>action('autopilot');$('fleet').onclick=()=>openFleet();$('scores').onclick=()=>openScores();$('awards').onclick=()=>openAwards();
 $('interact').onclick=()=>action('interact');$('recover').onclick=()=>action('reset');$('camera').onclick=()=>action('camera');
+for(const action of ['park','queue','start','leave'] as const){
+  $('parking-'+action).onclick=()=>{
+    session.parkingAction(action);
+    if(action==='park'||action==='queue')notice(action==='park'?'Park It: join from inside a parking lot.':'Cut the queue: join from its marked approach.');
+  };
+}
+const activityHelp=document.createElement('p');activityHelp.className='activity-help';
+activityHelp.textContent='Take the ferry from north SF to Rocket Island. Drive over a Rocket pad for temporary flight. At a parking lot, join Park It or enter the marked approach for Cut the queue. Race from an island start marker; cars can bump. Keyboard: use Tab and Enter to choose an action.';
+const keyboardHelp=$('keyboard-help').querySelector('small');
+if(keyboardHelp)keyboardHelp.textContent+=' Use Tab to reach Actions, Enter to open it, then Tab and Enter to choose a game.';
+$('drive-actions').insertAdjacentHTML('beforeend','<label class="race-choice" for="race-course">RACE COURSE<select id="race-course"><option value="short">Short circuit</option><option value="oval">Speed oval</option></select></label><button id="race-join">Join race</button><button id="race-start">Start race</button><button id="race-leave">Leave race</button>');
+$('drive-actions').append(activityHelp);
+for(const action of ['join','start','leave'] as const){
+  $('race-'+action).onclick=()=>{
+    const active=playerRace(session.world.races,session.id);
+    const course=(action==='join'?$<HTMLSelectElement>('race-course').value:active?.round.courseId??$<HTMLSelectElement>('race-course').value) as 'short'|'oval';
+    session.raceAction(action,course);
+    if(action==='join')notice('Race: join at the selected island start marker. Cars can bump.');
+  };
+}
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
 $('invite').onclick=async()=>{
@@ -149,18 +174,36 @@ function minimap(entity:Entity|undefined){
     mapKey=key;base.fillStyle='#315965';base.fillRect(0,0,240,240);
     for(const r of REGIONS){base.beginPath();r.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.closePath();base.fillStyle=r.id==='marin'||r.id==='yerba'?'#819981':'#b5b4a3';base.fill();}
     base.fillStyle='#6e7b78';for(const road of localRoads){
-      const x=px(road.x-road.w/2),z=pz(road.z-road.d/2),w=Math.max(.5,road.w*scale),d=Math.max(.5,road.d*scale);
-      if(x+w>=0&&x<=240&&z+d>=0&&z<=240)base.fillRect(x,z,w,d);
+      const x=px(road.x),z=pz(road.z),w=Math.max(.5,road.w*scale),d=Math.max(.5,road.d*scale),radius=Math.hypot(w,d)/2;
+      if(x+radius<0||x-radius>240||z+radius<0||z-radius>240)continue;
+      base.save();base.translate(x,z);base.rotate(-(road.angle??0));base.fillRect(-w/2,-d/2,w,d);base.restore();
     }
     base.strokeStyle='#e8d0a0';base.lineWidth=mapLocal?Math.max(2,32*scale):1.5;
     for(const highway of HIGHWAYS){base.beginPath();highway.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.stroke();}
     base.strokeStyle='#d6c7a6';base.lineWidth=mapLocal?Math.max(2,24*scale):2;
     for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
     base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('SF',px(-120)-12,pz(0));base.fillText('OAKLAND',px(385)+4,pz(-150));
+    base.fillText('ROCKET ISLAND',px(200)-22,pz(-1650));
+    for(const dock of Object.values(FERRY_DOCKS)){
+      const x=px(dock.x),z=pz(dock.z);base.beginPath();base.moveTo(x,z-4);base.lineTo(x+4,z);base.lineTo(x,z+4);base.lineTo(x-4,z);base.closePath();base.fillStyle='#e9f6ee';base.fill();
+    }
+    for(const lot of PARKING_LOTS){base.fillStyle='#ffd386';base.fillRect(px(lot.area.x)-2,pz(lot.area.z)-2,4,4);}
+    for(const course of RACE_COURSES){base.fillStyle='#e6a6e6';base.fillRect(px(course.start.x)-2,pz(course.start.z)-2,4,4);}
+    base.fillStyle='#eef0d9';
     for(const district of DISTRICTS.filter(d=>d.id==='san-jose'||d.id==='fremont'||d.id==='palo-alto'))base.fillText(district.name.toUpperCase(),px(district.x)+4,pz(district.z));
     base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);
   }
   map.drawImage(mapBase,0,0);
+  const ferry=session.world.ferry;
+  map.save();map.translate(px(ferry.x),pz(ferry.z));map.fillStyle='#f8f8ed';map.strokeStyle='#23535b';map.lineWidth=1.5;map.beginPath();map.rect(-3,-6,6,12);map.fill();map.stroke();map.restore();
+  const parkingRound=session.world.parking.rounds.find(r=>r.entrants.some(entrant=>entrant.playerId===session.id));
+  const parkingEntrant=parkingRound?.entrants.find(entrant=>entrant.playerId===session.id);
+  const stall=PARKING_LOTS.find(lot=>lot.id===parkingRound?.lotId)?.stalls.find(stall=>stall.id===parkingEntrant?.targetId);
+  if(stall){map.beginPath();map.arc(px(stall.x),pz(stall.z),6,0,Math.PI*2);map.strokeStyle='#ffb858';map.lineWidth=2;map.stroke();}
+  const racing=playerRace(session.world.races,session.id);
+  const raceRound=racing?.round,racer=racing?.entrant;
+  const gate=RACE_COURSES.find(course=>course.id===raceRound?.courseId)?.gates[racer?.nextGate??-1];
+  if(gate){map.beginPath();map.arc(px(gate.x),pz(gate.z),7,0,Math.PI*2);map.strokeStyle='#efbaf1';map.lineWidth=2;map.stroke();}
   STATIONS.forEach(s=>{map.beginPath();map.arc(px(s.x),pz(s.z),2.8,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
   session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle=e.police?'#ff7771':'#71cdd5';const size=e.police?4:2;map.fillRect(px(e.x)-size/2,pz(e.z)-size/2,size,size);});
   const player=session.world.players.find(p=>p.id===session.id);if(player){const target=orderTarget(player.delivery.order);map.beginPath();map.arc(px(target.x),pz(target.z),5,0,Math.PI*2);map.strokeStyle='#ffd384';map.lineWidth=2;map.stroke();}
@@ -237,7 +280,54 @@ for(const id of VEHICLE_IDS){const spec=VEHICLES[id],button=document.createEleme
 function openFleet(){controls.clear();controls.enabled=false;const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);showVehicle(entity&&entity.kind!=='person'?entity.kind:selectedVehicle);fleetDialog.showModal();}
 function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu;}
 $('fleet-close').onclick=closeFleet;fleetDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
-$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent='Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
+$('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.supportId==='ferry'||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent=entity?.supportId==='ferry'?'Drive off the ferry and stop before choosing a ride.':'Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Ride requested. Manual controls are fictional on wheel-less robotaxis.');};
+function updateActivities(e:Entity){
+  const world=session.world,ferry=world.ferry,secured=ferrySecured(ferry,e);
+  const nearDock=Object.values(FERRY_DOCKS).some(dock=>Math.hypot(e.x-dock.x,e.z-dock.z)<180);
+  const occupancy=world.entities.filter(car=>car.supportId==='ferry'&&car.kind!=='person').length;
+  let ferryText='';
+  if(nearDock||e.supportId==='ferry'||secured){
+    const where=ferry.phase==='sf'?'SF':ferry.phase==='island'?'Rocket Island':ferry.phase==='to-island'?'Rocket Island':'SF';
+    const timing=ferry.blocked==='ramp'?'waiting: move fully onto the deck and stop':ferry.blocked==='capacity'?'waiting: too many cars aboard':ferry.blocked==='apron'?'waiting for a clear arrival area':`${ferryDocked(ferry)?'departs':'arrives'} in ${Math.ceil(ferry.remaining)}s`;
+    ferryText=`FERRY · ${ferryDocked(ferry)?`At ${where}`:`To ${where}`} · ${timing} · ${occupancy}/${FERRY_DECK.vehicleCapacity} cars`;
+    if(secured)ferryText+=' · SECURED: controls resume on arrival; Unstuck returns to shore';
+  }
+  $('ferry-status').textContent=ferryText;
+  const round=world.parking.rounds.find(r=>r.entrants.some(entrant=>entrant.playerId===session.id));
+  const entrant=round?.entrants.find(entrant=>entrant.playerId===session.id);
+  const lot=PARKING_LOTS.find(lot=>lot.id===round?.lotId);
+  let parkingText='';
+  if(round&&entrant&&lot){
+    const remaining=Math.max(0,Math.ceil(round.endsAt-world.time));
+    const stall=lot.stalls.find(stall=>stall.id===entrant.targetId);
+    if(entrant.finishedAt!==null){
+      parkingText=round.mode==='park'?`PARK IT · Finished in ${entrant.elapsed?.toFixed(1)??'—'}s`:`QUEUE · Parked in ${entrant.elapsed?.toFixed(1)??'—'}s · ${entrant.overtakes??0} overtakes`;
+    }else if(round.phase==='results')parkingText=`${round.mode==='park'?'PARK IT':'QUEUE'} · Round ended`;
+    else if(round.mode==='park')parkingText=`PARK IT · Stall ${entrant.targetId??'—'}${stall?` · ${Math.round(Math.hypot(e.x-stall.x,e.z-stall.z))}m`:''} · hold ${entrant.hold.toFixed(1)}/2s · ${remaining}s left`;
+    else if(round.phase==='waiting')parkingText=`QUEUE · Position ${round.entrants.findIndex(p=>p.playerId===session.id)+1} · starts in ${remaining}s${round.hostId===session.id?' · Actions: Start queue':''}`;
+    else parkingText=`QUEUE · Find an empty stall · ${remaining}s left`;
+  }else if(PARKING_LOTS.some(lot=>Math.hypot(e.x-lot.area.x,e.z-lot.area.z)<Math.max(lot.area.width,lot.area.length)/2+25)){
+    parkingText='PARKING PLAYGROUND · Actions: Park It or Cut the queue';
+  }
+  $('parking-status').textContent=parkingText;
+  const racing=playerRace(world.races,session.id);
+  const race=racing?.round,racer=racing?.entrant;
+  const course=RACE_COURSES.find(course=>course.id===race?.courseId);
+  let raceText='';
+  if(race&&racer&&course){
+    const remaining=Math.max(0,Math.ceil(race.endsAt-world.time)),name=course.name.toUpperCase();
+    if(racer.status==='finished')raceText=`${name} · Finished ${racer.elapsed?.toFixed(1)??'—'}s${racer.rank?` · #${racer.rank}`:''}`;
+    else if(racer.status==='dnf')raceText=`${name} · Did not finish`;
+    else if(race.phase==='lobby')raceText=`${name} · Lobby ${race.entrants.length}/8 · starts in ${remaining}s${race.hostId===session.id?' · Actions: Start race':''}`;
+    else if(race.phase==='countdown')raceText=`${name} · Starting in ${remaining}s`;
+    else{
+      const gate=course.gates[racer.nextGate];
+      const feedback=racer.feedback==='wrong-way'?' · WRONG WAY':racer.feedback==='missed-gate'?' · MISSED GATE: return to checkpoint':'';
+      raceText=`${name} · Gate ${racer.nextGate+1}/${course.gates.length}${gate?` · ${Math.round(Math.hypot(e.x-gate.x,e.z-gate.z))}m`:''} · ${remaining}s left${feedback}`;
+    }
+  }else if(RACE_COURSES.some(course=>Math.hypot(e.x-course.start.x,e.z-course.start.z)<course.start.radius+20))raceText='RACE START · Choose a course in Actions. Cars can bump.';
+  $('race-status').textContent=raceText;
+}
 scene.start(dt=>{
   const input=controls.read();session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));scene.render(session.world,session.id,dt,menu);
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;
@@ -251,10 +341,13 @@ scene.start(dt=>{
   $('vehicle').textContent=spec?.name.toUpperCase()??'ON FOOT';
   $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${e.autopilot?' · AUTONOMOUS':''}`:'';
   $('autopilot').textContent=e.autopilot?'V · AV on':'V · AV off';$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
-  const airborne=e.loopAngle===null&&e.supportId===null;controls.airborne=airborne&&!!spec?.airThrusters;
+  const secured=ferrySecured(session.world.ferry,e),rocket=hasRocket(e,session.world.time);
+  const airborne=e.loopAngle===null&&e.supportId===null;controls.airborne=airborne&&rocket&&!secured;
   for(const control of ['KeyQ','KeyE','KeyH','ShiftLeft','KeyJ']){
-    const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!spec?.airThrusters;
+    const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket||secured;
   }
+  $('rocket-status').hidden=!rocket||!!spec?.airThrusters;
+  $('rocket-status').textContent=rocket&&!spec?.airThrusters?`TEMP ROCKET · ${Math.ceil(e.rocketUntil-session.world.time)}s`:'';
   $('flight').textContent=e.loopAngle!==null?'SUCTION':airborne?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',airborne||e.loopAngle!==null);
   $('jump-control').textContent=airborne?'AIR JUMP':'JUMP ↑';$('jump-control').setAttribute('aria-label',airborne?'Air jump':'Jump');
   $('drive-control').textContent=controls.airborne?'FLIP ↻':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Flip':'Drive');
@@ -271,13 +364,13 @@ scene.start(dt=>{
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
     $('mission').textContent=`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
-    const paused=session.world.time>d.activeUntil;
+    const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
-    $('hint').textContent=order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`;
+    $('hint').textContent=(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
     if(d.lastReward&&d.lastReward.id>lastRewardId){lastRewardId=d.lastReward.id;celebrateReward(d.lastReward);}
     $('delivery-stats').textContent=`${money(d.cash)} earned · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
-    $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
+    $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'Rocket Island and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
     $('police-status').classList.toggle('chased',chased);
     if(scoresDialog.open)updateScores();if(awardsDialog.open)updateAwards();
     const newAwards=player.achievements.unlocked.filter(id=>!seenAchievements.has(id));
@@ -285,6 +378,7 @@ scene.start(dt=>{
     if(newAwards.length&&!achievementTimer)announceAchievements();
     if(d.lastTicket&&d.tickets>lastTicketCount&&!menu&&session.status!=='disconnected'&&!ticketDialog.open){lastTicketCount=d.tickets;showTicket(d.lastTicket);}
   }
-  $('air').textContent=spec?.airThrusters?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=spec?.airThrusters?`${e.air}%`:'0%';
+  $('air').textContent=rocket?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=rocket?`${e.air}%`:'0%';
+  updateActivities(e);
   $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e);
 });

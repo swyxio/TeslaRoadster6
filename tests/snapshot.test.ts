@@ -24,4 +24,6 @@ test('snapshots retain players and owned cars, while ambient traffic follows the
   visible = snapshotFor(world, 'one');
   assert.ok(visible.entities.includes(ambient), 'approaching vehicles appear in a complete snapshot');
   assert.ok(world.entities.includes(ambient), 'filtering does not mutate the authoritative world');
+  ambient.x=viewer.x+AMBIENT_INTEREST_METERS*3;ambient.supportId='ferry';
+  assert.ok(snapshotFor(world,'one').entities.includes(ambient),'ferry passengers remain visible outside ambient interest');
 });

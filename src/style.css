@@ -98,3 +98,13 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 @media(pointer:coarse),(max-width:800px){.top-actions{gap:6px}.sound-button{width:44px;height:44px}}
 @media(max-height:550px){.sound-dialog{padding:16px;max-height:94dvh}.sound-sliders{gap:8px;margin:10px 0}.sound-dialog .fleet-intro{margin:6px 0}.sound-actions button{min-height:40px}}
 @media(max-width:360px){.topbar{padding:0 10px}.brand{font-size:16px}.brand-icon{margin-right:4px}.top-actions{gap:4px}.pill{font-size:7px;letter-spacing:.4px;padding:6px;white-space:nowrap}.sound-button{width:38px;height:38px}}
+
+/* Context for the ferry and optional parking games stays visible on touch. */
+.mission #ferry-status,.mission #parking-status,.mission #race-status{font-size:10px;line-height:1.35;color:#ffe0aa}
+.mission #ferry-status:empty,.mission #parking-status:empty,.mission #race-status:empty{display:none}
+#rocket-status{margin-top:7px;color:#ffd08e;font:700 9px ui-monospace,monospace;letter-spacing:.5px}
+#rocket-status[hidden]{display:none}
+.activity-help{margin:7px 10px 10px;color:#bcd2c8;font:11px/1.5 system-ui}
+.race-choice{display:grid;gap:5px;margin:10px 10px 2px;color:#c3d8cc;font:700 10px ui-monospace,monospace;letter-spacing:.6px}.race-choice select{width:100%;min-height:40px;border:1px solid #a9cbbb55;border-radius:6px;background:#203e42;color:#f9e9d1;padding:8px;font:12px system-ui}
+@media(pointer:coarse),(max-width:800px){.mission #ferry-status,.mission #parking-status,.mission #race-status{font-size:9px}.activity-help{font-size:11px}}
+@media(max-height:550px) and (pointer:coarse){.mission #ferry-status,.mission #parking-status,.mission #race-status{display:block}.mission #ferry-status:empty,.mission #parking-status:empty,.mission #race-status:empty{display:none}#rocket-status{font-size:8px;margin-top:2px}}

@@ -4,6 +4,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
+This checkout contains the Rocket Island expansion; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
+
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and potentially a costly citation; repeat and more serious flights increase the fine. Some Roadster orders lead to rooftops. Earn session achievements for rooftop landings, deliveries, and flying across the Bay. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
@@ -14,7 +16,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Proposal:** [Rocket Island and parking playgrounds](docs/ROCKET_ISLAND_PLAN.md) are planned, not yet implemented.
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a separate banked lane, an inverted cliff, a short circuit and speed oval. Purple Rocket pads temporarily give any vehicle the Roadster's fictional air moves. The two registered parking playgrounds offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -48,6 +50,9 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 - **C:** alternate chase camera. **R:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake or Rev while steering to drift. Tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
+- At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The ferry HUD shows its countdown and whether an obstruction is holding departure.
+- Drive over a purple Rocket pickup in a car to refill air and grant that vehicle 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds; the stock Rocket Roadster remains capable permanently.
+- At a marked parking playground, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
 
 ## Boundaries
@@ -72,6 +77,11 @@ shared/achievements.ts  Session awards and flight tracking
 shared/day.ts       Accelerated day clock and demand profiles
 shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
+shared/ferry.ts     Authoritative ferry and passenger attachment
+shared/rocket.ts    Vehicle-local temporary Rocket pickups
+shared/island-stunts.ts  Shared bank and cliff surfaces
+shared/parking*.ts  Parking playground definitions and rounds
+shared/race*.ts     Island courses and race rounds
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 src/session.ts     Solo/multiplayer transport adapter
@@ -80,6 +90,7 @@ src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
 src/scene.ts       Three.js world and camera
 src/bay-world.ts   Compressed Bay Area environment and landmarks
+src/island-stunts.ts  Bank and cliff meshes from shared geometry
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment

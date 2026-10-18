@@ -134,6 +134,7 @@ export class GameAudio {
       case 'pursuit':tone(740,560,.18,.13,'square');tone(740,560,.18,.13,'square',.22);break;
       case 'ticket':tone(440,330,.28,.16,'triangle');tone(330,220,.36,.14,'triangle',.16);break;
       case 'achievement':for(const [i,n] of [76,79,84,88].entries())tone(midi(n),midi(n),.24,.1,'triangle',i*.1);break;
+      case 'ferry':tone(115,105,.65,.12,'sine');tone(172,158,.55,.045,'sine');break;
     }
   }
   private scheduleMusic():void {

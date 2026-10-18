@@ -63,14 +63,14 @@ export function payoutFor(order: Order): number {
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
   return Math.max(0, order.base + bonus - latePenalty);
 }
-export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false): void {
+export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false): void {
   const delivery = player.delivery;
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
   if (active) {
     delivery.activeSeconds += dt;
-    delivery.order.elapsed += dt;
+    if(!orderPaused)delivery.order.elapsed += dt;
   }
   const target = orderTarget(delivery.order);
   if(entity.vy>.1||Math.abs(entity.speed)>4)return;

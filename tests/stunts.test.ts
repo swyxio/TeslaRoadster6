@@ -4,10 +4,13 @@ import {makeEntity,NEUTRAL,step,THRUSTER_REAR,THRUSTER_DOWN_LEFT,THRUSTER_DOWN_R
 import {STUNT_LOOP,STUNT_RAMP,rampHeight} from '../shared/map';
 import {initialDelivery} from '../shared/delivery';
 import {initialAchievements} from '../shared/achievements';
+import {createFerry} from '../shared/ferry';
+import {createParking} from '../shared/parking';
+import {createRace} from '../shared/race';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()}],pickups:[],time:0};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()}],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace()};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }

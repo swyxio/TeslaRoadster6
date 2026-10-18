@@ -1,5 +1,5 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, resetPlayer, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, resetPlayer, type World, type Input } from '../shared/game';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
   world: World = createWorld();
@@ -47,6 +47,8 @@ export class Session {
     }
   }
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
+  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')parkingAction(this.world,this.id,action);else this.send({type:'parking',action});}
+  raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
   action(type: 'interact' | 'reset' | 'autopilot') {
     if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:resetPlayer)(this.world, this.id);
     else this.send({type});

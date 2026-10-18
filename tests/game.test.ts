@@ -56,6 +56,11 @@ test('protocol rejects malformed, non-finite, oversized and out-of-range input',
   assert.equal(parseMessage('{"type":"input","input":{"throttle":1e999}}'), null);
   assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, boost: 1 } })), null);
   assert.equal(parseMessage(JSON.stringify({ type: 'input', input: { ...NEUTRAL, jump: -1 } })), null);
+  assert.ok(parseMessage('{"type":"parking","action":"park"}'));
+  assert.equal(parseMessage('{"type":"parking","action":"award"}'),null);
+  assert.ok(parseMessage('{"type":"race","action":"join","courseId":"short"}'));
+  assert.equal(parseMessage('{"type":"race","action":"finish","courseId":"short","elapsed":0}'),null);
+  assert.equal(parseMessage('{"type":"race","action":"join","courseId":"__proto__"}'),null);
   assert.equal(roomSlug('/api/room/bay-1'), 'bay-1'); assert.equal(roomSlug('/api/room/../../bad'), null);
   assert.equal(roomCapacity(), 64); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 64);
 });
