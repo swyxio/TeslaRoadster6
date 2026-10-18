@@ -857,3 +857,5 @@ The unbound Starship ledger extension was tested against isolated local Wrangler
 
 The unbound developer scheduling handler passed focused Node tests and a lightweight isolated Wrangler test for missing or invalid credentials, successful scheduling, duplicate requests, overlap and minimum lead time. The handler is not yet routed or configured in the game. The construction-stage thresholds, event arithmetic and launch-clock helpers passed focused tests; the staged spaceport model has not been visually inspected.
 
+The unbound room-event store passed an isolated local Wrangler test for idempotent win recording, refreshed ten-minute windows, half-open boundaries, same-time pagination and restart recovery. It is not connected to a match, payouts or cab settlement.
+
