@@ -20,10 +20,13 @@ export const UPGRADES = {
   tank: {name:'Air tank', price:30, description:'Double capacity and refill. Five levels of arcade flight.'},
   motor: {name:'Sport motor', price:45, description:'25% quicker acceleration and 10% higher road speed.'},
   armor: {name:'Impact armor', price:35, description:'Halves crash and hard-landing damage.'},
+  autonomyJump: {name:'Ludicrous Leap', price:150, description:'Self-driving can hop past stopped traffic. Requires rockets.'},
+  autonomySky: {name:'Maximum Plaid', price:300, description:'Self-driving can fly and use helpful air currents. Requires Ludicrous Leap and rockets.'},
   service: {name:'Repair & refill', price:12, description:'Restore condition and fill your air tank.'},
 } as const;
 export type UpgradeId=keyof typeof UPGRADES;
-export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean};
+export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean;autonomyJump:boolean;autonomySky:boolean};
+export function initialVehicleUpgrades():VehicleUpgrades{return {rocket:false,economy:false,motor:false,armor:false,autonomyJump:false,autonomySky:false};}
 export function hasRockets(e:Entity):boolean{return e.kind!=='person'&&(VEHICLES[e.kind].airThrusters||e.upgrades.rocket);}
 export function shopFor(e:Entity){
   if(e.kind==='person'||e.supportId!=='ground'||Math.abs(e.speed)>=1||Math.hypot(e.pushX,e.pushZ)>=1||Math.abs(e.vy)>=1)return undefined;

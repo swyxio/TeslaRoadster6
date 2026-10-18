@@ -22,6 +22,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       <div class="map-lightbox-legend"><span><i></i> YOU</span><span><i></i> DESTINATION</span><span><i></i> LOCKED</span><span class="map-cab-legend" hidden><i></i> CAB</span></div>
     </div>
     <div class="map-lightbox-cab" hidden><p class="map-cab-status" role="status" aria-live="polite"></p><button type="button" class="map-cab-follow" aria-pressed="false">Follow</button></div>
+    <div class="map-drive-mode"></div>
     <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
   document.body.append(dialog);
   const canvas = dialog.querySelector('canvas')!;

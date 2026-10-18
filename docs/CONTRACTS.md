@@ -1,4 +1,4 @@
-# Implementation contracts · v40 candidate
+# Implementation contracts · v41 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -27,7 +27,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 ambient families plus six Vault vehicles in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil, and current `navigation` route and arrival status; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 ambient families plus six Vault vehicles in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor`, `autonomyJump`, `autonomySky` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil, and current `navigation` route, mode and status; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (cash, lifetime delivery earnings and eligible income, level, last blocked access attempt, active time, order, completed runs, ticket state and OTA subscription), `achievements` (unlocked awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, ferry, parking rounds, race rounds, time, `mars` (`fund`, `roomFund`, `launchAt`) and authoritative `soccer` (ball position/velocity, both scores, goal/win phase, per-player class-specific touches and credited goals, last touch, and winning player IDs). A Rocket kit installed by pickup or purchase counts as a retrofit. Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v40 candidate
+## Wire protocol v41 candidate
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:40,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:41,capacity:number}`.
 
 Client messages:
 
@@ -61,8 +61,8 @@ Client messages:
 {"type":"race","action":"start","courseId":"oval"}
 {"type":"race","action":"leave","courseId":"short"}
 {"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
-{"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
-{"type":"deliveryDestination","requestId":4,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"destination","x":-120,"z":60,"mode":"road","requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"deliveryDestination","mode":"sky","requestId":4,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"starship","action":"status","requestId":11}
 {"type":"starship","action":"name","name":"Driver","requestId":12}
 {"type":"mars","action":"board","requestId":5}
@@ -88,7 +88,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:40, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:41, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -130,7 +130,7 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer request ID; corresponding results are sent only to the requester, including cooldown rejections where applicable. After a saved recovery is requested, a null identity choice leaves the driver paused until rejoin. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Both destination requests have an action fence and a private `destinationResult`. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; rooftop or unsafe/unreachable destinations are rejected. Map pins retain their normal road snapping. The driver may take over with manual controls.
+Both destination requests have an action fence, a required `mode` (`road`, `jump`, `sky`), and a private `destinationResult`. The server validates the purchased per-vehicle tier and rocket capability. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; rooftop or unsafe/unreachable destinations are rejected. Map pins retain their normal road snapping. The driver may take over with manual controls.
 
 Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and preview limit is eight; higher settings require explicit load experiments, and eight is not a validated capacity claim. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. Per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object handle wallet and income accounting. Input and physics proceed without waiting on profile RPCs. See [dated isolation and performance checks](VERIFICATION.md) for the measured conditions and limits.
 
@@ -208,9 +208,11 @@ Collision bodies are oriented rectangles using registry length/width; mass-weigh
 
 Each room starts with eight parked cars and eight city NPCs sampled from the 26-model ambient catalog. An explicit fleet seed selects the cohorts; the server chooses a new seed on room creation/reset, while pure simulation fixtures default to seed zero. All ambient models retain takeover, autonomy and manual driving coverage across cohorts. The six Vault IDs are excluded from ambient traffic and free fleet selection. Their purchase is location- and wallet-validated, and collection requires confirmed ownership at the Vault or a physical workshop. Another player cannot take an unoccupied luxury car. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting or disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
 
-Autonomy uses deterministic right-lane loops, including both directions around the Bay, speed-dependent following gaps and a timed eastbound Bay Bridge approach signal. Traffic demand follows the accelerated day, while the signal and driving behavior use real simulation seconds. Engage only on ground within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+Autonomy uses deterministic right-lane loops, including both directions around the Bay, speed-dependent following gaps and a timed eastbound Bay Bridge approach signal. Traffic demand follows the accelerated day, while the signal and driving behavior use real simulation seconds. The free-roaming cruise toggle engages on ground within 9 m of a supported street route; destination requests can also plan a checked off-road join. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
 
-The expanded map can request a destination. `shared/navigation.ts` builds a directed graph from the existing traffic lanes, snaps to a nearby connected lane, and checks the player's unlocked regions along the route. A car already on a lane facing against its direction may continue in its current direction a short distance to an intersection before following directed streets. A destination requires a driven car near a supported ground route; water, disconnected island roads, locked areas, unreachable lanes and excessive detours are rejected. The server replies to the request ID, records the route and arrival state in the entity, and clears stale manual inputs on success. Manual input cancels the route. Obstructions can still hold a car; this is arcade navigation, not a real road planner. Choosing another destination replaces the route only on success. Double-tapping Shift or using the touch-accessible delivery button requests the current order target through the same fenced destination action; rooftop targets require manual flight. Player AV steering and following use gradual adjustments except for imminent hazards.
+The expanded map can request a destination. `shared/navigation.ts` builds a directed graph from the existing traffic lanes and checks unlocked regions. A collision-checked local join can reach a connected lane from supported off-road ground; unsafe or inaccessible joins are rejected. The follower makes bounded reverse attempts when progress stalls, then reports failure instead of teleporting. Water, disconnected island roads, locked areas, unreachable lanes, airborne starts, rooftop goals and excessive detours remain unavailable. The server records route, selected mode and driving/arrived/failed status, and clears stale manual inputs on success. Manual input cancels the route. Double-tapping Shift or using the touch-accessible delivery button requests the current order target through the same fenced action.
+
+Street Pilot (`road`) is included. Ludicrous Leap (`jump`) and Maximum Plaid (`sky`) are paid per-vehicle upgrades requiring rockets, and Plaid also requires Leap. Leap may hop a stopped leader when its approach and landing are clear; Plaid may fly along a checked corridor and use a favorable thermal or jet with an exit. They consume the normal fictional rocket air and otherwise fall back to ground driving. Upgrades are applied only after the wallet commits and follow a saved driver's personal vehicle model; older saved vehicle records retain existing upgrades and default new tiers to unowned. These are bounded arcade heuristics, not a guarantee for every traffic situation.
 
 Ambient demand targets two to four unattended autonomous highway cars alongside eight city NPCs and four police. Taken cars, off-route abandoned cars and cars reattached to city routes do not count toward that target; the optional ambient pool is capped at 12 in total, so replenishment can be delayed when its reserve is full. At most one ambient car is added or removed every five simulation seconds. Removal is beyond 1,600 m from every player and preserves occupied and stopped autonomous cars; hidden off-route abandoned cars and free-flowing city-route cars may be reclaimed when the pool blocks replenishment. Available hidden spawn sites and safe removal conditions also limit how quickly traffic follows demand.
 

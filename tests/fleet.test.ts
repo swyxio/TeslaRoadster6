@@ -70,6 +70,9 @@ test('fleet commands reject forged kinds, airborne swaps and occupied player car
   assert.equal(parseMessage(JSON.stringify({type:'selectVehicle',kind:'__proto__',...fence})),null);
   assert.equal(parseMessage(JSON.stringify({type:'selectVehicle',kind:'spaceship',...fence})),null);
   assert.ok(parseMessage(JSON.stringify({type:'autopilot',...fence})));
+  for(const mode of ['road','jump','sky'])assert.ok(parseMessage(JSON.stringify({type:'deliveryDestination',mode,requestId:1,...fence})));
+  assert.equal(parseMessage(JSON.stringify({type:'deliveryDestination',mode:'teleport',requestId:1,...fence})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'deliveryDestination',requestId:1,...fence})),null);
   const world=createWorld();addPlayer(world,'a','A');addPlayer(world,'b','B');
   assert.equal(chooseVehicle(world,'a','zoox'),false,'non-Tesla vehicles must be taken from the street');
   const car=world.entities.find(e=>e.driver==='a')!;car.y=10;car.supportId=null;assert.equal(chooseVehicle(world,'a','zoox'),false);car.y=0;car.supportId='ground';
