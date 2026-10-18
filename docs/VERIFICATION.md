@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Rocket Dome with global chat · protocol v14 · 2026-10-18 Pacific
+
+- After integrating global chat, `pnpm test` passed 167/167 and `pnpm build` passed both typechecks and the production build. Vite's existing chunk-size warning remains (725 kB / 205 kB gzip main JavaScript).
+- Local Wrangler room and chat integrations passed, including the two-client wall refill and saved-driver recovery. A room run during concurrent chat testing and Wrangler reload timed out waiting for a goal; a stable rerun passed. These are not load tests.
+- Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the combined dome, score, guidance, chat button and controls. Portrait global chat opened and showed a connection to the local server. Screenshots: [desktop](screenshots/rocket-dome/desktop.png), [portrait](screenshots/rocket-dome/portrait.png), [landscape](screenshots/rocket-dome/landscape.png). The wall drive and touch limitations below still apply; no physical device or frame-rate measurement was made.
+
 ## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
 
 - After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.
