@@ -1,6 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
-## Ambient traffic reserve · local test, 2026-10-17 Pacific
+## Bay circuit, achievements and citations · protocol v9, local build
+
+- `pnpm test` passed 102/102, including support-aware achievements, severity-based police citations, rooftop delivery, Bay traffic and keyboard/touch input simulation. `pnpm build` passed; Vite warns about the 655 kB main JavaScript chunk (181 kB gzip).
+- Local Wrangler two-client integration passed for protocol, room clock, traffic, support identity, deliveries, police, stunts, fleet and disconnects. An eight-second same-host 64-client smoke passed with at least 65 snapshots/client and a 145 ms p95 inter-snapshot gap. This is not a production, WAN or sustained-load test.
+- Local Chrome desktop: drove the Bay Bridge, used Space to brake and J to jump, and opened and closed Awards. Chrome 390×844 portrait and 844×390 landscape emulation showed the driving HUD and Awards dialog. Automated touch taps did not visibly register in the final emulation; input-to-simulation tests cover touch jump and brake, but physical touch, multitouch and frame rate remain unverified. The landmark/terrain and traffic limits below still apply.
+
+## Ambient traffic reserve · historical pre-achievements integration, 2026-10-17 Pacific
 
 - A synthetic morning reconciliation test with one stationary observer and available hidden spawn sites reached the 34-car unattended target at 07:30; the largest shortfall was one car while demand rose from 14 at 06:30. The five-second interval is unchanged. This fixture does not establish actual rush-hour throughput or capacity when visibility, spacing or the reserve constrain placement.
 - Focused tests cover takeover replacement, off-route and city-route disconnect, the 68-car optional pool cap and preservation of occupied, visible or blocked cars during reclamation. These are simulation tests, not a new load or production measurement.
