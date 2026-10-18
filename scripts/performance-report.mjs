@@ -135,8 +135,8 @@ async function freePort() {
   await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()));
   return address.port;
 }
-async function command(command, args, cwd) {
-  const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+async function command(command, args, cwd, env = process.env) {
+  const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
@@ -193,19 +193,26 @@ async function main() {
   config.assets.directory = join(root, 'dist');
   await writeFile(stageFile, mountedStage);
   await writeFile(stageConfigFile, JSON.stringify(config));
+  const stageSecret = randomBytes(32).toString('hex');
+  const secretFile = join(localState, 'stage.env');
   const serverLog = [];
-  const worker = spawn(process.execPath, [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', stageConfigFile, '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspectorPort), '--var', 'PLAYTEST_X:-190', '--var', 'PLAYTEST_Z:120', '--var', 'PLAYTEST_YAW:-1.5707963267948966', '--var', 'PLAYTEST_SEED:0', '--var', 'PLAYTEST_PAUSE:1', '--persist-to', join(localState, 'storage')], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+  const safeServerLog = () => serverLog.join('').replaceAll(stageSecret, '[redacted]');
+  let worker;
   let exited = false, workerError;
-  worker.on('error', error => { workerError = error; });
-  worker.on('exit', () => { exited = true; });
-  worker.stdout.on('data', chunk => serverLog.push(String(chunk)));
-  worker.stderr.on('data', chunk => serverLog.push(String(chunk)));
   let health;
   try {
+    // Wrangler loads only this 0600 per-run secret as a secret_text binding;
+    // the recorder receives it via its environment, never command arguments.
+    await writeFile(secretFile, `PLAYTEST_STAGE_SECRET=${stageSecret}\n`, { mode: 0o600, flag: 'wx' });
+    worker = spawn(process.execPath, [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', stageConfigFile, '--env-file', secretFile, '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspectorPort), '--var', 'PLAYTEST_X:-190', '--var', 'PLAYTEST_Z:120', '--var', 'PLAYTEST_YAW:-1.5707963267948966', '--var', 'PLAYTEST_SEED:0', '--var', 'PLAYTEST_PAUSE:1', '--persist-to', join(localState, 'storage')], { cwd: root, env: { ...process.env, CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'true', CLOUDFLARE_INCLUDE_PROCESS_ENV: 'false' }, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+    worker.on('error', error => { workerError = error; });
+    worker.on('exit', () => { exited = true; });
+    worker.stdout.on('data', chunk => serverLog.push(String(chunk)));
+    worker.stderr.on('data', chunk => serverLog.push(String(chunk)));
     const deadline = Date.now() + 90000;
     while (!health && Date.now() < deadline) {
       if (workerError) throw workerError;
-      if (exited) throw new Error(`Local Worker exited before readiness: ${serverLog.join('').slice(-4000)}`);
+      if (exited) throw new Error(`Local Worker exited before readiness: ${safeServerLog().slice(-4000)}`);
       try {
         const response = await fetch(`http://127.0.0.1:${port}/api/health`);
         if (response.status >= 500) throw new Error(`Local staging fixture failed: ${await response.text()}`);
@@ -214,18 +221,18 @@ async function main() {
       if (!health) await delay(500);
     }
     if (!health) throw new Error('Local Worker did not become ready');
-    const recorderOutput = await command(process.execPath, [join(harness, 'node_modules/tsx/dist/cli.mjs'), join(harness, 'scripts/playtest-record.ts'), '--url', `http://127.0.0.1:${port}/?room=${roomName}&perf`, '--target-ref', revision, '--scenario', scenario, '--out', join(out, 'browser'), '--gpu', values.gpu, ...(values.video ? [] : ['--no-video']), '--trajectory'], harness);
+    const recorderOutput = await command(process.execPath, [join(harness, 'node_modules/tsx/dist/cli.mjs'), join(harness, 'scripts/playtest-record.ts'), '--url', `http://127.0.0.1:${port}/?room=${roomName}&perf`, '--target-ref', revision, '--scenario', scenario, '--out', join(out, 'browser'), '--gpu', values.gpu, ...(values.video ? [] : ['--no-video']), '--trajectory'], harness, { ...process.env, PLAYTEST_STAGE_SECRET: stageSecret });
     await writeFile(join(out, 'recorder.log'), recorderOutput);
   } finally {
-    if (!exited && worker.pid) {
+    if (worker && !exited && worker.pid) {
       try { process.kill(process.platform === 'win32' ? worker.pid : -worker.pid, 'SIGTERM'); } catch { /* already stopped */ }
       await Promise.race([new Promise(resolveExit => worker.once('exit', resolveExit)), delay(5000)]);
       if (!exited) {
         try { process.kill(process.platform === 'win32' ? worker.pid : -worker.pid, 'SIGKILL'); } catch { /* already stopped */ }
       }
     }
-    await writeFile(join(out, 'worker.log'), serverLog.join(''));
-    await rm(localState, { recursive: true, force: true });
+    try { await writeFile(join(out, 'worker.log'), safeServerLog()); }
+    finally { await rm(localState, { recursive: true, force: true }); }
   }
   const manifest = JSON.parse(await readFile(join(out, 'browser/manifest.json'), 'utf8'));
   const trajectory = JSON.parse(await readFile(join(out, 'browser/trajectory.json'), 'utf8'));

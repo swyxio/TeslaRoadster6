@@ -15,7 +15,8 @@ The motion model reports both steady 150 ms simulated round-trip delay and a
 bunched-delivery profile. They are separate scenarios. Browser runs use a
 fresh local room, staged start, 1280 × 720 viewport at DPR 1, and no video.
 The local fixture seeds the traffic cohort and pauses the room until the guest
-and recorder are ready, then resumes the normal room clock. The scenario opts
+and recorder are ready, then resumes the normal room clock. A generated per-run
+secret protects its local status and start endpoints. The scenario opts
 out of automatically saving the disposable driver using `freshGuest`. The player uses
 Street Pilot to reach four authoritative milestones: pickup and drop-off for
 each of two deliveries. Two observed jump bursts, a landing between jumps, and
@@ -114,8 +115,14 @@ confirms delivery, jump and flight coverage with closely aligned paths. Video
 encoding and concurrent host work make its timings unsuitable as a no-video
 baseline; its raw evidence is retained separately.
 
+The [matched no-video CI pair](performance-baselines/2026-10-18-paired-ci-route/)
+also completed both routes. Its hosted virtual runner was heavily loaded; the
+pair is a first observation to repeat, not a regression verdict or budget.
+
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 2026-10-18 · 0.0.25-alpha · `15b0a500bad046a95e87abd01e7c07090386d684` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 66.7 | 0.983–1.052 | 8.333 / 16.667 | 0.937 | [Paired CI evidence](performance-baselines/2026-10-18-paired-ci-route/); single contended run. |
+| 2026-10-18 · 0.0.28-alpha · `5c1a7c61b6d19ca9168c2327fa889326507b9b7c` | Same paired scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.934 | [Paired CI evidence](performance-baselines/2026-10-18-paired-ci-route/); single contended run. |
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |
 | 2026-10-18 · same version and commit, repeat | Same scenario and machine | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Repeat report](performance-baselines/2026-10-18-v0.0.24-aeb5704/repeat-report.json) and browser traces in the same directory; same synthetic traces as the first run. |
 | 2026-10-18 · 0.0.25-alpha · `1a5a0479570f1bde7d33ed6218c0c0df670767d2` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.7 | 0.983–1.052 | 8.333 / 16.667 | 0.952 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.25-1a5a047/); one busy-host observation. |

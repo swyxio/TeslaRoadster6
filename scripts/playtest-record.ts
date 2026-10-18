@@ -256,10 +256,13 @@ async function act(action: Action): Promise<unknown> {
       case 'waitForRoomReady': case 'beginRoom': {
         const room = target.searchParams.get('room');
         if (!['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || !room || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)) throw new Error('Room control requires a local fixture and a valid room.');
+        const stageSecret = process.env.PLAYTEST_STAGE_SECRET;
+        if (!stageSecret || !/^[0-9a-f]{64}$/i.test(stageSecret)) throw new Error('Set PLAYTEST_STAGE_SECRET to the fixture\'s 32-byte random secret in hexadecimal.');
+        const headers = { Authorization: `Bearer ${stageSecret}` };
         if (action.type === 'waitForRoomReady') {
           const deadline = performance.now() + timeout(action, 30000, 120000);
           do {
-            const response = await fetch(new URL(`/api/playtest/status/${room}`, target));
+            const response = await fetch(new URL(`/api/playtest/status/${room}`, target), { headers });
             if (!response.ok) throw new Error(`Could not inspect the local playtest room (${response.status}).`);
             const status = await response.json() as { ready?: boolean; paused?: boolean; started?: boolean };
             if (status.ready && status.paused && !status.started) { result = status; break; }
@@ -268,7 +271,7 @@ async function act(action: Action): Promise<unknown> {
           if (!result) throw new Error('Timed out waiting for a ready local playtest room.');
           break;
         }
-        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST' });
+        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers });
         if (!response.ok) throw new Error(`Could not start the local playtest room (${response.status}).`);
         result = await response.json(); break;
       }
@@ -383,7 +386,8 @@ async function act(action: Action): Promise<unknown> {
       for (const field of ['key', 'selector', 'ms', 'timeoutMs', 'state', 'name', 'id', 'completed', 'stage']) if (action[field] !== undefined) saved[field] = action[field];
       // Interactive wait-for calls are short so release cannot be blocked;
       // a fresh replay needs time for its own independent startup.
-      if (action.type === 'waitFor' || action.type === 'waitForPoseRevision') saved.timeoutMs = Math.max(Number(saved.timeoutMs ?? 0), 30000);
+      if (action.type === 'waitFor' || action.type === 'waitForPoseRevision' || action.type === 'waitForRoomReady') saved.timeoutMs = Math.max(Number(saved.timeoutMs ?? 0), 30000);
+      if (action.type === 'waitForDelivery') saved.timeoutMs = Math.max(Number(saved.timeoutMs ?? 0), 180000);
       if (action.type === 'fill') { replayable = false; saved.value = null; }
       else if (action.value !== undefined) saved.value = action.value;
       replaySteps.push(saved);

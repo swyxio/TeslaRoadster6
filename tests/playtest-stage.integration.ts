@@ -1,9 +1,9 @@
 // Run after pnpm build: pnpm exec tsx tests/playtest-stage.integration.ts
 // Uses an isolated local Wrangler process, two fresh rooms, and temporary storage.
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -34,6 +34,8 @@ async function stop(child:ChildProcess) {
 
 const directory=await mkdtemp(join(tmpdir(),'tesland-playtest-stage-'));
 const port=await freePort(),base=`http://127.0.0.1:${port}`;
+const stageSecret=randomBytes(32).toString('hex'),secretFile=join(directory,'stage.env');
+const authorization={Authorization:`Bearer ${stageSecret}`};
 const sockets:WebSocket[]=[];
 let worker:ChildProcess|undefined,logs='';
 function connect(room:string) {
@@ -58,7 +60,7 @@ function connect(room:string) {
   };
 }
 async function getStatus(room:string):Promise<Status> {
-  const response=await fetch(`${base}/api/playtest/status/${room}`,{signal:AbortSignal.timeout(5000)});
+  const response=await fetch(`${base}/api/playtest/status/${room}`,{headers:authorization,signal:AbortSignal.timeout(5000)});
   assert.equal(response.status,200);return response.json() as Promise<Status>;
 }
 function ambient(client:ReturnType<typeof connect>) {
@@ -67,12 +69,13 @@ function ambient(client:ReturnType<typeof connect>) {
 }
 
 try {
+  await writeFile(secretFile,`PLAYTEST_STAGE_SECRET=${stageSecret}\n`,{mode:0o600,flag:'wx'});
   worker=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev',
-    '--config','tests/fixtures/wrangler.playtest-stage.jsonc','--local','--ip','127.0.0.1','--port',String(port),
+    '--config','tests/fixtures/wrangler.playtest-stage.jsonc','--env-file',secretFile,'--local','--ip','127.0.0.1','--port',String(port),
     '--var','PLAYTEST_X:-190','--var','PLAYTEST_Z:120','--var',`PLAYTEST_YAW:${-Math.PI/2}`,
     '--var','PLAYTEST_SEED:0','--var','PLAYTEST_PAUSE:1',
     '--persist-to',join(directory,'storage'),'--show-interactive-dev-session','false'],
-    {cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
+    {cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none',CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV:'true',CLOUDFLARE_INCLUDE_PROCESS_ENV:'false'}});
   const append=(chunk:Buffer)=>{logs=(logs+chunk.toString()).slice(-20_000);};
   worker.stdout?.on('data',append);worker.stderr?.on('data',append);
   await until(async()=>{
@@ -102,10 +105,20 @@ try {
   assert.ok(first.messages.filter(message=>message.type==='state'&&message.tick===2).length>=2,'paused room continues to send snapshots');
   assert.equal(first.car()?.x,-190,'queued controls do not move the staged car');
 
-  const begin=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',signal:AbortSignal.timeout(5000)});
+  const wrong={Authorization:`Bearer ${randomBytes(32).toString('hex')}`};
+  for(const headers of [undefined,wrong]){
+    const status=await fetch(`${base}/api/playtest/status/${firstRoom}`,{headers,signal:AbortSignal.timeout(5000)});
+    assert.equal(status.status,401,'status requires the correct bearer token');
+    const denied=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers,signal:AbortSignal.timeout(5000)});
+    assert.equal(denied.status,401,'begin requires the correct bearer token');
+    assert.equal((await getStatus(firstRoom)).tick,2,'unauthorized begin leaves the room paused');
+  }
+  const crossOrigin=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers:{...authorization,Origin:'https://example.invalid'},signal:AbortSignal.timeout(5000)});
+  assert.equal(crossOrigin.status,403,'cross-origin controls remain blocked');
+  const begin=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers:authorization,signal:AbortSignal.timeout(5000)});
   assert.equal(begin.status,200);const started=await begin.json() as {ok:boolean;tick:number};
   assert.equal(started.ok,true);assert.equal(started.tick,2);
-  const again=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',signal:AbortSignal.timeout(5000)});
+  const again=await fetch(`${base}/api/playtest/begin/${firstRoom}`,{method:'POST',headers:authorization,signal:AbortSignal.timeout(5000)});
   assert.equal(again.status,409,'begin cannot be applied twice');
   await until(()=>first.input.tick>2&&!!first.input.control&&first.input.control.revision>pausedRevision,'normal ticks and control fence resume');
   await delay(300);
@@ -116,7 +129,8 @@ try {
   }
   await until(()=>Math.abs((first.car()?.x??startX)-startX)>1,'new input moves the car after begin');
   assert.equal((await getStatus(secondRoom)).tick,2,'starting one room leaves the other paused');
-  console.log('PASS: seeded rooms start at the same paused pose and fleet, begin is one-use, and ticks and new input resume.');
+  assert.ok(!logs.includes(stageSecret),'Wrangler output must not reveal the stage secret');
+  console.log('PASS: authenticated seeded rooms start at the same paused pose and fleet, unauthorized starts are rejected, begin is one-use, and ticks and new input resume.');
 } finally {
   for(const socket of sockets)try{socket.close();}catch{ /* already closed */ }
   if(worker)await stop(worker);

@@ -149,23 +149,36 @@ own matching fixture because internal room contracts can change.
 ### Repeatable delivery and flight route
 
 The performance scenario uses a seeded room and a synchronized start to reduce
-route variation. To run it directly with video, start the local-only fixture
-with a fresh state directory:
+route variation. The performance report automatically creates a per-run secret
+in a private temporary file and removes it when the fixture stops. To run the
+fixture directly with video, create a fresh private secret file and state
+directory, then start the local-only fixture:
 
 ```sh
+umask 077
+stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/tesland-stage.XXXXXX")"
+openssl rand -hex 32 | sed 's/^/PLAYTEST_STAGE_SECRET=/' > "$stage_dir/stage.env"
+printf 'Secret file: %s\n' "$stage_dir/stage.env"
 pnpm exec wrangler dev --config tests/fixtures/wrangler.playtest-stage.jsonc \
+  --env-file "$stage_dir/stage.env" \
   --local --ip 127.0.0.1 --port 8787 --var PLAYTEST_X:-190 \
   --var PLAYTEST_Z:120 --var PLAYTEST_YAW:-1.5707963267948966 \
-  --var PLAYTEST_SEED:0 --var PLAYTEST_PAUSE:1 --persist-to /tmp/tesland-route-state
+  --var PLAYTEST_SEED:0 --var PLAYTEST_PAUSE:1 --persist-to "$stage_dir/state"
 ```
 
-In another terminal, use a fresh room and output directory:
+In another terminal, set `stage_env` to the printed file path and use a fresh
+room and output directory:
 
 ```sh
+stage_env=/path/printed/above/stage.env
+export PLAYTEST_STAGE_SECRET="$(cut -d = -f 2 "$stage_env")"
 pnpm playtest:record --url 'http://127.0.0.1:8787/?room=route-1&perf' \
   --target-ref YOUR_COMMIT_SHA --scenario scripts/playtests/performance-drive.json \
   --out playtest-runs/route-1 --trajectory --gpu metal
+unset PLAYTEST_STAGE_SECRET
 ```
+
+Stop Wrangler when finished and remove the private temporary directory.
 
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
@@ -175,8 +188,10 @@ same-tick snapshots keep the browser connected; they are not advancing game
 time. Only one driver may join during this pause, and begin is one-use per room
 incarnation. With this option a blocked start fails instead of waiting for
 traffic to move. The loopback-only `GET /api/playtest/status/<room>` and
-`POST /api/playtest/begin/<room>` endpoints belong to the fixture, not the
-deployed game. Never expose or deploy this fixture.
+`POST /api/playtest/begin/<room>` endpoints require this secret as a bearer
+token. The recorder sends it directly from its environment; it is not saved in
+the recording. These endpoints belong to the fixture, not the deployed game.
+Never expose or deploy this fixture.
 
 The script invokes the game's Street Pilot through keyboard input, waits for
 pickup and drop-off of two orders, then uses jump and hover controls. The saved

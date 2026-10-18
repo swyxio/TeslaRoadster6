@@ -9,7 +9,7 @@ import type { ScheduledInput } from '../../shared/tick-input';
 
 export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent, MarketService };
 
-type StageVars = { PLAYTEST_X?: unknown; PLAYTEST_Z?: unknown; PLAYTEST_YAW?: unknown; PLAYTEST_SEED?: unknown; PLAYTEST_PAUSE?: unknown };
+type StageVars = { PLAYTEST_X?: unknown; PLAYTEST_Z?: unknown; PLAYTEST_YAW?: unknown; PLAYTEST_SEED?: unknown; PLAYTEST_PAUSE?: unknown; PLAYTEST_STAGE_SECRET?: unknown };
 type StagePose = { x: number; y: number; z: number; yaw: number };
 type StageSession = { id: string; attachPending: boolean; guest: boolean; identitySequence: number; poseRevision: number; control: ScheduledInput };
 
@@ -227,6 +227,12 @@ export default {
       const room = roomSlug(`/api/room/${match[2]}`);
       if (!room) return new Response('Invalid room', { status: 400 });
       if (!stageOptions(env as unknown as StageVars).pause) return new Response('Paused playtest is not enabled', { status: 404 });
+      const expected = (env as unknown as StageVars).PLAYTEST_STAGE_SECRET;
+      if (typeof expected !== 'string' || !/^[0-9a-f]{64}$/i.test(expected))
+        return new Response('Playtest control secret is not configured', { status: 503 });
+      const provided = /^Bearer ([0-9a-f]{64})$/i.exec(request.headers.get('Authorization') ?? '')?.[1];
+      if (!provided || !crypto.subtle.timingSafeEqual(new TextEncoder().encode(provided), new TextEncoder().encode(expected)))
+        return new Response('Unauthorized', { status: 401 });
       const rooms = env.ROOMS as unknown as DurableObjectNamespace<GameRoom>;
       const roomObject = rooms.get(rooms.idFromName(room));
       if (match[1] === 'status') return Response.json(await roomObject.playtestStatus(room));
