@@ -4,12 +4,30 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
+- After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.
 - After integrating the Mars stationary-boarding fix, all 450 tests and `pnpm build` passed. The preceding radio-integrated v30 Cloudflare preview passed the full two-client room integration and prediction checks; the subsequent Mars change only affected boarding eligibility.
 - After integrating the podcast radio and cross-street markings, `pnpm test` passed 449 tests and `pnpm build` passed with Vite’s large-chunk warning. The local Wrangler two-client room, prediction/acknowledgement/barrier and radio integrations passed. One earlier room run timed out at its air-jump observation for an unconfirmed reason; both the diagnostic rerun and final post-integration run passed. An earlier parallel run coincided with Wrangler reloads. These are functional checks, not load tests.
 - On the final combined build, Chrome again accepted the level-two I-280 destination from US 101, displayed the wooded speed oval and exposed the radio station controls. The emulated touch observations below predate the radio and lane-marking merge.
 - Before the radio integration, the combined build passed 443 tests and `pnpm build`, including both TypeScript checks. Vite reports its existing large-chunk warning. Route tests include the previously disconnected US 101 to I-280 pin, both road headings and cross-street connections; sky tests cover locked-region boundaries and empty-tank escape.
 - A local-only Wrangler fixture staged a level-zero car with an empty tank at the Skyline checkpoint. A second WebSocket observed the boundary hold, air refill, descent to 146.7 m and escape to x=87.8 m under ordinary unboosted thrust. This is a functional check, not a load test.
 - Local Chrome opened a level-two fixture on US 101, displayed the three labeled routes and accepted an I-280 destination pin into self-driving. In a separate room it joined and drove the police-free North Bay speed oval. On the combined v30 build, 390×844 portrait emulation drove with touch; 844×390 landscape emulation drove and steered together. No physical mobile device was tested. The geography and new alternate-road alignments remain compressed artistic approximations.
+
+## Persistent chat names with radio · protocol v29 · 2026-10-18 Pacific
+
+- After incorporating main's settled-vehicle Mars fix, 438 tests and the build passed on the combined code; Vite's existing large-chunk warning remains.
+- After integrating the radio release, `pnpm test` passed 437 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler room, chat and radio integrations passed, as did an isolated Wrangler restart with overlapping save and rename. A held-write test verified that queued messages are delivered in order after disconnect, timestamps reflect broadcast, and recovery waits for the rename to drain. A panel test checks that an unsent name draft survives an earlier rename's confirmation. These are functional checks, not load tests.
+- In Chrome on the combined local build, a chat rename retained the same displayed ID. Earlier desktop, portrait and landscape checks are recorded below; no physical device was tested.
+
+## Persistent chat names with predictive driving · protocol v29 · 2026-10-18 Pacific
+
+- After integrating the predictive driving release, `pnpm test` passed 431 tests and `pnpm build` passed with Vite's existing large-chunk warning. Local two-client room and chat integrations and an isolated real Wrangler restart passed, including overlapping save and rename; these are functional checks, not load tests.
+- Chrome on the combined local build recovered the previous name and ID, renamed in chat without changing the ID, and showed the renamed driver on the solo leaderboard. The editor was inspected in 390×844 portrait and measured in 844×390 landscape emulation; no physical device was tested.
+
+## Persistent chat names · protocol v28 · 2026-10-18 Pacific
+
+- On the integrated v28 build, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning.
+- Local two-client Wrangler chat integration verified repeated guest and saved-driver renames, collision handling, message attribution and recovery with the same ID and code. An isolated Wrangler restart test submitted save and rename together, restarted the Worker, and recovered the same ID with the updated name. A delayed storage-write test and a two-client chat run checked message order across renames; request IDs correlate confirmations with their requests. The standard two-client room integration passed on rerun after one Rocket Dome kickoff timeout. These are functional checks, not load tests.
+- Chrome on the local game changed the name twice in chat and once in Driver identity while retaining the same ID; after reload the saved name and ID returned. The recovery code remained hidden until requested. The chat editor was inspected in emulated 390×844 portrait and 844×390 landscape. No physical device was tested.
 
 ## Podcast radio with predictive driving · protocol v29 · 2026-10-18 Pacific
 

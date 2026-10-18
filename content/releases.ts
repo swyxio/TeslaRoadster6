@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.11-alpha',
-    label: '0.0.11 Alpha',
+    version: '0.0.12-alpha',
+    label: '0.0.12 Alpha',
     date: '2026-10-18',
     title: 'The scenic way around',
     intro: 'A greener North Bay, more ways down the Peninsula and friendlier skies.',
@@ -11,6 +11,19 @@ export const RELEASES = [
         'Explore the wooded Marin headlands and North Bay Playground; its races, ramps and ferry remain open.',
         'At level 2, take US 101, I-280 or El Camino Real down the Peninsula. Drive the split yourself or place a map pin on the road you want to visit.',
         'Skyline Express is much higher, its current is gentler, and fewer thermals fill the sky. Wind stops pushing you into locked areas so you can escape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.11-alpha',
+    label: '0.0.11 Alpha',
+    date: '2026-10-18',
+    title: 'A name that moves with you',
+    intro: 'Change your driver name whenever you like and keep the same chat identity.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'Edit your name right in the phone chat or from Driver identity. Your ID stays the same.',
+        'Your browser remembers your driver by default. Copy the private recovery code to use the same driver on another device.'
       ] }
     ]
   },

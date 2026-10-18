@@ -4,9 +4,10 @@ export type ChatStatus = 'connecting' | 'online' | 'offline';
 type ChatCallbacks = {
   onStatus: (status: ChatStatus, detail?: string) => void;
   onReady: (playerId: string, name: string, messages: ChatMessage[]) => void;
+  onRenamed: (playerId: string, name: string, requestId: number) => void;
   onMessage: (message: ChatMessage) => void;
   onRecovery: (code: string) => void;
-  onError: (message: string) => void;
+  onError: (message: string, code?: string, requestId?: number) => void;
 };
 
 /** Global chat is independent of the current driving room. */
@@ -51,6 +52,7 @@ export class GlobalChat {
     return true;
   }
   save(): boolean { return this.sendPacket({ type: 'save' }); }
+  rename(name: string, requestId: number): boolean { return this.sendPacket({ type: 'rename', name, requestId }); }
 
   private sendPacket(packet: object): boolean {
     if (this.status !== 'online' || this.socket?.readyState !== WebSocket.OPEN) return false;
@@ -113,6 +115,10 @@ export class GlobalChat {
         this.setStatus('online');
         this.startHeartbeat(socket);
         this.callbacks.onReady(this.playerId, this.name, data.messages as ChatMessage[]);
+      } else if (data.type === 'renamed' && typeof data.playerId === 'string' && data.playerId === this.playerId && typeof data.name === 'string' && Number.isSafeInteger(data.requestId) && (data.requestId as number) > 0) {
+        this.name = data.name;
+        this.requestedName = data.name;
+        this.callbacks.onRenamed(this.playerId, this.name, data.requestId as number);
       } else if (data.type === 'message' && data.message && typeof data.message === 'object') {
         this.callbacks.onMessage(data.message as ChatMessage);
       } else if (data.type === 'recovery' && typeof data.code === 'string') {
@@ -137,7 +143,7 @@ export class GlobalChat {
           this.blocked = true;
           this.setStatus('offline', 'Action needed');
         }
-        this.callbacks.onError(data.message);
+        this.callbacks.onError(data.message, typeof data.code === 'string' ? data.code : undefined, typeof data.requestId === 'number' ? data.requestId : undefined);
       }
     };
     socket.onclose = () => {
