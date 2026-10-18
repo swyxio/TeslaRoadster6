@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Caltrain stops and Bay landmarks · protocol v31 · 2026-10-18 Pacific
+
+- After integrating main's performance changes, `pnpm test` passed 463 tests and `pnpm build` passed both TypeScript checks and Vite, with the existing large-chunk warning. Station tests drove to all seven new lots from both highway directions, checked supported and unobstructed decorative tracks, and exercised parking games. Current tests covered directional force, normal unboosted escape and locked-region safeguards at the new stops. Landmark tests checked supported terrain, collision envelopes and clearances; the grove tests checked road, rail and building clearances.
+- Local Wrangler passed the two-client room integration and prediction/acknowledgement and barrier integration. A room run under concurrent build/test load timed out waiting for a subscription response; an isolated rerun passed. These are functional tests, not a capacity or load measurement.
+- Chrome on the integrated build used a local-only level-three staging fixture to display the Redwood City station, clock and redwood grove; 390×844 portrait emulation drove with touch and 844×390 landscape emulation drove and steered simultaneously. Before integration, Chrome started Park It at the Redwood City lot, displayed and drove near the Apple Park entrance, and displayed the Levi's Stadium entrance. There were no captured warning or error logs in the integrated playtest. No physical mobile device was tested. The stations, campuses and local streets are stylized game-space interpretations, and the rails have no train simulation.
+
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
 - After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.
