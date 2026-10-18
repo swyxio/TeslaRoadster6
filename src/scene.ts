@@ -15,7 +15,7 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
@@ -89,9 +89,8 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    // Keep high-density desktop displays from multiplying the game's fill cost;
-    // HUD text remains native-resolution DOM and touch keeps its existing cap.
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer: fine)').matches?1:1.5));
+    // Bound GPU fill on desktop and touch. HUD text stays native-resolution DOM.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -298,7 +297,8 @@ export class GameScene {
       const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
       const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
-      if(e.kind!=='person'){
+      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police);
+      if(detailed&&e.kind!=='person'){
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
       }
@@ -319,7 +319,7 @@ export class GameScene {
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+      if(detailed&&e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
     // Keep reusable meshes, but hide pickups missing from the current snapshot
     // (including the empty presentation world while joining another room).

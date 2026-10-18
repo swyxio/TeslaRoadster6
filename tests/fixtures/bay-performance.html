@@ -4,15 +4,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bay scenery performance fixture</title>
 <style>body{margin:0;background:#182c32;color:#eee;font:14px system-ui}header,pre{padding:12px;margin:0}button{padding:8px;margin:3px}canvas{display:block;width:min(100%,1280px)}pre{white-space:pre-wrap}</style>
-<header>Static Bay scenery · 1280 × 720 · DPR 1 · <button id="run">Measure all views</button><span id="views"></span></header>
+<header><span id="mode">Static Bay scenery</span> · 1280 × 720 · DPR 1 · <button id="run">Measure all views</button><span id="views"></span></header>
 <canvas id="view"></canvas><pre id="report">Loading…</pre>
 <script type="module">
 import * as T from 'three';
 import { buildBay } from '../../src/bay-world.ts';
+import { createVehicle, setThrusterEffects, setVehicleDetail } from '../../src/vehicles.ts';
 
 // Kept outside the production entry point. Compare the same fixture across refs.
 // ?baseline=1 stores a raster and measurement for each view in this origin only.
 const baseline = new URLSearchParams(location.search).has('baseline');
+const fleet = new URLSearchParams(location.search).has('fleet');
+const distant = new URLSearchParams(location.search).has('distant');
+document.querySelector('#mode').textContent=fleet?(distant?'Distant fleet':'Rocket fleet'):'Static Bay scenery';
 const canvas = document.querySelector('#view');
 const report = document.querySelector('#report');
 const renderer = new T.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
@@ -22,9 +26,12 @@ renderer.toneMapping=T.ACESFilmicToneMapping; renderer.toneMappingExposure=.82;
 const scene = new T.Scene(); scene.background=new T.Color(0xa8cbd0); scene.fog=new T.Fog(0xa8cbd0,350,1200);
 scene.add(new T.HemisphereLight(0xe9f5ff,0x626953,1.4));
 const sun=new T.DirectionalLight(0xffdfb5,2.2); sun.position.set(-100,160,80); scene.add(sun);
-const buildStart=performance.now(); buildBay(scene); const buildMs=performance.now()-buildStart;
+const buildStart=performance.now();
+const fleetModels=fleet?['roadster','model-3','cybertruck','zoox'].map(kind=>{const mesh=createVehicle(kind);setThrusterEffects(mesh,0,0,true);if(distant)setVehicleDetail(mesh,150**2);mesh.visible=false;scene.add(mesh);return mesh;}):[];
+if(!fleet)buildBay(scene);
+const buildMs=performance.now()-buildStart;
 const camera=new T.PerspectiveCamera(55,1280/720,.1,1800);
-const views=[
+const views=fleet?fleetModels.map(mesh=>({name:mesh.name,eye:[6,3.5,8],target:[0,1,0],mesh})):[
   {name:'Golden Gate',eye:[-215,22,-250],target:[-240,25,-360]},
   {name:'Bay Bridge',eye:[90,22,80],target:[240,22,60]},
   {name:'Waterfront',eye:[175,42,-40],target:[50,10,-40]},
@@ -32,7 +39,7 @@ const views=[
   {name:'SFO',eye:[-640,35,1270],target:[-700,12,1200]},
   {name:'Stanford',eye:[-900,27,4055],target:[-940,28,4000]},
 ];
-const draw=v=>{camera.position.set(...v.eye); camera.lookAt(...v.target); renderer.render(scene,camera);};
+const draw=v=>{for(const mesh of fleetModels)mesh.visible=mesh===v.mesh;camera.position.set(...v.eye); camera.lookAt(...v.target); renderer.render(scene,camera);};
 const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
 const percentile=(a,p)=>[...a].sort((a,b)=>a-b)[Math.floor((a.length-1)*p)];
 for(const view of views){const b=document.createElement('button');b.textContent=view.name;b.onclick=()=>draw(view);document.querySelector('#views').append(b);}
@@ -51,7 +58,7 @@ document.querySelector('#run').onclick=async()=>{
         const start=performance.now();draw(view);cpu.push(performance.now()-start);
       }
       const row={view:view.name,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,cpuP50:percentile(cpu,.5),cpuP95:percentile(cpu,.95),frameP95:percentile(intervals,.95)};
-      const key=`tesland-bay-performance-v1:${view.name}`;
+      const key=`tesland-bay-performance-v1:${fleet?'fleet:':''}${view.name}`;
       if(baseline)localStorage.setItem(key,JSON.stringify({row,png:canvas.toDataURL()}));
       else if(localStorage.getItem(key)){
         const old=JSON.parse(localStorage.getItem(key)),image=new Image();image.src=old.png;await image.decode();
@@ -63,7 +70,7 @@ document.querySelector('#run').onclick=async()=>{
       }
       rows.push(row);
     }
-    const result={baseline,buildMs,objects:scene.children.length,width:1280,height:720,rows};
+    const result={baseline,mode:fleet?(distant?'distant-fleet':'fleet'):'bay',buildMs,objects:scene.children.length,width:1280,height:720,rows};
     report.textContent=JSON.stringify(result,null,2);document.body.dataset.result=JSON.stringify(result);
     draw(views[0]);
   }catch(error){report.textContent=String(error);throw error;}

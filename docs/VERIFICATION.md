@@ -2,6 +2,14 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Reduced background fleet and vehicle detail · protocol v31 · 2026-10-18 Pacific
+
+- Default deterministic room population is 22 background vehicles rather than 67: eight city cars, eight parked cars, two highway cars and four police. Peak highway demand is four cars (24 background total); taken/abandoned highway reserve is bounded at 12. Seeded cohorts cover all 26 models without permanent simultaneous copies. All police, deliveries, flight, map content and player car detail remain. This is a population count, not a measured end-to-end speedup.
+- Rocket hardware uses two instanced draws instead of 20 per car, preserving geometry and near raster results. Distant non-player/non-police models use a single simplified mesh beyond 125 m, restoring detail within 100 m; sampled triangles fall to 228–764. See [rendering measurements](BAY_RENDERING.md). WebGL pixel ratio is capped at 1 on desktop and touch; HUD text remains native resolution.
+- `pnpm test` passed all 491 tests; `pnpm build` passed both TypeScript checks and static generation. JavaScript is 922.70 kB raw / 272.34 kB gzip in this build; the existing chunk-size warning remains. The full two-client Wrangler integration passed movement, flight/landing, traffic, delivery/police, room state and cleanup. It is not a capacity test.
+- Local Chrome drove and turned the detailed Roadster, then jumped/hovered to 5 m. At requested 390×844 and 844×390 viewport sizes, canvas buffer dimensions matched CSS dimensions within rounding (the Chrome session zoom affects effective viewport dimensions). Portrait Drive responded; no captured warning/error logs. These are viewport checks, not physical touch-device or GPU benchmarks.
+- The tick/reconciliation rewrite is separate and remains held on its motion/contact release gates. Rendering reductions do not establish that packet-shaped motion is fixed.
+
 ## Browser performance baseline and asset caching · protocol v31 · 2026-10-18 Pacific
 
 - On the PR #55-integrated game source, `pnpm run ci` passed 486 tests and the build after the HTML scanner review fix; the build also checked both TypeScript targets and generated exact cache rules for five fingerprinted Vite assets. Focused tests cover static graph accounting, transfer probes and invalid cache rules. The local timing and asset-size observations, including host load and scope, are in [the performance audit](PERFORMANCE_AUDIT.md).
