@@ -6,6 +6,36 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Take the scenic ride',
+    intro: 'Settle in for smoother self-driving and keep your little victories.',
+    sections: [
+      { title: 'Cruise to your delivery', items: [
+        'Double-tap Shift or tap Self-drive to delivery to route toward your current pickup or drop-off.',
+        'Self-driving eases through turns and follows traffic with more room. Use the controls to take over.'
+      ] },
+      { title: 'Keep your victories', items: [
+        'Scores show delivery milestones, room standings and current or recent mini-game results.',
+        'Earn new parking and racing awards, and keep confirmed awards with your saved driver.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.17-alpha',
+    label: '0.0.17 Alpha',
+    date: '2026-10-18',
+    title: 'Keep the deliveries coming',
+    intro: 'A little extra for every three completed deliveries.',
+    sections: [
+      { title: 'Delivery checkpoints', items: [
+        'Earn a $750 bonus for every third delivery, even when a late fare has fallen to zero.',
+        'The mission card tracks progress to your next bonus. Your saved driver keeps it alongside delivery progress.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.16-alpha',
+    label: '0.0.16 Alpha',
+    date: '2026-10-18',
     title: 'The Vault opens',
     intro: 'Save your driver, build a collection and explore the Bay.',
     sections: [

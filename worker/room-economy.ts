@@ -1,21 +1,50 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DriverProfile, type DriverOutcome, type EconomyIntent } from './driver-profile';
 import type { GameRoom } from './index';
+import { MARS_GOAL } from '../shared/mars';
+import { RoomEarningsEvents, type RoomEventCursor } from './room-earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>};
 type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null};
 type Acknowledged={fence:string;sequence:number};
 type PickupReservation={eventId:string|null;generation:number;readyAt:number};
+type RoomFund={balance:number;reserved:number};
 const RETRY_MS=1000;
 const PICKUP_COOLDOWN_MS=20_000;
 
 /** Separate from GameRoom so a slow profile or storage output gate cannot stop physics. */
 export class RoomEconomy extends DurableObject<Env> {
   private flights=new Map<string,Promise<void>>();
+  private earningsEvents=new RoomEarningsEvents(this.ctx.storage);
   private profile(id:string){return this.env.DRIVERS.get(this.env.DRIVERS.idFromName(id));}
+
+  /** Trusted room RPCs; pending wins fence later payout and cab observations. */
+  prepareEarningsWin(eventId:string,atMs:number){return this.earningsEvents.prepareWin(eventId,atMs);}
+  recordEarningsWinWithoutPayout(eventId:string,atMs:number){return this.earningsEvents.recordWinWithoutPayout(eventId,atMs);}
+  commitEarningsWin(eventId:string){return this.earningsEvents.commitWin(eventId);}
+  pendingEarningsWin(){return this.earningsEvents.pendingWin();}
+  earningsAt(atMs:number){return this.earningsEvents.activeUntil(atMs);}
+  earningsHistory(fromMs:number,toMs:number,cursor?:RoomEventCursor){return this.earningsEvents.history(fromMs,toMs,cursor);}
+
+  /** Seed once from the read-only legacy GameRoom key; later credits live here. */
+  async initializeRoomFund(legacy:number):Promise<number>{
+    if(!Number.isSafeInteger(legacy)||legacy<0||legacy>MARS_GOAL)throw new Error('Invalid legacy room fund');
+    return this.ctx.storage.transaction(async txn=>{
+      const fund=await txn.get<RoomFund>('room-fund');
+      if(fund)return fund.balance;
+      await txn.put('room-fund',{balance:legacy,reserved:0} satisfies RoomFund);
+      return legacy;
+    });
+  }
+  async roomFund():Promise<number>{
+    const fund=await this.ctx.storage.get<RoomFund>('room-fund');
+    if(!fund)throw new Error('Room fund not initialized');
+    return fund.balance;
+  }
 
   async submit(intent:EconomyIntent):Promise<DriverOutcome|null>{
     if(!Number.isSafeInteger(intent.sequence)||intent.sequence<1)return {ok:false,reason:'invalid'};
+    if(intent.action.kind==='contribute'&&intent.pickup)return {ok:false,reason:'invalid'};
     const key=`intent:${intent.eventId}`;
     const result=await this.ctx.storage.transaction(async txn=>{
       const existing=await txn.get<IntentRecord>(key);
@@ -27,6 +56,19 @@ export class RoomEconomy extends DurableObject<Env> {
       if(acknowledged?.fence===intent.fence && intent.sequence<=acknowledged.sequence)return {outcome:{ok:false,reason:'revision'} as DriverOutcome};
       if(await txn.get<boolean>(`frozen:${intent.driverId}:${intent.fence}`)){
         return {outcome:{ok:false,reason:'superseded'} as DriverOutcome};
+      }
+      if(intent.action.kind==='contribute'){
+        const fund=await txn.get<RoomFund>('room-fund'),amount=intent.action.amount;
+        if(!fund)throw new Error('Room fund not initialized');
+        if(!Number.isSafeInteger(amount)||amount<=0||amount>MARS_GOAL||amount>MARS_GOAL-fund.balance-fund.reserved){
+          const denied:IntentRecord={intent,outcome:{ok:false,reason:'reserved',available:Math.max(0,MARS_GOAL-fund.balance-fund.reserved)}};
+          await txn.put(key,denied);
+          await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
+          const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
+          if(alarm===null||alarm>next)await txn.setAlarm(next);
+          return denied;
+        }
+        await txn.put('room-fund',{...fund,reserved:fund.reserved+amount} satisfies RoomFund);
       }
       if(intent.pickup){
         const pickupKey=`pickup:${intent.pickup.id}`;
@@ -68,11 +110,19 @@ export class RoomEconomy extends DurableObject<Env> {
   private async resolveOnce(intent:EconomyIntent):Promise<DriverOutcome>{
     const outcome=await this.profile(intent.driverId).commit(intent);
     if(!outcome.ok && outcome.reason==='not-ready')return outcome;
-    await this.ctx.storage.transaction(async txn=>{
+    return this.ctx.storage.transaction(async txn=>{
       const key=`intent:${intent.eventId}`,record=await txn.get<IntentRecord>(key);
       if(!record)throw new Error('Missing economy intent');
-      if(record.outcome)return;
-      await txn.put(key,{intent,outcome} satisfies IntentRecord);
+      if(record.outcome)return record.outcome;
+      let result=outcome;
+      if(intent.action.kind==='contribute'){
+        const fund=await txn.get<RoomFund>('room-fund'),amount=intent.action.amount;
+        if(!fund||fund.reserved<amount)throw new Error('Missing room fund reservation');
+        const balance=fund.balance+(outcome.ok?amount:0);
+        await txn.put('room-fund',{balance,reserved:fund.reserved-amount} satisfies RoomFund);
+        if(outcome.ok)result={...outcome,roomFund:balance};
+      }
+      await txn.put(key,{intent,outcome:result} satisfies IntentRecord);
       await txn.delete(`pending:${intent.driverId}:${intent.eventId}`);
       await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
@@ -83,8 +133,8 @@ export class RoomEconomy extends DurableObject<Env> {
         if(!pickup||pickup.eventId!==intent.eventId)throw new Error('Missing pickup reservation');
         await txn.put(pickupKey,{eventId:null,generation:outcome.ok?pickup.generation+1:pickup.generation,readyAt:outcome.ok?Date.now()+PICKUP_COOLDOWN_MS:0} satisfies PickupReservation);
       }
+      return result;
     });
-    return outcome;
   }
   /** The producer calls this only after it consumes the recorded outcome. */
   async acknowledge(intent:EconomyIntent):Promise<boolean>{
@@ -146,6 +196,11 @@ export class RoomEconomy extends DurableObject<Env> {
       await txn.delete(`pending:${intent.driverId}:${intent.eventId}`);
       await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
       if(intent.pickup){const pickupKey=`pickup:${intent.pickup.id}`,pickup=await txn.get<PickupReservation>(pickupKey);if(pickup?.eventId===intent.eventId)await txn.put(pickupKey,{...pickup,eventId:null});}
+      if(intent.action.kind==='contribute'){
+        const fund=await txn.get<RoomFund>('room-fund');
+        if(!fund||fund.reserved<intent.action.amount)throw new Error('Missing room fund reservation');
+        await txn.put('room-fund',{...fund,reserved:fund.reserved-intent.action.amount} satisfies RoomFund);
+      }
     });
     // No old producer remains. Consume abandoned outcomes while the room is
     // frozen so the profile records even room-only rejected sequences.
@@ -167,7 +222,25 @@ export class RoomEconomy extends DurableObject<Env> {
     return [...(await this.ctx.storage.list<EconomyIntent>({prefix})).values()];
   }
   async alarm():Promise<void>{
+    // Alarms are consumed before the handler runs. Arm before reading work or
+    // awaiting any RPC, so termination during recovery cannot strand a journal.
+    const watchdog=Date.now()+RETRY_MS;
+    const armed=await this.ctx.storage.transaction(async txn=>{
+      const alarm=await txn.getAlarm();
+      if(alarm!==null&&alarm<=watchdog)return false;
+      await txn.setAlarm(watchdog);return true;
+    });
     const intents=await this.pending();
+    const other=await Promise.all(['cleanup:','unacked:','frozen:'].map(prefix=>this.ctx.storage.list({prefix,limit:1})));
+    if(!intents.length&&!other.some(entries=>entries.size)){
+      // Cancel only our own empty wakeup and recheck atomically with submissions.
+      if(armed)await this.ctx.storage.transaction(async txn=>{
+        if(await txn.getAlarm()!==watchdog)return;
+        const work=await Promise.all(['pending:','cleanup:','unacked:','frozen:'].map(prefix=>txn.list({prefix,limit:1})));
+        if(!work.some(entries=>entries.size))await txn.deleteAlarm();
+      });
+      return;
+    }
     await Promise.allSettled([...new Set(intents.map(intent=>intent.driverId))].map(driver=>this.resolveDriver(driver)));
     const cleanup=[...(await this.ctx.storage.list<EconomyIntent>({prefix:'cleanup:'})).values()];
     await Promise.allSettled(cleanup.map(intent=>this.finishCleanup(intent)));

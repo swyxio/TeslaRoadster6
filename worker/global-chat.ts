@@ -18,7 +18,7 @@ export type ChatServerMessage =
   | { type: 'recovery'; code: string }
   | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed'; requestId?: number };
 
-type StoredIdentity = { hash: string; name: string; walletId?:string };
+type StoredIdentity = { hash: string; name: string; walletId?:string; binding?:{durable:boolean;claims:Record<string,number|null>} };
 type Session = {
   playerId?: string;
   name?: string;
@@ -53,33 +53,99 @@ const CHAT_LIMIT = 5;
 const IP_WINDOW = 60_000;
 const IP_LIMIT = 60;
 const IP_BUCKET_LIMIT = 1000;
+const BINDING_LEASE_MS = 60_000;
 
 // Messages and session state stay in memory only. Sockets use the standard
 // non-hibernating API, so an instance must remain awake while players are connected.
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
   /** Bind a saved identity to a server-created guest wallet once, without copying earnings. */
-  async bindWallet(code:string,guestWalletId:string):Promise<{playerId:string;name:string;walletId:string|null}|null> {
+  async bindWallet(code:string,guestWalletId:string,token:string):Promise<{playerId:string;name:string;walletId:string|null;claim:boolean}|null> {
     const parsed=parseRecoveryCode(code);
-    if(!parsed || !/^[0-9a-f-]{36}$/i.test(guestWalletId))return null;
+    if(!parsed || !/^[0-9a-f-]{36}$/i.test(guestWalletId) || !/^[0-9a-f-]{36}$/i.test(token))return null;
     const givenHash=await hashRecoverySecret(parsed.secret);
     return this.ctx.storage.transaction(async txn=>{
-      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      const key=`identity:${parsed.playerId}`;
+      let saved=await txn.get<StoredIdentity>(key);
       const recordedHash=typeof saved?.hash==='string' && /^[0-9a-f]{64}$/.test(saved.hash)?saved.hash:'0'.repeat(64);
       const valid=crypto.subtle.timingSafeEqual(new TextEncoder().encode(givenHash),new TextEncoder().encode(recordedHash));
       if(!saved||!valid||typeof saved.name!=='string')return null;
+      if(saved.walletId && saved.binding){
+        const claims=Object.fromEntries(Object.entries(saved.binding.claims).filter(([,expiry])=>expiry===null||expiry>Date.now()));
+        if(!saved.binding.durable && !Object.keys(claims).length){
+          if(await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+          await txn.delete(`wallet:${saved.walletId}`);
+          const {walletId:_,binding:__,...unbound}=saved;saved=unbound;
+        }else saved={...saved,binding:{...saved.binding,claims}};
+        await txn.put(key,saved);
+      }
       if(saved.walletId){
         const owner=await txn.get<string>(`wallet:${saved.walletId}`);
         if(owner!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
-        return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId};
+        if(saved.binding && !saved.binding.durable){
+          // Each concurrent recovery has its own provisional claim. A stale
+          // request can release its claim without detaching another claimant.
+          const claims={...saved.binding.claims};
+          if(!Object.hasOwn(claims,token))claims[token]=Date.now()+BINDING_LEASE_MS;
+          await txn.put(key,{...saved,binding:{...saved.binding,claims}} satisfies StoredIdentity);
+          return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId,claim:true};
+        }
+        return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId,claim:false};
       }
       const walletKey=`wallet:${guestWalletId}`,owner=await txn.get<string>(walletKey);
       // The reverse claim and identity binding share one transaction: even a
       // superseded request cannot attach a second identity to the same wallet.
-      if(owner && owner!==parsed.playerId)return {playerId:parsed.playerId,name:saved.name,walletId:null};
-      await txn.put(key,{...saved,walletId:guestWalletId} satisfies StoredIdentity);
+      if(owner && owner!==parsed.playerId){
+        const ownerKey=`identity:${owner}`,other=await txn.get<StoredIdentity>(ownerKey);
+        if(other?.walletId===guestWalletId && other.binding && !other.binding.durable &&
+          Object.values(other.binding.claims).every(expiry=>expiry!==null&&expiry<=Date.now())){
+          const {walletId:_,binding:__,...unbound}=other;await txn.put(ownerKey,unbound);await txn.delete(walletKey);
+        }else return {playerId:parsed.playerId,name:saved.name,walletId:null,claim:false};
+      }
+      await txn.put(key,{...saved,walletId:guestWalletId,binding:{durable:false,claims:{[token]:Date.now()+BINDING_LEASE_MS}}} satisfies StoredIdentity);
       await txn.put(walletKey,parsed.playerId);
-      return {playerId:parsed.playerId,name:saved.name,walletId:guestWalletId};
+      return {playerId:parsed.playerId,name:saved.name,walletId:guestWalletId,claim:true};
+    });
+  }
+
+  /** Confirm the caller's provisional claim; the same token can still undo a stale confirmation. */
+  async confirmWallet(code:string,token:string):Promise<boolean>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return false;
+    return this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token))return false;
+      const expiry=saved.binding.claims[token];
+      if((expiry!==null&&expiry<=Date.now())||await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)return false;
+      await txn.put(key,{...saved,binding:{...saved.binding,claims:{...saved.binding.claims,[token]:null}}} satisfies StoredIdentity);return true;
+    });
+  }
+
+  /** Mark a successfully delivered confirmation durable; other claimants can still settle. */
+  async settleWallet(code:string,token:string):Promise<void>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return;
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token)||saved.binding.claims[token]!==null)return;
+      // One delivered confirmation makes this binding durable. Confirmed
+      // peers no longer need cleanup tokens; retain live pending peers so they
+      // can still confirm without racing this compaction.
+      const claims=Object.fromEntries(Object.entries(saved.binding.claims).filter(([,expiry])=>expiry!==null&&expiry>Date.now()));
+      if(Object.keys(claims).length)await txn.put(key,{...saved,binding:{durable:true,claims}} satisfies StoredIdentity);
+      else {const {binding:_,...durable}=saved;await txn.put(key,durable);}
+    });
+  }
+
+  /** Undo only this request's claim, including a confirmed reply that went stale. */
+  async releaseWallet(code:string,token:string):Promise<void>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return;
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token))return;
+      if(await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+      const claims={...saved.binding.claims};delete claims[token];
+      if(Object.keys(claims).length)await txn.put(key,{...saved,binding:{...saved.binding,claims}} satisfies StoredIdentity);
+      else if(saved.binding.durable){const {binding:_,...durable}=saved;await txn.put(key,durable);}
+      else {const {walletId,binding:_,...unbound}=saved;await txn.put(key,unbound);await txn.delete(`wallet:${walletId}`);}
     });
   }
 

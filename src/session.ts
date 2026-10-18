@@ -7,6 +7,8 @@ import type { LuxuryVehicleId } from '../shared/luxury';
 import { TickPrediction } from './tick-prediction';
 import { MotionClock } from './motion-clock';
 import { RemotePresentation } from './remote-presentation';
+import { validStarshipStatus, validStarshipTime, type StarshipRoomStatus } from './starship-model';
+import type { EarningsBonusView } from './earnings-bonus-ui';
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
@@ -56,7 +58,12 @@ export class Session {
   vehicleStyleResult: ({requestId:number;ok:boolean}&StyleChoice)|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
-  marsResult: {requestId:number;action:'board';ok:boolean}|null = null;
+  marsResult: {requestId:number;action:'board'|'contribute';ok:boolean;amount:number;available?:number}|null = null;
+  starshipStatus:StarshipRoomStatus|null = null;
+  starshipContextVersion=0;
+  starshipNameResult:{requestId:number;ok:boolean;publicName:string|null}|null = null;
+  earningsBonus:EarningsBonusView|null = null;
+  private starshipStatusRequest=0;
   identityResult: {requestId:number;ok:boolean;message:string;levelBaseline:{level:number;eligibleIncome:number;afterSnapshot:number}|null}|null = null;
   wallet: WalletView|null = null;
   luxuryResult: LuxuryResult|null = null;
@@ -158,9 +165,22 @@ export class Session {
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
+        if(message.type==='starshipStatus'&&message.requestId===this.starshipStatusRequest&&
+          validStarshipStatus(message.status)&&validStarshipTime(message.serverTime)&&
+          (message.publicName===null||typeof message.publicName==='string')&&typeof message.privacyPending==='boolean'){
+          this.starshipStatus={status:message.status,publicName:message.publicName,privacyPending:message.privacyPending,serverTime:message.serverTime,receivedAt:this.now()};
+        }
+        if(message.type==='starshipNameResult'&&Number.isSafeInteger(message.requestId)&&typeof message.ok==='boolean'&&
+          (message.publicName===null||typeof message.publicName==='string'))this.starshipNameResult=message;
+        if(message.type==='earningsStatus'){
+          if(message.events&&Array.isArray(message.events.room)&&Array.isArray(message.events.global)&&
+             validStarshipTime(message.serverTime)&&Number.isSafeInteger(message.validForMs)&&message.validForMs>0)
+            this.earningsBonus={events:message.events,serverTime:message.serverTime,validForMs:message.validForMs,receivedAt:this.now()};
+          else this.earningsBonus=null;
+        }
       } catch (error) { console.error('Room message processing failed:',error);this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected'; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else if(event.code===1011&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.'].includes(event.reason)){this.error=event.reason;} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   queueEdge(kind:'jump'|'flip',id:number) {
@@ -228,13 +248,24 @@ export class Session {
     if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
+  setDeliveryDestination(){
+    const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
+    if(this.status!=='online'||!this.actionWithBarrier({type:'deliveryDestination',requestId}))this.destinationResult={requestId,ok:false};
+    return requestId;
+  }
   setName(name:string) {
     this.name = name;
     if (this.id) this.send({type:'name',name});
   }
   /** Recovery codes are sent only to the room and never added to snapshots. */
   setIdentity(code?:string) {
+    // Chat can reconnect independently of the room. Rebinding the same
+    // in-flight or confirmed driver would suspend an active route for no
+    // reason; a new room still sends its own identity on welcome.
+    if(code&&code===this.identityCode&&this.id&&this.socket?.readyState===WebSocket.OPEN&&this.walletStatus!=='failed')return this.identityRequestId;
     const requestId=++this.nextUpgradeRequest;
+    this.starshipContextVersion++;
+    this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
     if(this.id&&this.socket?.readyState===WebSocket.OPEN){
       if(code)this.waitForWallet(requestId);
@@ -262,7 +293,25 @@ export class Session {
   }
   mars(){
     const requestId=++this.nextUpgradeRequest;this.marsResult=null;
-    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'board',requestId},false))this.marsResult={requestId,action:'board',ok:false};
+    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'board',requestId},false))this.marsResult={requestId,action:'board',ok:false,amount:0};
+    return requestId;
+  }
+  contributeMars(amount:number){
+    const requestId=++this.nextUpgradeRequest;this.marsResult=null;
+    if(this.status!=='online'||!this.actionWithBarrier({type:'mars',action:'contribute',amount,requestId},false))this.marsResult={requestId,action:'contribute',ok:false,amount:0};
+    return requestId;
+  }
+  requestStarshipStatus():boolean {
+    if(this.status!=='online'||this.walletBlocked)return false;
+    const requestId=++this.nextUpgradeRequest;
+    if(!this.send({type:'starship',action:'status',requestId}))return false;
+    this.starshipStatusRequest=requestId;return true;
+  }
+  setStarshipName(name:string|null):number {
+    const requestId=++this.nextUpgradeRequest;this.starshipNameResult=null;
+    this.starshipStatusRequest=0;
+    if(this.status!=='online'||this.walletBlocked||!this.send({type:'starship',action:'name',name,requestId}))
+      this.starshipNameResult={requestId,ok:false,publicName:null};
     return requestId;
   }
   setOta(enabled:boolean){
@@ -295,5 +344,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

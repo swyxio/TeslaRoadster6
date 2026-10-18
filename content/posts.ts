@@ -1,6 +1,14 @@
 /** Public posts, newest first. Article bodies are trusted Markdown in content/posts/. */
 export const POSTS = [
   {
+    slug: 'making-driving-feel-smooth',
+    title: 'Why our browser driving game felt jerky',
+    date: '2026-10-18',
+    release: '0.0.15 Alpha',
+    description: 'The work behind a smoother drive: frame pacing, multiplayer prediction, distant detail and the limits we still need to measure.',
+    file: '2026-10-18-making-driving-feel-smooth.md'
+  },
+  {
     slug: 'planning-the-economy',
     title: 'The Tesland economy: from deliveries to a Mars launch',
     date: '2026-10-18',

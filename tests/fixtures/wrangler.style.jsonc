@@ -9,11 +9,13 @@
     { "name": "CHAT", "class_name": "GlobalChat" },
     { "name": "DRIVERS", "class_name": "DriverProfile" },
     { "name": "ECONOMIES", "class_name": "RoomEconomy" },
-    { "name": "INCOME", "class_name": "GlobalIncome" }
+    { "name": "INCOME", "class_name": "GlobalIncome" },
+    { "name": "GLOBAL_EVENTS", "class_name": "GlobalEarningsEvent" }
   ] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
     { "tag": "v2", "new_sqlite_classes": ["GlobalChat"] },
-    { "tag": "v3", "new_sqlite_classes": ["DriverProfile", "RoomEconomy", "GlobalIncome"] }
+    { "tag": "v3", "new_sqlite_classes": ["DriverProfile", "RoomEconomy", "GlobalIncome"] },
+    { "tag": "v4", "new_sqlite_classes": ["GlobalEarningsEvent"] }
   ]
 }

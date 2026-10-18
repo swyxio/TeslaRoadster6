@@ -6,11 +6,12 @@ import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
-import { planNavigation, type Navigation } from './navigation';
+import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { CUSTOMERS, initialDelivery, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import { upgradePrice } from './research';
 import { setOta, updateOta } from './ota';
-import { awardDomeMatchAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
+import { awardDomeMatchAchievements, updateGameAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
 import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
@@ -24,12 +25,12 @@ import { ISLAND_BANK, advanceCliff, bankSurface, bankVerticalVelocity, cliffPose
 import { ovalBankSurface, ovalBankVerticalVelocity, sweepOvalBank } from './oval-bank';
 import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
 import { airCost, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
-import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
+import { initialSoccer, stepSoccer, type DomeParticipant, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=35;
+export const PROTOCOL_VERSION=38;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -42,7 +43,7 @@ export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:numb
 export type CockpitStats = { active:boolean; activeSeconds:number; deliveries:number; orderEligible:boolean; orderSeconds:number };
 export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air'|'rocket';active:boolean;readyAt?:number};
-export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;launchAt:number|null}};
+export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;roomFund:number;launchAt:number|null}};
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const damageFactor=(e:Entity)=>e.kind==='person'?1:(VEHICLES[e.kind].damageFactor??1);
@@ -53,7 +54,7 @@ export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:
 };
 /** Empty presentation state while waiting for an authoritative room snapshot. */
 export function createEmptyWorld():World {
-  return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,launchAt:null},pickups:[]};
+  return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,roomFund:0,launchAt:null},pickups:[]};
 }
 export function createWorld(fleetSeed=0):World {
   const world=createEmptyWorld();
@@ -316,11 +317,19 @@ export function toggleAutopilot(world:World,id:string):boolean {
   if(!e||e.kind==='person'||e.supportId==='ferry')return false;
   if(e.autopilot){e.autopilot=false;e.navigation=null;return true;}e.navigation=null;return engageAutopilot(e);
 }
-export function setDestination(world:World,id:string,destination:{x:number;z:number}):boolean {
+function navigate(world:World,id:string,destination:{x:number;z:number},maxDestinationSnap?:number):boolean {
   const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.driver!==id||!Number.isFinite(destination.x)||!Number.isFinite(destination.z))return false;
-  const route=planNavigation(car,destination,player.delivery.level);if(!route)return false;
+  const route=planNavigation(car,destination,player.delivery.level,maxDestinationSnap);if(!route)return false;
   car.navigation=route;car.autopilot=true;car.pauseUntil=0;return true;
+}
+export function setDestination(world:World,id:string,destination:{x:number;z:number}):boolean {
+  return navigate(world,id,destination);
+}
+export function setDeliveryDestination(world:World,id:string):boolean {
+  const player=world.players.find(p=>p.id===id);if(!player)return false;
+  const target=orderTarget(player.delivery.order);
+  return !target.rooftop&&navigate(world,id,target,DELIVERY_DESTINATION_SNAP);
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e||!player)return;
@@ -729,11 +738,17 @@ function constrainDome(e:Entity,rocket:boolean):void {
   }
 }
 
+/** A host may capture settled components from the apply callback in its transaction. */
+export type EconomyUpdateResult = readonly ResolvedDeliveryPayout[] | null | void;
 /** Optional authoritative transaction boundary. */
 export type EconomyHooks = {
-  update(player:Player,apply:()=>void):void;
+  update(player:Player,apply:()=>EconomyUpdateResult):void;
+  /** Attribute completed mini-games to the wallet driving at that moment. */
+  gameAward?(player:Player,apply:()=>void,capture?:()=>()=>void):void;
   pickup(player:Player,car:Entity,pickup:Pickup):void;
   canCollect?(driverId:string):boolean;
+  resolveDeliveryPayout?(player:Player,component:DeliveryPayoutComponent):number|null;
+  onDomeWin?(result:{participants:readonly DomeParticipant[];winners:readonly string[]}):void;
 };
 export function simulationSubsteps(world:World,dt:number):number {
   if(!Number.isFinite(dt)||dt<=0)return 1;
@@ -752,7 +767,8 @@ export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{su
   for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy);
 }
 function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
-  const update=(player:Player,apply:()=>void)=>economy?economy.update(player,apply):apply();
+  const update=(player:Player,apply:()=>EconomyUpdateResult)=>economy?economy.update(player,apply):apply();
+  const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
   world.time+=dt;
   updateFerry(world,dt,(entity,side)=>{const moved=moveToSide(world,entity,side);if(moved&&entity.driver)onRelocation?.(entity.driver);return moved;});
   for(const e of world.entities){updateDomeReturn(world,e);enterDomeIfInside(e);}
@@ -820,7 +836,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       if((boostFraction||hoverFraction||flightFraction)&&input.steer<0)e.thrusters|=THRUSTER_SIDE_LEFT;
     }
     const manualDriver=!!e.driver&&!e.autopilot;
-    e.steering+=(input.steer-e.steering)*Math.min(1,dt*(manualDriver?14:8));
+    e.steering+=(input.steer-e.steering)*Math.min(1,dt*(manualDriver?14:e.driver?4:8));
     if(e.supportId==='dome'&&e.domeS!==null){
       // Steering and speed live on the unwrapped capsule, then map back to 3D.
       const before=domeSurface(e.domeS),roadTop=spec!.maxSpeed*(e.upgrades.motor?1.1:1),top=boostFraction?Math.max(72,roadTop):roadTop;
@@ -1077,10 +1093,18 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
   const soccerWasPlaying=world.soccer.phase==='play';
   stepSoccer(world.soccer,world.entities,dt,world.time);
   if(soccerWasPlaying&&world.soccer.phase==='win'){
-    for(const participant of world.soccer.participants){
+    const participants:DomeParticipant[]=world.soccer.participants.filter(participant=>{
+      const player=world.players.find(p=>p.id===participant.playerId);
+      return !!player&&!!world.entities.find(e=>e.id===player.entityId)?.inDome;
+    });
+    economy?.onDomeWin?.({participants:participants.map(participant=>({playerId:participant.playerId,touches:{...participant.touches},goals:{...participant.goals}})),winners:[...world.soccer.winningPlayers]});
+    for(const participant of participants){
       const player=world.players.find(p=>p.id===participant.playerId);
       const entity=world.entities.find(e=>e.id===player?.entityId);
-      if(player&&entity?.inDome)update(player,()=>awardDomeMatchAchievements(player,participant,world.soccer.winningPlayers.includes(player.id)));
+      if(player&&entity?.inDome){
+        const evidence=structuredClone(participant),won=world.soccer.winningPlayers.includes(player.id);
+        gameAward(player,()=>awardDomeMatchAchievements(player,evidence,won));
+      }
     }
   }
   for(const player of world.players){
@@ -1089,7 +1113,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       const orderPaused=islandProtected(entity)||entity.inDome;
-      updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused);
+      const payouts=updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused,
+        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined);
+      if(payouts===null)return null;
       updateOta(player,world.time);
       const cockpit=player.cockpit, activeTime=player.delivery.activeSeconds-activeBefore;
       cockpit.active=input.cockpit&&entity.kind!=='person';
@@ -1103,10 +1129,21 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       }
       updateAchievements(player,entity,rooftop&&player.delivery.completed>before,player.delivery.completed>before?customer:undefined,(player.delivery.lastReward?.id??0)>rewardBefore);
       updateLevel(player.delivery);
+      return payouts;
     });
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
+  if(world.parking.rounds.length||world.races.rounds.length)for(const player of world.players){
+    const finishedParking=world.parking.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.finishedAt!==null));
+    const finishedRace=world.races.rounds.some(round=>round.entrants.some(entrant=>entrant.playerId===player.id&&entrant.status==='finished'));
+    if(finishedParking||finishedRace)gameAward(player,()=>updateGameAchievements(world,player),()=>{
+      // Capture only when a new award entered the wallet queue; these results
+      // expire before a delayed earlier transaction necessarily settles.
+      const evidence={...world,parking:structuredClone(world.parking),races:structuredClone(world.races)};
+      return ()=>updateGameAchievements(evidence,player);
+    });
+  }
   for(const pickup of world.pickups){
     if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time,economy?.canCollect);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;

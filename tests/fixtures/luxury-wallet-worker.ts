@@ -1,18 +1,77 @@
 // LOCAL TEST ONLY. This worker supplies funded drivers, showroom positioning,
 // and deterministic profile faults. It must never be used as a deployment entry.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat as ProductionGlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
+import { parseRecoveryCode } from '../../worker/global-chat-core';
 import { DriverProfile as ProductionDriverProfile, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
 import { initialDelivery, levelForCash, orderTarget } from '../../shared/delivery';
 import { SHOPS } from '../../shared/upgrades';
 import { LUXURY_SHOWROOM } from '../../shared/luxury';
 import { terrainHeight } from '../../shared/map';
+import { PARKING_LOTS } from '../../shared/parking-lots';
 import { addPlayer, createEmptyWorld, type World } from '../../shared/game';
 import { progressFrom } from '../../worker/driver-profile';
 import { EconomySession } from '../../worker/economy-session';
+import { DOME } from '../../shared/dome';
+import { RACE_COURSES } from '../../shared/race-courses';
 
-export { GlobalChat, GlobalIncome };
+export { GlobalIncome, GlobalEarningsEvent };
+/** Hold a claim before binding, or after its transaction or confirmation. */
+export class GlobalChat extends ProductionGlobalChat {
+  private nextBindingHold:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|null=null;
+  private bindingHeld=false;
+  private releaseUnavailable=false;
+  private releaseBindingHold:(()=>void)|undefined;
+  private holdNextBind=false;
+  private bindHeld=false;
+  private releaseBind:(()=>void)|undefined;
+  async armBindHold(){this.holdNextBind=true;}
+  async bindFaultState(){return {held:this.bindHeld};}
+  async releaseBindHold(){this.releaseBind?.();}
+  async armBindingHold(stage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore') {
+    if(stage==='restore'){this.releaseUnavailable=false;return;}
+    this.nextBindingHold=stage;
+  }
+  async bindingFaultState() { return {held:this.bindingHeld}; }
+  async releaseBinding() { this.releaseBindingHold?.(); }
+  private async holdBinding(stage:'bind'|'confirm') {
+    if(this.nextBindingHold===`lost-${stage}`){this.nextBindingHold=null;throw new Error('Injected lost binding reply');}
+    if(this.nextBindingHold!==stage)return;
+    this.nextBindingHold=null;this.bindingHeld=true;
+    try{await new Promise<void>(resolve=>{this.releaseBindingHold=resolve;});}
+    finally{this.bindingHeld=false;this.releaseBindingHold=undefined;}
+  }
+  override async bindWallet(code:string,walletId:string,token:string) {
+    const hold=this.holdNextBind;this.holdNextBind=false;
+    if(hold){
+      this.bindHeld=true;
+      try{await new Promise<void>(resolve=>{this.releaseBind=resolve;});}
+      finally{this.bindHeld=false;this.releaseBind=undefined;}
+    }
+    if(this.nextBindingHold==='missing-bind'){
+      this.nextBindingHold=null;this.releaseUnavailable=true;
+      throw new TypeError('The RPC receiver does not implement the method "bindWallet".');
+    }
+    const result=await super.bindWallet(code,walletId,token);await this.holdBinding('bind');return result;
+  }
+  override async releaseWallet(code:string,token:string) {
+    if(this.releaseUnavailable)throw new TypeError('The RPC receiver does not implement the method "releaseWallet".');
+    return super.releaseWallet(code,token);
+  }
+  override async confirmWallet(code:string,token:string) {
+    const result=await super.confirmWallet(code,token);await this.holdBinding('confirm');return result;
+  }
+  async expireBinding(code:string) {
+    const parsed=parseRecoveryCode(code);if(!parsed)throw new Error('Invalid recovery code');
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,identity=await txn.get<{binding?:{durable:boolean;claims:Record<string,number|null>}}>(key);
+      if(!identity?.binding || !Object.values(identity.binding.claims).some(expiry=>expiry!==null))throw new Error('No provisional claim');
+      for(const [token,expiry] of Object.entries(identity.binding.claims))if(expiry!==null)identity.binding.claims[token]=0;
+      await txn.put(key,identity);
+    });
+  }
+}
 
-type Fault = 'none' | 'hold-before' | 'fail-before' | 'lost-reply' | 'hold-lost-reply';
+type Fault = 'none' | 'hold-before' | 'hold-reject' | 'hold-revision' | 'reject' | 'revision' | 'fail-before' | 'lost-reply' | 'hold-lost-reply';
 const FUNDS = 20_000_000;
 
 /** Exercise the real per-player queue against a deterministic in-memory ledger. */
@@ -107,7 +166,7 @@ async function rejectionTimerSimulation(scenario:'same'|'order'|'renewal',discon
 
 /** Faults affect exactly the next commit to this driver's actual profile DO. */
 export class DriverProfile extends ProductionDriverProfile {
-  private fault: Fault = 'none';
+  private faults: Fault[] = [];
   private held = false;
   private heldAction:EconomyIntent['action'] | undefined;
   private releaseHeld: (() => void) | undefined;
@@ -144,9 +203,9 @@ export class DriverProfile extends ProductionDriverProfile {
     });
   }
 
-  async armFault(fault:Fault) {
+  async armFault(fault:Fault|Fault[]) {
     if (this.held) throw new Error('Release the held commit before arming another fault');
-    this.fault = fault;
+    this.faults = Array.isArray(fault)?[...fault]:[fault];
     return { started:this.started };
   }
   async faultState() { return { started:this.started, held:this.held, heldAction:this.heldAction }; }
@@ -163,14 +222,15 @@ export class DriverProfile extends ProductionDriverProfile {
   }
   override async commit(intent:EconomyIntent) {
     this.started++;
-    const fault = this.fault;
-    this.fault = 'none';
-    if (fault === 'hold-before') {
+    const fault = this.faults.shift()??'none';
+    if (fault === 'hold-before' || fault === 'hold-reject' || fault === 'hold-revision') {
       this.held = true;
       this.heldAction=structuredClone(intent.action);
       try { await new Promise<void>(resolve => { this.releaseHeld = resolve; }); }
       finally { this.held = false; this.heldAction=undefined; this.releaseHeld = undefined; }
     }
+    if (fault === 'hold-reject' || fault === 'reject') return {ok:false as const,reason:'invalid' as const};
+    if (fault === 'hold-revision' || fault === 'revision') return {ok:false as const,reason:'revision' as const};
     if (fault === 'fail-before') throw new Error('Injected profile write failure');
     const result = await super.commit(intent);
     if (fault === 'hold-lost-reply') {
@@ -288,6 +348,62 @@ export class GameRoom extends ProductionGameRoom {
   async fixtureShowroom(playerId:string, side:number) {
     return this.fixturePlace(playerId,LUXURY_SHOWROOM.arrival.x + side * 5,LUXURY_SHOWROOM.arrival.z);
   }
+  /** Place an active Park It entrant at its real assigned stall; gameplay completes it. */
+  async fixtureParkingStall(playerId:string) {
+    const world=Reflect.get(this,'world') as World;
+    const round=world.parking.rounds.find(candidate=>candidate.mode==='park'&&candidate.phase==='active'&&candidate.entrants.some(entrant=>entrant.playerId===playerId));
+    const entrant=round?.entrants.find(candidate=>candidate.playerId===playerId);
+    const stall=PARKING_LOTS.find(lot=>lot.id===round?.lotId)?.stalls.find(candidate=>candidate.id===entrant?.targetId);
+    const player=world.players.find(candidate=>candidate.id===playerId);
+    const car=world.entities.find(entity=>entity.id===player?.entityId);
+    if(!round||!entrant||entrant.finishedAt!==null||!stall||!car||car.driver!==playerId||car.id!==entrant.entityId)throw new Error('No active assigned parking stall');
+    this.fixturePlace(playerId,stall.x,stall.z);
+    Object.assign(car,{y:stall.y,yaw:stall.yaw,pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0,steering:0,autopilot:false,navigation:null});
+    return {lotId:round.lotId,stallId:stall.id};
+  }
+  /** Set up an earned Dome touch and four goals; physics scores the fifth. */
+  async fixtureDomeParticipant(playerId:string) {
+    const world=Reflect.get(this,'world') as World;
+    const player=world.players.find(candidate=>candidate.id===playerId);
+    const car=world.entities.find(entity=>entity.id===player?.entityId);
+    if(!car?.inDome||car.driver!==playerId||world.soccer.phase!=='play')throw new Error('No active Dome driver');
+    const soccer=world.soccer;
+    soccer.blueScore=4;soccer.orangeScore=0;
+    soccer.participants=[{playerId,touches:{roadster:true,retrofit:false,stock:false},goals:{roadster:1,retrofit:0,stock:0}}];
+    soccer.lastTouch={playerId,carClass:'roadster'};
+    Object.assign(soccer.ball,{x:DOME.x,y:3,z:DOME.z,vx:0,vy:0,vz:0});
+  }
+  async fixtureDomeScore() {
+    const world=Reflect.get(this,'world') as World;
+    if(world.soccer.phase!=='play')throw new Error('No active Dome match');
+    Object.assign(world.soccer.ball,{x:DOME.x+DOME.halfLength-2,y:3,z:DOME.z,vx:90,vy:0,vz:0});
+  }
+  /** Keep a previous DNF result while testing a driver change. */
+  async fixtureRaceResult(playerId:string) {
+    const world=Reflect.get(this,'world') as World;
+    const player=world.players.find(candidate=>candidate.id===playerId);
+    const car=world.entities.find(entity=>entity.id===player?.entityId);
+    if(!car)throw new Error('Test driver not in room');
+    world.races.rounds.push({courseId:'short',phase:'results',hostId:playerId,starterCount:1,openedAt:world.time,
+      startedAt:world.time,endsAt:world.time+30,entrants:[{playerId,entityId:car.id,status:'dnf',nextGate:0,
+        finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:car.x,y:car.y,z:car.z,time:world.time}}]});
+  }
+  /** Put a real entrant across its next gate; the room decides the crossing. */
+  async fixtureRaceGate(playerId:string) {
+    const world=Reflect.get(this,'world') as World;
+    const round=world.races.rounds.find(item=>item.phase==='active'&&item.entrants.some(entrant=>entrant.playerId===playerId&&entrant.status==='entered'));
+    const entrant=round?.entrants.find(item=>item.playerId===playerId);
+    const course=RACE_COURSES.find(item=>item.id===round?.courseId);
+    const gate=entrant&&course?.gates[entrant.nextGate];
+    const player=world.players.find(item=>item.id===playerId);
+    const car=world.entities.find(item=>item.id===player?.entityId);
+    if(!round||!entrant||!gate||!car||car.driver!==playerId)throw new Error('No active race gate');
+    const dx=-Math.sin(gate.yaw),dz=-Math.cos(gate.yaw),x=gate.x+dx*2,z=gate.z+dz*2;
+    this.fixturePlace(playerId,x,z);
+    Object.assign(car,{yaw:gate.yaw,autopilot:false,navigation:null});
+    entrant.previous={x:gate.x-dx*2,y:car.y,z:gate.z-dz*2,time:world.time-.01};
+    return {gate:gate.id,index:entrant.nextGate};
+  }
   /** Emulate many distinct income ticks without bypassing the room queue. */
   async fixtureQueueIncome(playerId:string,count:number) {
     const world=Reflect.get(this,'world') as World;
@@ -355,7 +471,7 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/__wallet-test/')) return worker.fetch(request, env as never, ctx);
     if (request.method !== 'POST') return new Response('POST required', { status:405 });
-    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
+    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm'|'missing-bind'|'restore';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
     const driver = env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId || 'unused'));
     const economy = env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room || 'fixture'));
     switch (url.pathname) {
@@ -367,8 +483,26 @@ export default {
       }
       case '/__wallet-test/associate': {
         const chat=env.CHAT.get(env.CHAT.idFromName('global'));
-        return Response.json(await chat.bindWallet(body.code,body.driverId));
+        const token=crypto.randomUUID(),result=await chat.bindWallet(body.code,body.driverId,token);
+        if(result?.claim && await chat.confirmWallet(body.code,token))await chat.settleWallet(body.code,token);
+        return Response.json(result);
       }
+      case '/__wallet-test/arm-bind': {
+        await env.CHAT.get(env.CHAT.idFromName('global')).armBindHold();return Response.json({ok:true});
+      }
+      case '/__wallet-test/bind-fault-state': {
+        return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).bindFaultState());
+      }
+      case '/__wallet-test/release-bind': {
+        await env.CHAT.get(env.CHAT.idFromName('global')).releaseBindHold();return Response.json({ok:true});
+      }
+      case '/__wallet-test/binding-begin': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).bindWallet(body.code,body.driverId,body.token));
+      case '/__wallet-test/binding-confirm': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).confirmWallet(body.code,body.token));
+      case '/__wallet-test/binding-release': await env.CHAT.get(env.CHAT.idFromName('global')).releaseWallet(body.code,body.token);return Response.json({ok:true});
+      case '/__wallet-test/binding-expire': await env.CHAT.get(env.CHAT.idFromName('global')).expireBinding(body.code);return Response.json({ok:true});
+      case '/__wallet-test/binding-arm': await env.CHAT.get(env.CHAT.idFromName('global')).armBindingHold(body.bindingStage);return Response.json({ok:true});
+      case '/__wallet-test/binding-state': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).bindingFaultState());
+      case '/__wallet-test/binding-resume': await env.CHAT.get(env.CHAT.idFromName('global')).releaseBinding();return Response.json({ok:true});
       case '/__wallet-test/players': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixturePlayers());
@@ -389,6 +523,26 @@ export default {
       case '/__wallet-test/position': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixtureShowroom(body.playerId,body.side));
+      }
+      case '/__wallet-test/parking-stall': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        return Response.json(await room.fixtureParkingStall(body.playerId));
+      }
+      case '/__wallet-test/dome-participant': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        await room.fixtureDomeParticipant(body.playerId);return Response.json({ok:true});
+      }
+      case '/__wallet-test/dome-score': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        await room.fixtureDomeScore();return Response.json({ok:true});
+      }
+      case '/__wallet-test/race-result': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        await room.fixtureRaceResult(body.playerId);return Response.json({ok:true});
+      }
+      case '/__wallet-test/race-gate': {
+        const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
+        return Response.json(await room.fixtureRaceGate(body.playerId));
       }
       case '/__wallet-test/workshop': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));

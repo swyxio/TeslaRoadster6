@@ -1,4 +1,4 @@
-import type { Entity, Player } from './game';
+import type { Entity, Player, World } from './game';
 import { updateLevel } from './delivery';
 import { LUXURY_DISCOVERY, atLuxuryShowroom } from './luxury';
 import { BUILDINGS, LANDMARKS, REGIONS, insidePolygon, isLand, terrainHeight } from './map';
@@ -51,6 +51,10 @@ export const ACHIEVEMENTS = {
   'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match. Reward: $2,000.' },
   'garage-champion': { name:'Garage Champion', description:'Win a Rocket Dome match with a goal credited to your rocket-retrofitted car. Reward: $2,000.' },
   'no-rockets-needed': { name:'No Rockets Needed', description:'Win with a goal, touching the ball only in cars without rockets. Reward: $2,000.' },
+  'park-it': { name:'Perfect Park', description:'Complete a Park It challenge.' },
+  'queue-cutter': { name:'Queue Cutter', description:'Claim a space in Cut the Queue.' },
+  'race-finisher': { name:'Checkered Flag', description:'Finish a race course.' },
+  'race-winner': { name:'First Across', description:'Finish first in a race that started with at least two drivers.' },
   'to-mars': { name:'To Mars', description:'Join the $1 billion global mission and board at the Fremont spaceport. Reward: $10,000.' },
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
@@ -87,8 +91,8 @@ function creditAwards(player:Player,amount:number,sameTickReward=false):void {
   player.delivery.lifetimeIncome+=amount;
   updateLevel(player.delivery);
   const reward=player.delivery.lastReward;
-  if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery')){
-    player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'?'pickup-research':'delivery-research',amount:reward.amount+amount};
+  if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery'||reward.kind==='pickup-research'||reward.kind==='delivery-research')){
+    player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'||reward.kind==='pickup-research'?'pickup-research':'delivery-research',amount:reward.amount+amount};
   }else player.delivery.lastReward={id:(reward?.id??0)+1,kind:'research',amount};
 }
 export function awardMarsAchievement(player:Player):void { if(unlock(player.achievements,'to-mars'))creditAwards(player,10_000); }
@@ -102,6 +106,20 @@ export function awardDomeMatchAchievements(player:Player,participant:DomePartici
   if(won&&participant.touches.retrofit&&participant.goals.retrofit>0&&unlock(state,'garage-champion'))cash+=2_000;
   if(won&&participant.touches.stock&&participant.goals.stock>0&&!participant.touches.roadster&&!participant.touches.retrofit&&unlock(state,'no-rockets-needed'))cash+=2_000;
   creditAwards(player,cash);
+}
+
+/** Mini-game achievements use only the simulation's completed results. */
+export function updateGameAchievements(world:World,player:Player):void {
+  for(const round of world.parking.rounds)for(const entrant of round.entrants){
+    if(entrant.playerId===player.id&&entrant.finishedAt!==null)
+      unlock(player.achievements,round.mode==='park'?'park-it':'queue-cutter');
+  }
+  for(const round of world.races.rounds)for(const entrant of round.entrants){
+    if(entrant.playerId!==player.id||entrant.status!=='finished')continue;
+    unlock(player.achievements,'race-finisher');
+    if((round.phase==='active'||round.phase==='results')&&entrant.rank===1&&round.starterCount>=2)
+      unlock(player.achievements,'race-winner');
+  }
 }
 // Region polygons also contain the Peninsula and East Bay; the achievement's
 // endpoints are the SF and Oakland city grids, not the full Bay corridor.

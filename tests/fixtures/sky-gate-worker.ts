@@ -1,12 +1,12 @@
 // Local-only fixture. The room's real messages, simulation and snapshots are
 // unchanged; stage the first driver immediately before the observer joins.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { ACCESS_BOUNDARIES } from '../../shared/delivery';
 import { JET_STREAMS } from '../../shared/sky-currents';
 import type { World } from '../../shared/game';
 
 export default worker;
-export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome };
+export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 
 export class GameRoom extends ProductionGameRoom {
   override async fetch(request:Request): Promise<Response> {

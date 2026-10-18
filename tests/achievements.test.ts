@@ -139,3 +139,50 @@ test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));
 });
+
+test('parking and racing awards follow completed game results without inventing solo race wins',async()=>{
+  const {updateGameAchievements}=await import('../shared/achievements');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const parking={lotId:'test',mode:'park' as const,phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,
+    entrants:[{playerId:player.id,entityId:car.id,joinedAt:0,targetId:'a',hold:2,finishedAt:1,elapsed:1,overtakes:null}],claimedStallIds:[]};
+  world.parking.rounds=[parking];
+  const entrant={playerId:player.id,entityId:car.id,status:'finished' as const,nextGate:1,finishedAt:1,elapsed:1,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  const round={courseId:'short',phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,starterCount:1,entrants:[entrant]};
+  world.races.rounds=[round];updateGameAchievements(world,player);
+  assert.ok(player.achievements.unlocked.includes('park-it'));
+  assert.ok(player.achievements.unlocked.includes('race-finisher'));
+  assert.ok(!player.achievements.unlocked.includes('race-winner'));
+  round.entrants.push({...entrant,playerId:other.id,entityId:other.entityId,elapsed:2,rank:2});
+  round.starterCount=2;
+  updateGameAchievements(world,player);updateGameAchievements(world,player);
+  assert.equal(player.achievements.unlocked.filter(id=>id==='race-winner').length,1);
+  assert.deepEqual(other.achievements.unlocked,[],'processing one player cannot mutate another');
+  const last=player.achievements.lastUnlock;
+  updateGameAchievements(world,player);
+  assert.deepEqual(player.achievements.lastUnlock,last,'repeated results do not create another unlock');
+  updateGameAchievements(world,other);
+  assert.deepEqual(other.achievements.unlocked,['race-finisher']);
+  assert.ok(!other.achievements.unlocked.includes('race-winner'));
+  world.parking.rounds=[{...parking,mode:'queue'}];updateGameAchievements(world,player);
+  assert.ok(player.achievements.unlocked.includes('queue-cutter'));
+});
+
+test('game results mutate only the passed player draft and require completed results',async()=>{
+  const {updateGameAchievements}=await import('../shared/achievements');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const entrant={playerId:player.id,entityId:car.id,joinedAt:0,targetId:'a',hold:0,finishedAt:null,elapsed:null,overtakes:null};
+  world.parking.rounds=[{lotId:'test',mode:'park',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:10,entrants:[entrant],claimedStallIds:[]}];
+  const raceEntrant={playerId:player.id,entityId:car.id,status:'finished' as const,nextGate:1,finishedAt:1,elapsed:1,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  world.races.rounds=[{courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:10,starterCount:2,entrants:[raceEntrant,{...raceEntrant,playerId:other.id,entityId:other.entityId,rank:2}]}];
+  const draft={...player,achievements:structuredClone(player.achievements)};
+  updateGameAchievements(world,draft);
+  assert.deepEqual(draft.achievements.unlocked,['race-finisher','race-winner'],'the first finisher earns the win while the race is active');
+  assert.deepEqual(player.achievements.unlocked,[],'the committed player is untouched while its draft changes');
+  assert.deepEqual(other.achievements.unlocked,[],'another player is untouched');
+  world.parking.rounds[0].entrants[0].finishedAt=2;
+  world.races.rounds[0].phase='results';
+  updateGameAchievements(world,draft);
+  assert.deepEqual(draft.achievements.unlocked,['race-finisher','race-winner','park-it']);
+  assert.deepEqual(player.achievements.unlocked,[]);
+  assert.deepEqual(other.achievements.unlocked,[]);
+});

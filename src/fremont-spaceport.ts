@@ -35,30 +35,35 @@ export function buildFremontSpaceport(scene:T.Scene) {
     box(tower,0,y,6,12,1,.5,0xcbb59a);box(tower,0,y,-6,12,1,.5,0xcbb59a);
   }
   // The fictional launch tower's arms extend toward the rocket.
-  for(const z of [-5,5])box(tower,-15,93,z,26,2,2,0x454f54);
+  const arms=new T.Group();tower.add(arms);
+  for(const z of [-5,5])box(arms,-15,93,z,26,2,2,0x454f54);
   box(tower,-1,127,0,14,4,14,0x454f54);
 
   const rocket=new T.Group();rocket.position.set(site.pad.x,site.pad.h,site.pad.z);scene.add(rocket);
+  const stages=Array.from({length:5},()=>{const group=new T.Group();rocket.add(group);return group;});
   const cylinder=(parent:T.Object3D,rTop:number,rBottom:number,h:number,y:number,color:number)=>{
     const m=new T.Mesh(new T.CylinderGeometry(rTop,rBottom,h,32),material(color,.7));m.position.y=y;parent.add(m);return m;
   };
   // Proportions based on Super Heavy's 72 m × 9 m booster and a Starship upper stage.
-  cylinder(rocket,4.5,4.5,72,36,0xb4c0bf);
-  for(const y of [3,20,40,60,71])cylinder(rocket,4.56,4.56,.35,y,0x65757a);
-  cylinder(rocket,4.5,4.5,35,89.5,0xc7d0cd);
-  cylinder(rocket,0,4.5,13,113.5,0xc7d0cd);
-  box(rocket,0,85,4.5,7,23,.2,0x202a30);
+  cylinder(stages[0],4.5,4.5,36,18,0xb4c0bf);
+  cylinder(stages[1],4.5,4.5,36,54,0xb4c0bf);
+  for(const y of [3,20,40,60,71])cylinder(stages[4],4.56,4.56,.35,y,0x65757a);
+  cylinder(stages[2],4.5,4.5,35,89.5,0xc7d0cd);
+  cylinder(stages[3],0,4.5,13,113.5,0xc7d0cd);
+  box(stages[4],0,85,4.5,7,23,.2,0x202a30);
   for(const side of [-1,1]){
-    const fin=box(rocket,side*5,78,0,4,12,1,0x3b484c);fin.rotation.z=side*.28;
-    const flap=box(rocket,side*4.3,103,0,2.4,5,.8,0x3b484c);flap.rotation.z=-side*.3;
+    const fin=box(stages[3],side*5,78,0,4,12,1,0x3b484c);fin.rotation.z=side*.28;
+    const flap=box(stages[3],side*4.3,103,0,2.4,5,.8,0x3b484c);flap.rotation.z=-side*.3;
   }
   for(let i=0;i<9;i++){
     const angle=i/9*Math.PI*2,engine=new T.Mesh(new T.ConeGeometry(.7,2,12),material(0x30383b,.5));
-    engine.position.set(Math.cos(angle)*3,-.6,Math.sin(angle)*3);engine.rotation.x=Math.PI;rocket.add(engine);
+    engine.position.set(Math.cos(angle)*3,-.6,Math.sin(angle)*3);engine.rotation.x=Math.PI;stages[4].add(engine);
   }
   const flame=new T.Mesh(new T.ConeGeometry(4,27,20),new T.MeshBasicMaterial({color:0xffbd68,transparent:true,opacity:.8}));flame.position.y=-14;flame.rotation.x=Math.PI;rocket.add(flame);flame.visible=false;
   const ring=new T.Mesh(new T.RingGeometry(12,12.7,64),new T.MeshBasicMaterial({color:0xffc76e,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(site.entrance.x,.13,site.entrance.z);scene.add(ring);
-  return {update(time:number,launchAt:number|null){
+  return {update(time:number,launchAt:number|null,stage=5){
+    const shown=Math.max(0,Math.min(5,Math.floor(stage)));
+    stages.forEach((group,index)=>{group.visible=index<shown;});arms.visible=shown>=5;
     const elapsed=launchAt===null?-1:time-launchAt;
     const launching=elapsed>=0&&elapsed<MARS_LAUNCH_SECONDS;
     rocket.position.y=site.pad.h+(launching?Math.max(0,elapsed-1)**2*3:0);

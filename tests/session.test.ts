@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
+import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
 
 class Socket {
   static OPEN = 1;
@@ -10,7 +11,7 @@ class Socket {
   readyState = Socket.OPEN;
   sent: string[] = [];
   onmessage?: (event: {data:string}) => void;
-  onclose?: (event: {code:number}) => void;
+  onclose?: (event: {code:number;reason:string}) => void;
   onerror?: () => void;
   constructor(public url:string) { Socket.last = this; }
   send(value:string) { this.sent.push(value); }
@@ -21,7 +22,7 @@ class Socket {
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
   }
-  closed(code=1000) { this.readyState = 3; this.onclose?.({code}); }
+  closed(code=1000,reason='') { this.readyState = 3; this.onclose?.({code,reason}); }
 }
 Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
 
@@ -45,6 +46,14 @@ test('a guest sends its decision before the starting vehicle request',()=>{
     {type:'identity',code:null,requestId:1},{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}},{type:'sync',token:1},
   ]);
   session.disconnect();
+});
+
+test('a failed award save is explained on disconnect',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  socket.closed(1011,'Award could not be saved. Rejoin.');
+  assert.equal(session.error,'Award could not be saved. Rejoin.');
+  assert.equal(session.status,'disconnected');
 });
 
 test('input cadence keeps fractional frame time without catching up in a burst',()=>{
@@ -118,6 +127,8 @@ test('joining the current room keeps its seat and may select a car',()=>{
 test('offline navigation requests fail without starting a local session',()=>{
   const session=new Session(), requestId=session.setDestination(-180,60);
   assert.deepEqual(session.destinationResult,{requestId,ok:false});
+  const deliveryRequest=session.setDeliveryDestination();
+  assert.deepEqual(session.destinationResult,{requestId:deliveryRequest,ok:false});
   assert.equal(session.world.players.length,0);
 });
 
@@ -174,10 +185,15 @@ test('online Mars actions use an ordered sync barrier and clear stale results on
   const requestId=session.mars();
   assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'board',requestId});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'marsResult',requestId,action:'board',ok:true});
+  socket.message({type:'marsResult',requestId,action:'board',ok:true,amount:0});
   assert.equal(session.marsResult?.ok,true);
+  const donation=session.contributeMars(123);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:123,requestId:donation});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  socket.message({type:'marsResult',requestId:donation,action:'contribute',ok:false,amount:0,available:75});
+  assert.deepEqual(session.marsResult,{type:'marsResult',requestId:donation,action:'contribute',ok:false,amount:0,available:75});
   session.join('friends','Alex');assert.equal(session.marsResult,null);
-  socket.message({type:'marsResult',requestId,action:'board',ok:true});assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'board',ok:true,amount:0});assert.equal(session.marsResult,null);
   session.disconnect();
 });
 
@@ -199,6 +215,40 @@ test('identity replies match the latest request and recovery is replayed on rejo
   session.join('friends','Alex');const next=Socket.last;
   next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
   assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'second-code',requestId:latest});
+  session.disconnect();
+});
+
+test('a new chat driver binds the guest wallet when browser storage is denied',()=>{
+  const session=new Session();session.join('bay','Guest');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Guest');socket.message({type:'state',world});
+  const stored=connectDriverWallet('new-driver',code=>stageDriverRecovery(null,code!)==='ok',code=>session.setIdentity(code));
+  assert.equal(stored,false);
+  const request=JSON.parse(socket.sent.at(-1)!);
+  assert.equal(request.type,'identity');assert.equal(request.code,'new-driver');assert.equal(session.walletBlocked,true);
+  const sent=socket.sent.length;session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');assert.equal(socket.sent.length,sent);
+  socket.message({type:'identityResult',requestId:request.requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world});assert.equal(session.walletStatus,'ready');
+  session.disconnect();
+});
+
+test('an unstaged chat switch cannot keep playing with the previous wallet',()=>{
+  const entries=new Map([[DRIVER_RECOVERY_KEY,'old-driver'],[DRIVER_PENDING_KEY,'unfinished-driver']]);
+  const storage={getItem:(key:string)=>entries.get(key)??null,setItem:(key:string,value:string)=>{entries.set(key,value);},removeItem:(key:string)=>{entries.delete(key);}};
+  const session=new Session(),old=session.setIdentity('old-driver');session.join('bay','Old');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Old');socket.message({type:'state',world});
+  socket.message({type:'identityResult',requestId:old,ok:true,message:'connected'});socket.message({type:'state',world});
+  assert.equal(session.walletStatus,'ready');
+  const stored=connectDriverWallet('new-driver',code=>stageDriverRecovery(storage,code!)==='ok',code=>session.setIdentity(code));
+  assert.equal(stored,false);assert.equal(entries.get(DRIVER_RECOVERY_KEY),'old-driver');assert.equal(entries.get(DRIVER_PENDING_KEY),'unfinished-driver');
+  const request=JSON.parse(socket.sent.at(-1)!);assert.equal(request.code,'new-driver');assert.equal(session.walletBlocked,true);
+  socket.message({type:'identityResult',requestId:old,ok:true,message:'stale'});assert.equal(session.identityResult,null);
+  socket.message({type:'identityResult',requestId:request.requestId,ok:false,message:'Rejoin with this driver.'});
+  const sent=socket.sent.length;session.tick(.1,{...NEUTRAL,throttle:1});session.buyUpgrade('rocket');assert.equal(socket.sent.length,sent);
+  session.disconnect();session.join('bay','New');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:8});
+  assert.equal(JSON.parse(next.sent.at(-1)!).code,'new-driver');
   session.disconnect();
 });
 
@@ -235,6 +285,32 @@ test('a saved driver cannot drive or spend until recovery and its following snap
   assert.equal(session.walletStatus,'ready');assert.equal(session.walletBlocked,false);
   assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}},'starting ride is requested after recovery');
   session.tick(.1,{...NEUTRAL,throttle:1});assert.equal(JSON.parse(socket.sent.at(-1)!).type,'input');
+  session.disconnect();
+});
+
+test('chat reconnecting the same driver does not interrupt a room route or rebind the wallet',()=>{
+  const session=new Session(),requestId=session.setIdentity('saved-code');
+  session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const sentDuringRecovery=socket.sent.length;
+  assert.equal(session.setIdentity('saved-code'),requestId);
+  assert.equal(socket.sent.length,sentDuringRecovery,'an in-flight bind is not duplicated');
+  socket.message({type:'wallet',level:0,eligibleIncome:0,cash:2_500,earned:0,unlocked:[],ownedLuxury:[]});
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world,inputAck:0});
+  assert.equal(session.walletStatus,'ready');
+  session.setDestination(-180,60);
+  const sentWithRoute=socket.sent.length;
+  assert.equal(session.setIdentity('saved-code'),requestId);
+  assert.equal(socket.sent.length,sentWithRoute,'no new identity message can cancel the route');
+  assert.equal(session.walletStatus,'ready');
+  session.join('friends','Alex');const next=Socket.last;
+  next.message({type:'welcome',id:'q',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'saved-code',requestId},'a new room still binds the driver');
+  const replacement=session.setIdentity('other-code');
+  assert.notEqual(replacement,requestId);
+  assert.deepEqual(JSON.parse(next.sent.at(-1)!),{type:'identity',code:'other-code',requestId:replacement},'a different driver still rebinds');
   session.disconnect();
 });
 
@@ -279,9 +355,14 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'destinationResult',requestId,ok:true});
   assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
-  session.enterMinigame('park');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:2,edgeBaseline:{jump:0,flip:0}});
+  const deliveryRequest=session.setDeliveryDestination();
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'deliveryDestination',requestId:deliveryRequest,actionSeq:2,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  socket.message({type:'destinationResult',requestId:deliveryRequest,ok:true});
+  assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId:deliveryRequest,ok:true});
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:3,edgeBaseline:{jump:0,flip:0}});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:3});
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
   session.disconnect();

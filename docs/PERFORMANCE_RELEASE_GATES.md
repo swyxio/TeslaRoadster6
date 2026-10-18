@@ -1,10 +1,11 @@
 # Performance release gates
 
-2026-10-18 Pacific. Performance takes priority over feature development. Economy,
-fleet, map and other feature releases remain held while this work is active.
-Small, independently verified performance fixes may ship; they do not by
-themselves satisfy the gates below. See [the audit](PERFORMANCE_AUDIT.md) for
-measurements and [verification](VERIFICATION.md) for build-specific evidence.
+2026-10-18 Pacific. After the verified 0.0.15 / protocol v32 production release,
+the user lifted the global feature hold and resumed the paused development
+chats. Performance now receives periodic checks and focused review when a
+change affects driving, rendering, networking or persistence. Existing gaps
+are tracked below; they do not freeze unrelated feature releases. See
+[the audit](PERFORMANCE_AUDIT.md) and [verification](VERIFICATION.md) for evidence.
 
 ## Driving continuity comes first
 
@@ -19,7 +20,7 @@ disabled prediction near traffic or in flight. Its input acknowledgements did
 not identify which room ticks held or replaced controls. A camera-only correction
 did not fix that mismatch.
 
-The v32 candidate schedules bounded inputs against authoritative ticks, replays
+The v32 release schedules bounded inputs against authoritative ticks, replays
 the local car with nearby simulation, and separates the predicted simulation
 from display correction. Other vehicles use snapshot interpolation, with nearby
 vehicles presented on the predicted timeline when the path is safe. Collisions,
@@ -51,14 +52,14 @@ acceleration, steady travel, contacts and intentional relocation in analysis.
 | Room throughput | After warm-up, a 60-second sustained sample should advance at least 57 seconds of simulation with bounded queues/history. Target p95 tick work below 40 ms at the existing 50 ms tick; report outbound bytes, acknowledgement delays and snapshot gaps. Repeat at the intended capacity with an isolated load generator before claiming that capacity. |
 | Rendering | Target 60 FPS on the recorded desktop configuration (p95 frame interval at most 20 ms) in representative city, traffic and flight scenes. Verify mobile separately; desktop or emulation results are not physical-device evidence. Report CPU submission and GPU/frame timing separately. |
 | Startup and tooling | Record initial/repeat transferred JS, build/typecheck/test wall times, and asset-cache behavior on the same revision and environment. No bundle-budget changes merely to silence a warning. |
-| Persistence isolation | A deliberately delayed or failed personal-state write must not pause unrelated input processing or the world tick. Paid changes publish only after durable commit; retries cannot duplicate rewards or debits. The currently held persistence prototype has not met this gate. |
+| Persistence isolation | A deliberately delayed or failed personal-state write must not pause unrelated input processing or the world tick. Paid changes publish only after durable commit; retries cannot duplicate rewards or debits. A persistence feature must demonstrate this for its own release. |
 
 These are initial engineering acceptance targets, not measured service promises.
 If a target needs revision, record the evidence and tradeoff; do not silently
 lower it to pass a failing candidate. A socket connection count is not a playable
 capacity result, and a microbenchmark win is not an end-to-end win.
 
-## Integration and reopening feature work
+## Feature integration and periodic checks
 
 Client prediction and server tick semantics land together with one protocol bump,
 contract changes, deterministic network-trace tests and live Wrangler integration.
@@ -66,7 +67,26 @@ Use one integration branch with exclusive file ownership. Preserve persisted roo
 Mars funds. Review and remove obsolete prediction paths after the new path works
 end to end; do not retain competing prediction engines.
 
-Before reopening features, record the motion, render and room results on the
-integrated commit, verify the deployed asset revision, and play the actual game.
-List any unverified devices/capacities and remaining defects plainly. Feature
-branches must incorporate the performance baseline before integration.
+Feature branches must incorporate main at `6e6067c` or later before integration.
+Keep the v32 tick/action/relocation contract, reduced traffic, vehicle LOD and
+provisional eight-player cap unless measurements justify changing them.
+
+Use ordinary focused tests/build and the relevant room or UI checks for each
+feature. Run matching motion, scene or persistence checks when those paths
+change; do not rerun every historical benchmark for unrelated content changes.
+Review performance daily while development continues. If the deployed runtime
+has not changed and there is no new symptom, skip repeat benchmarking. Compare
+changed builds with the recorded baseline using the same scenario and device;
+serialize heavy load/browser measurements to avoid host contention. A confirmed
+regression blocks the responsible change, not all independent development.
+
+The wallet/showroom chat owns the shared persistent wallet, identity and income
+contract. Progression, Cybercab/market, global Starship and saved-driver awards
+must reuse that contract and coordinate shared-file and protocol merges with
+its owner. Resume complete layers in dependency order; avoid competing ledgers
+or speculative rewrites. The Bay landmarks article can proceed independently.
+
+Long-outage display cuts, late inputs in short WAN samples, sustained playable
+capacity, physical-device validation and the crowded landscape HUD remain
+follow-ups. Preserve their evidence and distinguish new regressions from these
+known limitations. See the production entry in [VERIFICATION.md](VERIFICATION.md).
