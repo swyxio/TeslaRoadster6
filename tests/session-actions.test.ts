@@ -168,7 +168,7 @@ test('a rejected action keeps motion visible while its ordered result arrives',(
   const {session,socket,world,state,advance}=online();
   session.tick(.05,drive);assert.notEqual(session.renderWorld(),session.world);
   const requestId=session.setDestination(180,-300);
-  assert.deepEqual(socket.sent.slice(-2),[{type:'destination',x:180,z:-300,requestId,actionSeq:1,edgeBaseline:{jump:0,flip:0}},{type:'sync',token:1}]);
+  assert.deepEqual(socket.sent.slice(-2),[{type:'destination',x:180,z:-300,mode:'road',requestId,actionSeq:1,edgeBaseline:{jump:0,flip:0}},{type:'sync',token:1}]);
   assert.notEqual(session.renderWorld(),session.world,'the barrier alone does not rewind motion');
   socket.message({type:'destinationResult',requestId,ok:false});advance(100);state(world,2,0,0,1);
   assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId,ok:false});

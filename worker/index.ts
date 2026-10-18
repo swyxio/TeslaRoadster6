@@ -598,7 +598,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
     if(message.type==='destination'||message.type==='deliveryDestination'){
-      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z}):setDeliveryDestination(this.world,session.id);
+      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z},message.mode):setDeliveryDestination(this.world,session.id,message.mode);
       if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }

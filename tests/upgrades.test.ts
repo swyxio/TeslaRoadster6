@@ -78,6 +78,19 @@ test('upgrades stay with a taken vehicle when its driver exits and returns',()=>
   const {world,player,car}=setup('zoox');car.upgrades.rocket=true;car.upgrades.armor=true;
   interact(world,'p');assert.notEqual(player.entityId,car.id);interact(world,'p');assert.equal(player.entityId,car.id);assert.ok(car.upgrades.rocket&&car.upgrades.armor);
 });
+test('self-driving tiers require rockets and are bought in order, once each',()=>{
+  const {world,player,car}=setup('model-3');player.delivery.cash=20_000;
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),false);
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false);
+  car.upgrades.rocket=true;
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false,'Leap comes first');
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),true);
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),false,'no duplicate charge');
+  assert.equal(buyUpgrade(world,'p','autonomySky'),true);
+  assert.equal(buyUpgrade(world,'p','autonomySky'),false,'no duplicate charge');
+  assert.equal(player.delivery.cash,20_000-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
+  assert.equal(car.upgrades.autonomyJump,true);assert.equal(car.upgrades.autonomySky,true);
+});
 test('tank upgrades charge escalating prices, refill, and double usable flight each level',()=>{
   const {world,player,car}=setup();player.delivery.cash=30_000;
   assert.equal(buyUpgrade(world,'p','tank'),false,'requires a rocket kit');
@@ -114,7 +127,7 @@ test('an island kit remains installed and enables the shop after crossing back',
 test('rocket economy and sport motor affect real island-cliff physics',()=>{
   function run(motor:boolean,economy:boolean,jump:boolean,tankLevel:TankLevel=1,throttle=1){
     const {world,car}=setup(),pose=cliffPose(.4);
-    car.upgrades={rocket:true,motor,economy,armor:false};
+    Object.assign(car.upgrades,{rocket:true,motor,economy,armor:false});
     Object.assign(car,{x:pose.point.x,y:pose.point.y,z:pose.point.z,yaw:-Math.PI/2,pitch:.4,
       supportId:'island-cliff',loopAngle:.4,speed:20,vx:pose.tangent.x*20,vy:pose.tangent.y*20,vz:0,tankLevel});
     step(world,new Map([['p',{...NEUTRAL,throttle,jump:jump?1:0}]]),.05);

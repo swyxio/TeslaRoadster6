@@ -7,6 +7,8 @@ import { body, contact, dimensions } from './physics';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
+import { isDriveMode, type DriveMode } from './drive-mode';
+import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
 import { CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
@@ -17,7 +19,7 @@ import type { AchievementEvidence } from './achievement-evidence';
 import { newPolice, policeInput, updatePolice, type PoliceState, type TicketEvidence } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
-import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
+import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, initialVehicleUpgrades, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
 import { PAINTS, DECALS, initialVehicleStyle, isStyleChoice, type VehicleStyle, type StyleChoice } from './vehicle-style';
 import { createParking, insideParkingArea, joinParking, leaveParking, startQueue, updateParking, type ParkingMode, type ParkingState } from './parking';
 import { PARKING_LOTS } from './parking-lots';
@@ -32,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=41;
+export const PROTOCOL_VERSION=42;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -52,7 +54,7 @@ const damageFactor=(e:Entity)=>e.kind==='person'?1:(VEHICLES[e.kind].damageFacto
 const MAX_FLIGHT_SPEED=80; // 288 km/h: an arcade limit that keeps contact sampling bounded.
 export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:string|null=null):Entity=>{
   const height=terrainHeight(x,z);
-  return {id,kind,x,y:height??0,z,yaw:0,pitch:0,roll:0,vx:0,vy:0,vz:0,pitchRate:0,yawRate:0,rollRate:0,speed:0,health:100,air:100,tankLevel:1,upgrades:{rocket:false,economy:false,motor:false,armor:false},style:initialVehicleStyle(),driver,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,navigation:null,routeId:0,waypoint:0,pauseUntil:0,lastJump:0,lastFlip:0,flipRemaining:0,stunts:0,loopAngle:null,loopDirection:1,inDome:false,domeReturn:'sf',domeS:null,thrusters:0,jumpBurstUntil:0,supportId:height===null?null:'ground'};
+  return {id,kind,x,y:height??0,z,yaw:0,pitch:0,roll:0,vx:0,vy:0,vz:0,pitchRate:0,yawRate:0,rollRate:0,speed:0,health:100,air:100,tankLevel:1,upgrades:initialVehicleUpgrades(),style:initialVehicleStyle(),driver,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,navigation:null,routeId:0,waypoint:0,pauseUntil:0,lastJump:0,lastFlip:0,flipRemaining:0,stunts:0,loopAngle:null,loopDirection:1,inDome:false,domeReturn:'sf',domeS:null,thrusters:0,jumpBurstUntil:0,supportId:height===null?null:'ground'};
 };
 /** Empty presentation state while waiting for an authoritative room snapshot. */
 export function createEmptyWorld():World {
@@ -318,7 +320,8 @@ export function buyUpgrade(world:World,id:string,upgrade:UpgradeId):boolean {
   const price=upgradePrice(player,car,upgrade);
   if(player.delivery.cash<price)return false;
   if(upgrade==='rocket'&&hasRockets(car))return false;
-  if((upgrade==='economy'||upgrade==='tank')&&!hasRockets(car))return false;
+  if((upgrade==='economy'||upgrade==='tank'||upgrade==='autonomyJump'||upgrade==='autonomySky')&&!hasRockets(car))return false;
+  if(upgrade==='autonomySky'&&!car.upgrades.autonomyJump)return false;
   if(upgrade==='service'){
     if(car.health>=100&&car.air>=100)return false;
     car.health=100;car.air=100;
@@ -361,19 +364,19 @@ export function toggleAutopilot(world:World,id:string):boolean {
   if(!e||e.kind==='person'||e.supportId==='ferry')return false;
   if(e.autopilot){e.autopilot=false;e.navigation=null;return true;}e.navigation=null;return engageAutopilot(e);
 }
-function navigate(world:World,id:string,destination:{x:number;z:number},maxDestinationSnap?:number):boolean {
+function navigate(world:World,id:string,destination:{x:number;z:number},mode:DriveMode,maxDestinationSnap?:number):boolean {
   const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!car||car.driver!==id||!Number.isFinite(destination.x)||!Number.isFinite(destination.z))return false;
+  if(!player||!car||car.driver!==id||!isDriveMode(mode)||!Number.isFinite(destination.x)||!Number.isFinite(destination.z)||(mode!=='road'&&!hasRockets(car))||(mode==='jump'&&!car.upgrades.autonomyJump)||(mode==='sky'&&!car.upgrades.autonomySky))return false;
   const route=planNavigation(car,destination,player.delivery.level,maxDestinationSnap);if(!route)return false;
-  car.navigation=route;car.autopilot=true;car.pauseUntil=0;return true;
+  car.navigation=Object.assign(route,{mode});car.autopilot=true;car.pauseUntil=0;return true;
 }
-export function setDestination(world:World,id:string,destination:{x:number;z:number}):boolean {
-  return navigate(world,id,destination);
+export function setDestination(world:World,id:string,destination:{x:number;z:number},mode:DriveMode='road'):boolean {
+  return navigate(world,id,destination,mode);
 }
-export function setDeliveryDestination(world:World,id:string):boolean {
+export function setDeliveryDestination(world:World,id:string,mode:DriveMode='road'):boolean {
   const player=world.players.find(p=>p.id===id);if(!player)return false;
   const target=orderTarget(player.delivery.order);
-  return !target.rooftop&&navigate(world,id,target,DELIVERY_DESTINATION_SNAP);
+  return !target.rooftop&&navigate(world,id,target,mode,DELIVERY_DESTINATION_SNAP);
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e||!player)return;
@@ -837,18 +840,30 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     // Counters are retained when input expires, so releasing a control cannot
     // accidentally replay a jump or flip. Only the server consumes the edge.
     const manual=e.driver?inputs.get(e.driver)??{...NEUTRAL,jump:e.lastJump,flip:e.lastFlip}:{...NEUTRAL,jump:e.lastJump,flip:e.lastFlip};
-    const jump=manual.jump!==e.lastJump,flip=manual.flip!==e.lastFlip;
+    const manualJump=manual.jump!==e.lastJump,flip=manual.flip!==e.lastFlip;
     e.lastJump=manual.jump;e.lastFlip=manual.flip;
     if(ferrySecured(world.ferry,e)){e.thrusters=0;continue;}
-    if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.boost||manual.hover||manual.roll||jump||flip)){e.autopilot=false;e.navigation=null;}
-    if(e.driver&&(jump||flip))stuntPlayers.add(e.driver);
-    const input=e.police&&(e.police.targetId||e.police.path.length)?policeInput(e,world):e.autopilot?trafficInput(e,world):manual;
+    if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.boost||manual.hover||manual.roll||manualJump||flip)){e.autopilot=false;e.navigation=null;}
+    if(e.driver&&(manualJump||flip))stuntPlayers.add(e.driver);
+    let input:Input,autoJump=false;
+    if(e.police&&(e.police.targetId||e.police.path.length))input=policeInput(e,world);
+    else if(e.autopilot){
+      const nav=e.navigation,player=e.driver?world.players.find(p=>p.id===e.driver):undefined;
+      if(nav&&player&&nav.mode&&nav.mode!=='road'){
+        const state=nav.flight??(nav.flight=initialAutonomousFlight());
+        // The road follower must not advance a ground path while in flight.
+        const groundInput=state.phase==='air'&&e.supportId===null?NEUTRAL:trafficInput(e,world);
+        const flight=autonomousFlight(e,world,player.delivery.level,nav.mode,groundInput,state);
+        input=flight.input;autoJump=flight.jump;
+      }else input=trafficInput(e,world);
+    }else input=manual;
+    const jump=manualJump||autoJump;
     const person=e.kind==='person',spec=person?null:VEHICLES[e.kind as VehicleId];
     const rocket=hasRockets(e),airUse=airCost(e.upgrades.economy?.75:1,e.tankLevel),motor=e.upgrades.motor?1.25:1;
     if(e.inDome&&rocket&&e.supportId==='ground'&&Math.abs(e.z-DOME.z)<=DOME.flatHalfWidth){
       e.supportId='dome';e.domeS=e.z-DOME.z+DOME.flatHalfWidth;
     }
-    const oldX=e.x,oldZ=e.z,oldY=e.y,oldSupportId=e.supportId;
+    const oldX=e.x,oldZ=e.z,oldY=e.y,oldYaw=e.yaw,oldSupportId=e.supportId;
     const old={x:oldX,y:oldY,z:oldZ,supportId:oldSupportId};
     const onRamp=e.supportId==='stunt-ramp',onDome=e.supportId==='dome'&&e.domeS!==null;
     const rampSlope=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
@@ -1077,8 +1092,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       e.speed=0;e.pushX=0;e.pushZ=0;e.autopilot=false;e.navigation=null;
     }
     if(solid(e)){
-      e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;
+      e.x=oldX;e.z=oldZ;e.y=oldY;e.yaw=oldYaw;e.yawRate=0;e.supportId=oldSupportId;
       const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1)*damageFactor(e));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
+      if(e.autopilot)e.steering=0;
       e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
     }
     capFlightSpeed(e);

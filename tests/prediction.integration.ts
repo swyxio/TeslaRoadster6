@@ -1,4 +1,4 @@
-// Protocol-v41 live control test. Run only against local Wrangler:
+// Protocol-v42 live control test. Run only against local Wrangler:
 // pnpm exec tsx tests/prediction.integration.ts http://127.0.0.1:8787
 import assert from 'node:assert/strict';
 import { RoomInputClient } from './room-input-client';
@@ -7,7 +7,7 @@ import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8787');
 assert.ok(base.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(base.hostname),'run only against local Wrangler');
 const health=await fetch(new URL('/api/health',base));assert.equal((await health.json() as {version:number}).version,PROTOCOL_VERSION);
-assert.equal(PROTOCOL_VERSION,41);
+assert.equal(PROTOCOL_VERSION,42);
 const url=new URL(`/api/room/predict-${Date.now()}`,base);url.protocol='ws:';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean,label:string,timeout=6000){
@@ -161,7 +161,7 @@ try{
   await until(()=>driver.state.sync===124&&!!driver.state.world?.races.rounds.some(round=>round.courseId==='short'&&round.entrants.some(entrant=>entrant.playerId===driver.state.id)),'barrier follows mini-game entry');
   await delay(500);
   driver.input.action({type:'reset'});
-  driver.input.action({type:'destination',x:-120,z:60,requestId:42});driver.socket.send(JSON.stringify({type:'sync',token:125}));
+  driver.input.action({type:'destination',x:-120,z:60,mode:'road',requestId:42});driver.socket.send(JSON.stringify({type:'sync',token:125}));
   await until(()=>driver.state.sync===125&&driver.state.destinationResult?.requestId===42,'barrier follows rejected destination');
   assert.equal(driver.state.destinationResult!.ok,false,'action cooldown rejects the immediate destination request');
 
@@ -191,5 +191,5 @@ try{
   await until(()=>backward.input.control?.jump.seen===1,'new jump counter observed');
   backward.socket.send(JSON.stringify({type:'reset',actionSeq:1,edgeBaseline:{jump:0,flip:0}}));
   await until(()=>backward.state.closed===1008,'backward action baseline closes only that client');
-  console.log('PASS: v39 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.');
+  console.log('PASS: v42 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.');
 }finally{for(const socket of sockets)if(socket.readyState===WebSocket.OPEN)socket.close();}

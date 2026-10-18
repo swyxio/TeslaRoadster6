@@ -4,6 +4,7 @@ import { setupMinigames } from './minigames';
 import { createProgressPanels } from './progress-panels';
 import { listenForDoubleShift } from './double-shift';
 import { createMapDialog } from './map-dialog';
+import { createDriveModes } from './self-drive-mode';
 import { createChatPanel } from './chat-panel';
 import { GlobalChat } from './chat';
 import { limitDriverNameInput } from './driver-name';
@@ -86,7 +87,7 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
@@ -490,21 +491,25 @@ const mapDialog=createMapDialog({onDestination(point){
   if(session.status!=='online'||session.walletBlocked)return 'Connect your driver before starting self-driving.';
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.kind==='person')return 'Get into a car to use self-driving.';
-  if(car.supportId!=='ground'||car.inDome)return 'Drive onto a ground road outside the Dome first.';
+  if(car.supportId!=='ground'||car.inDome)return 'Land on the ground outside the Dome first.';
   if(requiredLevelAt(point.x,point.z)>player.delivery.level)return 'That area is locked. Keep delivering to open it.';
-  controls.clear();const requestId=session.setDestination(point.x,point.z);
-  pendingDestination={requestId,expires:performance.now()+5000};notice('Finding a route…');
+  updateDriveModes(car);const mode=driveModes.mode();
+  controls.clear();const requestId=session.setDestination(point.x,point.z,mode);
+  pendingDestination={requestId,expires:performance.now()+5000,success:`${driveModes.label(mode)} self-driving to your destination. Use the controls to take over.`,failure:'No route found. Choose an unlocked nearby destination or move to a clearer starting point.'};notice('Finding a route…');
 }});
+const driveModes=createDriveModes([$<HTMLElement>('delivery-drive-mode'),mapDialog.element.querySelector<HTMLElement>('.map-drive-mode')!],reason=>notice(`Street Pilot selected. ${reason}`),()=>controls.clear(),()=>{if(mapDialog.isOpen())mapDialog.close();setDrawer(null);openShop(true);});
+function updateDriveModes(car:Entity){driveModes.update({rocket:hasRockets(car),jump:car.upgrades.autonomyJump,sky:car.upgrades.autonomySky});}
 function driveToDelivery(){
   if(session.status!=='online'||session.walletBlocked){notice('Connect your driver before starting self-driving.');return;}
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.kind==='person'){notice('Get into a car to self-drive to your delivery.');return;}
-  if(car.supportId!=='ground'||car.inDome){notice('Drive onto a ground road outside the Dome first.');return;}
+  if(car.supportId!=='ground'||car.inDome){notice('Land on the ground outside the Dome first.');return;}
   const target=orderTarget(player.delivery.order);
   if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
-  controls.clear();const requestId=session.setDeliveryDestination();
-  pendingDestination={requestId,expires:performance.now()+5000,success:'Self-driving toward your delivery. Use the controls to take over.',failure:'No safe road route to this delivery from here. Try another starting point or drive manually.'};
+  updateDriveModes(car);const mode=driveModes.mode();
+  controls.clear();const requestId=session.setDeliveryDestination(mode);
+  pendingDestination={requestId,expires:performance.now()+5000,success:`${driveModes.label(mode)} self-driving toward your delivery. Use the controls to take over.`,failure:'No safe route to this delivery from here. Move to a clearer starting point or drive manually.'};
   notice('Finding a route to your delivery…');
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
@@ -957,21 +962,22 @@ function updateShop(){
   for(const id of Object.keys(UPGRADES) as UpgradeId[]){
     const button=document.querySelector<HTMLButtonElement>(`[data-upgrade="${id}"]`)!;
     const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:car.upgrades[id];
-    const needsRocket=(id==='economy'||id==='tank')&&!rocket;
+    const needsRocket=(id==='economy'||id==='tank'||id==='autonomyJump'||id==='autonomySky')&&!rocket;
+    const needsLeap=id==='autonomySky'&&!car.upgrades.autonomyJump;
     const price=upgradePrice(player,car,id);
     const name=id==='tank'?`Air tank · Level ${car.tankLevel}${installed?' (max)':` → ${car.tankLevel+1}`}`:UPGRADES[id].name;
     document.querySelector<HTMLElement>(`[data-upgrade-title="${id}"]`)!.textContent=name;
     const fullPrice=id==='tank'?tankUpgradePrice(car.tankLevel):UPGRADES[id].price;
-    button.textContent=installed?(id==='service'?'FULL':id==='tank'?'MAX':'INSTALLED'):needsRocket?'NEEDS ROCKET':`${money(price)}${price<fullPrice?' · RESEARCH':''}`;
+    button.textContent=installed?(id==='service'?'FULL':id==='tank'?'MAX':'INSTALLED'):needsRocket||needsLeap?`${money(price)} · NEEDS ${needsRocket&&needsLeap?'ROCKET & LEAP':needsRocket?'ROCKET':'LEAP'}`:`${money(price)}${price<fullPrice?' · RESEARCH':''}`;
     button.setAttribute('aria-label',`${name}: ${button.textContent}`);
-    button.disabled=!available||installed||needsRocket||player.delivery.cash<price||!!pendingShop||!!pendingOta||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
+    button.disabled=!available||installed||needsRocket||needsLeap||player.delivery.cash<price||!!pendingShop||!!pendingOta||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
   }
 }
-function openShop(){
+function openShop(preferSpaceX=false){
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car)return;
   const vaultDistance=Math.hypot(car.x-LUXURY_SHOWROOM.arrival.x,car.z-LUXURY_SHOWROOM.arrival.z);
-  if(vaultDistance<30){
+  if(!preferSpaceX&&vaultDistance<30){
     if(!atLuxuryShowroom(car)){notice('Stop in the gold forecourt to enter the Vault.');return;}
     setDrawer(null);controls.clear();controls.enabled=false;lastLuxuryKey='';updateLuxury();luxuryUi.open();return;
   }
@@ -1020,7 +1026,9 @@ scene.start(dt=>{
   }
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
+  if(navigationDriving&&observedCar?.navigation?.status==='failed')notice('Self-driving could not get past an obstacle. Take over or use Unstuck (K) and try again.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;
+  if(observedCar)updateDriveModes(observedCar);
   if(mapDialog.isOpen()&&observedPlayer&&observedCar)mapDialog.update(observedCar,observedCar.navigation?.destination,observedPlayer.delivery.level);
   if(mapDialog.isOpen()&&performance.now()-lastCabMapUpdate>=250){
     const id=mapDialog.trackedCabId();if(id){const cab=cabEntity(id);mapDialog.updateCab(id,cab?{x:cab.x,z:cab.z}:null);}
