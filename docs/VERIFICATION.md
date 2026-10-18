@@ -940,4 +940,6 @@ After merge `ce844b5`, the retry fix deployed successfully. A disposable saved p
 
 On the protocol v37 cruise-and-awards candidate merged with the wallet retry fix, `pnpm test` passed 699 tests and `pnpm build` passed. Local Wrangler checks passed for the two-client room, prediction and the missing-bind retry. The isolated awards-wallet integration passed held and rejected writes, driver binding, and recovery of a contested race award after disconnect. These are functional checks, not a throughput measurement.
 
+After merging the delivery-checkpoint release into the candidate, `pnpm test` passed 711 tests and `pnpm build` passed. The isolated awards-wallet integration passed again, as did the checkpoint integration, including a lost reply, another active driver, and recovery of the committed cash and income. These checks do not establish production throughput.
+
 Code review identified a pre-existing browser-storage edge case: if staging a recovery code fails because storage is unavailable, the page reports that the code can be copied but does not request the corresponding wallet binding. Switching chat identities in that state can also leave the previous wallet attached. This path has not been verified in a browser and remains unresolved on this candidate.
