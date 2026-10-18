@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { addPlayer, chooseVehicle, createWorld, NEUTRAL, step } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
 import { FERRY_DOCKS, ISLAND_TRACK, ROADS, isRocketIsland, supportHeight, supportNormal } from '../shared/map';
 import { ISLAND_BANK, ISLAND_CLIFF } from '../shared/island-stunts';
-import { ISLAND_JUMPS, islandJumpHeight, islandJumpSlope, sweepIslandJump } from '../shared/island-jumps';
+import { ISLAND_JUMPS, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from '../shared/island-jumps';
 import { PARKING_LOTS } from '../shared/parking-lots';
+import { dimensions } from '../shared/physics';
 import { addIslandJumps } from '../src/island-jumps';
 
 const distanceToSegment=(x:number,z:number,a:{x:number;z:number},b:{x:number;z:number})=>{
@@ -113,5 +114,55 @@ test('grounded cars cannot enter the high end or sides through the visible ramp'
     for(let i=0;i<25;i++)step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
     assert.equal(car.supportId,'ground');
     assert.equal(islandJumpHeight(car.x,car.z),null,'ramp side stopped entry');
+  }
+});
+
+test('airborne cars bounce off both triangular sides and the high end of each ramp',()=>{
+  for(const jump of ISLAND_JUMPS)for(const approach of [
+    {x:jump.end+3,z:jump.z,yaw:Math.PI/2,vx:-12,vz:0,axis:'x' as const},
+    {x:(jump.start+jump.end)/2,z:jump.z+jump.width/2+3,yaw:0,vx:0,vz:-12,axis:'positive-z' as const},
+    {x:(jump.start+jump.end)/2,z:jump.z-jump.width/2-3,yaw:Math.PI,vx:0,vz:12,axis:'negative-z' as const},
+  ]){
+    const {world,car}=setup('model-3');
+    Object.assign(car,{...approach,y:1.5,vy:0,speed:12,supportId:null});
+    for(let i=0;i<30;i++)step(world,new Map([['p',NEUTRAL]]),.05);
+    if(approach.axis==='x')assert.ok(car.x>=jump.end,`${jump.id}: passed through end at ${car.x}`);
+    if(approach.axis==='positive-z')assert.ok(car.z>=jump.z+jump.width/2,`${jump.id}: passed through side at ${car.z}`);
+    if(approach.axis==='negative-z')assert.ok(car.z<=jump.z-jump.width/2,`${jump.id}: passed through side at ${car.z}`);
+  }
+});
+
+test('airborne cars clear a ramp above its top and beside its finite faces',()=>{
+  const jump=ISLAND_JUMPS[0];
+  for(const setupPose of [
+    {x:jump.end+3,z:jump.z,y:7},
+    {x:jump.end+3,z:jump.z+jump.width/2+10,y:2},
+  ]){
+    const {world,car}=setup('model-3');
+    Object.assign(car,{...setupPose,yaw:Math.PI/2,vx:-12,vy:0,vz:0,speed:12,supportId:null});
+    for(let i=0;i<8;i++)step(world,new Map([['p',NEUTRAL]]),.05);
+    assert.ok(car.x<jump.end,`an unobstructed pass stopped at ${car.x}`);
+  }
+});
+
+test('swept walls catch fast crossings and respect their bounded triangular faces',()=>{
+  const jump=ISLAND_JUMPS[0],extent={halfX:2,halfZ:1,minY:0,maxY:2};
+  const hit=sweepIslandJumpWall({x:jump.end+10,y:2,z:jump.z},{x:jump.start-10,y:2,z:jump.z},extent)!;
+  assert.equal(hit.normal.x,1);assert.ok(hit.t>0&&hit.t<1);assert.ok(hit.x>jump.end+extent.halfX);
+  assert.equal(sweepIslandJumpWall({x:jump.end+10,y:5,z:jump.z},{x:jump.start-10,y:5,z:jump.z},extent),null);
+  assert.equal(sweepIslandJumpWall({x:jump.end+10,y:2,z:jump.z+20},{x:jump.start-10,y:2,z:jump.z+20},extent),null);
+});
+
+test('vehicle collision separation cannot push grounded or airborne cars underneath a ramp side',()=>{
+  for(const support of ['ground',null] as const){
+    const jump=ISLAND_JUMPS[0],{world,car}=setup('model-3');
+    const halfWidth=dimensions(car.kind).width/2,edge=jump.z+jump.width/2,y=support===null?1:0;
+    Object.assign(car,{x:(jump.start+jump.end)/2,z:edge+halfWidth+.02,y,yaw:-Math.PI/2,speed:0,supportId:support});
+    const pusher=makeEntity('pusher','model-3',car.x,car.z+halfWidth*1.5);
+    Object.assign(pusher,{y,yaw:-Math.PI/2,speed:0,supportId:support});world.entities.push(pusher);
+    step(world,new Map([['p',NEUTRAL]]),.05);
+    assert.equal(car.supportId,support);
+    assert.ok(car.z>=edge+halfWidth,`separation pushed a ${support??'flying'} car through the side to ${car.z}`);
+    assert.equal(islandJumpHeight(car.x,car.z),null);
   }
 });
