@@ -48,7 +48,7 @@ function ticketProgress(saved:DriverProgress,action:Extract<EconomyIntent['actio
   const delivery=initialDelivery(action.evidence);
   Object.assign(delivery,{cash:saved.cash,level:levelForCash(saved.cash),tickets:saved.tickets,completed:saved.completed,order:{...saved.order}});
   const previous=delivery.level;applyTicketEvidence(delivery,action.evidence);
-  if(delivery.level<previous)rerouteInaccessibleOrder(delivery,action.evidence,action.evidence.canFly);
+  if(delivery.level<previous)rerouteInaccessibleOrder(delivery,action.evidence,action.evidence.roofEligible===true);
   return {...saved,cash:delivery.cash,tickets:delivery.tickets,level:delivery.level,order:delivery.order};
 }
 
@@ -346,10 +346,33 @@ async function marketHandoff(){
   return {initialPaint,unpaintedCab,waitedForHead,actionApplied,buyAccepted,installSilent,installedPaint,rerouted,rerouteCash,switched,switchedPaint,cleared,
     stages:stages.map(({fence,sequence,intervals})=>({fence,sequence,intervals}))};
 }
+async function roofRepair(mode:'restore'|'switch'){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const roof=CUSTOMERS.findIndex(customer=>customer.rooftop),car=world.entities.find(entity=>entity.id===player.entityId)!;
+  player.delivery.cash=10_000;player.delivery.level=1;player.delivery.completed=7;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:roof,elapsed:37,base:900};
+  Object.assign(car,{kind:'tesla-semi',tankLevel:1});car.upgrades.rocket=true;
+  const initial=progressFrom(player.delivery,['deliveries-1','regular','deliveries-5','region-oakland'],{},[],0,0),writes:EconomyIntent[]=[];
+  let saved=structuredClone(initial);
+  const ledger={async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+    writes.push(structuredClone(intent));
+    if(intent.action.kind!=='progress')throw new Error('Unexpected roof repair action');
+    saved=structuredClone(intent.action.progress);
+    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+  },async acknowledge(){return true;}};
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  if(mode==='restore')await session.ensureAccessibleOrder();
+  else step(world,new Map(),.05,{economy:session.hooks()});
+  for(let i=0;i<1000&&(Reflect.get(session,'processing')||session.pending);i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(session.pending)throw new Error('Roof repair failed to drain');
+  return {initial,saved,writes,visible:player.delivery.order};
+}
 export default {async fetch(request:Request){
   const path=new URL(request.url).pathname;
   return Response.json(path==='/history'?await transient('history'):path==='/profile'?await transient('profile'):
     path==='/spend-history'?await scenario('history'):path==='/rejected'?await rejected():path==='/rejected-transient'?await rejectedTransient():
       path==='/backpressure'?await backpressure('history'):path==='/backpressure-fence'?await backpressure('fence'):
-        path==='/cadence'?await cadence():path==='/market-handoff'?await marketHandoff():await scenario());
+        path==='/cadence'?await cadence():path==='/market-handoff'?await marketHandoff():
+          path==='/roof-restore'?await roofRepair('restore'):path==='/roof-switch'?await roofRepair('switch'):await scenario());
 }};

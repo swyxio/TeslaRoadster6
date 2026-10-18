@@ -11,7 +11,8 @@ export const RELEASES = [
     sections: [
       { title: 'Earn your wings', items: [
         'Early air tanks run out sooner in flight; tank upgrades and efficient nozzles open longer trips.',
-        'Sky currents give a smaller assist, while heavier vehicles jump lower and fall faster. Ground boost lasts as long as before.'
+        'Sky currents give a smaller assist, while heavier vehicles jump lower and fall faster. Ground boost lasts as long as before.',
+        'Rooftop delivery jobs require rockets and a Level 3 air tank. An existing rooftop job reroutes to the ground if you switch to a less capable car.'
       ] }
     ]
   },

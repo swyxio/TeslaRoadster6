@@ -221,7 +221,7 @@ export class DriverProfile extends DurableObject<Env> {
         } else if(intent.action.kind==='ticket'){
           const evidence=intent.action.evidence;
           if(!evidence||![evidence.seconds,evidence.peakHeight,evidence.at,evidence.x,evidence.z].every(Number.isFinite)||
-            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean')error='invalid';
+            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean'||(evidence.roofEligible!==undefined&&typeof evidence.roofEligible!=='boolean'))error='invalid';
           else {
             const delivery=initialDelivery(evidence);
             Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:{...next.order}});
@@ -231,14 +231,14 @@ export class DriverProfile extends DurableObject<Env> {
               order.elapsed=Math.max(order.elapsed,before.elapsed);
             const previousLevel=delivery.level;
             applyTicketEvidence(delivery,evidence);
-            if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,evidence.canFly);
+            if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,evidence.roofEligible===true);
             if(!validAmount(delivery.cash)||!validAmount(delivery.tickets))error='invalid';
             else {next.cash=delivery.cash;next.tickets=delivery.tickets;next.order=delivery.order;}
           }
         } else if(intent.action.kind==='delivery'){
           const {stop,atMs,multiplier}=intent.action;
           if(!stop||![stop.x,stop.y,stop.z,stop.vy,stop.speed].every(Number.isFinite)||
-             typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||
+             typeof stop.kind!=='string'||(stop.supportId!==null&&typeof stop.supportId!=='string')||typeof stop.canFly!=='boolean'||(stop.roofEligible!==undefined&&typeof stop.roofEligible!=='boolean')||
              !Number.isSafeInteger(atMs)||atMs<0||![null,1,1.5,2,3].includes(multiplier))error='invalid';
           else {
             let projected:DeliveryState|undefined,projectedAwards:AchievementId[]=[];
