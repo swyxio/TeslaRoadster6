@@ -6,7 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join as joinPath, resolve } from 'node:path';
 import { LUXURY_CATALOG, luxuryPurchaseAwards, type LuxuryVehicleId } from '../shared/luxury';
 import { NEUTRAL } from '../shared/game';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
@@ -30,8 +30,8 @@ async function stop(child:ChildProcess) {
   for(let i=0;i<100&&child.exitCode===null&&child.signalCode===null;i++)await pause(50);
   if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid!,'SIGKILL');}catch{}
 }
-const dir=await mkdtemp(join(tmpdir(),'tesland-wallet-'));
-const port=await freePort(), base=`http://127.0.0.1:${port}`, config=join(dir,'wrangler.json');
+const dir=await mkdtemp(joinPath(tmpdir(),'tesland-wallet-'));
+const port=await freePort(), base=`http://127.0.0.1:${port}`, config=joinPath(dir,'wrangler.json');
 await writeFile(config,JSON.stringify({
   name:'tesland-wallet-test',main:resolve('tests/fixtures/luxury-wallet-worker.ts'),compatibility_date:'2026-10-17',
   assets:{directory:resolve('dist'),binding:'ASSETS',run_worker_first:['/api/*','/__wallet-test/*']},
@@ -46,7 +46,7 @@ let child:ChildProcess|undefined;
 const sockets:WebSocket[]=[];
 let logs='';
 function start() {
-  const c=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(port),'--persist-to',join(dir,'storage'),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
+  const c=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(port),'--persist-to',joinPath(dir,'storage'),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
   const append=(chunk:Buffer)=>{logs=(logs+chunk.toString()).slice(-20_000);};
   c.stdout?.on('data',append);c.stderr?.on('data',append);return c;
 }
@@ -166,8 +166,8 @@ try {
   // Simulated world time crosses three checkpoint windows without a wall-clock
   // wait. Paused orders must not write again; changed timers flush on finish.
   const timers=await rpc<{paused:{counts:number[];writes:DriverProgress[]};active:{counts:number[];writes:DriverProgress[]}}>('checkpoint-simulation',{});
-  assert.deepEqual(timers.paused.counts,[0,1,1,1,1,1],'an unchanged paused order does not create periodic writes');
-  assert.deepEqual(timers.paused.writes.map(item=>item.order.elapsed),[2,2.5],'disconnect flushes newly advanced order time');
+  assert.deepEqual(timers.paused.counts,[0,1,1,1,1,2],'an unchanged paused order does not create periodic writes');
+  assert.deepEqual(timers.paused.writes.map(item=>item.order.elapsed),[2,2,2.5],'disconnect flushes newly advanced order time after a paid checkpoint');
   assert.deepEqual(timers.active.counts,[0,1,2,3,3,3],'active OTA time continues to checkpoint');
   assert.deepEqual(timers.active.writes.map(item=>item.ota.remaining),[90,80,70,68],'active OTA remaining time survives disconnect');
   type Rejection={initial:DriverProgress;after:{order:DriverProgress['order'];completed:number;remaining:number};queued:number;queuedBeforeRejection:number;writes:DriverProgress[]};
@@ -666,7 +666,8 @@ try {
   await pause(450);
   send(aliceRoom,{type:'vehicleStyle',category:'paint',choice:'mint',requestId:30});
   await until(()=>aliceRoom.messages.some(message=>message.type==='vehicleStyleResult'&&message.requestId===30),'style purchase result');
-  assert.equal(aliceRoom.messages.find(message=>message.type==='vehicleStyleResult'&&message.requestId===30)!.ok,true);
+  const styleResult=aliceRoom.messages.find(message=>message.type==='vehicleStyleResult'&&message.requestId===30)!;
+  assert.equal(styleResult.ok,true);assert.equal(styleResult.category,'paint');assert.equal(styleResult.choice,'mint');
   await pause(450);
   send(aliceRoom,{type:'upgrade',upgrade:'motor',requestId:31});
   await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===31),'motor purchase result');
@@ -690,9 +691,10 @@ try {
   aliceRoom=await reconnecting;
   await until(()=>aliceRoom.last('wallet')?.ownedLuxury?.includes('lamborghini-temerario'),'reconnected wallet contains the completed purchase');
   const restored=await inspect(alice.id);
-  assert.equal(restored.revision,beforeLost.revision+1,'lost reply is committed once');
+  assert.ok(restored.revision>=beforeLost.revision+1,'the lost-reply purchase is committed; disconnect may also checkpoint timers');
   assert.equal(restored.progress.cash,purchaseCash(beforeLost.progress.cash,'lamborghini-temerario',beforeLost.progress.ownedLuxury,beforeLost.progress.unlocked));
   assert.equal(restored.progress.ownedLuxury.filter(id=>id==='lamborghini-temerario').length,1);
+  assert.equal(restored.progress.unlocked.filter(id=>id==='luxury-temerario').length,1,'lost reply grants its achievement once');
   const rejoinedId=aliceRoom.last('welcome')!.id as string;
   await rpc('position',{room:liveRoom,playerId:rejoinedId,side:-1});
   await pause(450);

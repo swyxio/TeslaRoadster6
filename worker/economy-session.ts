@@ -278,7 +278,10 @@ export class EconomySession {
   }
   workshop(type:'upgrade'|'vehicleStyle',requestId:number,value:UpgradeId|StyleChoice){
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
-    const reply=(ok:boolean)=>this.send(type==='upgrade'?{type:'upgradeResult',requestId,upgrade:value,ok}:{type:'vehicleStyleResult',requestId,...value as StyleChoice,ok});
+    const reply=(ok:boolean)=>{
+      if(type==='upgrade')this.send({type:'upgradeResult',requestId,upgrade:value,ok});
+      else {const {category,choice}=value as StyleChoice;this.send({type:'vehicleStyleResult',requestId,category,choice,ok});}
+    };
     if(this.failed||this.queue.length>=32||!car||car.kind==='person'||car.owner!==this.player.id||this.lockedCar){reply(false);return;}
     const clone=structuredClone(car),world={...this.world,entities:this.world.entities.map(e=>e===car?clone:e)};
     let ok=false;const before=this.submitted;

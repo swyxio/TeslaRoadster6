@@ -50,6 +50,11 @@ async function checkpointSimulation(activeOta:boolean) {
   counts.push(await tick(20,2));
   counts.push(await tick(30,2));
   counts.push(await tick(31,2));
+  if(!activeOta){
+    // A paid action creates a fresh checkpoint. Advancing the order within
+    // its next ten-second window must be flushed on immediate disconnect.
+    world.time=31.5;session.update(player,()=>{player.delivery.cash--;});await idle();
+  }
   counts.push(await tick(32,2.5));
   session.finish();await idle();
   return {counts,writes};
