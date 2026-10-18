@@ -1,11 +1,13 @@
 import type { Entity } from '../shared/game';
+import { isAmbientCollectionVehicle } from '../shared/vehicle-collections';
 import type { VehicleId } from '../shared/vehicles';
 
-/** Capture before interact turns the selected car's autopilot off. */
+/** Capture street fleet identity before interact changes the selected car. */
 export function captureAmbientNpcCars(entities:readonly Entity[]):Map<string,VehicleId> {
   const cars=new Map<string,VehicleId>();
   for(const car of entities){
-    if(car.kind!=='person'&&car.npc&&car.autopilot&&!car.driver&&!car.owner&&!car.cab&&!car.retiredCab&&!car.police)
+    if(isAmbientCollectionVehicle(car.kind)&&(car.npc||/^parked-\d+$/.test(car.id))&&
+      !car.driver&&!car.owner&&!car.cab&&!car.retiredCab&&!car.police)
       cars.set(car.id,car.kind);
   }
   return cars;

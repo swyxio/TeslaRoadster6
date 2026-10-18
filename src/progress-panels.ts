@@ -139,11 +139,11 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       section.append(heading);
       const list=element('ul','progress-award-list');
       if(group.id==='collection'){
-        section.append(element('p','progress-award-description','Drive 100 m in one ride to collect a model. Take over NPC traffic cars to collect thefts.'));
+        section.append(element('p','progress-award-description','Drive 100 m in one ride to collect a model. Take over NPC or parked fleet cars to collect thefts.'));
         list.classList.add('progress-collection-list');
         const groups:{id:string;title:string;ids:readonly VehicleId[];completed:readonly VehicleId[]|undefined}[]=[
           {id:'tesla',title:'Tesla models driven',ids:TESLA_COLLECTION_IDS,completed:collections?.driven},
-          {id:'npc',title:'NPC models taken',ids:VEHICLE_IDS,completed:collections?.stolen},
+          {id:'npc',title:'Street models taken',ids:VEHICLE_IDS,completed:collections?.stolen},
           {id:'vault',title:'Vault models driven',ids:VAULT_COLLECTION_IDS,completed:collections?.driven},
         ];
         for(const collection of groups){

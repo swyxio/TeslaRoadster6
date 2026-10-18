@@ -110,8 +110,8 @@ async function observedVehicleDrive(){
   restored.socket.close();
 }
 
-async function observedNpcTakeover(){
-  const driver=await savedDriver('Takeover driver'),room=`takeover-${randomUUID().slice(0,8)}`;
+async function observedNpcTakeover(source:'npc'|'parked'){
+  const driver=await savedDriver(`Takeover ${source}`),room=`takeover-${randomUUID().slice(0,8)}`;
   const client=await joinSaved(room,driver.code),playerId=client.last('welcome')!.id as string;
   await sync(client,401);
   const before=(await inspect(driver.driverId)).progress;
@@ -121,13 +121,13 @@ async function observedNpcTakeover(){
     const player=world?.players.find((item:{id:string})=>item.id===playerId);
     return world?.entities.some((entity:{id:string;kind:string})=>entity.id===player?.entityId&&entity.kind==='person');
   },'driver exits car');
-  const npc=await rpc<{id:string;kind:string}>('achievement','npc',{room,playerId});
+  const npc=await rpc<{id:string;kind:string}>('achievement',source,{room,playerId});
   await delay(450);
   client.input.action({type:'interact'});
-  await until(()=>client.last('state')?.world?.players.some((player:{id:string;entityId:string})=>player.id===playerId&&player.entityId===npc.id),'driver takes the ambient NPC');
+  await until(()=>client.last('state')?.world?.players.some((player:{id:string;entityId:string})=>player.id===playerId&&player.entityId===npc.id),`driver takes the ${source} car`);
   await sync(client,402);
   const after=(await inspect(driver.driverId)).progress;
-  assert.deepEqual(after.vehicleCollections?.stolen,['waymo-ipace']);
+  assert.deepEqual(after.vehicleCollections?.stolen,[npc.kind]);
   assert.ok(after.unlocked.includes('npc-theft-1'));
   assert.equal(after.cash,before.cash+100);assert.equal(after.eligibleIncome,before.eligibleIncome+100);
   client.socket.close();
@@ -207,8 +207,10 @@ try{
   const failures:string[]=[];
   try{await observedVehicleDrive();console.log('PASS server-observed vehicle drive and saved recovery');}
   catch(error){failures.push(`vehicle drive: ${error instanceof Error?error.stack:String(error)}`);}
-  try{await observedNpcTakeover();console.log('PASS actual NPC takeover and wallet commit');}
-  catch(error){failures.push(`NPC takeover: ${error instanceof Error?error.stack:String(error)}`);}
+  for(const source of ['npc','parked'] as const){
+    try{await observedNpcTakeover(source);console.log(`PASS actual ${source} takeover and wallet commit`);}
+    catch(error){failures.push(`${source} takeover: ${error instanceof Error?error.stack:String(error)}`);}
+  }
   for(const kind of ['roof','race','drive'] as const){
     try{await rejectedPredecessor(kind);console.log(`PASS ${kind} after rejected predecessor`);}
     catch(error){failures.push(`${kind}: ${error instanceof Error?error.stack:String(error)}`);}

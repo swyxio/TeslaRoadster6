@@ -24,7 +24,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Scores and awards:** Scores show delivery milestones, room standings and current or recently observed mini-game results. Results last for the drive. Awards show your progress and save status; confirmed awards follow a saved driver across drives and devices.
 
-**Vehicle collections:** Drive each Tesla and Vault model for 100 m in one ride to add it to your collection. Take different autonomous NPC models from the street for takeover milestones. Actions → Awards shows the model lists and cash rewards; parked cars and other players' Cybercabs do not count as NPC takeovers. Earlier drives and takeovers were not recorded, so the new collections begin empty.
+**Vehicle collections:** Drive each Tesla and Vault model for 100 m in one ride to add it to your collection. Take different NPC or seeded parked fleet models from the street for takeover milestones. Actions → Awards shows the model lists and cash rewards; other players' cars and Cybercabs do not count as takeovers. Earlier drives and takeovers were not recorded, so the new collections begin empty.
 
 **Tesland in 2050:** Cross the Golden Gate to the wooded Marin headlands, where the fictional First Delivery Monument celebrates the Bay’s most important cargo. Its base is solid and landable. See [the setting](content/lore.md).
 

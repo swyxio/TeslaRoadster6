@@ -121,9 +121,18 @@ export class GameRoom extends FixtureGameRoom {
     const {world,car:person}=this.fixtureDriver(playerId);
     if(person.kind!=='person'||!person.supportId)throw new Error('Fixture requires an on-foot player');
     const npc=makeEntity('fixture-ambient','waymo-ipace',person.x+3,person.z);
-    Object.assign(npc,{y:person.y,supportId:person.supportId,inDome:person.inDome,npc:true,autopilot:true});
+    Object.assign(npc,{y:person.y,supportId:person.supportId,inDome:person.inDome,npc:true,autopilot:false});
     world.entities=[person,npc];
     return {id:npc.id,kind:npc.kind};
+  }
+  async fixturePlaceParked(playerId:string){
+    const {world,car:person}=this.fixtureDriver(playerId);
+    if(person.kind!=='person'||!person.supportId)throw new Error('Fixture requires an on-foot player');
+    const parked=world.entities.find(entity=>entity.id==='parked-0');
+    if(!parked)throw new Error('Missing server-seeded parked car');
+    Object.assign(parked,{x:person.x+3,z:person.z,y:person.y,supportId:person.supportId,inDome:person.inDome});
+    world.entities=[person,parked];
+    return {id:parked.id,kind:parked.kind};
   }
 }
 
@@ -140,6 +149,7 @@ export default {
     if(path==='/__achievement-test/race')return Response.json(await room.fixtureTransientRace(body.playerId));
     if(path==='/__achievement-test/drive')return Response.json(await room.fixtureDriveCollection(body.playerId));
     if(path==='/__achievement-test/npc')return Response.json(await room.fixturePlaceNpc(body.playerId));
+    if(path==='/__achievement-test/parked')return Response.json(await room.fixturePlaceParked(body.playerId));
     return new Response('Unknown fixture route',{status:404});
   },
 };
