@@ -49,13 +49,13 @@ export function evaluateAchievementEvidence(unlocked:readonly AchievementId[],ev
   const award=(id:AchievementId,reward:number)=>{if(!seen.has(id)){seen.add(id);awards.push({id,reward});}};
   switch(evidence.kind){
     case 'roof':
-      award('roof-rider',1_000);
-      if(evidence.roof==='coit')award('coit-landing',2_000);
-      if(evidence.roof==='salesforce')award('salesforce-landing',2_000);
+      award('roof-rider',500);
+      if(evidence.roof==='coit')award('coit-landing',1_000);
+      if(evidence.roof==='salesforce')award('salesforce-landing',1_000);
       break;
     case 'site': {
-      if(evidence.site==='mission-san-jose')award('fremont-mission',1_000);
-      else if(evidence.site==='san-jose-city-hall')award('san-jose-city-hall',1_000);
+      if(evidence.site==='mission-san-jose')award('fremont-mission',500);
+      else if(evidence.site==='san-jose-city-hall')award('san-jose-city-hall',500);
       else if(evidence.site==='luxury-showroom')award(LUXURY_DISCOVERY.id,LUXURY_DISCOVERY.reward);
       else {
         const site=RESEARCH_SITES.find(item=>item.landmark===evidence.site);
@@ -64,7 +64,7 @@ export function evaluateAchievementEvidence(unlocked:readonly AchievementId[],ev
       break;
     }
     case 'crossing':
-      if(evidence.crossedWater&&evidence.origin!==evidence.destination)award('bay-hopper',1_000);
+      if(evidence.crossedWater&&evidence.origin!==evidence.destination)award('bay-hopper',500);
       break;
     case 'parking':
       if(evidence.finished)award(evidence.mode==='park'?'park-it':'queue-cutter',0);
@@ -77,11 +77,11 @@ export function evaluateAchievementEvidence(unlocked:readonly AchievementId[],ev
       break;
     case 'dome': {
       const {touches,goals,won}=evidence;
-      if(touches.roadster)award('rocket-rookie',2_000);
-      if(touches.retrofit)award('built-to-fly',2_000);
-      if(won&&touches.roadster&&goals.roadster>0)award('roadster-champion',2_000);
-      if(won&&touches.retrofit&&goals.retrofit>0)award('garage-champion',2_000);
-      if(won&&touches.stock&&goals.stock>0&&!touches.roadster&&!touches.retrofit)award('no-rockets-needed',2_000);
+      if(touches.roadster)award('rocket-rookie',500);
+      if(touches.retrofit)award('built-to-fly',500);
+      if(won&&touches.roadster&&goals.roadster>0)award('roadster-champion',500);
+      if(won&&touches.retrofit&&goals.retrofit>0)award('garage-champion',500);
+      if(won&&touches.stock&&goals.stock>0&&!touches.roadster&&!touches.retrofit)award('no-rockets-needed',500);
       break;
     }
   }

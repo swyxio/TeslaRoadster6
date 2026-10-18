@@ -39,7 +39,7 @@ test('research discounts are applied by the authoritative workshop to real purch
     Object.assign(car,{...at,y:terrainHeight(at.x,at.z),supportId:'ground',speed:0,vy:0});
     step(world,new Map([['p',NEUTRAL]]),.05);
     Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,speed:0,vy:0,pushX:0,pushZ:0,supportId:'ground',health:80});
-    const standard=upgrade==='tank'?30:UPGRADES[upgrade].price;
+    const standard=upgrade==='tank'?1_500:UPGRADES[upgrade].price;
     const price=upgradePrice(player,car,upgrade);assert.ok(price<standard);
     player.delivery.cash=price;assert.equal(buyUpgrade(world,player.id,upgrade),true,site.landmark);
     assert.equal(player.delivery.cash,0);
@@ -63,10 +63,10 @@ test('an SFO drop-off earns its visit and express bonuses once alongside the far
   Object.assign(car,{...at,y:terrainHeight(at.x,at.z),supportId:'ground',speed:0,vy:0});
   step(world,new Map([['p',NEUTRAL]]),.05);
   assert.equal(player.delivery.completed,1);assert.equal(player.delivery.earned,fare);
-  assert.equal(player.delivery.cash,fare+site.cash+2_500+2_500);
+  assert.equal(player.delivery.cash,fare+site.cash+500+1_000);
   assert.ok(player.achievements.unlocked.includes('sfo-ground-crew'));
   assert.ok(player.achievements.unlocked.includes('sfo-express'));
   assert.equal(player.delivery.lastReward?.kind,'delivery-research');
-  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+2_500+2_500);
-  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+2_500+2_500);
+  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+500+1_000);
+  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+500+1_000);
 });

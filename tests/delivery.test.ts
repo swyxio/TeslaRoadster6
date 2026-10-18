@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
+import { updateAchievements } from '../shared/achievements';
 import { newPolice, updatePolice } from '../shared/police';
 import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
 import { DOME } from '../shared/dome';
@@ -11,6 +12,25 @@ function setup(){
   world.entities=[car];world.pickups=[];player.delivery.cash=0;return {world,player,car};
 }
 function tick(world:World,input=NEUTRAL,n=1){for(let i=0;i<n;i++)step(world,new Map([['p',input]]),.05);}
+test('a fast first delivery pays a useful reward without immediately unlocking Oakland',()=>{
+  const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  const order=player.delivery.order;
+  assert.equal(player.delivery.cash,2_500);
+  assert.equal(order.base,600);
+  const pickup=orderTarget(order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  assert.equal(player.delivery.cash,2_740);
+  const dropoff=orderTarget(order);Object.assign(car,{x:dropoff.x,z:dropoff.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290);
+  assert.equal(player.delivery.lifetimeIncome,1_790);
+  assert.equal(player.delivery.level,0);
+  assert.ok(player.achievements.unlocked.includes('deliveries-1'));
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290,'the first-delivery award is one-off');
+});
 test('restaurant and fictional customer markers are on clear, reachable ground',()=>{
   for(const place of [...RESTAURANTS,...CUSTOMERS.filter(c=>!c.rooftop)]){
     assert.ok(isSurface(place.x,place.z),place.name);

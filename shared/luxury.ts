@@ -17,7 +17,7 @@ export const LUXURY_CATALOG = [
 export type LuxuryVehicleId = typeof LUXURY_CATALOG[number]['id'];
 export type LuxuryAchievementId = typeof LUXURY_CATALOG[number]['achievement']|'luxury-visit'|'luxury-first'|'luxury-collection-2'|'luxury-collection-4'|'luxury-collection-6';
 export function luxuryVehicle(id:string) { return LUXURY_CATALOG.find(vehicle=>vehicle.id===id); }
-export const LUXURY_DISCOVERY = { id:'luxury-visit', reward:5_000 } as const;
+export const LUXURY_DISCOVERY = { id:'luxury-visit', reward:1_000 } as const;
 
 /** Calculate the one-off awards to commit with a first purchase. */
 export function luxuryPurchaseAwards(id:LuxuryVehicleId,previousOwned:readonly string[],unlocked:readonly string[]) {

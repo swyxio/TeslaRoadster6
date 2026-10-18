@@ -8,7 +8,7 @@ The next restaurant and fare appear at the top left; the gold ring on the minima
 
 A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to zero. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
 
-Every third completed delivery also pays a repeatable $750 checkpoint, even when the late fare is zero. The mission card shows progress toward the next checkpoint and identifies the bonus when it is paid. It is separate from one-off achievements. The completed order, bonus and wallet are saved together for a saved driver.
+Every third completed delivery also pays a repeatable $350 checkpoint, even when the late fare is zero. The mission card shows progress toward the next checkpoint and identifies the bonus when it is paid. It is separate from one-off achievements. The completed order, bonus and wallet are saved together for a saved driver.
 
 ## Unlocking the Bay
 
@@ -24,7 +24,7 @@ Each driver starts with $2,500 and level 0. Current cash determines level, so bu
 
 The next threshold appears on the mission card. Boundaries apply to flying and driving; Marin, Rocket Dome, North Bay Playground and the SF parking playground remain accessible from the start. The driver's saved wallet retains cash, completed deliveries, current order, achievements and owned luxury vehicles across rooms and reconnects. The active-time leaderboard remains room-local.
 
-Each new job starts with a level-based base fare of $3,000, $4,000, $6,000, $9,500, $11,000, $13,000, $15,000, $20,000 or $26,000 for levels 0–8. The route's distance scales that base between 0.5× and 2× before pickup and delivery timing adjustments. One-off delivery, region and research awards can add cash as the driver progresses.
+Each new job starts with a level-based base fare of $1,200, $1,600, $2,500, $4,000, $5,500, $7,000, $9,000, $12,000 or $16,000 for levels 0–8. The route's distance scales that base between 0.5× and 2× before pickup and delivery timing adjustments. One-off delivery, region and research awards can add cash as the driver progresses.
 
 Orders only select locations already available to that driver. As the world opens, some runs go to the newly unlocked landmark destinations while other jobs stay local or use rooftops. These destinations are fictional deliveries to artistic, compressed versions of real places.
 

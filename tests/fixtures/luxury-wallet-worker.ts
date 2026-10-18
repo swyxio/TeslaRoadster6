@@ -77,7 +77,7 @@ const FUNDS = 20_000_000;
 /** Exercise the real per-player queue against a deterministic in-memory ledger. */
 async function checkpointSimulation(activeOta:boolean) {
   const world=createEmptyWorld(),player=addPlayer(world,'checkpoint','Driver');
-  if(activeOta)player.delivery.ota={enabled:true,active:true,renewAt:100};
+  if(activeOta)player.delivery.ota={enabled:true,active:true,renewAt:100,needsRenewalConsent:false};
   const progress=progressFrom(player.delivery,[],{},[],world.time,0);
   const writes:DriverProgress[]=[];
   const ledger={
@@ -123,7 +123,7 @@ async function checkpointSimulation(activeOta:boolean) {
 async function rejectionTimerSimulation(scenario:'same'|'order'|'renewal',disconnectBeforeRejection=false) {
   const world=createEmptyWorld(),player=addPlayer(world,'rejection','Driver');
   player.delivery.order.elapsed=2;
-  player.delivery.ota={enabled:true,active:true,renewAt:100};
+  player.delivery.ota={enabled:true,active:true,renewAt:100,needsRenewalConsent:false};
   const progress=progressFrom(player.delivery,[],{},[],world.time,0);
   const writes:DriverProgress[]=[];
   let releaseHead=()=>{},releaseAck=()=>{},ackWaiting=false;
@@ -147,6 +147,7 @@ async function rejectionTimerSimulation(scenario:'same'|'order'|'renewal',discon
   world.time=5;
   session.update(player,()=>{
     player.delivery.order.elapsed=7;
+    session.deliveryEnd(player,5,undefined);
     if(scenario==='order'){player.delivery.order.stage='dropoff';player.delivery.completed++;}
     if(scenario==='renewal')player.delivery.ota.renewAt=200;
   });
@@ -155,7 +156,8 @@ async function rejectionTimerSimulation(scenario:'same'|'order'|'renewal',discon
   releaseHead();
   for(let i=0;i<100&&!ackWaiting;i++)await Promise.resolve();
   if(!ackWaiting)throw new Error('Rejected head did not reach acknowledgement');
-  const after={order:structuredClone(player.delivery.order),completed:player.delivery.completed,remaining:player.delivery.ota.renewAt! - world.time};
+  const draft=Reflect.get(session,'draft') as {delivery:typeof player.delivery};
+  const after={order:structuredClone(draft.delivery.order),completed:draft.delivery.completed,remaining:draft.delivery.ota.renewAt! - world.time};
   if(!disconnectBeforeRejection)session.finish(); // Disconnect while acknowledgement is held.
   const queued=(Reflect.get(session,'queue') as unknown[]).length;
   releaseAck();
@@ -199,6 +201,18 @@ export class DriverProfile extends ProductionDriverProfile {
       record.progress.cash = cash;
       record.progress.level = levelForCash(cash);
       await txn.put('driver', record);
+      return record.progress;
+    });
+  }
+
+  /** Seed the exact pre-price-change subscription shape while disconnected. */
+  async seedLegacyOta(remaining:number) {
+    if(!Number.isFinite(remaining)||remaining<0)throw new Error('Invalid fixture OTA time');
+    return this.ctx.storage.transaction(async txn=>{
+      const record=await txn.get<{progress:DriverProgress}>('driver');
+      if(!record)throw new Error('No profile to seed');
+      record.progress.ota={enabled:true,active:remaining>0,remaining};
+      await txn.put('driver',record);
       return record.progress;
     });
   }
@@ -585,6 +599,7 @@ export default {
         return Response.json(acquired);
       }
       case '/__wallet-test/fund': return Response.json(await driver.seedFunds(body.seedCash));
+      case '/__wallet-test/legacy-ota': return Response.json(await driver.seedLegacyOta(body.count));
       case '/__wallet-test/inspect': return Response.json(await driver.inspect() ?? null);
       case '/__wallet-test/profile-keys': return Response.json(await driver.fixtureKeys());
       case '/__wallet-test/economy-keys': return Response.json(await economy.fixtureKeys());

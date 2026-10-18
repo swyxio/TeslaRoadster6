@@ -2,7 +2,9 @@
 
 **Economy design, 2026-10-18.** Deliveries build a wallet, a fleet puts money to work, and homes give players a place to show what they have built. This document sets out the proposed progression and prices. The [implementation guide](ECONOMY_IMPLEMENTATION.md) records the shared decisions and handoffs for contributors. The [player simulations](ECONOMY_SIMULATIONS.md) and [five-minute experiment](ECONOMY_FIVE_MINUTE.md) compare the choices and their pacing.
 
-The production baseline implements a saved wallet, cash-based regional levels, delivery and showroom achievements, a luxury showroom, and an automatic global earnings counter for Starship. The unreleased Cybercab candidate adds owned fleets and active-only income; its wallet recovery and gameplay checks remain release gates. Property, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for implemented and candidate rules.
+The game implements a saved wallet, cash-based regional levels, delivery and showroom achievements, the luxury showroom, owned Cybercabs with active-only income, a player market, a starter home and an automatic global earnings counter for Starship. Plots and construction, city-specific achievement chains and the broader research programs below remain designs. See [DELIVERY.md](DELIVERY.md), [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md) and [CONTRACTS.md](CONTRACTS.md) for implemented and proposed rules.
+
+The tables and long-run simulations below describe the earlier economy proposal. The current rebalance changes delivery fares, achievement payouts, OTA, upgrades and finishes; see [delivery](DELIVERY.md), [workshops](UPGRADES.md), and the [opening-session ledger](ECONOMY_FIVE_MINUTE.md#opening-session-ledger) for playable values.
 
 ## Goals
 

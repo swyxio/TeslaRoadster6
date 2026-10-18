@@ -7,12 +7,12 @@ export const MARKET_CATALOG = [
   {
     id:'sunrise-gold-paint', kind:'cosmetic', category:'paint',
     name:'Sunrise Gold', description:'A warm gold finish for a personal vehicle.',
-    price:2_000, color:0xe0aa34,
+    price:250_000, color:0xe0aa34,
   },
   {
     id:'pacific-blue-paint', kind:'cosmetic', category:'paint',
     name:'Pacific Blue', description:'A deep blue finish for a personal vehicle.',
-    price:2_000, color:0x236b9d,
+    price:12_000, color:0x236b9d,
   },
   {
     id:'bay-bridge-postcard', kind:'collectible', category:'keepsake',

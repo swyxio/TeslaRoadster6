@@ -2,6 +2,8 @@
 
 **Design experiment, 2026-10-18.** These are hypothetical players using proposed rules, not measurements of the current game or evidence that the experience is fun. This report preserves the earlier candidate's payouts and achievement schedule; the newer [five-minute branch experiment](ECONOMY_FIVE_MINUTE.md) tests a revised proposal. The model deliberately makes simplifying assumptions about jobs, players and multiplayer. Its results identify places to tune and playtest; they do not prove that progression is smooth. See [ECONOMY.md](ECONOMY.md) for the economy proposal and current-game caveats.
 
+The delivery and achievement amounts in this historical model predate the opening-session rebalance. For the current shared rules and a five-minute ledger, see [the opening-session comparison](ECONOMY_FIVE_MINUTE.md#opening-session-ledger).
+
 ## Reproduce
 
 ```sh

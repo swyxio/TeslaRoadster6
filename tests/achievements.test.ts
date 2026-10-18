@@ -68,7 +68,7 @@ test('roof identity distinguishes a landing from an overlapping airborne or othe
   const cashBefore=player.delivery.cash,incomeBefore=player.delivery.lifetimeIncome;
   assert.equal(onRoof(car),true);updateAchievements(player,car,false);updateAchievements(player,car,false);
   assert.deepEqual(player.achievements.unlocked,['roof-rider']);
-  assert.equal(player.delivery.cash,cashBefore+1_000);assert.equal(player.delivery.lifetimeIncome,incomeBefore+1_000);
+  assert.equal(player.delivery.cash,cashBefore+500);assert.equal(player.delivery.lifetimeIncome,incomeBefore+500);
   player.delivery.completed=3;updateAchievements(player,car,true);
   assert.deepEqual(player.achievements.unlocked,['roof-rider','sky-delivery','deliveries-1','regular']);
   Object.assign(car,{kind:'person'});assert.equal(onRoof(car),false);
@@ -91,7 +91,7 @@ test('tower awards require landing on the named roof and pay once',()=>{
     point(player,car,tower.x,tower.z,buildingRoofHeight(tower,tower.x,tower.z),`roof:${index}`);
     point(player,car,tower.x,tower.z,buildingRoofHeight(tower,tower.x,tower.z),`roof:${index}`);
     assert.ok(player.achievements.unlocked.includes(id));
-    assert.equal(player.delivery.cash,cash+3_000);assert.equal(player.delivery.lifetimeIncome,income+3_000);
+    assert.equal(player.delivery.cash,cash+1_500);assert.equal(player.delivery.lifetimeIncome,income+1_500);
   }
 });
 
@@ -104,7 +104,7 @@ test('Fremont and San Jose landmark visits pay once on stopped ground arrival',(
     point(player,car,place.arrival.x,place.arrival.z,0,'ground');
     point(player,car,place.arrival.x,place.arrival.z,0,'ground');
     assert.ok(player.achievements.unlocked.includes(id));
-    assert.equal(player.delivery.cash,cash+1_000);assert.equal(player.delivery.lifetimeIncome,income+1_000);
+    assert.equal(player.delivery.cash,cash+500);assert.equal(player.delivery.lifetimeIncome,income+500);
   }
 });
 

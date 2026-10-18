@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabAsset, type CybercabFleet } from '../shared/cybercabs';
+import { PAINTS } from '../shared/vehicle-style';
 
 const asset=(id:string,changes:Partial<CybercabAsset>={}):CybercabAsset=>({
   id,gross:0,remainder:0,lastEndMs:0,revenueAwarded:false,style:{paint:'stock',decal:'none'},...changes,
@@ -68,11 +69,14 @@ test('overlaps, unknown IDs and invalid saved state fail atomically',()=>{
 
 test('cab paint uses the catalog price and preserves the owned cab income state',()=>{
   const before=fleet(asset('one',{gross:19_999,remainder:3_000_000,lastEndMs:100,style:{paint:'stock',decal:'stripe'}}),asset('two'));
-  assert.deepEqual(paintCybercab(before,17,250,'one','ember'),{ok:false,reason:'unaffordable'});
-  assert.deepEqual(paintCybercab(before,18,250,'missing','ember'),{ok:false,reason:'invalid'});
-  assert.deepEqual(paintCybercab(before,18,250,'one','invalid' as 'ember'),{ok:false,reason:'invalid'});
-  assert.deepEqual(paintCybercab(before,18,250,'one','stock'),{ok:false,reason:'owned'});
-  const painted=paintCybercab(before,18,250,'one','ember');assert.ok(painted.ok);
+  assert.deepEqual(paintCybercab(before,PAINTS.ember.price-1,250,'one','ember'),{ok:false,reason:'unaffordable'});
+  assert.deepEqual(paintCybercab(before,PAINTS.ember.price,250,'missing','ember'),{ok:false,reason:'invalid'});
+  assert.deepEqual(paintCybercab(before,PAINTS.ember.price,250,'one','invalid' as 'ember'),{ok:false,reason:'invalid'});
+  assert.deepEqual(paintCybercab(before,PAINTS.ember.price,250,'one','stock'),{ok:false,reason:'owned'});
+  assert.deepEqual(paintCybercab(before,9_999,250,'one','sunset'),{ok:false,reason:'invalid'},'cab paint cannot bypass its level');
+  const dropped=paintCybercab(before,10_000,250,'one','sunset');assert.ok(dropped.ok);
+  assert.equal(dropped.cash,7_000);assert.equal(dropped.fleet.assets[0].style.paint,'sunset');
+  const painted=paintCybercab(before,PAINTS.ember.price,250,'one','ember');assert.ok(painted.ok);
   assert.equal(painted.cash,0);assert.equal(painted.eligibleIncome,250);
   assert.deepEqual(painted.fleet.assets[0],{...before.assets[0],style:{paint:'ember',decal:'stripe'}});
   assert.deepEqual(painted.fleet.assets[1],before.assets[1]);

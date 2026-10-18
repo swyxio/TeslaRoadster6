@@ -27,15 +27,15 @@ test('roof evidence preserves the existing ordinary and named-roof awards',()=>{
     assert.equal(awards.reduce((sum,award)=>sum+award.reward,0),player.delivery.cash-before);
     assert.deepEqual(evaluateAchievementEvidence(awards.map(award=>award.id),{kind:'roof',roof}),[]);
   }
-  assert.deepEqual(evaluateAchievementEvidence(['roof-rider'],{kind:'roof',roof:'coit'}),[{id:'coit-landing',reward:2_000}]);
+  assert.deepEqual(evaluateAchievementEvidence(['roof-rider'],{kind:'roof',roof:'coit'}),[{id:'coit-landing',reward:1_000}]);
 });
 
 test('sites derive the same IDs and rewards as physical arrivals',()=>{
   const visits=[
-    {site:'mission-san-jose',id:'fremont-mission',reward:1_000},
-    {site:'san-jose-city-hall',id:'san-jose-city-hall',reward:1_000},
+    {site:'mission-san-jose',id:'fremont-mission',reward:500},
+    {site:'san-jose-city-hall',id:'san-jose-city-hall',reward:500},
     ...RESEARCH_SITES.map(site=>({site:site.landmark,id:site.achievement,reward:site.cash})),
-    {site:'luxury-showroom',id:'luxury-visit',reward:5_000},
+    {site:'luxury-showroom',id:'luxury-visit',reward:1_000},
   ] as const;
   for(const visit of visits){
     const {player,car}=setup();

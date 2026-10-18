@@ -19,7 +19,7 @@ export type CybercabView = {
   canFollow:boolean;
   style?:{
     currentId:string;
-    choices:readonly {id:string;label:string}[];
+    choices:readonly {id:string;label:string;disabled?:boolean}[];
     state:'ready'|'pending'|'unavailable';
     detail?:string;
   };
@@ -136,15 +136,15 @@ export function createCybercabUI(options:CybercabUIOptions) {
       const style=current?.style;
       styleArea.hidden=!style;
       if(!style)return;
-      const key=JSON.stringify(style.choices.map(choice=>[choice.id,choice.label]));
+      const key=JSON.stringify(style.choices.map(choice=>[choice.id,choice.label,choice.disabled]));
       if(key!==choiceKey){
         choiceKey=key;select.replaceChildren();
-        for(const choice of style.choices){const option=el('option','',choice.label);option.value=choice.id;select.append(option);}
+        for(const choice of style.choices){const option=el('option','',choice.label);option.value=choice.id;option.disabled=!!choice.disabled;select.append(option);}
         dirty=false;
       }
       if(!dirty)select.value=style.currentId;
       const busy=stylePending.has(id)||style.state==='pending';
-      const available=style.state==='ready'&&!busy&&style.choices.some(choice=>choice.id===select.value);
+      const available=style.state==='ready'&&!busy&&style.choices.some(choice=>choice.id===select.value&&!choice.disabled);
       select.disabled=style.state!=='ready'||busy;
       save.disabled=!available||select.value===style.currentId;
       text(styleStatus,busy?(style.state==='pending'&&style.detail||'Style change pending. Waiting for confirmation.'):

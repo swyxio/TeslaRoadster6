@@ -83,14 +83,14 @@ test('completed matches award only participating players still in the dome',()=>
   finish(world);
   assert.deepEqual(world.soccer.winningPlayers,[stock.id]);
   assert.ok(roadster.achievements.unlocked.includes('rocket-rookie'));
-  assert.equal(roadster.delivery.cash,roadsterCash+2_000);assert.equal(roadster.delivery.lifetimeIncome,roadsterIncome+2_000);
+  assert.equal(roadster.delivery.cash,roadsterCash+500);assert.equal(roadster.delivery.lifetimeIncome,roadsterIncome+500);
   assert.ok(!roadster.achievements.unlocked.includes('roadster-champion'));
   assert.ok(stock.achievements.unlocked.includes('no-rockets-needed'));
   assert.deepEqual(spectator.achievements.unlocked,[]);
   assert.deepEqual(gone.achievements.unlocked,[]);
   const seq=stock.achievements.lastUnlock?.id;step(world,new Map(),.05);
   assert.equal(stock.achievements.lastUnlock?.id,seq,'win display does not award twice');
-  assert.equal(roadster.delivery.cash,roadsterCash+2_000,'the one-off award is not paid again');
+  assert.equal(roadster.delivery.cash,roadsterCash+500,'the one-off award is not paid again');
 });
 
 test('a departed leading scorer does not prevent a present player winning',()=>{
