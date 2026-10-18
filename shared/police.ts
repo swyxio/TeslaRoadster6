@@ -1,4 +1,4 @@
-import type { Entity, Input, World } from './game';
+import type { Entity, Input, Player, World } from './game';
 import { NEUTRAL } from './game';
 import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
@@ -59,24 +59,36 @@ function heightAboveSurface(e:Entity){
   return e.y-floor;
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
-function detectableFlight(e:Entity){const height=flightHeight(e);return height>3&&height<=80;}
 export function updatePolice(world:World,dt:number):void {
+  const entities=new Map(world.entities.map(entity=>[entity.id,entity]));
+  const players=new Map(world.players.map(player=>[player.id,player]));
+  const pursuits=new Set(world.entities.flatMap(entity=>entity.police?.targetId?[entity.police.targetId]:[]));
+  const flyers:{player:Player;entity:Entity}[]=[];
   for (const player of world.players) {
-    const e=world.entities.find(e=>e.id===player.entityId), flight=player.delivery.flight;
+    const e=entities.get(player.entityId), flight=player.delivery.flight;
     // The fictional arena is a no-police playground, including its ceiling.
-    const height=e&&!e.inDome&&!islandProtected(e)?flightHeight(e):0;
-    if(e&&(e.inDome||islandProtected(e))){flight.seconds=0;flight.peakHeight=0;}
+    const protectedArea=!!e&&(e.inDome||islandProtected(e));
+    const height=e&&!protectedArea?flightHeight(e):0;
+    if(protectedArea){flight.seconds=0;flight.peakHeight=0;}
     if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
-    else if(world.time-flight.lastAirborneAt>3&&!world.entities.some(c=>c.police?.targetId===player.id)){flight.seconds=0;flight.peakHeight=0;}
+    else if(world.time-flight.lastAirborneAt>3&&!pursuits.has(player.id)){flight.seconds=0;flight.peakHeight=0;}
+    if(e&&height>3&&height<=80)flyers.push({player,entity:e});
   }
   for(const cop of world.entities){
     const state=cop.police;if(!state)continue;
-    let player=world.players.find(p=>p.id===state.targetId);
-    let target=world.entities.find(e=>e.id===player?.entityId);
+    let player=state.targetId?players.get(state.targetId):undefined;
+    let target=player?entities.get(player.entityId):undefined;
     if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&!e.inDome&&!islandProtected(e)&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
-      if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
+      // Select the nearest eligible flyer in player order; strict comparison
+      // preserves the previous stable-sort tie break without repeated scans.
+      let nearest=SIGHT;
+      for(const candidate of flyers){
+        if(world.time<candidate.player.delivery.ticketGraceUntil)continue;
+        const distance=separation(cop,candidate.entity);
+        if(distance<nearest){nearest=distance;player=candidate.player;target=candidate.entity;}
+      }
+      if(player&&target){state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target){
       if(state.path.length&&cop.supportId==='ground'&&engageAutopilot(cop))state.path=[];

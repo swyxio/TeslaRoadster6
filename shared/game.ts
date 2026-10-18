@@ -20,7 +20,7 @@ import { createRace, joinRace, leaveRace, startRace, updateRace, type RaceState 
 import { RACE_COURSES } from './race-courses';
 import { ISLAND_BANK, advanceCliff, bankSurface, bankVerticalVelocity, cliffPose, enterCliffFromGround, resolveCliffHit, sweepBank, sweepCliff } from './island-stunts';
 import { ovalBankSurface, ovalBankVerticalVelocity, sweepOvalBank } from './oval-bank';
-import { islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
+import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
 import { airCost, MAX_TANK_LEVEL, tankUpgradePrice, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
@@ -429,6 +429,11 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
 type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null};
 function islandJumpWallHit(e:Entity,old:PreviousPose){
   const size=dimensions(e.kind);
+  // The exact oriented sweep is only relevant near a ramp. The circumscribed
+  // radius includes every yaw, including a car rotating while it moves.
+  const radius=Math.hypot(size.width,size.length)/2;
+  if(!ISLAND_JUMPS.some(jump=>Math.max(old.x,e.x)+radius>=jump.start&&Math.min(old.x,e.x)-radius<=jump.end&&
+    Math.max(old.z,e.z)+radius>=jump.z-jump.width/2&&Math.min(old.z,e.z)-radius<=jump.z+jump.width/2))return null;
   const vertical=verticalBounds(e);
   return sweepIslandJumpWall(old,e,{halfWidth:size.width/2,halfLength:size.length/2,yaw:e.yaw,
     minY:vertical.min-e.y,maxY:vertical.max-e.y});
@@ -447,7 +452,10 @@ function resolveIslandJumpWall(e:Entity,old:PreviousPose,hit:NonNullable<ReturnT
   e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
 }
 function ferryCanBoard(world:World,e:Entity):boolean {
-  return e.kind==='person'||world.entities.filter(other=>other!==e&&other.supportId==='ferry'&&other.kind!=='person').length<FERRY_DECK.vehicleCapacity;
+  if(e.kind==='person')return true;
+  let occupants=0;
+  for(const other of world.entities)if(other!==e&&other.supportId==='ferry'&&other.kind!=='person'&&++occupants>=FERRY_DECK.vehicleCapacity)return false;
+  return true;
 }
 // Reject transitions into a locked region for the controlled entity only.
 // The old-position comparison lets a displaced entity return from a locked area.
@@ -476,7 +484,9 @@ function followSupport(world:World,e:Entity,old:PreviousPose):void {
     e.supportId=null;e.vy=0;return;
   }
   if(e.supportId==='ground'){
-    if(ferryDocked(world.ferry)&&!ferryCanBoard(world,e)){
+    const size=dimensions(e.kind),radius=Math.hypot(size.width,size.length)/2;
+    if(ferryDocked(world.ferry)&&Math.abs(e.x-world.ferry.x)<=FERRY_DECK.width/2+radius&&
+      Math.abs(e.z-world.ferry.z)<=FERRY_DECK.length/2+radius&&!ferryCanBoard(world,e)){
       const side=world.ferry.phase as FerrySide,shoreSign=side==='sf'?1:-1;
       const deck={x:world.ferry.x,z:world.ferry.z,w:FERRY_DECK.width,d:FERRY_DECK.length,yaw:0};
       const overlap=contact(body(e),deck),previous=contact(body({...e,x:old.x,z:old.z,y:old.y}),deck);
@@ -568,7 +578,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
   if(ovalHit&&(!landing||ovalHit.y>=landing.y)){landing={id:'island-oval',y:ovalHit.y};e.x=ovalHit.x;e.z=ovalHit.z;}
   const jumpHit=sweepIslandJump(old,e);
   if(jumpHit&&(!landing||jumpHit.y>=landing.y)){landing={id:'island-jump',y:jumpHit.y};e.x=jumpHit.x;e.z=jumpHit.z;}
-  if(ferryDocked(world.ferry)&&ferryCanBoard(world,e)&&onFerryDeck(world.ferry,e.x,e.z)&&e.vy<=0&&old.y>=-.001&&e.y<=0&&!landing)landing={id:'ferry',y:0};
+  if(ferryDocked(world.ferry)&&onFerryDeck(world.ferry,e.x,e.z)&&e.vy<=0&&old.y>=-.001&&e.y<=0&&!landing&&ferryCanBoard(world,e))landing={id:'ferry',y:0};
   const deck=overpassHeight(e.x,e.z),oldDeck=overpassHeight(old.x,old.z)??deckTopAt(old.x);
   if(deck!==null&&e.vy<=0&&old.y>=oldDeck-.001&&e.y<=deck&&(!landing||deck>landing.y))landing={id:'overpass',y:deck};
   const ramp=rampHeight(e.x,e.z),oldRamp=rampHeight(old.x,old.z)??ramp;
@@ -1028,7 +1038,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
   for(const pickup of world.pickups){
     if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;
-    const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4);if(!car)continue;
+    const car=world.entities.find(e=>e.driver&&e.kind!=='person'&&e.supportId==='ground'&&Math.hypot(e.x-pickup.x,e.z-pickup.z)<4&&Math.abs(e.y-(terrainHeight(pickup.x,pickup.z)??0))<2);if(!car)continue;
     if(pickup.kind==='repair')car.health=100;else car.air=100;
     const player=world.players.find(p=>p.id===car.driver);
     if(player){player.delivery.cash+=5;player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:pickup.kind==='repair'?'supply-repair':'supply-air',amount:5};}

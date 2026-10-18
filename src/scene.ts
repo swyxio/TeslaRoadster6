@@ -389,5 +389,22 @@ export class GameScene {
     this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
-  start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
+  start(frame:(dt:number)=>void){
+    let last=performance.now();
+    // Opt-in, bounded diagnostics for repeatable browser playtests. Frame
+    // duration is CPU-side and does not wait for the GPU to finish.
+    const diagnostic=new URLSearchParams(location.search).has('perf')?{frames:[] as number[],work:[] as number[],count:0}:null;
+    this.renderer.setAnimationLoop(now=>{
+      const elapsed=now-last,dt=Math.min(elapsed/1000,.1);last=now;
+      const started=diagnostic?performance.now():0;
+      frame(dt);
+      if(!diagnostic)return;
+      diagnostic.frames.push(elapsed);diagnostic.work.push(performance.now()-started);
+      if(diagnostic.frames.length>240){diagnostic.frames.shift();diagnostic.work.shift();}
+      if(++diagnostic.count%60)return;
+      const percentile=(values:number[])=>[...values].sort((a,b)=>a-b)[Math.floor((values.length-1)*.95)];
+      const mean=diagnostic.frames.reduce((a,b)=>a+b,0)/diagnostic.frames.length;
+      document.body.dataset.teslandPerf=JSON.stringify({samples:diagnostic.frames.length,fps:1000/mean,frameP95Ms:percentile(diagnostic.frames),cpuP95Ms:percentile(diagnostic.work),drawCalls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles});
+    });
+  }
 }
