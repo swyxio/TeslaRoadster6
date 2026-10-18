@@ -8,6 +8,8 @@ import { LocalPrediction } from './local-prediction';
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
+export type WalletStatus = 'guest' | 'connecting' | 'syncing' | 'ready' | 'failed';
+const WALLET_TIMEOUT_MS=15_000;
 export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];ownedLuxury:LuxuryVehicleId[]};
 export type LuxuryResult = {requestId:number;action:'buy'|'collect';vehicle:LuxuryVehicleId;ok:boolean;reason?:string;awards?:AchievementId[]};
 export class Session {
@@ -16,8 +18,13 @@ export class Session {
   status: SessionStatus = 'disconnected';
   capacity = 0;
   snapshotVersion = 0;
+  walletStatus:WalletStatus = 'guest';
+  walletError = '';
   private socket?: WebSocket;
   private connectTimeout?: number;
+  private walletTimeout?: number;
+  private walletSnapshot=0;
+  private startingVehicle?:VehicleId;
   private sendTime = 0;
   private lastState = 0;
   private name = 'Driver';
@@ -41,6 +48,15 @@ export class Session {
   error = '';
   room = '';
   roomFull = false;
+  get walletBlocked():boolean {return this.walletStatus==='connecting'||this.walletStatus==='syncing'||this.walletStatus==='failed';}
+  private waitForWallet(requestId:number):void {
+    clearTimeout(this.walletTimeout);this.walletStatus='connecting';this.walletError='';this.prediction.reset();
+    this.walletTimeout=window.setTimeout(()=>{
+      if(this.identityRequestId!==requestId||!this.walletBlocked)return;
+      this.walletStatus='failed';this.walletError='Your saved driver is taking too long to connect.';
+      this.error=this.walletError;this.socket?.close();
+    },WALLET_TIMEOUT_MS);
+  }
   join(room: string, name: string,kind?:VehicleId) {
     if (this.status === 'online' && this.room === room) {
       this.setName(name);
@@ -51,7 +67,7 @@ export class Session {
     }
     kind ??= 'roadster';
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.snapshotVersion=0;this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.world = createEmptyWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.snapshotVersion=0;this.walletStatus=this.identityCode?'connecting':'guest';this.walletError='';this.startingVehicle=undefined;this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.world = createEmptyWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, 10000);
@@ -64,14 +80,18 @@ export class Session {
           if (message.version !== PROTOCOL_VERSION) { this.error = 'Game updated. Reload to reconnect.'; socket.close(); return; }
           this.id = message.id; this.capacity = message.capacity; this.lastState = performance.now();
           socket.send(JSON.stringify({type:'name',name:this.name}));
-          if(this.identityCode)socket.send(JSON.stringify({type:'identity',code:this.identityCode,requestId:this.identityRequestId}));
-          if(kind!=='roadster')this.actionWithBarrier({type:'selectVehicle',kind});
+          if(!this.identityRequestId)this.identityRequestId=++this.nextUpgradeRequest;
+          if(this.identityCode)this.waitForWallet(this.identityRequestId);
+          socket.send(JSON.stringify({type:'identity',code:this.identityCode??null,requestId:this.identityRequestId}));
+          if(kind!=='roadster'){if(this.walletBlocked)this.startingVehicle=kind;else this.actionWithBarrier({type:'selectVehicle',kind});}
         }
         if (message.type === 'state' && this.id) {
           this.world = message.world;this.snapshotVersion++;this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
+          if(this.walletStatus==='syncing'&&this.snapshotVersion>this.walletSnapshot){this.walletStatus='ready';clearTimeout(this.walletTimeout);this.walletTimeout=undefined;}
           const passed=Number.isSafeInteger(message.sync)&&this.waitingSync>0&&message.sync>=this.waitingSync;
           if(passed)this.waitingSync=0;
           this.prediction.snapshot(this.world,this.id,message.inputAck,this.lastState,passed);
+          if(!this.walletBlocked&&this.startingVehicle){const starting=this.startingVehicle;this.startingVehicle=undefined;this.actionWithBarrier({type:'selectVehicle',kind:starting});}
           if(this.pendingVehicle&&Number.isSafeInteger(message.sync)&&message.sync>=this.pendingVehicle.token){
             const {kind,previousId}=this.pendingVehicle;
             const player=this.world.players.find(player=>player.id===this.id);
@@ -85,20 +105,25 @@ export class Session {
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
-        if (message.type === 'identityResult' && message.requestId===this.identityRequestId) {
+        if (message.type === 'identityResult' && message.requestId===this.identityRequestId && this.walletStatus!=='failed') {
           const levelBaseline=message.ok&&this.identityCode&&this.wallet?{level:this.wallet.level,eligibleIncome:this.wallet.eligibleIncome,afterSnapshot:this.snapshotVersion}:null;
           this.identityResult={requestId:message.requestId,ok:message.ok,message:message.message,levelBaseline};
+          if(this.identityCode){
+            if(message.ok){this.walletStatus='syncing';this.walletSnapshot=this.snapshotVersion;}
+            else{clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.walletStatus='failed';this.walletError=message.message;}
+          }
         }
         if (message.type === 'wallet') this.wallet = message;
         if (message.type === 'luxuryResult') this.luxuryResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { this.prediction.reset();this.waitingSync=0;this.status = 'disconnected'; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.waitingSync=0;this.status = 'disconnected'; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   tick(dt: number, input: Input) {
     if (this.status === 'online') {
       if (performance.now() - this.lastState > 6000) { this.error = 'Connection stalled. Rejoin to continue.'; this.socket?.close(); return; }
+      if(this.walletBlocked)return;
       this.sendTime += dt;
       if (this.sendTime >= .05) {
         const seq=this.inputSeq+1;
@@ -136,13 +161,17 @@ export class Session {
   setIdentity(code?:string) {
     const requestId=++this.nextUpgradeRequest;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
-    if(this.id)this.send({type:'identity',code:code??null,requestId});
+    if(this.id&&this.socket?.readyState===WebSocket.OPEN){
+      if(code)this.waitForWallet(requestId);
+      else if(this.walletStatus!=='guest'){clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.walletStatus='failed';this.walletError='Rejoin to start a new guest driver.';}
+      this.send({type:'identity',code:code??null,requestId});
+    }
     return requestId;
   }
   luxury(action:'buy'|'collect',vehicle:LuxuryVehicleId) {
     const requestId=++this.nextUpgradeRequest;this.luxuryResult=null;
     const message={type:'luxury',action,vehicle,requestId};
-    const sent=this.status==='online'&&(action==='collect'?this.actionWithBarrier(message):this.send(message));
+    const sent=this.status==='online'&&!this.walletBlocked&&(action==='collect'?this.actionWithBarrier(message):this.send(message));
     if(!sent)this.luxuryResult={requestId,action,vehicle,ok:false,reason:'Connection lost. Rejoin and try again.'};
     return requestId;
   }
@@ -170,10 +199,11 @@ export class Session {
     this.actionWithBarrier({type},type==='reset');
   }
   private actionWithBarrier(value:unknown,reset=false):boolean {
+    if(this.walletBlocked)return false;
     if(!this.send(value)){this.prediction.suspend();return false;}
     this.prediction.suspend(reset);
     const token=++this.syncToken;this.waitingSync=token;return this.send({type:'sync',token});
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined;socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.sendTime=0;this.status='disconnected'; }
 }

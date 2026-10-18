@@ -9,7 +9,7 @@ const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 let id='',world:World|undefined,ack=-1,sync=0,states=0,destinationResult:{requestId:number;ok:boolean}|undefined;
 socket.addEventListener('message',event=>{
   const message=JSON.parse(String(event.data));
-  if(message.type==='welcome'){assert.equal(message.version,PROTOCOL_VERSION);id=message.id;}
+  if(message.type==='welcome'){assert.equal(message.version,PROTOCOL_VERSION);id=message.id;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
   if(message.type==='state'){states++;world=message.world;ack=message.inputAck;sync=message.sync??sync;}
   if(message.type==='destinationResult')destinationResult=message;
 });

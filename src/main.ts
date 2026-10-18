@@ -141,8 +141,8 @@ for(const name of ['master','music','effects'] as const){
 $('sound-mute').onclick=()=>{audio.setSettings({...audio.settings,muted:!audio.settings.muted});refreshSoundSettings();};
 $('sound-test').onclick=()=>{void audio.unlock().then(ok=>{if(ok)audio.play('pickup');$('sound-status').textContent=!ok?'Sound is unavailable in this browser.':audio.settings.muted||!audio.settings.master||!audio.settings.effects?'Unmute and raise master and effects volume to hear the test.':'Test played.';});};
 $('sound-button').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;refreshSoundSettings();refreshRadio();soundDialog.showModal();void radio.prepare();};
-function closeSound(){soundDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
-$('sound-close').onclick=closeSound;soundDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
+function closeSound(){soundDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
+$('sound-close').onclick=closeSound;soundDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 document.addEventListener('visibilitychange',()=>{void audio.visibility(document.hidden);radio.visibility(document.hidden);});
 for(const event of ['pointerdown','keydown'] as const)window.addEventListener(event,()=>{if(started)void audio.unlock();},{capture:true});
 refreshSoundSettings();refreshRadio();
@@ -155,6 +155,7 @@ const achievementEvents=new AchievementEventTracker();
 const levelEvents=new LevelEventTracker();
 let achievementQueue:AchievementId[] = [], achievementTimer = 0;
 let openDrawer: 'actions' | 'controls' | null = null;
+let walletWasBlocked=false,lastSessionStatus=session.status;
 function setDrawer(drawer: 'actions' | 'controls' | null) {
   openDrawer=drawer;
   for(const name of ['actions','controls'] as const){
@@ -163,12 +164,12 @@ function setDrawer(drawer: 'actions' | 'controls' | null) {
     $(name+'-toggle').setAttribute('aria-expanded',String(open));
   }
   controls.clear();
-  controls.enabled=!drawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');
+  controls.enabled=!drawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');
 }
 $('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
 $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
 $('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button')){setDrawer(null);if(event.detail===0)$('actions-toggle').focus();}},{capture:true});
-const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const nameInput=$<HTMLInputElement>('name');
@@ -258,7 +259,7 @@ const chatPanel=createChatPanel({
   },
   onOpenChange(open){
     if(open){unread=0;updateChatBadge();}
-    controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');
+    controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');
   },
 });
 document.body.append(chatPanel.element);
@@ -284,7 +285,7 @@ $('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
 function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();controls.clear();controls.enabled=false;}
 $('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;
 $('identity-close').onclick=()=>identityDialog.close();
-identityDialog.addEventListener('close',()=>{showRecoveryCode=false;pendingShowCode=false;refreshIdentity();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+identityDialog.addEventListener('close',()=>{showRecoveryCode=false;pendingShowCode=false;refreshIdentity();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 identityName.addEventListener('input',event=>{identityNameDirty=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(identityName);});
 identityName.addEventListener('compositionend',()=>limitDriverNameInput(identityName));
 $('identity-name-form').addEventListener('submit',event=>{
@@ -391,7 +392,7 @@ function begin(userGesture=true){
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('join').onclick=()=>begin();$('retry').onclick=()=>begin();
+$('join').onclick=()=>begin();$('retry').onclick=()=>{if(session.walletBlocked)session.disconnect();begin();};
 $('apply-ride').onclick=()=>requestMenuRide(false);
 $<HTMLInputElement>('room').addEventListener('input',updateRideMenu);
 $('error-join').onclick=()=>{
@@ -448,7 +449,7 @@ const mapDialog=createMapDialog({onDestination(point){
   controls.clear();const requestId=session.setDestination(point.x,point.z);
   pendingDestination={requestId,expires:performance.now()+5000};notice('Finding a route…');
 }});
-mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 $('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
 $('map-toggle').removeAttribute('aria-pressed');$('map-label').textContent='MAP · TAP TO EXPLORE';
 $('map-toggle').onclick=()=>{
@@ -560,7 +561,7 @@ function minimap(entity:Entity|undefined,level:Level){
 const scoresDialog=$<HTMLDialogElement>('scores-dialog');
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
-const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 $('mars-quick').onclick=()=>marsUi.open();$('mars-action').onclick=()=>marsUi.open();
 function updateScores(){
   const list=$('scores-list');list.replaceChildren();
@@ -585,7 +586,7 @@ function updateScores(){
   }
 }
 function openScores(){controls.clear();controls.enabled=false;updateScores();scoresDialog.showModal();}
-function closeScores(){scoresDialog.close();controls.clear();controls.enabled=!menu;}
+function closeScores(){scoresDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
 $('scores-close').onclick=closeScores;scoresDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
 
 const awardsDialog=$<HTMLDialogElement>('awards-dialog');
@@ -606,8 +607,8 @@ function updateAwards(){
   }
 }
 function openAwards(){controls.clear();controls.enabled=false;updateAwards();awardsDialog.showModal();}
-function closeAwards(){awardsDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
-$('awards-close').onclick=closeAwards;awardsDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
+function closeAwards(){awardsDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
+$('awards-close').onclick=closeAwards;awardsDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 function announceAchievements(){
   const id=achievementQueue.shift();if(!id){achievementTimer=0;$('achievement-toast').classList.add('hidden');return;}
   $('achievement-toast').textContent=`★ ACHIEVEMENT UNLOCKED · ${ACHIEVEMENTS[id].name}`;$('achievement-toast').classList.remove('hidden');
@@ -623,7 +624,7 @@ function showTicket(ticket:Ticket){
   ticketDialog.showModal();$<HTMLButtonElement>('ticket-acknowledge').focus();
 }
 ticketDialog.addEventListener('cancel',event=>event.preventDefault());
-$('ticket-acknowledge').onclick=()=>{ticketDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';};
+$('ticket-acknowledge').onclick=()=>{ticketDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;};
 
 const fleetDialog=$<HTMLDialogElement>('fleet-dialog');
 let previewVehicle:VehicleId='roadster';
@@ -637,7 +638,7 @@ function showVehicle(id:VehicleId){
 }
 for(const id of teslaIds){const spec=VEHICLES[id],button=document.createElement('button');button.dataset.vehicle=id;button.textContent=spec.name;button.style.setProperty('--vehicle-color',`#${spec.color.toString(16).padStart(6,'0')}`);button.onclick=()=>showVehicle(id);$('fleet-list').append(button);}
 function openFleet(){controls.clear();controls.enabled=false;const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);showVehicle(entity&&entity.kind!=='person'&&VEHICLES[entity.kind].brand==='Tesla'?entity.kind:selectedVehicle);fleetDialog.showModal();}
-function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu;}
+function closeFleet(){fleetDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
 $('fleet-close').onclick=closeFleet;fleetDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
 $('fleet-drive').onclick=()=>{const player=session.world.players.find(p=>p.id===session.id),entity=session.world.entities.find(e=>e.id===player?.entityId);if(!entity||entity.supportId===null||entity.supportId==='ferry'||entity.supportId==='island-cliff'||entity.loopAngle!==null||Math.abs(entity.speed)>1){$('fleet-feedback').textContent=entity?.supportId==='ferry'?'Drive off the ferry and stop before choosing a ride.':'Brake to a stop on the ground, then choose your ride.';return;}session.selectVehicle(previewVehicle);selectedVehicle=previewVehicle;startingSelect.value=previewVehicle;updateStarting();closeFleet();notice('Tesla requested. Upgrades do not transfer between vehicles.');};
 function updateActivities(e:Entity){
@@ -694,7 +695,7 @@ let luxuryStatus='',lastLuxuryKey='';
 const luxuryUi=createLuxuryShowroom({
   onPurchase:id=>requestLuxury('buy',id),
   onCollect:id=>requestLuxury('collect',id),
-  onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!document.querySelector('dialog[open]');},
+  onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},
 });
 document.body.append(luxuryUi.element);
 function requestLuxury(action:'buy'|'collect',id:string,source:'vault'|'workshop'='vault'){
@@ -856,14 +857,21 @@ function openShop(){
   if(!pendingShop)$('shop-feedback').textContent='Earn cash by delivering food. Your saved driver keeps purchased upgrades for this vehicle.';
   updateShop();shopDialog.showModal();
 }
-function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
-$('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
+function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
+$('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 
 scene.start(dt=>{
+  if(session.walletBlocked&&!walletWasBlocked){
+    controls.clear();controls.enabled=false;$('hud').classList.add('hidden');
+    for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))if(dialog!==identityDialog&&dialog!==chatPanel.element)dialog.close();
+  }
+  if(session.walletBlocked){if(controls.enabled){controls.clear();controls.enabled=false;}}
+  else if((walletWasBlocked||lastSessionStatus!=='online')&&session.status==='online'&&!menu&&!openDrawer&&!document.querySelector('dialog[open]'))controls.enabled=true;
+  walletWasBlocked=session.walletBlocked;lastSessionStatus=session.status;
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&session.status==='online');
+  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&session.status==='online'&&!session.walletBlocked);
   if(session.identityResult){
     const result=session.identityResult;session.identityResult=null;
     if(result.requestId===identityRequestId){
@@ -919,11 +927,21 @@ scene.start(dt=>{
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
   // A room switch clears the presentation world until an authoritative
   // snapshot arrives; do not leave the old room's instruments on screen.
-  $('hud').classList.toggle('hidden',menu||session.status!=='online');
-  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
+  $('hud').classList.toggle('hidden',menu||session.status!=='online'||session.walletBlocked);
+  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'&&session.walletStatus==='failed'?'○ WALLET NOT CONNECTED':session.status==='online'&&session.walletBlocked?'◌ CONNECTING WALLET…':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`Room: ${session.room}`:'';
-  $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
-  if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
+  const joiningWallet=session.status==='online'&&(session.walletStatus==='connecting'||session.walletStatus==='syncing');
+  $('joining').textContent=joiningWallet?'Connecting your wallet…':'Joining your room…';
+  $('joining').classList.toggle('hidden',!started||menu||!(session.status==='connecting'||joiningWallet));
+  if(started&&!menu&&(session.status==='disconnected'||session.walletStatus==='failed')){
+    if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');
+    $('error-title').textContent=session.walletStatus==='failed'?'Could not connect your saved driver.':session.roomFull?'This room is full.':'Let’s get you back on the road.';
+    $('error-copy').textContent=session.walletStatus==='failed'?`${session.walletError} Retry, or choose a guest driver in room settings.`:session.error;
+    if(identityDialog.open&&session.walletStatus==='failed'){
+      identityFeedback(session.walletError);$<HTMLButtonElement>('identity-rejoin').hidden=false;
+    }
+  }
+  if(session.walletBlocked)return;
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   marsUi.update(e);
   $('mars-quick').textContent=session.world.mars.fund>=MARS_GOAL?'🚀 Mars funded · board in Fremont':`🚀 Mars mission · ${money(session.world.mars.fund)} / $1B`;

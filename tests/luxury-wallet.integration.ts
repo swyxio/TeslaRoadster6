@@ -88,11 +88,12 @@ function purchaseCash(before:number,id:LuxuryVehicleId,owned:LuxuryVehicleId[]=[
 }
 function success(outcome:DriverOutcome|null):asserts outcome is Extract<DriverOutcome,{ok:true}> {assert.ok(outcome?.ok,JSON.stringify(outcome));}
 type Message={type:string;[key:string]:any};
-function connect(path:string) {
+function connect(path:string,guest=false) {
   const socket=new WebSocket(base.replace(/^http/,'ws')+path),messages:Message[]=[];
   sockets.push(socket);
   socket.addEventListener('message',event=>{
     const message=JSON.parse(String(event.data)) as Message;
+    if(guest&&message.type==='welcome')socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));
     Object.defineProperty(message,'_receivedAt',{value:performance.now()});
     messages.push(message);
   });
@@ -392,7 +393,7 @@ try {
   const rejected=connect(`/api/room/${retryRoom}`);
   await until(()=>rejected.socket.readyState===WebSocket.CLOSED,'first join fails on injected pickup read');
   assert.ok(!rejected.last('welcome'),'failed join never receives a playable session');
-  const refreshClient=connect(`/api/room/${retryRoom}`);
+  const refreshClient=connect(`/api/room/${retryRoom}`,true);
   await until(()=>!!refreshClient.last('welcome')&&!!refreshClient.last('wallet'),'join retries a transient pickup-state failure');
   const refreshPlayer=refreshClient.last('welcome')!.id as string;
 
@@ -417,7 +418,7 @@ try {
   } finally { await rpc('release-pickups',{room:retryRoom}).catch(()=>{}); }
 
   // A first save binds the earned guest wallet rather than starting it over.
-  const guestRoomName=`guest-${randomUUID().slice(0,8)}`,guest=connect(`/api/room/${guestRoomName}`);
+  const guestRoomName=`guest-${randomUUID().slice(0,8)}`,guest=connect(`/api/room/${guestRoomName}`,true);
   await until(()=>!!guest.last('welcome')&&!!guest.last('wallet'),'first-time guest joins');
   const guestPlayer=guest.last('welcome')!.id as string;
   await rpc('delivery-pickup',{room:guestRoomName,playerId:guestPlayer});
@@ -457,7 +458,7 @@ try {
 
   // An earned guest cannot silently overwrite its progress with an already
   // bound different driver; reconnecting makes the requested switch explicit.
-  const switchRoom=`switch-${randomUUID().slice(0,8)}`,switchGuest=connect(`/api/room/${switchRoom}`);
+  const switchRoom=`switch-${randomUUID().slice(0,8)}`,switchGuest=connect(`/api/room/${switchRoom}`,true);
   await until(()=>!!switchGuest.last('welcome')&&!!switchGuest.last('wallet'),'switching guest joins');
   const switchPlayer=switchGuest.last('welcome')!.id as string;
   await rpc('delivery-pickup',{room:switchRoom,playerId:switchPlayer});
@@ -476,6 +477,111 @@ try {
   switchGuest.socket.close();await until(()=>switchGuest.socket.readyState===WebSocket.CLOSED,'earned guest leaves before switching');
   const switched=await join(switchRoom,different.code);
   assert.ok(switched.messages.some(message=>message.type==='wallet'&&message.cash===beforeDifferent.progress.cash),'rejoining successfully restores the different wallet');
+
+  // From the first welcome, a driver awaiting a decision or a saved profile
+  // cannot collect a landmark, drive, or spend while the room keeps running.
+  const waitingDriver=await savedDriver(`Wait${randomUUID().slice(0,6)}`);
+  const waitingRoom=`wait-${randomUUID().slice(0,8)}`;
+  const waiting=connect(`/api/room/${waitingRoom}`),observer=connect(`/api/room/${waitingRoom}`,true);
+  await until(()=>!!waiting.last('welcome')&&!!waiting.last('wallet')&&!!observer.last('state'),'waiting driver and guest observer join');
+  const waitingId=waiting.last('welcome')!.id as string;
+  await rpc('position',{room:waitingRoom,playerId:waitingId,side:-1});
+  const waitingTime=waiting.last('state')!.world.time as number;
+  send(waiting,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
+  send(waiting,{type:'ota',enabled:true,requestId:10});
+  await until(()=>waiting.messages.some(message=>message.type==='otaResult'&&message.requestId===10),'pre-decision purchase rejected');
+  assert.equal(waiting.messages.find(message=>message.type==='otaResult'&&message.requestId===10)!.ok,false);
+  await until(()=>waiting.last('state')!.world.time>waitingTime+.4,'world ticks before the identity decision');
+  assert.equal(waiting.last('state')!.inputAck,0,'pre-decision controls are not applied');
+  assert.equal(waiting.last('wallet')!.cash,2_500);
+  assert.ok(!waiting.last('wallet')!.unlocked.includes('luxury-visit'),'nearby landmark does not award before the decision');
+
+  await rpc('arm-acquire',{driverId:waitingDriver.id});
+  send(waiting,{type:'identity',code:waitingDriver.code,requestId:11});
+  let observerSeq=0;
+  const observerTimer=setInterval(()=>send(observer,{type:'input',seq:++observerSeq,input:{...NEUTRAL,throttle:1}}),80);
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:waitingDriver.id})).held,'saved wallet acquire is held');
+    const duringTime=waiting.last('state')!.world.time as number;
+    send(waiting,{type:'input',seq:2,input:{...NEUTRAL,throttle:1}});
+    send(waiting,{type:'ota',enabled:true,requestId:12});
+    await until(()=>waiting.messages.some(message=>message.type==='otaResult'&&message.requestId===12),'purchase rejected during recovery');
+    assert.equal(waiting.messages.find(message=>message.type==='otaResult'&&message.requestId===12)!.ok,false);
+    await until(()=>waiting.last('state')!.world.time>duringTime+.4&&observer.last('state')!.inputAck>0,'other player and world continue during held recovery');
+    assert.equal(waiting.last('state')!.inputAck,0);
+    assert.equal(waiting.last('wallet')!.cash,2_500);
+    assert.ok(!waiting.last('wallet')!.unlocked.includes('luxury-visit'));
+    await rpc('release-acquire',{driverId:waitingDriver.id});
+    await until(()=>waiting.messages.some(message=>message.type==='identityResult'&&message.requestId===11&&message.ok),'held recovery completes');
+    assert.ok(waiting.messages.some(message=>message.type==='wallet'&&message.cash===FUNDS),'saved balance is restored');
+    send(waiting,{type:'input',seq:3,input:NEUTRAL});
+    await until(()=>waiting.last('state')!.inputAck===3,'recovered driver can play');
+  } finally { clearInterval(observerTimer);await rpc('release-acquire',{driverId:waitingDriver.id}).catch(()=>{}); }
+
+  // A timed-out/closed room must not install a late acquisition, and retrying
+  // the same saved driver must not be trapped behind its abandoned fence.
+  const abandonedDriver=await savedDriver(`Abandoned${randomUUID().slice(0,6)}`);
+  const abandoned=connect(`/api/room/${waitingRoom}`);
+  await until(()=>!!abandoned.last('welcome'),'abandoned recovery socket joins');
+  const abandonedId=abandoned.last('welcome')!.id as string;
+  await rpc('arm-acquire',{driverId:abandonedDriver.id});
+  send(abandoned,{type:'identity',code:abandonedDriver.code,requestId:15});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:abandonedDriver.id})).held,'abandoned acquire is held');
+    abandoned.socket.close();
+    await until(()=>observer.last('state')!.world.players.every((player:Message)=>player.id!==abandonedId),'closed recovery is removed from room');
+    await rpc('release-acquire',{driverId:abandonedDriver.id});
+    const resumed=await join(waitingRoom,abandonedDriver.code);
+    assert.ok(resumed.messages.some(message=>message.type==='wallet'&&message.cash===FUNDS),'retry restores the abandoned saved wallet');
+    assert.ok(!abandoned.messages.some(message=>message.type==='identityResult'&&message.requestId===15&&message.ok),'closed recovery never reports success');
+  } finally { await rpc('release-acquire',{driverId:abandonedDriver.id}).catch(()=>{}); }
+
+  // A failed lookup stays paused even if null arrives. Rejoining is required
+  // to choose a guest, and its abandoned actions never run.
+  const invalid=connect(`/api/room/${waitingRoom}`);
+  await until(()=>!!invalid.last('welcome'),'invalid-code driver joins');
+  send(invalid,{type:'identity',code:'not-a-valid-recovery-code',requestId:20});
+  await until(()=>invalid.messages.some(message=>message.type==='identityResult'&&message.requestId===20),'invalid recovery settles');
+  assert.equal(invalid.messages.find(message=>message.type==='identityResult'&&message.requestId===20)!.ok,false);
+  send(invalid,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
+  send(invalid,{type:'ota',enabled:true,requestId:21});
+  await until(()=>invalid.messages.some(message=>message.type==='otaResult'&&message.requestId===21),'failed recovery rejects spending');
+  assert.equal(invalid.messages.find(message=>message.type==='otaResult'&&message.requestId===21)!.ok,false);
+  assert.equal(invalid.last('state')!.inputAck,0);
+  send(invalid,{type:'identity',code:null,requestId:22});
+  await until(()=>invalid.messages.some(message=>message.type==='identityResult'&&message.requestId===22),'guest rejoin is required after failure');
+  assert.equal(invalid.messages.find(message=>message.type==='identityResult'&&message.requestId===22)!.ok,false);
+  send(invalid,{type:'input',seq:2,input:NEUTRAL});
+  await pause(200);assert.equal(invalid.last('state')!.inputAck,0,'null cannot resume a failed recovery');
+  invalid.socket.close();
+  const replacementGuest=connect(`/api/room/${waitingRoom}`,true);
+  await until(()=>replacementGuest.messages.some(message=>message.type==='identityResult'&&message.ok),'new guest joins explicitly');
+  send(replacementGuest,{type:'identity',code:null,requestId:23});
+  await until(()=>replacementGuest.messages.some(message=>message.type==='identityResult'&&message.requestId===23&&message.ok),'repeated guest decision is harmless');
+  send(replacementGuest,{type:'input',seq:1,input:NEUTRAL});
+  await until(()=>replacementGuest.last('state')?.inputAck===1,'new guest can play');
+  assert.equal(replacementGuest.last('wallet')!.cash,2_500,'rejected action was not replayed');
+
+  // A newer recovery supersedes a held request without exposing the old wallet.
+  const firstChoice=await savedDriver(`First${randomUUID().slice(0,6)}`),secondChoice=await savedDriver(`Second${randomUUID().slice(0,6)}`);
+  await rpc('fund',{driverId:secondChoice.id,seedCash:7_000_000});
+  const changing=connect(`/api/room/supersede-${randomUUID().slice(0,8)}`);
+  await until(()=>!!changing.last('welcome'),'superseded recovery socket joins');
+  await rpc('arm-acquire',{driverId:firstChoice.id});
+  send(changing,{type:'identity',code:firstChoice.code,requestId:30});
+  try {
+    await until(async()=>(await rpc<{held:boolean}>('acquire-fault-state',{driverId:firstChoice.id})).held,'first choice is held');
+    send(changing,{type:'identity',code:secondChoice.code,requestId:31});
+    send(changing,{type:'input',seq:1,input:{...NEUTRAL,throttle:1}});
+    await pause(200);assert.equal(changing.last('state')!.inputAck,0);
+    await rpc('release-acquire',{driverId:firstChoice.id});
+    await until(()=>changing.messages.some(message=>message.type==='identityResult'&&message.requestId===31&&message.ok),'newer choice attaches');
+    assert.ok(!changing.messages.some(message=>message.type==='identityResult'&&message.requestId===30),'superseded request never confirms');
+    assert.ok(changing.messages.some(message=>message.type==='wallet'&&message.cash===7_000_000),'only the newer wallet is installed');
+    assert.ok(!changing.messages.some(message=>message.type==='wallet'&&message.cash===FUNDS),'old wallet is never exposed');
+    send(changing,{type:'input',seq:2,input:NEUTRAL});
+    await until(()=>changing.last('state')!.inputAck===2,'newer identity is usable');
+  } finally { await rpc('release-acquire',{driverId:firstChoice.id}).catch(()=>{}); }
 
   // Two recoveries race after the first fence was installed but its reply was delayed.
   const racing=await savedDriver(`Race${randomUUID().slice(0,6)}`),racingRecord=await inspect(racing.id);
@@ -500,7 +606,8 @@ try {
     if(stale.socket.readyState===WebSocket.OPEN){
       const staleRoom=new URL(stale.socket.url).pathname.split('/').at(-1)!;
       await rpc('position',{room:staleRoom,playerId:stale.last('welcome')!.id,side:-1});
-      await until(()=>stale.last('wallet')?.unlocked?.includes('luxury-visit'),'superseded session reaches the Vault');
+      await pause(200);
+      assert.ok(!stale.last('wallet')?.unlocked?.includes('luxury-visit'),'failed recovery stays paused at the Vault');
       await barrier(stale,300);
       const staleCash=stale.last('wallet')!.cash,staleOwned=structuredClone(stale.last('wallet')!.ownedLuxury);
       assert.equal((await luxury(stale,'collect','ducati-panigale-v4',90)).ok,false,'superseded session cannot collect');

@@ -18,6 +18,7 @@ try {
     const ws = new WebSocket(base.replace(/^http/, 'ws') + room); sockets.push(ws);
     ws.addEventListener('message', e => {
       const raw=String(e.data),msg=JSON.parse(raw);
+      if(msg.type==='welcome')ws.send(JSON.stringify({type:'identity',code:null,requestId:1}));
       if(msg.type !== 'state')return;
       counts.set(ws,msg.world.players.length);snapshots.set(ws,(snapshots.get(ws)??0)+1);
       const times=seen.get(ws)??[];times.push(Date.now());seen.set(ws,times);

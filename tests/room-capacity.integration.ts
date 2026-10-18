@@ -12,7 +12,7 @@ const sockets: WebSocket[] = [];
 function connect(room:string) {
   const socket = new WebSocket(url(room)); sockets.push(socket);
   const welcome = new Promise<void>((resolve,reject)=>{
-    socket.addEventListener('message',event=>{if(JSON.parse(String(event.data)).type==='welcome')resolve();});
+    socket.addEventListener('message',event=>{if(JSON.parse(String(event.data)).type==='welcome'){socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));resolve();}});
     socket.addEventListener('error',()=>reject(new Error('WebSocket connection failed')));
   });
   const closed = new Promise<CloseEvent>(resolve=>socket.addEventListener('close',resolve,{once:true}));

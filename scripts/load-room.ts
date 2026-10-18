@@ -24,7 +24,7 @@ try {
     const socket=new WebSocket(url);sockets.push(socket);let welcomed=false;
     socket.addEventListener('message',event=>{
       const raw=String(event.data),message=JSON.parse(raw) as {type:string;version?:number;world?:World};
-      if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}welcomed=true;resolve();}
+      if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));welcomed=true;resolve();}
       if(message.type==='state'&&message.world&&measuring){
         const now=performance.now();if(lastSnapshot[i])gaps.push(now-lastSnapshot[i]);lastSnapshot[i]=now;
         snapshots++;snapshotCounts[i]++;bytes+=Buffer.byteLength(raw);seenPlayers[i]=message.world.players.length;

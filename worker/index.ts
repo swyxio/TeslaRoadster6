@@ -15,7 +15,7 @@ import { RoomEconomy } from './room-economy';
 export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
-type Session = { id:string; lastInput:number; lastMessage:number; windowStart:number; count:number; lastAction:number; inputSeq:number; appliedSeq:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; deferred:string[]; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
+type Session = { id:string; lastInput:number; lastMessage:number; windowStart:number; count:number; lastAction:number; inputSeq:number; appliedSeq:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null };
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -104,7 +104,7 @@ export class GameRoom extends DurableObject<Env> {
     try{player=addPlayer(this.world,id,chooseAvailableName('Driver',this.world.players.map(p=>p.name)));}
     catch(error){if(!(error instanceof NoSpawnError))throw error;return close(ROOM_NO_SPAWN_CODE,'No safe starting space');}
     const economy=new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups);
-    const session:Session={id,lastInput:now,lastMessage:now,windowStart:now,count:0,lastAction:0,inputSeq:0,appliedSeq:0,economy,identityTail:Promise.resolve(),attachPending:false,deferred:[],identitySequence:0,pendingBind:null};
+    const session:Session={id,lastInput:now,lastMessage:now,windowStart:now,count:0,lastAction:0,inputSeq:0,appliedSeq:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null};
     this.sessions.set(server,session);
     server.addEventListener('message',event=>{void this.onMessage(server,event.data);});
     server.addEventListener('close',()=>this.disconnect(server));
@@ -135,17 +135,17 @@ export class GameRoom extends DurableObject<Env> {
     const current=()=>socket.readyState===1&&this.sessions.get(socket)===session&&session.identitySequence===sequence;
     const send=(ok:boolean,message:string)=>{if(current())try{socket.send(JSON.stringify({type:'identityResult',requestId,ok,message}));}catch{}};
     if(!current())return;
-    if(code===null){send(true,'Guest selected. Rejoin to start a new driver.');return;}
+    let accepted=false;
     try{
+      if(code===null){send(false,'Rejoin to start a new guest driver.');return;}
       const identity=await this.env.CHAT.get(this.env.CHAT.idFromName('global')).bindWallet(code,session.economy.walletId);
       if(!current())return;
       if(!identity){send(false,'Invalid recovery code.');return;}
       if(identity.walletId===session.economy.walletId){
         const ok=await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(identity.walletId)).activateIncome(session.economy.currentFence);
-        send(ok,ok?'Saved driver connected.':'Session superseded. Rejoin to recover.');return;
+        accepted=ok;send(ok,ok?'Saved driver connected.':'Session superseded. Rejoin to recover.');return;
       }
       if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
-      session.attachPending=true;
       const fence=crypto.randomUUID(),initial=initialDelivery({x:0,z:0});
       // Register the incoming lease before awaiting it: another acquisition can
       // find and cancel this session even before replace() installs the wallet.
@@ -156,14 +156,13 @@ export class GameRoom extends DurableObject<Env> {
       session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress);
       session.pendingBind=null;
       session.economy.restoreCurrentVehicle();
-      send(true,'Saved driver connected.');
+      accepted=true;send(true,'Saved driver connected.');
     }catch{send(false,'Could not load driver. Rejoin to retry.');}
     finally{
-      session.attachPending=false;session.pendingBind=null;
-      if(this.sessions.get(socket)===session){
-        const deferred=session.deferred.splice(0);
-        for(const raw of deferred)void this.onMessage(socket,raw);
-      }
+      session.pendingBind=null;
+      // A failed or superseded recovery stays paused until the driver makes a
+      // new identity choice; another request may already be queued.
+      if(current())session.attachPending=!accepted;
     }
   }
 
@@ -177,13 +176,26 @@ export class GameRoom extends DurableObject<Env> {
     session.lastMessage=now;
     if(message.type==='identity'){
       const sequence=++session.identitySequence;
+      // A new guest can start immediately; later identity choices must remain
+      // ordered behind any recovery already in progress.
+      if(message.code===null&&(sequence===1||(session.guest&&!session.attachPending))){session.guest=true;session.attachPending=false;socket.send(JSON.stringify({type:'identityResult',requestId:message.requestId,ok:true,message:'Guest driver ready.'}));return;}
+      if(message.code!==null)session.guest=false;
+      session.attachPending=true;this.inputs.delete(session.id);
       session.identityTail=session.identityTail.then(()=>this.attachIdentity(socket,session,message.code,message.requestId,sequence));
       return;
     }
-    if(message.type==='input'){if(message.seq>session.inputSeq){this.inputs.set(session.id,message.input);session.lastInput=now;session.inputSeq=message.seq;}return;}
-    if(session.attachPending){if(session.deferred.length<90)session.deferred.push(raw);else this.disconnect(socket,1008,'Too many queued actions');return;}
+    if(message.type==='input'){if(!session.attachPending&&message.seq>session.inputSeq){this.inputs.set(session.id,message.input);session.lastInput=now;session.inputSeq=message.seq;}return;}
     if(message.type==='sync'){session.economy.barrier(message.token);return;}
     if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
+    if(session.attachPending){
+      if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
+      if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
+      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
+      if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'unavailable'}));
+      return;
+    }
     if(session.economy.vehicleLocked && (message.type==='interact'||message.type==='reset'||message.type==='selectVehicle'||message.type==='dome'||message.type==='minigame'))return;
     if(message.type==='dome'){travelDome(this.world,session.id);this.inputs.delete(session.id);return;}
     if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);return;}

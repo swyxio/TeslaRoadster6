@@ -12,7 +12,7 @@ function connect():Promise<Result>{
     const timeout=setTimeout(()=>reject(new Error('Timed out waiting for welcome or close')),10000);
     socket.addEventListener('message',event=>{
       const message=JSON.parse(String(event.data));
-      if(message.type==='welcome'){clearTimeout(timeout);resolve(message);}
+      if(message.type==='welcome'){socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));clearTimeout(timeout);resolve(message);}
     });
     socket.addEventListener('close',event=>{clearTimeout(timeout);resolve({type:'close',code:event.code,reason:event.reason});},{once:true});
     socket.addEventListener('error',()=>{clearTimeout(timeout);reject(new Error('WebSocket connection failed'));},{once:true});

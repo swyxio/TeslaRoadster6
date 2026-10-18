@@ -37,7 +37,7 @@ function connect() {
   const state: { id?:string; world?:World; closed?:number; history:Entity[] } = { history:[] };
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
-    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; }
+    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; socket.send(JSON.stringify({type:'identity',code:null,requestId:1})); }
     if (data.type === 'state') state.world = data.world;
   });
   socket.addEventListener('close', event => { state.closed = event.code; });

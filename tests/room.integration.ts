@@ -9,7 +9,7 @@ import { OTA_FEE } from '../shared/ota';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
 // The combined protocol includes Caltrain, research sites and vehicle finishes.
-assert.equal(PROTOCOL_VERSION, 33);
+assert.equal(PROTOCOL_VERSION, 34);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -28,7 +28,7 @@ function connect() {
   const state: { id?: string; world?: World; capacity?: number; inputAck?:number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
-    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
+    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; socket.send(JSON.stringify({type:'identity',code:null,requestId:1})); }
     if (data.type === 'state') {state.world = data.world;state.inputAck=data.inputAck;}
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'vehicleStyleResult') (state.vehicleStyleResults??=[]).push(data);

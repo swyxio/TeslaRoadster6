@@ -92,6 +92,8 @@ try{
   for(let i=0;i<4;i++)await savedDriver(i);
   const observer=connect(`/api/room/${room}`);clients.push(observer);
   await until(()=>observer.id!==''&&observer.messages.some(message=>message.type==='wallet'),'observer joins');
+  send(observer,{type:'identity',code:null,requestId:1});
+  await until(()=>observer.messages.some(message=>message.type==='identityResult'&&message.requestId===1&&message.ok),'observer chooses guest');
   for(let i=0;i<4;i++){
     const client=clients[i];await rpc('workshop',{room,playerId:client.id,shopIndex:[0,1,2,4][i]});
     await sleep(450);send(client,{type:'ota',enabled:true,requestId:2});

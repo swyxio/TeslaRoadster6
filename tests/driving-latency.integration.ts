@@ -13,7 +13,7 @@ const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 try {
   for(let i=0;i<sockets.length;i++)sockets[i].addEventListener('message',event=>{
     const message=JSON.parse(String(event.data));
-    if(message.type==='welcome')ids[i]=message.id;
+    if(message.type==='welcome'){ids[i]=message.id;sockets[i].send(JSON.stringify({type:'identity',code:null,requestId:1}));}
     if(message.type!=='state')return;
     const world=message.world as World;worlds[i]=world;
     if(started===undefined||!initial||seen[i]!==undefined)return;

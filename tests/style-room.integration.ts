@@ -15,7 +15,7 @@ function connect() {
   const state: { id?: string; world?: World; results: { requestId:number; ok:boolean }[] } = { results: [] };
   socket.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
-    if (message.type === 'welcome') state.id = message.id;
+    if (message.type === 'welcome') {state.id = message.id;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
     if (message.type === 'state') state.world = message.world;
     if (message.type === 'vehicleStyleResult') state.results.push(message);
   });
