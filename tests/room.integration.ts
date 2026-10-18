@@ -68,7 +68,21 @@ try {
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
   // A double jump from the Bay approach reaches the low City Glide lane.
   // Check its server-applied refill from the other client's snapshots.
-  one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
+  // The second connection can win the first spawn on a real network. Move it
+  // if it occupies the Bay approach, then retry around traffic or our own car.
+  const otherCar=two.state.world?.entities.find(e=>e.driver===two.state.id);
+  if(otherCar&&Math.hypot(otherCar.x-40,otherCar.z-60)<8){
+    two.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+  }
+  let laneSpawn=false;
+  const spawnAttempts:unknown[]=[];
+  for(let attempt=0;attempt<8&&!laneSpawn;attempt++){
+    one.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+    const e=two.state.world?.entities.find(e=>e.id===entityId);
+    laneSpawn=!!e&&e.supportId==='ground'&&Math.abs(e.speed)<=1&&currentAt({...e,y:12,supportId:null})?.id==='market';
+    spawnAttempts.push(e&&{x:e.x,y:e.y,z:e.z,supportId:e.supportId,speed:e.speed});
+  }
+  assert.ok(laneSpawn,`a free ground spawn beneath City Glide is available: ${JSON.stringify(spawnAttempts)}`);
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:2}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>2;},'first jump toward sky lane');
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:3}}));
