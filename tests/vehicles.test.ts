@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Mesh,InstancedMesh,Box3 } from 'three';
+import { Mesh,InstancedMesh,Box3,Object3D } from 'three';
 import {createVehicle,setVehicleDetail,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {THRUSTER_REAR,THRUSTER_SIDE_LEFT} from '../shared/game';
@@ -56,18 +56,26 @@ test('Rocket has ten nozzles and independently controlled vapor on each clone',(
 test('distant fleet preserves silhouettes, bounds geometry and restores independent upgrades',()=>{
  for(const id of VEHICLE_IDS){
   const car=createVehicle(id),other=createVehicle(id);
+  const warning=new Object3D();warning.name='traffic-hazard';car.add(warning);
   setThrusterEffects(car,THRUSTER_REAR,1,true);
   assert.equal(setVehicleDetail(car,130**2),false,id);
   const far=car.getObjectByName('vehicle-distant') as Mesh;
   assert.ok(far instanceof Mesh);
   assert.ok((far.geometry.index?.count??far.geometry.attributes.position.count)/3<4000,id);
-  assert.equal(car.getObjectByName('vehicle-detail')!.visible,false);
+  assert.equal(car.getObjectByName('vehicle-detail'),undefined,'inactive detail is outside the scene traversal');
+  let nodes=0;car.traverse(()=>nodes++);assert.equal(nodes,3,'only root, distant mesh and warning need transform updates');
+  assert.equal(warning.parent,car,'incident warning survives detail changes');
   assert.equal(other.getObjectByName('vehicle-distant'),undefined);
   assert.equal(setVehicleDetail(car,110**2),false,'hysteresis retains distant detail');
-  setRocketKit(car,id,true);
-  assert.equal(car.getObjectByName('rocket-kit')!.parent!.name,'vehicle-detail');
+  setRocketKit(car,id,true);setRocketKit(car,id,true);setRocketKit(car,id,false);
+  setThrusterEffects(car,0,2,true);
   assert.equal(setVehicleDetail(car,99**2),true);
-  assert.equal(far.visible,false);assert.equal(car.getObjectByName('jets')!.visible,true);
+  const near=car.getObjectByName('vehicle-detail')!;
+  assert.equal(near.children.filter(child=>child.name==='rocket-kit').length,1,'hidden updates do not duplicate hardware');
+  assert.equal(car.getObjectByName('rocket-kit')!.visible,false);
+  assert.equal(warning.parent,car);
+  assert.equal(far.parent,null);assert.equal(car.getObjectByName('jets')!.visible,false);
+  setThrusterEffects(car,THRUSTER_REAR,3,true);assert.equal(car.getObjectByName('jets')!.visible,true);
   assert.equal(setVehicleDetail(car,120**2),true,'hysteresis retains near detail');
   assert.equal(setVehicleDetail(car,2000**2,true),true,'controlled and police detail is retained');
  }
