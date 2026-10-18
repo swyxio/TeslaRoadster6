@@ -77,8 +77,8 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - Stop inside a mint station ring or marked charging bay to refill air. Green diamonds repair; amber diamonds refill air. Each also gives $5 in session cash and returns after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
-- At a marked parking playground or Supercharger lot, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry or enter another room code.
+- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
+- The game joins the public `bay` room automatically. Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links automatically join that room. If it is full, retry, enter another room code, or explicitly choose Drive solo for a local session.
 
 ## Boundaries
 

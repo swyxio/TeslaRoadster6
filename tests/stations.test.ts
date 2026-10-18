@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {addPlayer,createWorld,parkingAction,step} from '../shared/game';
+import {addPlayer,createWorld,enterMinigame,parkingAction,step} from '../shared/game';
 import {BUILDINGS,ROADS,STATION_VENUES,terrainHeight} from '../shared/map';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
@@ -52,5 +52,26 @@ test('every station supports Park It and Cut the queue in the authoritative simu
     Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,yaw:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0});
     assert.equal(parkingAction(world,'p','queue'),true,`${station.id}: queue join`);
     assert.equal(parkingAction(world,'p','start'),true,`${station.id}: queue start`);
+  }
+});
+
+test('the mini-game menu uses the current station, including its queue approach',()=>{
+  for(const station of STATIONS){
+    const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
+    for(const game of ['park','queue'] as const){
+      const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
+      player.delivery.level=3;world.entities=[car];world.pickups=[];
+      Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,supportId:'ground',autopilot:true});
+      assert.equal(enterMinigame(world,'p',game),true,`${station.id}: ${game}`);
+      assert.equal(world.parking.rounds[0].lotId,lot.id);
+      assert.deepEqual({x:car.x,z:car.z},{x:lot.approach.x,z:lot.approach.z});
+      assert.equal(car.autopilot,false);
+    }
+    const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
+    player.delivery.level=3;world.entities=[car];world.pickups=[];
+    Object.assign(car,{x:lot.area.x,z:lot.area.z-10,y:0,supportId:'ground'});
+    assert.equal(enterMinigame(world,'p','queue'),true,`${station.id}: move to local approach`);
+    assert.equal(world.parking.rounds[0].lotId,lot.id);
+    assert.ok(Math.abs(car.x-lot.approach.x)<=lot.approach.width/2&&Math.abs(car.z-lot.approach.z)<=lot.approach.length/2);
   }
 });
