@@ -2,12 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, enterMinigame, makeEntity, NEUTRAL, parkingAction, setDestination, step, travelDome, type World } from '../shared/game';
 import { updateFerry } from '../shared/ferry';
-import { terrainHeight } from '../shared/map';
+import { HIGHWAYS, terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { newPolice, updatePolice } from '../shared/police';
 import { hasRockets } from '../shared/upgrades';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { parseMessage } from '../worker/protocol';
+import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
+import { HIGHWAY_ROUTE_IDS, ROUTES } from '../shared/traffic';
 
 function drivingWorld(){
   const world=createWorld(),player=addPlayer(world,'driver','Driver');
@@ -18,6 +20,61 @@ function drivingWorld(){
 function simulate(world:World,until:()=>boolean,seconds=120){
   for(let i=0;i<seconds*20&&!until();i++)step(world,new Map(),.05);
 }
+
+function peninsulaPavementEdge(point:{x:number;z:number}):number{
+  let edge=Infinity;
+  for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
+    const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z;
+    const t=Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.z-a.z)*dz)/(dx*dx+dz*dz)));
+    edge=Math.min(edge,Math.hypot(point.x-a.x-t*dx,point.z-a.z-t*dz)-(highway.width??32)/2);
+  }
+  for(const street of PENINSULA_CROSS_STREETS)
+    edge=Math.min(edge,Math.max(Math.abs(point.x-street.x)-street.w/2,Math.abs(point.z-street.z)-street.d/2));
+  return edge;
+}
+
+test('map pins reach either Peninsula alternative in both directions after the level two unlock',()=>{
+  for(const road of ALTERNATE_ROADS)for(const direction of [0,1] as const){
+    const {world,player,car}=drivingWorld();
+    const route=ROUTES[HIGHWAY_ROUTE_IDS[direction]];
+    const reference=direction===0?{x:-1124,z:2347}:{x:60,z:6821};
+    const index=route.findIndex(point=>Math.hypot(point.x-reference.x,point.z-reference.z)<10);
+    assert.ok(index>=0,`${road.id}: starting lane`);
+    const a=route[index],b=route[(index+1)%route.length];
+    Object.assign(car,{x:a.x+(b.x-a.x)*.25,z:a.z+(b.z-a.z)*.25,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z))});
+    const target=road.points.find(point=>point.z>4500)!;
+    player.delivery.level=1;
+    assert.equal(setDestination(world,'driver',target),false,`${road.id}: locked at level one`);
+    player.delivery.level=2;
+    assert.equal(setDestination(world,'driver',target),true,`${road.id}: route from ${direction===0?'north':'south'}`);
+    for(let i=0;i<6000&&car.autopilot;i++){
+      step(world,new Map(),.05);
+      if(i%10!==0)continue;
+      assert.ok(peninsulaPavementEdge(car)<0,`${road.id}: self-driving stays on pavement`);
+    }
+    assert.equal(car.navigation?.status,'arrived',`${road.id}: destination reached`);
+    assert.ok(Math.hypot(car.x-target.x,car.z-target.z)<12,road.id);
+    assert.equal(car.health,100,`${road.id}: did not hit a building`);
+  }
+});
+
+test('nearby route changes use a shared cross street in either heading',()=>{
+  const main={x:-734,z:4503},alternatives=[{x:-1023,z:4553},{x:-850,z:4553}];
+  for(const yaw of [0,Math.PI])for(const alternative of alternatives)for(const back of [false,true]){
+    const {world,player,car}=drivingWorld(),start=back?alternative:main,target=back?main:alternative;
+    Object.assign(car,{...start,yaw});player.delivery.level=2;
+    assert.equal(setDestination(world,'driver',target),true,`${yaw}: ${JSON.stringify(start)} to ${JSON.stringify(target)}`);
+    assert.ok(car.navigation!.path.some(point=>PENINSULA_CROSS_STREETS.some(street=>Math.abs(point.z-street.z)<4)),
+      'the route uses a local junction');
+    for(let i=0;i<3600&&car.autopilot;i++){
+      step(world,new Map(),.05);
+      if(i%10===0)assert.ok(peninsulaPavementEdge(car)<0,'the car stays on pavement');
+    }
+    assert.equal(car.navigation?.status,'arrived');
+    assert.ok(Math.hypot(car.x-target.x,car.z-target.z)<12);
+    assert.equal(car.health,100);
+  }
+});
 
 test('every Tesla can follow a chosen connected destination through city turns',()=>{
   for(const kind of VEHICLE_IDS.filter(id=>VEHICLES[id].brand==='Tesla')){

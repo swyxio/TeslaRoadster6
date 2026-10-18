@@ -1,5 +1,6 @@
 /** Compressed Bay geography. X east, Z south, meters in game space. */
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
+import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
 import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
@@ -21,7 +22,7 @@ export function rampHeight(x:number,z:number):number|null {
   return STUNT_RAMP.height*(x-STUNT_RAMP.start)/(STUNT_RAMP.end-STUNT_RAMP.start);
 }
 /** Fictional playground: the southward projection is the island ferry apron. */
-export const ROCKET_ISLAND:Region={id:'rocket-island',name:'Rocket Island',color:0xb8c7a3,points:polygon([
+export const ROCKET_ISLAND:Region={id:'rocket-island',name:'North Bay Playground',color:0xb8c7a3,points:polygon([
   [-500,-1800],[-450,-2050],[-300,-2180],[600,-2180],[850,-2050],[900,-1700],
   [800,-1300],[600,-1140],[250,-1100],[20,-1100],[20,-1060],[-20,-1060],
   [-20,-1100],[-150,-1100],[-400,-1250],
@@ -57,10 +58,9 @@ export const PARKS=[
 export const LAKE_MERRITT={x:480,z:150,rx:18,rz:21,islands:[{x:474,z:145,r:4},{x:484,z:148,r:3.5},{x:480,z:157,r:3}]} as const;
 // A fictional sightseeing easter egg, not a depiction of any real person's vessel.
 export const MYSTERY_YACHT={x:210,z:-115,name:'Larry’s Imaginary Yacht'} as const;
-// Fictional monuments on flat Marin land, clear of the Golden Gate approach.
-// Their bases are shared collision buildings; the sculptures above are decorative.
+// A fictional monument on flat Marin land, clear of the Golden Gate approach.
+// Its base is a shared collision building; the sculpture above is decorative.
 export const TESLAND_MONUMENTS=[
- {id:'colossus',name:'Elon Colossus',x:-205,z:-445,w:22,d:22,h:12},
  {id:'first-delivery',name:'First Delivery Monument',x:-185,z:-510,w:14,d:14,h:6},
 ] as const;
 // A fictional 2050 expansion near the compressed Fremont/I-880 corridor.
@@ -80,7 +80,7 @@ export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   return inside;
 }
 export function isLand(x:number,z:number):boolean{return REGIONS.some(r=>insidePolygon(x,z,r.points));}
-/** Rocket Island has a server-side safety boundary at any altitude. */
+/** The playground has a server-side safety boundary at any altitude. */
 export function isRocketIsland(x:number,z:number):boolean{return insidePolygon(x,z,ROCKET_ISLAND.points);}
 export function isBridge(x:number,z:number):boolean{return BRIDGES.some(b=>b.axis==='x'?x>=b.start&&x<=b.end&&Math.abs(z-b.center)<=b.width/2:z>=b.start&&z<=b.end&&Math.abs(x-b.center)<=b.width/2);}
 export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridge(x,z);}
@@ -228,12 +228,14 @@ for(let i=0;i<SHORT_TRACK.length;i++){
 ROADS.push(
  {x:0,z:-1200,w:24,d:280,axis:'z',kind:'island'},
  {x:0,z:-225,w:24,d:60,axis:'z'},
+ ...PENINSULA_CROSS_STREETS,
 );
 
 /** Distances and shorelines are game-space approximations, not navigation. */
-export const HIGHWAYS:{id:string;name:string;points:MapPoint[]}[]=[
+export const HIGHWAYS:{id:string;name:string;width?:number;points:MapPoint[]}[]=[
  {id:'peninsula',name:'US 101',points:BAY_HIGHWAY_TRACES.peninsula.map(([x,z])=>({x,z}))},
  {id:'east-bay',name:'I-880',points:BAY_HIGHWAY_TRACES['east-bay'].map(([x,z])=>({x,z}))},
+ ...ALTERNATE_ROADS,
 ];
 // Shared route is closed implicitly: its final point joins the first on SF streets.
 export const BAY_CIRCUIT:MapPoint[]=[
@@ -269,7 +271,7 @@ export const LANDMARKS=[
 export const AIRPORT_RUNWAY={x:-660,z:1200,w:20,d:110} as const;
 for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z;
- ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
 export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport';stationId?:string};

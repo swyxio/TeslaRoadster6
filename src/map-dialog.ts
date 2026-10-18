@@ -10,7 +10,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   dialog.setAttribute('aria-labelledby', 'map-lightbox-title');
   dialog.innerHTML = `
     <header class="map-lightbox-header"><div><span>EXPLORE THE BAY</span><h2 id="map-lightbox-title">Where to?</h2></div><button type="button" class="map-close" aria-label="Close map">✕</button></header>
-    <p class="map-lightbox-help" id="map-lightbox-help">Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. The car stops at a connected road up to 100 m from your pin; locked or disconnected areas may be unavailable.</p>
+    <p class="map-lightbox-help" id="map-lightbox-help">Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. Shaded areas unlock as you play. The car stops at a connected road up to 100 m from your pin.</p>
     <div class="map-lightbox-view"><canvas class="map-lightbox-canvas" tabindex="0" role="application" aria-label="Bay map. Use arrow keys to move the destination pin; press Enter to drive there." aria-describedby="map-lightbox-help">Interactive map of the Bay.</canvas>
       <div class="map-lightbox-zoom" aria-label="Map controls"><button type="button" data-map-zoom="in" aria-label="Zoom in">+</button><button type="button" data-map-zoom="out" aria-label="Zoom out">−</button><button type="button" data-map-center aria-label="Center on your car">◎</button></div>
       <div class="map-lightbox-legend"><span><i></i> YOU</span><span><i></i> DESTINATION</span><span><i></i> LOCKED</span></div>
@@ -50,7 +50,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     c.clearRect(0, 0, width, height); c.fillStyle = '#335b67'; c.fillRect(0, 0, width, height);
     for (const region of REGIONS) {
       c.beginPath(); region.points.forEach((point, i) => { const p = screen(point); if (i) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y); });
-      c.closePath(); c.fillStyle = region.id === 'marin' || region.id === 'yerba' ? '#829a81' : '#c4c1ab'; c.fill();
+      c.closePath(); c.fillStyle = region.id === 'marin' || region.id === 'yerba' || region.id === 'rocket-island' ? '#829a81' : '#c4c1ab'; c.fill();
     }
     c.fillStyle = '#9eaf91';
     for (const park of PARKS) { const p = screen(park); c.fillRect(p.x - park.w * scale / 2, p.y - park.d * scale / 2, park.w * scale, park.d * scale); }
@@ -61,8 +61,8 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       if (p.x + radius < 0 || p.x - radius > width || p.y + radius < 0 || p.y - radius > height) continue;
       c.save(); c.translate(p.x, p.y); c.rotate(-(road.angle ?? 0)); c.fillRect(-w / 2, -h / 2, w, h); c.restore();
     }
-    c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#ead5ac'; c.lineWidth = Math.max(2, 32 * scale);
-    for (const highway of HIGHWAYS) { c.beginPath(); highway.points.forEach((point, i) => { const p = screen(point); if (i) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y); }); c.stroke(); }
+    c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#ead5ac';
+    for (const highway of HIGHWAYS) { c.lineWidth = Math.max(2, (highway.width ?? 32) * scale); c.beginPath(); highway.points.forEach((point, i) => { const p = screen(point); if (i) c.lineTo(p.x, p.y); else c.moveTo(p.x, p.y); }); c.stroke(); }
     c.strokeStyle = '#e5d4b1'; c.lineWidth = Math.max(2, 24 * scale);
     for (const bridge of BRIDGES) {
       const a = bridge.axis === 'x' ? screen({ x: bridge.start, z: bridge.center }) : screen({ x: bridge.center, z: bridge.start });
@@ -75,23 +75,60 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       const p = screen({x:(jump.start+jump.end)/2,z:jump.z});
       c.fillRect(p.x-(jump.end-jump.start)*scale/2,p.y-jump.width*scale/2,(jump.end-jump.start)*scale,jump.width*scale);
     }
-    // Match the minimap's unlocked-world masking without moving the shared geometry.
-    c.fillStyle = '#193b48e8';
+    // Keep locked regions subdued while retaining their coastline silhouettes.
+    c.fillStyle = '#193b48b8';
     for (let y = 0; y < height; y += 10) for (let x = 0; x < width; x += 10) if (!visible(world(x + 5, y + 5))) c.fillRect(x, y, 10, 10);
+    // Label actual shared routes in the part of the map the player can reach.
+    if (scale > .06) {
+      const placed: { left: number; top: number; right: number; bottom: number }[] = [];
+      const playerScreen = screen(player);
+      c.font = '700 10px system-ui'; c.textBaseline = 'middle';
+      for (const highway of HIGHWAYS) {
+        const textWidth = c.measureText(highway.name).width;
+        const labelBox = (point: MapPoint) => {
+          const p = screen(point);
+          return { left: p.x + 4, top: p.y - 19, right: p.x + 14 + textWidth, bottom: p.y - 3 };
+        };
+        const candidates: MapPoint[] = [];
+        for (let i = 1; i < highway.points.length; i++) {
+          const a = highway.points[i - 1], b = highway.points[i];
+          candidates.push(a, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+        }
+        const onScreen = candidates.filter(point => {
+          if (!visible(point)) return false;
+          const p = screen(point);
+          return p.x > 20 && p.x + textWidth + 14 < width - 80 && p.y > 30 && p.y < height - 30;
+        });
+        onScreen.sort((a, b) => {
+          const pa = screen(a), pb = screen(b);
+          return Math.hypot(pa.x - width / 2, pa.y - height / 2) - Math.hypot(pb.x - width / 2, pb.y - height / 2);
+        });
+        const point = onScreen.find(candidate => {
+          const box = labelBox(candidate);
+          const clearPlayer = playerScreen.x < box.left - 8 || playerScreen.x > box.right + 8 || playerScreen.y < box.top - 8 || playerScreen.y > box.bottom + 8;
+          return clearPlayer && placed.every(other => box.right + 6 < other.left || box.left - 6 > other.right || box.bottom + 6 < other.top || box.top - 6 > other.bottom);
+        });
+        if (!point) continue;
+        const p = screen(point);
+        c.fillStyle = '#1d3b3ae8'; c.fillRect(p.x + 4, p.y - 19, textWidth + 10, 16);
+        c.fillStyle = '#fff5d9'; c.fillText(highway.name, p.x + 9, p.y - 11);
+        placed.push(labelBox(point));
+      }
+    }
     c.font = '700 11px system-ui'; c.textBaseline = 'middle';
-    const labels = [{ name: 'SAN FRANCISCO', x: -180, z: 0 }, { name: 'OAKLAND', x: 450, z: -80 }, { name: 'ROCKET ISLAND', x: 150, z: -1750 }, ...DISTRICTS.map(d => ({ name: d.name.toUpperCase(), x: d.x, z: d.z }))];
+    const labels = [{ name: 'SAN FRANCISCO', x: -180, z: 0 }, { name: 'MARIN HEADLANDS', x: -310, z: -475 }, { name: 'OAKLAND', x: 450, z: -80 }, { name: 'NORTH BAY PLAYGROUND', x: 150, z: -1750 }, ...DISTRICTS.map(d => ({ name: d.name.toUpperCase(), x: d.x, z: d.z }))];
     for (const label of labels) {
       if (!visible(label)) continue;
       const p = screen(label); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#173a40'; c.fillText(label.name, p.x + 7, p.y - 7);
     }
-    if (scale > .13) for (const place of LANDMARKS) {
+    if (scale > .24) for (const place of LANDMARKS) {
       if (!visible(place.arrival)) continue;
       const p = screen(place.arrival); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#fff1c4'; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#173a40'; c.font = '600 10px system-ui'; c.fillText(place.name, p.x + 6, p.y + 5);
     }
-    if (scale > .13) for (const place of TESLAND_MONUMENTS) {
+    if (scale > .24) for (const place of TESLAND_MONUMENTS) {
       if (!visible(place)) continue;
       const p = screen(place); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#ffd080'; c.beginPath(); c.arc(p.x, p.y, 4, 0, Math.PI * 2); c.fill();

@@ -1,8 +1,10 @@
 import * as T from 'three';
 import { STATIONS } from '../shared/stations';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
+import { buildNorthBayScenery } from './north-bay-scenery';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
@@ -95,11 +97,11 @@ export function buildBay(scene:T.Scene) {
   batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
   // Adjacent rotated rectangles leave outside wedges at bends. Round joins
   // follow the shared highway vertices and sit just below the road surfaces.
-  const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points).map(p=>[`${p.x},${p.z}`,p])).values()];
+  const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points.map(p=>({...p,radius:(h.width??32)/2}))).map(p=>[`${p.x},${p.z},${p.radius}`,p])).values()];
   if(joins.length){
     const geometry=new T.CircleGeometry(1,32);geometry.rotateX(-Math.PI/2);
     const mesh=new T.InstancedMesh(geometry,material(0x424e50),joins.length),matrix=new T.Matrix4();
-    joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(16,1,16).setPosition(p.x,.13,p.z)));
+    joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(p.radius,1,p.radius).setPosition(p.x,.13,p.z)));
     mesh.computeBoundingSphere();scene.add(mesh);
   }
   // The oval surface and its paint come from shared bank geometry; the short
@@ -135,6 +137,11 @@ export function buildBay(scene:T.Scene) {
     if(r.axis==='z'&&Math.abs(r.z%60)>14)stripes.push({x:r.x,y:.14,z:r.z,w:.16,h:.018,d:4});
     if(r.axis==='x'&&Math.abs(r.x%60)>14)stripes.push({x:r.x,y:.145,z:r.z,w:4,h:.018,d:.16});
   }
+  // These local streets span several highway lanes, so the city-grid pass
+  // above skips their long rectangles. Mark their shared centerlines as well.
+  for(const street of PENINSULA_CROSS_STREETS)
+    for(let x=street.x-street.w/2+6;x<street.x+street.w/2-4;x+=14)
+      stripes.push({x,y:.145,z:street.z,w:7,h:.018,d:.16});
   batches(0xe7d8aa,stripes);
   // Paint follows each authoritative road rectangle. No separate decorative
   // asphalt, walls or ramps can suggest a surface the simulation lacks.
@@ -347,6 +354,7 @@ export function buildBay(scene:T.Scene) {
   batches(0x78674f,trees.map(p=>({...p,y:1.4,w:.55,h:2.8,d:.55})));
   const crown=new T.InstancedMesh(new T.IcosahedronGeometry(2.7,1),material(0x678764),trees.length),m=new T.Matrix4();
   trees.forEach((p,i)=>crown.setMatrixAt(i,m.makeTranslation(p.x,4,p.z)));crown.computeBoundingSphere();scene.add(crown);
+  buildNorthBayScenery(scene);
   for(const bridge of BRIDGES)drawBridge(bridge);
   function drawBridge(b:Bridge){
     const color=b.id==='golden-gate'?0xc2563d:0x99a7a5;

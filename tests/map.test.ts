@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
 import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,TESLAND_MONUMENTS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {PENINSULA_CROSS_STREETS} from '../shared/alternate-roads';
 import {STATIONS} from '../shared/stations';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {fitsParkingStall} from '../shared/parking';
@@ -147,6 +148,22 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
     const distance=Math.hypot(Math.max(0,Math.abs(x-area.x)-area.w/2),Math.max(0,Math.abs(z-area.z)-area.d/2));
     assert.ok(distance>=largestRadius,`${station.id}: traffic route near lot`);
    }
+  }
+ }
+});
+
+test('Peninsula cross streets are supported, clear and connect all three corridors',()=>{
+ for(const street of PENINSULA_CROSS_STREETS){
+  assert.ok(ROADS.includes(street));
+  for(let x=street.x-street.w/2;x<=street.x+street.w/2;x+=10)for(const offset of [-street.d/2,0,street.d/2])
+   assert.equal(terrainHeight(x,street.z+offset),0,`unsupported at ${x},${street.z+offset}`);
+  for(const b of BUILDINGS)assert.equal(contact({...street,yaw:0},{...b,yaw:0}),null,`cross street overlaps building ${b.x},${b.z}`);
+  for(const highway of HIGHWAYS.filter(h=>['peninsula','i-280','el-camino-real'].includes(h.id))){
+   assert.ok(highway.points.slice(1).some((b,i)=>{
+    const a=highway.points[i];if(street.z<Math.min(a.z,b.z)||street.z>Math.max(a.z,b.z))return false;
+    const x=a.x+(b.x-a.x)*(street.z-a.z)/(b.z-a.z);
+    return Math.abs(x-street.x)<street.w/2;
+   }),`${highway.id} misses the cross street`);
   }
  }
 });

@@ -73,6 +73,10 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
   seedHighwayTraffic(first,makeEntity);seedHighwayTraffic(second,makeEntity);
   assert.equal(first.entities.length,11);
   assert.deepEqual(first,second);
+  for(let i=0;i<HIGHWAY_ROUTE_IDS.length;i+=2){
+    assert.ok(first.entities.some(car=>car.routeId===HIGHWAY_ROUTE_IDS[i]||car.routeId===HIGHWAY_ROUTE_IDS[i+1]),
+      `ambient traffic uses route pair ${i/2}`);
+  }
   for(const world of [first,second]){
     const occupied=world.entities[0],player=addPlayer(world,'p','Player');
     world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
