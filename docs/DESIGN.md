@@ -6,13 +6,15 @@ Approved: stylized compressed Bay Area; driving/stunts first; real Tesla Superch
 
 ## Thirty-second loop
 
-Join → start seated in a Roadster → accelerate → jump above a block → flip → land → find a charger → do it again with a friend. No account, tutorial wall, garage purchase, grind, or mandatory mission. Every participant starts with a usable vehicle and100 air. Every researched family has parked and autonomous traffic examples. NPCs can be taken while nearby; human-occupied cars cannot be stolen. Fleet selection offers Teslas directly when stopped; other families must be taken from the street.
+Join → start seated in a Roadster → accelerate → jump above a block → flip → land → find a charger → do it again with a friend. No account or garage purchase is required; San Francisco and the Rocket Dome are immediately playable. Deliveries open more of the Bay during the session. Every participant starts with a usable vehicle and 100 air. Every researched family has parked and autonomous traffic examples. NPCs can be taken while nearby; human-occupied cars cannot be stolen. Fleet selection offers Teslas directly when stopped; other families must be taken from the street.
 
 The simulation prioritizes arcade legibility over realism. Ground friction slows an unattended car. A rocket-equipped vehicle shares one fictional tank for boost, jumps, forward flight, hover and rolls. Level 1 has twice the former capacity: jumping uses 12%, a flip 4.5%, boost 7% per second, hover 9% per second and forward thrust 2% per second. Tank upgrades at fictional shops double capacity at each level through Level 5. Air percentages are relative to the installed tank. W/S provide forward/reverse thrust in the air; hover holds altitude without cancelling horizontal motion. Air jumps and free-air hover are arcade fiction. Fictional underbody fans adhere rocket-equipped vehicles to the purpose-built loop without consuming compressed air and cannot hold it in free air. A depleted tank never prevents ordinary driving or falling. Station refills take about 3.6 seconds from empty, only when grounded and stopped within 9 m. Pickups provide instant full air or repair with 20 second respawn. Condition is clamped to 5 rather than introducing death before its design exists.
 
 ## Delivery loop
 
 Follow the gold marker to a notable restaurant, stop to collect an order, then deliver it to a fictional address. A fast pickup pays an immediate bonus. A separate estimate starts after pickup; beating it adds a delivery bonus and arriving late reduces the fare. The HUD shows current cash and active play time, and Scores compares the current room. Unattended time pauses after a short grace period. Driving and stunts remain available without completing orders.
+
+Players start at level zero. Session delivery count and lifetime earned rewards open Oakland and Berkeley, then the Peninsula and East Bay, then San Jose; spendable cash and fines do not reduce progress. The overview expands and destinations include unlocked landmarks as the world opens. The shared simulation applies the same boundaries to ground and flying drivers. A room participant's unlocks are their own, and progress resets with their game session. The HUD shows the next milestone and explains a blocked crossing. This follows the clear, pinned milestone pattern of [Forza Horizon's adventure progression](https://forza.net/news/forza-horizon-5-first-drive), adapted to a small session-only sandbox.
 
 Rocket flight can shorten a run but nearby police may spot it, pursue and slow the car before issuing a severity- and repeat-offense-based citation. Orders for rocket-equipped vehicles sometimes target a physical rooftop, and four session achievements reward crossing the Bay without landing, rooftop play and deliveries. Escaping their range or accepting a ticket ends a chase. All cash, timing and police behavior run in the shared simulation. Restaurants have no game affiliation, the geography and customers are fictionalized, and cash is not real money. See [DELIVERY.md](DELIVERY.md).
 
@@ -52,7 +54,7 @@ Snapshots always retain players and occupied cars, plus nearby ambient entities;
 2. Vehicle feel: tune camera, air time, collisions and refill loop from playtests.
 3. Improve district art while preserving registry model pivots and collision volumes.
 4. Playful destinations: shared stunt rings, short time trials, small ramps using authoritative terrain geometry.
-5. Only then opt-in combat/respawning or progression.
+5. Only then opt-in combat/respawning or persistent progression.
 
 Avoid adding inventories, persistent currencies, matchmaking services, chat moderation burdens or a broad asset pipeline before the delivery and driving loops are satisfying.
 

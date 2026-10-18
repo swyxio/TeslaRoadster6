@@ -5,8 +5,9 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, FERRY_DOCKS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
+import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
+import { createProgressionGates } from './progression-gates';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
@@ -19,6 +20,7 @@ import { cockpitPose } from './camera';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
+import { createSkyCurrents } from './sky-currents';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -44,7 +46,9 @@ export class GameScene {
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
   private objective=new T.Group();
+  private progressionGates=createProgressionGates();
   private dome=createRocketDome();
+  private skyCurrents=createSkyCurrents();
   private ballPosition=new T.Vector3();
   private ballReady=false;
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
@@ -105,6 +109,14 @@ export class GameScene {
       const x=side*6.25;
       box(this.ferry,x,.095,0,1.25,.03,34,0x75b6ac);
       for(const z of [-13,-6,1,8,15])box(this.ferry,x,.12,z,1,.025,.2,0xf4ead0);
+      // Painted foot spaces remain within the shared deck's existing walk lanes.
+      for(const z of [-12,-6,6,12]){
+        for(const edge of [-1,1]){
+          box(this.ferry,x+edge*.43,.14,z,.07,.025,1.5,0xf4ead0);
+          box(this.ferry,x,.14,z+edge*.75,.9,.025,.07,0xf4ead0);
+          box(this.ferry,x+edge*.16,.14,z,.12,.025,.38,0x173e3d);
+        }
+      }
       const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;
       const ctx=canvas.getContext('2d')!;ctx.fillStyle='#173e3d';ctx.font='bold 42px system-ui';ctx.textAlign='center';ctx.fillText('WALK',128,47);
       const mark=new T.Mesh(new T.PlaneGeometry(2.5,.65),new T.MeshBasicMaterial({map:new T.CanvasTexture(canvas),transparent:true,depthWrite:false,side:T.DoubleSide}));
@@ -148,7 +160,9 @@ export class GameScene {
       ring.rotation.x=-Math.PI/2;ring.position.set(course.start.x,.2,course.start.z);scene.add(ring);
       const label=this.label(course.name.toUpperCase());label.position.set(course.start.x,9,course.start.z);scene.add(label);
     }
+    for(const gate of Object.values(this.progressionGates))scene.add(gate);
     scene.add(this.dome.group);
+    scene.add(this.skyCurrents.group);
     const signal=BAY_BRIDGE_SIGNAL;
     // The meter is visual only: the same shared fixture controls NPCs and AVs.
     box(scene,signal.stopX,.06,signal.centerZ+signal.halfWidth/2,.35,.1,signal.halfWidth,0xf7f1db);
@@ -181,6 +195,8 @@ export class GameScene {
     });
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
+    for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }
   private label(text: string) {
@@ -231,7 +247,10 @@ export class GameScene {
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
+    for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
+    this.skyCurrents.group.visible=!controlled?.inDome;
+    this.skyCurrents.update(world.time);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
@@ -327,7 +346,7 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
 }

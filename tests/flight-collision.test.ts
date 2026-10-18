@@ -46,3 +46,62 @@ test('sustained flight collides with an opposing car on supported Rocket Island 
   for (let tick = 0; tick < 20 && opponent.health === 100; tick++) step(world, inputs, dt);
   assert.ok(opponent.health < 100, `the opposing car was missed: flight z=${car.z}, opponent z=${opponent.z}`);
 });
+
+test('a head-on airborne collision keeps both vehicles within the flight speed limit', () => {
+  const world = createWorld();
+  const light = makeEntity('light', 'waymo-firefly', 0, -1500);
+  const heavy = makeEntity('heavy', 'tesla-semi', 0, -1488.4);
+  Object.assign(light, { y: 1.5, yaw: Math.PI, supportId: null, speed: 75, vz: 75 });
+  Object.assign(heavy, { y: 1.5, yaw: 0, supportId: null, speed: 72, vz: -72 });
+  world.entities = [light, heavy];
+  world.players = [];
+  world.pickups = [];
+  // The initial separation puts the collision in the last physics substep.
+  step(world, new Map(), dt);
+  assert.ok(light.health < 100 && heavy.health < 100, 'the vehicles must actually collide');
+  assert.ok(light.vz < 0, 'the heavier vehicle rebounds the light vehicle');
+  for (const car of [light, heavy]) {
+    const speed = Math.hypot(car.vx, car.vy, car.vz);
+    assert.ok(speed <= 80.000001, `${car.id} exceeded the flight speed limit: ${speed} m/s`);
+  }
+});
+
+test('damage damping depends on elapsed time, not other vehicles changing substeps', () => {
+  const run = (health: number, fastNeighbor: boolean) => {
+    const world = createWorld();
+    const car = makeEntity('damaged', 'roadster', 0, -1500);
+    Object.assign(car, { speed: 10, health });
+    world.entities = [car];
+    world.players = [];
+    world.pickups = [];
+    if (fastNeighbor) {
+      const neighbor = makeEntity('distant-flight', 'roadster', 0, -1800);
+      Object.assign(neighbor, { y: 80, supportId: null, vx: 80 });
+      world.entities.push(neighbor);
+    }
+    step(world, new Map(), dt);
+    assert.equal(car.supportId, 'ground');
+    return car.speed;
+  };
+  const healthy = run(100, false);
+  const damaged = run(19, false);
+  const damagedWithFastNeighbor = run(19, true);
+  assert.ok(Math.abs(damaged - healthy * .995) < 1e-9, 'the 50 ms reference damping is preserved');
+  assert.ok(Math.abs(damaged - damagedWithFastNeighbor) < 1e-9, 'a distant fast vehicle must not add braking');
+});
+
+test('a dome-supported vehicle cannot knock an airborne car beyond the flight speed limit', () => {
+  const world = createWorld();
+  const light = makeEntity('light', 'waymo-firefly', 300, -861.6);
+  const heavy = makeEntity('heavy', 'tesla-semi', 300, -850, 'heavy-driver');
+  Object.assign(light, { y: 1.5, yaw: Math.PI, inDome: true, supportId: null, speed: 75, vz: 75 });
+  Object.assign(heavy, { inDome: true, supportId: 'dome', domeS: 20, speed: 72, upgrades: { ...heavy.upgrades, rocket: true } });
+  world.entities = [light, heavy];
+  world.players = [];
+  world.pickups = [];
+  step(world, new Map([['heavy-driver', { ...NEUTRAL, throttle: 1, boost: true }]]), dt);
+  assert.ok(light.health < 100 && heavy.health < 100, 'the vehicles must actually collide in the dome');
+  assert.ok(light.vz < 0, 'the airborne car rebounds');
+  const speed = Math.hypot(light.vx, light.vy, light.vz);
+  assert.ok(speed <= 80.000001, `the dome collision exceeded the flight speed limit: ${speed} m/s`);
+});

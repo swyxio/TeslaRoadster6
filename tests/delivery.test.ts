@@ -105,12 +105,12 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
   assert.ok(player.achievements.unlocked.includes('roof-rider'));assert.ok(player.achievements.unlocked.includes('sky-delivery'));
 });
 
-test('the next eligible Roadster order is rooftop; ordinary cars receive ground orders',()=>{
+test('eligible Roadster orders can be rooftop after Oakland unlock; ordinary cars receive ground orders',()=>{
   for(const kind of ['roadster','model-3'] as const){
-    const {world,player,car}=setup();car.kind=kind;
+    const {world,player,car}=setup();car.kind=kind;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
     const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
     Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world);
-    assert.equal(player.delivery.completed,1);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');
+    assert.equal(player.delivery.completed,7);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');
   }
 });
 

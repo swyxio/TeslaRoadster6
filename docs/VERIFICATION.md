@@ -2,6 +2,14 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island playground, charger lots and flight · protocol v17 before main integration · 2026-10-18 Pacific
+
+- `pnpm test` passed 253 tests and `pnpm build` passed; the Vite bundle retained its size warning (768.01 kB minified, 218.65 kB gzip). The local Wrangler health reported protocol v17 and capacity 64. Two-client room and global-chat integration passed, including replicated ferry/activity snapshots, kits, dome, forward flight, shop/OTA results and chat isolation. These were functional checks, not capacity or production evidence.
+- An 8-second same-host synthetic 64-client room smoke passed: at least 62 snapshots per client, p95 snapshot gap 163 ms and maximum per-recipient snapshot 136,398 bytes. A separate five-second same-process mixed-activity benchmark with six ferry passengers, four parking entrants, four racers, four dome players and four oval drivers passed: p95 simulation step 9.40 ms, p95 64-recipient snapshot batch 27.42 ms, maximum per-recipient snapshot 122,306 bytes. Neither measures peak traffic, sustained performance, WAN, physical-device rendering or production capacity.
+- Local Chrome portrait 390×844 touch emulation drove from 0 to 72 km/h, jumped to 4 m, opened Actions, reached SF · 16th Street and displayed fictional air refill and a Park It stall assignment. Landscape 844×390 touch emulation drove from 0 to 48 km/h, jumped to 4 m and opened Actions. A temporary passive pointer observer was removed after calibrating emulation; the Rocket pickup itself was not visually verified and no physical device was tested.
+- Independent automated review identified per-substep condition damping and uncapped collision impulses; both require fixes in the subsequent combined build. Browser testing identified a misleading unconditional parking request toast; a subsequent combined build corrects it.
+- Two clients used normal inputs from spawn: the observer saw the car board at 168.1 s, secured departure at 192.3 s, fixed-offset transit at 195.1 s, island arrival at 240.5 s and drive-off onto island ground at 248.1 s. Both sockets closed normally. This local Wrangler check does not verify physical devices or production.
+
 ## Island, chat and flight · protocol v16, before charger-lot changes · 2026-10-18 Pacific
 
 - At commit `a5d89db`, `pnpm test` passed 247/247 and `pnpm build` passed both typechecks and Vite. The main JavaScript was 767 kB (218 kB gzip); Vite reported its large-chunk warning.
@@ -21,6 +29,33 @@ These entries describe separate historical builds. Check the version and scope i
 
 - In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
 - This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
+
+## Chat quota test timing · 2026-10-18 Pacific
+
+- The production build for merge `843657f` failed in the existing global-chat quota test: its simulated one-hour reset was based on a timestamp taken before the tested quota bucket was constructed. The test now uses a timestamp taken immediately after construction, avoiding a race on loaded builders without changing the runtime limit.
+- On the latest controls integration, `pnpm test` passed 182 tests and `pnpm build` passed both TypeScript checks and the production build; Vite's existing large-chunk warning remains.
+- The subsequent production build `bb85cf4` deployed protocol v16 and served the locally built assets. Its two-client room integration passed, including sky-lane speed and refill. Two initial runs exposed a test setup assumption: either connection can occupy the Bay spawn; the test now moves the other car when needed and checks the actual launch position. This is not a load test.
+- After integrating Bay progression (protocol v17), `pnpm test` passed 191 tests, `pnpm build` passed, and the local two-client room integration again passed the sky-lane check. This is not a load test.
+
+## Gamepad and keyboard bindings · 2026-10-18 Pacific
+
+- After integrating sky currents, `pnpm test` passed 182 tests and `pnpm build` passed; the controls and network protocol were unchanged by this integration.
+
+- `pnpm test` passed 177 tests on rerun and `pnpm build` passed; one prior run failed an unrelated timing-sensitive global-chat test while the build was running concurrently. Vite's existing chunk-size warning remains. Unit tests cover simulated standard-controller analog steering, braking/reverse, flight, button edges, disconnect and safe resume, keyboard remapping, storage errors and touch independence. No physical controller was tested.
+- Chrome desktop: rebound forward from W to I, confirmed focus returned to its binding, and drove a solo Roadster to 82 km/h with I. Chrome emulation at 390×844 portrait and 844×390 landscape showed the scrollable settings dialog. Mobile interaction through the emulated browser targeted a different button, so touch activation and physical devices remain unverified.
+
+## Sky currents with flight controls and global chat · protocol v16 · 2026-10-18 Pacific
+
+- After integrating flight-control and tank upgrades, `pnpm test` passed 178 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. The sky tests additionally verify that the same air units refill tanks of different capacities.
+- Local Wrangler two-client room integration passed, including a double jump into City Glide and server-applied speed and air refill. Local global-chat and isolated restart integration also passed. These are functional checks, not concurrency or production-load tests.
+- Staging at commit `5851eca` returned protocol v16, served the locally built assets, and passed the two-client room integration, including sky-lane refill and acceleration. This is not a load test.
+- Chrome desktop solo reached City Glide with two timed E jumps, showing its speed and air indicator while police pursued. Chrome emulation at 390×844 portrait and 844×390 landscape showed the active lane indicator and updated touch controls. A temporary, removed local fixture placed the Roadster beside Transamerica: one E jump entered the thermal, rose to 19 m and refilled air. Thermal touch jumping was also independently checked before the flight-control integration below. No physical phone, subjective comfort or frame rate was tested.
+
+## Sky currents with global chat · before flight-control integration · protocol v14 · 2026-10-18 Pacific
+
+- After integrating the global-chat changes, `pnpm test` passed 168 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Shared simulation tests cover directional acceleration, free air, tank cap, all three thermal locations, jump reachability, vehicle eligibility, boundaries and determinism.
+- Local Wrangler two-client room integration observed a double jump enter City Glide and verified the server-applied speed and air refill in the second client's snapshots. Local global-chat and isolated restart integration also passed. These are functional checks, not a concurrency or production-load test.
+- Chrome desktop in the combined build reached City Glide by double jump and the car accelerated across the Bay without holding boost. A separate temporary local-only fixture placed the car by Transamerica: one jump entered the thermal, rose above the skyline and refilled the tank; the fixture was removed before the final build. Chrome 390×844 portrait emulation used the touch Jump control to enter that thermal, and 844×390 landscape and portrait emulation showed the combined sky-lane HUD and controls. Invalid room validation was visible, and the final local browser session reported no console errors. No physical phone, subjective comfort or frame rate was tested.
 
 ## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
 
@@ -297,3 +332,11 @@ After integrating the shop confirmation follow-up, 161 tests and `pnpm build` pa
 One additional local integration run timed out at the existing Tesla fleet-change assertion while Wrangler reloaded; a subsequent run passed. The preview integration also passed.
 
 After integrating main's global chat, 173 tests and `pnpm build` passed. Both the room and global-chat integrations passed against local Wrangler. Chrome portrait emulation showed the combined game and remote shop; no physical device was tested.
+
+## 2026-10-18 · Bay delivery progression and landmarks
+
+In the isolated release worktree, `pnpm test` passed 182 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. The local Wrangler two-client room integration passed on protocol v16. Shared-simulation tests exercise the delivery and earnings thresholds, per-player access, locked boundaries on the ground and in flight, collisions and takeover, and supported, collision-clear landmark arrivals. The integration is not a load test.
+
+In Chrome local solo play, the level-zero objective pointed into SF, attempting to cross the locked Bay Bridge showed the Oakland requirements and stopped the car, and the expanded map concealed locked regions. The desktop cockpit, invalid-room feedback, and 390×844 portrait and 844×390 landscape emulated layouts were inspected; a landscape HUD overlap and the starting heading were corrected. Keyboard driving moved the car. Emulated pointer actions did not reliably target the requested control in this browser session, so mobile touch behavior was not verified by this playtest. No physical device or complete manual drive through all unlocks was tested. Lake Merritt and its islands are decorative, not physical water.
+
+After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.

@@ -4,9 +4,26 @@ A small optional arcade loop: pick up from a real restaurant identity, drive or 
 
 ## How to play
 
-The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; any rocket-equipped vehicle can fly shortcuts. When a rocket-equipped vehicle finishes its first run and every third run thereafter, its next order goes to a flat rooftop: fly to the marked height, land, and stop near the center. The marker sits on the physical roof. Use a rocket pickup, visit a shop, or select the Roadster in Fleet if you changed to a non-flying car before finishing a rooftop order.
+The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; any rocket-equipped vehicle can fly shortcuts. After Oakland opens, some orders for rocket-equipped vehicles go to a flat rooftop: fly to the marked height, land, and stop near the center. Exploration orders to newly opened areas take priority over rooftop jobs. The marker sits on the physical roof. Use a rocket pickup, visit a shop, or select the Roadster in Fleet if you changed to a non-flying car before finishing a rooftop order.
 
 A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to zero. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
+
+## Unlocking the Bay
+
+Every driver starts at level 0 in San Francisco. Complete deliveries and earn rewards to unlock level 1 (Oakland and Berkeley), level 2 (the Peninsula and East Bay, including SFO, Stanford and Fremont), and level 3 (San Jose). The mission card shows the next delivery and lifetime-earnings targets. Lifetime earned includes pickup bonuses and delivery pay before purchases or tickets, so spending cash never closes a region. An attempted crossing reports the requirements. Boundaries apply to flying and driving alike; Marin, the separate Rocket Dome, Rocket Island and the SF parking playground remain available from the start. Milestones are per player and per game session, including in multiplayer. Restoring a chat identity does not restore game progress.
+
+| Level | Area | Completed deliveries | Total earned |
+| --- | --- | ---: | ---: |
+| 0 | San Francisco | 0 | $0 |
+| 1 | Oakland and Berkeley | 2 | $50 |
+| 2 | Peninsula and East Bay | 5 | $140 |
+| 3 | San Jose | 8 | $350 |
+
+For a ground-car starter sequence, the first five base fares are roughly $43, $36, $65, $42 and $29. On-time drops with partial pickup bonuses would earn about $95 after two and $258 after five; slow or missed bonuses can require additional runs. Long-distance orders pay more. These are examples, not a guaranteed reward.
+
+Orders only select locations already available to that driver. As the world opens, some runs go to the newly unlocked landmark destinations while other jobs stay local or use rooftops. These destinations are fictional deliveries to artistic, compressed versions of real places.
+
+For a rough sense of scale, the complete loop is about 19.9 game km: at a steady 60 km/h it would take about 20 minutes, or about 10 minutes at 120 km/h, before traffic, turns and stops. The 48-minute day cycles at 30 game-clock minutes per real minute; driving physics and order timers remain in simulation seconds. These are design estimates, not measured travel times or real Bay geography.
 
 The active clock counts input and three seconds after input, or a moving player AV. Both pickup and delivery clocks use the same rule. Standing idle eventually pauses both. An AV driving without input still counts; a parked AV does not. A browser or network stall can suspend simulation or disconnect the room; the clocks are not a competitive anti-cheat guarantee.
 
