@@ -3,7 +3,9 @@
 ## Service areas, stations and current main · preliminary integration · 2026-10-18 Pacific
 
 - On `fd8b787`, typechecking passed and 56 focused station, artwork, navigation, town-route, delivery-stop and progression tests passed together. These are preliminary checks before integrating the pending flight changes; they do not replace the final room, visual or performance checks.
-- Cloudflare preview build `e02929ab` failed one of 953 tests because the five-minute economy model tried to pick up a job while the new assignment search was still pending. The model now advances a single driver's bounded search on 20 Hz ticks before starting the assumed pickup time, rounded to a second. Its chart and article figures were regenerated; five focused economy and blog tests passed locally. The failed build was not deployed.
+- Cloudflare preview build `e02929ab` failed one of 953 tests because the five-minute economy model tried to pick up a job while the new assignment search was still pending. The model now advances a single driver's bounded search on 20 Hz ticks before starting the assumed pickup time, rounded to a second. Its chart and article figures were regenerated; five focused economy and blog tests passed locally. The failed build was not deployed. A new Cloudflare preview build, `5c42f8ee`, passed the full `pnpm ci` command on `c74c5e5` before the shop and flight integrations.
+
+- In one paired CI observation, `fd8b787` and base `1ca0eeb` both had a 66.7 ms p95 browser callback interval and a synthetic bunched-motion speed ratio of 0.936–1.151×. The single-client room simulated/wall ratio was 0.936× versus 0.933×; route endpoints differed 6.095 m. The three-logical-CPU virtual Mac had one-minute loads between roughly 7 and 20 across the runs. These results are descriptive, not a release verdict, physical-display measurement or proof that the bunched-motion target is met. Raw traces are in [Actions run 39166687414](https://github.com/swyxio/TeslaRoadster6/actions/runs/39166687414).
 
 ## Charger signs and Oakland spacing · current-main integration candidate · 2026-10-18 Pacific
 
@@ -12,6 +14,12 @@
 - A local staging fixture placed a guest near each Oakland lot without exercising normal progression. Chrome showed separate grounded pylons at Hegenberger and 2nd Street on desktop, including the Hegenberger pylon's reverse face. Keyboard driving moved the car into the Hegenberger lot, reaching 111 km/h; refill was covered by simulation tests, not observed in this drive.
 - Emulated 390×844 portrait and 844×390 landscape displayed the Hegenberger sign and controls. In portrait the mission panel obscured part of the sign from one close approach. An initial simulated touch did not drive. In a fresh local portrait guest, the Drive bounds were x=237–378, y=778–832 CSS pixels; sending their center directly through this Chrome session activated Boost instead. Accounting for the session's approximately 0.9 coordinate scale, a held touch set Drive's pressed state and accelerated the car from 1 to 100 km/h; release cleared the pressed state. A keyboard hold in the same guest also moved the car. This verifies portrait emulation, not physical touch; landscape touch still needs a check on the combined candidate.
 - The road planner ends about 35 game units from the Hegenberger lot, requiring a manual final approach. Charger auto-routing is separate. The final combined map needs its own station, routing, multiplayer and visual checks after integration.
+## Workshop redesign · 2026-10-18 Pacific
+
+- In an isolated local workshop fixture, Chrome showed the redesigned garage at desktop, emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape. The upgrade list scrolled to its final service item; the shop closed with Escape and reopened. The 3D car preview remained within its stage in the short landscape layout.
+- The tab strip worked with keyboard arrows and emulated touch. Guest purchases of paint, a decal and an air-tank upgrade updated the car, balance and confirmation; a remote-shop subscription could be enabled and cancelled. These were test-only guest purchases, not live wallet operations. No physical device was tested.
+- All 893 tests and `pnpm build` passed before integration with subsequent main-branch releases; the build retained its existing large-chunk warning.
+- After integrating main through PR #93, all 899 tests and the 0.0.28 build passed, with the same large-chunk warning.
 
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
