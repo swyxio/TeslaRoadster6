@@ -15,7 +15,7 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
@@ -92,9 +92,8 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    // Keep high-density desktop displays from multiplying the game's fill cost;
-    // HUD text remains native-resolution DOM and touch keeps its existing cap.
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer: fine)').matches?1:1.5));
+    // Bound GPU fill on desktop and touch. HUD text stays native-resolution DOM.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -310,10 +309,6 @@ export class GameScene {
       const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
       const blend=e.supportId==='ferry'?alpha:returningToAuthority||interpolatedRemote||localPredicted&&e.id===controlled?.id?1:alpha;
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
-      if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
-      }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
@@ -336,7 +331,7 @@ export class GameScene {
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+
     }
     // Keep reusable meshes, but hide pickups missing from the current snapshot
     // (including the empty presentation world while joining another room).
@@ -411,7 +406,18 @@ export class GameScene {
       this.camera.lookAt(this.focus);
     }
     this.predictedEntity=localPredicted?controlled?.id:undefined;
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    this.camera.updateMatrixWorld();
+    // Choose detail against the final camera pose, including reset/cockpit cuts.
+    for(const e of world.entities){
+      const mesh=this.entities.get(e.id)!;
+      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police);
+      if(detailed&&e.kind!=='person'){
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+      }
+      if(detailed&&e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+    }
+    for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){
     let last=performance.now();

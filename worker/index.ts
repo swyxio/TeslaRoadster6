@@ -7,6 +7,7 @@ import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 import { radioFeed } from './radio';
 import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
+import { VEHICLE_IDS } from '../shared/vehicles';
 
 export { GlobalChat };
 
@@ -35,7 +36,7 @@ export default {
 
 // Physics and player cash are session-only. The room's Mars fund is durable.
 export class GameRoom extends DurableObject<Env> {
-  private world = createWorld();
+  private world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
   private sessions = new Map<WebSocket, Session>();
   private inputs = new Map<string, Input>();
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -246,7 +247,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.sessions.size) {
       if (this.timer) clearInterval(this.timer);
       const fund=this.world.mars.fund;
-      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(); this.world.mars.fund=fund;
+      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length)); this.world.mars.fund=fund;
     }
   }
 }
