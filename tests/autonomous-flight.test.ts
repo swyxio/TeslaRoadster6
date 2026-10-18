@@ -181,6 +181,27 @@ test('both flight modes leave emergency braking in control when a large vehicle 
   }
 });
 
+test('a heavy Level 1 vehicle can launch either autonomous flight mode with a full tank',()=>{
+  for(const mode of ['jump','sky'] as const)for(const economy of [false,true]){
+    const {world,car,nav}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
+    Object.assign(car,{kind:'tesla-semi',speed:8,vx:8,tankLevel:1,air:100});
+    Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true,economy});
+    if(mode==='jump'){
+      const leader=makeEntity('leader','model-3',-287,0);leader.yaw=-Math.PI/2;world.entities.push(leader);
+    }
+    const reserve=economy?81:90;
+    car.air=reserve-.01;
+    assert.equal(autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight()).jump,false,`${mode} waits for its reserve`);
+    car.air=reserve;
+    assert.equal(autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight()).jump,true,`${mode} can launch once its reserve is available`);
+    car.air=100;
+    const result=flight(world,car,nav,mode);
+    assert.ok(result.jumps>=1,`${mode} starts shared physics`);
+    assert.equal(result.landed,true,`${mode} lands after the flight`);
+    assert.equal(car.health,100,`${mode} completes the sampled flight without damage`);
+  }
+});
+
 test('both flight modes reject a heavy jump that cannot clear the leader on descent',()=>{
   for(const mode of ['jump','sky'] as const){
     const {world,car}=fixture(-240,-177,-Math.PI/2,{x:-60,z:-177});
