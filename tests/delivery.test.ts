@@ -4,7 +4,7 @@ import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '.
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { updateAchievements } from '../shared/achievements';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
+import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from '../shared/map';
 import { DOME } from '../shared/dome';
 
 function setup(){
@@ -284,6 +284,24 @@ test('a chase expiring on the ramp returns the officer to a ground patrol',()=>{
     }
     assert.ok(expiredOnDeck,`pursuit did not expire on ramp from direction ${direction}`);
     assert.ok(rejoined,`cop failed to rejoin patrol from direction ${direction}: ${cop.x},${cop.z}, ${cop.supportId}`);
+  }
+});
+
+test('a patrol leaving either end of the ramp rejoins without hitting the deck',()=>{
+  for(const direction of [1,-1])for(const x of [OVERPASS.start+30,OVERPASS.deckStart+25,OVERPASS.deckEnd-25,OVERPASS.end-30]){
+    const {world,player,car}=setup();world.time=11;
+    Object.assign(car,{x:1000,z:1000,y:20,supportId:null});
+    const cop=makeEntity('police-recovery','model-3',x,OVERPASS.z);
+    Object.assign(cop,{y:overpassHeight(x,OVERPASS.z),supportId:'overpass',yaw:direction===1?-Math.PI/2:Math.PI/2,speed:10,npc:true,autopilot:true,police:newPolice()});
+    cop.police!.targetId=player.id;world.entities.push(cop);updatePolice(world,.05);
+    assert.equal(cop.police!.targetId,null,'the pursuit expired on the deck');
+    let rejoined=false;
+    for(let i=0;i<1200;i++){
+      Object.assign(car,{y:20,vy:0,supportId:null});tick(world);
+      if(cop.supportId==='ground'&&cop.autopilot&&cop.police!.path.length===0){rejoined=true;break;}
+    }
+    assert.ok(rejoined,`patrol failed to rejoin from ${x} toward ${direction}: ${cop.x},${cop.z}`);
+    assert.equal(cop.health,100,`patrol was damaged leaving ${x} toward ${direction}`);
   }
 });
 
