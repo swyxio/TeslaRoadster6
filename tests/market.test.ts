@@ -35,13 +35,32 @@ const buy=(assetId:string,actorId='buyer',operationId='buy',expectedRevision=1,l
   ({type:'buy',assetId,listingId,actorId,operationId,expectedRevision});
 const reason=(result:ReturnType<Fixture['run']>) => result.result.ok?null:result.result.reason;
 
-test('only property parcels are eligible for this resale prototype',()=>{
-  for(const kind of ['cosmetic','collectible']){
-    const asset={...property(false),kind} as unknown as MarketAsset;
-    const f=new Fixture(asset);
-    assert.equal(reason(f.run(create('property'))),'invalid');
-    assert.equal(f.listings.size,0);assert.equal(f.assets.get('property')?.listingId,null);
+test('server-owned cosmetic and collectible instances trade without the property gate',()=>{
+  for(const kind of ['cosmetic','collectible'] as const){
+    const common={id:'item',ownerId:'seller',listingId:null,tradable:true,revision:1,catalogId:'starter'};
+    const asset:MarketAsset=kind==='cosmetic'?{...common,kind,equipped:false}:{...common,kind};
+    const f=new Fixture(asset,100);
+    f.accounts.set('buyer',account('buyer',100,'existing-home'));
+    assert.equal(f.run(create('item','listing',99)).result.ok,true);
+    assert.equal(f.run(buy('item')).result.ok,true);
+    assert.equal(f.accounts.get('buyer')?.cash,1);
+    assert.equal(f.accounts.get('buyer')?.purchasedHomeAssetId,'existing-home');
+    assert.equal(f.assets.get('item')?.ownerId,'buyer');
+    assert.equal(f.accounts.get('seller')?.cash,94);
   }
+});
+
+test('equipped cosmetics cannot enter custody, and altered listed items cannot sell',()=>{
+  const asset:MarketAsset={id:'item',ownerId:'seller',listingId:null,tradable:true,revision:1,kind:'cosmetic',catalogId:'paint',equipped:true};
+  const f=new Fixture(asset,100);
+  assert.equal(reason(f.run(create('item'))),'equipped');
+  f.assets.set('item',{...asset,equipped:false});
+  assert.equal(f.run(create('item','listing',50,'retry')).result.ok,true);
+  f.assets.set('item',{...asset,listingId:'listing'});
+  assert.equal(reason(f.run(buy('item'))),'asset-changed');
+  f.assets.set('item',{...asset,listingId:'listing',equipped:false,catalogId:'different'});
+  assert.equal(reason(f.run(buy('item','buyer','changed-catalog'))),'asset-changed');
+  assert.equal(f.run({type:'cancel',assetId:'item',listingId:'listing',actorId:'seller',operationId:'cancel',expectedRevision:1}).result.ok,true);
 });
 
 test('listing locks an owned eligible asset, supports repricing and cancellation, and rejects stale or unauthorized changes',()=>{
@@ -104,7 +123,7 @@ test('property transfers require the pre-purchase balance and a free purchased-h
 
 test('a buyer cannot receive changed property terms, even if an external mutation forgot to advance the asset revision',()=>{
   const f=new Fixture(property(false),2_000_000);
-  f.run(create('property','listing',0));
+  f.run(create('property','listing',1));
   f.assets.set('property',{...property(true),listingId:'listing'});
   assert.equal(reason(f.run(buy('property'))),'asset-changed');
   assert.equal(f.accounts.get('buyer')?.purchasedHomeAssetId,null);

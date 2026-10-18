@@ -95,6 +95,7 @@ async function rejectedHeadSimulation(){
   const started=new Promise<void>(resolve=>{headStarted=resolve;});
   const writes:EconomyIntent[]=[],stages:CabIncomeStage[]=[];
   const ledger={
+    async assignCab(){return 'accepted' as const;},async stageTicket(){return 'accepted' as const;},
     async stageCab(stage:CabIncomeStage){stages.push(structuredClone(stage));return 'accepted' as const;},
     async prepareCab(){return {room:[],global:[]};},
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
@@ -125,7 +126,7 @@ async function rejectedHeadSimulation(){
   if(Reflect.get(session,'processing'))throw new Error('Session failed to drain');
   const secondWorld=createEmptyWorld(),secondPlayer=addPlayer(secondWorld,'second','Driver');
   secondPlayer.delivery.cash=initial.cash;secondPlayer.delivery.lifetimeIncome=initial.eligibleIncome;
-  const failedLedger={async stageCab(){return 'accepted' as const;},async prepareCab(){return {room:[],global:[]};},async submit(){return {ok:false as const,reason:'invalid' as const};},
+  const failedLedger={async assignCab(){return 'accepted' as const;},async stageTicket(){return 'accepted' as const;},async stageCab(){return 'accepted' as const;},async prepareCab(){return {room:[],global:[]};},async submit(){return {ok:false as const,reason:'invalid' as const};},
     async acknowledge(){throw new Error('Failed income must remain unacknowledged');}};
   const failed=new EconomySession({} as never,failedLedger as never,secondWorld,secondPlayer,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
@@ -148,6 +149,7 @@ async function delayedCabSimulation(){
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const writes:EconomyIntent[]=[];
   const ledger={
+    async assignCab(){return 'accepted' as const;},async stageTicket(){return 'accepted' as const;},
     async stageCab(){return 'accepted' as const;},
     async prepareCab(){return {room:[{startsAtMs:0,endsAtMs:600_000}],global:[{startsAtMs:0,endsAtMs:1_800_000}]};},
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
@@ -187,6 +189,7 @@ async function stageOrderSimulation(){
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const attempted:number[]=[],accepted:number[]=[];
   const ledger={
+    async assignCab(){return 'accepted' as const;},async stageTicket(){return 'accepted' as const;},
     async stageCab(stage:CabIncomeStage){
       attempted.push(stage.sequence);
       if(stage.sequence===1){started();await held;}

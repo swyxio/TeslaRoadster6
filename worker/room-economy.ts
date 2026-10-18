@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { DriverProfile, type DriverOutcome, type EconomyIntent } from './driver-profile';
+import { DriverProfile, type DriverAction, type DriverOutcome, type EconomyIntent } from './driver-profile';
 import type { GameRoom } from './index';
 import { MARS_GOAL } from '../shared/mars';
 import type { CybercabInterval } from '../shared/cybercabs';
@@ -14,9 +14,14 @@ type PickupReservation={eventId:string|null;generation:number;readyAt:number};
 type RoomFund={balance:number;reserved:number};
 /** sequence orders stages within a fence; wallet sequence is assigned at settlement. */
 export type CabIncomeStage={eventId:string;driverId:string;fence:string;roomId:string;sequence:number;intervals:CybercabInterval[]};
+export type TicketStage={eventId:string;driverId:string;fence:string;roomId:string;walletOrder:number;action:Extract<DriverAction,{kind:'ticket'}>};
 const stageKey=(stage:CabIncomeStage)=>`cab-stage:${stage.driverId}:${stage.eventId}`;
+const ticketKey=(stage:Pick<TicketStage,'driverId'|'eventId'>)=>`ticket-stage:${stage.driverId}:${stage.eventId}`;
+const cabOrderKey=(stage:Pick<CabIncomeStage,'driverId'|'eventId'>)=>`cab-order:${stage.driverId}:${stage.eventId}`;
+const walletOrderKey=(stage:Pick<TicketStage,'driverId'|'fence'>,order:number)=>`wallet-stage:${stage.driverId}:${stage.fence}:${order}`;
 const stageEventsKey=(stage:Pick<CabIncomeStage,'driverId'|'eventId'>)=>`cab-events:${stage.driverId}:${stage.eventId}`;
 const stageHighKey=(stage:Pick<CabIncomeStage,'driverId'|'fence'>)=>`cab-stage-high:${stage.driverId}:${stage.fence}`;
+const closedFenceKey=(driverId:string,fence:string)=>`closed-fence:${driverId}:${fence}`;
 const matchesStage=(stage:CabIncomeStage,intent:EconomyIntent)=>intent.action.kind==='cab-income' &&
   stage.eventId===intent.eventId&&stage.driverId===intent.driverId&&stage.fence===intent.fence&&stage.roomId===intent.roomId&&
   JSON.stringify(stage.intervals)===JSON.stringify(intent.action.intervals);
@@ -33,6 +38,9 @@ export class RoomEconomy extends DurableObject<Env> {
   private profile(id:string){return this.env.DRIVERS.get(this.env.DRIVERS.idFromName(id));}
   private async stages(driverId:string):Promise<CabIncomeStage[]>{
     return [...(await this.ctx.storage.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()];
+  }
+  private async tickets(driverId:string):Promise<TicketStage[]>{
+    return [...(await this.ctx.storage.list<TicketStage>({prefix:`ticket-stage:${driverId}:`})).values()];
   }
 
   /** Trusted room RPCs; pending wins fence later payout and cab observations. */
@@ -69,7 +77,7 @@ export class RoomEconomy extends DurableObject<Env> {
       if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
       const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
       if(intent)return matchesStage(stage,intent.intent)&&intent.stageSequence===stage.sequence?'accepted':'conflict';
-      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`))return 'superseded';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
       const high=await txn.get<number>(stageHighKey(stage))??0;
       if(stage.sequence!==high+1)return stage.sequence<=high?'superseded':'conflict';
       await txn.put({[stageKey(stage)]:stage,[stageHighKey(stage)]:stage.sequence});
@@ -87,6 +95,57 @@ export class RoomEconomy extends DurableObject<Env> {
       if(existing&&JSON.stringify(existing)===JSON.stringify(stage)){
         await txn.delete(stageKey(stage));
         if(await txn.get<number>(stageHighKey(stage))===stage.sequence)await txn.delete(stageHighKey(stage));
+      }
+    });
+    return 'superseded';
+  }
+
+  /** Assign a prepared cab's place in the wallet before accepting later physical work. */
+  async assignCab(stage:CabIncomeStage,walletOrder:number):Promise<'accepted'|'superseded'|'conflict'> {
+    if(!Number.isSafeInteger(walletOrder)||walletOrder<1)return 'conflict';
+    if(!await this.profile(stage.driverId).checkFence(stage.fence))return 'superseded';
+    return this.ctx.storage.transaction(async txn=>{
+      const existing=await txn.get<CabIncomeStage>(stageKey(stage));
+      const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
+      if((!existing||JSON.stringify(existing)!==JSON.stringify(stage))&&(!intent||!matchesStage(stage,intent.intent)))return 'conflict';
+      const orderKey=walletOrderKey(stage,walletOrder),owner=await txn.get<string>(orderKey);
+      const previous=await txn.get<number>(cabOrderKey(stage));
+      if((owner&&owner!==stage.eventId)||(previous!==undefined&&previous!==walletOrder))return 'conflict';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
+      if(!existing)return owner===stage.eventId?'accepted':'conflict';
+      await txn.put({[orderKey]:stage.eventId,[cabOrderKey(stage)]:walletOrder});
+      return 'accepted';
+    });
+  }
+
+  /** Persist one immutable police stop before it enters the profile. */
+  async stageTicket(stage:TicketStage):Promise<'accepted'|'superseded'|'conflict'> {
+    if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1)return 'conflict';
+    if(!await this.profile(stage.driverId).checkFence(stage.fence))return 'superseded';
+    const result=await this.ctx.storage.transaction(async txn=>{
+      const existing=await txn.get<TicketStage>(ticketKey(stage));
+      if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
+      const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
+      if(intent)return intent.intent.action.kind==='ticket'&&intent.intent.driverId===stage.driverId&&intent.intent.fence===stage.fence&&intent.intent.roomId===stage.roomId&&
+        JSON.stringify(intent.intent.action)===JSON.stringify(stage.action)&&await txn.get<string>(walletOrderKey(stage,stage.walletOrder))===stage.eventId?'accepted':'conflict';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`)||await txn.get<boolean>(closedFenceKey(stage.driverId,stage.fence)))return 'superseded';
+      const key=walletOrderKey(stage,stage.walletOrder),owner=await txn.get<string>(key);
+      // An order whose stage and intent are gone was already acknowledged.
+      // Never resurrect it when a delayed stage reply is retried.
+      if(owner)return owner===stage.eventId?'superseded':'conflict';
+      await txn.put({[ticketKey(stage)]:stage,[key]:stage.eventId});
+      const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
+      if(alarm===null||alarm>next)await txn.setAlarm(next);
+      return 'accepted';
+    });
+    if(result!=='accepted')return result;
+    if(await this.profile(stage.driverId).checkFence(stage.fence))return result;
+    await this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<TicketStage>(ticketKey(stage));
+      if(current&&JSON.stringify(current)===JSON.stringify(stage)){
+        await txn.delete(ticketKey(stage));
+        const key=walletOrderKey(stage,stage.walletOrder);
+        if(await txn.get<string>(key)===stage.eventId)await txn.delete(key);
       }
     });
     return 'superseded';
@@ -140,7 +199,7 @@ export class RoomEconomy extends DurableObject<Env> {
       }
       const acknowledged=await txn.get<Acknowledged>(`ack:${intent.driverId}`);
       if(acknowledged?.fence===intent.fence && intent.sequence<=acknowledged.sequence)return {outcome:{ok:false,reason:'revision'} as DriverOutcome};
-      if(await txn.get<boolean>(`frozen:${intent.driverId}:${intent.fence}`)){
+      if(await txn.get<boolean>(`frozen:${intent.driverId}:${intent.fence}`)||await txn.get<boolean>(closedFenceKey(intent.driverId,intent.fence))){
         return {outcome:{ok:false,reason:'superseded'} as DriverOutcome};
       }
       let cabEvents:EarningsEvents|undefined,stageSequence:number|undefined;
@@ -149,10 +208,25 @@ export class RoomEconomy extends DurableObject<Env> {
         if(!stage||!matchesStage(stage,intent))return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
         const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
         if([...stages.values()].some(item=>item.fence===stage.fence&&item.sequence<stage.sequence))return {outcome:null,blocked:true as const};
+        const order=await txn.get<number>(cabOrderKey(stage))??intent.sequence;
+        const tickets=await txn.list<TicketStage>({prefix:`ticket-stage:${intent.driverId}:`});
+        if([...tickets.values()].some(ticket=>ticket.fence===stage.fence&&ticket.walletOrder<order))return {outcome:null,blocked:true as const};
         stageSequence=stage.sequence;
         cabEvents=await txn.get<EarningsEvents>(stageEventsKey(stage));
         await txn.delete(stageKey(stage));
         await txn.delete(stageEventsKey(stage));
+        await txn.delete(cabOrderKey(stage));
+      } else if(intent.action.kind==='ticket'){
+        const ticket=await txn.get<TicketStage>(ticketKey(intent));
+        if(!ticket||ticket.fence!==intent.fence||ticket.roomId!==intent.roomId||JSON.stringify(ticket.action)!==JSON.stringify(intent.action))return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        const tickets=await txn.list<TicketStage>({prefix:`ticket-stage:${intent.driverId}:`});
+        if([...tickets.values()].some(other=>other.fence===ticket.fence&&other.walletOrder<ticket.walletOrder))return {outcome:null,blocked:true as const};
+        const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
+        for(const stage of stages.values())if(stage.fence===ticket.fence){
+          const order=await txn.get<number>(cabOrderKey(stage));
+          if(order!==undefined&&order<ticket.walletOrder)return {outcome:null,blocked:true as const};
+        }
+        await txn.delete(ticketKey(ticket));
       }
       if(intent.action.kind==='contribute'){
         const fund=await txn.get<RoomFund>('room-fund'),amount=intent.action.amount;
@@ -257,7 +331,7 @@ export class RoomEconomy extends DurableObject<Env> {
       // A mismatched event ID must never delete another producer's result.
       if(!record || JSON.stringify(record.intent)!==JSON.stringify(intent))return 'done' as const;
       if(!record.outcome)return 'pending' as const;
-      if(intent.action.kind==='cab-income'&&!record.outcome.ok)return 'blocked' as const;
+      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket')&&!record.outcome.ok)return 'blocked' as const;
       await txn.put(cleanupKey,intent);
       const ackKey=`ack:${intent.driverId}`,previous=await txn.get<Acknowledged>(ackKey);
       if(previous?.fence!==intent.fence || intent.sequence>previous.sequence)
@@ -293,11 +367,14 @@ export class RoomEconomy extends DurableObject<Env> {
     try{await flight;}finally{if(this.freezes.get(key)===flight)this.freezes.delete(key);}
   }
   private async freezeOnce(driverId:string,fence:string):Promise<void>{
-    await this.ctx.storage.transaction(async txn=>{
+    const started=await this.ctx.storage.transaction(async txn=>{
+      if(await txn.get<boolean>(closedFenceKey(driverId,fence)))return false;
       await txn.put(`frozen:${driverId}:${fence}`,true);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
       if(alarm===null||alarm>next)await txn.setAlarm(next);
+      return true;
     });
+    if(!started)return;
     await this.resolveDriver(driverId);
     const pending=(await this.pending(driverId)).filter(intent=>intent.fence===fence);
     const revision=pending.length?await this.profile(driverId).currentRevision(fence):null;
@@ -326,27 +403,33 @@ export class RoomEconomy extends DurableObject<Env> {
     const abandoned=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`unacked:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
     for(const intent of abandoned){
       const record=await this.ctx.storage.get<IntentRecord>(`intent:${intent.eventId}`);
-      if(intent.action.kind==='cab-income'&&(!record?.outcome||!record.outcome.ok))throw new Error('Unable to settle staged cab income');
+      if((intent.action.kind==='cab-income'||intent.action.kind==='ticket')&&(!record?.outcome||!record.outcome.ok))throw new Error('Unable to settle staged physical work');
       if(!await this.acknowledge(intent))throw new Error('Wallet cleanup pending');
     }
     const cleanup=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`cleanup:${driverId}:`})).values()].filter(intent=>intent.fence===fence);
     for(const intent of cleanup)await this.finishCleanup(intent);
     const remainingStages=[...(await this.ctx.storage.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()]
       .filter(stage=>stage.fence===fence).sort((a,b)=>a.sequence-b.sequence);
-    for(const stage of remainingStages){
+    const ticketStages=(await this.tickets(driverId)).filter(stage=>stage.fence===fence);
+    const work=[...await Promise.all(remainingStages.map(async stage=>({kind:'cab' as const,stage,order:await this.ctx.storage.get<number>(cabOrderKey(stage))}))),
+      ...ticketStages.map(stage=>({kind:'ticket' as const,stage,order:stage.walletOrder}))]
+      .sort((a,b)=>(a.order??Number.MAX_SAFE_INTEGER)-(b.order??Number.MAX_SAFE_INTEGER));
+    for(const entry of work){
+      const stage=entry.stage;
       const cursor=await this.profile(driverId).currentCursor(fence);
-      if(!cursor)throw new Error('Unable to settle fenced cab income');
+      if(!cursor)throw new Error('Unable to settle fenced physical work');
       const intent:EconomyIntent={eventId:stage.eventId,driverId,fence,roomId:stage.roomId,sequence:cursor.sequence+1,revision:cursor.revision,
-        action:{kind:'cab-income',intervals:stage.intervals}};
+        action:entry.kind==='cab'?{kind:'cab-income',intervals:entry.stage.intervals}:entry.stage.action};
       const converted=await this.ctx.storage.transaction(async txn=>{
-        const current=await txn.get<CabIncomeStage>(stageKey(stage));
+        const key=entry.kind==='cab'?stageKey(entry.stage):ticketKey(entry.stage);
+        const current=await txn.get<CabIncomeStage|TicketStage>(key);
         if(!current)return false;
-        if(JSON.stringify(current)!==JSON.stringify(stage)||await txn.get(`intent:${stage.eventId}`))throw new Error('Cab stage mismatch');
-        const cabEvents=await txn.get<EarningsEvents>(stageEventsKey(stage));
-        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null,stageSequence:stage.sequence,...(cabEvents?{cabEvents}:{})} satisfies IntentRecord);
+        if(JSON.stringify(current)!==JSON.stringify(stage)||await txn.get(`intent:${stage.eventId}`))throw new Error('Physical stage mismatch');
+        const cabEvents=entry.kind==='cab'?await txn.get<EarningsEvents>(stageEventsKey(entry.stage)):undefined;
+        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null,...(entry.kind==='cab'?{stageSequence:entry.stage.sequence}:{}),...(cabEvents?{cabEvents}:{})} satisfies IntentRecord);
         await txn.put(`pending:${driverId}:${stage.eventId}`,intent);
-        await txn.delete(stageKey(stage));
-        await txn.delete(stageEventsKey(stage));
+        await txn.delete(key);
+        if(entry.kind==='cab'){await txn.delete(stageEventsKey(entry.stage));await txn.delete(cabOrderKey(entry.stage));}
         const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
         if(alarm===null||alarm>next)await txn.setAlarm(next);
         return true;
@@ -354,12 +437,19 @@ export class RoomEconomy extends DurableObject<Env> {
       if(!converted)continue;
       await this.resolveDriver(driverId);
       const outcome=await this.status(stage.eventId);
-      if(!outcome?.ok)throw new Error('Unable to settle staged cab income');
-      if(!await this.acknowledge(intent))throw new Error('Cab income cleanup pending');
+      if(!outcome?.ok)throw new Error('Unable to settle staged physical work');
+      if(!await this.acknowledge(intent))throw new Error('Physical work cleanup pending');
     }
     // The durable seal prevents stale requests after the room marker is gone.
     await this.profile(driverId).sealFence(driverId,fence);
-    await this.ctx.storage.delete([`frozen:${driverId}:${fence}`,stageHighKey({driverId,fence})]);
+    // Keep a durable closed marker: a stale producer may have passed the
+    // profile check before this freeze and resume after the profile is sealed.
+    // Replacing the in-progress marker atomically leaves no insertion gap.
+    await this.ctx.storage.transaction(async txn=>{
+      const orders=await txn.list({prefix:`wallet-stage:${driverId}:${fence}:`});
+      await txn.put(closedFenceKey(driverId,fence),true);
+      await txn.delete([`frozen:${driverId}:${fence}`,stageHighKey({driverId,fence}),...orders.keys()]);
+    });
   }
   async pickupStates(ids:string[]):Promise<Record<string,PickupReservation>>{
     const entries=await Promise.all(ids.map(async id=>[id,await this.ctx.storage.get<PickupReservation>(`pickup:${id}`)??{eventId:null,generation:0,readyAt:0}] as const));
@@ -385,9 +475,9 @@ export class RoomEconomy extends DurableObject<Env> {
       .sort((a,b)=>a.sequence-b.sequence);
     for(const intent of cleanup)await this.finishCleanup(intent);
     const unacked=[...(await this.ctx.storage.list<EconomyIntent>({prefix:`unacked:${driverId}:`})).values()];
-    const stages=await this.stages(driverId);
+    const stages=await this.stages(driverId),tickets=await this.tickets(driverId);
     const producers=new Map<string,{roomId:string;fence:string}>();
-    for(const item of [...unacked,...stages])producers.set(JSON.stringify([item.roomId,item.fence]),item);
+    for(const item of [...unacked,...stages,...tickets])producers.set(JSON.stringify([item.roomId,item.fence]),item);
     for(const {roomId,fence} of producers.values()){
       // An unavailable room is not evidence that its producer has gone away.
       const room=this.env.ROOMS.get(this.env.ROOMS.idFromName(roomId));
@@ -406,19 +496,20 @@ export class RoomEconomy extends DurableObject<Env> {
       if(alarm!==null&&alarm<=watchdog)return false;
       await txn.setAlarm(watchdog);return true;
     });
-    const [intents,cleanup,unacked,stages,frozen]=await Promise.all([
+    const [intents,cleanup,unacked,stages,tickets,frozen]=await Promise.all([
       this.pending(),this.ctx.storage.list<EconomyIntent>({prefix:'cleanup:'}),
       this.ctx.storage.list<EconomyIntent>({prefix:'unacked:'}),this.ctx.storage.list<CabIncomeStage>({prefix:'cab-stage:'}),
+      this.ctx.storage.list<TicketStage>({prefix:'ticket-stage:'}),
       this.ctx.storage.list<boolean>({prefix:'frozen:'}),
     ]);
     const drivers=new Set(intents.map(intent=>intent.driverId));
-    for(const item of [...cleanup.values(),...unacked.values(),...stages.values()])drivers.add(item.driverId);
+    for(const item of [...cleanup.values(),...unacked.values(),...stages.values(),...tickets.values()])drivers.add(item.driverId);
     for(const key of frozen.keys())drivers.add(key.split(':')[1]);
     if(!drivers.size){
       // Cancel only our own empty wakeup and recheck atomically with submissions.
       if(armed)await this.ctx.storage.transaction(async txn=>{
         if(await txn.getAlarm()!==watchdog)return;
-        const work=await Promise.all(['pending:','cleanup:','unacked:','frozen:','cab-stage:'].map(prefix=>txn.list({prefix,limit:1})));
+        const work=await Promise.all(['pending:','cleanup:','unacked:','frozen:','cab-stage:','ticket-stage:'].map(prefix=>txn.list({prefix,limit:1})));
         if(!work.some(entries=>entries.size))await txn.deleteAlarm();
       });
       return;

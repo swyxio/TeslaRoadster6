@@ -11,7 +11,7 @@ import { MARS_GOAL } from '../shared/mars';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import { initialDelivery } from '../shared/delivery';
 import { EconomySession } from './economy-session';
-import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
+import { DriverProfile, GlobalIncome, progressFrom, type DriverProgress } from './driver-profile';
 import { RoomEconomy } from './room-economy';
 import { GlobalEarningsEvent } from './global-earnings-event';
 import { scheduleGlobalEarnings } from './global-earnings-admin';
@@ -19,12 +19,16 @@ import { activityPayout, earningsMultiplier, globalWindowsForInstant, ROOM_WIN_D
 import type { RoomEventCursor } from './room-earnings-events';
 import { leaveParking } from '../shared/parking';
 import { resetAchievementFlight } from '../shared/achievements';
+import { PROPERTY_HOME_SPAWNS, propertyRoomAssetId } from '../shared/property';
+import { MarketService } from './market-service';
+import { captureMarketHold, restoreMarketHold, withMarketHolds, type MarketHold } from './market-hold';
+import type { MarketPaint } from '../shared/market-protocol';
 
-export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent };
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent, MarketService };
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; GLOBAL_EVENTS: DurableObjectNamespace<GlobalEarningsEvent>; STARSHIP_ADMIN_TOKEN?:string; MAX_PLAYERS?: string };
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; GLOBAL_EVENTS: DurableObjectNamespace<GlobalEarningsEvent>; MARKET:DurableObjectNamespace<MarketService>; STARSHIP_ADMIN_TOKEN?:string; MAX_PLAYERS?: string };
 type CabMessage=Extract<ClientMessage,{type:'cab'}>;
-type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null;cabHighWater:number;cabRequests:Map<number,{payload:string;reply:string|null}> };
+type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null;cabHighWater:number;cabRequests:Map<number,{payload:string;reply:string|null}>;marketHold:MarketHold|null };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 type PendingRoomWin = {event_id:string;requested_at:number;room_id:string};
 type RoomEarningsSnapshot = {observedAt:number;events:EarningsEvents;lease:GlobalEventLease};
@@ -85,6 +89,8 @@ export class GameRoom extends DurableObject<Env> {
   private winFlight:Promise<void>|null=null;
   private hasPendingWin=false;
   private winJournalGeneration=0;
+  private propertyRefreshing=false;
+  private propertyRevision=0;
 
   private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
   private initWinStorage(){
@@ -231,6 +237,31 @@ export class GameRoom extends DurableObject<Env> {
       this.ledger().roomFund().then(balance=>{if(world===this.world)world.mars.roomFund=Math.max(world.mars.roomFund,balance);}),
       this.refreshEarnings(),
     ]).finally(()=>{this.refreshing=false;});
+    if(propertyRoomAssetId(this.roomId))void this.refreshProperty(world);
+  }
+
+  private async property(assetId:string){
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const operation=this.env.MARKET.get(this.env.MARKET.idFromName('global')).property(assetId);
+    try{return await Promise.race([
+      operation,
+      new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Property registry timed out')),3000);}),
+    ]);}finally{
+      if(timer!==undefined)clearTimeout(timer);
+      const dispose=Reflect.get(operation,Reflect.get(Symbol,'dispose') as symbol);
+      if(typeof dispose==='function')Reflect.apply(dispose,operation,[]);
+    }
+  }
+  private async refreshProperty(world:typeof this.world){
+    const assetId=propertyRoomAssetId(this.roomId);if(!assetId||this.propertyRefreshing)return;
+    this.propertyRefreshing=true;
+    try{
+      const result=await this.property(assetId);if(world!==this.world)return;
+      if(result.status==='available'&&result.property.completedHome&&result.property.revision>=this.propertyRevision){
+        this.propertyRevision=result.property.revision;world.property={assetId,ownerName:result.property.ownerName};
+      }else if(result.status!=='available'||!result.property.completedHome)world.property=null;
+    }catch{if(world===this.world)world.property=null;}
+    finally{this.propertyRefreshing=false;}
   }
 
   async fetch(request:Request):Promise<Response>{
@@ -241,8 +272,18 @@ export class GameRoom extends DurableObject<Env> {
     if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
     const slug=roomSlug(new URL(request.url).pathname);
     if(!slug)return close(1008,'Invalid room');
+    let property:Awaited<ReturnType<GameRoom['property']>>|null=null;
+    const assetId=propertyRoomAssetId(slug);
+    if(assetId){
+      try{property=await this.property(assetId);}catch{return close(1011,'Property service unavailable. Retry or return to Bay.');}
+      if(property.status==='unavailable')return close(1011,'Property service unavailable. Retry or return to Bay.');
+      if(property.status!=='available'||!property.property.completedHome)return close(1008,'Property not found. Return to Bay.');
+    }
     this.roomId=slug;
     const world=this.world;
+    if(property?.status==='available'&&property.property.revision>=this.propertyRevision){
+      this.propertyRevision=property.property.revision;world.property={assetId:property.property.assetId,ownerName:property.property.ownerName};
+    }
     this.ready??=this.initializeRoom(world);
     const walletId=crypto.randomUUID(),fence=crypto.randomUUID();
     const initial=initialDelivery({x:0,z:0});
@@ -257,11 +298,11 @@ export class GameRoom extends DurableObject<Env> {
     if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
     const id=crypto.randomUUID(),now=Date.now();
     let player;
-    try{player=addPlayer(this.world,id,chooseAvailableName('Driver',this.world.players.map(p=>p.name)));}
+    try{player=addPlayer(this.world,id,chooseAvailableName('Driver',this.world.players.map(p=>p.name)),property?.status==='available'?PROPERTY_HOME_SPAWNS:undefined);}
     catch(error){if(!(error instanceof NoSpawnError))throw error;return close(ROOM_NO_SPAWN_CODE,'No safe starting space');}
-    const economy=new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups);
+    const economy=new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups,acquired.marketPaint);
     const control=new ScheduledInput({...NEUTRAL});
-    const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null,cabHighWater:0,cabRequests:new Map()};
+    const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,identityTail:Promise.resolve(),attachPending:true,guest:false,identitySequence:0,pendingBind:null,cabHighWater:0,cabRequests:new Map(),marketHold:null};
     this.sessions.set(server,session);
     server.addEventListener('message',event=>{void this.onMessage(server,event.data);});
     server.addEventListener('close',()=>this.disconnect(server));
@@ -286,6 +327,54 @@ export class GameRoom extends DurableObject<Env> {
     for(const [socket] of matches)this.disconnect(socket,1008,'Driver opened in another room.');
     const detached=this.draining.get(`${driverId}:${fence}`);
     await Promise.all([...matches.map(([,s])=>s.economy.freeze()),...(detached?[detached.freeze()]:[])]);
+  }
+
+  /** Called only by a DriverProfile participant, never by a client. */
+  async pauseMarketWallet(driverId:string,fence:string,transactionId:string):Promise<boolean>{
+    if([...this.sessions.values()].some(s=>s.pendingBind?.driverId===driverId))return false;
+    const matches=[...this.sessions.entries()].filter(([,s])=>s.economy.walletId===driverId&&
+      (s.economy.currentFence===fence||s.marketHold?.oldFence===fence));
+    if(matches.length>1)return false;
+    if(!matches.length){
+      const detached=this.draining.get(`${driverId}:${fence}`);if(detached)await detached.freeze();
+      return true;
+    }
+    const [socket,session]=matches[0];
+    if(session.marketHold){
+      if(session.marketHold.transactionId!==transactionId||session.marketHold.oldFence!==fence)return false;
+    }else{
+      if(session.attachPending)return false;
+      const hold=captureMarketHold(this.world,session.id,transactionId,fence);if(!hold)return false;
+      session.marketHold=hold;session.attachPending=true;this.invalidate(socket,session);
+    }
+    await session.economy.pauseForMarket();
+    return true;
+  }
+
+  async installMarketWallet(driverId:string,oldFence:string,newFence:string,transactionId:string,revision:number,sequence:number,progress:DriverProgress,marketPaint:MarketPaint|null):Promise<void>{
+    const session=[...this.sessions.values()].find(s=>s.economy.walletId===driverId&&s.marketHold?.transactionId===transactionId&&s.marketHold.oldFence===oldFence);
+    if(!session)return;
+    const hold=session.marketHold!;
+    if(hold.newFence&&hold.newFence!==newFence)throw new Error('Market fence changed');
+    if(!hold.newFence){session.economy.installMarket(driverId,newFence,revision,sequence,progress,marketPaint);hold.marketPaint=marketPaint;hold.newFence=newFence;}
+  }
+
+  async resumeMarketWallet(driverId:string,fence:string,transactionId:string):Promise<void>{
+    const match=[...this.sessions.entries()].find(([,s])=>s.economy.walletId===driverId&&s.marketHold?.transactionId===transactionId);
+    if(!match)return;
+    const [socket,session]=match,hold=session.marketHold!;
+    if(hold.newFence!==fence||session.economy.currentFence!==fence)throw new Error('Market fence not installed');
+    if(hold.resume)return hold.resume;
+    const flight=(async()=>{
+      const restored=restoreMarketHold(this.world,hold);if(!restored.ok)throw new Error('Market resume has no safe position');
+      session.economy.setMarketPaint(hold.marketPaint??null);
+      await session.economy.resumeMarket();
+      if(this.sessions.get(socket)!==session||session.marketHold!==hold)return;
+      session.marketHold=null;session.attachPending=false;
+      this.invalidate(socket,session,restored.relocated);
+    })();
+    hold.resume=flight;
+    try{await flight;}finally{if(hold.resume===flight)delete hold.resume;}
   }
 
   private async attachIdentity(socket:WebSocket,session:Session,code:string|null,requestId:number,sequence:number):Promise<void>{
@@ -345,9 +434,12 @@ export class GameRoom extends DurableObject<Env> {
       if(soccer.lastTouch?.playerId===session.id)soccer.lastTouch=null;
       const player=this.world.players.find(item=>item.id===session.id);
       if(player)resetAchievementFlight(player);
-      session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress);
-      session.pendingBind=null;
+      session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress,result.marketPaint);
       session.economy.restoreCurrentVehicle();
+      stage='repair';
+      await session.economy.ensureAccessibleOrder();
+      if(!current())return;
+      session.pendingBind=null;
       this.invalidate(socket,session,true);
       accepted=send(true,'Saved driver connected.');
     }catch(error){
@@ -385,6 +477,7 @@ export class GameRoom extends DurableObject<Env> {
     const message=parseMessage(raw);if(!message){this.disconnect(socket,1008,'Invalid message');return;}
     session.lastMessage=now;
     if(message.type==='identity'){
+      if(session.marketHold){socket.send(JSON.stringify({type:'identityResult',requestId:message.requestId,ok:false,message:'Wait for the market transaction to finish.'}));return;}
       const sequence=++session.identitySequence;
       // A new guest can start immediately; later identity choices must remain
       // ordered behind any recovery already in progress.
@@ -399,6 +492,28 @@ export class GameRoom extends DurableObject<Env> {
       session.identityTail=session.identityTail.then(()=>this.attachIdentity(socket,session,message.code,message.requestId,sequence));
       this.ctx.waitUntil(session.identityTail);
       return;
+    }
+    if(message.type==='market'){
+      if(session.guest||(session.attachPending&&!session.marketHold)){
+        if(message.action!=='browse'&&message.action!=='status')socket.send(JSON.stringify({type:'marketResult',requestId:message.requestId,operationId:message.operationId,action:message.action,status:'rejected',reason:'save-driver'}));
+        return;
+      }
+      const driverId=session.economy.walletId,fence=session.economy.currentFence,identitySequence=session.identitySequence;
+      const current=()=>this.sessions.get(socket)===session&&session.identitySequence===identitySequence&&session.economy.walletId===driverId&&socket.readyState===1;
+      const run=async()=>{
+        try{
+          // A held participant is already authenticated by its original fence.
+          if(!session.marketHold&&!await this.env.DRIVERS.get(this.env.DRIVERS.idFromName(driverId)).checkFence(fence))return;
+          if(!current())return;
+          const market=this.env.MARKET.get(this.env.MARKET.idFromName('global'));
+          const player=this.world.players.find(item=>item.id===session.id)??session.marketHold?.player;
+          const value=message.action==='browse'?await market.browse(driverId,message.requestId,message.cursor,message.ownedCursor):
+            message.action==='status'?await market.status(driverId,message.operationId,message.requestId):
+              await market.execute(driverId,player?.name??'Driver',message);
+          if(current())socket.send(JSON.stringify(value));
+        }catch{/* The client retains its operation ID and retries an uncertain outcome. */}
+      };
+      this.ctx.waitUntil(run());return;
     }
     if(message.type==='input'){
       if(message.roomEpoch!==this.roomEpoch){this.rejectInput(socket,message,'epoch');return;}
@@ -534,7 +649,8 @@ export class GameRoom extends DurableObject<Env> {
     }
     const relocated=new Set<string>();
     let settlement:ReturnType<GameRoom['rate']>=null;
-    step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
+    const marketHolds=[...this.sessions.values()].flatMap(session=>session.marketHold?[session.marketHold]:[]);
+    const heldRelocations=withMarketHolds(this.world,marketHolds,()=>step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
       const player=this.world.players.find(item=>item.id===id);
       const entity=this.world.entities.find(item=>item.id===player?.entityId);
       for(const outcome of edgeResults.get(id)?.outcomes??[]){
@@ -543,7 +659,7 @@ export class GameRoom extends DurableObject<Env> {
       this.inputs.delete(id);relocated.add(id);
     },economy:{
       canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
-      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending){settlement=this.rate(Date.now());try{session.economy.update(player,apply,settlement);}finally{settlement=null;}}},
+      update:(player,apply,ticket)=>{const session=byId.get(player.id);if(session&&!session.attachPending){settlement=this.rate(Date.now());try{session.economy.update(player,apply,settlement,ticket);}finally{settlement=null;}}},
       // A result can occur while binding (for example, a ball already in
       // motion). Commit it to the current wallet; a different incoming wallet
       // must then pass the unstarted check again before it can replace it.
@@ -551,7 +667,8 @@ export class GameRoom extends DurableObject<Env> {
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
       resolveDeliveryPayout:(_player,component)=>settlement?activityPayout(component.amount,component.kind,settlement.atMs,settlement.events):null,
       onDomeWin:result=>{if(result.winners.length)this.recordWin();},
-    }});
+    }}));
+    for(const id of heldRelocations)relocated.add(id);
     this.tickCount=nextTick;
     for(const session of this.sessions.values())if(!session.attachPending)session.economy.observeCabs(now);
     // Rebalance without awaiting any driver's storage in the physics loop.
@@ -631,7 +748,7 @@ export class GameRoom extends DurableObject<Env> {
     if(!this.sessions.size){
       if(this.timer)clearInterval(this.timer);
       const {fund,roomFund}=this.world.mars;this.timer=null;this.tickCount=0;this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));this.world.mars.fund=fund;this.world.mars.roomFund=roomFund;
-      this.ready=null;this.pickupGenerations=new Map();this.pendingPickups=new Set();
+      this.ready=null;this.propertyRevision=0;this.pickupGenerations=new Map();this.pendingPickups=new Set();
     }
   }
 }

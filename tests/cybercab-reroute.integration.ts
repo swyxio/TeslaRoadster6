@@ -69,12 +69,48 @@ try{
   assert.equal(rejected.saved.cybercabs!.assets[0].gross,2);
   assert.ok(rejected.saved.unlocked.includes('park-it'));
   assert.equal(rejected.barrier,77);
-  const pressureResponse=await fetch(`${base}/backpressure`,{signal:AbortSignal.timeout(5000)});
-  if(!pressureResponse.ok)throw new Error(`backpressure fixture failed: ${await pressureResponse.text()}\n${logs}`);
-  const pressure=await pressureResponse.json() as {closes:number;failed:boolean;open:number;stages:{sequence:number;intervals:{startMs:number;endMs:number}[]}[]};
-  assert.equal(pressure.closes,1);assert.equal(pressure.failed,true);assert.equal(pressure.open,0);
-  assert.equal(pressure.stages.length,33,'accrual stops at the bounded backlog, even if close throws');
-  assert.deepEqual(pressure.stages.at(-1)!.intervals,[{assetId:'cab-a',startMs:1_000,endMs:1_100}],
-    'the final already-observed tail is staged before accrual stops');
+  const transientResponse=await fetch(`${base}/rejected-transient`,{signal:AbortSignal.timeout(5000)});
+  if(!transientResponse.ok)throw new Error(`rejected transient fixture failed: ${await transientResponse.text()}\n${logs}`);
+  const transient=await transientResponse.json() as {patrolReset:boolean;saved:DriverProgress;draft:{delivery:{tickets:number;completed:number};achievements:{unlocked:string[]}}};
+  assert.equal(transient.patrolReset,true);assert.equal(transient.draft.delivery.tickets,1);
+  assert.equal(transient.draft.delivery.completed,1);assert.ok(transient.draft.achievements.unlocked.includes('roof-rider'));
+  assert.equal(transient.saved.tickets,1,'the immutable stop is replayed after the rejected debit');
+  assert.equal(transient.saved.cash,25_888,'the ticket is calculated from the restored wallet without resurrecting spending');
+  // Delivery and roof evidence still need their own recovery path.
+  assert.equal(transient.saved.completed,0);
+  assert.ok(!transient.saved.unlocked.includes('roof-rider'));
+  const cadenceResponse=await fetch(`${base}/cadence`,{signal:AbortSignal.timeout(5000)});
+  if(!cadenceResponse.ok)throw new Error(`cadence fixture failed: ${await cadenceResponse.text()}\n${logs}`);
+  const cadence=await cadenceResponse.json() as {before:{open:number;stages:number};stages:{intervals:{assetId:string;startMs:number;endMs:number}[]}[]};
+  assert.deepEqual(cadence.before,{open:1,stages:0},'work below the checkpoint is still volatile');
+  assert.deepEqual(cadence.stages.map(stage=>stage.intervals),[
+    [{assetId:'cab-a',startMs:1_000,endMs:2_000}],
+    [{assetId:'cab-a',startMs:2_000,endMs:2_100}],
+    [{assetId:'cab-a',startMs:2_401,endMs:2_501}],
+  ],'one-second batches close on a missed tick and on pause without inferring the gap');
+  for(const mode of ['backpressure','backpressure-fence']){
+    const pressureResponse=await fetch(`${base}/${mode}`,{signal:AbortSignal.timeout(5000)});
+    if(!pressureResponse.ok)throw new Error(`${mode} fixture failed: ${await pressureResponse.text()}\n${logs}`);
+    const pressure=await pressureResponse.json() as {closes:number;failed:boolean;open:number;beforeRelease:{attempted:number[];accepted:number};stages:{sequence:number;intervals:{startMs:number;endMs:number}[]}[]};
+    assert.equal(pressure.closes,1);assert.equal(pressure.failed,true);assert.equal(pressure.open,0);
+    assert.equal(pressure.stages.length,8,'accrual stops at the bounded backlog, even if close throws');
+    assert.deepEqual(pressure.stages.at(-1)!.intervals,[{assetId:'cab-a',startMs:140,endMs:160},{assetId:'cab-a',startMs:1_000,endMs:1_100}],
+      'the final already-observed tail is staged before accrual stops');
+    if(mode==='backpressure-fence')assert.deepEqual(pressure.beforeRelease,{attempted:[1],accepted:0},'a stalled fence leaves all queued stages volatile until acceptance');
+  }
+  const handoffResponse=await fetch(`${base}/market-handoff`,{signal:AbortSignal.timeout(5000)});
+  if(!handoffResponse.ok)throw new Error(`market handoff fixture failed: ${await handoffResponse.text()}\n${logs}`);
+  const handoff=await handoffResponse.json() as {initialPaint:string;unpaintedCab:boolean;waitedForHead:boolean;actionApplied:boolean;buyAccepted:boolean;
+    installSilent:boolean;installedPaint:string;rerouted:boolean;rerouteCash:number;switched:boolean;switchedPaint:string;cleared:boolean;
+    stages:{fence:string;sequence:number;intervals:{startMs:number;endMs:number}[]}[]};
+  assert.equal(handoff.initialPaint,'pacific-blue-paint');assert.equal(handoff.unpaintedCab,true);
+  assert.equal(handoff.waitedForHead,true);assert.equal(handoff.actionApplied,false);assert.equal(handoff.buyAccepted,false);
+  assert.equal(handoff.installSilent,true);assert.equal(handoff.installedPaint,'sunrise-gold-paint');
+  assert.equal(handoff.rerouted,true);assert.equal(handoff.rerouteCash,9_000);
+  assert.equal(handoff.switched,true);assert.equal(handoff.switchedPaint,'sunrise-gold-paint');assert.equal(handoff.cleared,true);
+  assert.deepEqual(handoff.stages.map(({fence,sequence,intervals})=>({fence,sequence,intervals})),[
+    {fence:'old',sequence:1,intervals:[{assetId:'cab-a',startMs:1_000,endMs:1_100}]},
+    {fence:'new',sequence:1,intervals:[{assetId:'cab-a',startMs:2_000,endMs:3_000}]},
+  ],'pause drains the observed tail and resumes cab staging under the new fence');
   console.log('PASS: delayed cab settlement preserves an eligible delivery and transient game evidence.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

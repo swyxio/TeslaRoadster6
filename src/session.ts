@@ -10,6 +10,8 @@ import { MotionClock } from './motion-clock';
 import { RemotePresentation } from './remote-presentation';
 import { validStarshipStatus, validStarshipTime, type StarshipRoomStatus } from './starship-model';
 import type { EarningsBonusView } from './earnings-bonus-ui';
+import type { MarketRequest, MarketResultView, MarketState } from '../shared/market-protocol';
+type MarketClientRequest<T=MarketRequest> = T extends MarketRequest ? Omit<T,'type'|'requestId'> : never;
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
@@ -71,6 +73,8 @@ export class Session {
   luxuryResult: LuxuryResult|null = null;
   cabBuyResult: {requestId:number;action:'buy';ok:boolean;reason?:string}|null = null;
   cabPaintResult: {requestId:number;action:'paint';assetId:string;paint:PaintId;ok:boolean;reason?:string}|null = null;
+  marketState:MarketState|null=null;
+  marketResult:MarketResultView|null=null;
   vehicleResult: {kind:VehicleId;ok:boolean}|null = null;
   error = '';
   room = '';
@@ -167,6 +171,8 @@ export class Session {
         if (message.type === 'luxuryResult') this.luxuryResult = message;
         if (message.type === 'cabResult' && message.action === 'buy') this.cabBuyResult = message;
         if (message.type === 'cabResult' && message.action === 'paint') this.cabPaintResult = message;
+        if (message.type === 'marketState'&&Number.isSafeInteger(message.requestId)&&Array.isArray(message.listings)&&Array.isArray(message.owned)&&Array.isArray(message.shop))this.marketState=message;
+        if (message.type === 'marketResult'&&Number.isSafeInteger(message.requestId)&&typeof message.operationId==='string'&&['not-found','pending','completed','rejected'].includes(message.status))this.marketResult=message;
         if (message.type === 'vehicleStyleResult') this.vehicleStyleResult = message;
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
@@ -187,7 +193,7 @@ export class Session {
         }
       } catch (error) { console.error('Room message processing failed:',error);this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else if(event.code===1011&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.'].includes(event.reason)){this.error=event.reason;} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else if((event.code===1011||event.code===1008)&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.','Property not found. Return to Bay.','Property service unavailable. Retry or return to Bay.'].includes(event.reason)){this.error=event.reason;} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   queueEdge(kind:'jump'|'flip',id:number) {
@@ -296,6 +302,11 @@ export class Session {
     const requestId=++this.nextUpgradeRequest;this.cabPaintResult=null;
     return this.status==='online'&&this.walletStatus==='ready'&&this.send({type:'cab',action:'paint',assetId,paint,requestId})?requestId:null;
   }
+  market(request:MarketClientRequest):number|null {
+    const requestId=++this.nextUpgradeRequest;
+    if(this.status!=='online'||this.walletStatus!=='ready')return null;
+    try{return this.send({type:'market',...request,requestId})?requestId:null;}catch{return null;}
+  }
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
     if(this.status!=='online'||!this.actionWithBarrier({type:'upgrade',upgrade,requestId},false))this.upgradeResult={requestId,upgrade,ok:false};
@@ -359,5 +370,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

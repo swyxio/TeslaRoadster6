@@ -7,7 +7,7 @@ import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8787');
 assert.ok(base.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(base.hostname),'run only against local Wrangler');
 const health=await fetch(new URL('/api/health',base));assert.equal((await health.json() as {version:number}).version,PROTOCOL_VERSION);
-assert.equal(PROTOCOL_VERSION,39);
+assert.equal(PROTOCOL_VERSION,40);
 const url=new URL(`/api/room/predict-${Date.now()}`,base);url.protocol='ws:';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean,label:string,timeout=6000){

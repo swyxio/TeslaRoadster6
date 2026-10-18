@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { AchievementId } from '../shared/achievements';
-import { levelForCash, type DeliveryState, type Level, type Order } from '../shared/delivery';
+import { initialDelivery, levelForCash, rerouteInaccessibleOrder, type DeliveryState, type Level, type Order } from '../shared/delivery';
+import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import type { VehicleUpgrades } from '../shared/upgrades';
@@ -12,6 +13,7 @@ import { StarshipLedger } from './starship';
 import { normalizeName } from './global-chat-core';
 import type { StarshipContributorGroup } from '../shared/starship';
 import type { EarningsEvents, SettledDeliveryEarning } from '../shared/earnings-events';
+import { MARKET_LOCK_KEY, MarketWallet, type MarketWalletIntent, type MarketWalletPrepared } from './market-wallet';
 
 export type SavedVehicle = { upgrades:VehicleUpgrades; tankLevel:TankLevel; style:VehicleStyle };
 export type SavedVehicles = Record<string,SavedVehicle>;
@@ -27,12 +29,12 @@ export type DriverProgress = {
 };
 export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:SettledDeliveryEarning[]} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order}
   | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
-  | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order};
+  | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order} | {kind:'ticket';evidence:TicketEvidence;orderBefore:Order;completedBefore:number};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
   | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number}
   | {ok:false;reason:'superseded'|'revision'|'conflict'|'invalid'|'unaffordable'|'owned'|'reserved'|'not-ready';available?:number};
-type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean};
+type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean;marketPaint?:import('../shared/market-protocol').MarketPaint|null};
 type Receipt = {payload:string;outcome:DriverOutcome;cabEvents?:EarningsEvents};
 type PrivacyPending = {revision:number;name:string|null};
 type OutboxRetry = {attempts:number;next:number};
@@ -88,8 +90,31 @@ function validDeliveryEarnings(parts:SettledDeliveryEarning[],previous:DriverPro
 
 /** One authority per saved identity. Only trusted worker RPCs can reach it. */
 export class DriverProfile extends DurableObject<Env> {
-  async acquire(driverId:string,fence:string,initial:DriverProgress,roomId:string):Promise<{revision:number;sequence:number;progress:DriverProgress;resumed:boolean}> {
+  private marketParticipant:MarketWallet|null=null;
+  private marketWallet():MarketWallet {
+    if(this.marketParticipant)return this.marketParticipant;
+    type Room = {
+      pauseMarketWallet(driverId:string,fence:string,transactionId:string):Promise<boolean>;
+      installMarketWallet(driverId:string,oldFence:string,newFence:string,transactionId:string,revision:number,sequence:number,progress:DriverProgress,marketPaint:import('../shared/market-protocol').MarketPaint|null):Promise<void>;
+      resumeMarketWallet(driverId:string,fence:string,transactionId:string):Promise<void>;
+    };
+    const room=(id:string)=>this.env.ROOMS.get(this.env.ROOMS.idFromName(id)) as unknown as Room;
+    return this.marketParticipant=new MarketWallet(this.ctx.storage,{
+      pause:(driverId,fence,transactionId,id)=>room(id).pauseMarketWallet(driverId,fence,transactionId),
+      drain:(driverId,fence,id)=>this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(id)).freeze(driverId,fence),
+      install:(driverId,oldFence,newFence,transactionId,id,revision,sequence,progress,marketPaint)=>room(id).installMarketWallet(driverId,oldFence,newFence,transactionId,revision,sequence,progress,marketPaint),
+      resume:(driverId,fence,transactionId,id)=>room(id).resumeMarketWallet(driverId,fence,transactionId),
+    });
+  }
+
+  /** Trusted worker-to-worker calls only; no public fetch route exposes these. */
+  marketPrepare(intent:MarketWalletIntent):Promise<MarketWalletPrepared>{return this.marketWallet().prepare(intent);}
+  marketApply(transactionId:string):Promise<boolean>{return this.marketWallet().apply(transactionId);}
+  marketRelease(transactionId:string,decision:'commit'|'abort'):Promise<boolean>{return this.marketWallet().release(transactionId,decision);}
+
+  async acquire(driverId:string,fence:string,initial:DriverProgress,roomId:string):Promise<{revision:number;sequence:number;progress:DriverProgress;marketPaint:import('../shared/market-protocol').MarketPaint|null;resumed:boolean}> {
     for(;;){
+      if(await this.ctx.storage.get(MARKET_LOCK_KEY))throw new Error('Market wallet transaction pending');
       const previous=await this.ctx.storage.get<DriverRecord>('driver');
       if(previous && previous.driverId!==driverId)throw new Error('Driver identity mismatch');
       if(previous && previous.fence!==fence){
@@ -99,13 +124,14 @@ export class DriverProfile extends DurableObject<Env> {
         await this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(previous.roomId)).freeze(driverId,previous.fence);
       }
       const result=await this.ctx.storage.transaction(async txn=>{
+        if(await txn.get(MARKET_LOCK_KEY))throw new Error('Market wallet transaction pending');
         const current=await txn.get<DriverRecord>('driver');
         if(current?.fence!==previous?.fence || current?.roomId!==previous?.roomId)return null;
         const progress=current?.progress??initial;
         const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet()};
         const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false,progress:normalized}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:normalized,incomeActivated:false};
         await txn.put('driver',record);
-        return {revision:record.revision,sequence:record.sequence,progress:record.progress,resumed:!!current};
+        return {revision:record.revision,sequence:record.sequence,progress:record.progress,marketPaint:record.marketPaint??null,resumed:!!current};
       });
       if(result)return result;
     }
@@ -156,6 +182,23 @@ export class DriverProfile extends DurableObject<Env> {
           else {
             next.cybercabs=result.fleet;next.cash=result.cash;next.eligibleIncome=result.eligibleIncome;
             if(intent.action.kind!=='cab-income' && intent.action.order)next.order=structuredClone(intent.action.order);
+          }
+        } else if(intent.action.kind==='ticket'){
+          const evidence=intent.action.evidence;
+          if(!evidence||![evidence.seconds,evidence.peakHeight,evidence.at,evidence.x,evidence.z].every(Number.isFinite)||
+            evidence.seconds<0||evidence.peakHeight<0||evidence.at<0||typeof evidence.canFly!=='boolean')error='invalid';
+          else {
+            const delivery=initialDelivery(evidence);
+            Object.assign(delivery,{cash:next.cash,level:levelForCash(next.cash),tickets:next.tickets,completed:next.completed,order:{...next.order}});
+            const before=intent.action.orderBefore,order=delivery.order;
+            if(before&&next.completed===intent.action.completedBefore&&before.restaurant===order.restaurant&&before.customer===order.customer&&before.stage===order.stage&&
+              before.pickupEstimate===order.pickupEstimate&&before.estimate===order.estimate&&before.base===order.base&&Number.isFinite(before.elapsed)&&before.elapsed>=0)
+              order.elapsed=Math.max(order.elapsed,before.elapsed);
+            const previousLevel=delivery.level;
+            applyTicketEvidence(delivery,evidence);
+            if(delivery.level<previousLevel)rerouteInaccessibleOrder(delivery,evidence,evidence.canFly);
+            if(!validAmount(delivery.cash)||!validAmount(delivery.tickets))error='invalid';
+            else {next.cash=delivery.cash;next.tickets=delivery.tickets;next.order=delivery.order;}
           }
         } else if(intent.action.kind==='contribute'){
           const amount=intent.action.amount;

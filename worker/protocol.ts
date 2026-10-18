@@ -5,8 +5,9 @@ import type { EdgeBaseline } from '../shared/tick-input';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
 import { isStyleChoice, type PaintId, type StyleChoice } from '../shared/vehicle-style';
+import type { MarketRequest } from '../shared/market-protocol';
 export type ActionFence = {actionSeq:number;edgeBaseline:EdgeBaseline};
-export type ClientMessage = {type:'starship';action:'status';requestId:number} | {type:'starship';action:'name';name:string|null;requestId:number} | {type:'identity';code:string|null;requestId:number} | {type:'cab';action:'buy';requestId:number} | {type:'cab';action:'paint';assetId:string;paint:PaintId;requestId:number} | {type:'luxury';action:'buy';vehicle:LuxuryVehicleId;requestId:number} | ({type:'luxury';action:'collect';vehicle:LuxuryVehicleId;requestId:number} & ActionFence) | ({type:'vehicleStyle';requestId:number} & StyleChoice) | { type: 'input'; seq:number; targetTick:number; roomEpoch:string; controlRevision:number; actionSeq:number; input: Input } | {type:'sync';token:number} | ({ type: 'interact' | 'reset' | 'autopilot' | 'dome' } & ActionFence) | { type: 'name'; name: string } | ({type:'selectVehicle';kind:VehicleId} & ActionFence) | {type:'parking';action:'park'|'queue'|'start'|'leave'} | ({type:'race';action:'join';courseId:'short'|'oval'} & ActionFence) | {type:'race';action:'start'|'leave';courseId:'short'|'oval'} | ({type:'minigame';game:'park'|'queue'|'short'|'oval'} & ActionFence) | ({type:'destination';x:number;z:number;requestId:number} & ActionFence) | ({type:'deliveryDestination';requestId:number} & ActionFence) | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'board';requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number};
+export type ClientMessage = MarketRequest | {type:'starship';action:'status';requestId:number} | {type:'starship';action:'name';name:string|null;requestId:number} | {type:'identity';code:string|null;requestId:number} | {type:'cab';action:'buy';requestId:number} | {type:'cab';action:'paint';assetId:string;paint:PaintId;requestId:number} | {type:'luxury';action:'buy';vehicle:LuxuryVehicleId;requestId:number} | ({type:'luxury';action:'collect';vehicle:LuxuryVehicleId;requestId:number} & ActionFence) | ({type:'vehicleStyle';requestId:number} & StyleChoice) | { type: 'input'; seq:number; targetTick:number; roomEpoch:string; controlRevision:number; actionSeq:number; input: Input } | {type:'sync';token:number} | ({ type: 'interact' | 'reset' | 'autopilot' | 'dome' } & ActionFence) | { type: 'name'; name: string } | ({type:'selectVehicle';kind:VehicleId} & ActionFence) | {type:'parking';action:'park'|'queue'|'start'|'leave'} | ({type:'race';action:'join';courseId:'short'|'oval'} & ActionFence) | {type:'race';action:'start'|'leave';courseId:'short'|'oval'} | ({type:'minigame';game:'park'|'queue'|'short'|'oval'} & ActionFence) | ({type:'destination';x:number;z:number;requestId:number} & ActionFence) | ({type:'deliveryDestination';requestId:number} & ActionFence) | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'board';requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -33,6 +34,28 @@ export function parseMessage(raw: string): ClientMessage | null {
   if(value.type==='identity' && (value.code===null || (typeof value.code==='string' && value.code.length<=160)) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'identity',code:value.code as string|null,requestId:value.requestId as number};
   if(value.type==='cab' && value.action==='buy' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'cab',action:'buy',requestId:value.requestId as number};
   if(value.type==='cab' && value.action==='paint' && typeof value.assetId==='string' && /^[-a-zA-Z0-9]{1,128}$/.test(value.assetId) && isStyleChoice('paint',value.paint) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'cab',action:'paint',assetId:value.assetId,paint:value.paint as PaintId,requestId:value.requestId as number};
+  if(value.type==='market'){
+    const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
+    const whole=(v:unknown,min:number):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min;
+    if(!whole(value.requestId,1))return null;
+    const base={type:'market' as const,requestId:value.requestId};
+    if(value.action==='browse'){
+      if((value.cursor!==undefined&&!uuid(value.cursor))||(value.ownedCursor!==undefined&&!uuid(value.ownedCursor)))return null;
+      return {...base,action:'browse',...(value.cursor?{cursor:value.cursor as string}:{}),...(value.ownedCursor?{ownedCursor:value.ownedCursor as string}:{})};
+    }
+    if(!uuid(value.operationId))return null;
+    const operation={...base,operationId:value.operationId};
+    if(value.action==='status')return {...operation,action:'status'};
+    if(value.action==='acquire'&&typeof value.catalogId==='string'&&/^[a-z0-9-]{1,64}$/.test(value.catalogId))return {...operation,action:'acquire',catalogId:value.catalogId};
+    if(!uuid(value.assetId))return null;
+    if(value.action==='equip'||value.action==='unequip')return {...operation,action:value.action,assetId:value.assetId};
+    if(value.action==='list'&&whole(value.price,0))return {...operation,action:'list',assetId:value.assetId,price:value.price};
+    if(!uuid(value.listingId)||!whole(value.expectedRevision,1))return null;
+    const listing={...operation,assetId:value.assetId,listingId:value.listingId,expectedRevision:value.expectedRevision};
+    if(value.action==='reprice'&&whole(value.price,0))return {...listing,action:'reprice',price:value.price};
+    if(value.action==='cancel'||value.action==='buy')return {...listing,action:value.action};
+    return null;
+  }
   if(value.type==='starship'){
     if(value.action==='status'&&Number.isSafeInteger(value.requestId)&&(value.requestId as number)>0)return {type:'starship',action:'status',requestId:value.requestId as number};
     if(value.action==='name'&&(value.name===null||(typeof value.name==='string'&&value.name.length<=256))&&Number.isSafeInteger(value.requestId)&&(value.requestId as number)>0)

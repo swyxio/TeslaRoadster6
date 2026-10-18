@@ -232,7 +232,10 @@ try{
   type AlarmState={calls:number;active:boolean;recovering:string[]};
   const alarmState=()=>post<AlarmState>('/__cab-stage/alarm-state',{room:sharedRoom});
   await until(async()=>{const state=await alarmState();return state.calls>=1&&state.recovering.includes(slow.driverId);},'alarm reaches held profile');
-  const callsBeforeStage=(await alarmState()).calls;
+  // The call counter increments before the scan. Ensure that scan has ended;
+  // otherwise the new stage can legitimately be recovered by the first call.
+  let callsBeforeStage=0;
+  await until(async()=>{const state=await alarmState();if(state.active)return false;callsBeforeStage=state.calls;return true;},'first held-flight alarm returns');
   const started=(await rpc<{started:number}>('fault-state',{driverId:slow.driverId})).started;
   const orphanStage=batch(orphan.driverId,orphan.fence,sharedRoom,2,0,240);
   assert.equal(await stage(orphanStage),'accepted');

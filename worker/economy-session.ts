@@ -10,11 +10,15 @@ import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabInte
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
 import { RoomEconomy, type CabIncomeStage } from './room-economy';
 import type { EarningsEvents, SettledDeliveryEarning } from '../shared/earnings-events';
+import { applyTicketEvidence, type TicketEvidence } from '../shared/police';
+import type { MarketPaint } from '../shared/market-protocol';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
 type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
-type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;cabEvents?:EarningsEvents;onApplied?:(outcome:DriverOutcome)=>void;replayGameAward?:()=>void;awardRejections?:number};
+type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;cabEvents?:EarningsEvents;staged?:Promise<DriverOutcome|null>;onApplied?:(outcome:DriverOutcome)=>void;replayGameAward?:()=>void;awardRejections?:number};
 const MAX_GAME_AWARD_RETRIES=1;
+const CAB_CHECKPOINT_MS=1_000;
+const MAX_CAB_STAGES=8;
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 // Compare only durable fields touched by simulation. Vehicle maps are copied on change.
 const durableFields=(d:Draft)=>[d.delivery.cash,d.delivery.lifetimeIncome,d.delivery.earned,d.delivery.completed,d.delivery.level,d.delivery.tickets,d.delivery.order.restaurant,d.delivery.order.customer,d.delivery.order.stage,d.delivery.order.pickupEstimate,d.delivery.order.estimate,d.delivery.order.base,d.delivery.ota.enabled,d.delivery.ota.active,d.achievements.unlocked.length,d.vehicles];
@@ -53,14 +57,18 @@ export class EconomySession {
   private cabIntervals:CybercabInterval[]=[];
   private suspendedCabs=new Set<string>();
   private cabBackpressure=false;
+  private marketPaint:string|null=null;
+  private marketPaused=false;
+  private marketResume:Promise<void>|null=null;
   constructor(private env:Env,private economy:DurableObjectStub<RoomEconomy>,private world:World,private player:Player,private socket:WebSocket,
-    driverId:string,fence:string,private roomId:string,revision:number,sequence:number,progress:DriverProgress,pickupGenerations:Map<string,number>,private pendingPickups:Set<string>) {
+    driverId:string,fence:string,private roomId:string,revision:number,sequence:number,progress:DriverProgress,pickupGenerations:Map<string,number>,private pendingPickups:Set<string>,marketPaint:MarketPaint|null=null) {
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);
     this.pickupGenerations=pickupGenerations;
     this.install(progress);
     this.draft={delivery:structuredClone(player.delivery),achievements:structuredClone(player.achievements),cockpit:structuredClone(player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=player.delivery.ota.renewAt;
     this.rememberTimers();
+    this.setMarketPaint(marketPaint);
   }
   private driver(id=this.driverId){return this.env.DRIVERS.get(this.env.DRIVERS.idFromName(id));}
   private send(value:unknown){if(this.closed)return;try{this.socket.send(JSON.stringify(value));}catch{}}
@@ -93,6 +101,9 @@ export class EconomySession {
   get cabFleet(){return this.committed.cybercabs??emptyCybercabFleet();}
   close(){this.closed=true;}
   finish(){
+    // A paused handoff has already drained before sealing its old fence.
+    // Disconnect must not create work on that sealed fence.
+    if(this.marketPaused){this.close();return;}
     this.closeCabIntervals();
     if(!this.failed && this.timersChanged())
       this.enqueue({kind:'progress',progress:this.progress()});
@@ -104,6 +115,55 @@ export class EconomySession {
     while(this.processing || this.queue.length || this.staging.size || (!this.failed&&this.cabIntervals.length)){
       this.flushCabIncome();await wait(100);
     }
+  }
+  /** Caller holds this player's world simulation and rejects actions first. */
+  async pauseForMarket():Promise<void>{
+    if(this.closed||this.failed)throw new Error('Wallet is unavailable');
+    this.marketPaused=true;
+    this.pauseCabs();
+    const drain=async()=>{
+      while(this.processing||this.queue.length||this.staging.size||this.cabIntervals.length){
+        if(this.closed||this.failed)throw new Error('Wallet could not drain');
+        this.flushCabIncome();await wait(100);
+      }
+      if(this.closed||this.failed)throw new Error('Wallet could not drain');
+    };
+    await drain();
+    // Timers may have advanced without a wallet event; checkpoint only after
+    // all earlier drafts settle, so a rejected predecessor cannot erase it.
+    if(this.timersChanged()){this.enqueue({kind:'progress',progress:this.progress()});await drain();}
+  }
+  /** The old fence must have been sealed while the player remains held. */
+  installMarket(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress,paint:MarketPaint|null):void{
+    if(!this.marketPaused||this.closed||this.failed||this.processing||this.queue.length||this.staging.size||driverId!==this.driverId)throw new Error('Wallet is not paused and drained');
+    this.installProfile(driverId,fence,revision,sequence,progress,paint);
+  }
+  resumeMarket():Promise<void>{
+    if(this.marketResume)return this.marketResume;
+    const resume=(async()=>{
+      if(!this.marketPaused||this.closed||this.failed)throw new Error('Wallet is unavailable');
+      await this.ensureAccessibleOrder();
+      if(this.closed||this.failed)throw new Error('Wallet is unavailable');
+      this.marketPaused=false;this.wallet();
+    })();
+    this.marketResume=resume;
+    void resume.finally(()=>{if(this.marketResume===resume)this.marketResume=null;}).catch(()=>{});
+    return resume;
+  }
+  /** Reconcile an inaccessible job after a balance-changing market handoff. */
+  async ensureAccessibleOrder():Promise<void>{
+    if(this.closed||this.failed)throw new Error('Wallet is unavailable');
+    const car=this.world.entities.find(e=>e.id===this.player.entityId);
+    if(!car)throw new Error('Driver is unavailable');
+    if(!rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car)))return;
+    const item=this.enqueue({kind:'progress',progress:this.progress()});
+    const outcome=await new Promise<DriverOutcome>(resolve=>{item.onApplied=resolve;});
+    if(!outcome.ok)throw new Error('Unable to save rerouted order');
+    while(this.processing||this.queue.length||this.staging.size){
+      if(this.closed||this.failed)throw new Error('Wallet could not drain');
+      await wait(100);
+    }
+    if(this.closed||this.failed)throw new Error('Wallet could not drain');
   }
   barrier(token:number){this.barriers.push({token,after:this.submitted});}
   sync():number|undefined{
@@ -117,18 +177,28 @@ export class EconomySession {
     while(this.settledOutOfOrder.delete(this.settled+1))this.settled++;
   }
   /** The caller must serialize identity switches and ensure no guest events happened. */
-  replace(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress){
+  replace(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress,marketPaint:MarketPaint|null=null){
+    this.installProfile(driverId,fence,revision,sequence,progress,marketPaint);
+    this.wallet();
+  }
+  private installProfile(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress,marketPaint:MarketPaint|null){
     this.cabClock=null;
+    this.nextCabStage=1;this.stageTail=Promise.resolve(null);this.prepareTail=Promise.resolve(null);
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);
     this.install(progress);
     this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=this.player.delivery.ota.renewAt;
     this.rememberTimers();
-    this.wallet();
+    this.setMarketPaint(marketPaint);
   }
+  setMarketPaint(paint:MarketPaint|null){
+    this.marketPaint=paint?.catalogId??null;
+    for(const car of this.world.entities)if(car.owner===this.player.id&&car.kind!=='person'&&!car.cab&&!car.retiredCab)this.paintPersonalVehicle(car);
+  }
+  private paintPersonalVehicle(car:Entity){if(this.marketPaint)car.marketPaint=this.marketPaint;else delete car.marketPaint;}
   /** Only committed ownership may enter the world or be shown to the player. */
   buyCab(reply:(ok:boolean,reason?:string)=>void){
-    if(this.failed||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
     const assetId=crypto.randomUUID();
     const result=purchaseCybercab(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,assetId);
     if(!result.ok){reply(false,result.reason);return;}
@@ -141,7 +211,7 @@ export class EconomySession {
       outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.reason));
   }
   paintCab(assetId:string,paint:PaintId,reply:(ok:boolean,reason?:string)=>void){
-    if(this.failed||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32||this.closed){reply(false,'unavailable');return;}
     const result=paintCybercab(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,assetId,paint);
     if(!result.ok){reply(false,result.reason);return;}
     const previousLevel=this.draft.delivery.level;
@@ -163,6 +233,7 @@ export class EconomySession {
   cabReadyToRetire(id:string){return this.suspendedCabs.has(id)&&!this.cabOpen.has(id)&&!this.cabIntervals.some(interval=>interval.assetId===id)&&!this.pending&&!this.processing&&!this.staging.size;}
   /** Record only observed consecutive room ticks while the owner is active. */
   observeCabs(now:number){
+    if(this.marketPaused)return;
     const previous=this.cabClock;this.cabClock=now;
     if(this.closed||this.failed||previous===null||!Number.isSafeInteger(now)||now<=previous||now-previous>200){
       this.closeCabIntervals();this.flushCabIncome();return;
@@ -177,30 +248,28 @@ export class EconomySession {
       if(open&&open.endMs===previous)open.endMs=now;
       else {this.closeCabInterval(id);this.cabOpen.set(id,{assetId:id,startMs:previous,endMs:now});}
     }
-    // Checkpoint at most every ten seconds of observed operation. A stalled
-    // or interrupted room does not infer activity through the missing time.
-    for(const [id,interval] of this.cabOpen)if(interval.endMs-interval.startMs>=10_000)this.closeCabInterval(id);
+    // Batch consecutive observations; missing room ticks never imply activity.
+    for(const [id,interval] of this.cabOpen)if(interval.endMs-interval.startMs>=CAB_CHECKPOINT_MS)this.closeCabInterval(id);
     this.flushCabIncome();
-    // Bound unjournaled intervals if this driver's persistence is unavailable.
-    if((this.cabIntervals.length>=128||this.staging.size>=32)&&!this.cabBackpressure){
-      this.cabBackpressure=true;this.closeCabIntervals();
-      while(this.cabIntervals.length)this.stageCabIncome(this.cabIntervals.splice(0,128));
-      this.failed=true;
-      try{this.socket.close(1011,'Cab income delayed. Please rejoin.');}catch{}
-    }
   }
   private flushCabIncome(){
     if(this.failed||!this.cabIntervals.length)return;
-    const intervals=this.cabIntervals.slice(0,128);
-    this.cabIntervals.splice(0,intervals.length);
-    this.stageCabIncome(intervals);
+    // Preserve every observed open tail before stopping at the backlog limit.
+    // Stages still awaiting acceptance remain volatile if the room crashes.
+    if(this.staging.size>=MAX_CAB_STAGES-1)this.closeCabIntervals();
+    while(this.cabIntervals.length)this.stageCabIncome(this.cabIntervals.splice(0,128));
+    if(this.staging.size>=MAX_CAB_STAGES&&!this.cabBackpressure){
+      this.cabBackpressure=true;this.failed=true;
+      try{this.socket.close(1011,'Cab income delayed. Please rejoin.');}catch{}
+    }
   }
-  hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),gameAward:(player,apply,capture)=>this.gameAward(player,apply,capture),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
-  update(player:Player,apply:()=>EconomyUpdateResult,rate:{atMs:number;multiplier:1|1.5|2|3}|null=null){
-    if(this.failed)return;
+  hooks():EconomyHooks {return {update:(player,apply,ticket)=>this.update(player,apply,null,ticket),gameAward:(player,apply,capture)=>this.gameAward(player,apply,capture),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
+  update(player:Player,apply:()=>EconomyUpdateResult,rate:{atMs:number;multiplier:1|1.5|2|3}|null=null,ticket?:TicketEvidence){
+    if(this.failed||this.marketPaused)return;
     // Bound memory during an extended backend outage. The pending events keep
     // retrying after this driver leaves; the rest of the room is unaffected.
-    if(this.queue.length>=32){
+    const overloaded=this.queue.length>=32;
+    if(overloaded&&!ticket){
       // Preserve the final observed intervals before closing this session. Do
       // not project them through a speculative wallet that may be rejected;
       // the journal settles them after the preceding events, or on recovery.
@@ -216,6 +285,7 @@ export class EconomySession {
     const live={delivery:player.delivery,achievements:player.achievements,cockpit:player.cockpit};
     const before=durableFields(this.draft);
     const previousLevel=this.draft.delivery.level;
+    const ticketOrder=ticket?structuredClone(this.draft.delivery.order):undefined,ticketCompleted=this.draft.delivery.completed;
     player.delivery=this.draft.delivery;player.achievements=this.draft.achievements;player.cockpit=this.draft.cockpit;
     let payouts:EconomyUpdateResult;
     try{
@@ -232,8 +302,12 @@ export class EconomySession {
       return {sourceId:component.sourceId,kind:component.kind,base:component.amount,amount,atMs:rate.atMs,multiplier:component.kind==='checkpoint'?1:rate.multiplier};
     }):[];
     let item:Item|undefined;
-    if(changed(before,durableFields(this.draft)))item=this.enqueue({kind:'progress',progress:this.progress(),earnings});
+    if(changed(before,durableFields(this.draft)))item=this.enqueue(ticket?{kind:'ticket',evidence:structuredClone(ticket),orderBefore:ticketOrder!,completedBefore:ticketCompleted}:{kind:'progress',progress:this.progress(),earnings});
     else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())item=this.enqueue({kind:'progress',progress:this.progress()});
+    if(overloaded){
+      this.closeCabIntervals();while(this.cabIntervals.length)this.stageCabIncome(this.cabIntervals.splice(0,128));
+      this.failed=true;try{this.socket.close(1011,'Wallet delayed. Rejoin to recover.');}catch{}
+    }
     // Timers and flight geometry can advance visually; money, awards and order stages remain committed.
     if(!this.pending){
       live.delivery.activeSeconds=this.draft.delivery.activeSeconds;live.delivery.activeUntil=this.draft.delivery.activeUntil;
@@ -252,6 +326,12 @@ export class EconomySession {
     const ordinal=++this.submitted;
     const intent:EconomyIntent={eventId:crypto.randomUUID(),driverId:this.driverId,fence:this.fence,roomId:this.roomId,revision:this.nextRevision++,sequence:this.nextSequence++,action,...(pickup?{pickup}:{})};
     const item:Item={ordinal,intent,view:structuredClone(this.draft),result:null,onApplied};
+    if(action.kind==='ticket'){
+      const stage={eventId:intent.eventId,driverId:intent.driverId,fence:intent.fence,roomId:intent.roomId,walletOrder:intent.sequence,action};
+      item.staged=this.stageTail.then(previous=>previous??this.persistStage(()=>this.economy.stageTicket(stage)));
+      this.stageTail=item.staged;
+      item.onApplied=outcome=>{if(!outcome.ok){this.failed=true;if(!this.closed)try{this.socket.close(1011,'Ticket interrupted. Please rejoin.');}catch{}}};
+    }
     this.queue.push(item);
     if(action.kind==='progress')this.rememberTimers();
     if(!this.processing)void this.process();
@@ -302,15 +382,20 @@ export class EconomySession {
     }
     const intent:EconomyIntent={eventId:stage.eventId,driverId:stage.driverId,fence:stage.fence,roomId:stage.roomId,
       revision:this.nextRevision++,sequence:this.nextSequence++,action:{kind:'cab-income',intervals:stage.intervals}};
-    this.queue.push({ordinal,intent,view:structuredClone(this.draft),result:null,cabEvents:events,onApplied:outcome=>{
+    const assigned=this.stageTail.then(previous=>previous??this.persistStage(()=>this.economy.assignCab(stage,intent.sequence)));
+    this.stageTail=assigned;
+    this.queue.push({ordinal,intent,view:structuredClone(this.draft),result:null,cabEvents:events,staged:assigned,onApplied:outcome=>{
       if(!outcome.ok){this.failed=true;if(!this.closed)try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}}
     }});
     if(!this.processing)void this.process();
   }
   private async persistCabStage(stage:CabIncomeStage):Promise<DriverOutcome|null>{
+    return this.persistStage(()=>this.economy.stageCab(stage));
+  }
+  private async persistStage(call:()=>Promise<'accepted'|'superseded'|'conflict'>):Promise<DriverOutcome|null>{
     for(;;){
       try{
-        const result=await this.economy.stageCab(stage);
+        const result=await call();
         if(result==='accepted')return null;
         return {ok:false,reason:result};
       }catch{}
@@ -322,11 +407,23 @@ export class EconomySession {
     return progress.cash===item.view.delivery.cash&&progress.eligibleIncome===item.view.delivery.lifetimeIncome&&
       JSON.stringify(progress.cybercabs??emptyCybercabFleet())===JSON.stringify(item.view.cybercabs);
   }
+  private rebaseTicket(item:Item,progress:DriverProgress):boolean{
+    const expected=item.view.delivery,actual=progress.order,order=expected.order;
+    return progress.cash===expected.cash&&progress.tickets===expected.tickets&&progress.level===expected.level&&
+      actual.restaurant===order.restaurant&&actual.customer===order.customer&&actual.stage===order.stage&&
+      actual.pickupEstimate===order.pickupEstimate&&actual.estimate===order.estimate&&actual.base===order.base;
+  }
   private async process(){
     this.processing=true;
     try {
       while(this.queue.length){
         const item=this.queue[0];
+        const stageFailure=item.staged?await item.staged:null;
+        if(stageFailure){
+          this.failed=true;this.closed=true;try{this.socket.close(1011,'Economy interrupted. Rejoin to recover.');}catch{}
+          for(const pending of this.queue.splice(0))if(pending.intent.action.kind!=='cab-income'&&pending.intent.action.kind!=='ticket')pending.onApplied?.(stageFailure);
+          break;
+        }
         let outcome:DriverOutcome|null=null;
         while(!outcome){
           try{outcome=await this.economy.submit(item.intent);}catch{}
@@ -382,6 +479,18 @@ export class EconomySession {
                 discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
               }
             }
+            if(discarded.intent.action.kind==='ticket'&&!this.failed){
+              const staged=discarded.staged?await discarded.staged:null;
+              if(staged){
+                this.failed=true;if(!this.closed)try{this.socket.close(1011,'Ticket interrupted. Please rejoin.');}catch{}
+              }else{
+                const evidence=discarded.intent.action.evidence,previousLevel=this.draft.delivery.level;
+                applyTicketEvidence(this.draft.delivery,evidence);
+                if(this.draft.delivery.level<previousLevel)rerouteInaccessibleOrder(this.draft.delivery,evidence,evidence.canFly);
+                discarded.intent.revision=this.nextRevision++;discarded.intent.sequence=this.nextSequence++;
+                discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
+              }
+            }
             this.markSettled(discarded.ordinal);
             if(discarded.intent.action.kind!=='cab-income')discarded.onApplied?.({ok:false,reason:'revision'});
             replayAward(discarded);
@@ -391,10 +500,11 @@ export class EconomySession {
           // committed order and its still-valid elapsed time.
           if(this.closed&&!this.failed&&this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
         }else{
-          if(item.intent.action.kind==='cab-income'&&!this.rebaseCabIncome(item,outcome.progress)){
+          if((item.intent.action.kind==='cab-income'&&!this.rebaseCabIncome(item,outcome.progress))||
+            (item.intent.action.kind==='ticket'&&!this.rebaseTicket(item,outcome.progress))){
             // The committed receipt remains in the journal for fenced recovery.
-            this.failed=true;this.closed=true;try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}
-            for(const pending of this.queue.splice(0))if(pending.intent.action.kind!=='cab-income')pending.onApplied?.({ok:false,reason:'revision'});
+            this.failed=true;this.closed=true;try{this.socket.close(1011,'Economy interrupted. Please rejoin.');}catch{}
+            for(const pending of this.queue.splice(0))if(pending.intent.action.kind!=='cab-income'&&pending.intent.action.kind!=='ticket')pending.onApplied?.({ok:false,reason:'revision'});
             break;
           }
           this.committed=structuredClone(outcome.progress);this.committedRevision=outcome.revision;this.markSettled(item.ordinal);
@@ -417,7 +527,7 @@ export class EconomySession {
         // the room or other players; later events for this driver wait here.
         // Preserve a failed staged-income receipt for fenced recovery instead
         // of compacting away the only durable evidence of the owed interval.
-        if(!outcome.ok&&item.intent.action.kind==='cab-income')break;
+        if(!outcome.ok&&(item.intent.action.kind==='cab-income'||item.intent.action.kind==='ticket'))break;
         let acknowledged=false;
         while(!acknowledged){
           try{acknowledged=await this.economy.acknowledge(item.intent);}catch{}
@@ -428,7 +538,7 @@ export class EconomySession {
     } finally { this.processing=false; }
   }
   pickup(player:Player,car:Entity,pickup:Pickup){
-    if(this.failed||this.queue.length>=32||!pickup.active)return;
+    if(this.failed||this.marketPaused||this.queue.length>=32||!pickup.active)return;
     pickup.active=false;pickup.readyAt=Infinity;this.pendingPickups.add(pickup.id);
     const live={delivery:player.delivery,achievements:player.achievements,cockpit:player.cockpit};
     player.delivery=this.draft.delivery;player.achievements=this.draft.achievements;player.cockpit=this.draft.cockpit;
@@ -450,11 +560,11 @@ export class EconomySession {
   luxury(action:'buy'|'collect',vehicle:LuxuryVehicleId,requestId:number,onCollected?:()=>void){
     const entry=luxuryVehicle(vehicle),car=this.world.entities.find(e=>e.id===this.player.entityId);
     const reply=(ok:boolean,reason?:string,awards?:string[])=>this.send({type:'luxuryResult',requestId,action,vehicle,ok,...(reason?{reason}:{}),...(awards?{awards}:{})});
-    if(this.failed||this.queue.length>=32||!entry||!car||this.lockedCar){reply(false,'unavailable');return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32||!entry||!car||this.lockedCar){reply(false,'unavailable');return;}
     if(action==='collect'){
       if(!this.committed.ownedLuxury.includes(vehicle)||!canCollectLuxury(car)){reply(false,'unavailable');return;}
       const ok=collectLuxury(this.world,this.player.id,vehicle);
-      if(ok){const selected=this.world.entities.find(e=>e.id===this.player.entityId),saved=this.committed.vehicles[vehicle];if(selected&&saved){selected.upgrades=structuredClone(saved.upgrades);selected.tankLevel=saved.tankLevel;selected.style=structuredClone(saved.style);}}
+      if(ok)this.restoreCurrentVehicle();
       if(ok)onCollected?.();
       reply(ok,ok?undefined:'no-space');return;
     }
@@ -473,12 +583,15 @@ export class EconomySession {
   restoreCurrentVehicle(){
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
     const saved=car && this.committed.vehicles[car.kind];
-    if(car && car.owner===this.player.id && saved){car.upgrades=structuredClone(saved.upgrades);car.tankLevel=saved.tankLevel;car.style=structuredClone(saved.style);}
+    if(car && car.owner===this.player.id && !car.cab&&!car.retiredCab){
+      this.paintPersonalVehicle(car);
+      if(saved){car.upgrades=structuredClone(saved.upgrades);car.tankLevel=saved.tankLevel;car.style=structuredClone(saved.style);}
+    }
   }
   boardMars(requestId:number){
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
     const reply=(ok:boolean)=>this.send({type:'marsResult',requestId,action:'board',ok,amount:0});
-    if(!marsGoalReached(this.world.mars)||!car||!atMarsBoarding(car)||this.draft.achievements.unlocked.includes('to-mars')){reply(false);return;}
+    if(this.failed||this.marketPaused||!marsGoalReached(this.world.mars)||!car||!atMarsBoarding(car)||this.draft.achievements.unlocked.includes('to-mars')){reply(false);return;}
     const before=this.submitted;
     this.update(this.player,()=>awardMarsAchievement(this.player));
     const item=this.queue.at(-1);
@@ -493,14 +606,14 @@ export class EconomySession {
   contributeMars(amount:number,requestId:number){
     const reply=(ok:boolean,available?:number)=>this.send({type:'marsResult',requestId,action:'contribute',ok,amount:ok?amount:0,...(available!==undefined?{available}:{})});
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
-    if(this.failed||this.queue.length>=32||!car||!Number.isSafeInteger(amount)||amount<=0||amount>MARS_GOAL||this.draft.delivery.cash<amount){reply(false);return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32||!car||!Number.isSafeInteger(amount)||amount<=0||amount>MARS_GOAL||this.draft.delivery.cash<amount){reply(false);return;}
     const previousLevel=this.draft.delivery.level;
     this.draft.delivery.cash-=amount;this.draft.delivery.level=levelForCash(this.draft.delivery.cash);
     const rerouted=this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
     this.enqueue({kind:'contribute',amount,...(rerouted?{order:{...this.draft.delivery.order}}:{})},undefined,outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.available));
   }
   ota(enabled:boolean,requestId:number){
-    if(this.failed||this.queue.length>=32){this.send({type:'otaResult',requestId,enabled,ok:false});return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32){this.send({type:'otaResult',requestId,enabled,ok:false});return;}
     this.update(this.player,()=>{subscribeOta(this.world,this.player.id,enabled);});
     const latest=this.queue.at(-1);
     const send=(ok:boolean)=>this.send({type:'otaResult',requestId,enabled,ok});
@@ -512,7 +625,7 @@ export class EconomySession {
       if(type==='upgrade')this.send({type:'upgradeResult',requestId,upgrade:value,ok});
       else {const {category,choice}=value as StyleChoice;this.send({type:'vehicleStyleResult',requestId,category,choice,ok});}
     };
-    if(this.failed||this.queue.length>=32||!car||car.kind==='person'||car.owner!==this.player.id||this.lockedCar){reply(false);return;}
+    if(this.failed||this.marketPaused||this.queue.length>=32||!car||car.kind==='person'||car.owner!==this.player.id||this.lockedCar){reply(false);return;}
     const clone=structuredClone(car),world={...this.world,entities:this.world.entities.map(e=>e===car?clone:e)};
     let ok=false;const before=this.submitted;
     this.update(this.player,()=>{

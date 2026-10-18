@@ -8,7 +8,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
-import type { CabIncomeStage } from '../worker/room-economy';
+import type { CabIncomeStage, TicketStage } from '../worker/room-economy';
 
 const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
@@ -108,6 +108,95 @@ try{
   await pause(1_200);
   assert.equal((await rpc<RecordState>('profile',common)).progress.cash,afterCommit.progress.cash);
   assert.equal(await rpc<number>('total'),5_000+gross+2_000,'retry does not double-credit global income');
+
+  // The actual session leaves its sub-checkpoint tail volatile. Once its stage
+  // transaction is accepted, a crash before the reply must recover it once.
+  const liveRoom=`cab-live-${randomUUID().slice(0,8)}`,liveDriver=randomUUID(),liveFence=randomUUID(),live={room:liveRoom,driverId:liveDriver};
+  const tailRoom=`cab-tail-${randomUUID().slice(0,8)}`,tailDriver=randomUUID(),tailFence=randomUUID(),tail={room:tailRoom,driverId:tailDriver};
+  for(const [entry,driver,fence] of [[live,liveDriver,liveFence],[tail,tailDriver,tailFence]] as const){
+    await rpc('producer',{room:entry.room,active:true});await rpc('acquire',{...entry,fence});
+    const buyCab:EconomyIntent={eventId:randomUUID(),driverId:driver,fence,roomId:entry.room,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+    const purchased=await rpc<DriverOutcome>('buy',{...entry,intent:buyCab});success(purchased);
+  }
+  // Use fixed fixture timestamps so both intervals are auditable.
+  const observedStart=Date.now()-5_000;
+  for(const [entry,fence] of [[live,liveFence],[tail,tailFence]] as const){
+    const profile=await rpc<RecordState>('profile',entry);
+    await rpc('start-session',{...entry,fence,progress:profile.progress,start:observedStart});
+    await rpc('session-ticks',{...entry,start:observedStart,count:9});
+    assert.ok(!(await rpc<string[]>('keys',entry)).some(key=>key.startsWith(`cab-stage:${entry.driverId}:`)),
+      '900 ms of observed activity is still an open, volatile tail');
+  }
+  await rpc('hold-stage',live);
+  await rpc('session-ticks',{...live,start:observedStart+900,count:1});
+  await until(()=>rpc<boolean>('stage-held',live),'one-second session stage accepted before its reply');
+  assert.ok((await rpc<string[]>('keys',live)).some(key=>key.startsWith(`cab-stage:${liveDriver}:`)));
+  await stop(child);child=undefined;child=start();await ready();
+  await rpc('freeze',{...live,fence:liveFence},15_000);await rpc('freeze',{...tail,fence:tailFence},15_000);
+  const liveRecovered=await rpc<RecordState>('profile',live),tailRecovered=await rpc<RecordState>('profile',tail);
+  assert.equal(liveRecovered.progress.cybercabs!.assets[0].gross,4);
+  assert.equal(liveRecovered.progress.cybercabs!.assets[0].remainder,1_200_000);
+  assert.equal(liveRecovered.progress.cybercabs!.assets[0].lastEndMs,observedStart+1_000);
+  assert.equal(tailRecovered.progress.cybercabs!.assets[0].gross,0,'the unaccepted open tail cannot be reconstructed after crash');
+  await rpc('acquire',{...live,fence:randomUUID()});
+  assert.equal((await rpc<RecordState>('profile',live)).progress.cybercabs!.assets[0].gross,4,'reconnect cannot double-credit the accepted stage');
+
+  // Keep a rejecting wallet predecessor in flight, capture an actual police
+  // stop, and crash after its durable stage but before the reply. Test both
+  // sides of a cab history delay: wallet assignment, not observation time,
+  // decides whether the cab credit precedes the fine and the level reroute.
+  const ordered=[] as {room:string;driverId:string;fence:string;mode:'cab-first'|'ticket-first';start:number}[];
+  for(const mode of ['cab-first','ticket-first'] as const){
+    const room=`ticket-${randomUUID().slice(0,8)}`,driverId=randomUUID(),fence=randomUUID(),entry={room,driverId,fence,mode,start:Date.now()-5_000};
+    ordered.push(entry);await rpc('producer',{room,active:true});await rpc('acquire',entry);
+    const buyCab:EconomyIntent={eventId:randomUUID(),driverId,fence,roomId:room,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+    const purchased=await rpc<DriverOutcome>('buy',{...entry,intent:buyCab});success(purchased);
+    const progress=structuredClone(purchased.progress);progress.cash=10_109;progress.level=1;
+    progress.order={...progress.order,stage:'dropoff',customer:4};
+    const seed:EconomyIntent={eventId:randomUUID(),driverId,fence,roomId:room,revision:1,sequence:2,action:{kind:'progress',progress}};
+    const seeded=await rpc<DriverOutcome>('buy',{...entry,intent:seed});success(seeded);
+    await rpc('start-session',{...entry,progress:seeded.progress,revision:2,sequence:2});
+    await rpc('hold-head',entry);await rpc('reject-head',entry);
+    await until(()=>rpc<boolean>('head-held',entry),`${mode} rejected predecessor held`);
+    if(mode==='ticket-first')await rpc('hold-prepare',entry);
+    await rpc('session-ticks',{...entry,count:10});
+    if(mode==='ticket-first')await until(()=>rpc<boolean>('prepare-held',entry),'cab history held before wallet assignment');
+    else await until(async()=> (await rpc<string[]>('keys',entry)).some(key=>key.startsWith(`cab-order:${driverId}:`)),'cab wallet assignment persisted');
+    await rpc('hold-ticket',entry);
+    assert.deepEqual(await rpc('ticket',entry),{stopped:true});
+    await until(()=>rpc<boolean>('ticket-held',entry),`${mode} ticket accepted before its reply`);
+    assert.ok((await rpc<string[]>('keys',entry)).some(key=>key.startsWith(`ticket-stage:${driverId}:`)));
+  }
+  await stop(child);child=undefined;child=start();await ready();
+  for(const entry of ordered){
+    await rpc('freeze',entry,15_000);
+    const saved=await rpc<RecordState>('profile',entry);
+    assert.equal(saved.progress.cash,10_001,`${entry.mode}: rejected debit stays absent and cab/fine settle once`);
+    assert.equal(saved.progress.tickets,1,`${entry.mode}: the physical stop survives restart`);
+    assert.equal(saved.progress.cybercabs!.assets[0].gross,4);
+    if(entry.mode==='cab-first')assert.equal(saved.progress.order.customer,4,'credit before the fine keeps the Oakland order eligible');
+    else assert.notEqual(saved.progress.order.customer,4,'fine before the delayed credit reroutes the order');
+    await rpc('acquire',{...entry,fence:randomUUID()});
+    const replay=await rpc<RecordState>('profile',entry);
+    assert.equal(replay.progress.cash,10_001);assert.equal(replay.progress.tickets,1,'fence handoff cannot duplicate the stop');
+  }
+
+  // A delayed retry after acknowledgement cannot recreate an already-paid
+  // police stop with a new profile sequence.
+  const retryRoom=`ticket-retry-${randomUUID().slice(0,8)}`,retryDriver=randomUUID(),retryFence=randomUUID(),retry={room:retryRoom,driverId:retryDriver,fence:retryFence};
+  await rpc('producer',{room:retryRoom,active:true});
+  const acquired=await rpc<{progress:DriverProgress}>('acquire',retry);
+  const ticket:TicketStage={eventId:randomUUID(),driverId:retryDriver,fence:retryFence,roomId:retryRoom,walletOrder:1,
+    action:{kind:'ticket',evidence:{seconds:8,peakHeight:20,at:1,x:0,z:0,canFly:false},orderBefore:acquired.progress.order,completedBefore:acquired.progress.completed}};
+  const ticketIntent:EconomyIntent={eventId:ticket.eventId,driverId:retryDriver,fence:retryFence,roomId:retryRoom,revision:0,sequence:1,action:ticket.action};
+  assert.equal(await rpc('stage-ticket',{...retry,stage:ticket}),'accepted');
+  const charged=await rpc<DriverOutcome>('submit',{...retry,intent:ticketIntent});success(charged);
+  assert.equal(charged.progress.tickets,1);assert.equal(await rpc('acknowledge',{...retry,intent:ticketIntent}),true);
+  assert.equal(await rpc('stage-ticket',{...retry,stage:ticket}),'superseded');
+  assert.ok(!(await rpc<string[]>('keys',retry)).some(key=>key.startsWith(`ticket-stage:${retryDriver}:`)));
+  await rpc('freeze',retry,15_000);
+  assert.equal((await rpc<RecordState>('profile',retry)).progress.tickets,1,'a stale stage retry cannot charge twice');
+
   // Stage order is independent of wallet sequence. A missing ordinal must not
   // be skipped, even after the durable high watermark survives a restart.
   const gapRoom=`cab-gap-${randomUUID().slice(0,8)}`,gapDriver=randomUUID(),gapFence=randomUUID(),gap={room:gapRoom,driverId:gapDriver};
@@ -155,5 +244,60 @@ try{
   const lateKeys=await rpc<string[]>('keys',late);
   assert.ok(!lateKeys.includes(`cab-stage:${lateDriver}:${lateStage.eventId}`));
   assert.ok(!lateKeys.includes(`cab-stage-high:${lateDriver}:${lateFence}`),'a late rejected stage cannot leak its high watermark');
+  assert.ok(lateKeys.includes(`closed-fence:${lateDriver}:${lateFence}`),'the completed fence retains its insertion tombstone');
+
+  // The same delayed first check cannot insert a ticket after the old fence
+  // was sealed, even though that check returns the stale pre-freeze result.
+  const ticketLateRoom=`ticket-late-${randomUUID().slice(0,8)}`,ticketLateDriver=randomUUID(),ticketLateFence=randomUUID();
+  const ticketLate={room:ticketLateRoom,driverId:ticketLateDriver,fence:ticketLateFence};
+  const ticketLateProfile=await rpc<{progress:DriverProgress}>('acquire',ticketLate);
+  const ticketLateStage:TicketStage={eventId:randomUUID(),driverId:ticketLateDriver,fence:ticketLateFence,roomId:ticketLateRoom,walletOrder:1,
+    action:{kind:'ticket',evidence:{seconds:8,peakHeight:20,at:1,x:0,z:0,canFly:false},orderBefore:ticketLateProfile.progress.order,completedBefore:ticketLateProfile.progress.completed}};
+  await rpc('hold-fence',ticketLate);
+  const ticketLateReply=rpc('stage-ticket',{...ticketLate,stage:ticketLateStage},15_000);
+  await until(()=>rpc<boolean>('fence-held',ticketLate),'ticket pre-insertion fence check held');
+  await rpc('freeze',ticketLate,15_000);await rpc('release-fence',ticketLate);
+  assert.equal(await ticketLateReply,'superseded');
+  const ticketLateKeys=await rpc<string[]>('keys',ticketLate);
+  assert.ok(ticketLateKeys.includes(`closed-fence:${ticketLateDriver}:${ticketLateFence}`));
+  assert.ok(!ticketLateKeys.includes(`ticket-stage:${ticketLateDriver}:${ticketLateStage.eventId}`));
+
+  // Kill with the second fence check held after journal insertion. Freeze must
+  // adopt each row before sealing, despite the lost acknowledgement.
+  const adopted=[] as {room:string;driverId:string;fence:string;kind:'cab'|'ticket'}[];
+  for(const kind of ['cab','ticket'] as const){
+    const entry={room:`postcheck-${kind}-${randomUUID().slice(0,8)}`,driverId:randomUUID(),fence:randomUUID(),kind};
+    adopted.push(entry);await rpc('persistent-producer',{room:entry.room,active:true});
+    const initial=await rpc<{progress:DriverProgress}>('acquire',entry);
+    let staged:Promise<unknown>;
+    if(kind==='cab'){
+      const purchase:EconomyIntent={eventId:randomUUID(),driverId:entry.driverId,fence:entry.fence,roomId:entry.room,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+      success(await rpc<DriverOutcome>('buy',{...entry,intent:purchase}));
+      const stage:CabIncomeStage={eventId:randomUUID(),driverId:entry.driverId,fence:entry.fence,roomId:entry.room,sequence:1,intervals:[{assetId:'cab-a',startMs:0,endMs:240}]};
+      await rpc('hold-fence',{...entry,skip:1});staged=rpc('stage',{...entry,stage},30_000);
+    }else{
+      const stage:TicketStage={eventId:randomUUID(),driverId:entry.driverId,fence:entry.fence,roomId:entry.room,walletOrder:1,
+        action:{kind:'ticket',evidence:{seconds:8,peakHeight:20,at:1,x:0,z:0,canFly:false},orderBefore:initial.progress.order,completedBefore:initial.progress.completed}};
+      await rpc('hold-fence',{...entry,skip:1});staged=rpc('stage-ticket',{...entry,stage},30_000);
+    }
+    void staged.catch(()=>{});
+    await until(()=>rpc<boolean>('fence-held',entry),`${kind} post-insertion fence check held`);
+    assert.ok((await rpc<string[]>('keys',entry)).some(key=>key.startsWith(`${kind==='cab'?'cab-stage':'ticket-stage'}:${entry.driverId}:`)));
+    await rpc('freeze',entry,15_000);
+  }
+  await stop(child);child=undefined;child=start();await ready();
+  for(const [entry,closedFence] of [[late,lateFence],[ticketLate,ticketLateFence]] as const){
+    const before=await rpc<string[]>('keys',entry);
+    assert.ok(before.includes(`closed-fence:${entry.driverId}:${closedFence}`));
+    assert.ok(!before.some(key=>key.startsWith(`cab-stage:${entry.driverId}:`)||key.startsWith(`ticket-stage:${entry.driverId}:`)));
+    await rpc('acquire',{...entry,fence:randomUUID()});
+  }
+  for(const entry of adopted){
+    const saved=await rpc<RecordState>('profile',entry);
+    assert.equal(entry.kind==='cab'?saved.progress.cybercabs!.assets[0].gross:saved.progress.tickets,1,`${entry.kind} stage was adopted once`);
+    await rpc('acquire',{...entry,fence:randomUUID()});
+    const after=await rpc<RecordState>('profile',entry);
+    assert.equal(entry.kind==='cab'?after.progress.cybercabs!.assets[0].gross:after.progress.tickets,1,`${entry.kind} restart cannot duplicate work`);
+  }
   console.log('PASS: complete global history, room/global bonuses, exact remainder, milestone, lost reply and income outbox recovery.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}
