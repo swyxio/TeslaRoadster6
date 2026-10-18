@@ -164,6 +164,9 @@ try{
   loop.disable();
   let queuesDrained=true;
   try{await until(async()=>{const queues=await rpc<{queued:number;processing:boolean}[]>('queues',{room});return queues.every(item=>item.queued===0&&!item.processing);},'wallet queues drain',15_000);}catch{queuesDrained=false;}
+  if(expectCollection){
+    try{await until(()=>clients.slice(0,4).some(client=>client.messages.some(message=>message.type==='wallet'&&message.vehicleCollections?.driven?.length>0)),'saved collection reaches a wallet',5_000);}catch{}
+  }
   const commitAfter=await Promise.all(clients.slice(0,4).map(client=>rpc<{started:number}>('fault-state',{driverId:client.driverId})));
   const ledgerKeys=await rpc<string[]>('economy-keys',{room});
   const profileKeys=await Promise.all(clients.slice(0,4).map(client=>rpc<string[]>('profile-keys',{driverId:client.driverId})));
