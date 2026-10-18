@@ -765,7 +765,7 @@ scene.start(dt=>{
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
   session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&session.status==='online');
-  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world,session.takePresentationSnap());
+  const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world,session.takePresentationSnap(),session.takeCameraSnap());
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;

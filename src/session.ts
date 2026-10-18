@@ -95,6 +95,7 @@ export class Session {
   }
   renderWorld():World {return this.status==='online'?this.prediction.renderWorld(performance.now())??this.world:this.world;}
   takePresentationSnap():boolean {return this.prediction.takeSnap();}
+  takeCameraSnap():boolean {return this.prediction.takeCameraSnap();}
   selectVehicle(kind:VehicleId){
     this.vehicleResult=null;
     const player=this.world.players.find(player=>player.id===this.id);
@@ -136,11 +137,11 @@ export class Session {
     return requestId;
   }
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
-    this.actionWithBarrier({type});
+    this.actionWithBarrier({type},type==='reset');
   }
-  private actionWithBarrier(value:unknown):boolean {
-    this.prediction.suspend();
-    if(!this.send(value))return false;
+  private actionWithBarrier(value:unknown,reset=false):boolean {
+    if(!this.send(value)){this.prediction.suspend();return false;}
+    this.prediction.suspend(reset);
     const token=++this.syncToken;this.waitingSync=token;return this.send({type:'sync',token});
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }

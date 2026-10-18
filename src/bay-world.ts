@@ -11,21 +11,24 @@ import { buildCaltrain } from './caltrain';
 export function buildBay(scene:T.Scene) {
   const palettes=[0xd0c4b0,0xdecdb6,0xb5beb5,0xdac1a8,0xb7a898,0x9fada8,0xe1d1b9];
   type BoxItem={x:number;y:number;z:number;w:number;h:number;d:number;angle?:number};
+  const boxGeometry=new T.BoxGeometry(1,1,1);
+  const details=new Map<number,BoxItem[]>();
   function batches(color:number,items:BoxItem[]){
     if(!items.length)return;
-    const mesh=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
+    const mesh=new T.InstancedMesh(boxGeometry,material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
     items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle??0),scale.set(p.w,p.h,p.d))));mesh.computeBoundingSphere();scene.add(mesh);
   }
-  function localBatches(color:number,items:BoxItem[]){
+  function localBatches(color:number,items:BoxItem[],cellSize=700){
     const chunks=new Map<string,BoxItem[]>();
     for(const item of items){
-      const key=`${Math.floor(item.x/700)},${Math.floor(item.z/700)}`;
+      const key=`${Math.floor(item.x/cellSize)},${Math.floor(item.z/cellSize)}`;
       const chunk=chunks.get(key)??[];chunk.push(item);chunks.set(key,chunk);
     }
     for(const chunk of chunks.values())batches(color,chunk);
   }
   function box(x:number,y:number,z:number,w:number,h:number,d:number,color:number){
-    const m=new T.Mesh(new T.BoxGeometry(w,h,d),material(color));m.position.set(x,y,z);scene.add(m);return m;
+    const items=details.get(color)??[];
+    items.push({x,y,z,w,h,d});details.set(color,items);
   }
   // Water is physically below the flat, drivable bridge decks.
   const water=new T.Mesh(new T.PlaneGeometry(MAP_BOUNDS.maxX-MAP_BOUNDS.minX+1600,MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ+1600),new T.MeshStandardMaterial({color:0x478e9b,roughness:.45,metalness:.18}));
@@ -405,5 +408,8 @@ export function buildBay(scene:T.Scene) {
   box(yacht.x-5,2,yacht.z,14,1.5,7,0x4e7480);
   box(yacht.x-8,4,yacht.z,.4,4,.4,0xd5ded6);
   box(yacht.x-6,5.4,yacht.z,4,1.2,.06,0xe9ba65);
+  // Static details share geometry and local material batches, just like the
+  // buildings. Regional bounds keep distant bridge/port details cullable.
+  for(const [color,items] of details)localBatches(color,items,250);
   buildRouteSignage(scene);
 }

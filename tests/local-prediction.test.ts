@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, NEUTRAL, resetPlayer, step } from '../shared/game';
 import { BUILDINGS, isSurface } from '../shared/map';
 import { ISLAND_JUMPS, sweepIslandJumpWall } from '../shared/island-jumps';
 import { dimensions } from '../shared/physics';
@@ -12,6 +12,64 @@ function setup(){
   return {world,player,car};
 }
 const drive={...NEUTRAL,throttle:1,steer:.4};
+
+test('ordinary support changes and rejected actions do not cut the chase camera',()=>{
+  const {world}=setup(),prediction=new LocalPrediction();
+  prediction.snapshot(world,'p',0,0);prediction.input(1,drive,1);
+  const airborne=structuredClone(world);airborne.entities[0].supportId=null;airborne.entities[0].y=3;
+  prediction.snapshot(airborne,'p',1,100);
+  assert.equal(prediction.takeSnap(),true,'the vehicle still returns to authoritative movement');
+  assert.equal(prediction.takeCameraSnap(),false,'takeoff is not a camera teleport');
+  const landed=structuredClone(world);
+  prediction.snapshot(landed,'p',1,200);
+  assert.equal(prediction.takeSnap(),true);
+  assert.equal(prediction.takeCameraSnap(),false,'landing is not a camera teleport');
+  prediction.suspend();prediction.snapshot(landed,'p',1,300,true);
+  assert.equal(prediction.takeCameraSnap(),false,'a barrier alone is not proof of relocation');
+  const dome=structuredClone(landed);dome.entities[0].inDome=true;dome.entities[0].z+=1;
+  prediction.snapshot(dome,'p',1,350);
+  assert.equal(prediction.takeCameraSnap(),false,'driving through the Dome gate does not cut the camera');
+  prediction.snapshot(landed,'p',1,375);
+  assert.equal(prediction.takeCameraSnap(),false,'leaving the Dome gate does not cut the camera');
+  const moved=structuredClone(landed);moved.entities[0].x+=50;
+  prediction.snapshot(moved,'p',1,400);
+  assert.equal(prediction.takeCameraSnap(),true,'a large authoritative relocation resets the camera');
+  assert.equal(prediction.takeCameraSnap(),false,'the camera reset is consumed once');
+  const replacement=structuredClone(moved);replacement.entities[0].id='new-car';replacement.players[0].entityId='new-car';
+  prediction.snapshot(replacement,'p',1,500);
+  assert.equal(prediction.takeCameraSnap(),true,'changing vehicles resets the camera');
+});
+
+test('a long snapshot gap at speed does not look like a camera teleport',()=>{
+  const {world,car}=setup(),prediction=new LocalPrediction();
+  car.vx=80;prediction.snapshot(world,'p',0,0);
+  const later=structuredClone(world);later.time=1.2;later.entities[0].x+=80;
+  prediction.snapshot(later,'p',1,1200);
+  assert.equal(prediction.takeCameraSnap(),false);
+});
+
+test('a short accepted reset cuts the camera but a rejected reset does not',()=>{
+  const {world,car}=setup(),prediction=new LocalPrediction();
+  Object.assign(car,{x:47,z:60,yaw:-Math.PI/2});
+  prediction.snapshot(world,'p',0,0);prediction.suspend(true);
+  const after=structuredClone(world);resetPlayer(after,'p');
+  assert.ok(Math.hypot(car.x-after.entities[0].x,car.z-after.entities[0].z)<10,'exercise a short reset');
+  step(after,new Map([['p',drive]]),.05);
+  prediction.snapshot(after,'p',0,100,true);
+  assert.equal(prediction.takeCameraSnap(),true);
+  prediction.suspend(true);prediction.snapshot(after,'p',0,200,true);
+  assert.equal(prediction.takeCameraSnap(),false,'an unchanged rejected reset does not cut');
+});
+
+test('rejected reset while braking across a delayed snapshot does not cut',()=>{
+  const {world,car}=setup(),prediction=new LocalPrediction();
+  car.speed=9;car.vx=9;car.yaw=Math.PI/2;
+  prediction.snapshot(world,'p',0,0);prediction.suspend(true);
+  const later=structuredClone(world);
+  for(let i=0;i<5;i++)step(later,new Map([['p',NEUTRAL]]),.05);
+  prediction.snapshot(later,'p',0,250,true);
+  assert.equal(prediction.takeCameraSnap(),false);
+});
 
 test('prediction is visual only and rebases repeated and skipped server inputs',()=>{
   const {world,car}=setup(),prediction=new LocalPrediction(),before=structuredClone(world);

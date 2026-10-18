@@ -68,23 +68,46 @@ export class LocalPrediction {
   private predicted:Entity|null=null;
   private lastInput:Input|null=null;
   private snap=false;
+  private cameraSnap=false;
+  private resetPending=false;
 
-  reset():void {this.pending=[];this.world=null;this.id='';this.snapshotAt=0;this.ack=0;this.blocked=false;this.predicted=null;this.lastInput=null;this.snap=false;}
+  reset():void {this.pending=[];this.world=null;this.id='';this.snapshotAt=0;this.ack=0;this.blocked=false;this.predicted=null;this.lastInput=null;this.snap=false;this.cameraSnap=false;this.resetPending=false;}
   // A post-action server barrier is required before any new prediction.
-  suspend():void {this.pending=[];this.blocked=true;this.predicted=null;this.snap=true;}
+  suspend(reset=false):void {this.pending=[];this.blocked=true;this.predicted=null;this.snap=true;this.resetPending||=reset;}
   takeSnap():boolean {const snap=this.snap;if(!this.blocked)this.snap=false;return snap;}
+  takeCameraSnap():boolean {const snap=this.cameraSnap;this.cameraSnap=false;return snap;}
 
   snapshot(world:World,id:string,ack:number,now:number,barrierPassed=false):void {
     if(!Number.isSafeInteger(ack)||ack<this.ack){this.reset();return;}
     const prior=driven(this.world??world,this.id||id),current=driven(world,id),previousPreview=now-this.snapshotAt<=MAX_SNAPSHOT_AGE_MS?this.predicted:null;
-    const discontinuity=!!this.id&&(!prior||!current||prior.id!==current.id||prior.kind!==current.kind||
-      prior.supportId!==current.supportId||prior.inDome!==current.inDome||
+    const relocation=!!this.id&&(!prior||!current||prior.id!==current.id||prior.kind!==current.kind||
+      prior.inDome!==current.inDome||
       Math.hypot(prior.x-current.x,prior.y-current.y,prior.z-current.z)>Math.max(10,Math.hypot(prior.vx,prior.vy,prior.vz)*.2+2));
+    const discontinuity=relocation||!!prior&&!!current&&prior.supportId!==current.supportId;
+    // Support and Dome boundaries may be crossed continuously. Only cut the
+    // camera for a different driven body or movement too large for the time
+    // between server snapshots; the vehicle still uses the stricter barrier.
+    const snapshotSeconds=Math.max(0,world.time-(this.world?.time??world.time));
+    const elapsed=Math.max(.2,snapshotSeconds);
+    const cameraRelocation=!!this.id&&(!prior||!current||prior.id!==current.id||prior.kind!==current.kind||
+      Math.hypot(prior.x-current.x,prior.y-current.y,prior.z-current.z)>
+      Math.max(10,Math.max(Math.hypot(prior.vx,prior.vy,prior.vz),Math.hypot(current.vx,current.vy,current.vz))*elapsed+2));
+    // Resets can move only a few metres or turn the car in place. The server
+    // has no action-result message, so use the reset intent and its observed
+    // stopped pose, never the barrier alone, as evidence for a camera cut.
+    const resetSpeed=Math.max(2,Math.min(10,50*snapshotSeconds+1));
+    const distance=prior&&current?Math.hypot(prior.x-current.x,prior.y-current.y,prior.z-current.z):0;
+    const travel=prior&&current?Math.max(Math.hypot(prior.vx,prior.vy,prior.vz),Math.hypot(current.vx,current.vy,current.vz))*snapshotSeconds:0;
+    const turn=prior&&current?Math.abs(Math.atan2(Math.sin(prior.yaw-current.yaw),Math.cos(prior.yaw-current.yaw))):0;
+    const naturalTurn=prior&&current?Math.max(Math.abs(prior.yawRate),Math.abs(current.yawRate))*snapshotSeconds:0;
+    const resetPose=!!prior&&!!current&&this.resetPending&&Math.hypot(current.vx,current.vy,current.vz)<resetSpeed&&
+      (distance>Math.max(2,travel+1)||turn>Math.max(1,naturalTurn+.3));
+    if(cameraRelocation||resetPose)this.cameraSnap=true;
     if(discontinuity){this.pending=[];this.predicted=null;this.snap=true;}
     if(this.predicted&&!previousPreview)this.snap=true;
     this.world=world;this.id=id;this.snapshotAt=now;this.ack=ack;
     this.pending=this.pending.filter(item=>item.seq>ack);
-    if(barrierPassed)this.blocked=false;
+    if(barrierPassed){this.blocked=false;this.resetPending=false;}
     this.replay(now);
     // An ordinary ACK can consume every pending input. Keep blending toward
     // the authoritative car when the same preview is still safe; true
