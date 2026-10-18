@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE } from '../shared/game';
+import { addPlayer, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 
 class Socket {
@@ -41,6 +41,15 @@ test('full rooms are distinct and stale sockets cannot overwrite a new session',
   old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();old.onerror?.();
   assert.equal(session.status,'connecting');assert.equal(session.id,'');assert.equal(session.error,'');
   current.closed();assert.equal(session.status,'disconnected');
+});
+
+test('a blocked spawn reports a retryable error rather than a full room or solo mode',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.onerror?.();socket.closed(ROOM_NO_SPAWN_CODE);
+  assert.equal(session.status,'disconnected');assert.equal(session.roomFull,false);
+  assert.match(session.error,/no safe starting space/i);
+  session.join('bay','Driver');assert.equal(session.status,'connecting');assert.equal(session.error,'');
+  Socket.last.closed();
 });
 
 test('joining the current room keeps its seat and may select a car',()=>{

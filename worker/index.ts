@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -50,8 +50,14 @@ export class GameRoom extends DurableObject<Env> {
     const id = crypto.randomUUID();
     const now = Date.now();
     server.accept();
+    try {
+      addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
+    } catch (error) {
+      if (!(error instanceof NoSpawnError)) { server.close(1011, 'Could not start session'); throw error; }
+      server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
+      return new Response(null, { status: 101, webSocket: client });
+    }
     this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
-    addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
     server.addEventListener('message', event => this.onMessage(server, event.data));
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
