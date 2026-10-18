@@ -2,6 +2,7 @@ import './style.css';
 import './identity.css';
 import { setupMinigames } from './minigames';
 import { createProgressPanels } from './progress-panels';
+import { nextDeliveryAward, nextReachableTier, tierGoalLabel } from './next-goal';
 import { listenForDoubleShift } from './double-shift';
 import { createMapDialog } from './map-dialog';
 import { createDriveModes } from './self-drive-mode';
@@ -22,7 +23,7 @@ import { quoteCybercabPurchase } from '../shared/cybercabs';
 import { LUXURY_CATALOG, LUXURY_SHOWROOM, atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
-import { DEFAULT_ROOM, Session, validRoom } from './session';
+import { DEFAULT_ROOM, Session, validRoom, type WalletView } from './session';
 import { Controls } from './controls';
 import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
@@ -45,13 +46,13 @@ import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUnt
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { selectAchievementTiers, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import { AchievementEventTracker } from './achievement-events';
 import { LevelEventTracker } from './level-events';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
-import { MARS_GOAL } from '../shared/mars';
 import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
 import { createEarningsBonusBadge } from './earnings-bonus-ui';
@@ -88,9 +89,9 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><button type="button" id="next-award" class="mission-link" hidden></button></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><button id="charger-drive">⚡ Self-drive to Supercharger</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -173,7 +174,9 @@ const levelEvents=new LevelEventTracker();
 let achievementQueue:AchievementId[] = [], achievementTimer = 0;
 let openDrawer: 'actions' | 'controls' | null = null;
 let walletWasBlocked=false,lastSessionStatus=session.status;
+let driveShortcut:{reset:()=>void}|null=null;
 function setDrawer(drawer: 'actions' | 'controls' | null) {
+  driveShortcut?.reset();
   openDrawer=drawer;
   for(const name of ['actions','controls'] as const){
     const open=drawer===name;
@@ -186,7 +189,7 @@ function setDrawer(drawer: 'actions' | 'controls' | null) {
 $('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
 $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
 $('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button')){setDrawer(null);if(event.detail===0)$('actions-toggle').focus();}},{capture:true});
-const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
+const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{driveShortcut?.reset();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const nameInput=$<HTMLInputElement>('name');
@@ -455,6 +458,7 @@ function cameraLabel(onFoot:boolean){
   $('camera').setAttribute('aria-label',onFoot&&scene.cameraMode==='cockpit'?'Camera: cockpit selected, chase view on foot. Switch view':`Camera: ${label}. Switch view`);
 }
 function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'|'awards'|'shop'){
+  driveShortcut?.reset();
   if(type==='shop'){openShop();return;}
   if(type==='awards'){openAwards();return;}
   if(type==='scores'){openScores();return;}
@@ -514,7 +518,10 @@ function driveToDelivery(){
   notice('Finding a route to your delivery…');
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
-listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer&&session.status==='online'&&!session.walletBlocked,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery});
+$('route-goal').onclick=()=>{setDrawer(null);driveToDelivery();};
+function driveToCharger(){notice('Supercharger routing is being prepared.');}
+$('charger-drive').onclick=()=>{setDrawer(null);driveToCharger();};
+driveShortcut=listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer&&session.status==='online'&&!session.walletBlocked,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery,onTripleTap:driveToCharger});
 mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 $('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
 $('map-toggle').removeAttribute('aria-pressed');$('map-label').textContent='MAP · TAP TO EXPLORE';
@@ -630,7 +637,7 @@ const starship=new StarshipClient(session);
 const earningsBadge=createEarningsBonusBadge();$('mission-panel').append(earningsBadge.element);
 const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
 const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},starship);
-for(const id of ['mars-quick','mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
+for(const id of ['mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
 const progressPanels=createProgressPanels({
   session,
   driverId:()=>chat.playerId,
@@ -639,6 +646,9 @@ const progressPanels=createProgressPanels({
 });
 const {scoresDialog,awardsDialog}=progressPanels;
 const openScores=progressPanels.openScores,openAwards=progressPanels.openAwards;
+let nextAwardTarget:AchievementId|AchievementTierId|undefined;
+let goalOwner:string|null=null,goalGeneration=-1,goalWallet:WalletView|null=null,goalTier:AchievementTierRow|null=null;
+$('next-award').onclick=()=>{setDrawer(null);openAwards(nextAwardTarget);};
 function announceAchievements(){
   const id=achievementQueue.shift();if(!id){achievementTimer=0;$('achievement-toast').classList.add('hidden');return;}
   $('achievement-toast').textContent=`★ ACHIEVEMENT UNLOCKED · ${ACHIEVEMENTS[id].name}`;$('achievement-toast').classList.remove('hidden');
@@ -1089,8 +1099,6 @@ scene.start(dt=>{
   marsUi.update(e);
   earningsBadge.update(session.earningsBonus);
   if(session.walletBlocked)return;
-  const mission=starship.state();
-  $('mars-quick').textContent=mission.confirmed?(mission.freshness==='live'?'🚀 Mars mission':'🚀 Mars mission · last confirmed')+` · ${money(Math.min(mission.confirmed.total,MARS_GOAL))} / $1B`:'🚀 Mars mission · status unavailable';
   minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');
@@ -1161,6 +1169,19 @@ scene.start(dt=>{
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
+    const routeButton=$<HTMLButtonElement>('route-goal');
+    const routeLabel=e.kind==='person'?'↗ Get in a car to self-drive':target.rooftop?'↗ Rooftop delivery · fly manually':e.supportId!=='ground'?'↗ Land to start self-driving':`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;
+    routeButton.hidden=false;if(routeButton.textContent!==routeLabel)routeButton.textContent=routeLabel;
+    const awardButton=$<HTMLButtonElement>('next-award');
+    const owner=chat.status==='online'&&currentCode&&currentCode===chat.code&&currentCode===walletBoundCode?chat.playerId:null;
+    const wallet=owner&&session.walletStatus==='ready'?session.wallet:null;
+    if(owner!==goalOwner||session.connectionGeneration!==goalGeneration){goalOwner=owner;goalGeneration=session.connectionGeneration;goalWallet=null;goalTier=null;}
+    if(wallet!==goalWallet){goalWallet=wallet;goalTier=wallet?nextReachableTier(selectAchievementTiers(wallet.achievementTiers),goalTier):null;}
+    const guestAward=session.walletStatus==='guest'?nextDeliveryAward(player.achievements.unlocked):null;
+    nextAwardTarget=goalTier?.id??guestAward??undefined;
+    const awardLabel=goalTier?tierGoalLabel(goalTier):guestAward?`★ Next award · ${ACHIEVEMENTS[guestAward].description.split(' Reward:')[0]}`:'';
+    awardButton.hidden=!nextAwardTarget;if(awardButton.textContent!==awardLabel)awardButton.textContent=awardLabel;
+    awardButton.title=guestAward?ACHIEVEMENTS[guestAward].description:'View this award';
     $('mission-label').textContent=order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld } from '../shared/game';
-import { awardDeliveryTarget, awardProgress, awardSaveView, deliveryStandings, GameResultHistory, nextDeliveryLevel } from '../src/progress-model';
+import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers } from '../src/progress-model';
+import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { ACHIEVEMENT_TIER_IDS, applyAchievementTierEvent, normalizeAchievementTiers } from '../shared/achievement-tiers';
 import { MARS_GOAL } from '../shared/mars';
 
 function setup(){const world=createWorld(),player=addPlayer(world,'p','Driver');return {world,player};}
@@ -96,6 +98,47 @@ test('wallet status never presents unconfirmed or stale awards as saved',()=>{
   assert.match(awardSaveView(true,'connecting',saved,earned).text,/Connecting/);
   assert.match(awardSaveView(false,'failed',saved,earned).text,/Could not connect/);
   assert.equal(awardDeliveryTarget('regular'),3);
+});
+
+test('award groups cover the catalog and preserve actual milestone ordering and rewards',()=>{
+  const ids=Object.keys(ACHIEVEMENTS) as AchievementId[];
+  const groups=AWARD_GROUPS.map(group=>group.id);
+  assert.ok(ids.every(id=>groups.includes(awardGroup(id))));
+  assert.deepEqual(groups,['delivery','flight','exploration','games','collection']);
+  assert.ok(ACHIEVEMENT_TIER_IDS.every(id=>groups.includes(awardFamilyGroup(id))));
+  assert.ok(ACHIEVEMENT_TIER_IDS.every(id=>AWARD_FAMILY_DESCRIPTIONS[id].length>0));
+  assert.match(AWARD_FAMILY_DESCRIPTIONS['dome-wins'],/Score a goal and win/);
+  assert.match(AWARD_FAMILY_DESCRIPTIONS['races-won'],/at least two starters/);
+  assert.equal(awardGroup('park-it'),'games');assert.equal(awardGroup('race-winner'),'games');
+  assert.equal(awardGroup('rocket-rookie'),'games');assert.equal(awardGroup('berkeley-research'),'exploration');
+  assert.equal(awardFamilyGroup('roof-landings'),'flight');assert.equal(awardFamilyGroup('rooftop-deliveries'),'delivery');
+  assert.equal(awardTier('deliveries-1'),'Delivery milestone 1 / 14');
+  assert.equal(awardTier('regular'),'Delivery milestone 2 / 14');
+  assert.equal(awardTier('deliveries-250'),'Delivery milestone 14 / 14');
+  assert.equal(awardTier('luxury-collection-4'),'Collection milestone 2 / 3');
+  assert.deepEqual(awardDetails('deliveries-1'),{description:'Complete your first delivery.',reward:'$2,500 cash'});
+  assert.deepEqual(awardDetails('berkeley-research'),{description:'Visit the Campanile.',reward:'$1,500 and 20% off efficient nozzles'});
+  assert.deepEqual(awardDetails('park-it'),{description:'Complete a Park It challenge.',reward:'Award only'});
+});
+
+test('repeatable progress only exposes committed owner wallet counts',()=>{
+  const initial=normalizeAchievementTiers(undefined,0,[]);
+  const progress=applyAchievementTierEvent(initial,['deliveries','early-deliveries']).progress;
+  const rows=savedAwardTiers(true,'ready',progress)!;
+  assert.equal(rows.length,ACHIEVEMENT_TIER_IDS.length);
+  assert.deepEqual(rows.find(row=>row.id==='deliveries'),{id:'deliveries',name:'Deliveries',count:1,rank:1,nextTarget:10,nextCash:0});
+  assert.deepEqual(rows.find(row=>row.id==='early-deliveries'),{id:'early-deliveries',name:'Early deliveries',count:1,rank:1,nextTarget:10,nextCash:350});
+  for(const status of ['guest','connecting','syncing','failed'] as const)assert.equal(savedAwardTiers(true,status,progress),null);
+  assert.equal(savedAwardTiers(false,'ready',progress),null);
+  assert.equal(savedAwardTiers(true,'ready',null),null);
+});
+
+test('award cards distinguish committed, pending, guest and unavailable progress',()=>{
+  assert.deepEqual(awardCardState(true,true,true,'ready'),{state:'saved',label:'Earned',save:'Saved to your driver'});
+  assert.deepEqual(awardCardState(true,false,true,'ready'),{state:'pending',label:'Earned',save:'Awaiting wallet confirmation'});
+  assert.deepEqual(awardCardState(true,false,true,'guest'),{state:'guest',label:'Earned',save:'Guest drive · not saved'});
+  assert.deepEqual(awardCardState(true,false,false,'ready'),{state:'locked',label:'Locked',save:'Saves when earned'});
+  assert.deepEqual(awardCardState(false,true,true,'ready'),{state:'unavailable',label:'Unavailable',save:'Connect to see progress'});
 });
 
 test('result history observes each snapshot once and clears on room or driver change',()=>{
