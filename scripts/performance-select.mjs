@@ -24,7 +24,9 @@ function main() {
   let changes = [];
   if (!manual) {
     const base = event.pull_request.base.sha, head = event.pull_request.head.sha;
-    const rows = execFileSync('git', ['diff', '--numstat', `${base}...${head}`], { encoding: 'utf8' });
+    // Count a rename on both real paths; Git's compact `{src => shared}` form
+    // otherwise hides cross-directory runtime moves from the selector.
+    const rows = execFileSync('git', ['diff', '--no-renames', '--numstat', `${base}...${head}`], { encoding: 'utf8' });
     changes = rows.trim().split('\n').filter(Boolean).map(row => {
       const [added, deleted, ...parts] = row.split('\t');
       return { path: parts.join('\t'), binary: added === '-' || deleted === '-', added: Number(added) || 0, deleted: Number(deleted) || 0 };

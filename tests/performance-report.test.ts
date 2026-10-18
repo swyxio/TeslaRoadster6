@@ -42,6 +42,12 @@ test('selector reads a real pull-request diff and writes separate GitHub outputs
     const json = execFileSync(process.execPath, [script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output } });
     assert.deepEqual(JSON.parse(json), { run: true, reason: 'at least 100 changed relevant lines', changedLines: 100 });
     assert.equal(readFileSync(output, 'utf8'), 'run=true\nreason=at least 100 changed relevant lines\n');
+    mkdirSync(join(dir, 'shared'));
+    git('mv', 'src/render.ts', 'shared/render.ts');
+    git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'move runtime code');
+    writeFileSync(event, JSON.stringify({ pull_request: { base: { sha: head }, head: { sha: git('rev-parse', 'HEAD') }, labels: ['performance-required'].map(name => ({ name })) } }));
+    const moved = execFileSync(process.execPath, [script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output } });
+    assert.deepEqual(JSON.parse(moved), { run: true, reason: 'performance-required label', changedLines: 200 });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
