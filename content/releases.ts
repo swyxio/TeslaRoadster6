@@ -6,6 +6,23 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Build a Cybercab fleet',
+    intro: 'Put Cybercabs on the road and trade things you own.',
+    sections: [
+      { title: 'Your fleet', items: [
+        'Buy Cybercabs with a saved driver, find them on the map and follow their rides.',
+        'Active, self-driving Cybercabs earn income while they are on the road.'
+      ] },
+      { title: 'The exchange', items: [
+        'Collect paints and souvenirs, or buy a starter home to visit with friends.',
+        'List owned items at a fixed price. The seller receives 95% of a completed sale.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.18-alpha',
+    label: '0.0.18 Alpha',
+    date: '2026-10-18',
     title: 'Take the scenic ride',
     intro: 'Settle in for smoother self-driving and keep your little victories.',
     sections: [

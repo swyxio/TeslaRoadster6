@@ -34,6 +34,8 @@ import { buildFremontSpaceport } from './fremont-spaceport';
 import type { StarshipAnimation } from './starship-timeline';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { RESEARCH_SITES, researchArrival } from '../shared/research';
+import { createPropertyScene } from './property-scene';
+import { marketPaintColor } from '../shared/market-catalog';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -69,6 +71,7 @@ export class GameScene {
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
   private skyCurrents=createSkyCurrents();
+  private propertyScene=createPropertyScene();
   private ballPosition=new T.Vector3();
   private ballReady=false;
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
@@ -109,6 +112,7 @@ export class GameScene {
     this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
+    this.scene.add(this.propertyScene.group);
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
     this.objectiveBeam.position.y=9;this.objective.add(this.objectiveBeam);
     this.scene.add(this.objective);
@@ -238,6 +242,7 @@ export class GameScene {
   private worldUpdatedAt=0;
   render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false,remoteSampled=false,starship?:{animation:StarshipAnimation|null;stage:number|null}) {
     if(snapCamera)this.cameraReady=false;
+    this.propertyScene.update(world.property);
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
     // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
@@ -430,10 +435,10 @@ export class GameScene {
     for(const e of world.entities){
       const mesh=this.entities.get(e.id)!;
       // Custom finishes need their detailed meshes; the shared distant mesh has stock colors.
-      const customized=e.kind!=='person'&&(e.style.paint!=='stock'||e.style.decal!=='none');
+      const customized=e.kind!=='person'&&(e.style.paint!=='stock'||e.style.decal!=='none'||marketPaintColor(e.marketPaint)!==null);
       const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police||customized);
       if(detailed&&e.kind!=='person'){
-        setVehicleStyle(mesh,e.kind,e.style);
+        setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
         const spec=VEHICLES[e.kind];

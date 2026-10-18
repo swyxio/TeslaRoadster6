@@ -220,7 +220,7 @@ export class DriverProfile extends ProductionDriverProfile {
     await super.compact(intent);
     if(fault==='after')throw new Error('Injected error after receipt compaction');
   }
-  override async commit(intent:EconomyIntent) {
+  override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents) {
     this.started++;
     const fault = this.faults.shift()??'none';
     if (fault === 'hold-before' || fault === 'hold-reject' || fault === 'hold-revision') {
@@ -232,7 +232,7 @@ export class DriverProfile extends ProductionDriverProfile {
     if (fault === 'hold-reject' || fault === 'reject') return {ok:false as const,reason:'invalid' as const};
     if (fault === 'hold-revision' || fault === 'revision') return {ok:false as const,reason:'revision' as const};
     if (fault === 'fail-before') throw new Error('Injected profile write failure');
-    const result = await super.commit(intent);
+    const result = await super.commit(intent,cabEvents);
     if (fault === 'hold-lost-reply') {
       this.held = true;
       this.heldAction=structuredClone(intent.action);

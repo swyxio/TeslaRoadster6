@@ -1,4 +1,4 @@
-# Implementation contracts · v38
+# Implementation contracts · v40 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v38
+## Wire protocol v40 candidate
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:38,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:40,capacity:number}`.
 
 Client messages:
 
@@ -69,6 +69,18 @@ Client messages:
 {"type":"mars","action":"contribute","amount":100,"requestId":10}
 {"type":"identity","code":"<recovery-code>","requestId":6}
 {"type":"identity","code":null,"requestId":9}
+{"type":"cab","action":"buy","requestId":11}
+{"type":"cab","action":"paint","assetId":"<server-asset-id>","paint":"mint","requestId":12}
+{"type":"market","action":"browse","requestId":13}
+{"type":"market","action":"browse","requestId":16,"cursor":"<listing-uuid>","ownedCursor":"<asset-uuid>"}
+{"type":"market","action":"acquire","requestId":17,"operationId":"<uuid>","catalogId":"sunrise-gold-paint"}
+{"type":"market","action":"equip","requestId":18,"operationId":"<uuid>","assetId":"<uuid>"}
+{"type":"market","action":"unequip","requestId":19,"operationId":"<uuid>","assetId":"<uuid>"}
+{"type":"market","action":"list","requestId":20,"operationId":"<uuid>","assetId":"<uuid>","price":0}
+{"type":"market","action":"reprice","requestId":21,"operationId":"<uuid>","assetId":"<uuid>","listingId":"<uuid>","expectedRevision":1,"price":100}
+{"type":"market","action":"cancel","requestId":22,"operationId":"<uuid>","assetId":"<uuid>","listingId":"<uuid>","expectedRevision":2}
+{"type":"market","action":"buy","requestId":14,"operationId":"<uuid>","assetId":"<uuid>","listingId":"<uuid>","expectedRevision":1}
+{"type":"market","action":"status","requestId":15,"operationId":"<same-uuid>"}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
 {"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":10,"edgeBaseline":{"jump":1,"flip":0}}
 ```
@@ -76,7 +88,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:38, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:40, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -89,7 +101,10 @@ Server messages:
 {type:"starshipNameResult", requestId:number, ok:boolean, publicName:string|null}
 {type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
-{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], ownedLuxury:LuxuryVehicleId[]}
+{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
+{type:"cabResult", requestId:number, action:"buy"|"paint", ok:boolean, reason?:string, assetId?:string, paint?:PaintId}
+{type:"marketState", requestId:number, listings:MarketListingView[], owned:MarketAssetView[], shop:MarketShopView[], nextCursor?:string, nextOwnedCursor?:string}
+{type:"marketResult", requestId:number, operationId:string, action:MarketOperationAction|null, status:"not-found"|"pending"|"completed"|"rejected", reason?:string}
 {type:"luxuryResult", requestId:number, action:"buy"|"collect", vehicle:LuxuryVehicleId, ok:boolean, reason?:string, awards?:AchievementId[]}
 ```
 
@@ -123,7 +138,11 @@ Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and p
 
 The server creates a guest wallet on join. `EconomySession` keeps a per-driver draft and ordered queue; `RoomEconomy` records intents and pickup reservations, while `DriverProfile` checks revisions and fences and records receipts with wallet changes. The visible wallet is the last committed result. Identity, purchase and collection requests are validated against server-owned state; a slow driver profile must not block other players' room physics or input acknowledgements. `sync` barriers wait for the requesting driver's preceding economy operations.
 
-The profile includes balance, earned and eligible income, current order and completion count, achievement IDs, owned Vault vehicle IDs, personal vehicle upgrades/finishes and OTA state. Position, health, air, traffic and activity rounds stay in the room. Local checks of reconnects, identity recovery, uncertain outcomes, timer checkpoints and isolation under delay are recorded in [VERIFICATION.md](VERIFICATION.md). Property, player trading, Cybercab passive ownership and broader event multipliers remain plans rather than implemented wallet features.
+The profile includes balance, earned and eligible income, current order and completion count, achievement IDs, owned Vault vehicle IDs, personal vehicle upgrades/finishes, Cybercab fleet state and OTA state. Position, health, air, traffic and activity rounds stay in the room. Local checks of reconnects, identity recovery, uncertain outcomes, timer checkpoints and isolation under delay are recorded in [VERIFICATION.md](VERIFICATION.md). The candidate's property and player-trading scope is described below.
+
+In the candidate, the room stages server-observed delivery stops, physical and match achievement evidence, and supply pickups in wallet order. A stage is accepted after its journal transaction and final profile-fence check, or when fence recovery adopts the already-written row. Evidence still in room memory or awaiting acceptance is volatile. A supply stage reserves its pickup generation in the same journal transaction; a successful profile receipt credits $5 once, while a terminal rejection releases the reservation without consuming it. Accepted evidence is reevaluated against committed progress after earlier operations resolve; delivery stops that no longer match are no-ops. Profile receipts commit the resulting progress and awards idempotently. Region milestones caused by delivery, physical achievements, supply or cab income commit with the triggering credit. Flight and cockpit tracking, uncommitted Mars boarding, and changes since the last periodic timer or OTA checkpoint remain volatile.
+
+Delivery stages preserve the observed stop, active-order clock and event time. If historical rate data is unavailable, the room retains subsequent physical evidence and defers that driver's dependent wallet decisions until it can reproject them; driving and other players continue. Cockpit statistics are session-only and the deferred-payout tick can be omitted from their bookkeeping. The per-driver queue is bounded at 32, with a possible final ticket beyond that check; overload disconnects that driver for recovery. Cab stages have a separate eight-stage preparation limit. A stalled acceptance or inconsistent physical receipt can block that driver's handoff; there is no automatic repair tool or fixed durability deadline.
 
 ## Mars mission
 
@@ -135,7 +154,7 @@ Profile income and privacy outboxes retry independently with persisted, jittered
 
 At a newly confirmed goal crossing, the global coordinator stores a launch ID and a launch time 30 seconds later. The world construction and playback derive from the confirmed total and server-time anchor. Polling and network transit can introduce presentation delay; this is not frame-synchronized. Replay is available after completion and never starts another launch or changes earnings. No season or room is retired.
 
-A verified Dome win with a player winner starts a 1.5× room bonus for ten minutes, refreshing on a subsequent win. An authenticated operator may schedule a 2× game-wide event for 30 minutes, at least 60 seconds ahead; combined activity pay is capped at 3×. Delivery pickup and drop-off components use their authoritative payout-time rate; checkpoint and one-off achievement awards remain fixed. The current Dome match has no repeatable match payout. Any future repeatable activity or cab producer must integrate its own durable event-time settlement; the shared interval and room-history helpers alone do not activate those payouts. A room fails closed on a missing or stale event lease: arrivals wait for a confirmed rate while driving continues.
+A verified Dome win with a player winner starts a 1.5× room bonus for ten minutes, refreshing on a subsequent win. An authenticated operator may schedule a 2× game-wide event for 30 minutes, at least 60 seconds ahead; combined activity pay is capped at 3×. Delivery pickup and drop-off components use their authoritative payout-time rate; dispatched cab income is settled proportionally across complete historical windows. Checkpoint and one-off achievement awards remain fixed. The current Dome match has no repeatable match payout. Future repeatable activity producers must integrate their own durable event-time settlement. A missing or stale event lease defers settlement until the historical rate is confirmed while driving continues.
 
 Operators configure a high-entropy `STARSHIP_ADMIN_TOKEN` secret (at least 32 characters), then `POST /api/admin/earnings-events` with `Authorization: Bearer <token>` and JSON `{"requestId":"<unique-id>","startsAtMs":<future-UTC-ms>}`. A repeated request ID with the same start is idempotent; conflicting IDs, overlap and insufficient lead time are rejected. Never commit or log the secret. Without it, scheduling returns 503.
 
@@ -229,7 +248,7 @@ The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games
 
 Every third completion adds a $750 checkpoint to cash and cumulative eligible income, including when the delivery fare is zero. It is not part of delivery-only `earned` and is grouped with same-tick fare and awards for presentation. The completed order and wallet update share the existing fenced profile commit and income outbox; a retry cannot complete the same order twice.
 
-`shared/delivery-payout.ts` produces server-derived pickup, delivery and checkpoint components with base amounts and stable source IDs scoped to a driver: `delivery:<completed+1>:pickup`, `:dropoff`, and, when due, `:checkpoint`. This ordinal is valid while a driver has only one active automatically assigned order; a future system that suspends an order while another completes needs a persisted accepted-job ID. `EconomyHooks.resolveDeliveryPayout` may resolve eligible fares before cash, level, next-order and achievement updates; checkpoint pay is never passed to it. A null result defers the arrival without changing order stage, cash or achievements, freezes that order's timer for the tick, and leaves physics and other drivers running. The `EconomyHooks.update` apply callback returns the resolved components for a host to capture in the same transaction, or null for deferral. Identity resolution is the default; the room supplies its authoritative event rate and the wallet commits the component records, rates and timestamps with fenced progress.
+`shared/delivery-payout.ts` produces server-derived pickup, delivery and checkpoint components with base amounts and stable source IDs scoped to a driver: `delivery:<completed+1>:pickup`, `:dropoff`, and, when due, `:checkpoint`. This ordinal is valid while a driver has only one active automatically assigned order; a future system that suspends an order while another completes needs a persisted accepted-job ID. `EconomyHooks.resolveDeliveryPayout` may resolve eligible fares before cash, level, next-order and achievement updates; checkpoint pay is never passed to it. A null result defers the visible arrival without changing order stage, cash or achievements. The `EconomyHooks.update` apply callback returns resolved components or null for deferral. In the candidate room, the stop and its active-order clock are staged for historical-rate settlement and replay; the wallet commits the component records, rates and timestamps with fenced progress. Identity resolution remains the default for hosts without a rate hook.
 
 On a verified soccer play-to-win transition, `EconomyHooks.onDomeWin` synchronously receives detached server-derived present participants and winner IDs before same-tick match awards or delivery resolution. A host can establish its settlement ordering barrier there; the callback alone does not settle or persist a payout.
 
@@ -247,6 +266,24 @@ Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the 
 
 `shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first color to five ends the match; after a six-second winner display, both scores, player match stats and the ball reset. The last driven car to physically strike the ball earns the goal for its driver and its class; an undriven car's strike clears the last touch. The player(s) present in the dome at match completion with the most credited goals win; if no eligible player has a credited goal, the match has no player winner. Leaving and returning before the finish retains the player’s match goals. Departing the room removes that driver's match stats and pending touch. Physics, scoring and timing are authoritative in online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 
+
+## Cybercab and market candidate
+
+In this unreleased candidate, only a connected saved driver can purchase a Cybercab. The server generates the asset ID and price; the profile commits the debit, asset and one-time ownership award with its receipt. Paint uses the existing server-side workshop catalog and is committed to that specific owned asset. Repeated request IDs on one connection are coalesced while pending or replayed after completion; older evicted IDs are rejected. After an uncertain disconnect the UI waits for the same saved wallet to reconnect and reconcile before allowing a new purchase. The wallet fence drains and evicts an earlier session before binding the next one.
+
+`dispatchCybercab` only uses committed ownership. Its provisional budget is eight additional cab entities per room, including borrowed retired copies; the allocator shares slots across owners, keeps occupied cars, and settles before retiring an unoccupied car. A dispatched cab retains its owner through takeover. When its owner leaves, an occupied borrowed car loses its durable asset identity and becomes a temporary ride until released. The cab's `assetId` is opaque and the owner receives its entity outside the normal ambient-interest radius. The fleet dialog exposes owner/driver, committed gross income, paint and map find/follow. The cap is not a measured room-capacity guarantee.
+
+The room measures consecutive observed wall-clock ticks only while the owner is active and an owned cab is dispatched, autonomous and unoccupied. It does not infer operation across gaps longer than 200 ms. It closes intervals after one second of observed activity or on pause/disconnect and stages them in the room journal with a stable ID and a contiguous per-fence stage ordinal. Acceptance requires a committed journal row and a successful final profile-fence check, not merely the one-second checkpoint: an open interval and any stage queued or awaiting acceptance remain volatile. The journal row can be removed if that fence check finds the session superseded. A stalled profile-fence check can extend the window, so there is no fixed elapsed-time durability bound. Accepted batches recover after a room restart and drain in order before a fence handoff; profile receipts atomically advance each cab's non-overlapping watermark, fractional remainder, cash, eligible income and one-time $2,000 award at $20,000 gross. On wallet-queue or eight-stage preparation backlog overload, the room closes and queues the final observed intervals for staging, stops accrual and disconnects without projecting the tail through the speculative wallet. Unresolved rejected or out-of-order staged records retain their evidence and block the driver's handoff; there is not yet an automatic or operator repair tool. A slow driver's storage does not block other players' physics. Accepted stages are serialized per driver so a later interval cannot be durably accepted while an earlier stage is uncertain.
+
+After a fence is drained and sealed, the room journal retains a small closed-fence marker to reject delayed producers that passed an earlier profile check. Completed markers are not alarm work; storage grows by one marker per completed fence until a safe compaction policy is designed.
+
+The market uses a single durable registry for server-minted cosmetic, collectible and completed-home instances, fixed-price listings and operation IDs. The room identifies the saved driver; the client cannot choose a wallet or seller. Prices are nonnegative whole game-cash units. A sale debits the buyer, credits the seller `floor(price × 95 / 100)` and removes the remainder; it does not count as game-created eligible income. Property acquisition requires $2 million immediately before the transaction and a free purchased-home slot. The initial city-supplied $1 million home is an instanced visitable exterior; plots, building, garages and improvements remain design work.
+
+Cross-object settlement is a recoverable coordinator protocol, not one atomic database transaction: the registry durably records the operation, locks the affected asset, prepares and seals each driver's existing profile wallet, applies idempotent wallet writes, publishes custody, then releases the wallets and asset. A completed result is sent only after releases; an uncertain operation stays pending and recovery retries it. An active participant must be stopped in a safe personal car outside shared activities; otherwise the operation can reject as busy. While held, that player is excluded from physics and wallet accrual, and other drivers continue. Client storage stages the operation ID and command before sending; after reconnect, status is checked and a not-found operation is resent with the same ID. Failure to write or read the journal blocks new actions. Public and owned inventories paginate separately. Equipped market paint is profile-owned, rendered on personal vehicles, and must be unequipped before listing.
+
+A completed home has a stable canonical address derived from its asset UUID, independent of its current owner. Only canonical property addresses use registry lookup; other valid room names, including ordinary `p-` names, remain ordinary rooms. A property room verifies that asset with the registry on entry and checks safe arrival positions near the shared collision-backed house. The owner label is public presentation, not an authorization credential; registry unavailability fails entry closed. No interior, garage or transferable improvements are represented by this home.
+
+Before settling an accepted cab interval, the room-owned history barrier checks its durable pending-win journal, and the economy consumes all relevant room and global history pages. Unavailable or incomplete history defers settlement; a current global lease cannot establish an earlier interval's multiplier. While history is pending, other wallet actions can proceed without the unavailable credit. The resolved windows are saved with the stage, then the credit is projected into the draft when it enters the ordered wallet queue and receives its wallet sequence. Subsequent actions use that projection; the visible wallet shows committed results. If an earlier wallet action is rejected, an accepted cab stage is reprojected from the restored wallet. Fence recovery drains recorded wallet intents before settling remaining stages in ordinal order. The profile commits the receipt, watermark, remainder and wallet together. Cumulative eligible income continues through the shared outbox after a Starship launch; a late confirmation may represent money earned before launch.
 
 ## Citations, rooftops and achievements
 

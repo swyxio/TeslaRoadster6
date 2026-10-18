@@ -11,8 +11,8 @@ import { orderTarget } from '../shared/delivery';
 import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
-// Protocol 38 combines delivery destinations with Starship and earnings-event messages.
-assert.equal(PROTOCOL_VERSION, 38);
+// Protocol 39 combines persistent Cybercabs with the v38 Starship and driving contracts.
+assert.equal(PROTOCOL_VERSION, 40);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

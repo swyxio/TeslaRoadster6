@@ -32,8 +32,8 @@ export class DriverProfile extends ProductionDriverProfile {
   private loseDelivery=false;
   private lost=false;
   fixtureLoseDelivery(){this.loseDelivery=true;}
-  override async commit(intent:EconomyIntent){
-    const result=await super.commit(intent);
+  override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents){
+    const result=await super.commit(intent,cabEvents);
     if(intent.action.kind==='progress'&&intent.action.earnings?.some(part=>part.kind==='delivery')){
       await this.ctx.storage.put('fixture-delivery-intent',intent);
       if(this.loseDelivery){this.loseDelivery=false;this.lost=true;throw new Error('Injected lost profile reply');}

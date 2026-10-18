@@ -13,6 +13,11 @@ import mapTraceUrl from '../shared/bay-highway-traces.ts?url&no-inline';
 import mapBakeUrl from '../shared/bake-bay-highways.py?url&no-inline';
 import { FleetPreview } from './fleet-preview';
 import { createLuxuryShowroom } from './luxury-ui';
+import { createCybercabUI } from './cybercab-ui';
+import { createMarketUI } from './market-ui';
+import { MarketClient } from './market-client';
+import { propertyRoom, propertyRoomAssetId } from '../shared/property';
+import { quoteCybercabPurchase } from '../shared/cybercabs';
 import { LUXURY_CATALOG, LUXURY_SHOWROOM, atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
@@ -79,9 +84,9 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -634,7 +639,7 @@ function announceAchievements(){
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
   setDrawer(null);
-  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();luxuryUi.close();marsUi.close();mapDialog.close();minigames.close();chatPanel.close();
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();luxuryUi.close();cabUi.close();marketUi.close();marsUi.close();mapDialog.close();minigames.close();chatPanel.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;
   $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;
@@ -715,6 +720,96 @@ const luxuryUi=createLuxuryShowroom({
   onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},
 });
 document.body.append(luxuryUi.element);
+let pendingCabBuy:{requestId:number;count:number;code:string;generation:number;lost:boolean}|null=null;
+let pendingCabPaint:{requestId:number;id:string;paint:PaintId;code:string;generation:number;lost:boolean}|null=null;
+let cabStatus='',cabPaintStatus:{id:string;message:string}|null=null,lastCabKey='',lastCabMapUpdate=0;
+function cabEntity(id:string){return session.world.entities.find(entity=>entity.owner===session.id&&entity.cab?.assetId===id);}
+function openCabMap(id:string,follow:boolean){
+  const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId),cab=cabEntity(id);
+  const index=session.wallet?.cybercabs.assets.findIndex(asset=>asset.id===id)??-1;
+  if(!player||!car||!cab||index<0)return;
+  cabUi.close();setDrawer(null);controls.clear();controls.enabled=false;
+  mapDialog.openCab(car,car.navigation?.destination,player.delivery.level,{id,name:`Cybercab ${index+1}`,position:{x:cab.x,z:cab.z}},follow);
+}
+const cabUi=createCybercabUI({
+  onPurchase(){
+    if(pendingCabBuy||!currentCode||!session.wallet)return false;
+    const requestId=session.buyCab();if(requestId===null)return false;
+    pendingCabBuy={requestId,count:session.wallet.cybercabs.assets.length,code:currentCode,generation:session.connectionGeneration,lost:false};cabStatus='';return true;
+  },
+  onFind:id=>openCabMap(id,false),onFollow:id=>openCabMap(id,true),
+  onStyle(id,choice){
+    if(pendingCabPaint||!currentCode||!Object.hasOwn(PAINTS,choice))return false;
+    const paint=choice as PaintId,requestId=session.paintCab(id,paint);if(requestId===null)return false;
+    pendingCabPaint={requestId,id,paint,code:currentCode,generation:session.connectionGeneration,lost:false};cabPaintStatus=null;return true;
+  },
+  onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},
+});
+document.body.append(cabUi.element);
+function updateCabs(){
+  const ready=session.status==='online'&&session.walletStatus==='ready'&&!!session.wallet;
+  if(pendingCabBuy){
+    if(session.status!=='online'||session.connectionGeneration!==pendingCabBuy.generation)pendingCabBuy.lost=true;
+    const result=session.cabBuyResult?.requestId===pendingCabBuy.requestId?session.cabBuyResult:null;
+    const recovered=pendingCabBuy.lost&&ready;
+    if((result&&!result.ok)||(result?.ok&&ready&&session.wallet!.cybercabs.assets.length>pendingCabBuy.count)||recovered){
+      const same=currentCode===pendingCabBuy.code;
+      const bought=same&&ready&&session.wallet!.cybercabs.assets.length>pendingCabBuy.count;
+      cabStatus=!same?'Reconnect the previous saved driver to check its purchase.':bought?'Cybercab added to your fleet.':result?.reason==='unaffordable'?'Not enough cash for this Cybercab.':'Purchase was not confirmed. Review the offer before trying again.';
+      pendingCabBuy=null;session.cabBuyResult=null;cabUi.resolvePurchase();
+    }
+  }
+  if(pendingCabPaint){
+    if(session.status!=='online'||session.connectionGeneration!==pendingCabPaint.generation)pendingCabPaint.lost=true;
+    const result=session.cabPaintResult?.requestId===pendingCabPaint.requestId?session.cabPaintResult:null;
+    const applied=ready&&currentCode===pendingCabPaint.code&&session.wallet!.cybercabs.assets.some(asset=>asset.id===pendingCabPaint!.id&&asset.style.paint===pendingCabPaint!.paint);
+    if((result&&!result.ok)||(result?.ok&&applied)||(pendingCabPaint.lost&&ready)){
+      const id=pendingCabPaint.id;
+      cabPaintStatus={id,message:applied?'Paint updated.':result?.reason==='unaffordable'?'Not enough cash for that paint.':'Paint change was not confirmed.'};
+      pendingCabPaint=null;session.cabPaintResult=null;cabUi.resolveStyle(id);
+    }
+  }
+  const wallet=ready?session.wallet:null,player=session.world.players.find(p=>p.id===session.id);
+  const quote=wallet&&quoteCybercabPurchase(wallet.cybercabs.assets.length,wallet.cybercabs.claimedOwnershipAwards);
+  const projected=wallet&&quote?wallet.cash-quote.price+quote.award:null;
+  const unavailable=session.status!=='online'?'Reconnect to see your fleet.':session.walletStatus==='guest'?'Save your driver in Actions → Driver identity to keep a fleet.':!wallet?'Connecting to your saved driver…':!quote?'Your fleet is complete.':wallet.cash<quote.price?'Earn more cash to buy the next Cybercab.':undefined;
+  const cabs=(wallet?.cybercabs.assets??[]).map((asset,index)=>{
+    const entity=cabEntity(asset.id),driver=entity?.driver?session.world.players.find(p=>p.id===entity.driver)?.name??'Driver':null;
+    const active=!!entity&&!driver&&entity.npc&&entity.autopilot&&!!player&&session.world.time<=player.delivery.activeUntil;
+    const detail=!entity?'Waiting for space in this room.':driver?'Income pauses while a player drives.':active?'Driving and earning while you are active.':'Income pauses while you are inactive or the cab is not autonomous.';
+    return {id:asset.id,name:`Cybercab ${index+1}`,state:active?'operating' as const:'waiting' as const,stateDetail:detail,owner:player?.name??'You',driver,
+      revenue:{label:'Lifetime cab income',amount:asset.gross},canFind:!!entity,canFollow:!!entity,
+      style:{currentId:asset.style.paint,choices:(Object.keys(PAINTS) as PaintId[]).map(id=>({id,label:`${PAINTS[id].name} · ${money(PAINTS[id].price)}`})),
+        state:pendingCabPaint?'pending' as const:'ready' as const,detail:cabPaintStatus?.id===asset.id?cabPaintStatus.message:undefined}};
+  });
+  const next={cash:wallet?.cash??null,level:wallet?.level??null,purchase:{state:pendingCabBuy?'pending' as const:unavailable?'unavailable' as const:'ready' as const,
+    quote:quote&&projected!==null?{price:quote.price,award:quote.award,projectedBalance:projected,projectedLevel:levelForCash(projected)}:null,
+    detail:pendingCabBuy?.lost?'Rejoin with this saved driver to confirm the purchase.':unavailable||cabStatus},cabs};
+  const key=JSON.stringify(next);if(key!==lastCabKey){lastCabKey=key;cabUi.update(next);}
+}
+$('cybercabs').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;lastCabKey='';updateCabs();cabUi.open();};
+const market=new MarketClient(driverStorage,request=>session.market(request));
+let lastMarketKey='';
+function updateMarket(){
+  const owner=chat.status==='online'&&currentCode&&currentCode===chat.code&&currentCode===walletBoundCode?chat.playerId:null;
+  const ready=!!owner&&session.status==='online'&&session.walletStatus==='ready'&&!!session.wallet;
+  const refreshOnReady=market.setContext({owner,ready,generation:session.connectionGeneration,cash:ready?session.wallet!.cash:null});
+  if(session.marketState){market.receiveState(session.marketState);session.marketState=null;}
+  if(session.marketResult){market.receiveResult(session.marketResult);session.marketResult=null;}
+  market.tick();
+  if(marketUi.isOpen()){
+    if(refreshOnReady)market.refresh();
+    const next=market.view(),key=JSON.stringify(next);if(key!==lastMarketKey){lastMarketKey=key;marketUi.update(next);}
+  }
+}
+const marketUi=createMarketUI({
+  onAction:action=>market.start(action),onRefresh:()=>market.refresh(),onMore:()=>market.more(),onMoreOwned:()=>market.moreOwned(),
+  onVisit(assetId){const room=propertyRoom(assetId);if(!room){notice('This home is unavailable. Refresh the market.');return;}$<HTMLInputElement>('room').value=room;begin();},
+  onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},
+});
+document.body.append(marketUi.element);
+$('market').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;lastMarketKey='';updateMarket();marketUi.open();};
+$('return-bay').onclick=()=>{$<HTMLInputElement>('room').value=DEFAULT_ROOM;begin();};
 function requestLuxury(action:'buy'|'collect',id:string,source:'vault'|'workshop'='vault'){
   const vehicle=luxuryVehicle(id);if(!vehicle||pendingLuxury)return;
   luxuryStatus='';
@@ -917,6 +1012,16 @@ scene.start(dt=>{
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   navigationDriving=observedCar?.navigation?.status==='driving'&&observedCar.autopilot;
   if(mapDialog.isOpen()&&observedPlayer&&observedCar)mapDialog.update(observedCar,observedCar.navigation?.destination,observedPlayer.delivery.level);
+  if(mapDialog.isOpen()&&performance.now()-lastCabMapUpdate>=250){
+    const id=mapDialog.trackedCabId();if(id){const cab=cabEntity(id);mapDialog.updateCab(id,cab?{x:cab.x,z:cab.z}:null);}
+    lastCabMapUpdate=performance.now();
+  }
+  if(cabUi.isOpen()||pendingCabBuy||pendingCabPaint)updateCabs();
+  $('return-bay').hidden=!propertyRoomAssetId(session.room);
+  const propertyName=$('property-name'),property=session.world.property;
+  propertyName.hidden=!property;
+  if(property){const label=`${property.ownerName} · HOME`;if(propertyName.textContent!==label)propertyName.textContent=label;}
+  updateMarket();
   if(menuRidePending){
     const result=session.vehicleResult;
     if(result?.kind===menuRidePending.kind||session.status!=='online'||performance.now()>menuRidePending.expires){

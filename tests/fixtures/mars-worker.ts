@@ -17,11 +17,11 @@ export class DriverProfile extends ProductionDriverProfile {
   async fixtureHoldDonation(){this.holdNextDonation=true;}
   async fixtureFaultState(){return {held:!!this.heldReply,intent:this.heldIntent};}
   async fixtureCash(){const record=await this.ctx.storage.get<{progress:{cash:number}}>('driver');return record?.progress.cash;}
-  override async commit(intent:EconomyIntent){
+  override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents){
     // Duplicate attempts must also wait; otherwise an alarm could bypass the
     // simulated lost reply before the test terminates the local Worker.
     if(this.heldIntent?.eventId===intent.eventId && this.heldReply)await this.heldReply;
-    const outcome=await super.commit(intent);
+    const outcome=await super.commit(intent,cabEvents);
     if(this.holdNextDonation&&intent.action.kind==='contribute'){
       this.holdNextDonation=false;this.heldIntent=structuredClone(intent);
       this.heldReply=new Promise<void>(()=>{});

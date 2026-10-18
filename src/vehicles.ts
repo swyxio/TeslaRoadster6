@@ -237,10 +237,10 @@ export function createVehicle(kind:VehicleId|'person'):T.Group {
   return templates.get(kind)!.clone(true);
 }
 /** Materials and decal geometry are shared; styles change only the individual mesh references. */
-export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
-  const key=`${style.paint}:${style.decal}`;
+export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle,marketPaint:number|null=null){
+  const key=`${style.paint}:${style.decal}:${marketPaint??'base'}`;
   if(root.userData.vehicleStyle===key)return;
-  const spec=VEHICLES[kind],color=PAINTS[style.paint].color,detail=vehicleDetails.get(root)?.near??root;
+  const spec=VEHICLES[kind],color=marketPaint??PAINTS[style.paint].color,detail=vehicleDetails.get(root)?.near??root;
   detail.traverse(node=>{
     if(!(node instanceof T.Mesh)||Array.isArray(node.material)||node.name==='vehicle-distant')return;
     const current=node.material;
