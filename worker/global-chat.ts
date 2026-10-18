@@ -59,6 +59,7 @@ const IP_BUCKET_LIMIT = 1000;
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
   private sessions = new Map<WebSocket, Session>();
+  private drainingIds = new Set<string>();
   private history: ChatMessage[] = [];
   private ipBuckets = new Map<string, Bucket>();
   private identityBuckets = new Map<string, Bucket>();
@@ -183,8 +184,8 @@ export class GlobalChat extends DurableObject {
       if (session.messageTimes.length >= CHAT_LIMIT) { this.error(socket, 'Please wait before sending more messages.'); return; }
       session.messageTimes.push(now);
       session.updates = session.updates.then(() => {
-        if (!this.sessions.has(socket) || !session.playerId || !session.name) return;
-        const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: now };
+        if (!session.playerId || !session.name) return;
+        const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: Date.now() };
         this.history.push(chat);
         if (this.history.length > HISTORY_LIMIT) this.history.shift();
         for (const [recipient, active] of this.sessions) if (active.playerId) this.send(recipient, { type: 'message', message: chat });
@@ -212,7 +213,7 @@ export class GlobalChat extends DurableObject {
         knownCode = `poly-${parsed.playerId}.${parsed.secret}`;
         name = saved.name;
         if (!this.sessions.has(socket)) return;
-        if ([...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
+        if (this.drainingIds.has(playerId) || [...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
           this.send(socket, { type: 'error', code: 'identity_active', message: 'That saved driver is already connected elsewhere.' }); return;
         }
       } else {
@@ -240,7 +241,7 @@ export class GlobalChat extends DurableObject {
   }
 
   private async rename(socket: WebSocket, session: Session, desiredName: string, requestId: number): Promise<void> {
-    if (!this.sessions.has(socket) || !session.playerId) return;
+    if (!session.playerId) return;
     const used = [...this.sessions.values()].filter(active => active !== session)
       .flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
     const name = chooseAvailableName(desiredName, used);
@@ -290,6 +291,13 @@ export class GlobalChat extends DurableObject {
     const session = this.sessions.get(socket);
     if (!session) return;
     this.sessions.delete(socket);
+    if (session.playerId) {
+      const id = session.playerId;
+      this.drainingIds.add(id);
+      // Finish accepted writes/messages before allowing this saved identity to
+      // reconnect, so a new socket cannot race the old one's pending rename.
+      void session.updates.then(() => this.drainingIds.delete(id), () => this.drainingIds.delete(id));
+    }
     if (session.handshakeTimer) clearTimeout(session.handshakeTimer);
     if (!this.sessions.size && this.reapTimer) { clearInterval(this.reapTimer); this.reapTimer = null; }
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }

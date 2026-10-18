@@ -160,11 +160,21 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.ok(observer.sent.some(event => event.type === 'message' && event.message.text === 'before'));
     assert.ok(!observer.sent.some(event => event.type === 'message' && event.message.text === 'after'));
+    orderedHub.disconnect(sender);
+    const reconnecting = makeSocket(), reconnectingSession = attach(orderedHub, reconnecting);
+    await orderedHub.hello(reconnecting, reconnectingSession, '', code);
+    assert.equal(reconnecting.sent.at(-1).code, 'identity_active', 'identity stays reserved while accepted work drains');
+    orderedHub.onMessage(observer, JSON.stringify({ type: 'message', text: 'other' }));
+    await observerSession.updates;
+    const beforeRelease = Date.now();
     releaseWrite();
     await senderSession.updates;
     const orderedMessages = observer.sent.filter(event => event.type === 'message');
-    assert.deepEqual(orderedMessages.map(event => [event.message.text, event.message.name]), [['before', 'Driver One'], ['after', 'New Name']]);
-    assert.equal(sender.sent.find(event => event.type === 'renamed').requestId, 7);
+    assert.deepEqual(orderedMessages.map(event => [event.message.text, event.message.name]), [['before', 'Driver One'], ['other', 'Observer'], ['after', 'New Name']]);
+    assert.ok(orderedMessages.at(-1).message.time >= beforeRelease, 'message time reflects when it was broadcast');
+    assert.ok(!sender.sent.some(event => event.type === 'renamed'), 'closed sender is not acknowledged');
+    await orderedHub.hello(reconnecting, reconnectingSession, '', code);
+    assert.equal(reconnecting.sent.at(-1).name, 'New Name', 'recovery sees the completed rename');
   } finally {
     Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
   }
