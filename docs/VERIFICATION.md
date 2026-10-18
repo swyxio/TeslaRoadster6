@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Bay charging lots · protocol v22 · 2026-10-18 Pacific
+
+- After integrating main's v21 driving changes, `pnpm test` passed 316 tests and `pnpm build` passed both typechecks and production generation; Vite retained its large-chunk warning. Local Wrangler advertised v22 and passed the two-client room and global-chat integrations. An earlier v20 room run timed out on its post-Dome reset check; the subsequent v22 run passed. These are local checks, not production or load evidence.
+- Shared simulation tests checked at least two lots per represented area, site provenance and fictional labels, charging at every bay, Park It completion and queue start at every lot, and clearance for lots and venue-building collision footprints.
+- Chrome desktop showed the SF 16th Street and San Jose Coleman lots using a temporary local spawn fixture, removed before build. The unmodified build started a solo drive. The San Jose lot rendered at 390×844 and 844×390 emulated viewports; Park It joined using keyboard activation in the portrait emulation. An attempted emulated touch Drive hold did not produce observed movement, so this is not touch-driving or physical-device proof. No browser console errors were captured during the fixture pass.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
