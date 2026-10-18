@@ -130,8 +130,9 @@ test('a chasing patrol brakes for traffic in its path without stopping for a cle
   assert.equal(policeInput(cop,world).brake,true,'a blocked reverse is held in place');
 });
 
-test('a patrol safely waits behind a stopped car and resumes when the road clears',()=>{
-  const {world,player,car}=fixture(),cop=patrol(world,190),pose=along(220);
+for(const {speed,obstacleAt,targetAt} of [{speed:25,obstacleAt:220,targetAt:250},{speed:42,obstacleAt:330,targetAt:440}])test(`a ${speed} m/s patrol waits behind stopped traffic and resumes when clear`,()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190),pose=along(obstacleAt);
+  cop.speed=speed;Object.assign(car,along(targetAt));
   const obstacle=makeEntity('obstacle','model-3',pose.x,pose.z);
   Object.assign(obstacle,{yaw,speed:0});world.entities.push(obstacle);
   cop.police!.targetId=player.id;cop.police!.cause='speeding';cop.police!.lastSeen=0;
