@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {makeEntity,NEUTRAL,step,type Input,type World} from '../shared/game';
+import {makeEntity,NEUTRAL,step,THRUSTER_REAR,THRUSTER_DOWN_LEFT,THRUSTER_DOWN_RIGHT,THRUSTER_SIDE_RIGHT,type Input,type World} from '../shared/game';
 import {STUNT_LOOP,STUNT_RAMP,rampHeight} from '../shared/map';
 import {initialDelivery} from '../shared/delivery';
 
@@ -10,6 +10,16 @@ function playground(x=0,z=0){
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }
+test('thruster signals track actual boosts, jumps, flips and depleted air',()=>{
+  const {car,send}=playground();
+  send({...NEUTRAL,throttle:1,boost:true});assert.equal(car.thrusters,THRUSTER_REAR);
+  send();assert.equal(car.thrusters,0);
+  send({...NEUTRAL,jump:1});assert.equal(car.thrusters,THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT);
+  for(let i=0;i<6;i++)send({...NEUTRAL,jump:1});assert.equal(car.thrusters,0);
+  send({...NEUTRAL,jump:1,flip:1});assert.ok(car.thrusters&THRUSTER_SIDE_RIGHT);
+  for(let i=0;i<18;i++)send({...NEUTRAL,jump:1,flip:1});
+  car.air=0;send({...NEUTRAL,jump:1,flip:1,boost:true,hover:true,roll:1});assert.equal(car.thrusters,0);
+});
 test('a jump starts the delivery activity clock without keeping it active indefinitely',()=>{
   const {world,send}=playground();
   send({...NEUTRAL,jump:1});

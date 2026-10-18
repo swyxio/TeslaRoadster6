@@ -1,6 +1,6 @@
 // Run against Wrangler or deployment: pnpm exec tsx tests/room.integration.ts [http://localhost:8787]
 import assert from 'node:assert/strict';
-import { PROTOCOL_VERSION, NEUTRAL, type World } from '../shared/game';
+import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_RIGHT, type World } from '../shared/game';
 const base = process.argv[2] ?? 'http://localhost:8787';
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -34,13 +34,17 @@ try {
   for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 1 } })); await delay(50); }
   await eventually(() => {const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&((e.x-origin.x)*-Math.sin(origin.yaw)+(e.z-origin.z)*-Math.cos(origin.yaw)>4);}, 'remote player receives authoritative movement');
   await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5;},'active delivery time replicated');
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1,boost:true}}));
+  await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_REAR),'remote boost exhaust replicated');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   // The press is counted, so a complete tap between input frames is retained.
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1}}));
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>.5&&e.air===76;},'jump and air use replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>.5&&e.air<100&&(e.thrusters&(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT))===(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT);},'jump exhaust and air use replicated');
+  const remaining=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&e.air===67;},'one-tap flip completion replicated');
+  await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_SIDE_RIGHT),'remote flip exhaust replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-9))<.01;},'one-tap flip completion replicated');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));

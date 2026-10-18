@@ -5,7 +5,7 @@ import { type World } from '../shared/game';
 import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
-import { box, material, createVehicle } from './vehicles';
+import { box, material, createVehicle, setThrusterEffects } from './vehicles';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
@@ -59,7 +59,7 @@ export class GameScene {
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
-  render(world: World, playerId: string, dt: number, menu: boolean, thrust: boolean) {
+  render(world: World, playerId: string, dt: number, menu: boolean) {
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -78,7 +78,7 @@ export class GameScene {
       mesh.rotation.order='YXZ';
       const delta=(target:number,current:number)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
       mesh.rotation.y+=delta(e.yaw,mesh.rotation.y)*alpha;mesh.rotation.x+=delta(e.pitch,mesh.rotation.x)*alpha;mesh.rotation.z+=delta(e.roll,mesh.rotation.z)*alpha;
-      const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind!=='person'&&VEHICLES[e.kind].airThrusters&&e.loopAngle===null&&e.y>.5&&(e.driver!==playerId||thrust);
+      if(e.kind==='roadster')setThrusterEffects(mesh,e.thrusters,world.time);
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
