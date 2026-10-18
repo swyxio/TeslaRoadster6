@@ -1,6 +1,19 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.9-alpha',
+    label: '0.0.9 Alpha',
+    date: '2026-10-18',
+    title: 'A name that moves with you',
+    intro: 'Change your driver name whenever you like and keep the same chat identity.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'Edit your name right in the phone chat or from Driver identity. Your ID stays the same.',
+        'Your browser remembers your driver by default. Copy the private recovery code to use the same driver on another device.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.8-alpha',
     label: '0.0.8 Alpha',
     date: '2026-10-18',
