@@ -1,12 +1,18 @@
 /** Compressed Bay geography. X east, Z south, meters in game space. */
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
+import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
 import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
+import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps';
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
+import { LUXURY_SHOWROOM } from './luxury';
+import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
+import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
+import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -20,13 +26,13 @@ export function rampHeight(x:number,z:number):number|null {
   return STUNT_RAMP.height*(x-STUNT_RAMP.start)/(STUNT_RAMP.end-STUNT_RAMP.start);
 }
 /** Fictional playground: the southward projection is the island ferry apron. */
-export const ROCKET_ISLAND:Region={id:'rocket-island',name:'Rocket Island',color:0xb8c7a3,points:polygon([
+export const ROCKET_ISLAND:Region={id:'rocket-island',name:'North Bay Playground',color:0xb8c7a3,points:polygon([
   [-500,-1800],[-450,-2050],[-300,-2180],[600,-2180],[850,-2050],[900,-1700],
   [800,-1300],[600,-1140],[250,-1100],[20,-1100],[20,-1060],[-20,-1060],
   [-20,-1100],[-150,-1100],[-400,-1250],
 ])};
-const ISLAND_DOME_LINK:Region={id:'island-dome-link',name:'Rocket Dome approach',color:0xb8c7a3,points:polygon([[240,-1120],[380,-1120],[380,-935],[240,-935]])};
-const ALCATRAZ_DOME_LAND:Region={id:'alcatraz',name:'Alcatraz Rocket Dome',color:0x9fab8d,points:polygon([[190,-920],[215,-955],[385,-955],[410,-920],[410,-780],[385,-745],[215,-745],[190,-780]])};
+// Compressed China Basin waterfront: the stadium and its plaza remain on shared land.
+const DOME_WATERFRONT:Region={id:'china-basin',name:'China Basin Rocket Dome',color:0xd4d1bb,points:polygon([[-150,140],[45,140],[55,165],[55,230],[30,285],[-150,285]])};
 /** Pier tips and the center of a 38 m ferry deck alongside each tip. */
 export const FERRY_DOCKS={
   sf:{x:0,z:-255,deckZ:-274},
@@ -38,7 +44,7 @@ export const REGIONS:Region[]=[
   {id:'marin',name:'Marin Headlands',color:0x9ba883,points:polygon([[-410,-550],[-120,-550],[-116,-460],[-140,-413],[-185,-385],[-230,-374],[-275,-385],[-340,-382],[-400,-405],[-420,-470]])},
   {id:'yerba',name:'Yerba Buena Island',color:0xa9b49a,points:polygon([[169,27],[193,12],[222,22],[238,44],[235,70],[220,87],[187,91],[164,76],[158,49]])},
   {id:'sf-ferry-apron',name:'San Francisco ferry apron',color:0xb9b7a4,points:polygon([[-20,-255],[20,-255],[20,-195],[-20,-195]])},
-  ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND,
+  DOME_WATERFRONT, ROCKET_ISLAND,
 ];
 export type Bridge = { id:'golden-gate'|'bay-bridge'; name:string; axis:'x'|'z'; start:number; end:number; center:number; width:number };
 // Decks are at ground height, deliberate arcade simplification; water is below.
@@ -56,6 +62,19 @@ export const PARKS=[
 export const LAKE_MERRITT={x:480,z:150,rx:18,rz:21,islands:[{x:474,z:145,r:4},{x:484,z:148,r:3.5},{x:480,z:157,r:3}]} as const;
 // A fictional sightseeing easter egg, not a depiction of any real person's vessel.
 export const MYSTERY_YACHT={x:210,z:-115,name:'Larry’s Imaginary Yacht'} as const;
+// A fictional monument on flat Marin land, clear of the Golden Gate approach.
+// Its base is a shared collision building; the sculpture above is decorative.
+export const TESLAND_MONUMENTS=[
+ {id:'first-delivery',name:'First Delivery Monument',x:-185,z:-510,w:14,d:14,h:6},
+] as const;
+// A fictional 2050 expansion near the compressed Fremont/I-880 corridor.
+// These shared envelopes are solid; the rocket above the pad is decorative.
+export const FREMONT_SPACEPORT={
+ factory:{x:1825,z:6190,w:130,d:80,h:24},
+ pad:{x:1960,z:6190,w:34,d:34,h:4},
+ tower:{x:1990,z:6190,w:12,d:12,h:125},
+ entrance:{x:1929,z:6223},
+} as const;
 export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   let inside=false;
   for(let i=0,j=points.length-1;i<points.length;j=i++){
@@ -65,9 +84,8 @@ export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   return inside;
 }
 export function isLand(x:number,z:number):boolean{return REGIONS.some(r=>insidePolygon(x,z,r.points));}
-/** The island and dome approach share a server-side safety boundary at any altitude. */
-const ROCKET_ISLAND_ZONES = [ROCKET_ISLAND, ISLAND_DOME_LINK, ALCATRAZ_DOME_LAND];
-export function isRocketIsland(x:number,z:number):boolean{return ROCKET_ISLAND_ZONES.some(region=>insidePolygon(x,z,region.points));}
+/** The playground has a server-side safety boundary at any altitude. */
+export function isRocketIsland(x:number,z:number):boolean{return insidePolygon(x,z,ROCKET_ISLAND.points);}
 export function isBridge(x:number,z:number):boolean{return BRIDGES.some(b=>b.axis==='x'?x>=b.start&&x<=b.end&&Math.abs(z-b.center)<=b.width/2:z>=b.start&&z<=b.end&&Math.abs(x-b.center)<=b.width/2);}
 export function isSurface(x:number,z:number):boolean{return isLand(x,z)||isBridge(x,z);}
 
@@ -85,7 +103,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-oval'|'island-cliff'|'ferry'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-jump'|'island-cliff'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -112,25 +130,58 @@ export function overpassHeight(x:number,z:number):number|null {
  if(x>OVERPASS.deckEnd)return OVERPASS.height*(OVERPASS.end-x)/(OVERPASS.end-OVERPASS.deckEnd);
  return OVERPASS.height;
 }
+/** The upper exterior follows the same capsule as the rendered arena shell. */
+export function domeRoofHeight(x:number,z:number):number|null {
+ if(Math.abs(x-DOME.x)>DOME.halfLength)return null;
+ const side=Math.max(0,Math.abs(z-DOME.z)-DOME.flatHalfWidth);
+ return side>DOME.radius?null:DOME.radius+Math.sqrt(Math.max(0,DOME.radius**2-side**2));
+}
+/** Shared roof height for the visible curved special landmarks. */
+export function buildingRoofHeight(b:Building,x:number,z:number):number {
+ const dome=(cx:number,cz:number,rx:number,rz:number,base:number,height:number)=>{
+  const q=((x-cx)/rx)**2+((z-cz)/rz)**2;
+  return q<=1?base+height*Math.sqrt(Math.max(0,1-q)):0;
+ };
+ if(b.style==='rotunda')return Math.max(14,dome(b.x,b.z,9,9,14,9));
+ if(b.style==='salesforce'||b.style==='coit')return Math.max(b.h,dome(b.x,b.z,b.w*.46,b.w*.46,b.h,b.w*.46*.38));
+ if(b.style==='landmark'){
+  const p=NORTH_LANDMARKS.find(p=>p.x===b.x&&p.z===b.z);
+  if(p?.shape==='rotunda')return Math.max(b.h*.72,dome(b.x,b.z,b.w*.35,b.d*.35,b.h*.72,b.h*.28));
+  if(p?.shape==='crystal')return Math.max(b.h*.26,dome(b.x,b.z,b.w*.4,b.d*.4,b.h*.26,b.h*.7));
+  if(p?.shape==='academy'||p?.shape==='greenhouse'){
+   const academy=p.shape==='academy',base=b.h*(academy?.56:.43),radius=academy?.18:.19,offset=academy?.27:.28;
+   return Math.max(base,...[-1,0,1].map(i=>dome(b.x+i*b.w*offset,b.z,b.w*radius,b.d*(academy?.4:.39),base,b.h*(academy?.4:.5))));
+  }
+ }
+ return b.h;
+}
 /** Surface IDs are static map identities; null denotes no support at the pivot. */
 export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='ground')return terrainHeight(x,z);
+ if(id==='dome-roof')return domeRoofHeight(x,z);
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
  if(id==='island-bank')return bankSurface(x,z)?.height??null;
  if(id==='island-oval')return ovalBankSurface(x,z)?.height??null;
+ if(id==='island-jump')return islandJumpHeight(x,z);
  // Curved surfaces can have multiple heights at one point; ferry support moves.
  if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
  const b=BUILDINGS[Number(id.slice(5))];
- return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
+ return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?buildingRoofHeight(b,x,z):null;
 }
 export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
  if(supportHeight(id,x,z)===null)return null;
  if(id==='island-bank')return bankSurface(x,z)?.normal??null;
  if(id==='island-oval')return ovalBankSurface(x,z)?.normal??null;
+ if(id==='dome-roof'||id.startsWith('roof:')){
+  const delta=.05,h=supportHeight(id,x,z)!,hx=supportHeight(id,x+delta,z),hz=supportHeight(id,x,z+delta);
+  const dx=hx===null?0:(hx-h)/delta,dz=hz===null?0:(hz-h)/delta,len=Math.hypot(dx,1,dz);
+  return {x:-dx/len,y:1/len,z:-dz/len};
+ }
  let dx=0,dz=0;
  if(id==='ground')({dx,dz}=hillSurface(x,z));
  else if(id==='stunt-ramp')dx=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
+ else if(id==='island-jump')dx=islandJumpSlope(islandJumpAt(x,z)!);
  else if(id==='overpass'){
   if(x<OVERPASS.deckStart)dx=OVERPASS.height/(OVERPASS.deckStart-OVERPASS.start);
   else if(x>OVERPASS.deckEnd)dx=-OVERPASS.height/(OVERPASS.end-OVERPASS.deckEnd);
@@ -152,14 +203,20 @@ export function domeSurface(arcLength:number):{y:number;z:number;tangentY:number
 
 export type RoadSegment={x:number;z:number;w:number;d:number;axis:'x'|'z';angle?:number;kind?:'highway'|'island';course?:'oval'};
 export const ROADS:RoadSegment[]=[];
+/** Clear the stadium footprint while leaving the adjoining city streets intact. */
+export function inDomePlaza(x:number,z:number):boolean {
+ return Math.abs(x-DOME.x)<96&&z>=DOME.z-65&&z<=DOME.z+80;
+}
 function streetGrid(xs:number[],zs:number[],xmin:number,xmax:number,zmin:number,zmax:number){
- for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
- for(const z of zs)for(let x=xmin;x<xmax;x+=15)if(isLand(x+7.5,z))ROADS.push({x:x+7.5,z,w:15,d:14,axis:'x'});
+ for(const x of xs)for(let z=zmin;z<zmax;z+=15)if(isLand(x,z+7.5)&&!inDomePlaza(x,z+7.5))ROADS.push({x,z:z+7.5,w:14,d:15,axis:'z'});
+ for(const z of zs)for(let x=xmin;x<xmax;x+=15)if(isLand(x+7.5,z)&&!inDomePlaza(x+7.5,z))ROADS.push({x:x+7.5,z,w:15,d:14,axis:'x'});
 }
 streetGrid([-360,-300,-240,-180,-120,-60,0,60],[-240,-180,-120,-60,0,60,120,180,240],-405,105,-300,300);
 streetGrid([330,390,450,510,570],[-240,-180,-120,-60,0,60,120,180,240],270,610,-285,300);
 // Shore roads and bridge approaches, connected to the two street grids.
 ROADS.push({x:-240,z:-330,w:18,d:180,axis:'z'},{x:195,z:60,w:270,d:24,axis:'x'});
+// The north gate connects directly to the z=120 city street.
+ROADS.push({x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:18,d:DOME.z-DOME.flatHalfWidth-120,axis:'z'});
 
 // The route remains useful to the minimap; the oval's physical surface is
 // shared separately with its renderer in oval-bank.ts.
@@ -174,14 +231,16 @@ for(let i=0;i<SHORT_TRACK.length;i++){
 }
 ROADS.push(
  {x:0,z:-1200,w:24,d:280,axis:'z',kind:'island'},
- {x:300,z:-1090,w:24,d:320,axis:'z',kind:'island'},
  {x:0,z:-225,w:24,d:60,axis:'z'},
+ ...PENINSULA_CROSS_STREETS,
+ ...CALTRAIN_ROADS,
 );
 
 /** Distances and shorelines are game-space approximations, not navigation. */
-export const HIGHWAYS:{id:string;name:string;points:MapPoint[]}[]=[
+export const HIGHWAYS:{id:string;name:string;width?:number;points:MapPoint[]}[]=[
  {id:'peninsula',name:'US 101',points:BAY_HIGHWAY_TRACES.peninsula.map(([x,z])=>({x,z}))},
  {id:'east-bay',name:'I-880',points:BAY_HIGHWAY_TRACES['east-bay'].map(([x,z])=>({x,z}))},
+ ...ALTERNATE_ROADS,
 ];
 // Shared route is closed implicitly: its final point joins the first on SF streets.
 export const BAY_CIRCUIT:MapPoint[]=[
@@ -196,9 +255,12 @@ function pointAtZ(highway:typeof HIGHWAYS[number],z:number):MapPoint{
 }
 // Approximate arcade destinations, placed beside the compressed traced corridors.
 export const DISTRICTS=[
+ {id:'south-san-francisco',name:'South San Francisco',...pointAtZ(HIGHWAYS[0],950)},
  {id:'san-mateo',name:'San Mateo',...pointAtZ(HIGHWAYS[0],2000)},
+ {id:'redwood-city',name:'Redwood City',...pointAtZ(HIGHWAYS[0],2450)},
  {id:'palo-alto',name:'Palo Alto',...pointAtZ(HIGHWAYS[0],4000)},
  {id:'mountain-view',name:'Mountain View',...pointAtZ(HIGHWAYS[0],6000)},
+ {id:'santa-clara',name:'Santa Clara',...pointAtZ(HIGHWAYS[0],6790)},
  {id:'san-jose',name:'San Jose',x:1530,z:8770},
  {id:'fremont',name:'Fremont',...pointAtZ(HIGHWAYS[1],6000)},
  {id:'east-bay',name:'East Bay',...pointAtZ(HIGHWAYS[1],3000)},
@@ -211,15 +273,16 @@ export const LANDMARKS=[
  {id:'stanford',name:'Stanford · Hoover Tower',x:-940,z:4000,w:16,d:16,h:60,district:'peninsula',style:'hoover',arrival:{x:-940,z:4030}},
  {id:'mission-san-jose',name:'Fremont · Mission San José',x:1770,z:6000,w:26,d:18,h:20,district:'east-bay',style:'mission',arrival:{x:1770,z:6035}},
  {id:'san-jose-city-hall',name:'San José · City Hall',x:1680,z:8700,w:22,d:22,h:23,district:'south-bay',style:'rotunda',arrival:{x:1705,z:8730}},
+ {id:'ucsf',name:'UCSF · Parnassus',x:-330,z:90,w:22,d:22,h:21,district:'sf',style:'hospital',arrival:{x:-330,z:120}},
 ] as const;
 // Runway paint sits on the same supported land as the cars; no aircraft simulation.
 export const AIRPORT_RUNWAY={x:-660,z:1200,w:20,d:110} as const;
 for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z;
- ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
+ ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom';stationId?:string};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -236,7 +299,7 @@ function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax
    {x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type},
    {x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type},
   ];
-  for(const b of generated)if(!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
+  for(const b of generated)if(!inDomePlaza(b.x,b.z)&&!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
  }
 }
 blocks('sf',-360,60,-240,240);blocks('oakland',330,570,-240,240);
@@ -256,6 +319,18 @@ function distanceToHighway(x:number,z:number){
  }
  return best;
 }
+function nearCaltrain(x:number,z:number,w:number,d:number){
+ const intersects=(a:{x:number;z:number;w:number;d:number})=>Math.abs(x-a.x)<(w+a.w)/2+1&&Math.abs(z-a.z)<(d+a.d)/2+1;
+ if(CALTRAIN_ROADS.some(intersects)||CALTRAIN_PARKING_LOTS.some(lot=>intersects({x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length}))||
+  CALTRAIN_STOPS.some(stop=>intersects({x:stop.platform.x,z:stop.platform.z,w:44,d:8})))return true;
+ // Keep the rendered rail and its clearance away from solid town buildings.
+ for(let i=1;i<CALTRAIN_TRACK.length;i++){
+  const a=CALTRAIN_TRACK[i-1],b=CALTRAIN_TRACK[i],dx=b.x-a.x,dz=b.z-a.z;
+  const t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz)));
+  if(Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<Math.hypot(w,d)/2+3)return true;
+ }
+ return false;
+}
 // Compact, physically collidable district clusters. Roads and shoulders remain clear.
 for(const district of DISTRICTS){
  const highway=HIGHWAYS[district.id==='fremont'||district.id==='east-bay'?1:0];
@@ -266,7 +341,8 @@ for(const district of DISTRICTS){
  for(const side of [-1,1])for(const along of [-70,0,70])for(const offset of [65,120]){
   const x=district.x+tx*along+tz*offset*side,z=district.z+tz*along-tx*offset*side;
   const w=24,d=22;
-  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2))))continue;
+  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||nearCaltrain(x,z,w,d)||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2)))||
+   STATIONS.some(s=>Math.abs(x-s.x)<(w+CHARGER_LOT.width)/2&&Math.abs(z-s.z)<(d+CHARGER_LOT.length)/2))continue;
   const high=district.id==='san-jose'&&offset===65;
   const h=high?48+(along+70)/7:12+(Math.abs(along)+offset)%17;
   BUILDINGS.push({x,z,w,d,h,district:district.id==='san-jose'?'south-bay':district.id==='fremont'||district.id==='east-bay'?'east-bay':'peninsula',style:high?'tower':h>22?'midrise':'house'});
@@ -278,14 +354,44 @@ for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,dist
 export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
 const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
  .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
+landmarkBuildings.push(...EAST_SOUTH_ADDITIONS);
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
- const overlapsLandmark=landmarkBuildings.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
+ const overlapsLandmark=[...landmarkBuildings,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
  const overlapsHill=NATURAL_HILLS.some(h=>b.x+b.w/2>h.minX&&b.x-b.w/2<h.maxX&&b.z+b.d/2>h.minZ&&b.z-b.d/2<h.maxZ);
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }
 BUILDINGS.push(...landmarkBuildings);
+// These compact venue buildings sit beside selected lots. Collision, roof and
+// rendering all use the same footprint; the facades are stylized, not surveys.
+export const STATION_VENUES:Building[]=STATIONS.filter(s=>s.frontage).map(s=>({
+ x:s.x+s.frontage!.x,z:s.z+s.frontage!.z,w:20,d:18,h:s.setting==='garage'?12:8,
+ district:s.area==='Mill Valley'||s.area==='Corte Madera'||s.area==='San Francisco'?'sf':s.area==='San Jose'?'south-bay':s.area==='Hayward'||s.area==='Fremont'?'east-bay':'peninsula',
+ style:'station-venue',stationId:s.id,
+}));
+for(let i=BUILDINGS.length-1;i>=0;i--){
+ const b=BUILDINGS[i];
+ if(!['house','midrise','tower'].includes(b.style))continue;
+ if(STATION_VENUES.some(v=>Math.abs(v.x-b.x)<(v.w+b.w)/2+1&&Math.abs(v.z-b.z)<(v.d+b.d)/2+1))BUILDINGS.splice(i,1);
+}
+BUILDINGS.push(...STATION_VENUES);
+// Shared envelopes are the physical campus buildings, including Apple Park's
+// separate ring segments. Replace background blocks only when they overlap.
+for(let i=BUILDINGS.length-1;i>=0;i--){
+ const b=BUILDINGS[i];
+ if(!['house','midrise','tower'].includes(b.style))continue;
+ if(TECH_CAMPUS_BUILDINGS.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1))BUILDINGS.splice(i,1);
+}
+BUILDINGS.push(...TECH_CAMPUS_BUILDINGS);
+// The Vault replaces one generated background block; its physical envelope and
+// visible building share the same footprint. The forecourt remains open ground.
+const vault=LUXURY_SHOWROOM.building;
+const vaultBlock=BUILDINGS.findIndex(b=>b.style==='midrise'&&Math.hypot(b.x-vault.x,b.z-vault.z)<.01);
+if(vaultBlock<0)throw new Error('The Vault background block is missing');
+BUILDINGS.splice(vaultBlock,1,{...vault,district:'peninsula',style:'luxury-showroom'});
+BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
+BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

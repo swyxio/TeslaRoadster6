@@ -1,27 +1,35 @@
 import * as T from 'three';
+import { STATIONS } from '../shared/stations';
+import { LUXURY_SHOWROOM } from '../shared/luxury';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
+import { PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
 import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
+import { buildNorthBayScenery } from './north-bay-scenery';
+import { buildCaltrain } from './caltrain';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
   const palettes=[0xd0c4b0,0xdecdb6,0xb5beb5,0xdac1a8,0xb7a898,0x9fada8,0xe1d1b9];
   type BoxItem={x:number;y:number;z:number;w:number;h:number;d:number;angle?:number};
+  const boxGeometry=new T.BoxGeometry(1,1,1);
+  const details=new Map<number,BoxItem[]>();
   function batches(color:number,items:BoxItem[]){
     if(!items.length)return;
-    const mesh=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
+    const mesh=new T.InstancedMesh(boxGeometry,material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
     items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle??0),scale.set(p.w,p.h,p.d))));mesh.computeBoundingSphere();scene.add(mesh);
   }
-  function localBatches(color:number,items:BoxItem[]){
+  function localBatches(color:number,items:BoxItem[],cellSize=700){
     const chunks=new Map<string,BoxItem[]>();
     for(const item of items){
-      const key=`${Math.floor(item.x/700)},${Math.floor(item.z/700)}`;
+      const key=`${Math.floor(item.x/cellSize)},${Math.floor(item.z/cellSize)}`;
       const chunk=chunks.get(key)??[];chunk.push(item);chunks.set(key,chunk);
     }
     for(const chunk of chunks.values())batches(color,chunk);
   }
   function box(x:number,y:number,z:number,w:number,h:number,d:number,color:number){
-    const m=new T.Mesh(new T.BoxGeometry(w,h,d),material(color));m.position.set(x,y,z);scene.add(m);return m;
+    const items=details.get(color)??[];
+    items.push({x,y,z,w,h,d});details.set(color,items);
   }
   // Water is physically below the flat, drivable bridge decks.
   const water=new T.Mesh(new T.PlaneGeometry(MAP_BOUNDS.maxX-MAP_BOUNDS.minX+1600,MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ+1600),new T.MeshStandardMaterial({color:0x478e9b,roughness:.45,metalness:.18}));
@@ -94,11 +102,11 @@ export function buildBay(scene:T.Scene) {
   batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
   // Adjacent rotated rectangles leave outside wedges at bends. Round joins
   // follow the shared highway vertices and sit just below the road surfaces.
-  const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points).map(p=>[`${p.x},${p.z}`,p])).values()];
+  const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points.map(p=>({...p,radius:(h.width??32)/2}))).map(p=>[`${p.x},${p.z},${p.radius}`,p])).values()];
   if(joins.length){
     const geometry=new T.CircleGeometry(1,32);geometry.rotateX(-Math.PI/2);
     const mesh=new T.InstancedMesh(geometry,material(0x424e50),joins.length),matrix=new T.Matrix4();
-    joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(16,1,16).setPosition(p.x,.13,p.z)));
+    joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(p.radius,1,p.radius).setPosition(p.x,.13,p.z)));
     mesh.computeBoundingSphere();scene.add(mesh);
   }
   // The oval surface and its paint come from shared bank geometry; the short
@@ -134,6 +142,11 @@ export function buildBay(scene:T.Scene) {
     if(r.axis==='z'&&Math.abs(r.z%60)>14)stripes.push({x:r.x,y:.14,z:r.z,w:.16,h:.018,d:4});
     if(r.axis==='x'&&Math.abs(r.x%60)>14)stripes.push({x:r.x,y:.145,z:r.z,w:4,h:.018,d:.16});
   }
+  // These local streets span several highway lanes, so the city-grid pass
+  // above skips their long rectangles. Mark their shared centerlines as well.
+  for(const street of PENINSULA_CROSS_STREETS)
+    for(let x=street.x-street.w/2+6;x<street.x+street.w/2-4;x+=14)
+      stripes.push({x,y:.145,z:street.z,w:7,h:.018,d:.16});
   batches(0xe7d8aa,stripes);
   // Paint follows each authoritative road rectangle. No separate decorative
   // asphalt, walls or ramps can suggest a surface the simulation lacks.
@@ -210,11 +223,37 @@ export function buildBay(scene:T.Scene) {
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
-    if(b.style==='landmark')return;
+    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
-    const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
-    if(!landmark&&!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
-    if(b.style==='campanile'||b.style==='hoover'){
+    const landmark=['campanile','hoover','airport','mission','rotunda','hospital'].includes(b.style);
+    if(!landmark&&!['pyramid','coit','salesforce','station-venue','luxury-showroom'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
+    if(b.style==='luxury-showroom'){
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,0x29353a);
+      box(b.x,3.7,b.z+b.d/2+.04,b.w-2,5.4,.1,0x526f77);
+      for(const side of [-1,1])box(b.x+side*5.5,3.7,b.z+b.d/2+.1,.28,5.4,.1,0xd4bc79);
+      box(b.x,b.h-.6,b.z+b.d/2+.08,b.w,.8,.18,0xbda873);
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+      const ctx=canvas.getContext('2d')!;ctx.fillStyle='#29353a';ctx.fillRect(0,0,512,96);
+      ctx.fillStyle='#f0dfac';ctx.textAlign='center';ctx.font='bold 52px system-ui';ctx.fillText('THE VAULT',256,66,480);
+      const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+      const sign=new T.Mesh(new T.PlaneGeometry(13,2.4),new T.MeshBasicMaterial({map:texture,side:T.DoubleSide}));
+      sign.position.set(b.x,7.3,b.z+b.d/2+.2);scene.add(sign);
+      const ring=new T.Mesh(new T.RingGeometry(LUXURY_SHOWROOM.radius-.45,LUXURY_SHOWROOM.radius,48),new T.MeshBasicMaterial({color:0xeacb79,side:T.DoubleSide}));
+      ring.rotation.x=-Math.PI/2;ring.position.set(LUXURY_SHOWROOM.arrival.x,.18,LUXURY_SHOWROOM.arrival.z);scene.add(ring);
+    }else if(b.style==='station-venue'){
+      const station=STATIONS.find(s=>s.id===b.stationId)!;
+      const color=station.setting==='garage'?0xa9adab:station.setting==='museum'?0x9bb6bd:0xd6ccb9;
+      const accent=station.setting==='retail'?0xb9473d:station.setting==='museum'?0x507a85:station.setting==='garage'?0x6b797d:0xa57761;
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,color);
+      box(b.x,b.h-.5,b.z+b.d/2+.04,b.w,.7,.1,accent);
+      box(b.x,2.8,b.z+b.d/2+.04,b.w-3,2.8,.1,0x49666c);
+      for(const side of [-1,1])box(b.x+side*4.5,2.8,b.z+b.d/2+.1,.28,3,.1,0xe9dfca);
+      const canvas=document.createElement('canvas');canvas.width=768;canvas.height=96;
+      const ctx=canvas.getContext('2d')!;ctx.fillStyle='#f4ebd9';ctx.fillRect(0,0,768,96);
+      ctx.fillStyle='#243b40';ctx.textAlign='center';ctx.font='bold 50px system-ui';ctx.fillText(station.venue.toUpperCase(),384,65,730);
+      const sign=new T.Mesh(new T.PlaneGeometry(15,1.9),new T.MeshBasicMaterial({map:new T.CanvasTexture(canvas),side:T.DoubleSide}));
+      sign.position.set(b.x,5.4,b.z+b.d/2+.12);scene.add(sign);
+    }else if(b.style==='campanile'||b.style==='hoover'){
       const berkeley=b.style==='campanile',stone=berkeley?0xdad6c7:0xd5c2a0;
       box(b.x,(b.h-10)/2,b.z,b.w*.8,b.h-10,b.d*.8,stone);
       box(b.x,b.h-12,b.z,b.w*.94,2,b.d*.94,berkeley?0xe5e2d3:0xc6a883);
@@ -228,6 +267,11 @@ export function buildBay(scene:T.Scene) {
         }
       }
       const roof=new T.Mesh(new T.ConeGeometry(b.w*.55,5,4),material(berkeley?0xa8aaa0:0xa85243));roof.rotation.y=Math.PI/4;roof.position.set(b.x,b.h-2.5,b.z);scene.add(roof);
+    }else if(b.style==='hospital'){
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,0xdde7df);
+      for(const side of [-1,1])box(b.x+side*6,9,b.z+b.d/2+.04,5,12,.1,0x7da5aa);
+      box(b.x,16,b.z+b.d/2+.08,7,1.6,.15,0x4f918d);
+      box(b.x,16,b.z+b.d/2+.09,1.6,7,.16,0x4f918d);
     }else if(b.style==='airport'){
       box(b.x,5,b.z,b.w,10,b.d,0xd8dfd8);
       const shaft=new T.Mesh(new T.CylinderGeometry(5,3.5,29,10),material(0xe3e9e2));shaft.position.set(b.x,24.5,b.z);scene.add(shaft);
@@ -328,6 +372,8 @@ export function buildBay(scene:T.Scene) {
   batches(0x78674f,trees.map(p=>({...p,y:1.4,w:.55,h:2.8,d:.55})));
   const crown=new T.InstancedMesh(new T.IcosahedronGeometry(2.7,1),material(0x678764),trees.length),m=new T.Matrix4();
   trees.forEach((p,i)=>crown.setMatrixAt(i,m.makeTranslation(p.x,4,p.z)));crown.computeBoundingSphere();scene.add(crown);
+  buildNorthBayScenery(scene);
+  buildCaltrain(scene);
   for(const bridge of BRIDGES)drawBridge(bridge);
   function drawBridge(b:Bridge){
     const color=b.id==='golden-gate'?0xc2563d:0x99a7a5;
@@ -376,5 +422,8 @@ export function buildBay(scene:T.Scene) {
   box(yacht.x-5,2,yacht.z,14,1.5,7,0x4e7480);
   box(yacht.x-8,4,yacht.z,.4,4,.4,0xd5ded6);
   box(yacht.x-6,5.4,yacht.z,4,1.2,.06,0xe9ba65);
+  // Static details share geometry and local material batches, just like the
+  // buildings. Regional bounds keep distant bridge/port details cullable.
+  for(const [color,items] of details)localBatches(color,items,250);
   buildRouteSignage(scene);
 }

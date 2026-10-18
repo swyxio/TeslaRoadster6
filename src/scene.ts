@@ -5,17 +5,21 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, domeSurface, supportNormal, terrainHeight } from '../shared/map';
+import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
-import { STATIONS, stationStalls } from '../shared/stations';
+import { STATIONS } from '../shared/stations';
+import { addStationArt } from './station-art';
 import { orderTarget } from '../shared/delivery';
+import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects, setVehicleStyle } from './vehicles';
+import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
+import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
@@ -23,7 +27,16 @@ import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
+import { buildTechCampuses } from './tech-campuses';
+import { buildEastSouthAdditions } from './east-south-additions';
 import { buildBillboards } from './billboards';
+import { buildTeslandMonuments } from './tesland-monuments';
+import { buildFremontSpaceport } from './fremont-spaceport';
+import type { StarshipAnimation } from './starship-timeline';
+import { MARS_LAUNCH_SECONDS } from '../shared/mars';
+import { RESEARCH_SITES, researchArrival } from '../shared/research';
+import { createPropertyScene } from './property-scene';
+import { marketPaintColor } from '../shared/market-catalog';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -39,19 +52,28 @@ export class GameScene {
   private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
+  private driverLabels = new DriverLabels(this.scene);
   private pickups = new Map<string,T.Group>();
+  private pickupLabels = new Map<string,T.SpriteMaterial>();
   private ferry = new T.Group();
+  private ferryMotion = new T.Vector3();
+  private controlledUp = new T.Vector3(0,1,0);
+  private controlledUpId = '';
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
+  private researchMarkers = new Map<string,T.Group>();
   private parkingClaims = new Map<string,T.Group>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
+  private spaceport?:ReturnType<typeof buildFremontSpaceport>;
   private objective=new T.Group();
+  private goalArt=createGoalArt();
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
   private skyCurrents=createSkyCurrents();
+  private propertyScene=createPropertyScene();
   private ballPosition=new T.Vector3();
   private ballReady=false;
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
@@ -70,6 +92,7 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private predictedEntity?:string;
   cameraMode:CameraMode = 'chase';
   private renderedCockpit=false;
   private marker = new T.Vector3();
@@ -80,7 +103,8 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+    // Bound GPU fill on desktop and touch. HUD text stays native-resolution DOM.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -90,8 +114,10 @@ export class GameScene {
     this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
+    this.scene.add(this.propertyScene.group);
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
     this.objectiveBeam.position.y=9;this.objective.add(this.objectiveBeam);
+    this.objective.add(this.goalArt.mesh);
     this.scene.add(this.objective);
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
     window.addEventListener('resize',resize); resize();
@@ -101,8 +127,13 @@ export class GameScene {
     buildBay(scene);
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
+    buildTechCampuses(scene);
+    buildEastSouthAdditions(scene);
+    buildTeslandMonuments(scene);
+    this.spaceport=buildFremontSpaceport(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
+    addIslandJumps(scene);
     // The hull travels with the authoritative deck; its top is the physical y=0 support.
     box(this.ferry,0,-.65,0,FERRY_DECK.width,1.3,FERRY_DECK.length,0x485e63);
     box(this.ferry,0,-1.5,0,FERRY_DECK.width-1,1,FERRY_DECK.length-2,0x254b54);
@@ -179,15 +210,7 @@ export class GameScene {
     const green=new T.Mesh(new T.SphereGeometry(.23,12,8),this.signalGreen);
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
-      for(const stall of stationStalls(s)) {
-        // Charger posts and mint stop bars identify the fictional air-refill bays.
-        box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);
-        const z=stall.z-stall.length/2-.8;
-        box(scene,stall.x-.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x+.46,1.2,z,.24,2.4,.6,0xf3e8d6);
-        box(scene,stall.x,2.28,z,1.16,.24,.6,0xf3e8d6);
-        box(scene,stall.x,1.2,z,.68,1.7,.14,0xd34537);
-      }
+      addStationArt(scene,s);
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
     });
     const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
@@ -200,9 +223,16 @@ export class GameScene {
       box(scene,s.x,y+6,s.z-8,16,.45,.6,0x9e7bc5);
       const label=new T.Sprite(signMaterial);label.position.set(s.x,y+8,s.z-8);label.scale.set(9,2.25,1);this.shopLabels.push(label);scene.add(label);
     });
-    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
+    const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['NORTH BAY PLAYGROUND FERRY',0,-230],['NORTH BAY PLAYGROUND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const site of RESEARCH_SITES){
+      const point=researchArrival(site),marker=new T.Group();marker.position.set(point.x,(terrainHeight(point.x,point.z)??0)+.2,point.z);
+      const ring=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0x83d9f7,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;marker.add(ring);
+      const label=this.label('RESEARCH · STOP HERE');label.position.y=8;marker.add(label);
+      scene.add(marker);this.researchMarkers.set(site.achievement,marker);
+    }
+    for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+19,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }
@@ -211,7 +241,19 @@ export class GameScene {
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
-  render(world: World, playerId: string, dt: number, menu: boolean) {
+  private lastWorldTime=-1;
+  private worldUpdatedAt=0;
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false,remoteSampled=false,starship?:{animation:StarshipAnimation|null;total:number|null}) {
+    if(snapCamera)this.cameraReady=false;
+    this.propertyScene.update(world.property);
+    const now=performance.now();
+    if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
+    // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
+    const elapsed=Math.min(.1,Math.max(0,(now-this.worldUpdatedAt)/1000));
+    const global=starship?.animation;
+    const legacy=world.mars.launchAt!==null&&world.time+elapsed>=world.mars.launchAt&&world.time+elapsed-world.mars.launchAt<MARS_LAUNCH_SECONDS;
+    if(global?.source==='global')this.spaceport?.update(global.elapsed,0,starship?.total??null,now/1000);
+    else this.spaceport?.update(world.time+elapsed,legacy?world.mars.launchAt:null,starship?.total??null,now/1000);
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
@@ -225,18 +267,20 @@ export class GameScene {
     this.sun.intensity=.5+daylight*1.7;
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
+    this.ferryMotion.copy(this.ferry.position).multiplyScalar(-1);
     if(this.ferry.position.distanceTo(ferryTarget)>35)this.ferry.position.copy(ferryTarget);else this.ferry.position.lerp(ferryTarget,1-Math.exp(-14*dt));
+    this.ferryMotion.add(this.ferry.position);
     for(const side of ['sf','island'] as const){
       const target=world.ferry.phase===side?Math.PI/2:0,gate=this.ferryGates[side];
       gate.rotation.z+=(target-gate.rotation.z)*(1-Math.exp(-6*dt));
     }
     const occupancy=world.entities.filter(e=>e.supportId==='ferry'&&e.kind!=='person').length;
     for(const sign of this.dockSigns){
-      const f=world.ferry,destination=sign.side==='sf'?'ROCKET ISLAND':'SAN FRANCISCO';
+      const f=world.ferry,destination=sign.side==='sf'?'NORTH BAY PLAYGROUND':'SAN FRANCISCO';
       const waiting=f.blocked==='ramp'?'CLEAR DECK':f.blocked==='capacity'?'DECK FULL':f.blocked==='apron'?'CLEAR ARRIVAL':null;
       const status=f.phase===sign.side?(waiting?`WAIT · ${waiting}`:`BOARDING · DEPARTS ${Math.ceil(f.remaining)}S`)
         :f.phase===(sign.side==='sf'?'to-sf':'to-island')?`ARRIVES ${Math.ceil(f.remaining)}S`
-        :f.phase==='sf'?'AT SAN FRANCISCO':f.phase==='island'?'AT ROCKET ISLAND':'EN ROUTE';
+        :f.phase==='sf'?'AT SAN FRANCISCO':f.phase==='island'?'AT NORTH BAY PLAYGROUND':'EN ROUTE';
       const text=`${destination}|${status} · ${occupancy}/${FERRY_DECK.vehicleCapacity} CARS`;
       if(text!==sign.text){
         sign.text=text;const ctx=sign.canvas.getContext('2d')!;ctx.clearRect(0,0,768,160);
@@ -254,10 +298,11 @@ export class GameScene {
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
+    for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
     for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
-    this.skyCurrents.update(world.time);
+    this.skyCurrents.update(world.time,controlled);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
@@ -274,30 +319,50 @@ export class GameScene {
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       mesh.visible=!(cockpit&&e.id===controlled?.id);
-      const target=new T.Vector3(e.x,e.y,e.z);
-      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
-      if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+      const interpolatedRemote=remoteSampled&&e.id!==controlled?.id&&e.supportId!=='ferry';
+      const ahead=e.id===controlled?.id||e.supportId==='ferry'||interpolatedRemote?0:elapsed;
+      const target=new T.Vector3(e.x+e.vx*ahead,e.y+e.vy*ahead,e.z+e.vz*ahead);
+      if(e.supportId==='ferry'){
+        // Passengers and the visual hull share one moving reference frame.
+        target.x+=this.ferry.position.x-world.ferry.x;target.z+=this.ferry.position.z-world.ferry.z;
+        if(mesh.userData.onFerry)mesh.position.add(this.ferryMotion);
       }
+      mesh.userData.onFerry=e.supportId==='ferry';
+      // When a preview is suspended, return directly to authority rather than
+      // interpolating the car through a newly reported obstacle or shoreline.
+      const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
+      const blend=e.supportId==='ferry'?alpha:returningToAuthority||interpolatedRemote||localPredicted&&e.id===controlled?.id?1:alpha;
+      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
       this.surfaceUp.set(0,surface?.normalY??normal?.y??1,surface?.normalZ??normal?.z??0);
       if(!surface)this.surfaceUp.x=normal?.x??0;
-      this.surfaceBack.set(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
+      if(e.id===controlled?.id){
+        if(this.controlledUpId!==e.id||snapLocal)this.controlledUp.copy(this.surfaceUp);
+        else this.controlledUp.lerp(this.surfaceUp,1-Math.exp(-25*dt)).normalize();
+        this.controlledUpId=e.id;this.surfaceUp.copy(this.controlledUp);
+      }
+      const visualYaw=e.yaw+e.yawRate*(e.id===controlled?.id||interpolatedRemote?0:elapsed);
+      this.surfaceBack.set(Math.sin(visualYaw),surface?Math.cos(visualYaw)*surface.tangentY:0,surface?Math.cos(visualYaw)*surface.tangentZ:Math.cos(visualYaw));
       this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
       this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'?e.pitch:0));
-      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
-      mesh.quaternion.slerp(this.orientation,alpha);
+      // The bike leans into grounded turns; flight and surface roll remain
+      // authoritative. Lean is visual and does not change the collision body.
+      const lean=e.kind!=='person'&&VEHICLES[e.kind].shape==='motorcycle'&&e.driver&&e.supportId!==null&&e.loopAngle===null
+        ?e.steering*Math.min(Math.abs(e.speed)/18,1)*Math.sign(e.speed)*.32:0;
+      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll+lean));
+      mesh.quaternion.slerp(this.orientation,blend);
       const incident=isTrafficIncident(e,world.time);
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
+    this.driverLabels.update(world,this.entities,menu,controlled?.id);
+    // Hide pickups absent from the current authoritative snapshot.
+    for(const mesh of this.pickups.values())mesh.visible=false;
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
       if(!mesh){
@@ -307,7 +372,18 @@ export class GameScene {
           const body=new T.Mesh(new T.CylinderGeometry(.37,.48,1.6,8),new T.MeshStandardMaterial({color:0xf6eaff,emissive:0x56377a}));mesh.add(body);
           const tip=new T.Mesh(new T.ConeGeometry(.37,.65,8),new T.MeshStandardMaterial({color:0xc47aff,emissive:0x43215d}));tip.position.y=1.1;mesh.add(tip);
           for(const side of [-1,1])box(mesh,side*.52,-.55,0,.3,.5,.18,0xb96ff7);
-        }else mesh.add(new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024})));
+        }else{
+          mesh.add(new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024})));
+          let label=this.pickupLabels.get(pickup.kind);
+          if(!label){
+            const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;const ctx=canvas.getContext('2d')!;
+            ctx.fillStyle='#17383de8';ctx.fillRect(0,4,512,88);ctx.fillStyle=pickup.kind==='repair'?'#b3f5c2':'#ffe0a0';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 42px system-ui';
+            ctx.fillText(pickup.kind==='repair'?'REPAIR + $5':'AIR REFILL + $5',256,49);
+            const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+            label=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false});this.pickupLabels.set(pickup.kind,label);
+          }
+          const sign=new T.Sprite(label);sign.position.y=2.4;sign.scale.set(6,1.15,1);mesh.add(sign);
+        }
         mesh.position.set(pickup.x,(terrainHeight(pickup.x,pickup.z)??0)+1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);
       }
       mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=(terrainHeight(pickup.x,pickup.z)??0)+1.7+Math.sin(performance.now()*.002)*.3;
@@ -317,7 +393,8 @@ export class GameScene {
     else this.ballPosition.lerp(ballTarget,alpha);
     this.dome.update(this.ballPosition);
     const e=controlled;
-    this.objective.visible=!!player&&!menu&&!e?.inDome;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    const target=player?orderTarget(player.delivery.order):undefined;
+    this.objective.visible=!!player&&!menu&&!e?.inDome;if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
     if(menu){
@@ -327,15 +404,18 @@ export class GameScene {
       const distance=this.cameraMode==='wide'?30:portrait?18:15;
       const lookAhead=portrait?-6:5;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
-      const back=new T.Vector3(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
-      const position=new T.Vector3(e.x,e.y,e.z),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
+      const mesh=this.entities.get(e.id)!;
+      const visualBack=new T.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
+      const yaw=Math.atan2(visualBack.x,visualBack.z);
+      const back=new T.Vector3(Math.sin(yaw),surface?Math.cos(yaw)*surface.tangentY:0,surface?Math.cos(yaw)*surface.tangentZ:Math.cos(yaw));
+      const position=mesh.position.clone(),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
       this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
       if(surface){
         // A tangent chase camera on the curved wall points out through the
         // shell. Move behind the car and look into the pitch as it climbs,
         // retaining world-up so the field remains legible on the ceiling.
         const wallView=T.MathUtils.clamp((1-surface.normalY)*2.5,0,1);
-        const field=new T.Vector3(T.MathUtils.clamp(e.x,DOME.x-DOME.halfLength*.45,DOME.x+DOME.halfLength*.45),0,DOME.z);
+        const field=new T.Vector3(T.MathUtils.clamp(position.x,DOME.x-DOME.halfLength*.45,DOME.x+DOME.halfLength*.45),0,DOME.z);
         const outward=position.clone().sub(field).normalize();
         const arenaCamera=position.clone().addScaledVector(outward,this.cameraMode==='wide'?22:15).add(new T.Vector3(back.x*6,10,0));
         const arenaFocus=position.clone().lerp(field,.35).add(new T.Vector3(0,1,0));
@@ -353,7 +433,45 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    this.predictedEntity=localPredicted?controlled?.id:undefined;
+    this.camera.updateMatrixWorld();
+    if(player&&target)this.goalArt.update(goalArtKind(player.delivery.order.stage,target.rooftop),goalArtNearby(target,e,menu),world.time,this.camera);
+    else this.goalArt.mesh.visible=false;
+    // Choose detail against the final camera pose, including reset/cockpit cuts.
+    for(const e of world.entities){
+      const mesh=this.entities.get(e.id)!;
+      // Custom finishes need their detailed meshes; the shared distant mesh has stock colors.
+      const customized=e.kind!=='person'&&(e.style.paint!=='stock'||e.style.decal!=='none'||marketPaintColor(e.marketPaint)!==null);
+      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police||customized);
+      if(detailed&&e.kind!=='person'){
+        setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+        const spec=VEHICLES[e.kind];
+        if(spec.shape==='motorcycle'){
+          const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;
+          const wheel=mesh.getObjectByName('wheel_f');if(wheel)wheel.rotation.y=e.steering*spec.steerAngle;
+        }else for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}
+      }
+    }
+    for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
-  start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
+  start(frame:(dt:number)=>void){
+    let last=performance.now();
+    // Opt-in, bounded diagnostics for repeatable browser playtests. Frame
+    // duration is CPU-side and does not wait for the GPU to finish.
+    const diagnostic=new URLSearchParams(location.search).has('perf')?{frames:[] as number[],work:[] as number[],count:0}:null;
+    this.renderer.setAnimationLoop(now=>{
+      const elapsed=now-last,dt=Math.min(elapsed/1000,.1);last=now;
+      const started=diagnostic?performance.now():0;
+      frame(dt);
+      if(!diagnostic)return;
+      diagnostic.frames.push(elapsed);diagnostic.work.push(performance.now()-started);
+      if(diagnostic.frames.length>240){diagnostic.frames.shift();diagnostic.work.shift();}
+      if(++diagnostic.count%60)return;
+      const percentile=(values:number[])=>[...values].sort((a,b)=>a-b)[Math.floor((values.length-1)*.95)];
+      const mean=diagnostic.frames.reduce((a,b)=>a+b,0)/diagnostic.frames.length;
+      document.body.dataset.teslandPerf=JSON.stringify({samples:diagnostic.frames.length,fps:1000/mean,frameP95Ms:percentile(diagnostic.frames),cpuP95Ms:percentile(diagnostic.work),drawCalls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles,pickupMeshes:this.pickups.size,visiblePickups:[...this.pickups.values()].filter(mesh=>mesh.visible).length});
+    });
+  }
 }

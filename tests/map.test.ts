@@ -1,7 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,TESLAND_MONUMENTS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {PENINSULA_CROSS_STREETS} from '../shared/alternate-roads';
 import {STATIONS} from '../shared/stations';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {fitsParkingStall} from '../shared/parking';
@@ -17,7 +19,7 @@ import {ovalBankSurface} from '../shared/oval-bank';
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
  const car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  world.entities=[car];world.pickups=[];Object.assign(car,{x,z,yaw});
  for(let i=0;i<650&&!goal(car.x,car.z);i++)step(world,new Map([['crossing',{...NEUTRAL,throttle:1}]]),.05);
  assert.ok(goal(car.x,car.z),`crossing stopped at ${car.x.toFixed(1)}, ${car.z.toFixed(1)}`);
@@ -32,9 +34,10 @@ test('both bridges traverse water and connect the correct shores',()=>{
 test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
  assert.ok(isRocketIsland(200,-1650));
  assert.ok(!isRocketIsland(0,-800));
- // The connected dome shares the island's protected area.
+ // The dome is on the SF waterfront, separate from the island.
  assert.ok(isLand(DOME.x,DOME.z));
- assert.ok(isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isLand(300,-850),'the old Alcatraz arena land is gone');
  for(let i=0;i<ISLAND_TRACK.length;i++){
   const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
   for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){
@@ -58,21 +61,21 @@ test('Rocket Island loop and ferry approaches are clear, supported and separated
  drive(0,-180,0,(_,z)=>z< -240);
  drive(0,-1250,Math.PI,(_,z)=>z> -1090);
 });
-test('the island-to-Dome road is supported, protected and clear of the bank and parking',()=>{
- const road=ROADS.find(r=>r.kind==='island'&&r.x===300&&r.z===-1090);
+test('the stadium street approach is supported and clear of the bank and parking',()=>{
+ const road=ROADS.find(r=>r.x===DOME.x&&r.z===(120+DOME.z-DOME.flatHalfWidth)/2&&r.w===18);
  assert.ok(road,'the shared approach is also rendered as a road');
- for(let z=-1246;z<=-934;z+=4)for(let x=road.x-12;x<=road.x+12;x+=4){
+ for(let z=120;z<=DOME.z-DOME.flatHalfWidth;z+=4)for(let x=road.x-8;x<=road.x+8;x+=4){
   assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
-  assert.ok(isRocketIsland(x,z),`approach not protected at ${x},${z}`);
+  assert.ok(!isRocketIsland(x,z),`approach must be on city land at ${x},${z}`);
   assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
-  assert.ok(!nearbyBuildings(x,z,7).length,`building near the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).some(b=>contact({x,z,w:1,d:1,yaw:0},{...b,yaw:0})),`building on the approach at ${x},${z}`);
  }
  const approach={...road,yaw:road.angle??0};
  for(const lot of PARKING_LOTS){
   const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
   assert.equal(contact(approach,area),null,`${lot.id} overlaps the Dome approach`);
  }
- for(const other of ROADS.filter(r=>r.kind==='island'&&r!==road))
+ for(const other of ROADS.filter(r=>r.kind==='island'))
   assert.equal(contact(approach,{...other,yaw:other.angle??0}),null,'the approach does not overlay a race course');
 });
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
@@ -93,6 +96,16 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  assert.ok(BUILDINGS.length>100);
 });
 
+test('the Rocket Dome plaza and street entrance are clear of city buildings and billboards',()=>{
+ const plaza={x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0};
+ const entrance={x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:28,d:DOME.z-DOME.flatHalfWidth-120,yaw:0};
+ for(const area of [plaza,entrance]){
+  for(const building of BUILDINGS)assert.equal(contact(area,{...building,yaw:0}),null,`building at ${building.x},${building.z}`);
+  for(const billboard of BILLBOARDS)assert.equal(contact(area,{...billboard,w:BILLBOARD_WIDTH,d:.35}),null,`billboard at ${billboard.x},${billboard.z}`);
+ }
+ assert.ok(!EXTRA_LANDMARKS.some(place=>place.id==='oracle-park'),'the Rocket Dome replaces the miniature ballpark');
+});
+
 test('charger playgrounds, posts and pickups clear roads, buildings, spawns and ferry',()=>{
  const world=createWorld();
  const ferry={x:0,z:(FERRY_DOCKS.sf.deckZ+FERRY_DOCKS.island.deckZ)/2,w:FERRY_DECK.width,
@@ -104,8 +117,10 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
   const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
   const approach={x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw};
   const pad={x:lot.pickup.x,z:lot.pickup.z,w:14,d:14,yaw:0};
+  assert.equal(contact(area,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id}: stadium plaza`);
   assert.equal(contact(pad,approach),null,`${station.id}: pickup clears queue`);
   assert.equal(contact(area,ferry),null,`${station.id}: ferry`);
+  for(const other of PARKING_LOTS)if(other.id!==lot.id)assert.equal(contact(area,{x:other.area.x,z:other.area.z,w:other.area.width,d:other.area.length,yaw:other.area.yaw}),null,`${station.id}: overlaps ${other.id}`);
   for(const dx of [-20,-10,0,10,20])for(const dz of [-20,-10,0,10,20])
    assert.equal(terrainHeight(station.x+dx,station.z+dz),0,`${station.id}: land`);
   for(const r of ROADS){
@@ -138,6 +153,22 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
  }
 });
 
+test('Peninsula cross streets are supported, clear and connect all three corridors',()=>{
+ for(const street of PENINSULA_CROSS_STREETS){
+  assert.ok(ROADS.includes(street));
+  for(let x=street.x-street.w/2;x<=street.x+street.w/2;x+=10)for(const offset of [-street.d/2,0,street.d/2])
+   assert.equal(terrainHeight(x,street.z+offset),0,`unsupported at ${x},${street.z+offset}`);
+  for(const b of BUILDINGS)assert.equal(contact({...street,yaw:0},{...b,yaw:0}),null,`cross street overlaps building ${b.x},${b.z}`);
+  for(const highway of HIGHWAYS.filter(h=>['peninsula','i-280','el-camino-real'].includes(h.id))){
+   assert.ok(highway.points.slice(1).some((b,i)=>{
+    const a=highway.points[i];if(street.z<Math.min(a.z,b.z)||street.z>Math.max(a.z,b.z))return false;
+    const x=a.x+(b.x-a.x)*(street.z-a.z)/(b.z-a.z);
+    return Math.abs(x-street.x)<street.w/2;
+   }),`${highway.id} misses the cross street`);
+  }
+ }
+});
+
 test('Bay highway shoulders are supported and its lanes clear the largest truck',()=>{
  for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
   const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
@@ -157,7 +188,7 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
 });
 
 test('landmarks and their delivery arrivals share supported, collision-clear geography',()=>{
- assert.equal(LANDMARKS.length,5);
+ assert.equal(LANDMARKS.length,6);
  for(const landmark of LANDMARKS){
   assert.ok(BUILDINGS.some(b=>b.x===landmark.x&&b.z===landmark.z&&b.style===landmark.style),landmark.id);
   for(const sx of [-1,1])for(const sz of [-1,1])assert.ok(isLand(landmark.x+sx*landmark.w/2,landmark.z+sz*landmark.d/2),landmark.id);
@@ -173,11 +204,23 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
 
 test('new building landmarks share collision identities and remain distinct from the prior landmarks',()=>{
  assert.equal(EXTRA_LANDMARKS.length,100);
- assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,105);
+ assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,106);
  for(const place of EXTRA_LANDMARKS){
   const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
   if(place.id==='mission-peak')assert.equal(matching.length,0);
   else {assert.equal(matching.length,1,place.id);assert.equal(matching[0].h,place.h,place.id);}
+ }
+});
+
+test('Tesland monument bases are supported, collision-backed and clear of roads and landmarks',()=>{
+ for(const monument of TESLAND_MONUMENTS){
+  const base=BUILDINGS.find(b=>b.style==='monument'&&b.x===monument.x&&b.z===monument.z);
+  assert.ok(base,monument.id);
+  assert.equal(base.h,monument.h);
+  for(const sx of [-1,1])for(const sz of [-1,1])assert.equal(terrainHeight(monument.x+sx*monument.w/2,monument.z+sz*monument.d/2),0,monument.id);
+  const footprint={...monument,yaw:0};
+  for(const road of ROADS)assert.equal(contact(footprint,{...road,yaw:road.angle??0}),null,`${monument.id} overlaps a road`);
+  for(const building of BUILDINGS)if(building!==base)assert.equal(contact(footprint,{...building,yaw:0}),null,`${monument.id} overlaps a building`);
  }
 });
 
@@ -201,7 +244,7 @@ test('new landmarks, hills and signs clear parking, ferry and race gameplay area
 
 test('autopilot can cross the Bay and return without teleporting',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
- player.delivery.level=3;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
+ player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;car.yaw=-Math.PI/2;world.entities=[car];world.pickups=[];assert.ok(toggleAutopilot(world,'p'));let furthest=car.x;
  for(let i=0;i<2400;i++){const x=car.x,z=car.z;step(world,new Map(),.05);assert.ok(Math.hypot(car.x-x,car.z-z)<2);furthest=Math.max(furthest,car.x);}
  assert.ok(furthest>330);assert.ok(car.x<100);assert.equal(car.autopilot,true);
 });

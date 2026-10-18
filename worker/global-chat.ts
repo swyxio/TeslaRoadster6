@@ -4,20 +4,21 @@ import { chooseAvailableName, createRecoveryCode, hashRecoverySecret, normalizeC
 /**
  * One global object, shared across rooms. WebSocket client sends:
  *   {type:'hello',name:string,code?:string}, {type:'message',text:string},
- *   {type:'save'}, or {type:'ping'} (a client heartbeat; no response).
+ *   {type:'rename',name:string,requestId:number}, {type:'save'}, or {type:'ping'}.
  * Server sends:
  *   {type:'ready',playerId,name,messages}, {type:'message',message},
- *   {type:'recovery',code}, or {type:'error',message}.
+ *   {type:'renamed',playerId,name,requestId}, {type:'recovery',code}, or {type:'error',message}.
  * Recovery codes are bearer credentials: never broadcast or include in history.
  */
 export type ChatMessage = { id: string; playerId: string; name: string; text: string; time: number };
 export type ChatServerMessage =
   | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[] }
   | { type: 'message'; message: ChatMessage }
+  | { type: 'renamed'; playerId: string; name: string; requestId: number }
   | { type: 'recovery'; code: string }
-  | { type: 'error'; message: string; code?: 'identity_active' };
+  | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed'; requestId?: number };
 
-type StoredIdentity = { hash: string; name: string };
+type StoredIdentity = { hash: string; name: string; walletId?:string; binding?:{durable:boolean;claims:Record<string,number|null>} };
 type Session = {
   playerId?: string;
   name?: string;
@@ -25,6 +26,8 @@ type Session = {
   lastActivity: number;
   authenticating: boolean;
   saving: boolean;
+  updates: Promise<void>;
+  pendingName?: string;
   issuedCode?: string;
   authFailures: number;
   inboundStart: number;
@@ -50,12 +53,104 @@ const CHAT_LIMIT = 5;
 const IP_WINDOW = 60_000;
 const IP_LIMIT = 60;
 const IP_BUCKET_LIMIT = 1000;
+const BINDING_LEASE_MS = 60_000;
 
 // Messages and session state stay in memory only. Sockets use the standard
 // non-hibernating API, so an instance must remain awake while players are connected.
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
+  /** Bind a saved identity to a server-created guest wallet once, without copying earnings. */
+  async bindWallet(code:string,guestWalletId:string,token:string):Promise<{playerId:string;name:string;walletId:string|null;claim:boolean}|null> {
+    const parsed=parseRecoveryCode(code);
+    if(!parsed || !/^[0-9a-f-]{36}$/i.test(guestWalletId) || !/^[0-9a-f-]{36}$/i.test(token))return null;
+    const givenHash=await hashRecoverySecret(parsed.secret);
+    return this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`;
+      let saved=await txn.get<StoredIdentity>(key);
+      const recordedHash=typeof saved?.hash==='string' && /^[0-9a-f]{64}$/.test(saved.hash)?saved.hash:'0'.repeat(64);
+      const valid=crypto.subtle.timingSafeEqual(new TextEncoder().encode(givenHash),new TextEncoder().encode(recordedHash));
+      if(!saved||!valid||typeof saved.name!=='string')return null;
+      if(saved.walletId && saved.binding){
+        const claims=Object.fromEntries(Object.entries(saved.binding.claims).filter(([,expiry])=>expiry===null||expiry>Date.now()));
+        if(!saved.binding.durable && !Object.keys(claims).length){
+          if(await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+          await txn.delete(`wallet:${saved.walletId}`);
+          const {walletId:_,binding:__,...unbound}=saved;saved=unbound;
+        }else saved={...saved,binding:{...saved.binding,claims}};
+        await txn.put(key,saved);
+      }
+      if(saved.walletId){
+        const owner=await txn.get<string>(`wallet:${saved.walletId}`);
+        if(owner!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+        if(saved.binding && !saved.binding.durable){
+          // Each concurrent recovery has its own provisional claim. A stale
+          // request can release its claim without detaching another claimant.
+          const claims={...saved.binding.claims};
+          if(!Object.hasOwn(claims,token))claims[token]=Date.now()+BINDING_LEASE_MS;
+          await txn.put(key,{...saved,binding:{...saved.binding,claims}} satisfies StoredIdentity);
+          return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId,claim:true};
+        }
+        return {playerId:parsed.playerId,name:saved.name,walletId:saved.walletId,claim:false};
+      }
+      const walletKey=`wallet:${guestWalletId}`,owner=await txn.get<string>(walletKey);
+      // The reverse claim and identity binding share one transaction: even a
+      // superseded request cannot attach a second identity to the same wallet.
+      if(owner && owner!==parsed.playerId){
+        const ownerKey=`identity:${owner}`,other=await txn.get<StoredIdentity>(ownerKey);
+        if(other?.walletId===guestWalletId && other.binding && !other.binding.durable &&
+          Object.values(other.binding.claims).every(expiry=>expiry!==null&&expiry<=Date.now())){
+          const {walletId:_,binding:__,...unbound}=other;await txn.put(ownerKey,unbound);await txn.delete(walletKey);
+        }else return {playerId:parsed.playerId,name:saved.name,walletId:null,claim:false};
+      }
+      await txn.put(key,{...saved,walletId:guestWalletId,binding:{durable:false,claims:{[token]:Date.now()+BINDING_LEASE_MS}}} satisfies StoredIdentity);
+      await txn.put(walletKey,parsed.playerId);
+      return {playerId:parsed.playerId,name:saved.name,walletId:guestWalletId,claim:true};
+    });
+  }
+
+  /** Confirm the caller's provisional claim; the same token can still undo a stale confirmation. */
+  async confirmWallet(code:string,token:string):Promise<boolean>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return false;
+    return this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token))return false;
+      const expiry=saved.binding.claims[token];
+      if((expiry!==null&&expiry<=Date.now())||await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)return false;
+      await txn.put(key,{...saved,binding:{...saved.binding,claims:{...saved.binding.claims,[token]:null}}} satisfies StoredIdentity);return true;
+    });
+  }
+
+  /** Mark a successfully delivered confirmation durable; other claimants can still settle. */
+  async settleWallet(code:string,token:string):Promise<void>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return;
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token)||saved.binding.claims[token]!==null)return;
+      // One delivered confirmation makes this binding durable. Confirmed
+      // peers no longer need cleanup tokens; retain live pending peers so they
+      // can still confirm without racing this compaction.
+      const claims=Object.fromEntries(Object.entries(saved.binding.claims).filter(([,expiry])=>expiry!==null&&expiry>Date.now()));
+      if(Object.keys(claims).length)await txn.put(key,{...saved,binding:{durable:true,claims}} satisfies StoredIdentity);
+      else {const {binding:_,...durable}=saved;await txn.put(key,durable);}
+    });
+  }
+
+  /** Undo only this request's claim, including a confirmed reply that went stale. */
+  async releaseWallet(code:string,token:string):Promise<void>{
+    const parsed=parseRecoveryCode(code);if(!parsed)return;
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,saved=await txn.get<StoredIdentity>(key);
+      if(!saved?.walletId||!saved.binding||!Object.hasOwn(saved.binding.claims,token))return;
+      if(await txn.get<string>(`wallet:${saved.walletId}`)!==parsed.playerId)throw new Error('Saved wallet identity mismatch');
+      const claims={...saved.binding.claims};delete claims[token];
+      if(Object.keys(claims).length)await txn.put(key,{...saved,binding:{...saved.binding,claims}} satisfies StoredIdentity);
+      else if(saved.binding.durable){const {binding:_,...durable}=saved;await txn.put(key,durable);}
+      else {const {walletId,binding:_,...unbound}=saved;await txn.put(key,unbound);await txn.delete(`wallet:${walletId}`);}
+    });
+  }
+
   private sessions = new Map<WebSocket, Session>();
+  private drainingIds = new Set<string>();
   private history: ChatMessage[] = [];
   private ipBuckets = new Map<string, Bucket>();
   private identityBuckets = new Map<string, Bucket>();
@@ -73,7 +168,7 @@ export class GlobalChat extends DurableObject {
     const [client, server] = Object.values(pair);
     server.accept();
     const session: Session = {
-      ip, lastActivity: Date.now(), authenticating: false, saving: false, authFailures: 0,
+      ip, lastActivity: Date.now(), authenticating: false, saving: false, updates: Promise.resolve(), authFailures: 0,
       inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null,
     };
     this.sessions.set(server, session);
@@ -158,10 +253,18 @@ export class GlobalChat extends DurableObject {
     if (data.type === 'ping') return;
     if (data.type === 'save') {
       if (session.issuedCode) { this.send(socket, { type: 'recovery', code: session.issuedCode }); return; }
-      if (session.saving) { this.error(socket, 'Generating your code; please wait.'); return; }
-      if (!this.allowIdentityCreation(session.ip)) { this.error(socket, 'Saved drivers are temporarily limited. Try again later.'); return; }
+      if (session.saving) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Generating your code; please wait.' }); return; }
+      if (!this.allowIdentityCreation(session.ip)) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Saved drivers are temporarily limited. Try again later.' }); return; }
       session.saving = true;
-      void this.save(socket, session);
+      session.updates = session.updates.then(() => this.save(socket, session));
+      return;
+    }
+    if (data.type === 'rename') {
+      if (!Number.isSafeInteger(data.requestId) || (data.requestId as number) < 1) { this.error(socket, 'Invalid name change request.'); return; }
+      const requestId = data.requestId as number;
+      if (typeof data.name !== 'string' || data.name.length > 512) { this.send(socket, { type: 'error', code: 'rename_failed', requestId, message: 'Enter a valid driver name.' }); return; }
+      const name = data.name;
+      session.updates = session.updates.then(() => this.rename(socket, session, name, requestId));
       return;
     }
     if (data.type === 'message') {
@@ -171,10 +274,13 @@ export class GlobalChat extends DurableObject {
       session.messageTimes = session.messageTimes.filter(time => now - time < CHAT_WINDOW);
       if (session.messageTimes.length >= CHAT_LIMIT) { this.error(socket, 'Please wait before sending more messages.'); return; }
       session.messageTimes.push(now);
-      const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: now };
-      this.history.push(chat);
-      if (this.history.length > HISTORY_LIMIT) this.history.shift();
-      for (const [recipient, active] of this.sessions) if (active.playerId) this.send(recipient, { type: 'message', message: chat });
+      session.updates = session.updates.then(() => {
+        if (!session.playerId || !session.name) return;
+        const chat: ChatMessage = { id: crypto.randomUUID(), playerId: session.playerId, name: session.name, text, time: Date.now() };
+        this.history.push(chat);
+        if (this.history.length > HISTORY_LIMIT) this.history.shift();
+        for (const [recipient, active] of this.sessions) if (active.playerId) this.send(recipient, { type: 'message', message: chat });
+      });
       return;
     }
     this.error(socket, 'Unknown chat request.');
@@ -198,14 +304,14 @@ export class GlobalChat extends DurableObject {
         knownCode = `poly-${parsed.playerId}.${parsed.secret}`;
         name = saved.name;
         if (!this.sessions.has(socket)) return;
-        if ([...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
+        if (this.drainingIds.has(playerId) || [...this.sessions.values()].some(active => active !== session && active.playerId === playerId)) {
           this.send(socket, { type: 'error', code: 'identity_active', message: 'That saved driver is already connected elsewhere.' }); return;
         }
       } else {
         playerId = crypto.randomUUID();
       }
       if (!this.sessions.has(socket)) return;
-      const used = [...this.sessions.values()].flatMap(active => active.name ? [active.name] : []);
+      const used = [...this.sessions.values()].flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
       session.playerId = playerId;
       session.name = chooseAvailableName(name, used);
       session.issuedCode = knownCode;
@@ -225,6 +331,30 @@ export class GlobalChat extends DurableObject {
     if (session.authFailures >= 4) this.disconnect(socket, 1008, 'Too many recovery attempts');
   }
 
+  private async rename(socket: WebSocket, session: Session, desiredName: string, requestId: number): Promise<void> {
+    if (!session.playerId) return;
+    const used = [...this.sessions.values()].filter(active => active !== session)
+      .flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
+    const name = chooseAvailableName(desiredName, used);
+    session.pendingName = name;
+    try {
+      if (session.issuedCode) {
+        const key = `identity:${session.playerId}`;
+        await this.ctx.storage.transaction(async txn=>{
+          const saved=await txn.get<StoredIdentity>(key);
+          if(!saved)throw new Error('Saved identity unavailable');
+          await txn.put(key,{...saved,name} satisfies StoredIdentity);
+        });
+      }
+      session.name = name;
+      if (this.sessions.has(socket)) this.send(socket, { type: 'renamed', playerId: session.playerId, name, requestId });
+    } catch {
+      this.send(socket, { type: 'error', code: 'rename_failed', requestId, message: 'Could not change your name. Please try again.' });
+    } finally {
+      session.pendingName = undefined;
+    }
+  }
+
   private async save(socket: WebSocket, session: Session): Promise<void> {
     try {
       if (!session.playerId || !session.name) return;
@@ -240,7 +370,7 @@ export class GlobalChat extends DurableObject {
         this.send(socket, { type: 'recovery', code });
       }
     } catch {
-      this.error(socket, 'Could not save this driver. Please try again.');
+      this.send(socket, { type: 'error', code: 'save_failed', message: 'Could not save this driver. Please try again.' });
     } finally {
       session.saving = false;
     }
@@ -254,6 +384,13 @@ export class GlobalChat extends DurableObject {
     const session = this.sessions.get(socket);
     if (!session) return;
     this.sessions.delete(socket);
+    if (session.playerId) {
+      const id = session.playerId;
+      this.drainingIds.add(id);
+      // Finish accepted writes/messages before allowing this saved identity to
+      // reconnect, so a new socket cannot race the old one's pending rename.
+      void session.updates.then(() => this.drainingIds.delete(id), () => this.drainingIds.delete(id));
+    }
     if (session.handshakeTimer) clearTimeout(session.handshakeTimer);
     if (!this.sessions.size && this.reapTimer) { clearInterval(this.reapTimer); this.reapTimer = null; }
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }

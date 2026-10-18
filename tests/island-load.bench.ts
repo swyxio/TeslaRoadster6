@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, NEUTRAL, parkingAction, raceAction, step, travelDome } from '../shared/game';
 import { ovalBankVertex } from '../shared/oval-bank';
+import { ScheduledInput } from '../shared/tick-input';
 import { snapshotFor } from '../worker/snapshot';
 
 const world=createWorld();
@@ -27,14 +28,14 @@ for(let i=18;i<22;i++){
 }
 
 const ovalCars=players.slice(18,22).map((_,i)=>car(i+18));
-const stepTimes:number[]=[],snapshotTimes:number[]=[];let maxBytes=0,snapshots=0,ovalBankedTicks=0;
+const stepTimes:number[]=[],snapshotTimes:number[]=[],control=new ScheduledInput(NEUTRAL).snapshot();let maxBytes=0,snapshots=0,ovalBankedTicks=0;
 for(let tick=0;tick<100;tick++){
   let started=performance.now();step(world,inputs,.05);stepTimes.push(performance.now()-started);
   ovalBankedTicks+=ovalCars.filter(e=>e.supportId==='island-oval').length;
   if(tick%2===0){
     started=performance.now();
     for(const player of players){
-      const raw=JSON.stringify({type:'state',world:snapshotFor(world,player.id)});
+      const raw=JSON.stringify({type:'state',world:snapshotFor(world,player.id),tick:tick+1,roomEpoch:'00000000-0000-0000-0000-000000000000',substeps:1,poseRevision:0,control});
       maxBytes=Math.max(maxBytes,Buffer.byteLength(raw));snapshots++;
     }
     snapshotTimes.push(performance.now()-started);

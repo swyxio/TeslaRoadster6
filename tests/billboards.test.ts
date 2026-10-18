@@ -14,7 +14,7 @@ import { contact } from '../shared/physics';
 test('fictional roadside billboards stay grounded and clear of shared gameplay',()=>{
   assert.ok(BILLBOARDS.length>=20);
   assert.ok(BILLBOARDS.some(board=>board.z<300),'a board is visible before the first regional unlock');
-  assert.deepEqual(new Set(BILLBOARDS.map(board=>board.route)),new Set(['US 101','I-880']));
+  assert.deepEqual(new Set(BILLBOARDS.map(board=>board.route)),new Set(['US 101','I-880','I-280','El Camino Real']));
   assert.equal(new Set(BILLBOARD_DESIGNS.map(design=>design.company)).size,BILLBOARD_DESIGNS.length);
   for(const board of BILLBOARDS){
     assert.ok(BILLBOARD_DESIGNS[board.design]);

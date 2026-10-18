@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { ACCESS_BOUNDARIES, LEVELS } from '../shared/delivery';
 import { BRIDGES, HIGHWAYS, terrainHeight, type MapPoint } from '../shared/map';
+import { FLIGHT_CEILING } from '../shared/sky-currents';
 
 type GateLevel = 1|2|3;
 type Placement = { x:number; z:number; yaw:number; width:number };
@@ -31,7 +32,7 @@ function requirementMaterial(level:GateLevel):T.SpriteMaterial {
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='#ffcc83';ctx.font='bold 52px system-ui';ctx.fillText(`LEVEL ${level}  ·  ${goal.name.toUpperCase()}`,512,64,950);
   ctx.fillStyle='#fff7e7';ctx.font='bold 40px system-ui';
-  ctx.fillText(`${goal.deliveries} DELIVERIES  +  $${goal.earned} TOTAL EARNED`,512,137,950);
+  ctx.fillText(`$${goal.cash.toLocaleString()} AVAILABLE CASH`,512,137,950);
   ctx.fillStyle='#ffcc83';ctx.font='bold 33px system-ui';ctx.fillText('LOCKED ON THE ROAD AND IN THE AIR',512,205,950);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
   return new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false});
@@ -46,7 +47,7 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
   // Thin dashed guides mark the same full-height boundary used by flyers,
   // without placing an opaque wall over the road or scenery.
   const airGuidePoints:number[]=[];
-  for(const x of [-.5,.5])for(let y=12;y<100;y+=12)airGuidePoints.push(x,y,0,x,Math.min(y+7,100),0);
+  for(const x of [-.5,.5])for(let y=12;y<FLIGHT_CEILING;y+=12)airGuidePoints.push(x,y,0,x,Math.min(y+7,FLIGHT_CEILING),0);
   const airGuideGeometry=new T.BufferGeometry();
   airGuideGeometry.setAttribute('position',new T.Float32BufferAttribute(airGuidePoints,3));
   const airGuideMaterial=new T.LineBasicMaterial({color:0xffc56f,transparent:true,opacity:.65,depthWrite:false});
@@ -64,6 +65,7 @@ export function createProgressionGates():Record<GateLevel,T.Group> {
     const label=new T.Sprite(requirements[level]);label.position.y=12.7;label.scale.set(30,7.5,1);group.add(label);
     const airGuide=new T.LineSegments(airGuideGeometry,airGuideMaterial);airGuide.scale.x=placement.width;group.add(airGuide);
     const airLabel=new T.Sprite(requirements[level]);airLabel.position.y=62;airLabel.scale.set(24,6,1);group.add(airLabel);
+    const highLabel=new T.Sprite(requirements[level]);highLabel.position.y=150;highLabel.scale.set(24,6,1);group.add(highLabel);
     groups[level].add(group);
   }
 

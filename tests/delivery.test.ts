@@ -2,26 +2,56 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
+import { updateAchievements } from '../shared/achievements';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
+import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
+import { DOME } from '../shared/dome';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
-  world.entities=[car];world.pickups=[];return {world,player,car};
+  world.entities=[car];world.pickups=[];player.delivery.cash=0;return {world,player,car};
 }
 function tick(world:World,input=NEUTRAL,n=1){for(let i=0;i<n;i++)step(world,new Map([['p',input]]),.05);}
+test('a fast first delivery pays a useful reward without immediately unlocking Oakland',()=>{
+  const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  const order=player.delivery.order;
+  assert.equal(player.delivery.cash,2_500);
+  assert.equal(order.base,600);
+  const pickup=orderTarget(order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  assert.equal(player.delivery.cash,2_740);
+  const dropoff=orderTarget(order);Object.assign(car,{x:dropoff.x,z:dropoff.z,y:0,speed:0,vy:0,supportId:'ground'});
+  updateDelivery(world,player,car,NEUTRAL,0);
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290);
+  assert.equal(player.delivery.lifetimeIncome,1_790);
+  assert.equal(player.delivery.level,0);
+  assert.ok(player.achievements.unlocked.includes('deliveries-1'));
+  updateAchievements(player,car,false,undefined,true);
+  assert.equal(player.delivery.cash,4_290,'the first-delivery award is one-off');
+});
 test('restaurant and fictional customer markers are on clear, reachable ground',()=>{
   for(const place of [...RESTAURANTS,...CUSTOMERS.filter(c=>!c.rooftop)]){
     assert.ok(isSurface(place.x,place.z),place.name);
     assert.ok(!nearbyBuildings(place.x,place.z,4).some(b=>Math.abs(place.x-b.x)<b.w/2+2&&Math.abs(place.z-b.z)<b.d/2+2),place.name);
   }
 });
-test('early bonus and late penalty change the base fare in the expected direction',()=>{
-  const order=initialDelivery({x:40,z:60}).order;
-  const early=payoutFor({...order,elapsed:order.estimate/2});
-  const onTime=payoutFor({...order,elapsed:order.estimate});
-  const late=payoutFor({...order,elapsed:order.estimate*1.5});
-  assert.ok(early>onTime&&onTime>late&&late>=0);assert.equal(onTime,order.base);assert.equal(payoutFor({...order,elapsed:order.estimate*5}),0);
+test('delivery pay keeps the fast bonus and late penalty until the 50% floor',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:600,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:0}),1_050);
+  assert.equal(payoutFor({...order,elapsed:50}),825);
+  assert.equal(payoutFor({...order,elapsed:100}),600);
+  assert.equal(payoutFor({...order,elapsed:125}),500);
+  assert.equal(payoutFor({...order,elapsed:175}),300);
+  assert.equal(payoutFor({...order,elapsed:500}),300,'very late deliveries still pay');
+});
+test('the minimum fare rounds up for odd-dollar quotes',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:601,estimate:100};
+  assert.equal(payoutFor({...order,elapsed:100}),601);
+  assert.equal(payoutFor({...order,elapsed:125}),501);
+  assert.equal(payoutFor({...order,elapsed:175}),301);
+  assert.equal(payoutFor({...order,elapsed:500}),301);
 });
 test('pickup bonus decreases with active time and expires at the estimate',()=>{
   const order=initialDelivery({x:40,z:60}).order;
@@ -46,11 +76,12 @@ test('pickup and delivery require stopping on the ground; payment occurs exactly
   const pickup=player.delivery.cash;assert.ok(pickup>0);assert.deepEqual(player.delivery.lastReward,{id:1,kind:'pickup',amount:pickup});
   const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,speed:0});tick(world);
   assert.equal(player.delivery.completed,1);const payout=player.delivery.cash-pickup;assert.ok(payout>order.base);
-  assert.deepEqual(player.delivery.lastReward,{id:2,kind:'delivery',amount:payout});
+  assert.deepEqual(player.delivery.lastReward,{id:2,kind:'delivery-research',amount:payout});
+  assert.ok(player.achievements.unlocked.includes('deliveries-1'));
   tick(world,NEUTRAL,20);assert.equal(player.delivery.completed,1);assert.equal(player.delivery.cash,pickup+payout);assert.equal(player.delivery.lastReward?.id,2);
 });
 test('active clock and delivery estimate pause after inactivity; player scores are independent',()=>{
-  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');other.delivery.cash=0;
   const target=orderTarget(player.delivery.order);Object.assign(car,{x:target.x,z:target.z});tick(world);assert.equal(player.delivery.order.stage,'dropoff');
   tick(world,{...NEUTRAL,steer:1},20);const afterInput=player.delivery.activeSeconds;assert.ok(afterInput>.9);
   tick(world,NEUTRAL,160);const stopped=player.delivery.activeSeconds;assert.ok(stopped>=3.9&&stopped<4.1);
@@ -64,6 +95,18 @@ test('police see nearby flight, chase, slow and ticket once; grace prevents inst
   car.speed=1;updatePolice(world,.05);assert.ok(player.delivery.cash<=-60);assert.equal(player.delivery.cash,-player.delivery.lastTicket!.amount);assert.equal(player.delivery.tickets,1);assert.equal(cop.police.targetId,null);
   Object.assign(car,{y:10,vy:1,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.tickets,1);
 });
+test('police choose the nearest eligible flyer, preserving player order for ties',()=>{
+  const {world,player,car}=setup(),second=addPlayer(world,'second','Second');
+  const secondCar=world.entities.find(entity=>entity.id===second.entityId)!;
+  const cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:0,z:20,y:10,supportId:null});
+  Object.assign(secondCar,{x:0,z:-20,y:10,supportId:null});
+  updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+  cop.police=newPolice();secondCar.z=-10;
+  updatePolice(world,.05);assert.equal(cop.police.targetId,second.id);
+  cop.police=newPolice();second.delivery.ticketGraceUntil=world.time+20;
+  updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+});
 test('police do not see grounded, distant or rooftop cars; an escaped chase expires',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
   Object.assign(car,{x:0,z:10,y:0});updatePolice(world,.05);assert.equal(cop.police.targetId,null);
@@ -72,6 +115,54 @@ test('police do not see grounded, distant or rooftop cars; an escaped chase expi
   Object.assign(cop,{x:0,z:0});
   Object.assign(car,{x:0,z:10,y:10,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
   Object.assign(car,{x:0,z:200});world.time+=11;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+});
+test('police measure flight above curved landmark roofs at the current position',()=>{
+  for(const shape of ['rotunda','coit'] as const){
+    const roof=BUILDINGS.find(b=>b.style===shape)!;
+    const x=roof.x+(shape==='rotunda'?roof.w*.45:0),z=roof.z;
+    const height=buildingRoofHeight(roof,x,z);
+    assert.ok(shape==='rotunda'?height<roof.h:height>roof.h,`${shape} exercises the curved roof`);
+    const {world,player,car}=setup(),cop=makeEntity('cop','model-3',x,z);
+    cop.police=newPolice();world.entities.push(cop);
+    Object.assign(car,{x,z,y:height+2,supportId:null});
+    world.time=.05;updatePolice(world,.05);
+    assert.equal(cop.police.targetId,null,`${shape}: two meters above the roof is not detectable`);
+    assert.ok(Math.abs(player.delivery.flight.peakHeight-2)<1e-8,`${shape}: flight height uses the visible roof`);
+    car.y=height+4;world.time+=.05;updatePolice(world,.05);
+    assert.equal(cop.police.targetId,player.id,`${shape}: four meters above the roof is detectable`);
+  }
+});
+test('police do not use a landmark roof outside its footprint',()=>{
+  const roof=BUILDINGS.find(b=>b.style==='rotunda')!;
+  const x=roof.x+roof.w/2+1,z=roof.z;
+  assert.ok(!nearbyBuildings(x,z,0).some(b=>Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2));
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',x,z);
+  cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x,z,y:roof.h+2,supportId:null});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id);
+  assert.equal(player.delivery.flight.peakHeight,roof.h+2);
+});
+test('police measure exterior flight above the stadium roof without protecting it as arena interior',()=>{
+  const {world,player,car}=setup(),x=DOME.x,z=DOME.z,height=domeRoofHeight(x,z)!;
+  const cop=makeEntity('cop','model-3',x,z);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x,z,y:height+2,supportId:null,inDome:false});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,null);
+  assert.ok(Math.abs(player.delivery.flight.peakHeight-2)<1e-8);
+  car.y=height+4;world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id,'outside flight is still detectable');
+  car.inDome=true;world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,null,'arena protection still ends a chase');
+  assert.equal(player.delivery.flight.seconds,0);
+});
+test('a roof above the car does not count as the surface beneath it',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',DOME.x,DOME.z);
+  cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:DOME.x,z:DOME.z,y:10,supportId:null,inDome:false});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id);
+  assert.equal(player.delivery.flight.peakHeight,10);
 });
 test('a chasing police car drives toward a target on an unobstructed street',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,60);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
@@ -107,7 +198,7 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
 
 test('eligible Roadster orders can be rooftop after Oakland unlock; ordinary cars receive ground orders',()=>{
   for(const kind of ['roadster','model-3'] as const){
-    const {world,player,car}=setup();car.kind=kind;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
+    const {world,player,car}=setup();car.kind=kind;player.delivery.cash=10_000;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
     const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
     Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world);
     assert.equal(player.delivery.completed,7);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');

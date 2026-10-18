@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
+import { DOME } from '../shared/dome';
 import { isRocketIsland, terrainHeight } from '../shared/map';
 
 const flightInput = { ...NEUTRAL, throttle: 1, boost: true, hover: true };
@@ -92,10 +93,10 @@ test('damage damping depends on elapsed time, not other vehicles changing subste
 
 test('a dome-supported vehicle cannot knock an airborne car beyond the flight speed limit', () => {
   const world = createWorld();
-  const light = makeEntity('light', 'waymo-firefly', 300, -861.6);
-  const heavy = makeEntity('heavy', 'tesla-semi', 300, -850, 'heavy-driver');
+  const light = makeEntity('light', 'waymo-firefly', DOME.x, DOME.z - 11.6);
+  const heavy = makeEntity('heavy', 'tesla-semi', DOME.x, DOME.z, 'heavy-driver');
   Object.assign(light, { y: 1.5, yaw: Math.PI, inDome: true, supportId: null, speed: 75, vz: 75 });
-  Object.assign(heavy, { inDome: true, supportId: 'dome', domeS: 20, speed: 72, upgrades: { ...heavy.upgrades, rocket: true } });
+  Object.assign(heavy, { inDome: true, supportId: 'dome', domeS: DOME.flatHalfWidth, speed: 72, upgrades: { ...heavy.upgrades, rocket: true } });
   world.entities = [light, heavy];
   world.players = [];
   world.pickups = [];

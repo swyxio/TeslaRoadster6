@@ -76,7 +76,7 @@ function clearBillboard(x:number,z:number,yaw:number):boolean {
   return [-8,-4,0,4,8].every(offset=>clearPoint(x+c*offset,z-s*offset));
 }
 
-/** Decorative, non-colliding props placed on real shared ground alongside traced roads. */
+/** Decorative, non-colliding props placed on real shared ground alongside shared roads. */
 export const BILLBOARDS:Billboard[]=[];
 for(const highway of HIGHWAYS){
   fractions.forEach((fraction,index)=>{

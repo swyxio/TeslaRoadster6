@@ -1,6 +1,9 @@
-type Reward = { kind: 'pickup' | 'delivery'; amount: number };
+import type { DeliveryReward } from '../shared/delivery';
+
 let popup: HTMLElement | null = null;
 let timeout = 0;
+let active = false;
+const pending:DeliveryReward[] = [];
 function getPopup(): HTMLElement {
   if (popup) return popup;
   popup = document.getElementById('reward')!;
@@ -20,19 +23,28 @@ function getPopup(): HTMLElement {
 }
 export function resetCelebration() {
   clearTimeout(timeout);
+  pending.length=0;
+  active=false;
   if (!popup) return;
   popup.classList.remove('celebrate');
   popup.querySelector('#reward-label')!.textContent = '';
   popup.querySelector('#reward-amount')!.textContent = '';
 }
-export function celebrateReward(reward: Reward) {
+export function celebrateReward(reward: DeliveryReward) {
+  pending.push(reward);
+  if(active)return;
+  showNext();
+}
+function showNext() {
+  const reward=pending.shift();
+  if(!reward){resetCelebration();return;}
+  active=true;
   const element = getPopup();
-  clearTimeout(timeout);
   element.classList.remove('celebrate');
   // Restart CSS animations even when two rewards arrive close together.
   void element.offsetWidth;
-  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : 'DELIVERY COMPLETE';
+  element.querySelector('#reward-label')!.textContent = reward.kind === 'pickup' ? 'FAST PICKUP BONUS' : reward.kind === 'delivery' ? 'DELIVERY COMPLETE' : reward.kind === 'pickup-research' ? 'PICKUP + AWARDS' : reward.kind === 'delivery-research' ? 'DELIVERY + AWARDS' : reward.kind === 'supply-repair' ? 'REPAIR + CASH' : reward.kind === 'research' ? 'ACHIEVEMENT AWARD' : 'AIR REFILL + CASH';
   element.querySelector('#reward-amount')!.textContent = `+$${reward.amount}`;
   element.classList.add('celebrate');
-  timeout = window.setTimeout(resetCelebration, 3000);
+  timeout = window.setTimeout(showNext, 3000);
 }

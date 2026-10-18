@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "poly-no-spawn-fixture",
+  "main": "./no-spawn-worker.ts",
+  "compatibility_date": "2026-10-17",
+  "vars": { "MAX_PLAYERS": "2" },
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "NoSpawnGameRoom" },
+    { "name": "CHAT", "class_name": "GlobalChat" },
+    { "name": "DRIVERS", "class_name": "DriverProfile" },
+    { "name": "ECONOMIES", "class_name": "RoomEconomy" },
+    { "name": "INCOME", "class_name": "GlobalIncome" },
+    { "name": "GLOBAL_EVENTS", "class_name": "GlobalEarningsEvent" }
+  ] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NoSpawnGameRoom", "GlobalChat", "DriverProfile", "RoomEconomy", "GlobalIncome"] }, { "tag": "v2", "new_sqlite_classes": ["GlobalEarningsEvent"] }]
+}

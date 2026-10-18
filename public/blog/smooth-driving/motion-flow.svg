@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">One input, two timelines</title>
+  <desc id="desc">The browser predicts local motion immediately and sends the input to the room. The room simulates authoritative ticks and sends snapshots, which correct the local prediction and are buffered to display other cars.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#c8d9d1"/></marker>
+  </defs>
+  <rect width="1200" height="520" rx="16" fill="#17383c"/>
+  <g font-family="system-ui, sans-serif" fill="#dfeee6">
+    <text x="40" y="43" font-size="21" letter-spacing="2" fill="#b8d4c8">YOUR BROWSER</text>
+    <g fill="#285646" stroke="#82c7a3" stroke-width="2">
+      <rect x="40" y="72" width="230" height="94" rx="12"/><rect x="335" y="72" width="290" height="94" rx="12"/><rect x="695" y="72" width="315" height="94" rx="12"/>
+    </g>
+    <g font-size="25" font-weight="650"><text x="62" y="112">Steer</text><text x="357" y="112">Predict locally</text><text x="717" y="112">Show your car</text></g>
+    <g font-size="18" fill="#c5ddd0"><text x="62" y="140">Driver input</text><text x="357" y="140">Use shared simulation</text><text x="717" y="140">Respond before the reply</text></g>
+    <text x="40" y="242" font-size="21" letter-spacing="2" fill="#b8d4c8">THE SHARED ROOM</text>
+    <g fill="#254964" stroke="#8bb8e8" stroke-width="2">
+      <rect x="40" y="270" width="230" height="94" rx="12"/><rect x="335" y="270" width="290" height="94" rx="12"/><rect x="695" y="270" width="315" height="94" rx="12"/>
+    </g>
+    <g font-size="25" font-weight="650"><text x="62" y="310">Send input</text><text x="357" y="310">Room simulates</text><text x="717" y="310">Send snapshot</text></g>
+    <g font-size="18" fill="#c6d9ed"><text x="62" y="338">Target a room tick</text><text x="357" y="338">20 ticks / second</text><text x="717" y="338">About 10 / second</text></g>
+    <rect x="695" y="409" width="315" height="82" rx="12" fill="#604d31" stroke="#e7bc77" stroke-width="2"/>
+    <text x="717" y="445" font-size="25" font-weight="650">Show other cars</text>
+    <text x="717" y="472" font-size="18" fill="#f4dab0">Buffer and interpolate</text>
+    <text x="502" y="207" font-size="18" fill="#c8d9d1">Confirm and replay</text>
+  </g>
+  <g fill="none" stroke="#c8d9d1" stroke-width="3" marker-end="url(#arrow)">
+    <path d="M270 119 H325"/><path d="M625 119 H685"/><path d="M245 166 V260"/>
+    <path d="M270 317 H325"/><path d="M625 317 H685"/><path d="M852 364 V399"/>
+    <path d="M852 270 V222 H480 V176" stroke-dasharray="8 7"/>
+  </g>
+</svg>

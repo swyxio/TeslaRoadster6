@@ -1,5 +1,6 @@
 import type { ParkingLot } from './parking';
 import { CHARGER_LOT, STATIONS, stationStalls } from './stations';
+import { CALTRAIN_PARKING_LOTS } from './caltrain';
 
 // All gameplay lots use this registry, including their approaches and pads.
 // They occupy clear shared land, rather than decorative street-side spaces.
@@ -12,14 +13,15 @@ export const PARKING_LOTS:readonly (ParkingLot & {name:string; pickup:{x:number;
     pickup:{x:-272,z:360},
   },
   {
-    id:'island-playground',name:'Rocket Island parking playground',
+    id:'island-playground',name:'North Bay Playground parking lot',
     area:{x:90,z:-1190,yaw:0,width:80,length:60},
     approach:{x:55,z:-1190,yaw:0,width:18,length:24},
     stalls:[72,84,96,108].map((x,i)=>({id:`island-${i}`,x,y:0,z:-1203,yaw:0,width:5,length:10})),
     pickup:{x:116,z:-1172},
   },
+  ...CALTRAIN_PARKING_LOTS,
   ...STATIONS.map(station=>({
-    id:`charger-${station.id}`,name:`${station.name} · Supercharger`,
+    id:`charger-${station.id}`,name:`${station.name} · ${station.sourceUrl?'Supercharger':'air station'}`,
     area:{x:station.x,z:station.z,yaw:0,width:CHARGER_LOT.width,length:CHARGER_LOT.length},
     approach:{x:station.x,z:station.z+.75,yaw:0,width:26,length:11.5},
     stalls:stationStalls(station),

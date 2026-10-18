@@ -1,8 +1,10 @@
-import type { Entity, Input, World } from './game';
+import type { Entity, Input, Player, World } from './game';
 import { NEUTRAL } from './game';
-import { OVERPASS, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
+import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
+import { updateLevel, type DeliveryState } from './delivery';
+import { hasRockets } from './upgrades';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -52,28 +54,51 @@ function heightAboveSurface(e:Entity){
   let floor=terrainHeight(e.x,e.z)??0;
   const deck=overpassHeight(e.x,e.z);if(deck!==null&&deck<=e.y)floor=Math.max(floor,deck);
   const ramp=rampHeight(e.x,e.z);if(ramp!==null&&ramp<=e.y)floor=Math.max(floor,ramp);
-  for(const b of nearbyBuildings(e.x,e.z,0))if(b.h<=e.y&&Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2)floor=Math.max(floor,b.h);
+  const dome=domeRoofHeight(e.x,e.z);if(dome!==null&&dome<=e.y)floor=Math.max(floor,dome);
+  for(const b of nearbyBuildings(e.x,e.z,0))if(Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2){
+    const roof=buildingRoofHeight(b,e.x,e.z);if(roof<=e.y)floor=Math.max(floor,roof);
+  }
   return e.y-floor;
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}
-function detectableFlight(e:Entity){const height=flightHeight(e);return height>3&&height<=80;}
-export function updatePolice(world:World,dt:number):void {
+/** Immutable physical proof of one police stop; the fine depends on the wallet at application time. */
+export type TicketEvidence={seconds:number;peakHeight:number;at:number;x:number;z:number;canFly:boolean};
+export function applyTicketEvidence(delivery:DeliveryState,evidence:TicketEvidence):void {
+  const durationFine=Math.min(120,Math.floor(evidence.seconds/2)*8),heightFine=Math.min(80,Math.floor(evidence.peakHeight/10)*10),repeatFine=delivery.tickets*35;
+  const amount=60+durationFine+heightFine+repeatFine;
+  delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(evidence.seconds),peakHeight:Math.round(evidence.peakHeight),durationFine,heightFine,repeatFine};
+  delivery.cash-=amount;updateLevel(delivery);delivery.ticketGraceUntil=evidence.at+20;delivery.flight.seconds=0;delivery.flight.peakHeight=0;
+}
+export function updatePolice(world:World,dt:number,onTicket?:(player:Player,apply:()=>void,evidence:TicketEvidence)=>void):void {
+  const entities=new Map(world.entities.map(entity=>[entity.id,entity]));
+  const players=new Map(world.players.map(player=>[player.id,player]));
+  const pursuits=new Set(world.entities.flatMap(entity=>entity.police?.targetId?[entity.police.targetId]:[]));
+  const flyers:{player:Player;entity:Entity}[]=[];
   for (const player of world.players) {
-    const e=world.entities.find(e=>e.id===player.entityId), flight=player.delivery.flight;
+    const e=entities.get(player.entityId), flight=player.delivery.flight;
     // The fictional arena is a no-police playground, including its ceiling.
-    const height=e&&!e.inDome&&!islandProtected(e)?flightHeight(e):0;
-    if(e&&(e.inDome||islandProtected(e))){flight.seconds=0;flight.peakHeight=0;}
+    const protectedArea=!!e&&(e.inDome||islandProtected(e));
+    const height=e&&!protectedArea?flightHeight(e):0;
+    if(protectedArea){flight.seconds=0;flight.peakHeight=0;}
     if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
-    else if(world.time-flight.lastAirborneAt>3&&!world.entities.some(c=>c.police?.targetId===player.id)){flight.seconds=0;flight.peakHeight=0;}
+    else if(world.time-flight.lastAirborneAt>3&&!pursuits.has(player.id)){flight.seconds=0;flight.peakHeight=0;}
+    if(e&&height>3&&height<=80)flyers.push({player,entity:e});
   }
   for(const cop of world.entities){
     const state=cop.police;if(!state)continue;
-    let player=world.players.find(p=>p.id===state.targetId);
-    let target=world.entities.find(e=>e.id===player?.entityId);
+    let player=state.targetId?players.get(state.targetId):undefined;
+    let target=player?entities.get(player.entityId):undefined;
     if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&!e.inDome&&!islandProtected(e)&&world.time>=p.delivery.ticketGraceUntil&&detectableFlight(e)&&separation(cop,e)<SIGHT).sort((a,b)=>separation(cop,a.e!)-separation(cop,b.e!))[0];
-      if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
+      // Select the nearest eligible flyer in player order; strict comparison
+      // preserves the previous stable-sort tie break without repeated scans.
+      let nearest=SIGHT;
+      for(const candidate of flyers){
+        if(world.time<candidate.player.delivery.ticketGraceUntil)continue;
+        const distance=separation(cop,candidate.entity);
+        if(distance<nearest){nearest=distance;player=candidate.player;target=candidate.entity;}
+      }
+      if(player&&target){state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target){
       if(state.path.length&&cop.supportId==='ground'&&engageAutopilot(cop))state.path=[];
@@ -85,12 +110,13 @@ export function updatePolice(world:World,dt:number):void {
     if(cop.supportId!==null&&target.supportId===cop.supportId&&d<12){
       target.speed*=Math.exp(-2.2*dt);
       if(d<7&&Math.abs(target.speed)<4){
-        const delivery=player.delivery, flight=delivery.flight;
-        const durationFine=Math.min(120,Math.floor(flight.seconds/2)*8),heightFine=Math.min(80,Math.floor(flight.peakHeight/10)*10),repeatFine=delivery.tickets*35;
-        const amount=60+durationFine+heightFine+repeatFine;
-        delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(flight.seconds),peakHeight:Math.round(flight.peakHeight),durationFine,heightFine,repeatFine};
-        delivery.cash-=amount;delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
-        target.autopilot=false;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
+        const evidence:TicketEvidence={seconds:player.delivery.flight.seconds,peakHeight:player.delivery.flight.peakHeight,
+          at:world.time,x:target.x,z:target.z,canFly:hasRockets(target)};
+        const applyTicket=()=>applyTicketEvidence(player!.delivery,evidence);
+        if(onTicket)onTicket(player,applyTicket,evidence);else applyTicket();
+        // The stop and patrol reset are immediate physical effects; the fine is committed separately.
+        player.delivery.ticketGraceUntil=world.time+20;player.delivery.flight.seconds=0;player.delivery.flight.peakHeight=0;
+        target.autopilot=false;target.navigation=null;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
         for(const other of world.entities)if(other.police?.targetId===player.id)resumePatrol(other);
         continue;
       }

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, resetPlayer, step, NEUTRAL } from '../shared/game';
 import { onRoof, updateAchievements } from '../shared/achievements';
-import { BUILDINGS, OVERPASS, STUNT_LOOP, STUNT_RAMP, terrainHeight, type SupportId } from '../shared/map';
+import { BUILDINGS, LANDMARKS, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, terrainHeight, type SupportId } from '../shared/map';
 
 function setup(){const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;return {world,player,car};}
 function point(player:ReturnType<typeof setup>['player'],car:ReturnType<typeof setup>['car'],x:number,z:number,y:number,supportId:SupportId|null=y===0?'ground':null){
@@ -65,10 +65,12 @@ test('roof identity distinguishes a landing from an overlapping airborne or othe
   assert.equal(onRoof(car),false);updateAchievements(player,car,false);
   assert.ok(!player.achievements.unlocked.includes('roof-rider'));
   Object.assign(car,{supportId:`roof:${index}`});
+  const cashBefore=player.delivery.cash,incomeBefore=player.delivery.lifetimeIncome;
   assert.equal(onRoof(car),true);updateAchievements(player,car,false);updateAchievements(player,car,false);
   assert.deepEqual(player.achievements.unlocked,['roof-rider']);
+  assert.equal(player.delivery.cash,cashBefore+500);assert.equal(player.delivery.lifetimeIncome,incomeBefore+500);
   player.delivery.completed=3;updateAchievements(player,car,true);
-  assert.deepEqual(player.achievements.unlocked,['roof-rider','sky-delivery','regular']);
+  assert.deepEqual(player.achievements.unlocked,['roof-rider','sky-delivery','deliveries-1','regular']);
   Object.assign(car,{kind:'person'});assert.equal(onRoof(car),false);
 });
 test('flying to an Oakland rooftop can earn both achievements',()=>{
@@ -80,9 +82,35 @@ test('flying to an Oakland rooftop can earn both achievements',()=>{
   assert.ok(player.achievements.unlocked.includes('roof-rider'));
 });
 
+test('tower awards require landing on the named roof and pay once',()=>{
+  for(const [style,id] of [['coit','coit-landing'],['salesforce','salesforce-landing']] as const){
+    const {player,car}=setup(),index=BUILDINGS.findIndex(building=>building.style===style),tower=BUILDINGS[index];
+    const cash=player.delivery.cash,income=player.delivery.lifetimeIncome;
+    point(player,car,tower.x,tower.z,buildingRoofHeight(tower,tower.x,tower.z),null);
+    assert.ok(!player.achievements.unlocked.includes(id));
+    point(player,car,tower.x,tower.z,buildingRoofHeight(tower,tower.x,tower.z),`roof:${index}`);
+    point(player,car,tower.x,tower.z,buildingRoofHeight(tower,tower.x,tower.z),`roof:${index}`);
+    assert.ok(player.achievements.unlocked.includes(id));
+    assert.equal(player.delivery.cash,cash+1_500);assert.equal(player.delivery.lifetimeIncome,income+1_500);
+  }
+});
+
+test('Fremont and San Jose landmark visits pay once on stopped ground arrival',()=>{
+  for(const [landmark,id] of [['mission-san-jose','fremont-mission'],['san-jose-city-hall','san-jose-city-hall']] as const){
+    const {player,car}=setup(),place=LANDMARKS.find(item=>item.id===landmark)!;
+    const cash=player.delivery.cash,income=player.delivery.lifetimeIncome;
+    point(player,car,place.arrival.x,place.arrival.z,0,null);
+    assert.ok(!player.achievements.unlocked.includes(id));
+    point(player,car,place.arrival.x,place.arrival.z,0,'ground');
+    point(player,car,place.arrival.x,place.arrival.z,0,'ground');
+    assert.ok(player.achievements.unlocked.includes(id));
+    assert.equal(player.delivery.cash,cash+500);assert.equal(player.delivery.lifetimeIncome,income+500);
+  }
+});
+
 // Exercise the actual Roadster's air budget and motion, not just the trigger coordinates.
 test('the Roadster can earn Bay Hopper with a continuous two-jump flight',()=>{
-  const {world,player,car}=setup();player.delivery.level=1;world.entities=[car];world.pickups=[];
+  const {world,player,car}=setup();player.delivery.cash=10_000;player.delivery.level=1;world.entities=[car];world.pickups=[];
   Object.assign(car,{x:50,z:60,y:0,yaw:-Math.PI/2,speed:0,supportId:'ground'});
   step(world,new Map([['p',NEUTRAL]]),.05);car.speed=68;
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
@@ -106,8 +134,55 @@ test('an immediate first-frame jump starts Bay Hopper after spawn, reset or vehi
 });
 
 test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick',()=>{
-  const {world,player,car}=setup();player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.yaw=-Math.PI/2;car.speed=68;
+  const {world,player,car}=setup();player.delivery.cash=10_000;player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.yaw=-Math.PI/2;car.speed=68;
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));
+});
+
+test('parking and racing awards follow completed game results without inventing solo race wins',async()=>{
+  const {updateGameAchievements}=await import('../shared/achievements');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const parking={lotId:'test',mode:'park' as const,phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,
+    entrants:[{playerId:player.id,entityId:car.id,joinedAt:0,targetId:'a',hold:2,finishedAt:1,elapsed:1,overtakes:null}],claimedStallIds:[]};
+  world.parking.rounds=[parking];
+  const entrant={playerId:player.id,entityId:car.id,status:'finished' as const,nextGate:1,finishedAt:1,elapsed:1,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  const round={courseId:'short',phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,starterCount:1,entrants:[entrant]};
+  world.races.rounds=[round];updateGameAchievements(world,player);
+  assert.ok(player.achievements.unlocked.includes('park-it'));
+  assert.ok(player.achievements.unlocked.includes('race-finisher'));
+  assert.ok(!player.achievements.unlocked.includes('race-winner'));
+  round.entrants.push({...entrant,playerId:other.id,entityId:other.entityId,elapsed:2,rank:2});
+  round.starterCount=2;
+  updateGameAchievements(world,player);updateGameAchievements(world,player);
+  assert.equal(player.achievements.unlocked.filter(id=>id==='race-winner').length,1);
+  assert.deepEqual(other.achievements.unlocked,[],'processing one player cannot mutate another');
+  const last=player.achievements.lastUnlock;
+  updateGameAchievements(world,player);
+  assert.deepEqual(player.achievements.lastUnlock,last,'repeated results do not create another unlock');
+  updateGameAchievements(world,other);
+  assert.deepEqual(other.achievements.unlocked,['race-finisher']);
+  assert.ok(!other.achievements.unlocked.includes('race-winner'));
+  world.parking.rounds=[{...parking,mode:'queue'}];updateGameAchievements(world,player);
+  assert.ok(player.achievements.unlocked.includes('queue-cutter'));
+});
+
+test('game results mutate only the passed player draft and require completed results',async()=>{
+  const {updateGameAchievements}=await import('../shared/achievements');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const entrant={playerId:player.id,entityId:car.id,joinedAt:0,targetId:'a',hold:0,finishedAt:null,elapsed:null,overtakes:null};
+  world.parking.rounds=[{lotId:'test',mode:'park',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:10,entrants:[entrant],claimedStallIds:[]}];
+  const raceEntrant={playerId:player.id,entityId:car.id,status:'finished' as const,nextGate:1,finishedAt:1,elapsed:1,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  world.races.rounds=[{courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:10,starterCount:2,entrants:[raceEntrant,{...raceEntrant,playerId:other.id,entityId:other.entityId,rank:2}]}];
+  const draft={...player,achievements:structuredClone(player.achievements)};
+  updateGameAchievements(world,draft);
+  assert.deepEqual(draft.achievements.unlocked,['race-finisher','race-winner'],'the first finisher earns the win while the race is active');
+  assert.deepEqual(player.achievements.unlocked,[],'the committed player is untouched while its draft changes');
+  assert.deepEqual(other.achievements.unlocked,[],'another player is untouched');
+  world.parking.rounds[0].entrants[0].finishedAt=2;
+  world.races.rounds[0].phase='results';
+  updateGameAchievements(world,draft);
+  assert.deepEqual(draft.achievements.unlocked,['race-finisher','race-winner','park-it']);
+  assert.deepEqual(player.achievements.unlocked,[]);
+  assert.deepEqual(other.achievements.unlocked,[]);
 });

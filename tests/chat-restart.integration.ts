@@ -129,9 +129,13 @@ try {
   send(first.socket, { type: 'message', text: marker });
   await until(() => first.events.some(event => event.type === 'message' && event.message?.text === marker), 'message before restart');
   send(first.socket, { type: 'save' });
+  const renamed = `Again${randomUUID().slice(0, 8)}`;
+  send(first.socket, { type: 'rename', name: renamed, requestId: 1 });
   await until(() => first.events.some(event => event.type === 'recovery'), 'recovery code');
   const code = first.events.find(event => event.type === 'recovery')!.code;
   assert.ok(code);
+  await until(() => first.events.some(event => event.type === 'renamed'), 'renamed driver before restart');
+  assert.equal(first.events.find(event => event.type === 'renamed')?.playerId, guest.playerId);
   await stop(child);
   child = undefined;
 
@@ -145,7 +149,7 @@ try {
   const recovered = second.events.find(event => event.type === 'ready');
   assert.ok(recovered, 'saved recovery code must be accepted after the restart');
   assert.equal(recovered.playerId, guest.playerId);
-  assert.equal(recovered.name, guest.name);
+  assert.equal(recovered.name, renamed);
   assert.deepEqual(recovered.messages, [], 'chat history must not survive a restart');
   console.log('PASS: real local Wrangler restart preserved saved player ID/name and discarded chat history.');
 } finally {
