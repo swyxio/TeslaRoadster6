@@ -1,5 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+## Open-source and staging preparation
+
+- `pnpm install --frozen-lockfile` and `pnpm run ci` passed locally (18 tests, both typechecks, and Vite build). The build retains Vite's warning about a JavaScript chunk over 500 kB.
+- Manually deployed Cloudflare Worker Preview `staging` at `https://staging-bay-drive.swyxio.workers.dev`. Health returned protocol version 3 and capacity 64; the deployed two-client integration passed. A simultaneous connection to the same room code in production and staging saw only one player on each side, confirming isolation for that test. The three.js license notice was served from staging.
+- The native Git build connection and automatic production/preview deployments need separate verification; a manual Preview is not proof of CI/CD.
+
 ## Bay geography rebuild
 
 - Hand-authored SF, Oakland, Yerba Buena and Marin land polygons; navigable Bay Bridge and Golden Gate decks, water, waterfront/port, parks, skyline landmarks and corresponding minimap. Geometry is compressed and streets/decks remain flat. See MAP.md for provenance and limits.
@@ -7,7 +13,7 @@
 - Local Worker two-client integration passed. Local 64-client same-host smoke passed (8 seconds; minimum 77 snapshots/client, p95 inter-snapshot gap 111 ms). This is not WAN latency, mobile rendering or a sustained load test.
 - Deployed Worker version `2a0c90bf-8759-4eac-b813-83c5cb62517c`: health returned protocol version 3 and capacity 64; two-client integration passed. The deployed 64-client same-host smoke passed (8 seconds; minimum 77 snapshots/client, p95 inter-snapshot gap 160 ms). Snapshot delivery gaps are not input latency.
 - Chrome desktop: drove from SF across the Bay Bridge to Oakland, observed the bridge above water, Yerba Buena Island and the Oakland charger. Chrome 390×844 and 844×390 with touch emulation: controls and route visible; portrait acceleration exercised. Physical devices and frame rate remain unverified.
-- Screenshot: `screenshots/bay-bridge-drive.png` from the deployed game. The Golden Gate crossing was tested in simulation, not manually driven in the browser.
+- Screenshot: `screenshots/bay-bridge-drive.jpg` from the deployed game. The Golden Gate crossing was tested in simulation, not manually driven in the browser.
 
 ## Earlier baseline · historical evidence
 
@@ -24,7 +30,7 @@
 - Live `/api/health` returned `{"ok":true,"version":1,"capacity":64}`.
 - Chrome desktop visibly verified local solo drive, lift, on-foot exit and car re-entry; deployed room join and Roadster flight (14m altitude with air consuming).
 - Chrome tab-scoped device emulation inspected390×844 portrait and844×390 landscape; touch controls visible, combined touch throttle/lift exercised and air consumption observed. Physical device behavior and sustained FPS are not verified. Roll controls were moved into a clear strip above pedals after layout inspection; portrait camera aim adjusted to keep the car above the instruments.
-- Screenshots: `screenshots/live-desktop.png`, `screenshots/mobile-portrait.png`, `screenshots/mobile-landscape.png`.
+- Screenshots: `screenshots/live-desktop.jpg`, `screenshots/mobile-portrait.jpg`, `screenshots/mobile-landscape.jpg`.
 
 ## Known limits / next checks
 

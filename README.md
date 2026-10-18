@@ -2,7 +2,9 @@
 
 Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Drive a Roadster, hold lift to fly, roll over the skyline, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Cross the Bay Bridge from San Francisco to Oakland via Yerba Buena Island, or take the Golden Gate north to Marin.
 
-**Play:** https://bay-drive.swyxio.workers.dev
+**[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
+
+![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
@@ -10,10 +12,11 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 ## Run
 
-Node 22+, pnpm 10. No credentials are needed locally.
+Node 22 and pnpm 10.33.1 are recommended. No credentials are needed locally.
 
 ```sh
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm build
 pnpm dev:server
 # http://localhost:8787 serves both client and WebSocket server
@@ -22,12 +25,12 @@ pnpm dev:server
 For frontend hot reload, leave Wrangler running and start `pnpm dev` in another terminal. Vite proxies `/api` and WebSockets to port 8787. Cloudflare owns production hosting and multiplayer; solo mode uses the same simulation locally.
 
 ```sh
-pnpm test
-pnpm build
+pnpm run ci # tests, TypeScript checks and production build
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
-pnpm run deploy
 ```
+
+The network checks need the local Worker running. See [deployment](docs/DEPLOYMENT.md) for a separate Cloudflare deployment and the native build/preview workflow; deploying is not needed to contribute.
 
 ## Play
 
@@ -70,3 +73,7 @@ tests/             Simulation, protocol and live connection checks
 ```
 
 No framework is needed for this small HUD. Keep the simulation independent from Three.js, the DOM, and Cloudflare. Keep pnpm lockfile committed. Alternative UI or art implementations should obey the contracts before adding dependencies or changing shared gameplay.
+
+## License and attribution
+
+First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Tesla, Waymo, Cruise and Zoox names identify the vehicles that inspired this independent project; they do not imply endorsement, and the MIT license does not grant trademark rights.
