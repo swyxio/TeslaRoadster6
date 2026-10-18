@@ -2,6 +2,14 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island with flight steering and release 0.0.2 · protocol v18 · 2026-10-18 Pacific
+
+- At merge `d98a31d`, `pnpm test` passed 284 tests and `pnpm build` passed both TypeScript checks, Vite and generation of two release entries. The main JavaScript was 796.47 kB (229.09 kB gzip), with Vite's large-chunk warning. Local Wrangler's room and global-chat integrations passed. The Cloudflare branch preview built successfully and served the matching JavaScript and stylesheet, protocol v18 and the 0.0.2 release entry; its two-client room integration passed. These checks do not describe the shared production deployment.
+- Chrome desktop held Jump/Hover at 5 m while air fell from 72% to 64%, and Actions showed parking and races. At 390×844 touch emulation, holding Jump/Hover stayed at 5 m while air fell from 46% to 37%; at 844×390 it stayed at 5 m while air fell from 23% to 16%. Actions opened in both; a police citation needed dismissal before the landscape action. The changelog marked 0.0.2 as new to a 0.0.1 returning player. No console errors were observed; no physical device was tested.
+- Two local Wrangler clients observed a scripted normal-input Park It round at the SF 16th Street charger: the driver reached the lot from spawn, parked in bay `sf-16th-1`, and held for two seconds, finishing in 15.45 simulation seconds. The second client then observed queue join and withdrawal; both sockets closed normally. This did not test a two-entrant queue competition or establish playability at every lot.
+- In another local Wrangler room on the same build, two clients observed a normal-input car ferry crossing: boarding at 160.0 s, secured departure at 180.2 s, fixed-offset transit at 196.1 s, island arrival at 225.2 s and drive-off onto ground at 231.4 s. Both sockets closed after completion, with no progression block or state injection. A race was not attempted in this room.
+- Independent review of the flight-steering merge found no actionable regressions; focused controls and island-flight tests passed. Earlier load and hosted crossing results below describe the earlier combined build.
+
 ## Island with release history · protocol v18 · 2026-10-18 Pacific
 
 - At merge `e697757`, `pnpm test` passed 280 tests and `pnpm build` passed both TypeScript checks, Vite and generation of the public blog and changelog. The main JavaScript was 795.37 kB (228.66 kB gzip), with Vite's large-chunk warning. Local Wrangler room and global-chat integrations passed; `/blog/` and `/changelog/` returned HTML. These checks preceded the subsequent flight-steering integration.
