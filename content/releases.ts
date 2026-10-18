@@ -1,6 +1,21 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.14-alpha',
+    label: '0.0.14 Alpha',
+    date: '2026-10-18',
+    title: 'Build your skyline',
+    intro: 'Save your driving progress and grow a place of your own in the Bay.',
+    sections: [
+      { title: 'Keep building', items: [
+        'Saved online drivers keep their wallet, achievements and paid personal-car configurations between rooms. Guest and solo drives remain session-only.',
+        'At the $2 million wallet threshold, buy one starter home or up to three development plots. Visit a plot to build a tower up to 20 stories and invite friends to see it.',
+        'UCSF research discounts the starter home, and Berkeley research discounts its charger. Building milestones pay once per driver; current delivery rates make property a long-term goal.',
+        'Explore the updated economy blog for the simulations, research stops and interactive tower planner.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.13-alpha',
     label: '0.0.13 Alpha',
     date: '2026-10-18',
