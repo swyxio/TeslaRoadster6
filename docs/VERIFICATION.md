@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Predictive shared driving · protocol v28 · 2026-10-18 Pacific
+
+- The merged build passed 415 tests and `pnpm build`, including both TypeScript checks. Vite retains its large-chunk warning. Local Wrangler two-client room, prediction/acknowledgement/barrier and chat integrations passed.
+- In a unique live local room, Chrome on an Apple M5 Pro drove and steered without console errors. A 7.04-second driving capture at 1413×1001 CSS pixels, rendered at DPR 1.0 on WebGL2/Metal, averaged 88.4 FPS with 17.1 ms p95 frame intervals and no frames over 50 ms. Host load was high; this is one short local sample, not a sustained FPS guarantee or a controlled before/after comparison.
+- A 10.01-second local 64-client synthetic run kept all 64 connected and visible, but averaged 5.8 snapshots per client per second, advanced 5.7 simulated seconds, and had a 419 ms p95 snapshot gap. Clients decoded 536.64 MiB in total. Same-host client parsing and scheduling affect this result; it is not evidence of real-time 64-player or production capacity.
+
 ## Island, shared Bay and device playtests · 2026-10-18 Pacific
 
 - After integrating the charging-lot update at `5d454c9` and the mini-game, navigation and arena fixes, protocol v27 passed 401 tests and `pnpm build`. Vite retains its large-chunk warning.
