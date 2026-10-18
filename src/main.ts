@@ -67,7 +67,7 @@ function begin(solo:boolean){
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
 $('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
-$('error-menu').onclick=()=>{$('error').classList.add('hidden');session.solo();toggleMenu(true);};
+$('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();session.solo();toggleMenu(true);};
 function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'){
   if(type==='scores'){openScores();return;}
   if(type==='fleet'){openFleet();return;}
