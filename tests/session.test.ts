@@ -49,13 +49,16 @@ test('full rooms report a distinct error and old sockets cannot replace the new 
   current.closed();assert.equal(session.status,'disconnected');
 });
 
-test('joining the current room keeps the occupied seat and changes the selected car',()=>{
+test('joining the current room keeps the occupied seat and current ride',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:2});
-  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});const existingWorld=session.world;
+  const world=createWorld();const player=addPlayer(world,'p','Alex');
+  world.entities.find(entity=>entity.id===player.entityId)!.kind='zoox';
+  socket.message({type:'state',world});const existingWorld=session.world;
   session.join('bay','Alex','model-3');
   assert.equal(Socket.last,socket);assert.equal(socket.readyState,Socket.OPEN);
   assert.equal(session.world,existingWorld);assert.equal(session.id,'p');
-  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'selectVehicle',kind:'model-3'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'name',name:'Alex'});
+  assert.ok(!socket.sent.some(message=>JSON.parse(message).type==='selectVehicle'));
   socket.closed();
 });

@@ -25,9 +25,6 @@ export class Session {
   join(room: string, name: string, kind: VehicleId = 'roadster') {
     if (this.status === 'online' && this.room === room) {
       this.setName(name);
-      const player = this.world.players.find(player => player.id === this.id);
-      const vehicle = this.world.entities.find(entity => entity.id === player?.entityId);
-      if (vehicle?.kind !== kind) this.selectVehicle(kind);
       return;
     }
     this.name = name;

@@ -46,7 +46,7 @@ document.querySelector('#app')!.innerHTML = `
  <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
  <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="bay" pattern="[a-z0-9-]+" value="${DEFAULT_ROOM}" autocapitalize="none" spellcheck="false"></label></div>
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
- <button id="join" class="primary">Join room <span>↗</span></button><p class="form-note" id="form-note" role="status">Everyone starts in bay. Enter a room code to meet friends elsewhere. No account needed.</p>
+ <button id="join" class="primary">Join room <span>↗</span></button><p class="form-note" id="form-note" role="status">Your starting ride applies when joining a new room. To change rides here, use Actions → Fleet.</p>
  <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <div class="release-links"><span>${CURRENT_RELEASE.label}</span><a id="release-changelog" href="/changelog/">Changelog</a><a href="/blog/">Dev blog</a></div><p id="last-played" class="last-played">No earlier play recorded on this browser.</p>
