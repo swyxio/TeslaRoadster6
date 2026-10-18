@@ -752,6 +752,9 @@ scene.start(dt=>{
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
+  // A room switch clears the presentation world until an authoritative
+  // snapshot arrives; do not leave the old room's instruments on screen.
+  $('hud').classList.toggle('hidden',menu||session.status!=='online');
   $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`Room: ${session.room}`:'';
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
