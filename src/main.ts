@@ -1058,6 +1058,18 @@ function openShop(preferSpaceX=false){
 function closeShop(){shopDialog.close();controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;}
 $('shop-close').onclick=closeShop;shopDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status==='online'&&!session.walletBlocked;});
 
+function updateFlightLabel(e:Entity){
+  const airborne=e.loopAngle===null&&e.supportId===null;
+  const label=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';
+  const flight=$('flight');
+  if(flight.textContent!==label){flight.textContent=label;flight.classList.toggle('flying',label!=='GROUNDED');}
+  $('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
+}
+function updateDriveControl(){
+  $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';
+  $('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
+}
+
 scene.start(dt=>{
   starship.tick(marsUi.isOpen());
   if(session.walletBlocked&&!walletWasBlocked){
@@ -1092,11 +1104,14 @@ scene.start(dt=>{
     if(pendingLuxury?.source==='workshop')$('shop-feedback').textContent='Disconnected. Rejoin to collect your vehicle.';
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
-  let feedbackCar:Entity|undefined;
+  let feedbackCar:Entity|undefined,flightChanged=false;
   if(!marsUi.isViewing()){
     const renderWorld=session.renderWorld(),renderPlayer=renderWorld.players.find(p=>p.id===session.id);
     feedbackCar=renderWorld.entities.find(e=>e.id===renderPlayer?.entityId);
-    for(const event of soundEvents)if(event.cue==='land')scene.landed(event.strength??1);
+    for(const event of soundEvents){
+      if(event.cue==='jump'||event.cue==='land'){flightChanged=true;if(car)updateFlightLabel(car);}
+      if(event.cue==='land')scene.landed(event.strength??1);
+    }
     scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),total:starship.total()});
   }
   if(driveFeedback.update(feedbackCar,input,soundEvents,dt,driving&&!marsUi.isViewing()))audio.play('boost');
@@ -1139,6 +1154,7 @@ scene.start(dt=>{
     lastActiveSeconds=active;
   }
   if(observedCar)controls.observeFlight(hasRockets(observedCar)&&!ferrySecured(session.world.ferry,observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
+  if(flightChanged)updateDriveControl();
   document.body.classList.toggle('cockpit-active',cockpit);
   $('cockpit-trim').hidden=!cockpit;$('cockpit-dashboard').hidden=!cockpit||!!car?.inDome;
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
@@ -1204,9 +1220,8 @@ scene.start(dt=>{
   for(const control of ['KeyQ','KeyR','KeyX','ShiftLeft','KeyE']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket||secured;
   }
-  $('flight').textContent=e.loopAngle!==null||e.supportId==='dome'?'SUCTION':airborne?'AIRBORNE':'GROUNDED';$('flight').classList.toggle('flying',airborne||e.loopAngle!==null||e.supportId==='dome');
-  $('jump-control').textContent='JUMP / HOVER';$('jump-control').setAttribute('aria-label',airborne?'Tap to air jump, hold to hover':'Tap to jump, hold to hover');
-  $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
+  updateFlightLabel(e);
+  $('jump-control').textContent='JUMP / HOVER';updateDriveControl();
   document.querySelector('[data-control="KeyA"]')?.setAttribute('aria-label',airborne?'Bank left':'Steer left');document.querySelector('[data-control="KeyD"]')?.setAttribute('aria-label',airborne?'Bank right':'Steer right');
   $('air-label').textContent=`AIR LV ${e.tankLevel}`;$('air').classList.toggle('air-low',rocket&&e.air<12);$('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
   $('interact').textContent=`${controlSettings.label('interact')} · ${e.kind==='person'?'Take nearby car':'Exit car'}`;
