@@ -182,7 +182,7 @@ Imagine every delivery, cab fare and achievement moving the same giant meter. On
 
 How long might that take? In a [community run](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/STARSHIP_ECONOMY.md#a-population-run-using-the-delivery-simulations) using our saver, cab, fleet and casual paths, **50 players each playing an hour a day** reach $100m on day 17, $500m on day 105 and $1 billion on day 223. Ten players on that schedule take 1,162 days; 250 players playing half an hour a day reach the goal on day 70. The run keeps the same players throughout and extends their later earning rates after 40 hours. Player activity and earning rates matter as much as the number on the meter.
 
-There's already a Mars mission in the game: open the mission menu, contribute from your session cash and watch your room's progress bar fill. At $1 billion, reach the Fremont spaceport to board. The room fund persists; solo progress lasts for that drive. The game-wide earnings meter will need persistent identities and a reliable way to count each reward once.
+There's already a Mars mission in the game: open the mission menu, contribute from your session cash and watch your room's progress bar fill. At $1 billion, reach the Fremont spaceport to board. The room fund persists between drives. The game-wide earnings meter will need persistent identities and a reliable way to count each reward once.
 
 <figure>
 <img src="/blog/economy/mars-mission-menu.jpg" alt="The current Mars mission menu shows the room fund, contribution controls and boarding instructions for Fremont." loading="lazy">
