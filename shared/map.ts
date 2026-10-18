@@ -2,6 +2,7 @@
 import { BAY_HIGHWAY_TRACES } from './bay-highway-traces';
 import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
+import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps';
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
@@ -84,7 +85,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-cliff'|'ferry'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'island-bank'|'island-cliff'|'island-jump'|'ferry'|`roof:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -117,6 +118,7 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='overpass')return overpassHeight(x,z);
  if(id==='stunt-ramp')return rampHeight(x,z);
  if(id==='island-bank')return bankSurface(x,z)?.height??null;
+ if(id==='island-jump')return islandJumpHeight(x,z);
  // Curved surfaces can have multiple heights at one point; ferry support moves.
  if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
  const b=BUILDINGS[Number(id.slice(5))];
@@ -128,6 +130,7 @@ export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number
  let dx=0,dz=0;
  if(id==='ground')({dx,dz}=hillSurface(x,z));
  else if(id==='stunt-ramp')dx=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
+ else if(id==='island-jump')dx=islandJumpSlope(islandJumpAt(x,z)!);
  else if(id==='overpass'){
   if(x<OVERPASS.deckStart)dx=OVERPASS.height/(OVERPASS.deckStart-OVERPASS.start);
   else if(x>OVERPASS.deckEnd)dx=-OVERPASS.height/(OVERPASS.end-OVERPASS.deckEnd);

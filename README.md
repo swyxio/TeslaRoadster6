@@ -28,7 +28,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a separate banked lane, an inverted cliff, a short circuit and speed oval. Purple Rocket pads temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a separate banked lane, an inverted cliff, two eastbound jump ramps, a short circuit and speed oval. Purple Rocket pads temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -108,6 +108,7 @@ shared/stations.ts  Curated real station provenance + game placements
 shared/ferry.ts     Authoritative ferry and passenger attachment
 shared/rocket.ts    Vehicle-local temporary Rocket pickups
 shared/island-stunts.ts  Shared bank and cliff surfaces
+shared/island-jumps.ts   Shared island launch ramps and landing contacts
 shared/dome*.ts     Rocket Dome geometry and surface collisions
 shared/soccer.ts    Authoritative ball, goals and match state
 shared/parking*.ts  Parking playground definitions and rounds
