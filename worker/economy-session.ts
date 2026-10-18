@@ -3,7 +3,7 @@ import { hasRockets } from '../shared/upgrades';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type Entity, type Pickup, type Player, type World } from '../shared/game';
 import { awardMarsAchievement, type AchievementState } from '../shared/achievements';
-import { atMarsBoarding, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
+import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
 import type { StyleChoice } from '../shared/vehicle-style';
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
@@ -183,6 +183,7 @@ export class EconomySession {
           if(this.closed&&!this.failed&&this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
         }else{
           this.committed=structuredClone(outcome.progress);this.committedRevision=outcome.revision;this.settled=item.ordinal;
+          if(outcome.roomFund!==undefined)this.world.mars.roomFund=Math.max(this.world.mars.roomFund,outcome.roomFund);
           if(item.intent.action.kind==='progress')this.committedOtaPeriodEnd=item.view.delivery.ota.renewAt;
           if(!this.closed){
             this.install(outcome.progress);
@@ -258,7 +259,7 @@ export class EconomySession {
   boardMars(requestId:number){
     const car=this.world.entities.find(e=>e.id===this.player.entityId);
     const reply=(ok:boolean)=>this.send({type:'marsResult',requestId,action:'board',ok,amount:0});
-    if(this.world.mars.fund<MARS_GOAL||!car||!atMarsBoarding(car)||this.draft.achievements.unlocked.includes('to-mars')){reply(false);return;}
+    if(!marsGoalReached(this.world.mars)||!car||!atMarsBoarding(car)||this.draft.achievements.unlocked.includes('to-mars')){reply(false);return;}
     const before=this.submitted;
     this.update(this.player,()=>awardMarsAchievement(this.player));
     const item=this.queue.at(-1);
@@ -269,6 +270,15 @@ export class EconomySession {
       if(outcome.ok){if(this.world.mars.launchAt===null||this.world.time-this.world.mars.launchAt>=MARS_LAUNCH_SECONDS)this.world.mars.launchAt=this.world.time;reply(true);}
       else reply(false);
     };
+  }
+  contributeMars(amount:number,requestId:number){
+    const reply=(ok:boolean,available?:number)=>this.send({type:'marsResult',requestId,action:'contribute',ok,amount:ok?amount:0,...(available!==undefined?{available}:{})});
+    const car=this.world.entities.find(e=>e.id===this.player.entityId);
+    if(this.failed||this.queue.length>=32||!car||!Number.isSafeInteger(amount)||amount<=0||amount>MARS_GOAL||this.draft.delivery.cash<amount){reply(false);return;}
+    const previousLevel=this.draft.delivery.level;
+    this.draft.delivery.cash-=amount;this.draft.delivery.level=levelForCash(this.draft.delivery.cash);
+    const rerouted=this.draft.delivery.level<previousLevel&&rerouteInaccessibleOrder(this.draft.delivery,car,hasRockets(car));
+    this.enqueue({kind:'contribute',amount,...(rerouted?{order:{...this.draft.delivery.order}}:{})},undefined,outcome=>reply(outcome.ok,outcome.ok?undefined:outcome.available));
   }
   ota(enabled:boolean,requestId:number){
     if(this.failed||this.queue.length>=32){this.send({type:'otaResult',requestId,enabled,ok:false});return;}

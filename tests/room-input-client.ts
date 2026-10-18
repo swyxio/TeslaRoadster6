@@ -1,4 +1,4 @@
-// Small protocol-v35 input helper for local integration tests and benchmarks.
+// Small protocol-v36 input helper for local integration tests and benchmarks.
 // The owning script parses each socket message once and passes it to observe().
 import type { Input } from '../shared/game';
 import type { ControlSnapshot, EdgeBaseline, EdgeOutcome } from '../shared/tick-input';

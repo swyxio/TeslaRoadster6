@@ -1,6 +1,7 @@
 // LOCAL TEST ONLY. This worker supplies funded drivers, showroom positioning,
 // and deterministic profile faults. It must never be used as a deployment entry.
-import worker, { GameRoom as ProductionGameRoom, GlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome } from '../../worker/index';
+import worker, { GameRoom as ProductionGameRoom, GlobalChat as ProductionGlobalChat, RoomEconomy as ProductionRoomEconomy, GlobalIncome } from '../../worker/index';
+import { parseRecoveryCode } from '../../worker/global-chat-core';
 import { DriverProfile as ProductionDriverProfile, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
 import { initialDelivery, levelForCash, orderTarget } from '../../shared/delivery';
 import { SHOPS } from '../../shared/upgrades';
@@ -10,7 +11,39 @@ import { addPlayer, createEmptyWorld, type World } from '../../shared/game';
 import { progressFrom } from '../../worker/driver-profile';
 import { EconomySession } from '../../worker/economy-session';
 
-export { GlobalChat, GlobalIncome };
+export { GlobalIncome };
+
+/** Hold the real chat claim or confirmation after its transaction commits. */
+export class GlobalChat extends ProductionGlobalChat {
+  private nextBindingHold:'bind'|'confirm'|'lost-bind'|'lost-confirm'|null=null;
+  private bindingHeld=false;
+  private releaseBindingHold:(()=>void)|undefined;
+  async armBindingHold(stage:'bind'|'confirm'|'lost-bind'|'lost-confirm') { this.nextBindingHold=stage; }
+  async bindingFaultState() { return {held:this.bindingHeld}; }
+  async releaseBinding() { this.releaseBindingHold?.(); }
+  private async holdBinding(stage:'bind'|'confirm') {
+    if(this.nextBindingHold===`lost-${stage}`){this.nextBindingHold=null;throw new Error('Injected lost binding reply');}
+    if(this.nextBindingHold!==stage)return;
+    this.nextBindingHold=null;this.bindingHeld=true;
+    try{await new Promise<void>(resolve=>{this.releaseBindingHold=resolve;});}
+    finally{this.bindingHeld=false;this.releaseBindingHold=undefined;}
+  }
+  override async bindWallet(code:string,walletId:string,token:string) {
+    const result=await super.bindWallet(code,walletId,token);await this.holdBinding('bind');return result;
+  }
+  override async confirmWallet(code:string,token:string) {
+    const result=await super.confirmWallet(code,token);await this.holdBinding('confirm');return result;
+  }
+  async expireBinding(code:string) {
+    const parsed=parseRecoveryCode(code);if(!parsed)throw new Error('Invalid recovery code');
+    await this.ctx.storage.transaction(async txn=>{
+      const key=`identity:${parsed.playerId}`,identity=await txn.get<{binding?:{durable:boolean;claims:Record<string,number|null>}}>(key);
+      if(!identity?.binding || !Object.values(identity.binding.claims).some(expiry=>expiry!==null))throw new Error('No provisional claim');
+      for(const [token,expiry] of Object.entries(identity.binding.claims))if(expiry!==null)identity.binding.claims[token]=0;
+      await txn.put(key,identity);
+    });
+  }
+}
 
 type Fault = 'none' | 'hold-before' | 'fail-before' | 'lost-reply' | 'hold-lost-reply';
 const FUNDS = 20_000_000;
@@ -355,7 +388,7 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/__wallet-test/')) return worker.fetch(request, env as never, ctx);
     if (request.method !== 'POST') return new Response('POST required', { status:405 });
-    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
+    const body = await request.json() as {driverId:string;fence:string;eventId:string;intent:EconomyIntent;fault:Fault;room:string;playerId:string;side:number;code:string;token:string;bindingStage:'bind'|'confirm'|'lost-bind'|'lost-confirm';pickupId:string;pickupFault:'hold'|'fail';compactFault:'before'|'after';ackFault:'hold-before'|'lost-reply';count:number;seedCash?:number;shopIndex?:number};
     const driver = env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId || 'unused'));
     const economy = env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room || 'fixture'));
     switch (url.pathname) {
@@ -367,8 +400,17 @@ export default {
       }
       case '/__wallet-test/associate': {
         const chat=env.CHAT.get(env.CHAT.idFromName('global'));
-        return Response.json(await chat.bindWallet(body.code,body.driverId));
+        const token=crypto.randomUUID(),result=await chat.bindWallet(body.code,body.driverId,token);
+        if(result?.claim && await chat.confirmWallet(body.code,token))await chat.settleWallet(body.code,token);
+        return Response.json(result);
       }
+      case '/__wallet-test/binding-begin': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).bindWallet(body.code,body.driverId,body.token));
+      case '/__wallet-test/binding-confirm': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).confirmWallet(body.code,body.token));
+      case '/__wallet-test/binding-release': await env.CHAT.get(env.CHAT.idFromName('global')).releaseWallet(body.code,body.token);return Response.json({ok:true});
+      case '/__wallet-test/binding-expire': await env.CHAT.get(env.CHAT.idFromName('global')).expireBinding(body.code);return Response.json({ok:true});
+      case '/__wallet-test/binding-arm': await env.CHAT.get(env.CHAT.idFromName('global')).armBindingHold(body.bindingStage);return Response.json({ok:true});
+      case '/__wallet-test/binding-state': return Response.json(await env.CHAT.get(env.CHAT.idFromName('global')).bindingFaultState());
+      case '/__wallet-test/binding-resume': await env.CHAT.get(env.CHAT.idFromName('global')).releaseBinding();return Response.json({ok:true});
       case '/__wallet-test/players': {
         const room=env.ROOMS.get(env.ROOMS.idFromName(body.room));
         return Response.json(await room.fixturePlayers());

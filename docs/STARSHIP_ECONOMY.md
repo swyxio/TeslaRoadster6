@@ -1,6 +1,6 @@
 # A shared Starship goal
 
-**Launch design, 2026-10-18.** Tesland has a room-wide Mars fund today. The proposed next step is a game-wide launch meter that grows as players earn across rooms, alongside the [persistent economy](ECONOMY.md).
+**Launch design, 2026-10-18.** The game-wide launch meter grows as players earn across rooms, alongside the [persistent economy](ECONOMY.md). Launch celebration, contributor recognition and season retirement remain design work.
 
 ## What counts toward $1 billion
 
@@ -8,9 +8,9 @@ Every player's eligible earnings count **automatically** toward a game-wide, fir
 
 Count each eligible, authoritative income event once: delivery and pickup pay, operating Cybercab earnings, one-time achievement awards and other explicitly enabled game-issued activity rewards, including their eligible event multipliers. The counter records the full reward even if the player later spends it or drops a level. Do not count transfers, gifts, player-to-player sales, property resale proceeds, refunds, loans or the same money moving between wallets; do not multiply progress again merely because cash changes hands. New reward types need an explicit classification as eligible or ineligible. If a counted reward is voided as fraudulent or erroneous, reverse its contribution with an auditable adjustment; ordinary spending and fines do not reverse legitimate lifetime earnings. The global total is the sum of distinct eligible events, not a sum of current balances, and is not capped per transaction just because it crosses the target.
 
-The first season begins at the start of reliable earnings records. Backfill earlier earnings **only** when a stable account identity and unique, authoritative source event can be verified; current session-only cash and anonymous session IDs do not justify inventing a lifetime balance. Preserve account lifetime earnings across future seasons, but define any later season's launch counter using new eligible events in that season so the same old income does not immediately trigger it again. Season-two targets and asset carryover remain design decisions.
+The current counter starts with verified earnings after the wallet implementation; the $2,500 starting balance is not credited as earned income. It uses a per-driver cumulative total and idempotent outbox, while event-level attribution, corrections and seasons remain future work. The first season begins at the start of reliable earnings records. Backfill earlier earnings **only** when a stable account identity and unique, authoritative source event can be verified; current session-only cash and anonymous session IDs do not justify inventing a lifetime balance. Preserve account lifetime earnings across future seasons, but define any later season's launch counter using new eligible events in that season so the same old income does not immediately trigger it again. Season-two targets and asset carryover remain design decisions.
 
-The existing per-room Mars fund is a **different** design: players contribute session cash to a durable fund for one named room. It is not the game-wide lifetime-earnings counter and the two are not linked. Do not count a deposit as new earnings or silently merge them. Integrating the two requires a separate product and implementation decision; automatic game-wide progress is the selected goal here. See [CONTRACTS.md](CONTRACTS.md#mars-mission) for the current room mission.
+The separate per-room Mars fund accepts voluntary contributions from a saved wallet and preserves each named room's existing balance. A contribution does not add to global earnings. Either completed goal permits boarding; the balances remain independent. See [CONTRACTS.md](CONTRACTS.md#mars-mission) for the current mission.
 
 ## How long might it take?
 
@@ -34,7 +34,7 @@ Reproduce the table with `pnpm exec tsx scripts/economy-starship.ts`; the focuse
 
 ## A population run using the delivery simulations
 
-The [delivery-led player model](ECONOMY_FIVE_MINUTE.md) supplies a second estimate that includes its changing wallet levels, purchases, cab income and one-off awards for the first 40 active hours. Split the population 30% delivery saver, 30% first-cab owner, 20% fleet reinvestor and 20% 30-minute casual. Everyone in a row plays every day at the stated duration. There are no event multipliers. The first SF grant counts once per player; purchases do not subtract from the meter. After 40 hours, each player repeats their own average **recurring** income from hours 32–40, with no repeated achievement or unlock awards. This tail holds earning patterns fixed and does not predict later upgrades or new content.
+The [delivery-led player model](ECONOMY_FIVE_MINUTE.md) supplies a second estimate that includes its changing wallet levels, purchases, cab income and one-off awards for the first 40 active hours. Split the population 30% delivery saver, 30% first-cab owner, 20% fleet reinvestor and 20% 30-minute casual. Everyone in a row plays every day at the stated duration. There are no event multipliers. The simulation counts the first SF grant once per player, while the implemented global counter excludes the starting balance; purchases do not subtract from either meter. After 40 hours, each player repeats their own average **recurring** income from hours 32–40, with no repeated achievement or unlock awards. This tail holds earning patterns fixed and does not predict later upgrades or new content.
 
 | Population and active time | $100m | $250m | $500m | $750m | $900m | $1bn |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

@@ -29,7 +29,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=35;
+export const PROTOCOL_VERSION=36;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -42,7 +42,7 @@ export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:numb
 export type CockpitStats = { active:boolean; activeSeconds:number; deliveries:number; orderEligible:boolean; orderSeconds:number };
 export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air'|'rocket';active:boolean;readyAt?:number};
-export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;launchAt:number|null}};
+export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;roomFund:number;launchAt:number|null}};
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const damageFactor=(e:Entity)=>e.kind==='person'?1:(VEHICLES[e.kind].damageFactor??1);
@@ -53,7 +53,7 @@ export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:
 };
 /** Empty presentation state while waiting for an authoritative room snapshot. */
 export function createEmptyWorld():World {
-  return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,launchAt:null},pickups:[]};
+  return {entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,roomFund:0,launchAt:null},pickups:[]};
 }
 export function createWorld(fleetSeed=0):World {
   const world=createEmptyWorld();

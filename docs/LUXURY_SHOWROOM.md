@@ -1,6 +1,6 @@
 # The Vault: a luxury showroom
 
-**Candidate implementation · 2026-10-18.** The Vault is an independent showroom near Stanford with six cars and motorcycles priced as long-term goals. The candidate branch includes the showroom, persistent wallet, purchase and collection flow, and achievements. Local game and recovery checks are recorded in [VERIFICATION.md](VERIFICATION.md); the release gate remains closed pending the combined driving and wallet performance test.
+**Implementation · 2026-10-18.** The Vault is an independent showroom near Stanford with six cars and motorcycles priced as long-term goals. The showroom includes a persistent wallet, purchase and collection flow, and achievements. Game, recovery and performance checks are recorded in [VERIFICATION.md](VERIFICATION.md).
 
 The original low-poly models are integrated through `src/luxury-models.ts` and `src/vehicles.ts`. Motorcycles have separate front and rear wheels and a rider, with visual steering, lean and cockpit positioning. The showroom uses an on-demand model preview. [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) describes the wallet design.
 
@@ -43,7 +43,7 @@ Show all six model-specific goals in Awards so that a player can pick a favorite
 | Revuelto / Chiron / Tourbillon | $60k / $100k / $150k |
 | Own 2 / 4 / 6 distinct luxury models | $50k / $100k / $250k |
 
-The transaction design pays a purchase's awards together; achievement presentation may announce them separately. Awards raise current cash and can reopen levels. They are intended to count once toward eligible Starship earnings without event multipliers; end-to-end accounting remains to be verified. A first-time Temerario buyer with $3m would spend it, receive the $40k model award plus the $25k first-purchase award, and finish with $65k at level 2. The car stays owned after the level drop. This example assumes no other unclaimed award fires.
+The transaction design pays a purchase's awards together; achievement presentation may announce them separately. Awards raise current cash and can reopen levels. They count once toward eligible Starship earnings. Event multipliers remain planned. The income integration checks the first Ducati purchase and replay through the global counter. A first-time Temerario buyer with $3m would spend it, receive the $40k model award plus the $25k first-purchase award, and finish with $65k at level 2. The car stays owned after the level drop. This example assumes no other unclaimed award fires.
 
 ## Manufacturer references and model scope
 
@@ -60,7 +60,7 @@ The models should be original game geometry, identifiable from the real vehicles
 
 Car widths exclude mirrors. The Tourbillon launch page's specifications were visible in search but its direct page could not be opened during this research; verify them again when implementing. The Ducati sheet supplies wheelbase but not an overall envelope; any game envelope needs an explicit estimate.
 
-The integrated bikes use two wheel groups, a rider and a driver seat. The renderer hides the rider when unoccupied, steers the front wheel and applies visual lean when grounded; driving and collision behavior remain arcade simulation. Preserve the 26 existing vehicle IDs and their parked, traffic, takeover and driving coverage. Game-world visual and handling verification remains pending.
+The integrated bikes use two wheel groups, a rider and a driver seat. The renderer hides the rider when unoccupied, steers the front wheel and applies visual lean when grounded; driving and collision behavior remain arcade simulation. Preserve the 26 existing vehicle IDs and their parked, traffic, takeover and driving coverage. Local game checks covered driving and collection; see [VERIFICATION.md](VERIFICATION.md) for the specific models and devices tested.
 
 ## Remaining verification
 
