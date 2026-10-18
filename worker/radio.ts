@@ -8,6 +8,7 @@ const STATIONS = {
 
 const MAX_FEED_BYTES = 32 * 1024 * 1024;
 const cacheHeaders = { 'Cache-Control': 'public, max-age=3600', 'Content-Type': 'application/json; charset=utf-8' };
+const responseHeaders = { ...cacheHeaders, 'Cache-Control':'no-store' };
 type Episode = RadioEpisode;
 
 function validUrl(value: string, hostname: string): string {
@@ -29,7 +30,7 @@ export async function radioFeed(request: Request, ctx: ExecutionContext): Promis
   if (cached) {
     const { episodes } = await cached.json<{ episodes:Episode[] }>();
     const now = Date.now();
-    return Response.json({ episodes:episodes.filter(e => isRecentRadioEpisode(e.publishedAt, now)) }, { headers:cacheHeaders });
+    return Response.json({ episodes:episodes.filter(e => isRecentRadioEpisode(e.publishedAt, now)), serverNow:now }, { headers:responseHeaders });
   }
   try {
     const source = await fetch(config.feed, { signal: AbortSignal.timeout(15000) });
@@ -66,7 +67,7 @@ export async function radioFeed(request: Request, ctx: ExecutionContext): Promis
     while (!(await reader.read()).done) { /* Consume the parser without retaining the original feed. */ }
     const response = Response.json({ episodes }, { headers: cacheHeaders });
     ctx.waitUntil(cache.put(cacheKey, response.clone()));
-    return response;
+    return Response.json({ episodes, serverNow:now }, { headers:responseHeaders });
   } catch {
     return Response.json({ error: 'This station is temporarily unavailable. Please try again.' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
   }

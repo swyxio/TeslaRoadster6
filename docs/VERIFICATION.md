@@ -2,10 +2,10 @@
 
 ## Recent podcast radio and loaded-build label · 0.0.22 candidate / protocol v42 · 2026-10-18 Pacific
 
-- After merging deployed `82c37f1` (PR #75), the isolated candidate passed all 852 tests and `pnpm build`, with the existing large-chunk warning. The radio checks cover two-calendar-month boundaries, month-end/leap-year clamping, missing/future dates, cached shuffle expiry, delayed Play and existing playback/race behavior.
+- After merging deployed `82c37f1` (PR #75), the isolated candidate passed all 853 tests and `pnpm build`, with the existing large-chunk warning. The radio checks cover two-calendar-month boundaries, month-end/leap-year clamping, missing/future dates, cached shuffle expiry, delayed Play, an incorrect device clock and existing playback/race behavior. The fake media element queues pause events like a browser; the empty-catalog explanation survives that delayed event.
 - The real RSS integration against isolated local Wrangler returned 16 Latent Space and 11 ThursdAI episodes, all with publication timestamps inside the rolling window and valid HTTPS stream/page links; unknown station and method rejection checks passed. This checks metadata/parser behavior, not audible browser playback or production availability.
 - Chrome showed `Tesland · v0.0.22 Alpha` in the title and the matching changelog badge in the game header at desktop, 390×844 portrait and 844×390 landscape sizes. Both podcast station selections loaded an episode and a Ready state. Sound settings opened with keyboard activation after two automated clicks produced no visible change; this is not evidence of physical touch behavior. No physical device or audible playback was tested. The existing large mission panel remains crowded on narrow screens.
-- The title and badge use the `CURRENT_RELEASE` bundled in the loaded JavaScript, so an older tab cannot claim a newer server build. Local build assets are `index-Ixj3kscV.js` and `index-YyCGTYub.css`. No simulation, room-capacity or frame-rate measurement was made for this metadata/UI change.
+- The title and badge use the `CURRENT_RELEASE` bundled in the loaded JavaScript, so an older tab cannot claim a newer server build. No simulation, room-capacity or frame-rate measurement was made for this metadata/UI change.
 - These checks precede deployment; production verification belongs to the release record on PR #79. No production room or saved identity was touched by these checks.
 
 

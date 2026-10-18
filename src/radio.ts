@@ -17,7 +17,7 @@ export class Radio {
   loading = false;
   private media = new Audio();
   private catalogs = new Map<PodcastStation, Episode[]>();
-  private fetchedAt = new Map<PodcastStation, number>();
+  private clocks = new Map<PodcastStation, { serverNow:number; receivedAt:number }>();
   private remaining = new Map<PodcastStation, Episode[]>();
   private generation = 0;
   private resumeOnVisible = false;
@@ -27,7 +27,7 @@ export class Radio {
     if (this.station !== 'chiptune') this.status = 'Choose Play for a random episode from the last two months.';
     this.media.preload = 'none';
     this.media.addEventListener('playing', () => { this.status = 'Playing'; this.changed(); });
-    this.media.addEventListener('pause', () => { if (this.station !== 'chiptune' && this.media.paused && !this.media.ended) this.status = 'Paused'; this.changed(); });
+    this.media.addEventListener('pause', () => { if (this.status === 'Playing' && this.media.paused && !this.media.ended) this.status = 'Paused'; this.changed(); });
     this.media.addEventListener('ended', () => { void this.next(true); });
     this.media.addEventListener('error', () => { if (this.episode && this.station !== 'chiptune') { this.status = 'Stream unavailable. Try another episode.'; this.changed(); } });
   }
@@ -52,19 +52,19 @@ export class Radio {
     this.loading = true; this.status = 'Loading episodes…'; this.changed();
     try {
       let episodes = this.catalogs.get(station);
-      if (!episodes || Date.now() - (this.fetchedAt.get(station) ?? 0) >= CATALOG_TTL_MS) {
-        const response = await fetch(`/api/radio/${station}?format=${RADIO_CATALOG_VERSION}`, { signal: AbortSignal.timeout(20000) });
+      if (!episodes || this.catalogAge(station) >= CATALOG_TTL_MS) {
+        const response = await fetch(`/api/radio/${station}?format=${RADIO_CATALOG_VERSION}`, { cache:'no-store', signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error('Feed unavailable');
-        const data = await response.json() as { episodes?: Episode[] };
+        const data = await response.json() as { episodes?: Episode[]; serverNow:number };
         episodes = data.episodes?.filter(e => typeof e.title === 'string' && typeof e.audio === 'string' && e.audio.startsWith('https://'));
-        if (!episodes) throw new Error('Invalid catalog');
+        if (!episodes || !Number.isFinite(data.serverNow)) throw new Error('Invalid catalog');
         if (generation !== this.generation) return;
         this.catalogs.set(station, episodes);
-        this.fetchedAt.set(station, Date.now());
+        this.clocks.set(station, { serverNow:data.serverNow, receivedAt:performance.now() });
         this.remaining.delete(station);
       }
       if (generation !== this.generation) return;
-      episodes = episodes.filter(e => isRecentRadioEpisode(e.publishedAt, Date.now()));
+      episodes = episodes.filter(e => isRecentRadioEpisode(e.publishedAt, this.catalogNow(station)));
       if (!episodes.length) { this.episode = null; this.status = NO_RECENT_EPISODES; return; }
       this.episode = this.draw(station, episodes);
       this.status = 'Ready — press Play to listen.';
@@ -73,6 +73,13 @@ export class Radio {
     } finally {
       if (generation === this.generation) { this.loading = false; this.changed(); }
     }
+  }
+  private catalogAge(station:PodcastStation):number {
+    const clock=this.clocks.get(station);
+    return clock ? Math.max(0,performance.now()-clock.receivedAt) : Infinity;
+  }
+  private catalogNow(station:PodcastStation):number {
+    return (this.clocks.get(station)?.serverNow ?? NaN)+this.catalogAge(station);
   }
   private draw(station: PodcastStation, episodes: Episode[]): Episode {
     const eligible = new Set(episodes);
@@ -86,7 +93,7 @@ export class Radio {
   async play(): Promise<void> {
     if (this.station === 'chiptune') return;
     const generation = this.generation;
-    if (this.episode && !isRecentRadioEpisode(this.episode.publishedAt, Date.now())) {
+    if (this.episode && !isRecentRadioEpisode(this.episode.publishedAt, this.catalogNow(this.station))) {
       this.media.pause(); this.media.removeAttribute('src'); this.episode = null;
     }
     if (!this.episode) await this.prepare();
@@ -100,8 +107,8 @@ export class Radio {
     if (this.station === 'chiptune') return;
     const station = this.station, generation = ++this.generation;
     this.media.pause(); this.media.removeAttribute('src');
-    const episodes = this.catalogs.get(station)?.filter(e => isRecentRadioEpisode(e.publishedAt, Date.now()));
-    if (!episodes || Date.now() - (this.fetchedAt.get(station) ?? 0) >= CATALOG_TTL_MS) { this.episode = null; this.loading = false; await this.prepare(); }
+    const episodes = this.catalogs.get(station)?.filter(e => isRecentRadioEpisode(e.publishedAt, this.catalogNow(station)));
+    if (!episodes || this.catalogAge(station) >= CATALOG_TTL_MS) { this.episode = null; this.loading = false; await this.prepare(); }
     else if (!episodes.length) { this.episode = null; this.status = NO_RECENT_EPISODES; this.changed(); }
     else { this.episode = this.draw(station, episodes); this.status = 'Ready — press Play to listen.'; this.changed(); }
     if (autoplay && generation === this.generation) await this.play();
