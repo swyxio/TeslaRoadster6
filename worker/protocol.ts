@@ -1,5 +1,6 @@
 import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
+import { normalizeName } from './global-chat-core';
 export type ClientMessage = { type: 'input'; input: Input } | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
@@ -18,8 +19,7 @@ export function parseMessage(raw: string): ClientMessage | null {
   if(value.type==='selectVehicle' && typeof value.kind==='string' && Object.hasOwn(VEHICLES,value.kind))return {type:'selectVehicle',kind:value.kind as VehicleId};
   if (value.type === 'interact' || value.type === 'reset' || value.type === 'autopilot' || value.type === 'dome') return { type: value.type };
   if (value.type === 'name' && typeof value.name === 'string') {
-    const name = value.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24);
-    return name ? { type: 'name', name } : null;
+    return { type: 'name', name: normalizeName(value.name) };
   }
   return null;
 }

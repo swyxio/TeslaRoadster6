@@ -2,8 +2,12 @@ import { DurableObject } from 'cloudflare:workers';
 import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { snapshotFor } from './snapshot';
+import { GlobalChat } from './global-chat';
+import { chooseAvailableName } from './global-chat-core';
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; MAX_PLAYERS?: string };
+export { GlobalChat };
+
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
 type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number };
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
@@ -12,13 +16,15 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (url.pathname === '/api/health') return Response.json({ ok: true, version: PROTOCOL_VERSION, capacity: roomCapacity(env.MAX_PLAYERS) });
     const slug = roomSlug(url.pathname);
-    if (!slug) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
+    const chat = url.pathname === '/api/chat';
+    if (!slug && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
     if (request.method !== 'GET') return reply('GET required', 405);
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return reply('WebSocket upgrade required', 426);
     const origin = request.headers.get('Origin');
     // Non-browser clients may omit Origin. This is a public sandbox, not authentication.
     if (origin && origin !== url.origin) return reply('Cross-origin connections are not allowed', 403);
-    return env.ROOMS.get(env.ROOMS.idFromName(slug)).fetch(request);
+    if (chat) return env.CHAT.get(env.CHAT.idFromName('global')).fetch(request);
+    return env.ROOMS.get(env.ROOMS.idFromName(slug!)).fetch(request);
   },
 } satisfies ExportedHandler<Env>;
 
@@ -40,7 +46,7 @@ export class GameRoom extends DurableObject<Env> {
     const now = Date.now();
     server.accept();
     this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0 });
-    addPlayer(this.world, id, `Driver ${this.sessions.size}`);
+    addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
     server.addEventListener('message', event => this.onMessage(server, event.data));
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
@@ -63,7 +69,7 @@ export class GameRoom extends DurableObject<Env> {
     if (message.type === 'input') { this.inputs.set(session.id, message.input); session.lastInput = now; return; }
     if (message.type === 'name') {
       const player = this.world.players.find(p => p.id === session.id);
-      if(player) player.name=message.name;
+      if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
       return;
     }
     if (now - session.lastAction < 400) return;

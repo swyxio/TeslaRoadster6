@@ -10,13 +10,16 @@ export class Session {
   private accumulator = 0;
   private sendTime = 0;
   private lastState = 0;
+  private name = 'Driver';
   error = '';
   constructor() { addPlayer(this.world, this.id, 'You'); }
-  solo(kind:VehicleId='roadster') {
+  solo(kind:VehicleId='roadster',name=this.name) {
+    this.name = name;
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = '';
-    this.world = createWorld(); addPlayer(this.world, this.id, 'You'); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
+    this.world = createWorld(); addPlayer(this.world, this.id, this.name); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
   join(room: string, name: string,kind:VehicleId='roadster') {
+    this.name = name;
     this.disconnect(); this.status = 'connecting'; this.error = ''; this.id = ''; this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
@@ -27,7 +30,7 @@ export class Session {
         if (message.type === 'welcome') {
           if (message.version !== PROTOCOL_VERSION) { this.error = 'Game updated. Reload to reconnect.'; socket.close(); return; }
           this.id = message.id; this.capacity = message.capacity; this.lastState = performance.now();
-          socket.send(JSON.stringify({type:'name',name}));
+          socket.send(JSON.stringify({type:'name',name:this.name}));
           if(kind!=='roadster')socket.send(JSON.stringify({type:'selectVehicle',kind}));
         }
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
@@ -47,6 +50,13 @@ export class Session {
     }
   }
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
+  setName(name:string) {
+    this.name = name;
+    if (this.status === 'solo') {
+      const player = this.world.players.find(p => p.id === this.id);
+      if (player) player.name = name;
+    } else if (this.id) this.send({type:'name',name});
+  }
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
     if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:type==='dome'?travelDome:resetPlayer)(this.world, this.id);
     else this.send({type});

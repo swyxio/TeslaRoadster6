@@ -1,5 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+## Global chat and saved drivers · local · 2026-10-17 Pacific
+
+- `pnpm test` passed 152/152 tests and `pnpm build` passed; the existing Vite large-chunk warning remains.
+- Local Wrangler integration passed for global message delivery, case-insensitive name collisions in chat and rooms, private recovery codes, repeated save, recovery, invalid-code rejection and cross-origin rejection. A separate isolated Wrangler restart test restored the same saved ID and name and confirmed the chat history was gone. The existing two-client room integration also passed. These are not load tests.
+- Chrome desktop solo showed a chosen name, sent a local chat message, generated a recovery code and displayed an invalid-code error. Chrome emulation at 390×844 and 844×390 showed chat and the scrollable recovery dialog; keyboard activation worked. Emulated pointer/touch activation did not register for the chat button, so touch activation and physical devices remain unverified. No browser console errors were observed.
+
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
