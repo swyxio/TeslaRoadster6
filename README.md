@@ -18,6 +18,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
+**Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
+
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
 **Proposal:** The [larger Rocket Island and parking playgrounds](docs/ROCKET_ISLAND_PLAN.md) are planned; the Rocket Dome is playable now.
@@ -74,6 +76,7 @@ shared/game.ts      Pure authoritative simulation and world schema
 shared/map.ts       Shared land, bridges, road and collision geometry
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/upgrades.ts  Fictional shop locations, prices and eligibility
+shared/sky-currents.ts  Shared sky-lane and thermal volumes
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous routes and traffic demand
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
@@ -90,6 +93,7 @@ src/controls.ts    Keyboard and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
 src/scene.ts       Three.js world and camera
+src/sky-currents.ts  Animated sky-lane and thermal markers
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
