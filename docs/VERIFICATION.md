@@ -2,9 +2,23 @@
 
 ## Gamepad and keyboard bindings · 2026-10-18 Pacific
 
+- After integrating sky currents, `pnpm test` passed 182 tests and `pnpm build` passed; the controls and network protocol were unchanged by this integration.
+
 - `pnpm test` passed 177 tests on rerun and `pnpm build` passed; one prior run failed an unrelated timing-sensitive global-chat test while the build was running concurrently. Vite's existing chunk-size warning remains. Unit tests cover simulated standard-controller analog steering, braking/reverse, flight, button edges, disconnect and safe resume, keyboard remapping, storage errors and touch independence. No physical controller was tested.
 - Chrome desktop: rebound forward from W to I, confirmed focus returned to its binding, and drove a solo Roadster to 82 km/h with I. Chrome emulation at 390×844 portrait and 844×390 landscape showed the scrollable settings dialog. Mobile interaction through the emulated browser targeted a different button, so touch activation and physical devices remain unverified.
 
+## Sky currents with flight controls and global chat · protocol v16 · 2026-10-18 Pacific
+
+- After integrating flight-control and tank upgrades, `pnpm test` passed 178 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. The sky tests additionally verify that the same air units refill tanks of different capacities.
+- Local Wrangler two-client room integration passed, including a double jump into City Glide and server-applied speed and air refill. Local global-chat and isolated restart integration also passed. These are functional checks, not concurrency or production-load tests.
+- Staging at commit `5851eca` returned protocol v16, served the locally built assets, and passed the two-client room integration, including sky-lane refill and acceleration. This is not a load test.
+- Chrome desktop solo reached City Glide with two timed E jumps, showing its speed and air indicator while police pursued. Chrome emulation at 390×844 portrait and 844×390 landscape showed the active lane indicator and updated touch controls. A temporary, removed local fixture placed the Roadster beside Transamerica: one E jump entered the thermal, rose to 19 m and refilled air. Thermal touch jumping was also independently checked before the flight-control integration below. No physical phone, subjective comfort or frame rate was tested.
+
+## Sky currents with global chat · before flight-control integration · protocol v14 · 2026-10-18 Pacific
+
+- After integrating the global-chat changes, `pnpm test` passed 168 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Shared simulation tests cover directional acceleration, free air, tank cap, all three thermal locations, jump reachability, vehicle eligibility, boundaries and determinism.
+- Local Wrangler two-client room integration observed a double jump enter City Glide and verified the server-applied speed and air refill in the second client's snapshots. Local global-chat and isolated restart integration also passed. These are functional checks, not a concurrency or production-load test.
+- Chrome desktop in the combined build reached City Glide by double jump and the car accelerated across the Bay without holding boost. A separate temporary local-only fixture placed the car by Transamerica: one jump entered the thermal, rose above the skyline and refilled the tank; the fixture was removed before the final build. Chrome 390×844 portrait emulation used the touch Jump control to enter that thermal, and 844×390 landscape and portrait emulation showed the combined sky-lane HUD and controls. Invalid room validation was visible, and the final local browser session reported no console errors. No physical phone, subjective comfort or frame rate was tested.
 
 ## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
 
