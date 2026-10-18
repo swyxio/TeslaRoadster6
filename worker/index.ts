@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -74,6 +74,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     if (now - session.lastAction < 400) {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
       return;
     }
     session.lastAction = now;
@@ -85,6 +86,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
+    if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:subscribeOta(this.world,session.id,message.enabled)}));
   }
 
   private tick(): void {

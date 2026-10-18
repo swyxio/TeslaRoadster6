@@ -174,7 +174,8 @@ export function updateParking(state:ParkingState,lots:readonly ParkingLot[],worl
         claimed.add(stall.id);round.claimedStallIds.push(stall.id);
       }
     }
-    if(round.entrants.every(entrant=>entrant.finishedAt!==null))results(round,world.time);
+    if(round.entrants.every(entrant=>entrant.finishedAt!==null)||
+      (round.mode==='queue'&&lot.stalls.every(stall=>round.claimedStallIds.includes(stall.id))))results(round,world.time);
   }
   state.rounds=state.rounds.filter(round=>round.entrants.length>0&&(round.phase!=='results'||world.time<round.endsAt));
 }

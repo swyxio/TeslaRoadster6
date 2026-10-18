@@ -39,6 +39,7 @@ export class GameScene {
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
+  private parkingClaims = new Map<string,T.Group>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
   private shopLabels:T.Sprite[]=[];
@@ -132,6 +133,12 @@ export class GameScene {
         box(scene,stall.x,.19,stall.z-stall.length/2,stall.width,.04,.12,0xf4ebcb);
         const ring=new T.Mesh(new T.RingGeometry(2.6,3,32),new T.MeshBasicMaterial({color:0xffc46a,side:T.DoubleSide,transparent:true,opacity:.9}));
         ring.rotation.x=-Math.PI/2;ring.position.set(stall.x,.23,stall.z);ring.visible=false;scene.add(ring);this.parkingTargets.set(stall.id,ring);
+        const claim=new T.Group();claim.position.set(stall.x,stall.y+.25,stall.z);claim.rotation.y=stall.yaw;claim.visible=false;
+        for(const side of [-1,1]){
+          const bar=box(claim,0,0,0,.45,.06,Math.hypot(stall.width,stall.length)*.8,0xef6255);
+          bar.rotation.y=side*Math.atan2(stall.width,stall.length);
+        }
+        scene.add(claim);this.parkingClaims.set(stall.id,claim);
       }
       const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
     }
@@ -214,8 +221,10 @@ export class GameScene {
         sign.texture.needsUpdate=true;
       }
     }
-    const parkingTarget=world.parking.rounds.flatMap(round=>round.entrants).find(entrant=>entrant.playerId===playerId)?.targetId;
+    const parkingTarget=world.parking.rounds.filter(round=>round.mode==='park').flatMap(round=>round.entrants).find(entrant=>entrant.playerId===playerId)?.targetId;
     for(const [id,marker] of this.parkingTargets)marker.visible=id===parkingTarget;
+    const claimedStalls=new Set(world.parking.rounds.filter(round=>round.mode==='queue').flatMap(round=>round.claimedStallIds));
+    for(const [id,marker] of this.parkingClaims)marker.visible=claimedStalls.has(id);
     const racing=playerRace(world.races,playerId),race=racing?.round,entrant=racing?.entrant;
     const course=RACE_COURSES.find(item=>item.id===race?.courseId);
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';

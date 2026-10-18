@@ -1,4 +1,4 @@
-# Implementation contracts · v14
+# Implementation contracts · v16
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -27,17 +27,17 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), position, orientation, linear and angular velocity, speed, health/air, per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), stunt and arc attachment, `inDome`, `domeS`, support identity, authoritative thruster-effect bitmask, driver, owner, pushX/pushZ, steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, ferry, parking rounds, race rounds, time and authoritative `soccer` (ball position/velocity, scores and goal/win phase). Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
-Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome` and `buyUpgrade`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
+Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade` and `subscribeOta`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v14
+## Wire protocol v16
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:14,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:16,capacity:number}`.
 
 Client messages:
 
@@ -49,6 +49,7 @@ Client messages:
 {"type":"dome"}
 {"type":"selectVehicle","kind":"model-3"}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
+{"type":"ota","enabled":true,"requestId":2}
 {"type":"name","name":"Driver"}
 {"type":"parking","action":"park"}
 {"type":"parking","action":"queue"}
@@ -62,16 +63,17 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:14, capacity:number}
+{type:"welcome", id:string, version:16, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
+{type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 ```
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
-Upgrade requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. Solo mode returns the same result from the shared simulation.
+Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. Solo mode returns the same result from the shared simulation. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
 Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Shared room state is memory-only. Start timer with first connection; stop and reset when empty. No persistent promise of garages or game progress. Do not replace with a global room object or client-authoritative coordinates.
 
@@ -87,7 +89,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `parkingAction`, `raceAction`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -142,7 +144,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 ## Shops and upgrades contract
 
-`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay before sending `upgrade` with one of `rocket|economy|motor|armor|service`. `buyUpgrade` independently validates driver, location, motion, cash, prerequisites and duplicates, and deducts the player’s session cash. The rocket kit grants any vehicle the flight controls and a full tank; economy reduces flight air use by 25%, motor changes acceleration and road speed, armor halves impact damage, and service repairs/refills. Shop state belongs to each vehicle, not the player; an old personal car is removed on fleet selection and abandoned ambient traffic may be reclaimed. A room reset loses all upgrades and money. `rocket` pickups in the city, on the island and at parking playgrounds grant the same session-long kit without payment and respawn in 20 seconds. Shared simulation and room snapshots own all state; the UI and renderer must not apply purchases themselves. See [UPGRADES.md](UPGRADES.md).
+`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay or have an active OTA subscription before sending `upgrade` with one of `rocket|economy|tank|motor|armor|service`. `buyUpgrade` independently validates driver, location, motion, cash, prerequisites and duplicates, and deducts the player’s session cash. The rocket kit grants any vehicle the flight controls and a full tank; economy reduces flight air use by 25%; tank upgrades double capacity, refill, and cost $30/$60/$120/$240 to reach levels 2/3/4/5; motor changes acceleration and road speed, armor halves impact damage, and service repairs/refills. Shop state belongs to each vehicle, not the player; an old personal car is removed on fleet selection and abandoned ambient traffic may be reclaimed. A room reset loses all upgrades and money. `rocket` pickups in the city, on the island and at parking playgrounds grant the same session-long kit without payment and respawn in 20 seconds. Shared simulation and room snapshots own all state; the UI and renderer must not apply purchases themselves. See [UPGRADES.md](UPGRADES.md).
 
 ## Delivery and police contract
 

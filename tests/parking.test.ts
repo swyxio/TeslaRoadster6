@@ -134,6 +134,26 @@ test('claimed queue stalls stay claimed after their winner leaves or disconnects
   }
 });
 
+test('a queue ends when all stalls are claimed even if entrants are still waiting',()=>{
+  for(const winnerLeaves of [false,true]){
+    const w=world(),state=createParking(),cars=['a','b','c','d','e','f'].map(id=>add(w,id,'roadster',-30));
+    for(const id of ['a','b','c','d','e','f'])assert.equal(joinParking(state,lot,w,id,'queue'),true);
+    assert.equal(startQueue(state,lot.id,w,'a'),true);
+    const round=state.rounds[0];
+    for(let i=0;i<lot.stalls.length;i++){
+      place(cars[i],lot.stalls[i]);tick(state,w);
+      assert.deepEqual(round.claimedStallIds,lot.stalls.slice(0,i+1).map(stall=>stall.id));
+      assert.equal(round.phase,i===lot.stalls.length-1?'results':'active');
+      if(i===0&&winnerLeaves){cars[i].x=300;tick(state,w);}
+    }
+    assert.deepEqual(round.entrants.filter(entrant=>entrant.finishedAt===null).map(entrant=>entrant.playerId),['e','f']);
+    assert.equal(round.endsAt,w.time+PARKING_RESULTS_DURATION);
+    tick(state,w,PARKING_RESULTS_DURATION);assert.equal(state.rounds.length,0);
+    assert.equal(joinParking(state,lot,w,'e','queue'),true);
+    assert.deepEqual(state.rounds[0].claimedStallIds,[],'a new round has no claimed stalls');
+  }
+});
+
 test('nonparticipants and unfinished cars block a stall, while a jumped-in car can land and claim',()=>{
   const w=world(),state=createParking(),car=add(w,'p','roadster',-30);
   assert.equal(joinParking(state,lot,w,'p','queue'),true);assert.equal(startQueue(state,lot.id,w,'p'),true);
