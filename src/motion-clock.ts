@@ -6,12 +6,11 @@ export class MotionClock {
   private presentedTick:number|null=null;
   private presentedAt=0;
   private presentedRate=1/50;
-  private contactPriority=false;
   private remoteTick:number|null=null;
   private remoteAt=0;
   private remoteRate=1/50;
 
-  reset():void {this.observations=[];this.turnaround=[];this.presentedTick=null;this.presentedAt=0;this.presentedRate=1/50;this.contactPriority=false;this.remoteTick=null;this.remoteAt=0;this.remoteRate=1/50;}
+  reset():void {this.observations=[];this.turnaround=[];this.presentedTick=null;this.presentedAt=0;this.presentedRate=1/50;this.remoteTick=null;this.remoteAt=0;this.remoteRate=1/50;}
 
   observe(tick:number,at:number):boolean {
     if(!Number.isSafeInteger(tick)||tick<0||!Number.isFinite(at))return false;
@@ -29,8 +28,6 @@ export class MotionClock {
     if(!Number.isFinite(ms)||ms<0)return;
     this.turnaround.push(ms);if(this.turnaround.length>20)this.turnaround.shift();
   }
-
-  prioritizeContacts(nearby:boolean):void {this.contactPriority=nearby;}
 
   stale(now:number):boolean {const last=this.observations.at(-1);return !last||now-last.at>500;}
 
@@ -70,11 +67,7 @@ export class MotionClock {
     else if(now>this.presentedAt){
       const elapsed=Math.min(100,now-this.presentedAt),rate=this.rate();
       const error=candidate-this.presentedTick;
-      // Away from other cars, recover lead gradually so delayed acknowledgements
-      // do not make the displayed car surge. Near contacts, converge quickly
-      // to keep the replay and peers on the same timeline.
-      const low=this.contactPriority?.5:.98,high=this.contactPriority?1.5:1.02;
-      const desired=rate*Math.max(low,Math.min(high,1+error*.3));
+      const desired=rate*Math.max(.5,Math.min(1.5,1+error*.3));
       this.presentedRate+=(desired-this.presentedRate)*(1-Math.exp(-elapsed/200));
       this.presentedTick+=this.presentedRate*elapsed;this.presentedAt=now;
     }

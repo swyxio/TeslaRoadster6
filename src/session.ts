@@ -147,9 +147,6 @@ export class Session {
           this.droppedInputEdges+=queued-this.edgeQueue.length;
           if(message.control.revision!==this.controlRevision){this.controlRevision=message.control.revision;this.lastTargetTick=0;this.lastSentInput=null;}
           this.world = message.world;this.snapshotVersion++; this.status = 'online'; this.lastState = now; clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
-          const controlled=this.world.entities.find(entity=>entity.driver===this.id);
-          this.clock.prioritizeContacts(!controlled||this.world.entities.some(entity=>entity.id!==controlled.id&&
-            Math.hypot(entity.x-controlled.x,entity.z-controlled.z)<60));
           if(this.walletStatus==='syncing'&&this.snapshotVersion>this.walletSnapshot){
             this.walletStatus='ready';clearTimeout(this.walletTimeout);this.walletTimeout=undefined;
             // Discard presses from before/during recovery; start at the server's
