@@ -9,7 +9,7 @@ Over a few hours we worked on the Three.js scene, the shared room and the way th
 
 The result is a better local prediction and correction system, less work for distant vehicles, and a smaller provisional room limit.
 
-## The frame rate was only one clock
+## The frame rate was only one clock {#the-frame-rate-was-only-one-clock}
 
 Tesland is a browser game on Cloudflare Workers. Each multiplayer room runs a shared simulation in a Durable Object. The browser sends steering and throttle over a WebSocket; the room simulates the cars and sends back snapshots of the world. A *snapshot* is a picture of the game state at a particular simulation step: positions, velocities and other information the browser needs.
 
@@ -26,7 +26,7 @@ In one early, unrepeated diagnostic, turning drawing off reportedly reduced the 
 
 The old client already tried to predict the driver's car, but its model did not match the room's clock closely enough. It replayed a full 50 ms of motion for each pending input submission, while the room could use only the latest controls for a tick. For example, three pending submissions could make the client replay 150 ms of motion when the room advanced only 50 ms. It also switched prediction off in common situations, including near traffic and during flight. Correcting the camera helped some transitions; it could not make those two timelines agree.
 
-## Predict the drive, then reconcile it
+## Predict the drive, then reconcile it {#predict-the-drive-then-reconcile-it}
 
 Suppose you press right while driving at 100 km/h. You should see the car begin turning without waiting for a round trip to the server. But the room still needs to decide what happened if you hit another car or finish a delivery.
 
@@ -45,7 +45,7 @@ The room remains authoritative for collisions, rewards and money. Prediction is 
 
 Glenn Fiedler's [explanation of client-side prediction](https://gafferongames.com/post/networked_physics_2004/) describes the same basic exchange: predict locally, accept the server's correction and replay what has happened since.
 
-## The other cars have their own timing problem
+## The other cars have their own timing problem {#the-other-cars-have-their-own-timing-problem}
 
 We know what the local driver just pressed. We do not know what another human will press next. For other cars, the browser keeps a short history of snapshots and normally draws a position between two known samples. This *interpolation* adds some visual delay, but makes movement less dependent on the exact arrival time of each message. Fiedler's [snapshot-interpolation walkthrough](https://www.gafferongames.com/post/snapshot_interpolation/) shows the same tradeoff.
 
@@ -53,7 +53,7 @@ Nearby cars complicate this. If my predicted car is moving ahead while a car bes
 
 The guardrails matter. We had to keep a car on the shared ground height when smoothing over a hill, and keep ferry passengers aligned with the moving deck. A review also caught a recovery case where the local car returned to the latest room state while a nearby car was still drawn from an older one. The fix puts both on the confirmed frame in that case. These checks reduce bad guesses during collisions.
 
-## Two ways to see the drive
+## Two ways to see the drive {#two-ways-to-see-the-drive}
 
 We recorded a manual drive in the older preview and another in the newer build. Both start on the same street, then take different routes.
 
@@ -81,7 +81,7 @@ In that fixture, the largest modeled display step between samples fell from abou
 
 An 800 ms interruption in incoming updates still produced a roughly 15.7 m recovery step in a separate synthetic test. Unexpected input from another driver or a genuine relocation can also cause a visible correction.
 
-## Spend less on what is far away
+## Spend less on what is far away {#spend-less-on-what-is-far-away}
 
 The timing fix was only part of the work. The scene still had to draw the Bay and its cars.
 
@@ -91,7 +91,7 @@ We also reduced the default background fleet from 67 vehicles to 22. A distant n
 
 Room snapshots already filter distant ambient entities, but retain players and occupied cars. The room still simulates the shared world and decides collisions. We chose to spend detail and background traffic where they were most likely to matter for the drive.
 
-## A room limit needs more than a socket count
+## A room limit needs more than a socket count {#a-room-limit-needs-more-than-a-socket-count}
 
 The server has a separate performance budget: it must advance the shared simulation quickly enough for everyone in the room. In a 60-second local run with 64 synthetic clients, the room advanced only 44.2 seconds of simulation. The load generator and server shared a busy machine. We reduced the provisional room cap to eight while gathering better measurements.
 
