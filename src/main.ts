@@ -40,10 +40,10 @@ document.querySelector('#app')!.innerHTML = `
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
- <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="invite">↗ Invite</button><button id="camera">C · Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="keyboard-help"><kbd>W A S D</kbd> drive / pitch / bank <kbd>SPACE</kbd> brake · steer to drift <kbd>J</kbd> jump <kbd>X</kbd> flip <kbd>H</kbd> hover <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>V</kbd> autopilot <kbd>G</kbd> fleet <kbd>L</kbd> scores <kbd>T</kbd> awards</div>
+ <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive, reverse, pitch &amp; bank</p><p><kbd>SPACE</kbd> brake · steer while moving to drift</p><p><kbd>J</kbd> jump &nbsp; <kbd>X</kbd> flip &nbsp; <kbd>H</kbd> hover</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / E</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>R</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Flight controls are available in the Roadster Rocket.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyJ" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / VEHICLE COLLECTION</span><h2 id="fleet-title">See other vehicles.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Every model is driving around town and parked nearby. Borrow one, or choose your next ride here.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
@@ -74,7 +74,7 @@ for(const name of ['master','music','effects'] as const){
 }
 $('sound-mute').onclick=()=>{audio.setSettings({...audio.settings,muted:!audio.settings.muted});refreshSoundSettings();};
 $('sound-test').onclick=()=>{void audio.unlock().then(ok=>{if(ok)audio.play('pickup');$('sound-status').textContent=!ok?'Sound is unavailable in this browser.':audio.settings.muted||!audio.settings.master||!audio.settings.effects?'Unmute and raise master and effects volume to hear the test.':'Test played.';});};
-$('sound-button').onclick=()=>{controls.clear();controls.enabled=false;refreshSoundSettings();soundDialog.showModal();};
+$('sound-button').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;refreshSoundSettings();soundDialog.showModal();};
 function closeSound(){soundDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
 $('sound-close').onclick=closeSound;soundDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
 document.addEventListener('visibilitychange',()=>{void audio.visibility(document.hidden);});
@@ -85,9 +85,25 @@ try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
 let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
+let openDrawer: 'actions' | 'controls' | null = null;
+function setDrawer(drawer: 'actions' | 'controls' | null) {
+  openDrawer=drawer;
+  for(const name of ['actions','controls'] as const){
+    const open=drawer===name;
+    $(name==='actions'?'drive-actions':'keyboard-help').hidden=!open;
+    $(name+'-toggle').setAttribute('aria-expanded',String(open));
+  }
+  controls.clear();
+  controls.enabled=!drawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');
+}
+$('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
+$('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
+$('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button'))setDrawer(null);},{capture:true});
+document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
+window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const roomParam = new URLSearchParams(location.search).get('room');
 if (roomParam && /^[a-z0-9][a-z0-9-]{0,31}$/.test(roomParam)) $<HTMLInputElement>('room').value=roomParam;
-function toggleMenu(show: boolean) {menu=show;controls.enabled=!show;controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started);$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
+function toggleMenu(show: boolean) {menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started);$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
@@ -197,6 +213,7 @@ function announceAchievements(){
 }
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
+  setDrawer(null);
   if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;

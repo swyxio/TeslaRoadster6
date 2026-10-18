@@ -57,3 +57,15 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   brake.dispatchEvent(pointer('pointerdown',2));step(world,new Map([['driver',controls.read()]]),.05);
   assert.ok(car.speed<19);brake.dispatchEvent(pointer('pointerup',2));assert.equal(controls.read().brake,false);
 });
+
+test('Tab navigates the HUD and Space activates a focused button instead of braking',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  let buttonFocused=false;
+  fakeWindow.matches=selector=>buttonFocused&&selector==='button,a';fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];
+  Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const key=(code:string)=>{const event=new Event('keydown',{cancelable:true});Object.defineProperty(event,'code',{value:code});return event;};
+  const tab=key('Tab');fakeWindow.dispatchEvent(tab);assert.equal(tab.defaultPrevented,false);
+  buttonFocused=true;const space=key('Space');fakeWindow.dispatchEvent(space);assert.equal(space.defaultPrevented,false);assert.equal(controls.read().brake,false);
+  buttonFocused=false;const brake=key('Space');fakeWindow.dispatchEvent(brake);assert.equal(brake.defaultPrevented,true);assert.equal(controls.read().brake,true);
+});
