@@ -10,6 +10,12 @@ Join → start seated in a Roadster → accelerate → lift above a block → ro
 
 The simulation prioritizes arcade legibility over realism. Ground friction slows an unattended car. Roadster air is a shared boost/lift budget. Space/Lift holds thrust; releasing it allows gravity to land the car. Q/E/touch rolls provide stunts with automatic ground stabilization. A depleted air tank never prevents ordinary driving. Station refills take about3.6seconds from empty, only when grounded and stopped within9m. Pickups provide instant full air or repair with20second respawn. Condition is clamped to5 rather than introducing death before its design exists.
 
+## Delivery loop
+
+Follow the gold marker to a notable restaurant, stop to collect an order, then deliver it to a fictional address. An estimate starts after pickup; beating it adds a bonus and arriving late reduces the fare. The HUD shows current cash and active play time, and Scores compares the current room. Unattended time pauses after a short grace period. Driving and stunts remain available without completing orders.
+
+Roadster flight can shorten a run but nearby police may spot it, pursue and slow the car before issuing a ticket. Escaping their range or accepting a ticket ends a chase. All cash, timing and police behavior run in the shared simulation. Restaurants have no game affiliation, the geography and customers are fictionalized, and cash is not real money. See [DELIVERY.md](DELIVERY.md).
+
 ## Current content
 
 A compressed Bay spans distinct San Francisco and Oakland shores, Yerba Buena Island and Marin. The Bay Bridge crosses water to Oakland; the Golden Gate crosses the strait to Marin. Street grids, waterfront, parks, port cranes and landmark silhouettes are hand-authored, not a surveyed map. Driveable decks and streets are flat at the same height; water is below and off-bridge water landings recover the car to a safe street. See [MAP.md](MAP.md). Four primary-source station identities use artistic coordinates; air refilling and flight are fictional.
@@ -48,7 +54,7 @@ Building collision uses a spatial index. First networking scaling step, when mea
 4. Playful destinations: shared stunt rings, short time trials, small ramps using authoritative terrain geometry.
 5. Only then opt-in combat/respawning or progression.
 
-Avoid adding quests, inventories, currencies, matchmaking services, chat moderation burdens or a broad asset pipeline before the driving loop is satisfying.
+Avoid adding inventories, persistent currencies, matchmaking services, chat moderation burdens or a broad asset pipeline before the delivery and driving loops are satisfying.
 
 ## Poly AV fleet layer
 

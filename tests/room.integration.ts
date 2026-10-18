@@ -23,12 +23,17 @@ function connect() {
 const one = connect(), two = connect();
 try {
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
+  for(const state of [one.state,two.state]){
+    assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'));
+    assert.equal(state.world!.entities.filter(e=>e.police).length,4);
+  }
   const id = one.state.id!;
   const entityId = one.state.world!.players.find(p => p.id === id)!.entityId;
   const initial = one.state.world!.entities.find(e => e.id === entityId)!;
   const origin={x:initial.x,z:initial.z,yaw:initial.yaw};
   for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 1 } })); await delay(50); }
   await eventually(() => {const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&((e.x-origin.x)*-Math.sin(origin.yaw)+(e.z-origin.z)*-Math.cos(origin.yaw)>4);}, 'remote player receives authoritative movement');
+  await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5;},'active delivery time replicated');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));
@@ -39,5 +44,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, remote movement, fleet selection, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, remote movement, delivery state, police, fleet selection, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
 } finally { one.socket.close(); two.socket.close(); }

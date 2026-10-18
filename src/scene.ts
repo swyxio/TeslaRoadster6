@@ -4,6 +4,7 @@ import { VEHICLES } from '../shared/vehicles';
 import { type World } from '../shared/game';
 import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
+import { orderTarget } from '../shared/delivery';
 import { box, material, createVehicle } from './vehicles';
 
 export class GameScene {
@@ -13,6 +14,7 @@ export class GameScene {
   private entities = new Map<string,T.Group>();
   private pickups = new Map<string,T.Mesh>();
   private labels:T.Sprite[]=[];
+  private objective=new T.Group();
   private focus = new T.Vector3(0,1,24);
   private follow = new T.Vector3();
   private cameraReady = false;
@@ -29,6 +31,9 @@ export class GameScene {
     const sun = new T.DirectionalLight(0xffdfb5,2.2); sun.position.set(-100,160,80); this.scene.add(sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
+    const ring=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.25;this.objective.add(ring);
+    const beam=new T.Mesh(new T.CylinderGeometry(.5,1,18,8,1,true),new T.MeshBasicMaterial({color:0xffcf75,transparent:true,opacity:.24,depthWrite:false,side:T.DoubleSide}));beam.position.y=9;this.objective.add(beam);
+    this.scene.add(this.objective);
     const resize = () => { this.renderer.setSize(innerWidth,innerHeight); this.camera.aspect=innerWidth/innerHeight; this.camera.updateProjectionMatrix(); };
     window.addEventListener('resize',resize); resize();
   }
@@ -61,10 +66,17 @@ export class GameScene {
     for(const e of world.entities) {
       let mesh=this.entities.get(e.id);
       if(mesh&&mesh.name!==e.kind){this.scene.remove(mesh);this.entities.delete(e.id);mesh=undefined;}
-      if(!mesh){mesh=createVehicle(e.kind);mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
+      if(!mesh){mesh=createVehicle(e.kind);if(e.police){
+        const h=VEHICLES['model-3'].height;
+        box(mesh,0,h+.05,0,.9,.12,.35,0x1b2c35);
+        const red=box(mesh,-.23,h+.15,0,.4,.15,.28,0xff4b48);red.name='police-red';
+        const blue=box(mesh,.23,h+.15,0,.4,.15,.28,0x3caaff);blue.name='police-blue';
+        for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
+      }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       const yawDelta=Math.atan2(Math.sin(e.yaw-mesh.rotation.y),Math.cos(e.yaw-mesh.rotation.y));mesh.rotation.y+=yawDelta*alpha;mesh.rotation.z=e.roll;
+      const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const jets=mesh.getObjectByName('jets');if(jets)jets.visible=e.kind!=='person'&&VEHICLES[e.kind].airThrusters&&e.y>.5&&(e.driver!==playerId||lift);
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
@@ -75,6 +87,7 @@ export class GameScene {
     }
     const player=world.players.find(p=>p.id===playerId);
     const e=world.entities.find(e=>e.id===player?.entityId);
+    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,0,target.z);}
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e){

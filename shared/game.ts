@@ -4,11 +4,13 @@ import { STATIONS } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
 import { engageAutopilot, routePose, trafficInput } from './traffic';
+import { initialDelivery, updateDelivery, type DeliveryState } from './delivery';
+import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 
-export const PROTOCOL_VERSION=3;
+export const PROTOCOL_VERSION=4;
 export type Input = { throttle:number;steer:number;boost:boolean;lift:boolean;roll:number;brake:boolean };
-export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;roll:number;speed:number;health:number;air:number;driver:string|null;vy:number;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number};
-export type Player = {id:string;name:string;entityId:string};
+export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;roll:number;speed:number;health:number;air:number;driver:string|null;vy:number;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number;police?:PoliceState};
+export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air';active:boolean;readyAt?:number};
 export type World = {entities:Entity[];players:Player[];pickups:Pickup[];time:number};
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,lift:false,roll:0,brake:false};
@@ -29,6 +31,12 @@ export function createWorld():World {
     }
     throw new Error(`No parked space for ${kind}`);
   });
+  for(let i=0;i<4;i++){
+    for(let n=0;n<60;n++){
+      const pose=routePose(i*7+n,60),cop={...makeEntity(`police-${i}`,'model-3',pose.x,pose.z),...pose,npc:true,autopilot:true,police:newPolice()};
+      if(fits(world,cop)){world.entities.push(cop);break;}
+    }
+  }
   return world;
 }
 
@@ -55,7 +63,7 @@ function spawnPosition(world:World,kind:Entity['kind']='roadster'):{x:number;z:n
 export function addPlayer(world:World,id:string,name:string):Player {
   const existing=world.players.find(p=>p.id===id);if(existing)return existing;
   const spawn=spawnPosition(world),car=makeEntity(`ride-${id}`,'roadster',spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
-  const player={id,name:name.slice(0,24),entityId:car.id};world.entities.push(car);world.players.push(player);return player;
+  const player:Player={id,name:name.slice(0,24),entityId:car.id,delivery:initialDelivery()};world.entities.push(car);world.players.push(player);return player;
 }
 function cleanupCars(world:World){world.entities=world.entities.filter(e=>!e.owner||e.driver!==null||world.players.some(p=>p.id===e.owner));}
 function release(e:Entity,world:World){e.driver=null;e.speed=0;e.autopilot=false;if(e.npc){engageAutopilot(e);e.pauseUntil=world.time+2;}}
@@ -68,7 +76,7 @@ export function interact(world:World,playerId:string):void {
   const player=world.players.find(p=>p.id===playerId),e=world.entities.find(e=>e.id===player?.entityId);
   if(!player||!e||e.y>.5||Math.abs(e.speed)>5)return;
   if(e.kind==='person'){
-    const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&other.y<.5&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
+    const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&!other.police&&other.y<.5&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
     if(!car)return;
     car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);
   }else{
@@ -99,10 +107,11 @@ export function resetPlayer(world:World,id:string):void {
 function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;}
 export function step(world:World,inputs:Map<string,Input>,dt:number):void {
   if(!Number.isFinite(dt)||dt<=0)return;dt=Math.min(dt,.05);world.time+=dt;
+  updatePolice(world,dt);
   for(const e of world.entities){
     const manual=e.driver?inputs.get(e.driver)??NEUTRAL:NEUTRAL;
     if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.lift||manual.boost||manual.roll))e.autopilot=false;
-    const input=e.autopilot?trafficInput(e,world):manual;
+    const input=e.police?.targetId?policeInput(e,world):e.autopilot?trafficInput(e,world):manual;
     const person=e.kind==='person',spec=person?null:VEHICLES[e.kind as VehicleId];
     const oldX=e.x,oldZ=e.z,oldY=e.y;
     const boosting=!!spec?.airThrusters&&input.boost&&e.air>0,lifting=!!spec?.airThrusters&&input.lift&&e.air>0;
@@ -146,6 +155,10 @@ export function step(world:World,inputs:Map<string,Input>,dt:number):void {
     const bvx=-Math.sin(b.yaw)*b.speed+b.pushX,bvz=-Math.cos(b.yaw)*b.speed+b.pushZ;
     const closing=(bvx-avx)*hit.nx+(bvz-avz)*hit.nz;
     if(closing<0){const impulse=-1.25*closing/(1/ma+1/mb);applyImpulse(a,-hit.nx*impulse/ma,-hit.nz*impulse/ma);applyImpulse(b,hit.nx*impulse/mb,hit.nz*impulse/mb);const damage=Math.max(0,-closing-5)*.35;a.health=Math.max(5,a.health-damage*mb/total);b.health=Math.max(5,b.health-damage*ma/total);}
+  }
+  for(const player of world.players){
+    const entity=world.entities.find(e=>e.id===player.entityId);
+    if(entity)updateDelivery(world,player,entity,inputs.get(player.id)??NEUTRAL,dt);
   }
   for(const pickup of world.pickups){
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;

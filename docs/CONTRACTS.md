@@ -1,4 +1,4 @@
-# Implementation contracts · v3
+# Implementation contracts · v4
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -6,7 +6,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 
 | Lane | Owns | May depend on | Must not change incidentally |
 |---|---|---|---|
-| Gameplay | `shared/game.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
+| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
@@ -27,17 +27,17 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/roll, speed/vy, health/air, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil.
-- `Player`: id, display name, entityId. Each player controls exactly one entity; each vehicle has at most one driver.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/roll, speed/vy, health/air, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Player`: id, display name, entityId, and `delivery` (session cash, active time, order, completed runs and ticket state). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/lift/brake are booleans. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v3
+## Wire protocol v4
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:3,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:4,capacity:number}`.
 
 Client messages:
 
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:3, capacity:number}
+{type:"welcome", id:string, version:4, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -97,3 +97,11 @@ Autonomy uses deterministic right-lane loops, including a cross-Bay route, and o
 Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 
 Geometry/materials in the renderer are shared static caches. Removing an entity must NOT dispose shared geometry. Wheel assemblies are named `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`; yaw articulation uses shared steering state. `jets` remains the flight effect group. Future models must pass catalog coverage, body collision, takeover, traffic-stability and multiplayer-selection tests.
+
+## Delivery and police contract
+
+`shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. The estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the estimate and leaderboard clock pause. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
+
+Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m or when the player is ticketed. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a $25 ticket, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
+
+`L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; there is no persistent identity or global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
