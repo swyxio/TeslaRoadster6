@@ -97,3 +97,4 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .sound-actions{display:flex;gap:10px}.sound-actions button{flex:1;min-height:44px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:13px}.sound-actions button[aria-pressed=true]{background:#ffc77f;color:#21373b}
 @media(pointer:coarse),(max-width:800px){.top-actions{gap:6px}.sound-button{width:44px;height:44px}}
 @media(max-height:550px){.sound-dialog{padding:16px;max-height:94dvh}.sound-sliders{gap:8px;margin:10px 0}.sound-dialog .fleet-intro{margin:6px 0}.sound-actions button{min-height:40px}}
+@media(max-width:360px){.topbar{padding:0 10px}.brand{font-size:16px}.brand-icon{margin-right:4px}.top-actions{gap:4px}.pill{font-size:7px;letter-spacing:.4px;padding:6px;white-space:nowrap}.sound-button{width:38px;height:38px}}
