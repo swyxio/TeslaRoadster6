@@ -10,7 +10,8 @@ export const RELEASES = [
       { title: 'Drive together', items: [
         'Find two eastbound launch ramps inside the island playground and try them in any car.',
         'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
-        'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.'
+        'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
+        'Start and leave mini-games with clearer feedback, and recover self-driving from some opposite-facing streets.'
       ] }
     ]
   },
