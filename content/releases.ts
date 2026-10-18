@@ -1,6 +1,19 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.7-alpha',
+    label: '0.0.7 Alpha',
+    date: '2026-10-18',
+    title: 'Room for every control',
+    intro: 'The map and game controls fit more comfortably on short screens.',
+    sections: [
+      { title: 'Play and explore', items: [
+        'The minimap stays clear of mini-game and driving controls in compact portrait and landscape layouts.',
+        'Air-refill cues stay visible when they are active.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.6-alpha',
     label: '0.0.6 Alpha',
     date: '2026-10-18',
