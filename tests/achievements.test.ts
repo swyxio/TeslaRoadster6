@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, resetPlayer, step, NEUTRAL } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, resetPlayer, step, NEUTRAL } from '../shared/game';
 import { onRoof, updateAchievements } from '../shared/achievements';
 import { BUILDINGS, OVERPASS, STUNT_LOOP, STUNT_RAMP, terrainHeight, type SupportId } from '../shared/map';
 
@@ -88,4 +88,26 @@ test('the Roadster can earn Bay Hopper with a continuous two-jump flight',()=>{
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));assert.ok(car.air>0);
+});
+
+
+test('an immediate first-frame jump starts Bay Hopper after spawn, reset or vehicle selection',()=>{
+  for(const mode of ['spawn','reset','vehicle'] as const){
+    const {world,player,car:original}=setup();world.entities=[original];world.pickups=[];
+    if(mode!=='spawn')step(world,new Map([['p',NEUTRAL]]),.05);
+    if(mode==='reset')resetPlayer(world,player.id);
+    if(mode==='vehicle')assert.ok(chooseVehicle(world,player.id,'roadster'));
+    const car=world.entities.find(entity=>entity.id===player.entityId)!;
+    step(world,new Map([['p',{...NEUTRAL,jump:1}]]),.05);
+    assert.equal(car.supportId,null,mode);
+    assert.equal(player.achievements.crossing?.origin,'sf',mode);
+    assert.equal(player.achievements.crossing?.entityId,car.id,mode);
+  }
+});
+
+test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick',()=>{
+  const {world,player,car}=setup();world.entities=[car];world.pickups=[];car.x=50;car.speed=68;
+  for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
+    step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
+  assert.ok(player.achievements.unlocked.includes('bay-hopper'));
 });

@@ -95,7 +95,7 @@ export function interact(world:World,playerId:string):void {
   if(e.kind==='person'){
     const car=world.entities.filter(other=>other.kind!=='person'&&!other.driver&&!other.police&&other.supportId===e.supportId&&Math.hypot(other.x-e.x,other.z-e.z)<Math.max(7,dimensions(other.kind).length/2+2)).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
     if(!car)return;
-    car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;car.lastJump=e.lastJump;car.lastFlip=e.lastFlip;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);
+    car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;car.lastJump=e.lastJump;car.lastFlip=e.lastFlip;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);resetAchievementFlight(player);
   }else{
     const width=dimensions(e.kind).width/2+1.3,length=dimensions(e.kind).length/2+1.3;
     const exits=[{angle:Math.PI/2,distance:width},{angle:-Math.PI/2,distance:width},{angle:Math.PI,distance:length},{angle:0,distance:length}];
@@ -104,7 +104,7 @@ export function interact(world:World,playerId:string):void {
       const y=supportHeight(e.supportId!,p.x,p.z);if(y===null)return null;p.y=y;p.supportId=e.supportId;return p;
     }).find((p):p is Entity=>p!==null&&fits(world,p));
     if(!person)return;
-    person.lastJump=e.lastJump;person.lastFlip=e.lastFlip;release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);
+    person.lastJump=e.lastJump;person.lastFlip=e.lastFlip;release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);resetAchievementFlight(player);
   }
 }
 export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
@@ -113,7 +113,7 @@ export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
   release(old,world);
   world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
   const spawn=spawnPosition(world,kind),car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;car.lastJump=old.lastJump;car.lastFlip=old.lastFlip;
-  world.entities.push(car);player.entityId=car.id;return true;
+  world.entities.push(car);player.entityId=car.id;resetAchievementFlight(player);return true;
 }
 export function toggleAutopilot(world:World,id:string):boolean {
   const p=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===p?.entityId);
@@ -202,6 +202,11 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
   world.time+=dt;
   updateHighwayTraffic(world,dt,makeEntity);
   updatePolice(world,dt);
+  // Capture the supported spawn/reset/vehicle before this tick can launch it.
+  for(const player of world.players)if(player.achievements.lastPosition===null){
+    const entity=world.entities.find(e=>e.id===player.entityId);
+    if(entity)updateAchievements(player,entity,false);
+  }
   const stuntPlayers=new Set<string>();
   for(const e of world.entities){
     // Counters are retained when input expires, so releasing a control cannot
