@@ -38,7 +38,7 @@ function main() {
   console.log(`Tier-four baseline: $${baseline}/active hour; rate excludes other delivery achievements and checkpoints.`);
   console.table([
     { path: 'One research certification', ...questEconomics(researchThresholds, 11_000, 6) },
-    { path: 'SFO airport line', ...questEconomics(airportThresholds, 11_000, 7, 1000) },
+    { path: 'SFO airport line', ...questEconomics(airportThresholds, 11_000, 7, 2000) },
   ]);
   console.log('First home and four optional upgrades:', firstHomePackage());
 }

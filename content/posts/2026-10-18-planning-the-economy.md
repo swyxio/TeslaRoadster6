@@ -81,6 +81,8 @@ The next delivery can take you somewhere new, and the place should give you a re
 
 We want to grow those stops into delivery-led programs. After 20 deliveries, a driver could carry energy equipment at Berkeley, medical supplies for UCSF, flight-research equipment at Stanford, or airport cargo at SFO. The university programs would award five degrees after 2, 6, 12, 20 and 30 qualifying program deliveries; SFO would use 1, 4, 8, 14 and 20. Each chain pays $15.5k across its five milestones and opens a related upgrade or livery along the way. At six minutes per job, the 30 program deliveries take about three active hours after the initial 20-delivery prerequisite. That's a reason to learn a part of the Bay while continuing the delivery career.
 
+Airport runs deserve a fare that makes the extra drive worthwhile. In our level-four example, a $2k SFO supplement brings a seven-minute airport job to about $111k per active hour, just above the $110k rate for six-minute regular deliveries. The five airport awards make the first 20 jobs more rewarding still.
+
 Rocket Dome, racing and parking are for the occasional detour and achievement hunt. A Dome win could give everyone in the room 1.5× eligible earnings for ten minutes. A separate global event could give everyone 2× for 30 minutes; together the bonuses cap at 3×. They apply to deliveries, active cab income and eligible activity pay. Achievement awards keep their normal value.
 
 ## What the journeys look like

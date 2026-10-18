@@ -14,13 +14,13 @@ test('research milestones pay once on cumulative eligible deliveries', () => {
 });
 
 test('airport supplement accounts for the extra minute and is separate from awards', () => {
-  const line = questEconomics(airportThresholds, 11_000, 7, 1000);
+  const line = questEconomics(airportThresholds, 11_000, 7, 2000);
   assert.equal(line.jobs, 20);
   assert.equal(line.elapsedMinutes, 140);
-  assert.equal(line.supplementIncome, 20_000);
-  assert.equal(line.gross, 255_500);
-  assert.equal(line.grossPerHour, 109_500);
-  assert.ok(line.recurringPerHour < 110_000);
+  assert.equal(line.supplementIncome, 40_000);
+  assert.equal(line.gross, 275_500);
+  assert.equal(line.grossPerHour, 275_500 * 60 / 140);
+  assert.ok(line.recurringPerHour > 110_000);
 });
 
 test('property choices spend cash, preserve assets, and can lower the current level', () => {
