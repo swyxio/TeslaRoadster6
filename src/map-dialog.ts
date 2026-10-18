@@ -3,6 +3,7 @@ import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS,
 import { TECH_CAMPUSES } from '../shared/tech-campuses';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
 import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
@@ -190,6 +191,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       if (!visible(place)) continue;
       const p = screen(place); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
       c.fillStyle = '#e5b87a'; c.beginPath(); c.arc(p.x,p.y,3,0,Math.PI*2); c.fill();
+      drawLabel(p,place.name,'600 10px system-ui',12);
+    }
+    if (scale > .7) for (const place of NEW_LANDMARKS) {
+      if (!visible(place)) continue;
+      const p=screen(place); if(p.x<0||p.x>width||p.y<0||p.y>height)continue;
+      c.fillStyle='#e5b87a';c.beginPath();c.arc(p.x,p.y,2.5,0,Math.PI*2);c.fill();
       drawLabel(p,place.name,'600 10px system-ui',12);
     }
     for (const stop of CALTRAIN_STOPS) {

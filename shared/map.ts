@@ -8,6 +8,7 @@ import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps'
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
+import { NEW_LANDMARKS } from './new-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
@@ -352,13 +353,14 @@ for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,dist
 // Replace only generated background blocks where a hand-authored landmark or
 // a physical hill stands. Existing special landmarks keep their own identity.
 export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
-const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
+const landmarkBuildings:Building[]=[...EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak'),...NEW_LANDMARKS.filter(place=>place.solid)]
  .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
 landmarkBuildings.push(...EAST_SOUTH_ADDITIONS);
+const landmarkClearances=[...landmarkBuildings,...NEW_LANDMARKS.filter(place=>!place.solid)];
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
- const overlapsLandmark=[...landmarkBuildings,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
+ const overlapsLandmark=[...landmarkClearances,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
  const overlapsHill=NATURAL_HILLS.some(h=>b.x+b.w/2>h.minX&&b.x-b.w/2<h.maxX&&b.z+b.d/2>h.minZ&&b.z-b.d/2<h.maxZ);
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }

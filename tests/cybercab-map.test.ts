@@ -6,7 +6,7 @@ import ts from 'typescript';
 test('cab map follows live positions, pauses for map interaction and handles a lost location', async () => {
   let source = await readFile(new URL('../src/map-dialog.ts', import.meta.url), 'utf8');
   source = source.replace("import './map-dialog.css';", '');
-  for (const name of ['map', 'tech-campuses', 'caltrain', 'east-south-additions', 'delivery', 'island-jumps', 'luxury']) {
+  for (const name of ['map', 'tech-campuses', 'caltrain', 'east-south-additions', 'delivery', 'island-jumps', 'luxury', 'new-landmarks']) {
     source = source.replace(`'../shared/${name}'`, JSON.stringify(new URL(`../shared/${name}.ts`, import.meta.url).href));
   }
   const js = ts.transpile(source, { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 });

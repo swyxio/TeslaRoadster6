@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## 100 more Bay landmarks · protocol v44 candidate · 2026-10-18 Pacific
+
+- The candidate based on `aeb5704` passed 883 tests and `pnpm build` (the existing Vite large-chunk warning remains). Tests cover 100 distinct sourced places, supported ground, shared collision envelopes, model bounds, roads, parking, destinations, the home property, stadium plaza and billboard clearance. Eleven open-air models are decorative; the other new buildings use approximate rectangular collision, not their detailed meshes.
+- Local Wrangler v44 passed the two-client room and prediction integrations, including movement, delivery, activities and protocol checks. This is not a load or complete ferry-crossing test.
+- In Chrome against isolated local rooms, the game started, self-drove through San Francisco, and showed the new map names at close zoom. The map and controls were inspected at desktop and emulated 390 × 844 portrait and 844 × 390 landscape; the article's updated map and mobile legend were also inspected. A simulated touch on Drive did not move the car, and map zoom required keyboard activation in the emulation; touch input and physical devices remain unverified.
+- The 28 new geographic label atlases total approximately 14.75 MiB at four bytes per pixel, rather than 112 MiB if each were 1024 × 1024. At the same stationary SF starting view in Chrome (772 × 939, DPR 1.8), a baseline `2b5a2bf` and this candidate each reported 159 draw calls; the single-frame triangle counts were 222,890 and 215,992. Host load was heavy (roughly 28–51), and the samples do not establish a frame-rate, driving-continuity, mobile or GPU performance result. The project release gates and production verification remain separate.
+
 ## Earnings lease timing · 0.0.24 candidate / protocol v43 · 2026-10-18 Pacific
 
 - Fresh disposable sockets reproduced intermittent unavailable earnings status on production and an isolated Cloudflare preview. They sent no identity, controls, purchases or delivery actions. In the 14-second diagnostic preview sample, the first status was valid and six subsequent refreshes were unavailable, while 127 snapshots advanced through tick 252. This does not establish that historical payout settlement was blocked.

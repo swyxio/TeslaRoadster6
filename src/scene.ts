@@ -26,6 +26,7 @@ import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
 import { buildTechCampuses } from './tech-campuses';
 import { buildEastSouthAdditions } from './east-south-additions';
 import { buildBillboards } from './billboards';
@@ -123,6 +124,13 @@ export class GameScene {
     const scene=this.scene;
     buildBay(scene);
     buildNorthLandmarks(scene);
+    // Local batches keep distant parts cullable; each atlas holds at most 48 labels.
+    const landmarkCells=new Map<string,typeof NEW_LANDMARKS>();
+    for(const place of NEW_LANDMARKS){
+      const key=`${Math.floor(place.x/600)},${Math.floor(place.z/800)}`;
+      const cell=landmarkCells.get(key)??[];cell.push(place);landmarkCells.set(key,cell);
+    }
+    for(const cell of landmarkCells.values())for(let i=0;i<cell.length;i+=48)buildNorthLandmarks(scene,cell.slice(i,i+48),[]);
     buildSouthLandmarks(scene);
     buildTechCampuses(scene);
     buildEastSouthAdditions(scene);
