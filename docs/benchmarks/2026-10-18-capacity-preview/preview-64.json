@@ -1,0 +1,167 @@
+{
+  "commit": "fb87ecbfba796ae9b5798ebc81325c2f9c82bdc8",
+  "clients": 64,
+  "startUtc": "2026-10-18T20:03:49.798+00:00",
+  "endUtc": "2026-10-18T20:05:00.266+00:00",
+  "outerSeconds": 70.467,
+  "returncode": 0,
+  "sourceSha256": {
+    "docs/benchmarks/2026-10-18-capacity-preview/preview-once.ts": "e212ff7d2a65450e12385868701c059f941c43ff52c08a6b7aa92e09a8a401e2",
+    "tests/room-input-client.ts": "aa6056b001ef83b27a49499954e6329ba5e653e38f79e3a441b664040b38d90d",
+    "worker/index.ts": "acb3c4a7381122c14a192b1ad74e48fc7001f36a24fb34ba46df8a010bfd19cc",
+    "worker/protocol.ts": "02698d1f32b5748c7287aaa255f4055bed800dfcfe4810d9aaad58388eb49447",
+    "shared/game.ts": "434b672062d4eebc552733c843c7e0dc5158f0e2818f642522790fc16a057ccd",
+    "wrangler.jsonc": "e3d9f57ca239e3c3c6c388382766f599d04b4ef46b0a404e1b6f2ab19b0df375"
+  },
+  "hostLoadSamples": [
+    {
+      "utc": "2026-10-18T20:03:49.806+00:00",
+      "load_1_5_15": [
+        52.13525390625,
+        38.5048828125,
+        32.6220703125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:03:54.811+00:00",
+      "load_1_5_15": [
+        49.4013671875,
+        38.1640625,
+        32.5361328125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:03:59.815+00:00",
+      "load_1_5_15": [
+        56.416015625,
+        39.8046875,
+        33.14794921875
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:04.818+00:00",
+      "load_1_5_15": [
+        62.14794921875,
+        41.2685546875,
+        33.70361328125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:09.819+00:00",
+      "load_1_5_15": [
+        58.4521484375,
+        40.8486328125,
+        33.599609375
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:14.819+00:00",
+      "load_1_5_15": [
+        56.89404296875,
+        40.81787109375,
+        33.630859375
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:19.821+00:00",
+      "load_1_5_15": [
+        55.701171875,
+        40.83740234375,
+        33.6796875
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:24.823+00:00",
+      "load_1_5_15": [
+        53.96337890625,
+        40.7236328125,
+        33.68115234375
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:29.824+00:00",
+      "load_1_5_15": [
+        52.28466796875,
+        40.59521484375,
+        33.6767578125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:34.825+00:00",
+      "load_1_5_15": [
+        49.779296875,
+        40.26953125,
+        33.60205078125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:39.826+00:00",
+      "load_1_5_15": [
+        46.193359375,
+        39.68359375,
+        33.43408203125
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:44.827+00:00",
+      "load_1_5_15": [
+        43.53515625,
+        39.240234375,
+        33.31396484375
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:49.828+00:00",
+      "load_1_5_15": [
+        40.208984375,
+        38.62158203125,
+        33.13037109375
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:54.828+00:00",
+      "load_1_5_15": [
+        37.46923828125,
+        38.07958984375,
+        32.97119140625
+      ]
+    },
+    {
+      "utc": "2026-10-18T20:04:59.834+00:00",
+      "load_1_5_15": [
+        35.349609375,
+        37.6298828125,
+        32.84228515625
+      ]
+    }
+  ],
+  "result": {
+    "preview": "https://codex-restore-room-capacity-bay-drive.swyxio.workers.dev",
+    "room": "capacity-1792353832137",
+    "clients": 64,
+    "requestedSeconds": 60,
+    "elapsedSeconds": 60.02,
+    "failure": "",
+    "extraClose": {
+      "code": 4003,
+      "reason": "Room full"
+    },
+    "closed": 0,
+    "sentInputs": 66176,
+    "inputRejections": 47542,
+    "clientsWithAppliedInput": 64,
+    "snapshots": 38930,
+    "clientsSeeingAll": 64,
+    "minSnapshots": 603,
+    "snapshotRatePerClient": 10.13,
+    "p95SnapshotGapMs": 300,
+    "maxSnapshotGapMs": 885,
+    "decodedJsonMiB": 5127.17,
+    "minSimulatedSeconds": 60.2,
+    "medianSimulatedSeconds": 60.7,
+    "clientEventLoopP95Ms": 46.9,
+    "note": "Synthetic inputs use a helper, not the game Session. Input rejections include warm-up; decoded bytes are not wire bytes. Shared client host and WAN affect results; no tick-work, rendering, physical-device, sustained or production claim."
+  },
+  "stdout": "{\n  \"preview\": \"https://codex-restore-room-capacity-bay-drive.swyxio.workers.dev\",\n  \"room\": \"capacity-1792353832137\",\n  \"clients\": 64,\n  \"requestedSeconds\": 60,\n  \"elapsedSeconds\": 60.02,\n  \"failure\": \"\",\n  \"extraClose\": {\n    \"code\": 4003,\n    \"reason\": \"Room full\"\n  },\n  \"closed\": 0,\n  \"sentInputs\": 66176,\n  \"inputRejections\": 47542,\n  \"clientsWithAppliedInput\": 64,\n  \"snapshots\": 38930,\n  \"clientsSeeingAll\": 64,\n  \"minSnapshots\": 603,\n  \"snapshotRatePerClient\": 10.13,\n  \"p95SnapshotGapMs\": 300,\n  \"maxSnapshotGapMs\": 885,\n  \"decodedJsonMiB\": 5127.17,\n  \"minSimulatedSeconds\": 60.2,\n  \"medianSimulatedSeconds\": 60.7,\n  \"clientEventLoopP95Ms\": 46.9,\n  \"note\": \"Synthetic inputs use a helper, not the game Session. Input rejections include warm-up; decoded bytes are not wire bytes. Shared client host and WAN affect results; no tick-work, rendering, physical-device, sustained or production claim.\"\n}\n",
+  "stderr": ""
+}
