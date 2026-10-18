@@ -57,3 +57,38 @@ The fixture's `preserveDrawingBuffer` enables raster comparison; production does
 not enable it. Render-call duration measures CPU submission only. The fixture
 does not load the game's environment map or dynamic content. It is outside the
 Vite production entry and adds no shipped JavaScript.
+
+## Rocket hardware batches
+
+A second comparison against `7363106` uses the same fixture with `?fleet=1`
+(`?fleet=1&baseline=1` to record the baseline). Ten rigid nozzle mounts share
+two instanced hardware meshes per car; named anchors and independent vapor
+groups remain. Geometry, material, triangle count and near-car detail are
+unchanged. Ordinary traffic still allocates no rocket hardware until upgraded.
+
+| Upgraded vehicle | Draw calls before → after | Triangles, unchanged |
+| --- | ---: | ---: |
+| Roadster | 43 → 25 | 11,568 |
+| Model 3 | 41 → 23 | 11,292 |
+| Cybertruck | 42 → 24 | 6,880 |
+| Zoox | 42 → 24 | 7,572 |
+
+The Roadster, Model 3 and Zoox comparison images are pixel-identical. The
+Cybertruck differs in two pixels, each by one channel value. These are static
+views with vapor off, not a full-game FPS benchmark. [Raw fleet results](benchmarks/rocket-rendering-2026-10-18.json)
+include all observed timings. Existing tests cover all 26 models' retrofit
+visibility, clone independence and exhaust flags; triangle accounting now
+includes every instance instead of counting its base geometry once.
+
+## Distant vehicle detail
+
+The same fixture with `?fleet=1&distant=1` forces the distant model into the
+close-up view for inspection. This is deliberately a detail reduction, not a
+pixel-equivalence claim. Beyond 125 m, each sampled vehicle submits one draw:
+Roadster 764 triangles, Model 3 716, Cybertruck 228, Zoox 500. The full upgraded
+models submit 25/23/24/24 draws and 11,568/11,292/6,880/7,572 triangles respectively.
+The player and police always retain full detail; other cars restore it within
+100 m. [Raw distant results](benchmarks/distant-fleet-2026-10-18.json) include
+noisy timings; no full-game FPS gain is established. Near/far changes preserve
+entity transforms and share catalog geometry. Tests cover all 26 models,
+hysteresis, clone independence and restoring an upgraded vehicle's detail.

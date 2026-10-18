@@ -12,6 +12,6 @@ Tests: pnpm test and pnpm build. Network changes: live room.integration.ts and c
 
 Keep docs/VERIFICATION.md current with dated observations.
 
-Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage. Protocol v31, the delivery/police and cockpit contracts in docs/DELIVERY.md, and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
+Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage across seeded room cohorts, not permanent simultaneous copies. Keep the current budget of eight city cars, eight parked cars, two to four highway cars and four police unless measurements justify changing it. Protocol v31, the delivery/police and cockpit contracts in docs/DELIVERY.md, and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
 
 Map source of truth: shared/map.ts; read docs/MAP.md before changing terrain, coastlines, bridges or landmarks. Do not move visual streets or water independently of authoritative surfaces and collisions.
