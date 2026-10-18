@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Chase-camera continuity · protocol v31 branch · 2026-10-18 Pacific
+
+- `pnpm test` passed 467 tests and `pnpm build` passed both typechecks and production generation, with Vite's existing large-chunk warning. Focused prediction tests exercise takeoff, landing, Dome boundaries, rejected actions, delayed snapshots, a short reset and changing vehicles. An independent review found and prompted fixes for a Dome-boundary cut and a false reset cut during braking.
+- In a local Chrome shared room with a test proxy adding approximately 150 ms round-trip delay, one baseline takeoff and landing moved the chase camera 14.4 m and 15.7 m in a single frame. A comparable run with the camera change moved it 0.52 m and 0.60 m. These are single runs with manually timed controls, not controlled latency percentiles or a guarantee of smoothness; the vehicle itself still moved 6.4–6.8 m in those transition frames. A separate local desktop check drove, reset and switched through cockpit and wide views.
+- The server does not report an explicit relocation revision. Camera cuts for resets and teleports are therefore inferred from observed pose changes; a reset after a long snapshot gap can remain ambiguous. This presentation change does not resolve the underlying input/reconciliation jitter, flight response or room-capacity limitations. No physical device or production performance test was performed for this branch.
+
 ## Caltrain stops and Bay landmarks · protocol v31 · 2026-10-18 Pacific
 
 - After integrating main's performance changes, `pnpm test` passed 463 tests and `pnpm build` passed both TypeScript checks and Vite, with the existing large-chunk warning. Station tests drove to all seven new lots from both highway directions, checked supported and unobstructed decorative tracks, and exercised parking games. Current tests covered directional force, normal unboosted escape and locked-region safeguards at the new stops. Landmark tests checked supported terrain, collision envelopes and clearances; the grove tests checked road, rail and building clearances.
