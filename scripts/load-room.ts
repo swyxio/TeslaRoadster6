@@ -1,12 +1,12 @@
 // Bounded headless clients, local Wrangler only. Example:
-// pnpm exec tsx scripts/load-room.ts http://127.0.0.1:18943 64 10
+// pnpm exec tsx scripts/load-room.ts http://127.0.0.1:8787 8 10
 // This includes client parsing and same-host scheduling; it does not isolate Worker CPU.
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { RoomInputClient } from '../tests/room-input-client';
 import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
 
-const base=process.argv[2]??'http://127.0.0.1:18943';
-const count=Number(process.argv[3]??'64'),seconds=Number(process.argv[4]??'10');
+const base=process.argv[2]??'http://127.0.0.1:8787';
+const count=Number(process.argv[3]??'8'),seconds=Number(process.argv[4]??'10');
 const host=new URL(base).hostname;
 if(!['127.0.0.1','localhost','[::1]'].includes(host))throw new Error('Run this synthetic load only against a local server.');
 if(!Number.isInteger(count)||count<1||count>128||!Number.isFinite(seconds)||seconds<2||seconds>60)throw new Error('Use 1–128 clients and a duration of 2–60 seconds.');

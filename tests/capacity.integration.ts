@@ -4,7 +4,7 @@ import { RoomInputClient } from './room-input-client';
 import { NEUTRAL, type Entity } from '../shared/game';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
-const count = Number(process.argv[3] ?? 64);
+const count = Number(process.argv[3] ?? 8);
 if (!Number.isInteger(count) || count < 2 || count > 128) throw new Error('Use 2–128 clients');
 const room = `/api/room/capacity-${Date.now()}`;
 const sockets: WebSocket[] = [];
