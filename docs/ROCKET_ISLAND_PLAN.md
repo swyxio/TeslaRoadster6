@@ -4,7 +4,9 @@
 
 A deliberately oversized, fictional Alcatraz-inspired **Rocket Island** is a free-roam physics playground: no police or tickets on the island, with an inverted cliff, banked speed course, jumps, refill points and optional races. Drive or jump a car onto an autonomous ferry at San Francisco; watch the crossing and drive off at the island. A temporary Rocket pickup makes any of the 26 playable vehicle families capable of the existing fictional Rocket moves. Every authored parking lot in the world is also an optional playground for parking, queue-cutting and jumping games. The map is imaginative game geography, not a model of the real island or a claim about real vehicle capabilities.
 
-This is a design, not implemented behavior. Keep the normal Bay loop, delivery, police, fleet and solo/multiplayer game playable at each stage. No new accounts, permanent upgrades, purchases or persistent leaderboard are needed.
+The enclosed Rocket Dome soccer arena is implemented with direct, reversible travel; the ferry, larger island, speed oval, inverted cliff, races, upgrades and parking games described below remain a design. Keep the normal Bay loop, delivery, police, fleet and solo/multiplayer game playable at each stage. No new accounts, permanent upgrades, purchases or persistent leaderboard are needed.
+
+The dome has one shared ball and blue/orange goal counts without assigned teams. Either side reaching five wins, followed by an automatic match reset. Rocket Roadsters can adhere to its curved walls and ceiling. Arena travel is immediate for now, not an autonomous ferry. Delivery order time pauses and police pursuit clears while in the dome.
 
 ## Space and first-pass math
 

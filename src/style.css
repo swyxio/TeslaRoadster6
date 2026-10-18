@@ -110,3 +110,9 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 @media(pointer:coarse),(max-width:800px){.cockpit-dashboard{top:80px;bottom:auto;left:16px;transform:none;width:min(300px,calc(100vw - 124px));padding:9px 12px}.cockpit-route strong{font-size:12px}.cockpit-route small{font-size:9px}.cockpit-speed strong{font-size:22px}.cockpit-active .mission{top:160px;z-index:3}.cockpit-invitation{margin:-8px 0 14px}.score-driver small{font-size:8px}}
 @media(max-height:550px){.cockpit-dashboard{top:60px;bottom:auto;left:16px;transform:none;width:min(300px,42vw);padding:6px 10px}.cockpit-active .mission{top:136px}.cockpit-route small{display:none}.cockpit-trim{border-bottom-width:8px}}
 @media(max-width:360px){.topbar{padding:0 10px}.brand{font-size:16px}.brand-icon{margin-right:4px}.top-actions{gap:4px}.pill{font-size:7px;letter-spacing:.4px;padding:6px;white-space:nowrap}.sound-button{width:38px;height:38px}}
+
+/* Arena score replaces the mission panel and leaves room for Actions. */
+.dome-score{position:fixed;left:24px;top:112px;display:grid;gap:6px;max-width:340px;padding:14px 18px;border-left:3px solid #93dfff;border-radius:0 8px 8px 0;background:#102e3ce8;box-shadow:0 8px 25px #09252b66}
+.dome-score strong{font-size:20px;letter-spacing:.04em;white-space:nowrap}.dome-score #dome-blue{color:#8bdcff}.dome-score #dome-orange{color:#ffbe7b}.dome-score #dome-status,.dome-score small{font-size:10px;line-height:1.3;color:#d3e9df}.dome-score small{color:#a5c8c3}
+@media(pointer:coarse),(max-width:800px){.dome-score{top:78px;left:12px;max-width:calc(100vw - 124px);padding:9px 12px;gap:3px}.dome-score .eyebrow{font-size:8px;letter-spacing:1px}.dome-score strong{font-size:16px}.dome-score #dome-status,.dome-score small{font-size:9px}}
+@media(max-height:550px) and (pointer:coarse){.dome-score{top:62px;max-width:min(280px,calc(100vw - 130px))}.dome-score small{display:none}}

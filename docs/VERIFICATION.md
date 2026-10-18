@@ -1,10 +1,24 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket Dome with cockpit · protocol v11, local build · 2026-10-17 Pacific
+
+- After integrating the cockpit update and correcting natural arena entry and long-vehicle wall clearance, `pnpm test` passed 147/147 and `pnpm build` passed; the main JavaScript is 697 kB (195 kB gzip) and Vite still reports its chunk-size warning. Simulation regressions cover first-person order eligibility, grounded and airborne entry, overflight, police/delivery policy and yaw-projected wall clearance.
+- Local Wrangler two-client integration passed for cockpit state, arena entry, ball impact, a goal observed by both clients, arena exit and existing room checks. An earlier run overlapped a Wrangler reload and timed out; the stable rerun passed. This is not a load test.
+- Chrome desktop showed the arena and switched to cockpit view. In 390×844 touch emulation, driving in cockpit scored a blue goal and climbed to 22 m; switching camera showed the field again. In 844×390 landscape emulation, score and controls remained visible. A subsequent 390×844 touch-emulated drive brought a Tesla Semi to a side wall and stopped it. The browser reported no console errors. No physical device, multi-touch reliability, frame rate or motion-comfort test was performed.
+
 ## Cockpit view · protocol v10 · 2026-10-17 Pacific
 
 - After merging the road-first HUD, `pnpm run ci` passed 116 tests and the production build; local Wrangler two-client integration replicated cockpit selection, active time and switching back, alongside existing multiplayer checks. Camera pose tests cover pitch and roll; simulation tests cover complete and mixed-view runs, paused intervals, on-foot use and malformed flags. Camera claims are not anti-cheat proof.
 - The staging deployment of commit `b49338e` returned protocol v10 and matched the locally built browser assets. Its live two-client room integration passed, including cockpit state replication; this was not a load test.
 - Chrome desktop solo: switched to cockpit, drove, jumped and flipped with the view rolling with the vehicle, and saw first-person active time in the leaderboard. Chrome 390×844 portrait and 844×390 landscape emulation showed dashboard guidance and driving controls; the on-foot chase fallback and a switch to Model 3 were observed before the HUD merge. After integration, the phone action drawer switched views and a projected restaurant sign appeared when driving toward the pickup. No browser console errors were captured. These are browser emulation, not physical touch, frame-rate or motion-comfort tests.
+
+## Alcatraz Rocket Dome · protocol v10, pre-cockpit local build
+
+- After integrating the sound and road-first HUD updates, `pnpm test` passed 135/135 and `pnpm build` passed; the main JavaScript is 692 kB (194 kB gzip) and retains Vite's chunk-size warning. Simulation tests cover both goals, goal colors, fifth-goal reset, wall and ceiling ball strikes, and car collisions on the arena surface.
+- Local Wrangler two-client integration passed for arena entry, a car moving the shared ball, a goal score observed by both clients, arena exit and the existing room checks. This is not a load test.
+- Chrome desktop solo: scored a goal by driving into the ball, returned to the Bay and re-entered, then drove the Rocket up a wall to 22 m and onto the 50 m ceiling with the field and ball visible. A later shot into the blue goal increased the blue score. The combined build's reloaded ceiling playtest showed no console errors.
+- Chrome touch emulation: the combined build's portrait 390×844 accelerator moved the car to 184 km/h and scored; portrait and 844×390 landscape showed the score and controls. No physical device, multi-touch or frame-rate measurement was performed.
+- The arena is reached by direct travel; the planned ferry and broader Rocket Island playground are not implemented. Non-Rocket vehicles remain inside the arena without wall adhesion.
 
 ## Synthesized audio with Bay integration · 2026-10-17 Pacific
 

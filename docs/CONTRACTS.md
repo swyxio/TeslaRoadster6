@@ -1,4 +1,4 @@
-# Implementation contracts · v10
+# Implementation contracts · v11
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -17,7 +17,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, roof or null while airborne. Loop support requires `loopAngle` because x/z alone cannot identify its height.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, dome, roof or null while airborne. Loop support requires `loopAngle`; dome support requires `domeS`, because x/z alone cannot identify their height.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided when needed for fast motion. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
@@ -30,14 +30,14 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 - `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
-- `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
+- `World`: entities, players, pickups, time and authoritative `soccer` (ball position/velocity, both scores and goal/win phase). Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v10
+## Wire protocol v11
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:10,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:11,capacity:number}`.
 
 Client messages:
 
@@ -46,6 +46,7 @@ Client messages:
 {"type":"interact"}
 {"type":"reset"}
 {"type":"autopilot"}
+{"type":"dome"}
 {"type":"selectVehicle","kind":"zoox"}
 {"type":"name","name":"Driver"}
 ```
@@ -53,7 +54,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:10, capacity:number}
+{type:"welcome", id:string, version:11, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -65,7 +66,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot')`, `selectVehicle(kind)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -92,7 +93,7 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 
 ## Fleet and autonomy contract
 
-`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only the `roadster` Rocket has arcade thrust, jumps, flips and suction. Air jumps, free-air thruster hover and tank performance are game fiction. Suction operates only at the physical loop surface.
+`shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only the `roadster` Rocket has arcade thrust, jumps, flips and suction. Air jumps, free-air thruster hover and tank performance are game fiction. Suction operates at the physical loop and dome surfaces.
 
 Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. A grounded player car moving forward can initiate an arcade drift by steering with brake or reverse; lateral momentum decays after release. This is not suspension/tire simulation. Terrain roof support remains shared.
 
@@ -113,6 +114,12 @@ Geometry/materials in the renderer are shared static caches. Removing an entity 
 Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m or when the player is ticketed. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 
 `L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; there is no persistent identity or global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
+
+## Rocket Dome soccer
+
+`shared/dome.ts` defines the fictional Alcatraz arena; `shared/map.ts` supplies its capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay spawn, preserving health and air. A vehicle arriving from the island or air joins in place once its upright body fits inside the capsule; the exterior shell is passable on entry, while the interior contains cars. Above-roof overflights remain outside. No ferry is implemented. The arena is enclosed, has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact.
+
+`shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first side to five wins; after a six-second winner display, both scores and the ball reset. Physics, scoring and timing are authoritative in solo and online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 
 
 ## Citations, rooftops and achievements

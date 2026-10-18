@@ -5,12 +5,14 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, supportNormal } from '../shared/map';
+import { DISTRICTS, domeSurface, supportNormal } from '../shared/map';
 import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { box, material, createVehicle, setThrusterEffects } from './vehicles';
 import { cockpitPose } from './camera';
+import { createRocketDome } from './rocket-dome';
+import { DOME } from '../shared/dome';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -29,6 +31,9 @@ export class GameScene {
   private pickups = new Map<string,T.Mesh>();
   private labels:T.Sprite[]=[];
   private objective=new T.Group();
+  private dome=createRocketDome();
+  private ballPosition=new T.Vector3();
+  private ballReady=false;
   private objectiveRing=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0xffcf75,side:T.DoubleSide}));
   private objectiveBeam=new T.Mesh(new T.CylinderGeometry(.5,1,18,8,1,true),new T.MeshBasicMaterial({color:0xffcf75,transparent:true,opacity:.24,depthWrite:false,side:T.DoubleSide}));
   private focus = new T.Vector3(0,1,24);
@@ -41,6 +46,8 @@ export class GameScene {
   private pitchAxis = new T.Vector3(1,0,0);
   private rollRotation = new T.Quaternion();
   private rollAxis = new T.Vector3(0,0,1);
+  private cameraTurn = new T.Quaternion();
+  private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
   cameraMode:CameraMode = 'chase';
@@ -72,6 +79,7 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    scene.add(this.dome.group);
     const signal=BAY_BRIDGE_SIGNAL;
     // The meter is visual only: the same shared fixture controls NPCs and AVs.
     box(scene,signal.stopX,.06,signal.centerZ+signal.halfWidth/2,.35,.1,signal.halfWidth,0xf7f1db);
@@ -135,9 +143,11 @@ export class GameScene {
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
       if(e.kind==='roadster')setThrusterEffects(mesh,e.thrusters,world.time);
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
-      const normal=e.supportId===null||e.supportId==='stunt-loop'?null:supportNormal(e.supportId,e.x,e.z);
-      this.surfaceUp.set(normal?.x??0,normal?.y??1,normal?.z??0);
-      this.surfaceBack.set(Math.sin(e.yaw),0,Math.cos(e.yaw));
+      const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
+      const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
+      this.surfaceUp.set(0,surface?.normalY??normal?.y??1,surface?.normalZ??normal?.z??0);
+      if(!surface)this.surfaceUp.x=normal?.x??0;
+      this.surfaceBack.set(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
       this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
@@ -155,24 +165,46 @@ export class GameScene {
       if(!mesh){mesh=new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024}));mesh.position.set(pickup.x,1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);}
       mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=1.7+Math.sin(performance.now()*.002)*.3;
     }
+    const ball=world.soccer.ball,ballTarget=new T.Vector3(ball.x,ball.y,ball.z);
+    if(!this.ballReady||this.ballPosition.distanceTo(ballTarget)>12){this.ballPosition.copy(ballTarget);this.ballReady=true;}
+    else this.ballPosition.lerp(ballTarget,alpha);
+    this.dome.update(this.ballPosition);
     const e=controlled;
-    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    this.objective.visible=!!player&&!menu&&!e?.inDome;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
+    const cameraUp=new T.Vector3(0,1,0);
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
       const distance=this.cameraMode==='wide'?30:portrait?18:15;
       const lookAhead=portrait?-6:5;
-      this.follow.set(e.x+Math.sin(e.yaw)*distance,e.y+(this.cameraMode==='wide'?23:8),e.z+Math.cos(e.yaw)*distance);
-      this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*lookAhead,e.y+1.3,e.z-Math.cos(e.yaw)*lookAhead),1-Math.exp(-8*dt));
+      const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
+      const back=new T.Vector3(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
+      const position=new T.Vector3(e.x,e.y,e.z),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
+      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
+      if(surface){
+        // A tangent chase camera on the curved wall points out through the
+        // shell. Move behind the car and look into the pitch as it climbs,
+        // retaining world-up so the field remains legible on the ceiling.
+        const wallView=T.MathUtils.clamp((1-surface.normalY)*2.5,0,1);
+        const field=new T.Vector3(T.MathUtils.clamp(e.x,DOME.x-DOME.halfLength*.45,DOME.x+DOME.halfLength*.45),0,DOME.z);
+        const outward=position.clone().sub(field).normalize();
+        const arenaCamera=position.clone().addScaledVector(outward,this.cameraMode==='wide'?22:15).add(new T.Vector3(back.x*6,10,0));
+        const arenaFocus=position.clone().lerp(field,.35).add(new T.Vector3(0,1,0));
+        this.follow.lerp(arenaCamera,wallView);focusTarget.lerp(arenaFocus,wallView);
+      }
+      if(!this.cameraReady||this.camera.position.distanceTo(this.follow)>100){this.camera.position.copy(this.follow);this.focus.copy(focusTarget);}
+      else this.focus.lerp(focusTarget,1-Math.exp(-8*dt));
     }
     if(cockpit&&e&&e.kind!=='person'){
       const mesh=this.entities.get(e.id)!;const pose=cockpitPose(mesh.position,mesh.quaternion,VEHICLES[e.kind]);
       this.camera.position.copy(pose.position);this.camera.quaternion.copy(pose.quaternion);this.cameraReady=true;
     }else{
       if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
-      this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);
+      this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));
+      this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
+      this.camera.lookAt(this.focus);
     }
     this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;this.renderer.render(this.scene,this.camera);
   }
