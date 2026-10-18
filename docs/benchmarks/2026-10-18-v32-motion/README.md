@@ -27,7 +27,10 @@ not a measurement of frame rate or a live network session.
 `v32-final-slalom.json.gz`, `v32-final-flight.json.gz` and
 `v32-final-stall.json.gz` contain the corresponding candidate traces at a
 simulated 150 ms RTT, captured from code commit
-`33c040c3e480f1a6e468228a7b450fcb62cf80fe`. The benchmark script SHA-256 is
+`74a0613e0a730688deffd80fe04303ad067f9f41`. These files are byte-identical
+to the earlier runs at `33c040c3e480f1a6e468228a7b450fcb62cf80fe`; the
+synchronized comparison video therefore shows the same final local motion.
+The benchmark script SHA-256 is
 `7dbcbcaef9232cc0b6061caaad2f40caf0840275f200116eebe6af186b1c22a2`.
 In the slalom, the displayed/reference speed ratio's
 5th–95th percentile changed from 0–6.964 to 0.983–1.052, and the first visible
