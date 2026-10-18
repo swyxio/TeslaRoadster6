@@ -80,7 +80,7 @@ try{
   const baseFare=payoutFor({...order(),elapsed:45});
   assert.equal(paid.delivery?.matched,true);assert.equal(paid.delivery?.earnings[0].amount,baseFare);
   assert.equal(paid.progress.completed,1);assert.ok(paid.awards.includes('deliveries-1'));
-  assert.equal(paid.progress.cash,10_120+baseFare+2_500+100,'first early-delivery tier commits with the fare');
+  assert.equal(paid.progress.cash,10_120+baseFare+500+100,'first early-delivery tier commits with the fare');
   assert.deepEqual(paid.progress.achievementTiers?.deliveries,{count:1,claimed:1});
   assert.deepEqual(paid.progress.achievementTiers?.['early-deliveries'],{count:1,claimed:1});
   assert.deepEqual(await rpc('sources',e),['earned-source:delivery:1:dropoff']);
@@ -186,7 +186,7 @@ try{
   await until(()=>rpc<boolean>('stage-held',achievement),'achievement stage accepted before lost reply');
   await stop(child);child=undefined;child=start();await ready();await rpc('freeze',achievement,15_000);
   const awarded=await rpc<Profile>('profile',achievement);
-  assert.equal(awarded.progress.cash,52_500);assert.equal(awarded.progress.eligibleIncome,3_000);
+  assert.equal(awarded.progress.cash,51_000);assert.equal(awarded.progress.eligibleIncome,1_500);
   assert.equal(awarded.progress.order.elapsed,45);assert.ok(awarded.progress.unlocked.includes('roof-rider'));
   assert.ok(awarded.progress.unlocked.includes('region-peninsula'),'achievement unlocks the balance cascade');
   const nextFence=randomUUID(),reattached=await rpc<Profile>('acquire',{...achievement,fence:nextFence});
@@ -195,7 +195,7 @@ try{
   const repeatedIntent:EconomyIntent={eventId:repeated.eventId,driverId:repeated.driverId,fence:repeated.fence,roomId:repeated.roomId,
     revision:reattached.revision,sequence:reattached.sequence+1,clock:repeated.clock,action:repeated.action};
   const repeatedResult=await rpc<DriverOutcome>('submit',{...achievement,intent:repeatedIntent});success(repeatedResult);
-  assert.deepEqual(repeatedResult.awards,[]);assert.equal(repeatedResult.progress.cash,52_500);
+  assert.deepEqual(repeatedResult.awards,[]);assert.equal(repeatedResult.progress.cash,51_000);
   console.log('delivery and achievement journal rejection, ordering, rate, crash and fencing integration passed');
 }finally{
   if(child)await stop(child);

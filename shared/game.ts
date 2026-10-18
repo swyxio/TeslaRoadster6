@@ -34,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=42;
+export const PROTOCOL_VERSION=43;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
