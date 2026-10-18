@@ -777,3 +777,7 @@ On a follow-up based on main at `6b85df1`, a regression test first reproduced bo
 On the combined radio and boarding-fix build, Chrome joined a local live room and drove without console errors. A 6.56-second desktop capture at 1413×939 pixels averaged 105.2 FPS, with a 14.08 ms p95 frame interval and no frames over 50 ms. It used an Apple M5 Pro with WebGL2/Metal and rendered at DPR 1.0; host load was high. This is a short sample, not a sustained FPS guarantee or a controlled comparison.
 
 After deployment, both production endpoints advertised v29, and the deployed JavaScript and CSS matched that local build. A disposable production room passed a two-client movement and input-acknowledgement smoke test. In a separate brief production Chrome check, the room connected, driving and steering worked, and no console errors appeared. These checks do not establish production capacity.
+
+## 2026-10-18 · Economy implementation guide
+
+The contributor guide was checked against the held economy design, the main baseline at `3307584`, the current session contracts and the tower pricing formula. Local document links and the $1.02m starter-home and five-, ten- and twenty-story cost examples passed a lightweight check. This change updates documentation only; no gameplay tests, build or deployment were run during the performance measurement window.
