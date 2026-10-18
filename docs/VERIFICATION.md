@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
+- After integrating the Mars stationary-boarding fix, all 450 tests and `pnpm build` passed. The preceding radio-integrated v30 Cloudflare preview passed the full two-client room integration and prediction checks; the subsequent Mars change only affected boarding eligibility.
 - After integrating the podcast radio and cross-street markings, `pnpm test` passed 449 tests and `pnpm build` passed with Vite’s large-chunk warning. The local Wrangler two-client room, prediction/acknowledgement/barrier and radio integrations passed. One earlier room run timed out at its air-jump observation for an unconfirmed reason; both the diagnostic rerun and final post-integration run passed. An earlier parallel run coincided with Wrangler reloads. These are functional checks, not load tests.
 - On the final combined build, Chrome again accepted the level-two I-280 destination from US 101, displayed the wooded speed oval and exposed the radio station controls. The emulated touch observations below predate the radio and lane-marking merge.
 - Before the radio integration, the combined build passed 443 tests and `pnpm build`, including both TypeScript checks. Vite reports its existing large-chunk warning. Route tests include the previously disconnected US 101 to I-280 pin, both road headings and cross-street connections; sky tests cover locked-region boundaries and empty-tank escape.
