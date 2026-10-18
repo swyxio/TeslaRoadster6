@@ -351,7 +351,7 @@ nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEv
 nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
 $('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
 function openIdentity(){
-  if(session.playtest){notice('Practice is not saved. Use Room settings → Return to saved driver to manage your identity.');return;}setDrawer(null);ensureChat();if(recoveryWarning&&currentCode)showRecoveryCode=true;refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();if(recoveryWarning)identityFeedback(recoveryWarning);else if(!recovery.available)identityFeedback('Browser storage is unavailable. Copy your recovery code to keep your driver.');controls.clear();controls.enabled=false;}
+  if(session.playtest){notice('Playtest progress is not saved. Use Menu → Playtest → Return to saved driver to manage your identity.');return;}setDrawer(null);ensureChat();if(recoveryWarning&&currentCode)showRecoveryCode=true;refreshIdentity();identityName.value=nameInput.value;identityNameDirty=false;identityDialog.showModal();if(recoveryWarning)identityFeedback(recoveryWarning);else if(!recovery.available)identityFeedback('Browser storage is unavailable. Copy your recovery code to keep your driver.');controls.clear();controls.enabled=false;}
 $('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;
 $('identity-close').onclick=()=>identityDialog.close();
 identityDialog.addEventListener('close',()=>{showRecoveryCode=false;pendingShowCode=false;refreshIdentity();controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
