@@ -28,7 +28,7 @@ import { RACE_COURSES } from './race-courses';
 import { ISLAND_BANK, advanceCliff, bankSurface, bankVerticalVelocity, cliffPose, enterCliffFromGround, resolveCliffHit, sweepBank, sweepCliff } from './island-stunts';
 import { ovalBankSurface, ovalBankVerticalVelocity, sweepOvalBank } from './oval-bank';
 import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
-import { airCost, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
+import { airCost, flightLoad, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type DomeParticipant, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
@@ -860,6 +860,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     const jump=manualJump||autoJump;
     const person=e.kind==='person',spec=person?null:VEHICLES[e.kind as VehicleId];
     const rocket=hasRockets(e),airUse=airCost(e.upgrades.economy?.75:1,e.tankLevel),motor=e.upgrades.motor?1.25:1;
+    const load=spec?flightLoad(spec.massKg):1,flightAirUse=airUse*load,flightGravity=9.81*load;
     if(e.inDome&&rocket&&e.supportId==='ground'&&Math.abs(e.z-DOME.z)<=DOME.flatHalfWidth){
       e.supportId='dome';e.domeS=e.z-DOME.z+DOME.flatHalfWidth;
     }
@@ -873,26 +874,30 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       e.vy=-Math.cos(e.yaw)*e.speed*surface.tangentY;e.vz=-Math.cos(e.yaw)*e.speed*surface.tangentZ;
     }else if(grounded){e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;e.vy=onRamp?e.vx*rampSlope:e.supportId==='island-bank'?bankVerticalVelocity(e.x,e.z,e.vx,e.vz):e.supportId==='island-oval'?ovalBankVerticalVelocity(e.x,e.z,e.vx,e.vz):e.supportId==='island-jump'?e.vx*islandJumpSlope(islandJumpAt(e.x,e.z)!):0;}
     if(jump&&rocket&&e.air>0){
-      // A partly empty tank fires a proportional jump; a full starter jump costs 6%.
-      const jumpCost=12*airUse,jumpFraction=Math.min(1,e.air/jumpCost);
+      // A partly empty tank fires a proportional jump; a full starter
+      // Roadster jump costs 24% before the optional nozzle discount.
+      const jumpCost=12*flightAirUse,jumpFraction=Math.min(1,e.air/jumpCost);
       e.air=Math.max(0,e.air-jumpCost*jumpFraction);e.jumpBurstUntil=world.time+.25;
       const angle=e.loopAngle,surface=onDome?domeSurface(e.domeS!):null;
       const normal=surface?{x:0,y:surface.normalY,z:surface.normalZ}:e.supportId==='island-cliff'&&angle!==null?cliffPose(angle).normal:e.supportId==='island-bank'?bankSurface(e.x,e.z)?.normal:e.supportId==='island-oval'?ovalBankSurface(e.x,e.z)?.normal:e.supportId==='island-jump'||e.supportId==='dome-roof'||e.supportId?.startsWith('roof:')?supportNormal(e.supportId,e.x,e.z):null;
       const nx=normal?.x??(angle===null?0:-Math.sin(angle)),ny=normal?.y??(angle===null?1:Math.cos(angle)),nz=normal?.z??0;
-      // An air jump restores upward speed instead of stacking unlimited impulses.
+      // A full air jump restores upward speed without stacking impulses. A
+      // partial jump scales the entire correction, including arresting a fall.
       const along=e.vx*nx+e.vy*ny+e.vz*nz;
-      const impulse=grounded?11*jumpFraction:Math.max(0,11*jumpFraction-along);
+      const jumpSpeed=11/load;
+      const impulse=grounded?jumpSpeed*jumpFraction:Math.max(0,jumpSpeed-along)*jumpFraction;
       e.vx+=nx*impulse;e.vy+=ny*impulse;e.vz+=nz*impulse;
       e.loopAngle=null;e.domeS=null;e.supportId=null;grounded=false;
     }
-    if(flip&&rocket&&!grounded&&e.loopAngle===null&&e.air>=9*airUse&&e.flipRemaining<=0){e.air-=9*airUse;e.flipRemaining=Math.PI*2;}
+    if(flip&&rocket&&!grounded&&e.loopAngle===null&&e.air>=9*flightAirUse&&e.flipRemaining<=0){e.air-=9*flightAirUse;e.flipRemaining=Math.PI*2;}
     const boosting=rocket&&input.boost&&e.air>0&&(input.throttle!==0||!grounded);
-    const boostFraction=boosting?Math.min(1,e.air/(14*airUse*dt)):0;
-    e.air=Math.max(0,e.air-14*airUse*dt*boostFraction);
-    const hoverFraction=rocket&&input.hover&&!grounded&&e.loopAngle===null?Math.min(1,e.air/(18*airUse*dt)):0;
-    e.air=Math.max(0,e.air-18*airUse*dt*hoverFraction);
-    const flightFraction=rocket&&!grounded&&e.loopAngle===null&&input.throttle!==0?Math.min(1,e.air/(4*airUse*dt)):0;
-    e.air=Math.max(0,e.air-4*airUse*dt*flightFraction);
+    const boostAirUse=grounded?airUse:flightAirUse;
+    const boostFraction=boosting?Math.min(1,e.air/(14*boostAirUse*dt)):0;
+    e.air=Math.max(0,e.air-14*boostAirUse*dt*boostFraction);
+    const hoverFraction=rocket&&input.hover&&!grounded&&e.loopAngle===null?Math.min(1,e.air/(18*flightAirUse*dt)):0;
+    e.air=Math.max(0,e.air-18*flightAirUse*dt*hoverFraction);
+    const flightFraction=rocket&&!grounded&&e.loopAngle===null&&input.throttle!==0?Math.min(1,e.air/(4*flightAirUse*dt)):0;
+    e.air=Math.max(0,e.air-4*flightAirUse*dt*flightFraction);
     e.thrusters=0;
     if(boostFraction||(flightFraction&&input.throttle>0))e.thrusters|=THRUSTER_REAR;
     if(rocket&&(world.time<e.jumpBurstUntil||hoverFraction))e.thrusters|=THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT;
@@ -999,7 +1004,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
         e.yawRate+=(input.steer*1.6-e.yawRate)*Math.min(1,dt*4);e.yaw+=e.yawRate*dt;
         e.pitchRate+=(-e.pitch*2-e.pitchRate*2)*dt;e.pitch=clamp(e.pitch+e.pitchRate*dt,-1.3,1.3);
         if(e.flipRemaining>0){const turn=Math.min(e.flipRemaining,Math.PI*2/.8*dt);e.roll+=turn;e.flipRemaining-=turn;e.rollRate=turn/dt;if(e.flipRemaining<1e-8){e.flipRemaining=0;e.stunts++;}}
-        else if(input.roll&&e.air>0){const fraction=Math.min(1,e.air/(3*airUse*dt));e.air-=3*airUse*dt*fraction;e.rollRate=input.roll*3.6*fraction;e.roll+=e.rollRate*dt;}
+        else if(input.roll&&e.air>0){const fraction=Math.min(1,e.air/(3*flightAirUse*dt));e.air-=3*flightAirUse*dt*fraction;e.rollRate=input.roll*3.6*fraction;e.roll+=e.rollRate*dt;}
         else if(!hoverFraction){const upright=Math.atan2(Math.sin(e.roll),Math.cos(e.roll)),bank=input.steer*.65;e.rollRate=(bank-upright)*3;e.roll+=(bank-upright)*Math.min(1,dt*3);}
         else e.rollRate=0;
         // Powered flight damps sideways and opposing momentum so a new heading
@@ -1010,18 +1015,20 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
           const along=forward*input.throttle<0?forward*damping:forward;
           e.vx=fx*along+sideX*damping;e.vz=fz*along+sideZ*damping;
         }
-        const thrust=45.46*boostFraction+16*flightFraction*input.throttle;
+        const thrust=(45.46*boostFraction+16*flightFraction*input.throttle)/load;
         e.vx+=-Math.sin(e.yaw)*Math.cos(e.pitch)*thrust*dt;e.vy+=Math.sin(e.pitch)*thrust*dt;e.vz+=-Math.cos(e.yaw)*Math.cos(e.pitch)*thrust*dt;
       }
       // Fictional thruster hover holds any orientation; it is not suction.
-      if(hoverFraction){const damping=Math.exp(-3*dt*hoverFraction);e.vy*=damping;e.vy+=9.81*dt*hoverFraction;}
+      if(hoverFraction){const damping=Math.exp(-3*dt*hoverFraction);e.vy*=damping;e.vy+=flightGravity*dt*hoverFraction;}
       const current=currentAt(e);
       if(current){
         // A current never consumes air. It replenishes even an empty tank and
         // works on any airborne vehicle, with or without an installed kit.
-        e.air=Math.min(100,e.air+airCost(14,e.tankLevel)*dt);
+        e.air=Math.min(100,e.air+airCost(current.kind==='thermal'?1:2,e.tankLevel)*dt);
         if(current.kind==='thermal'){
-          if(e.vy<12)e.vy+=Math.min(12-e.vy,20*dt);
+          // An updraft slows a fall and assists powered climbs, but cannot
+          // hold or lift an unpowered car against gravity on its own.
+          if(e.vy<6)e.vy+=Math.min(6-e.vy,2.5*dt);
         }else{
           const dx=current.end.x-current.start.x,dz=current.end.z-current.start.z,length=Math.hypot(dx,dz),x=dx/length,z=dz/length;
           const player=e.driver&&world.players.find(p=>p.id===e.driver);
@@ -1031,13 +1038,16 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
           if(!gateAhead){
             // Normal flight thrust exceeds the current, allowing a player to
             // turn or reverse out without needing to spend extra air on boost.
-            const along=e.vx*x+e.vz*z,boost=Math.min(8*dt,Math.max(0,60-along));
+            const along=e.vx*x+e.vz*z,boost=Math.min(3*dt,Math.max(0,60-along));
             e.vx+=x*boost;e.vz+=z*boost;
-            e.vy*=Math.exp(-2*dt);e.vy+=9.81*dt;
+            // Wind eases an unpowered descent; it must not stack another
+            // gravity cancellation on top of the player's powered hover.
+            const unpowered=1-hoverFraction;
+            e.vy*=Math.exp(-.45*dt*unpowered);e.vy+=4.4*dt*unpowered;
           }
         }
       }
-      e.vy-=9.81*dt;capFlightSpeed(e);
+      e.vy-=flightGravity*dt;capFlightSpeed(e);
       e.x+=e.vx*dt;e.y+=e.vy*dt;e.z+=e.vz*dt;
       const jumpWall=islandJumpWallHit(e,old),jumpTop=sweepIslandJump(old,e);
       const groundTime=old.y>=0&&e.y<0?old.y/(old.y-e.y):Infinity;

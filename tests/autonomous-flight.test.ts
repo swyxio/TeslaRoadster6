@@ -52,7 +52,7 @@ test('sky mode can use the aligned thermal and leave it to land',()=>{
   const {world,car,nav}=fixture(0,-118,Math.PI,{x:0,z:30});
   const result=flight(world,car,nav,'sky');
   assert.equal(result.state.current,'pyramid');assert.equal(result.wind,'pyramid');
-  assert.ok(result.peak>20);assert.equal(result.landed,true);assert.ok(car.z> -77);assert.equal(car.health,100);
+  assert.ok(result.peak>9);assert.equal(result.landed,true);assert.ok(car.z> -82);assert.equal(car.health,100);
 });
 
 test('sky mode catches a low jet only when the downstream exit is reachable',()=>{
@@ -129,7 +129,7 @@ test('authoritative sky mode rides a thermal, lands and continues to its destina
     if(car.supportId===null)airborne=true;else if(airborne)landed=true;
     if(currentAt(car)?.id==='pyramid')thermal=true;peak=Math.max(peak,car.y);
   }
-  assert.equal(airborne,true);assert.equal(landed,true);assert.equal(thermal,true);assert.ok(peak>20);
+  assert.equal(airborne,true);assert.equal(landed,true);assert.equal(thermal,true);assert.ok(peak>9);
   assert.equal(car.navigation?.status,'arrived');assert.ok(Math.hypot(car.x-3,car.z-60)<8);
   assert.equal(car.health,100);assert.equal(car.lastJump,0);
 });
@@ -181,20 +181,18 @@ test('both flight modes leave emergency braking in control when a large vehicle 
   }
 });
 
-test('both flight modes can clear a stopped large vehicle when takeoff clearance is safe',()=>{
+test('both flight modes reject a heavy jump that cannot clear the leader on descent',()=>{
   for(const mode of ['jump','sky'] as const){
     const {world,car}=fixture(-240,-177,-Math.PI/2,{x:-60,z:-177});
-    car.kind='tesla-semi';
+    car.kind='tesla-semi';car.tankLevel=2;
     Object.assign(car.upgrades,{rocket:true,autonomyJump:true,autonomySky:true});
     const leader=makeEntity('leader','robovan',-227,-177);leader.yaw=-Math.PI/2;world.entities.push(leader);
     assert.equal(setDestination(world,'pilot',{x:-60,z:-177},mode),true);
-    let airborne=false,landed=false;
-    for(let i=0;i<1800&&car.autopilot;i++){
+    for(let i=0;i<40;i++){
       step(world,new Map(),.05);
-      if(car.supportId===null)airborne=true;else if(airborne)landed=true;
+      assert.equal(car.supportId,'ground',`${mode} must not jump into the leader`);
+      assert.ok(Math.hypot(car.x-leader.x,car.z-leader.z)>9,`${mode} avoids the leader`);
     }
-    assert.equal(airborne,true,`${mode} should use the safe takeoff`);
-    assert.equal(landed,true);assert.equal(car.navigation?.status,'arrived');
     assert.equal(car.health,100);assert.equal(leader.x,-227);
   }
 });

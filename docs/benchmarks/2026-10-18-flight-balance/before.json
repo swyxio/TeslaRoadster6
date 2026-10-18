@@ -1,0 +1,4544 @@
+{
+  "dt": 0.05,
+  "description": "Controlled synthetic single-car simulation; flight path steers in a circle; current cases start inside a volume.",
+  "results": [
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 11.15,
+      "emptyAt": 11.15,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 64,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 28,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 9.1,
+      "emptyAt": 9.1,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 505.2,
+      "displacementMeters": 283.11,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 56,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 94,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 94,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": 12.65,
+      "peakY": 16.19,
+      "endY": 15.55,
+      "pathMeters": 231.41,
+      "displacementMeters": 231.41,
+      "airRemainingPercent": 0,
+      "currentSeconds": 3.35,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 98,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 95.65,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 77.65,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 41.65,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 15.55,
+          "air": 0,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 58.1,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 92,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 84,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 58.1,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 14.85,
+      "emptyAt": 14.85,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 73,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 46,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 12.15,
+      "emptyAt": 12.15,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 749.19,
+      "displacementMeters": 220.9,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 67,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 34,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 95.5,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 95.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 11.91,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.66,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 86.16,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 59.16,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 11.91,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 88.52,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 88.52,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 22.25,
+      "emptyAt": 22.25,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 64,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 32.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 18.2,
+      "emptyAt": 18.2,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 1233.18,
+      "displacementMeters": 158.8,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 56,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 17.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 97,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 97,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 39.33,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 97.83,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 88.83,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 70.83,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 39.33,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 79.05,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 92,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 79.05,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 29.65,
+      "emptyAt": 29.65,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 96.62,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 73,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 49.37,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 24.25,
+      "emptyAt": 24.25,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 1717.17,
+      "displacementMeters": 255.82,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 95.88,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 67,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 38.12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.75,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 97.75,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 55.96,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.83,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 93.08,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 79.58,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 55.96,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 2,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94.26,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 94.26,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 44.45,
+      "emptyAt": 44.45,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 66.25,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 36.4,
+      "emptyAt": 36.4,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 2689.15,
+      "displacementMeters": 276.37,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 58.75,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.5,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 98.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 98.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 69.66,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.5,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 98.91,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 94.41,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 85.41,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 69.66,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 89.53,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 89.53,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 59.3,
+      "emptyAt": 59.3,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 96.63,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 74.69,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 48.5,
+      "emptyAt": 48.5,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 3657.13,
+      "displacementMeters": 283.34,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 95.87,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 69.06,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.88,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 98.88,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 98.88,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 77.98,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.92,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 96.54,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 89.79,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 77.98,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 3,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.13,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 97.13,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 88.9,
+      "emptyAt": 88.9,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.87,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 83.12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 72.75,
+      "emptyAt": 72.75,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 5597.08,
+      "displacementMeters": 253.12,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.62,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 79.37,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.25,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.25,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 84.83,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.75,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.46,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 97.21,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 92.71,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 84.83,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94.76,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.75,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 94.76,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 118.55,
+      "emptyAt": 118.55,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.16,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 96.63,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 87.34,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 97,
+      "emptyAt": 97,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 7537.03,
+      "displacementMeters": 172.49,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.97,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 95.88,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 84.53,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.44,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.44,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.44,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 88.99,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.96,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 98.27,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 94.9,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 88.99,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 4,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.57,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 98.57,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 177.8,
+      "emptyAt": 177.8,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.44,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.87,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 91.56,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 145.5,
+      "emptyAt": 145.5,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 11416.94,
+      "displacementMeters": 94.84,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.31,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.63,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 89.69,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.63,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.63,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.63,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 92.42,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.87,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.73,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 98.6,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 96.35,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 92.42,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.38,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.87,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99.75,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 97.38,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 237.05,
+      "emptyAt": 237.05,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.58,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 99.16,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 96.62,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 93.67,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 193.95,
+      "emptyAt": 193.95,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 15292.85,
+      "displacementMeters": 267.71,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.48,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.97,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 95.87,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 92.27,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.72,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.72,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.72,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 94.49,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.98,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 99.14,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 97.45,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 94.49,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 5,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.28,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 99.28,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 11.15,
+      "emptyAt": 11.15,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 64,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 28,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 9.1,
+      "emptyAt": 9.1,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 505.2,
+      "displacementMeters": 283.11,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 56,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 94,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 94,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": 12.65,
+      "peakY": 16.19,
+      "endY": 15.55,
+      "pathMeters": 231.41,
+      "displacementMeters": 231.41,
+      "airRemainingPercent": 0,
+      "currentSeconds": 3.35,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 98,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 95.65,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 77.65,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 41.65,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 15.55,
+          "air": 0,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 58.1,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 92,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 84,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 58.1,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 14.85,
+      "emptyAt": 14.85,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 73,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 46,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 12.15,
+      "emptyAt": 12.15,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 749.19,
+      "displacementMeters": 220.9,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 67,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 34,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 95.5,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 95.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 11.91,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.66,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 86.16,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 59.16,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 11.91,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 88.52,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 88.52,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 22.25,
+      "emptyAt": 22.25,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 64,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 32.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 18.2,
+      "emptyAt": 18.2,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 1233.18,
+      "displacementMeters": 158.8,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 56,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 17.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 97,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 97,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 39.33,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 97.83,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 88.83,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 70.83,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 39.33,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 79.05,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 92,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 79.05,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 29.65,
+      "emptyAt": 29.65,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 96.62,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 73,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 49.37,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 24.25,
+      "emptyAt": 24.25,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 1717.17,
+      "displacementMeters": 255.82,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 95.88,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 67,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 38.12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.75,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 97.75,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 55.96,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.83,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 93.08,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 79.58,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 55.96,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 2,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94.26,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 94.26,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 44.45,
+      "emptyAt": 44.45,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 82,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 66.25,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 36.4,
+      "emptyAt": 36.4,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 2689.15,
+      "displacementMeters": 276.37,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 78,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 58.75,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.5,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 98.5,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 98.5,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 69.66,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.5,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 98.91,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 94.41,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 85.41,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 69.66,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 89.53,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 96,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 89.53,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 59.3,
+      "emptyAt": 59.3,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 96.63,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 86.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 74.69,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 48.5,
+      "emptyAt": 48.5,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 3657.13,
+      "displacementMeters": 283.34,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 95.87,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 83.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 69.06,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.88,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 98.88,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 98.88,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 77.98,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.92,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 96.54,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 89.79,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 77.98,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 3,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.13,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 97.13,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 88.9,
+      "emptyAt": 88.9,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.87,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 91,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 83.12,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 72.75,
+      "emptyAt": 72.75,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 5597.08,
+      "displacementMeters": 253.12,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.62,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 89,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 79.37,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.25,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.25,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.25,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 84.83,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.75,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.46,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 97.21,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 92.71,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 84.83,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 94.76,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.75,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 98,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 94.76,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 118.55,
+      "emptyAt": 118.55,
+      "peakY": 100,
+      "endY": 99.98,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.16,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 96.63,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 93.25,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 87.34,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 97,
+      "emptyAt": 97,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 7537.03,
+      "displacementMeters": 172.49,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 98.97,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 95.88,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 91.75,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 84.53,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.44,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.44,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.44,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 88.99,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.96,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 98.27,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 94.9,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 88.99,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 4,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 98.57,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 98.57,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": false,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 177.8,
+      "emptyAt": 177.8,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.44,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.87,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.75,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 95.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 91.56,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": false,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 145.5,
+      "emptyAt": 145.5,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 11416.94,
+      "displacementMeters": 94.84,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.31,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.63,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.25,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 94.5,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 89.69,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": false,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.63,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.63,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.63,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": false,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 92.42,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 99.87,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.73,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 98.6,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 96.35,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 92.42,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": false,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 97.38,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 99.87,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 99.75,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 99.5,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 99,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 97.38,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": true,
+      "scenario": "hover",
+      "stop": "empty",
+      "seconds": 237.05,
+      "emptyAt": 237.05,
+      "peakY": 100,
+      "endY": 99.99,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.58,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 99.16,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 98.31,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 96.62,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 93.67,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": true,
+      "scenario": "flight",
+      "stop": "empty",
+      "seconds": 193.95,
+      "emptyAt": 193.95,
+      "peakY": 100,
+      "endY": 100,
+      "pathMeters": 15292.85,
+      "displacementMeters": 267.71,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 100,
+          "air": 99.48,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 100,
+          "air": 98.97,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 100,
+          "air": 97.94,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 100,
+          "air": 95.87,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 100,
+          "air": 92.27,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": true,
+      "scenario": "jump",
+      "stop": "landed",
+      "seconds": 2.2,
+      "emptyAt": null,
+      "peakY": 5.91,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.72,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 5.86,
+          "air": 99.72,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 1.9,
+          "air": 99.72,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": true,
+      "scenario": "jet",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 16.19,
+      "endY": 16.19,
+      "pathMeters": 219.11,
+      "displacementMeters": 219.11,
+      "airRemainingPercent": 94.49,
+      "currentSeconds": 1.95,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 13.66,
+          "air": 100,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 15.64,
+          "air": 99.98,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 16.18,
+          "air": 99.14,
+          "current": null
+        },
+        {
+          "seconds": 8,
+          "y": 16.19,
+          "air": 97.45,
+          "current": null
+        },
+        {
+          "seconds": 15,
+          "y": 16.19,
+          "air": 94.49,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 5,
+      "economy": true,
+      "scenario": "thermal",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 98.47,
+      "endY": 98.47,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 99.28,
+      "currentSeconds": 13.3,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.07,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 15.15,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 29.5,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 58.22,
+          "air": 100,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 98.47,
+          "air": 99.28,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "jet-empty",
+      "stop": "landed",
+      "seconds": 13.65,
+      "emptyAt": null,
+      "peakY": 12,
+      "endY": 0,
+      "pathMeters": 594.61,
+      "displacementMeters": 594.61,
+      "airRemainingPercent": 84.53,
+      "currentSeconds": 12.1,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 12,
+          "air": 7,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 12,
+          "air": 14,
+          "current": "market"
+        },
+        {
+          "seconds": 4,
+          "y": 12,
+          "air": 28,
+          "current": "market"
+        },
+        {
+          "seconds": 8,
+          "y": 12,
+          "air": 56,
+          "current": "market"
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "thermal-empty",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 102.89,
+      "endY": 99.66,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 75.07,
+      "currentSeconds": 10.75,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.35,
+          "air": 7,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 20,
+          "air": 14,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 43.51,
+          "air": 28,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 90.53,
+          "air": 56,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 99.66,
+          "air": 75.07,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "roadster",
+      "level": 1,
+      "economy": false,
+      "scenario": "fall-empty",
+      "stop": "landed",
+      "seconds": 4.55,
+      "emptyAt": null,
+      "peakY": 100,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 94.85,
+          "air": 0,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 80.01,
+          "air": 0,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 21,
+          "air": 0,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "jet-empty",
+      "stop": "landed",
+      "seconds": 13.65,
+      "emptyAt": null,
+      "peakY": 12,
+      "endY": 0,
+      "pathMeters": 594.61,
+      "displacementMeters": 594.61,
+      "airRemainingPercent": 84.53,
+      "currentSeconds": 12.1,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 12,
+          "air": 7,
+          "current": "market"
+        },
+        {
+          "seconds": 2,
+          "y": 12,
+          "air": 14,
+          "current": "market"
+        },
+        {
+          "seconds": 4,
+          "y": 12,
+          "air": 28,
+          "current": "market"
+        },
+        {
+          "seconds": 8,
+          "y": 12,
+          "air": 56,
+          "current": "market"
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "thermal-empty",
+      "stop": "limit",
+      "seconds": 15,
+      "emptyAt": null,
+      "peakY": 102.89,
+      "endY": 99.66,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 75.07,
+      "currentSeconds": 10.75,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 8.35,
+          "air": 7,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 2,
+          "y": 20,
+          "air": 14,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 4,
+          "y": 43.51,
+          "air": 28,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 8,
+          "y": 90.53,
+          "air": 56,
+          "current": "pyramid"
+        },
+        {
+          "seconds": 15,
+          "y": 99.66,
+          "air": 75.07,
+          "current": null
+        }
+      ]
+    },
+    {
+      "kind": "tesla-semi",
+      "level": 1,
+      "economy": false,
+      "scenario": "fall-empty",
+      "stop": "landed",
+      "seconds": 4.55,
+      "emptyAt": null,
+      "peakY": 100,
+      "endY": 0,
+      "pathMeters": 0,
+      "displacementMeters": 0,
+      "airRemainingPercent": 0,
+      "currentSeconds": 0,
+      "samples": [
+        {
+          "seconds": 1,
+          "y": 94.85,
+          "air": 0,
+          "current": null
+        },
+        {
+          "seconds": 2,
+          "y": 80.01,
+          "air": 0,
+          "current": null
+        },
+        {
+          "seconds": 4,
+          "y": 21,
+          "air": 0,
+          "current": null
+        }
+      ]
+    }
+  ]
+}

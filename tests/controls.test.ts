@@ -58,7 +58,7 @@ test('a Space tap immediately after jump flips even before the HUD updates',()=>
   for(const code of ['KeyE','Space']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   assert.equal(controls.airborne,false);
   step(world,new Map([['driver',controls.read()]]),.05);
-  assert.equal(car.supportId,null);assert.ok(car.flipRemaining>0);assert.equal(car.air,89.5);
+  assert.equal(car.supportId,null);assert.ok(car.flipRemaining>0);assert.equal(car.air,58);
 });
 
 test('braking before a jump in the same tick does not trigger a flip',()=>{
@@ -70,7 +70,7 @@ test('braking before a jump in the same tick does not trigger a flip',()=>{
   const world:World={...createWorld(),entities:[car],players:[],pickups:[],time:0};
   for(const code of ['Space','KeyE']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   step(world,new Map([['driver',controls.read()]]),.05);
-  assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,94);
+  assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,76);
 });
 
 test('pending jump preserves flip until acknowledged, even with a delayed snapshot',()=>{
@@ -97,9 +97,9 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   const car=makeEntity('car','roadster',0,0,'driver');
   const world:World={...createWorld(),entities:[car],players:[],pickups:[],time:0};
   const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyE'});fakeWindow.dispatchEvent(key);
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,94);assert.equal(car.lastJump,1);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,76);assert.equal(car.lastJump,1);
   jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));
-  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,88);assert.equal(car.lastJump,2);
+  step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,52);assert.equal(car.lastJump,2);
   Object.assign(car,{x:0,z:0,y:0,vy:0,supportId:'ground',speed:20});
   brake.dispatchEvent(pointer('pointerdown',2));step(world,new Map([['driver',controls.read()]]),.05);
   assert.ok(car.speed<19);brake.dispatchEvent(pointer('pointerup',2));assert.equal(controls.read().brake,false);

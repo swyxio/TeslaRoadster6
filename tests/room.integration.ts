@@ -99,7 +99,7 @@ try {
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
-  const entityId = one.state.world!.players.find(p => p.id === id)!.entityId;
+  let entityId = one.state.world!.players.find(p => p.id === id)!.entityId;
   const initial = one.state.world!.entities.find(e => e.id === entityId)!;
   const origin={x:initial.x,z:initial.z,yaw:initial.yaw};
   for (let i = 0; i < 20; i++) { one.input.send({ ...NEUTRAL, throttle: 1, cockpit: true }); await delay(50); }
@@ -120,13 +120,21 @@ try {
   const remaining=two.state.world!.entities.find(e=>e.id===entityId)!.air;
   one.input.send({...NEUTRAL,jump:1,flip:1});
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_SIDE_RIGHT),'remote flip exhaust replicated');
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-4.5))<.01;},'one-tap flip completion replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-18))<.01;},'one-tap flip completion replicated');
   const flightStart=two.state.world!.entities.find(e=>e.id===entityId)!;
   const flightOrigin={x:flightStart.x,z:flightStart.z,yaw:flightStart.yaw};
   for(let i=0;i<12;i++){one.input.send({...NEUTRAL,jump:1,flip:1,throttle:1,hover:true});await delay(50);}
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId===null&&((e.x-flightOrigin.x)*-Math.sin(flightOrigin.yaw)+(e.z-flightOrigin.z)*-Math.cos(flightOrigin.yaw)>1)&&(e.thrusters&THRUSTER_REAR)!==0;},'remote forward flight and hover replicated');
   one.input.send({...NEUTRAL,jump:1,flip:1});
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId!==null;},'assisted landing on a shared surface replicated');
+  // Select a fresh Roadster for the separate double-jump scenario. Reset alone
+  // preserves air, and the preceding jump, flip and powered flight spent it.
+  one.input.action({type:'reset'});
+  await delay(600);
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId!==null&&Math.abs(e.speed)<=1;},'Roadster is stopped before choosing another');
+  one.input.action({type:'selectVehicle',kind:'roadster'});
+  await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.entityId!==entityId&&two.state.world?.entities.some(e=>e.id===p.entityId&&e.air===100)===true;},'fresh Roadster is ready for the separate lane scenario');
+  entityId=two.state.world!.players.find(p=>p.id===id)!.entityId;
   // A double jump from the Bay approach reaches the low City Glide lane.
   // Check its server-applied refill from the other client's snapshots.
   // The second connection can win the first spawn on a real network. Move it

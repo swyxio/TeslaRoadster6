@@ -2,7 +2,7 @@ import type { Entity, Input, World } from './game';
 import type { Level } from './delivery';
 import { requiredLevelAt } from './delivery';
 import type { DriveMode } from './drive-mode';
-import { airCost } from './air-tank';
+import { airCost, flightLoad } from './air-tank';
 import { inDomePlaza, isSurface, nearbyBuildings, overpassHeight, terrainHeight } from './map';
 import { dimensions } from './physics';
 import { currentAt, JET_STREAMS, THERMALS } from './sky-currents';
@@ -51,13 +51,17 @@ function jumpable(car:Entity,other:Entity,forward:{x:number;z:number},along:numb
   const alignment=Math.abs(forward.x*otherForward.x+forward.z*otherForward.z);
   const cross=Math.abs(forward.x*otherForward.z-forward.z*otherForward.x);
   const footprint=size.length/2+(alignment*obstacle.length+cross*obstacle.width)/2;
-  // Air thrust can add up to 16 m/s². Reserve extra room for input/physics
-  // sampling and for a body to rise completely above the leader's top.
+  // Check ascent and descent with this vehicle's fictional flight load.
+  // Reject a jump if even maximum thrust cannot clear the leader before
+  // the first ballistic descent. This optimistic bound ignores later pulses
+  // and hover; it is not a collision-free guarantee.
   const height=obstacle.height+Math.max(0,other.y-car.y)+.5;
-  const discriminant=121-19.62*height;if(discriminant<=0)return false;
-  const time=(11-Math.sqrt(discriminant))/9.81;
+  const load=flightLoad(size.massKg),jumpSpeed=11/load,gravity=9.81*load;
+  const discriminant=jumpSpeed*jumpSpeed-2*gravity*height;if(discriminant<=0)return false;
+  const root=Math.sqrt(discriminant),time=(jumpSpeed-root)/gravity,fallTime=(jumpSpeed+root)/gravity;
   const speed=Math.max(0,car.speed+car.pushX*forward.x+car.pushZ*forward.z);
-  return along>=footprint+(speed+1)*time+8*time*time+1;
+  return along>=footprint+(speed+1)*time+8/load*time*time+1&&
+    speed*fallTime+8/load*fallTime*fallTime>=along+footprint+1;
 }
 
 /** A stopped leader is a plausible reason to spend air on a short jump. */
@@ -134,6 +138,7 @@ export function autonomousFlight(car:Entity,world:World,level:Level,mode:DriveMo
   const ground={input:groundInput,jump:false,active:false};
   const nav=car.navigation;
   if(mode==='road'||!nav||nav.status!=='driving'||!hasRockets(car)||car.inDome||car.loopAngle!==null){state.phase='ground';return ground;}
+  const airUse=flightLoad(dimensions(car.kind).massKg)*(car.upgrades.economy?.75:1);
   if(state.phase==='air'){
     if(car.supportId!==null){state.phase='ground';state.target=null;return ground;}
     const target=state.target;
@@ -151,15 +156,15 @@ export function autonomousFlight(car:Entity,world:World,level:Level,mode:DriveMo
     let jump=false;
     // Sky mode adds a second measured pulse for a longer cruise, but avoids
     // spending a jump once airborne wind is already carrying the car upward.
-    if(mode==='sky'&&state.jumps<2&&car.air>=airCost(18,car.tankLevel)&&world.time-state.lastJump>.9&&
+    if(mode==='sky'&&state.jumps<2&&car.air>=airCost(18*airUse,car.tankLevel)&&world.time-state.lastJump>.9&&
        height<9&&car.vy<3&&!current&&distance>18&&world.time-state.started<3){
       jump=true;state.lastJump=world.time;state.jumps++;
     }
-    const hover=car.air>=airCost(5,car.tankLevel)&&height<6&&car.vy< -6;
+    const hover=car.air>=airCost(5*airUse,car.tankLevel)&&height<6&&car.vy< -6;
     const input:Input={...groundInput,throttle,steer:steering,brake:false,boost:false,hover,roll:0};
     return {input,jump,active:true};
   }
-  if(car.supportId!=='ground'||nav.join||world.time-state.lastLaunch<10||car.air<airCost(45,car.tankLevel)||
+  if(car.supportId!=='ground'||nav.join||world.time-state.lastLaunch<10||car.air<airCost(45*airUse,car.tankLevel)||
      Math.abs(car.speed)>12||car.speed<-.2||world.time<state.nextCheck)return ground;
   const next=nav.path[nav.index];if(!next)return ground;
   const distance=length(car,next);if(distance<70)return ground;
