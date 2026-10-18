@@ -5,10 +5,10 @@ import { addPlayer, createWorld, makeEntity, removePlayer, step, travelDome, typ
 import { initialSoccer, stepSoccer, type SoccerState } from '../shared/soccer';
 import type { VehicleId } from '../shared/vehicles';
 
-function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false):void {
+function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false,pickup=false):void {
   const car=makeEntity('striker',kind,DOME.x+5,DOME.z,id);
   Object.assign(car,{y:0,vx:400,vy:0,vz:0,yaw:-Math.PI/2,inDome:true});
-  car.upgrades.rocket=retrofit;
+  car.upgrades.rocket=retrofit;car.rocketUntil=pickup?10:0;
   Object.assign(state.ball,{x:DOME.x,y:DOME.ballRadius,z:DOME.z,vx:0,vy:0,vz:0});
   stepSoccer(state,[car],.05,.05);
   assert.ok(state.ball.vx>0,'an actual collision moved the ball');
@@ -39,6 +39,8 @@ test('ball contacts record the actual vehicle class and ignore undriven cars',()
     assert.equal(state.lastTouch?.carClass,expected);
     assert.equal(state.participants[0].touches[expected],true);
   }
+  const temporary=initialSoccer();touch(temporary,'driver','model-3',false,true);
+  assert.equal(temporary.lastTouch?.carClass,'pickup');
   const state=initialSoccer();touch(state,'driver','roadster');touch(state,null,'model-3');
   assert.equal(state.lastTouch,null,'an undriven car cannot credit its collision to the previous player');
   goal(state,1,1);assert.equal(state.participants[0].goals.roadster,0);
@@ -105,6 +107,13 @@ test('stock win requires stock-only touches and a stock-credited goal',()=>{
   assert.ok(p.achievements.unlocked.includes('rocket-rookie'));
   assert.ok(!p.achievements.unlocked.includes('roadster-champion'));
   assert.ok(!p.achievements.unlocked.includes('no-rockets-needed'));
+});
+
+test('a temporary Rocket pickup does not count as a rocket-free win',()=>{
+  const world=createWorld(),p=addPlayer(world,'p','Player');assert.equal(travelDome(world,p.id),true);
+  touch(world.soccer,p.id,'model-3',false,true);touch(world.soccer,p.id,'model-3');finish(world);
+  assert.ok(!p.achievements.unlocked.includes('no-rockets-needed'));
+  assert.ok(!p.achievements.unlocked.includes('built-to-fly'));
 });
 
 test('disconnect removes a participant and their pending touch',()=>{

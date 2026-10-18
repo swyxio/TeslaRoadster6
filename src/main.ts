@@ -26,7 +26,7 @@ import { celebrateReward, resetCelebration } from './rewards';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
-import { DOME } from '../shared/dome';
+import { DOME, chargingDomeWall } from '../shared/dome';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, terrainHeight } from '../shared/map';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
@@ -59,7 +59,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
- <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · most goals wins · ties share</small></div>
+ <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="dome">⚽ Rocket Dome</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button><button id="parking-park">Park It</button><button id="parking-queue">Cut the queue</button><button id="parking-start">Start queue</button><button id="parking-leave">Leave parking game</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
@@ -628,7 +628,7 @@ scene.start(dt=>{
   if(e.inDome){
     const soccer=session.world.soccer;
     const blue=`BLUE ${soccer.blueScore}`,orange=`${soccer.orangeScore} ORANGE`;
-    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.stock;
+    const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
     const ownParticipant=soccer.participants.find(participant=>participant.playerId===session.id);
     const ownGoals=ownParticipant?goalCount(ownParticipant):0;
     const topGoals=Math.max(0,...soccer.participants.map(goalCount));
@@ -669,8 +669,9 @@ scene.start(dt=>{
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),station=chargingStationAt(e.x,e.z),refilling=!!station&&e.supportId==='ground'&&e.loopAngle===null&&Math.abs(e.y-(terrainHeight(station!.x,station!.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
   const skyCurrent=currentAt(e);
-  $('station-status').textContent=skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + AIR':'➜ SKY LANE · SPEED + AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${nearest.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
-  $('station-status').classList.toggle('refilling',refilling||!!skyCurrent);
+  const wallCharge=chargingDomeWall(e,rocket);
+  $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + AIR':'➜ SKY LANE · SPEED + AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${nearest.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
+  $('station-status').classList.toggle('refilling',refilling||!!skyCurrent||wallCharge);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const shopDistance=Math.hypot(e.x-nearbyShop.x,e.z-nearbyShop.z),shopReady=!!shopFor(e);

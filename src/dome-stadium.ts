@@ -1,5 +1,6 @@
 import * as T from 'three';
-import { DOME } from '../shared/dome';
+import { DOME, DOME_CHARGE_HEIGHT } from '../shared/dome';
+import { DOME_PERIMETER, domeSurface } from '../shared/map';
 
 type Box = { x:number; y:number; z:number; w:number; h:number; d:number; color:number };
 
@@ -126,6 +127,26 @@ export function addDomeStadium(group:T.Group):void {
     matrix.compose(a.clone().add(b).multiplyScalar(.5),rotation,new T.Vector3(width,delta.length(),width));beamMesh.setMatrixAt(i,matrix);beamMesh.setColorAt(i,new T.Color(color));
   });
   beamMesh.name='dome-roof-trusses';beamMesh.computeBoundingSphere();group.add(beamMesh);
+
+  // Gold paint follows the actual curved wall at the shared recharge height.
+  const marks:number[]=[];
+  const arc=(side:number,height:number)=>{
+    const angle=Math.acos(1-height/R);
+    return side>0?2*W+R*angle:DOME_PERIMETER-R*angle;
+  };
+  const point=(x:number,s:number):number[]=>{
+    const p=domeSurface(s);return [x,p.y+p.normalY*.25,p.z-DOME.z+p.normalZ*.25];
+  };
+  const triangle=(a:number[],b:number[],c:number[])=>marks.push(...a,...b,...c);
+  for(const side of [-1,1]){
+    const low=arc(side,DOME_CHARGE_HEIGHT),high=arc(side,DOME_CHARGE_HEIGHT+.6);
+    const a=point(-L+.5,low),b=point(L-.5,low),c=point(L-.5,high),d=point(-L+.5,high);
+    triangle(a,b,c);triangle(a,c,d);
+    for(let x=-63;x<=63;x+=14)triangle(point(x-2.3,arc(side,10)),point(x+2.3,arc(side,10)),point(x,arc(side,15)));
+  }
+  const chargeGeometry=new T.BufferGeometry();chargeGeometry.setAttribute('position',new T.Float32BufferAttribute(marks,3));
+  const chargeMarks=new T.Mesh(chargeGeometry,new T.MeshBasicMaterial({color:0xffd46b,side:T.DoubleSide}));
+  chargeMarks.name='dome-charge-marks';group.add(chargeMarks);
 
   addStatues(group);
   addSigns(group);

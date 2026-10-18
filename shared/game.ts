@@ -1,5 +1,5 @@
 import { BUILDINGS, DOME_PERIMETER, FERRY_DOCKS, MAP_BOUNDS, OVERPASS, STUNT_LOOP, STUNT_RAMP, domeSurface, rampHeight, inDomePlaza, isRocketIsland, isSurface, nearbyBuildings, overpassHeight, supportHeight, terrainHeight, type SupportId } from './map';
-import { DOME } from './dome';
+import { DOME, DOME_CHARGE_RATE, chargingDomeWall } from './dome';
 export { BUILDINGS } from './map';
 import { chargingStationAt } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
@@ -733,6 +733,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
       e.pushX=0;e.pushZ=0;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
     }
+    if(chargingDomeWall(e,hasRocket(e,world.time)))e.air=Math.min(100,e.air+DOME_CHARGE_RATE*dt);
     const station=chargingStationAt(e.x,e.z);
     if(!person&&station&&e.supportId==='ground'&&Math.abs(e.speed)<1&&Math.abs(e.y-(terrainHeight(station.x,station.z)??0))<1)e.air=Math.min(100,e.air+28*dt);
   }
