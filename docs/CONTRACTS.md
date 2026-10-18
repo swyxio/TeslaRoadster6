@@ -1,4 +1,4 @@
-# Implementation contracts · v31
+# Implementation contracts · v32
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -35,7 +35,7 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v31
+## Wire protocol v32
 
 Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:31,capacity:number}`.
 
@@ -84,7 +84,7 @@ For local presentation only, the client replays at most three unacknowledged inp
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The simulation decides membership and applies lift, speed and air. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v31 combines the wooded North Bay, Peninsula alternatives and rebalanced sky currents with the shared UCSF landmark, research rewards and vehicle finishes. The server checks visits, shop discounts and finish purchases; clients cannot claim visits or set prices. The server and client must share world geometry, support queries and match schema.
+Protocol v32 combines Caltrain stops, roads, parking and tech-campus landmarks with UCSF, research rewards and vehicle finishes. The server validates visits, shop discounts and purchases; clients cannot claim visits or set prices. Server and client share world geometry, support queries and match schema.
 
 The map includes a static, collision-backed monument base in the Marin headlands. Its footprint and landable roof height come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculpture above it is decorative. Rendering and minimap markers use the same position.
 
@@ -169,7 +169,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 `shared/island-jumps.ts` defines two eastbound ramp tops, their normals and swept landing contacts. Cars enter from the level end, follow the shared slope and leave the lip with its upward velocity. The rendered wedges use the same coordinates; their bounded sides and high ends block grounded and airborne cars, including displacement from other cars.
 
-`shared/parking-lots.ts` defines two playgrounds and 24 charging lots and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
+`shared/parking-lots.ts` defines two playgrounds, 24 charging lots and seven Caltrain-area lots, and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 
 The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games use the current registered lot when the player is there, otherwise a collision-checked playground; race entries use a checked starting slot. Joining is one operation that preserves the previous location if entry fails; health, air and progression are unchanged. Rocket Dome retains its existing `dome` travel action. The client confirms entry, start and leave from snapshots and offers contextual controls and failure feedback.
 
@@ -191,7 +191,7 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v30 requires matching world geometry and soccer match state on both ends.
+`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v32 requires matching world geometry and soccer match state on both ends.
 
 Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. It also works on the ceiling and while boosting, including with a Rocket kit from a pickup; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change and clients display replicated air and eligibility.
 

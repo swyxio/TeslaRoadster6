@@ -38,7 +38,9 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
-**North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups equip any vehicle with the Roadster's fictional air moves for the rest of its session. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups equip any vehicle with the Roadster's fictional air moves for the rest of its session. Parking playgrounds, charging lots and Caltrain-area lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+
+**Caltrain and campuses:** Explore compressed, fictional interpretations of Caltrain stops from San Francisco to San José, joined by decorative tracks, local streets and short optional sky lanes. The tracks do not simulate train service. Real company names identify original miniature campus landmarks; game placement is invented. See [the map notes](docs/MAP.md) and [campus references](docs/TECH_CAMPUSES.md).
 
 ## Run
 
@@ -87,7 +89,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - Stop inside a mint station ring or marked charging bay to refill air. Green diamonds repair; amber diamonds refill air. Each also gives $5 in session cash and returns after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
-- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
+- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground, charging lot or Caltrain lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Opening the game joins the shared `bay` room, or the room named by an invite link. Use **Invite** to copy the current link; the menu also offers another room. A full or disconnected room offers retry or another room.
 
 ## Boundaries

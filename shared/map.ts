@@ -9,6 +9,9 @@ import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
 import { CHARGER_LOT, STATIONS } from './stations';
+import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
+import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
+import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -229,6 +232,7 @@ ROADS.push(
  {x:0,z:-1200,w:24,d:280,axis:'z',kind:'island'},
  {x:0,z:-225,w:24,d:60,axis:'z'},
  ...PENINSULA_CROSS_STREETS,
+ ...CALTRAIN_ROADS,
 );
 
 /** Distances and shorelines are game-space approximations, not navigation. */
@@ -250,9 +254,12 @@ function pointAtZ(highway:typeof HIGHWAYS[number],z:number):MapPoint{
 }
 // Approximate arcade destinations, placed beside the compressed traced corridors.
 export const DISTRICTS=[
+ {id:'south-san-francisco',name:'South San Francisco',...pointAtZ(HIGHWAYS[0],950)},
  {id:'san-mateo',name:'San Mateo',...pointAtZ(HIGHWAYS[0],2000)},
+ {id:'redwood-city',name:'Redwood City',...pointAtZ(HIGHWAYS[0],2450)},
  {id:'palo-alto',name:'Palo Alto',...pointAtZ(HIGHWAYS[0],4000)},
  {id:'mountain-view',name:'Mountain View',...pointAtZ(HIGHWAYS[0],6000)},
+ {id:'santa-clara',name:'Santa Clara',...pointAtZ(HIGHWAYS[0],6790)},
  {id:'san-jose',name:'San Jose',x:1530,z:8770},
  {id:'fremont',name:'Fremont',...pointAtZ(HIGHWAYS[1],6000)},
  {id:'east-bay',name:'East Bay',...pointAtZ(HIGHWAYS[1],3000)},
@@ -274,7 +281,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport';stationId?:string};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus';stationId?:string};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -311,6 +318,18 @@ function distanceToHighway(x:number,z:number){
  }
  return best;
 }
+function nearCaltrain(x:number,z:number,w:number,d:number){
+ const intersects=(a:{x:number;z:number;w:number;d:number})=>Math.abs(x-a.x)<(w+a.w)/2+1&&Math.abs(z-a.z)<(d+a.d)/2+1;
+ if(CALTRAIN_ROADS.some(intersects)||CALTRAIN_PARKING_LOTS.some(lot=>intersects({x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length}))||
+  CALTRAIN_STOPS.some(stop=>intersects({x:stop.platform.x,z:stop.platform.z,w:44,d:8})))return true;
+ // Keep the rendered rail and its clearance away from solid town buildings.
+ for(let i=1;i<CALTRAIN_TRACK.length;i++){
+  const a=CALTRAIN_TRACK[i-1],b=CALTRAIN_TRACK[i],dx=b.x-a.x,dz=b.z-a.z;
+  const t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz)));
+  if(Math.hypot(x-a.x-t*dx,z-a.z-t*dz)<Math.hypot(w,d)/2+3)return true;
+ }
+ return false;
+}
 // Compact, physically collidable district clusters. Roads and shoulders remain clear.
 for(const district of DISTRICTS){
  const highway=HIGHWAYS[district.id==='fremont'||district.id==='east-bay'?1:0];
@@ -321,7 +340,7 @@ for(const district of DISTRICTS){
  for(const side of [-1,1])for(const along of [-70,0,70])for(const offset of [65,120]){
   const x=district.x+tx*along+tz*offset*side,z=district.z+tz*along-tx*offset*side;
   const w=24,d=22;
-  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2)))||
+  if(distanceToHighway(x,z)<Math.hypot(w,d)/2+21||nearCaltrain(x,z,w,d)||![-1,1].every(sx=>[-1,1].every(sz=>isLand(x+sx*w/2,z+sz*d/2)))||
    STATIONS.some(s=>Math.abs(x-s.x)<(w+CHARGER_LOT.width)/2&&Math.abs(z-s.z)<(d+CHARGER_LOT.length)/2))continue;
   const high=district.id==='san-jose'&&offset===65;
   const h=high?48+(along+70)/7:12+(Math.abs(along)+offset)%17;
@@ -334,6 +353,7 @@ for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,dist
 export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
 const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
  .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
+landmarkBuildings.push(...EAST_SOUTH_ADDITIONS);
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
@@ -355,6 +375,14 @@ for(let i=BUILDINGS.length-1;i>=0;i--){
  if(STATION_VENUES.some(v=>Math.abs(v.x-b.x)<(v.w+b.w)/2+1&&Math.abs(v.z-b.z)<(v.d+b.d)/2+1))BUILDINGS.splice(i,1);
 }
 BUILDINGS.push(...STATION_VENUES);
+// Shared envelopes are the physical campus buildings, including Apple Park's
+// separate ring segments. Replace background blocks only when they overlap.
+for(let i=BUILDINGS.length-1;i>=0;i--){
+ const b=BUILDINGS[i];
+ if(!['house','midrise','tower'].includes(b.style))continue;
+ if(TECH_CAMPUS_BUILDINGS.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1))BUILDINGS.splice(i,1);
+}
+BUILDINGS.push(...TECH_CAMPUS_BUILDINGS);
 BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
 BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
 // Shared candidate index keeps collision cost local as the city grows.
