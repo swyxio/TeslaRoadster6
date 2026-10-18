@@ -2,6 +2,23 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Persistent chat names with radio · protocol v29 · 2026-10-18 Pacific
+
+- After incorporating main's settled-vehicle Mars fix, 438 tests and the build passed on the combined code; Vite's existing large-chunk warning remains.
+- After integrating the radio release, `pnpm test` passed 437 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler room, chat and radio integrations passed, as did an isolated Wrangler restart with overlapping save and rename. A held-write test verified that queued messages are delivered in order after disconnect, timestamps reflect broadcast, and recovery waits for the rename to drain. A panel test checks that an unsent name draft survives an earlier rename's confirmation. These are functional checks, not load tests.
+- In Chrome on the combined local build, a chat rename retained the same displayed ID. Earlier desktop, portrait and landscape checks are recorded below; no physical device was tested.
+
+## Persistent chat names with predictive driving · protocol v29 · 2026-10-18 Pacific
+
+- After integrating the predictive driving release, `pnpm test` passed 431 tests and `pnpm build` passed with Vite's existing large-chunk warning. Local two-client room and chat integrations and an isolated real Wrangler restart passed, including overlapping save and rename; these are functional checks, not load tests.
+- Chrome on the combined local build recovered the previous name and ID, renamed in chat without changing the ID, and showed the renamed driver on the solo leaderboard. The editor was inspected in 390×844 portrait and measured in 844×390 landscape emulation; no physical device was tested.
+
+## Persistent chat names · protocol v28 · 2026-10-18 Pacific
+
+- On the integrated v28 build, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning.
+- Local two-client Wrangler chat integration verified repeated guest and saved-driver renames, collision handling, message attribution and recovery with the same ID and code. An isolated Wrangler restart test submitted save and rename together, restarted the Worker, and recovered the same ID with the updated name. A delayed storage-write test and a two-client chat run checked message order across renames; request IDs correlate confirmations with their requests. The standard two-client room integration passed on rerun after one Rocket Dome kickoff timeout. These are functional checks, not load tests.
+- Chrome on the local game changed the name twice in chat and once in Driver identity while retaining the same ID; after reload the saved name and ID returned. The recovery code remained hidden until requested. The chat editor was inspected in emulated 390×844 portrait and 844×390 landscape. No physical device was tested.
+
 ## Podcast radio with predictive driving · protocol v29 · 2026-10-18 Pacific
 
 - After integrating main at `6b85df1`, `pnpm test` passed 435 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler passed the two-client room, global chat, prediction/barrier and radio integrations. The Cloudflare preview passed its build, radio and prediction integrations. These are functional checks, not load measurements.

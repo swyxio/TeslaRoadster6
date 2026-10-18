@@ -45,7 +45,7 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     const states: ChatStatus[] = [];
     const errors: string[] = [];
     const client = new GlobalChat({
-      onStatus: status => states.push(status), onReady: () => {}, onMessage: () => {},
+      onStatus: status => states.push(status), onReady: () => {}, onRenamed: () => {}, onMessage: () => {},
       onRecovery: () => {}, onError: error => errors.push(error),
     });
     client.connect('Sky');
@@ -59,6 +59,11 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     assert.deepEqual(first.packets().at(-1), { type: 'ping' });
     assert.equal(client.save(), true);
     first.receive({ type: 'recovery', code: 'private-code' });
+    assert.equal(client.rename('Sky Again', 1), true);
+    assert.deepEqual(first.packets().at(-1), { type: 'rename', name: 'Sky Again', requestId: 1 });
+    first.receive({ type: 'renamed', playerId: 'id-1', name: 'Sky Again', requestId: 1 });
+    assert.equal(client.playerId, 'id-1');
+    assert.equal(client.name, 'Sky Again');
     first.finishClose();
     assert.equal(intervals.size, 0, 'heartbeat stops on disconnect');
     heartbeat.fn();
@@ -67,8 +72,8 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     assert.equal(client.send('not sent'), false);
     const reconnect = [...timers.values()][0]; timers.clear(); reconnect();
     const second = Socket.sockets[1]; second.open();
-    assert.deepEqual(second.packets()[0], { type: 'hello', name: 'Sky', code: 'private-code' });
-    second.receive({ type: 'ready', playerId: 'id-1', name: 'Sky', messages: [] });
+    assert.deepEqual(second.packets()[0], { type: 'hello', name: 'Sky Again', code: 'private-code' });
+    second.receive({ type: 'ready', playerId: 'id-1', name: 'Sky Again', messages: [] });
     assert.equal(intervals.size, 1, 'heartbeat restarts after reconnect');
     [...intervals.values()][0].fn();
     assert.deepEqual(second.packets().at(-1), { type: 'ping' });
