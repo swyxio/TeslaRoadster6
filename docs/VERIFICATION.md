@@ -4,6 +4,7 @@
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
 - Local Wrangler's two-client room integration passed for dome entry, a shared ball impact and goal, exit, Tesla-only selection, upgrade snapshot fields and a rejected purchase. Successful purchases remain covered by the shared simulation and solo UI fixture, not a live room transaction. This is not a load test.
+- The staging preview of commit `976a204` returned protocol v12 and served the locally built browser assets. Its two-client integration passed the same room checks, including a rejected purchase. This is not a load test.
 - Chrome desktop showed both Rocket Dome and Shop in Actions, shop distance guidance, and a working trip to the dome. Chrome 390×844 portrait and 844×390 landscape emulation showed the combined driving layout; in portrait, an emulated touch opened Actions and Shop displayed its nearest-shop guidance. The shop purchase dialog was checked in both orientations before dome integration (below). No physical phone was tested.
 
 ## Rocket pickups, Tesla fleet and workshops · pre-dome protocol v11 · 2026-10-17 Pacific
