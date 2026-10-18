@@ -65,6 +65,6 @@ I also wanted to see whether we could make the shared driving part work with Clo
 
 I’ve been building this in layers with coding agents: get a drive working, try it, then add the next mechanic. After trying the controls, I asked for sharper steering and a simpler way to fly. Now a tap of E jumps and holding the same key hovers. The code and [contributor contracts](https://github.com/swyxio/TeslaRoadster6) are public under MIT, so other coding agents and contributors can change the visuals or build on the gameplay without each inventing a different simulation.
 
-This is an alpha, not a persistent MMO. Rooms and delivery progress are session-based and reset when the room ends or restarts. There’s no shooting or permanent game economy yet.
+This is an alpha, not a persistent MMO. Delivery progress and personal cash are session-based; the newer shared Mars fund persists per room. There’s no shooting or permanent personal economy yet.
 
 I started with a flying-car daydream. Now I can pick up dinner, chase a bonus across a condensed version of the Bay, and find out whether the shortcut was worth the ticket. If that sounds fun, [take a drive](/).
