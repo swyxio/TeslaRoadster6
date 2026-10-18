@@ -1,0 +1,87 @@
+{
+  "fixture": {
+    "renderHz": 120,
+    "serverTickHz": 20,
+    "tankLevel": 4,
+    "durationMs": 8000,
+    "transport": "FIFO, 0 or 75 ms one-way; bunched profile adds deterministic 125 ms spikes and -16.667 ms jitter",
+    "setup": "one controlled Roadster, starting at x=-300 and z=-2050 (ground) or z=-1850, y=100 (flight); initial ambient entities and pickups removed except one autonomous nearby NPC in fast-turn-npc; production traffic replenishment may spawn distant ambient vehicles after 5 s; no remote players or collision coverage; routes can cross the island oval and its banked surface",
+    "fastTurns": "full throttle from start; steer 0.7 at 3000 ms through 7000 ms; slalom alternates 0.7 and -0.7 every 500 ms from 3000 ms; flight-turn hovers at altitude",
+    "snapshotOverlay": "each delivered tick-adapter snapshot carries received time, server tick, acknowledged input and its controlled-car pose; samples also carry the present server tick pose and immediate-input reference",
+    "focusLoss": "client frames stop 4000–4600 ms and inputs clear; server ticks and socket delivery continue; resumed frame dt is capped at 100 ms",
+    "networkStall": "server-to-client messages sent 4000–4800 ms wait until 4800 ms plus base delay; upstream and server ticks continue",
+    "serverOverload": "only every other server tick runs 4000–4800 ms; inputs and snapshots can still be delivered; no later catch-up ticks are invented",
+    "teleport": "server applies a 30 m horizontal displacement at 4000 ms and calls the adapter relocation hook; reset uses the actual client action/barrier",
+    "response": "counterfactual traces disable only the named input interval; first position difference > .05 m, jump height increase > .05 m, or orientation/yaw difference > .002 rad; angular events also report 1 and 5 degree onset",
+    "travelRatio": "rendered frame-to-frame speed divided by predicted-body speed, sampled only when predicted-body speed exceeds 10 m/s; values can reflect correction, not physical wheel speed",
+    "yaw": "heading of rendered local +Z axis; yaw rate and frame-to-frame rate change use that heading rather than stored body yaw; reference/server yaw comparisons use discrete, possibly older, body poses and include support-normal tilt",
+    "velocityReversals": "consecutive rendered-frame velocity vectors point in opposite hemispheres and both exceed 2 m/s; these can also reflect legitimate abrupt maneuvers",
+    "immediateReference": "independent shared physics stepped every 50 ms without network using input at the start of each interval; sampled tick pose can be up to 50 ms old",
+    "limits": "Synthetic simulation and scene-transform emulation only; no GPU, browser, real network, remote collisions, ferry reference-frame rendering, throughput, or device claims."
+  },
+  "results": [
+    {
+      "scenario": "flight-turn",
+      "profile": "steady150",
+      "motion": {
+        "frameMoveP99M": 0.476,
+        "frameMoveMaxM": 0.476,
+        "frameMoveMaxAtMs": 3925,
+        "frameRotationP99Degrees": 0.535,
+        "frameRotationMaxDegrees": 0.535,
+        "frameRotationMaxAtMs": 6975,
+        "frameVelocityChangeP95Mps": 1.833,
+        "frameVelocityChangeMaxMps": 2.99,
+        "frameVelocityChangeMaxAtMs": 4575,
+        "frameVelocityReversals": 0,
+        "yawRateP95DegPerSec": 64.171,
+        "yawRateMaxDegPerSec": 64.171,
+        "frameYawRateChangeP95DegPerSec": 1.998,
+        "yawFromImmediateTickP95Degrees": 4.806,
+        "yawFromServerTickP95Degrees": 11.209,
+        "travelToBodySpeedRatio": {
+          "samples": 885,
+          "p05": 0.983,
+          "p50": 1,
+          "p95": 1.058
+        },
+        "distanceFromServerTickP95M": 9.333,
+        "distanceFromServerTickMaxM": 9.986,
+        "distanceFromImmediateTickP95M": 3.857,
+        "distanceFromImmediateTickMaxM": 4.299,
+        "afterFrameGap": {
+          "meters": 0,
+          "atMs": 0,
+          "gapMs": 0
+        }
+      },
+      "responses": [
+        {
+          "event": "steer",
+          "atMs": 3000,
+          "measure": "yaw",
+          "threshold": ".002 rad",
+          "eventBodySpeedMps": 48.8,
+          "firstVisualMs": 16.667,
+          "firstVisual1DegreeMs": 58.333,
+          "firstVisual5DegreesMs": 191.667,
+          "firstVisualFrameMoveM": 0.407,
+          "firstVisualFrameRotationDegrees": 0.099,
+          "firstServerTickMs": 150
+        }
+      ],
+      "network": {
+        "sent": 164,
+        "received": 80,
+        "batched": 0
+      },
+      "adapter": {
+        "ticks": 160,
+        "rejected": 0,
+        "rejectionCounts": {},
+        "processedEdges": 0,
+        "expiredEdges": 0
+      }
+    }
+  ]
+}

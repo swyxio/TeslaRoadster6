@@ -17,14 +17,14 @@ test('jet lanes push in their marked direction and refill an empty tank, includi
  const lane=JET_STREAMS[0],car=makeEntity('car','zoox',lane.start.x+80,lane.start.z,'p');
  Object.assign(car,{y:lane.height,supportId:null,air:0});const world=worldFor(car);
  tick(world,20);
- assert.ok(car.vx>7);assert.ok(car.air>6.5);assert.ok(car.y>=lane.height-lane.halfHeight);
+ assert.ok(car.vx>2.9);assert.ok(car.air>3.9);assert.ok(car.y>=lane.height-lane.halfHeight);
  assert.equal(car.upgrades.rocket,false);
  car.air=99.9;tick(world);assert.equal(car.air,100);
 });
 
 test('wind refills the same air units across tank upgrades without overflowing',()=>{
  const lane=JET_STREAMS[0];
- for(const [level,expected] of [[1,7],[5,.4375]] as const){
+ for(const [level,expected] of [[1,4],[5,.25]] as const){
   const car=makeEntity('car','roadster',-200,lane.start.z,'p');
   Object.assign(car,{y:lane.height,supportId:null,air:20,tankLevel:level});
   tick(worldFor(car),20);
@@ -32,7 +32,7 @@ test('wind refills the same air units across tank upgrades without overflowing',
  }
 });
 
-test('the remaining thermal starts above the road, lifts a jumping car and replenishes air',()=>{
+test('the remaining thermal extends a jump and replenishes some air',()=>{
  assert.equal(THERMALS.length,1);
  for(const thermal of THERMALS){
   const landmark=BUILDINGS.find(b=>b.style===(thermal.id==='pyramid'?'pyramid':thermal.id==='coit'?'coit':'salesforce'))!;
@@ -41,10 +41,35 @@ test('the remaining thermal starts above the road, lifts a jumping car and reple
   const car=makeEntity('car','roadster',thermal.x,thermal.z,'p'),world=worldFor(car);
   assert.equal(currentAt(car),undefined,'grounded vehicles cannot refill');
   tick(world,1,{...NEUTRAL,jump:1});
-  const afterJump=car.air;tick(world,160,{...NEUTRAL,jump:1});
-  assert.ok(car.y>70,`${thermal.name} lifts a regular jump`);
+  const afterJump=car.air;let peak=car.y;
+  for(let i=0;i<160&&car.supportId===null;i++){tick(world,1,{...NEUTRAL,jump:1});peak=Math.max(peak,car.y);}
+  assert.ok(peak>6,`${thermal.name} extends a regular jump`);
+  assert.notEqual(car.supportId,null,'the unpowered car lands');
   assert.ok(car.air>afterJump,`${thermal.name} refills the tank`);
  }
+});
+
+test('sampled level-one thermal jump pulses land instead of sustaining flight',()=>{
+ for(const economy of [false,true])for(const ticksBetweenJumps of [2,10,20,40,50,60]){
+  const {world,car}=controlledCar();
+  Object.assign(car,{x:THERMALS[0].x,z:THERMALS[0].z,y:0,air:100,tankLevel:1,supportId:'ground'});
+  car.upgrades.economy=economy;
+  let counter=0,segment=0,longest=0;
+  for(let i=0;i<1000;i++){
+   if(i%ticksBetweenJumps===0)counter++;
+   tick(world,1,{...NEUTRAL,jump:counter});
+   if(car.supportId===null){segment++;longest=Math.max(longest,segment);}else segment=0;
+  }
+  assert.ok(longest*.05<22,`nozzles=${economy}, interval=${ticksBetweenJumps*.05}: ${longest*.05}s airborne`);
+  assert.equal(car.supportId,'ground');assert.equal(car.air,0);
+ }
+});
+
+test('hover in a sky lane consumes air without gaining free altitude',()=>{
+ const lane=JET_STREAMS[0],{world,car}=controlledCar();
+ Object.assign(car,{x:-200,z:lane.start.z,y:lane.height,air:100,supportId:null});
+ tick(world,20,{...NEUTRAL,hover:true});
+ assert.ok(Math.abs(car.y-lane.height)<.01);assert.ok(car.air<70);
 });
 
 function controlledCar(){
@@ -58,10 +83,9 @@ test('the raised Skyline is harder to enter accidentally but reachable from the 
  const {world,car}=controlledCar();
  Object.assign(car,{x:-100,z:skyline.start.z,y:88,supportId:null});
  assert.notEqual(currentAt(car)?.id,'skyline','the former height no longer enters the lane');
- Object.assign(car,{x:thermal.x,z:thermal.z,y:0,yaw:0,air:100,supportId:'ground'});
- tick(world,220,{...NEUTRAL,jump:1});
- let jump=1;
- for(let i=0;i<220&&car.y<145;i++){
+ Object.assign(car,{x:thermal.x,z:thermal.z,y:0,yaw:0,air:100,tankLevel:4,supportId:'ground'});
+ let jump=0;
+ for(let i=0;i<800&&car.y<145;i++){
   if(i%20===0)jump++;
   tick(world,1,{...NEUTRAL,jump});
  }
@@ -135,7 +159,7 @@ test('an unlocked player can still ride the Skyline across the bridge gate',()=>
   vx:0,vy:0,vz:0,air:100,supportId:null});
  tick(world,20);
  assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);assert.ok(car.vx>0);
- assert.ok(Math.abs(car.y-skyline.height)<.01,'the lane keeps holding altitude');
+ assert.ok(car.y<skyline.height,'the lane slows descent without holding a car up for free');
 });
 
 test('membership respects height, width, support, dome, and people',()=>{
@@ -191,15 +215,15 @@ test('a Caltrain current gives directional speed and refills a flying car',()=>{
  Object.assign(car,{x:(lane.start.x+lane.end.x)/2,z:(lane.start.z+lane.end.z)/2,y:lane.height,air:0,supportId:null});
  tick(world,20);
  const dx=lane.end.x-lane.start.x,dz=lane.end.z-lane.start.z;
- assert.ok((car.vx*dx+car.vz*dz)/Math.hypot(dx,dz)>7,'wind adds speed in its marked direction');
- assert.ok(car.air>6.5,'wind refills the empty tank');
+ assert.ok((car.vx*dx+car.vz*dz)/Math.hypot(dx,dz)>2.9,'wind adds speed in its marked direction');
+ assert.ok(car.air>3.9,'wind refills the empty tank');
 });
 
 test('a Rocket can reach a Caltrain lane from the station without another current',()=>{
  const lane=CALTRAIN_CURRENTS.find(l=>l.id==='caltrain-redwood-city-south')!;
  const {world,player,car}=controlledCar();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
  Object.assign(car,{x:(lane.start.x+lane.end.x)/2,z:(lane.start.z+lane.end.z)/2,y:0,
-  vx:0,vy:0,vz:0,air:100,supportId:'ground'});
+  vx:0,vy:0,vz:0,air:100,tankLevel:2,supportId:'ground'});
  for(let i=0;i<220&&currentAt(car)?.id!==lane.id;i++)tick(world,1,{...NEUTRAL,jump:1+Math.floor(i/20)});
  assert.equal(currentAt(car)?.id,lane.id);assert.ok(car.air>0);
 });

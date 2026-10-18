@@ -22,7 +22,7 @@ test('an island Rocket pad refills an upgraded tank and enables its scaled jump'
   step(world, new Map([[player.id, { ...NEUTRAL, jump: 1 }]]), .05);
   assert.equal(car.supportId, null);
   assert.ok(car.vy > 0);
-  assert.equal(car.air, 98.5);
+  assert.equal(car.air, 94);
 });
 
 test('a secured ferry passenger keeps delivery paused while OTA renews and upgrades the tank', () => {
@@ -66,8 +66,8 @@ test('low-air jumps launch away from the island bank and cliff', () => {
     world.pickups = [];
     const bank = bankSurface(80, -1750)!;
     const cliff = cliffPose(.8);
-    if (surface === 'bank') Object.assign(car, { x: 80, y: bank.height, z: -1750, supportId: 'island-bank', air: 3 });
-    else Object.assign(car, { ...cliff.point, supportId: 'island-cliff', loopAngle: .8, air: 3 });
+    if (surface === 'bank') Object.assign(car, { x: 80, y: bank.height, z: -1750, supportId: 'island-bank', air: 12 });
+    else Object.assign(car, { ...cliff.point, supportId: 'island-cliff', loopAngle: .8, air: 12 });
     const normal = surface === 'bank' ? bank.normal : cliff.normal;
     step(world, new Map([[player.id, { ...NEUTRAL, jump: 1 }]]), .05);
     assert.equal(car.supportId, null);

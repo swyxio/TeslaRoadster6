@@ -1,0 +1,115 @@
+{
+  "fixture": {
+    "renderHz": 120,
+    "serverTickHz": 20,
+    "tankLevel": 4,
+    "durationMs": 8000,
+    "transport": "FIFO, 0 or 75 ms one-way; bunched profile adds deterministic 125 ms spikes and -16.667 ms jitter",
+    "setup": "one controlled Roadster, starting at x=-300 and z=-2050 (ground) or z=-1850, y=100 (flight); initial ambient entities and pickups removed except one autonomous nearby NPC in fast-turn-npc; production traffic replenishment may spawn distant ambient vehicles after 5 s; no remote players or collision coverage; routes can cross the island oval and its banked surface",
+    "fastTurns": "full throttle from start; steer 0.7 at 3000 ms through 7000 ms; slalom alternates 0.7 and -0.7 every 500 ms from 3000 ms; flight-turn hovers at altitude",
+    "snapshotOverlay": "each delivered tick-adapter snapshot carries received time, server tick, acknowledged input and its controlled-car pose; samples also carry the present server tick pose and immediate-input reference",
+    "focusLoss": "client frames stop 4000–4600 ms and inputs clear; server ticks and socket delivery continue; resumed frame dt is capped at 100 ms",
+    "networkStall": "server-to-client messages sent 4000–4800 ms wait until 4800 ms plus base delay; upstream and server ticks continue",
+    "serverOverload": "only every other server tick runs 4000–4800 ms; inputs and snapshots can still be delivered; no later catch-up ticks are invented",
+    "teleport": "server applies a 30 m horizontal displacement at 4000 ms and calls the adapter relocation hook; reset uses the actual client action/barrier",
+    "response": "counterfactual traces disable only the named input interval; first position difference > .05 m, jump height increase > .05 m, or orientation/yaw difference > .002 rad; angular events also report 1 and 5 degree onset",
+    "travelRatio": "rendered frame-to-frame speed divided by predicted-body speed, sampled only when predicted-body speed exceeds 10 m/s; values can reflect correction, not physical wheel speed",
+    "yaw": "heading of rendered local +Z axis; yaw rate and frame-to-frame rate change use that heading rather than stored body yaw; reference/server yaw comparisons use discrete, possibly older, body poses and include support-normal tilt",
+    "velocityReversals": "consecutive rendered-frame velocity vectors point in opposite hemispheres and both exceed 2 m/s; these can also reflect legitimate abrupt maneuvers",
+    "immediateReference": "independent shared physics stepped every 50 ms without network using input at the start of each interval; sampled tick pose can be up to 50 ms old",
+    "limits": "Synthetic simulation and scene-transform emulation only; no GPU, browser, real network, remote collisions, ferry reference-frame rendering, throughput, or device claims."
+  },
+  "results": [
+    {
+      "scenario": "flight",
+      "profile": "bunched150",
+      "motion": {
+        "frameMoveP99M": 0.545,
+        "frameMoveMaxM": 0.551,
+        "frameMoveMaxAtMs": 7166.667,
+        "frameRotationP99Degrees": 4.181,
+        "frameRotationMaxDegrees": 5.157,
+        "frameRotationMaxAtMs": 5208.333,
+        "frameVelocityChangeP95Mps": 0.974,
+        "frameVelocityChangeMaxMps": 5.969,
+        "frameVelocityChangeMaxAtMs": 1008.333,
+        "frameVelocityReversals": 0,
+        "yawRateP95DegPerSec": 28.953,
+        "yawRateMaxDegPerSec": 56.383,
+        "frameYawRateChangeP95DegPerSec": 1.178,
+        "yawFromImmediateTickP95Degrees": 1.41,
+        "yawFromServerTickP95Degrees": 5.824,
+        "travelToBodySpeedRatio": {
+          "samples": 407,
+          "p05": 0.938,
+          "p50": 0.992,
+          "p95": 1.04
+        },
+        "distanceFromServerTickP95M": 13.231,
+        "distanceFromServerTickMaxM": 14.395,
+        "distanceFromImmediateTickP95M": 4.395,
+        "distanceFromImmediateTickMaxM": 5.405,
+        "afterFrameGap": {
+          "meters": 0,
+          "atMs": 0,
+          "gapMs": 0
+        }
+      },
+      "responses": [
+        {
+          "event": "steer",
+          "atMs": 2000,
+          "measure": "rotation",
+          "threshold": ".002 rad",
+          "eventBodySpeedMps": 0.068,
+          "firstVisualMs": 16.667,
+          "firstVisual1DegreeMs": 41.667,
+          "firstVisual5DegreesMs": 166.667,
+          "firstVisualFrameMoveM": 0,
+          "firstVisualFrameRotationDegrees": 0.232,
+          "firstServerTickMs": 200
+        },
+        {
+          "event": "roll",
+          "atMs": 3500,
+          "measure": "rotation",
+          "threshold": ".002 rad",
+          "eventBodySpeedMps": 0.001,
+          "firstVisualMs": 8.333,
+          "firstVisual1DegreeMs": 8.333,
+          "firstVisual5DegreesMs": 25,
+          "firstVisualFrameMoveM": 0,
+          "firstVisualFrameRotationDegrees": 2.173,
+          "firstServerTickMs": 200
+        },
+        {
+          "event": "flip",
+          "atMs": 5200,
+          "measure": "rotation",
+          "threshold": ".002 rad",
+          "eventBodySpeedMps": 34.73,
+          "firstVisualMs": 8.333,
+          "firstVisual1DegreeMs": 8.333,
+          "firstVisual5DegreesMs": 8.333,
+          "firstVisualFrameMoveM": 0.291,
+          "firstVisualFrameRotationDegrees": 5.157,
+          "firstServerTickMs": 200
+        }
+      ],
+      "network": {
+        "sent": 169,
+        "received": 121,
+        "batched": 108
+      },
+      "adapter": {
+        "ticks": 160,
+        "rejected": 40,
+        "rejectionCounts": {
+          "late": 40
+        },
+        "processedEdges": 1,
+        "expiredEdges": 0
+      }
+    }
+  ]
+}
