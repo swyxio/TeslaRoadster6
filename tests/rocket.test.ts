@@ -88,3 +88,14 @@ test('all fleet meshes show independent upgrade hardware and replicated exhaust 
     assert.equal(upgraded.getObjectByName('rocket_hardware')!.visible, kind === 'roadster', kind);
   }
 });
+
+test('full stock or purchased Rocket cars leave the pad for others',()=>{
+ for(const kind of ['roadster','model-3'] as const){
+  const full=car('a',kind),other=car('b');full.air=100;
+  if(kind==='model-3')full.upgrades.rocket=true;
+  const pickup=pad();assert.equal(updateRocketPickup(pickup,[full,other],1),'b');
+  assert.equal(other.rocketUntil,1+ROCKET_DURATION);assert.equal(full.air,100);
+  const pad2=pad();assert.equal(updateRocketPickup(pad2,[full],1),null);assert.equal(pad2.active,true);
+  full.air=50;assert.equal(updateRocketPickup(pad2,[full],1),'a');assert.equal(full.air,100);
+ }
+});

@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Combined island, driving update and China Basin stadium · protocol v22 · 2026-10-18 Pacific
+
+- `pnpm test` passed 340 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Coverage includes the island ramps and banked oval, temporary Rocket expiry, ferry and parking behavior, dome roof and game scoring.
+- Local Wrangler protocol-v22 two-client room integration passed shared soccer scoring to five, wall refill, movement and the existing room checks. A separate local-only fixture let a second WebSocket observe jump support, launch and landing, with a 5.10 m peak. These are not load tests or an end-to-end multiplayer ferry crossing.
+- Chrome desktop solo on the combined v22 build traveled to the China Basin dome, drove into the ball and saw Blue score. A temporary island-spawn fixture on the preceding v21 island/oval integration showed a jump and landing; separate ferry, parking and emulated mobile observations are recorded below. No physical device was tested.
+- After the successful local jump fixture, Wrangler logged `Uncaught Error: Network connection lost` at socket shutdown. This also occurred on the unchanged v19 baseline; the cause remains unconfirmed.
+
 ## Island oval, jumps and relocated stadium · protocol v21 before later main updates · 2026-10-18 Pacific
 
 - After integrating the banked oval and ferry improvements, `pnpm test` passed 332 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Tests cover the 90-second pickup expiry, including detachment in the stadium, the paid kit, ferry and parking claims, jump collisions and the stadium at its new location.
@@ -481,3 +488,11 @@ After integrating the Rocket Island, ferry and parking changes from main, 273 te
 ## 2026-10-18 · First development post rewrite
 
 In the isolated article worktree after integrating the Rocket Island and landmark changes, `pnpm test` passed 273 tests and `pnpm build` passed, including both TypeScript checks. In Chrome, the static article was inspected at desktop and emulated 390×844 portrait and 844×390 landscape widths; the delivery-loop graphic was resized for readable phone labels. Local solo play supplied the street, flight, citation and cockpit screenshots from the integrated build. These are browser captures, not physical-device or multiplayer load tests.
+
+## 2026-10-18 · Driving feel, supplies and surfaces
+
+In the isolated worktree, `pnpm test` passed 281 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. Simulation tests cover direction changes, controlled airborne momentum, repeated jump velocity, supply rewards, rocket-pad eligibility, the stunt loop and curved-roof landings. A local Wrangler two-client room integration passed on protocol v20; a separate run timed out at its existing flip-completion assertion, so that integration remains susceptible to intermittent failure. This was not a load test.
+
+In Chrome solo play, temporary spawn fixtures showed a supply pickup restoring air and awarding cash, and a thermal showing the refill message and increasing air. The thermal display was inspected at desktop and at emulated 390×844 portrait and 844×390 landscape; the final nearby-label adjustment was rechecked at desktop. Fixtures were removed. No physical device, full manual loop drive, or ferry landing was tested; further playtesting is needed to judge the handling. The collision surfaces remain stylized approximations, not exact collision meshes for every landmark.
+
+After integrating main's island, ferry and permanent Rocket kit changes, all 313 tests and the build passed. The local two-client Wrangler room integration passed on protocol v21; it is not a ferry-crossing or load test. Chrome showed the integrated solo game on desktop and in emulated portrait and landscape layouts, with landscape touch controls visible. No physical device was tested.

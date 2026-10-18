@@ -1,4 +1,4 @@
-# Implementation contracts · v21
+# Implementation contracts · v22
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -17,7 +17,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, ferry, roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, dome roof, ferry, building roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided for fast relative motion. Airborne speed is capped at 80 m/s (288 km/h) to keep collision sampling bounded; this is an arcade limit, not a general continuous-collision guarantee. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v21
+## Wire protocol v22
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:21,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:22,capacity:number}`.
 
 Client messages:
 
@@ -63,7 +63,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:21, capacity:number}
+{type:"welcome", id:string, version:22, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -71,9 +71,9 @@ Server messages:
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
-Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v21 versions the shared landmark and terrain world data. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
+Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v21 combines the relocated China Basin Rocket Dome and soccer match state with island jump geometry and the `island-jump` support identity. The server and client must share the same dome and ramp geometry, support queries and match schema.
+Protocol v22 combines the relocated China Basin Rocket Dome and soccer match state with island jump geometry, curved roof and loop collision changes, and supply reward kinds. The server and client must share the same world geometry, support queries and match schema; incompatible clients cannot connect.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -122,7 +122,7 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 
 `shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, stock capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. The `roadster` has stock fictional Rocket capability. A Rocket pickup fills the tank and grants 90 simulation seconds of capability; another pickup refreshes the duration. A purchased kit grants capability for the vehicle’s session. Both belong to the vehicle, not its driver. Air jumps, free-air thruster hover, adhesion and tank performance are game fiction. Suction operates only on supported stunt surfaces.
 
-Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle, with quicker, tighter steering for manual drivers; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. A grounded player car moving forward can initiate an arcade drift by steering with brake or reverse; lateral momentum decays after release. This is not suspension/tire simulation. Terrain roof support remains shared.
+Collision bodies are oriented rectangles using registry length/width; mass-weighted impulse response includes lateral velocity. Bicycle steering uses wheelbase and bounded steering angle, with quicker, tighter steering for manual drivers; Cybertruck/Zoox have enhanced low-speed steering and visually countersteering rear wheels. A grounded player car moving forward can drift by steering with brake; lateral momentum decays after release. Opposing throttle brakes to a stop before reversing and suppresses steering while changing direction. Powered airborne throttle damps opposing and sideways velocity to make aiming more responsive. This is not suspension/tire simulation. Terrain roof support remains shared.
 
 Every model has one parked entity and one NPC traffic entity. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting/disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
 
@@ -150,7 +150,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 ## Shops and upgrades contract
 
-`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay or have an active OTA subscription before sending `upgrade` with one of `rocket|economy|tank|motor|armor|service`. `buyUpgrade` independently validates driver, location, motion, cash, prerequisites and duplicates, and deducts the player’s session cash. The rocket kit grants any vehicle the flight controls and a full tank; economy reduces flight air use by 25%; tank upgrades double capacity, refill, and cost $30/$60/$120/$240 to reach levels 2/3/4/5; motor changes acceleration and road speed, armor halves impact damage, and service repairs/refills. Shop state belongs to each vehicle, not the player; an old personal car is removed on fleet selection and abandoned ambient traffic may be reclaimed. A room reset loses all upgrades and money. `rocket` pickups in the city, on the island and at parking playgrounds grant 90 simulation seconds of temporary capability and respawn in 20 seconds; they do not install a purchased kit. Shared simulation and room snapshots own all state; the UI and renderer must not apply purchases themselves. See [UPGRADES.md](UPGRADES.md).
+`shared/upgrades.ts` owns fictional shop positions, range, upgrade IDs, prices and eligibility. Stop in a ground-level purple bay or have an active OTA subscription before sending `upgrade` with one of `rocket|economy|tank|motor|armor|service`. `buyUpgrade` independently validates driver, location, motion, cash, prerequisites and duplicates, and deducts the player’s session cash. The rocket kit grants any vehicle the flight controls and a full tank; economy reduces flight air use by 25%; tank upgrades double capacity, refill, and cost $30/$60/$120/$240 to reach levels 2/3/4/5; motor changes acceleration and road speed, armor halves impact damage, and service repairs/refills. Shop state belongs to each vehicle, not the player; an old personal car is removed on fleet selection and abandoned ambient traffic may be reclaimed. A room reset loses all upgrades and money. `rocket` pickups in the city, on the island and at parking playgrounds grant 90 simulation seconds of temporary capability and respawn in 20 seconds; they do not install a purchased kit. A permanently equipped car consumes one only if it needs an air refill. Green repair and amber air diamonds each award $5 spendable session cash, without counting toward delivery earnings or progression. Shared simulation and room snapshots own all state; the UI and renderer must not apply purchases themselves. See [UPGRADES.md](UPGRADES.md).
 
 ## Delivery and police contract
 
@@ -164,7 +164,7 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn based on the player’s origin, preserving health and air. Cars can drive in from the street and out through the marked north gate without teleporting; the exterior shell also admits vehicles from other directions or the air once their upright bodies fit. Above-roof overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v21 requires matching world geometry and soccer match state on both ends.
+`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v22 requires matching world geometry and soccer match state on both ends.
 
 Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. It also works on the ceiling and while boosting, including with a temporary Rocket pickup; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change and clients display replicated air and eligibility.
 
