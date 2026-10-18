@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
-import { isRocketIsland, terrainHeight } from '../shared/map';
 import { DOME } from '../shared/dome';
+import { isRocketIsland, terrainHeight } from '../shared/map';
 
 const flightInput = { ...NEUTRAL, throttle: 1, boost: true, hover: true };
 const dt = .05;

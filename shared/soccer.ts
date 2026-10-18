@@ -2,7 +2,7 @@ import { DOME } from './dome';
 import type { Entity } from './game';
 import { domeSurface } from './map';
 import { dimensions } from './physics';
-import { VEHICLES } from './vehicles';
+import { hasRockets } from './upgrades';
 
 export type SoccerSide = 'blue' | 'orange';
 export type SoccerBall = {x:number;y:number;z:number;vx:number;vy:number;vz:number};
@@ -36,8 +36,7 @@ export function domeGoals(participant:DomeParticipant):number {
 
 function recordTouch(state:SoccerState,car:Entity,time:number):void {
   if(!car.driver||car.kind==='person'){state.lastTouch=null;return;}
-  const carClass:DomeCarClass=car.kind==='roadster'?'roadster':
-    !VEHICLES[car.kind].airThrusters&&car.upgrades.rocket?'retrofit':time<car.rocketUntil?'pickup':'stock';
+  const carClass:DomeCarClass=car.kind==='roadster'?'roadster':hasRockets(car)?'retrofit':time<car.rocketUntil?'pickup':'stock';
   let participant=state.participants.find(p=>p.playerId===car.driver);
   if(!participant){
     participant={playerId:car.driver,touches:{roadster:false,retrofit:false,pickup:false,stock:false},goals:{roadster:0,retrofit:0,pickup:0,stock:0}};

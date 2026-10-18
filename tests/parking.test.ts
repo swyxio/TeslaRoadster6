@@ -5,9 +5,6 @@ import { initialDelivery } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import { PARKING_LOTS } from '../shared/parking-lots';
-import { createFerry } from '../shared/ferry';
-import { createRace } from '../shared/race';
-import { initialSoccer } from '../shared/soccer';
 import { body, contact } from '../shared/physics';
 import {
   createParking, fitsParkingStall, joinParking, leaveParking, startQueue, updateParking,
@@ -22,7 +19,7 @@ const lot:ParkingLot={id:'test-lot',area:{x:0,z:0,yaw:0,width:200,length:200},
     {id:'c',x:30,y:0,z:20,yaw:0,width:5,length:10},
     {id:'d',x:45,y:0,z:20,yaw:0,width:5,length:10},
   ]};
-function world():World{return {entities:[],players:[],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer()};}
+function world():World{const world=createWorld();world.entities=[];world.players=[];world.pickups=[];return world;}
 function add(world:World,id:string,kind:Entity['kind']='roadster',x=0,z=0):Entity {
   const car=makeEntity(`car-${id}`,kind,x,z,id);
   Object.assign(car,{y:0,supportId:'ground'});

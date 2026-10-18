@@ -635,9 +635,9 @@ scene.start(dt=>{
     const eligible=soccer.participants.filter(participant=>present.has(participant.playerId));
     const topGoals=Math.max(0,...eligible.map(goalCount));
     const leaders=topGoals?eligible.filter(participant=>goalCount(participant)===topGoals):[];
-    const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Driver';
+    const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Departed driver';
     const leader=leaders.length?`${driverName(leaders[0].playerId)}${leaders.length>1?` +${leaders.length-1}`:''} (${topGoals})`:'No leader yet';
-    const standings=`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
+    const standings=soccer.phase==='win'?`Your goals: ${ownGoals}`:`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
     const winner=soccer.winningPlayers;
     const status=soccer.phase==='win'?(winner.length===0?'Match complete · no credited winner':winner.includes(session.id)?`${winner.length>1?'You share':'You take'} the win! New match soon.`:`${driverName(winner[0])}${winner.length>1?` +${winner.length-1} share the win`:' wins'}! New match soon.`):soccer.phase==='goal'?`${soccer.lastScorer?.toUpperCase()} goal! Last touch gets credit.`:'Either goal counts · first color to 5 ends match';
     if($('dome-blue').textContent!==blue)$('dome-blue').textContent=blue;
@@ -678,6 +678,7 @@ scene.start(dt=>{
   $('station-status').textContent=e.inDome?(wallCharge?'ϟ WALL CHARGE · AIR REFILLING':rocket?'ϟ DRIVE UP THE GOLD WALLS TO REFILL':'ϟ ADD A ROCKET TO RIDE THE WALLS'):skyCurrent?`${skyCurrent.kind==='thermal'?'↑ THERMAL · LIFT + REFILLING AIR':'➜ SKY LANE · SPEED + REFILLING AIR'} · ${skyCurrent.name}`:refilling?`ϟ FICTIONAL AIR REFILL · ${refilling.name}`:rocket&&e.air<12?`LOW AIR · ${nearest.name} refill · ${Math.round(distance)} m`:`ϟ AIR REFILL (GAME) · ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').classList.toggle('refilling',!!refilling||!!skyCurrent||wallCharge);
   $('station-status').classList.toggle('sky-active',!!skyCurrent);
+  $('station-status').classList.toggle('dome-active',e.inDome);
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const shopDistance=Math.hypot(e.x-nearbyShop.x,e.z-nearbyShop.z),shopReady=!!shopFor(e);
   $('shop-prompt').hidden=menu||!started||e.kind==='person'||shopDistance>30||shopDialog.open;

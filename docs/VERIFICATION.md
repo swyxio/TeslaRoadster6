@@ -1,5 +1,7 @@
 # Verification · 2026-10-18 Pacific
 
+These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
+
 ## Dome roof fix and economy integration · protocol v22 · 2026-10-18 Pacific
 
 - After the latest main integration and roof-crossing fix, `pnpm test` passed 348 tests and `pnpm build` passed. Vite retains its existing large-chunk warning. Focused tests cover an ascending car crossing the roof and side/end fly-ins.
@@ -17,8 +19,6 @@
 - After integrating the banked oval and ferry improvements, `pnpm test` passed 332 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Tests cover the 90-second pickup expiry, including detachment in the stadium, the paid kit, ferry and parking claims, jump collisions and the stadium at its new location.
 - A local-only two-WebSocket Wrangler fixture observed approach, jump support, takeoff and landing, with a 5.12 m peak. It was not a load test or a multiplayer ferry crossing.
 - Chrome desktop solo using a temporary island spawn showed the ramp and drove the Roadster into the air and back to ground. Earlier desktop ferry/parking and emulated mobile observations below describe the preceding builds; no physical device was tested.
-
-These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
 ## Combined Rocket Island and China Basin stadium · protocol v21, before main oval/ferry merge · 2026-10-18 Pacific
 
@@ -508,3 +508,11 @@ In the isolated worktree, `pnpm test` passed 281 tests and `pnpm build` passed, 
 In Chrome solo play, temporary spawn fixtures showed a supply pickup restoring air and awarding cash, and a thermal showing the refill message and increasing air. The thermal display was inspected at desktop and at emulated 390×844 portrait and 844×390 landscape; the final nearby-label adjustment was rechecked at desktop. Fixtures were removed. No physical device, full manual loop drive, or ferry landing was tested; further playtesting is needed to judge the handling. The collision surfaces remain stylized approximations, not exact collision meshes for every landmark.
 
 After integrating main's island, ferry and permanent Rocket kit changes, all 313 tests and the build passed. The local two-client Wrangler room integration passed on protocol v21; it is not a ferry-crossing or load test. Chrome showed the integrated solo game on desktop and in emulated portrait and landscape layouts, with landscape touch controls visible. No physical device was tested.
+
+## 2026-10-18 · China Basin Dome integrated with permanent kits
+
+After integrating main's flight, parking, island and permanent Rocket kit changes, `pnpm test` passed 328 tests and `pnpm build` passed both TypeScript checks; the existing Vite large-chunk warning remains. Rocket kits acquired by pickup or purchase both count as retrofits for Dome achievements. Regression tests cover the stadium approach, all vehicle gate sizes, clear ambient traffic routes and permanent-kit awards. A local Wrangler two-client room test passed on protocol v22, including a five-goal match, replicated awards, spectator exclusion and wall refill; local chat integration also passed. This is not a load test.
+
+Chrome solo play showed the integrated arena and score on desktop and emulated 390×844 portrait and 844×390 landscape. In landscape, the wall-refill hint remained visible and an emulated touch on Drive accelerated the car. No physical device was tested.
+
+After integrating the economy simulation proposal from main, all 334 tests passed; it does not change the playable simulation.

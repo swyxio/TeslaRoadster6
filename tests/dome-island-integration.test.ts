@@ -135,21 +135,23 @@ test('a dome shortcut from the Bay returns to the Bay while an island shortcut r
 
 test('a fly-in or shortcut returns to the last supported side even after flying over Dome land', async () => {
   const { isRocketIsland } = await import('../shared/map');
-  for (const island of [false, true]) for (const shortcut of [false, true]) {
+  for (const island of [false, true]) for (const approach of ['shortcut', 'side', 'gate'] as const) {
     const { world, car } = setup(); world.pickups = [];
     if (island) Object.assign(car, { x: 0, z: -1150, y: 0, supportId: 'ground' });
     step(world, new Map([['p', { ...NEUTRAL, jump: 1 }]]), .05);
     assert.equal(car.supportId, null, 'the flight begins from supported land');
-    // Continue the flight over the protected Dome land, above the roof.
+    // Continue the flight above the China Basin stadium roof without landing.
     Object.assign(car, { x: DOME.x - 15, z: DOME.z, y: 52, vx: 0, vy: -8, vz: 0 });
     step(world, new Map(), .05);
     assert.equal(car.inDome, false);
-    if (shortcut) assert.ok(travelDome(world, 'p'));
+    if (approach === 'shortcut') assert.ok(travelDome(world, 'p'));
     else {
-      // The solid roof now supports landings; fly through an open side instead.
-      Object.assign(car, { x: DOME.x, z: DOME.z + 48, y: 10, vx: 0, vy: 0, vz: -20 });
+      // The roof supports landings; approach airborne through a side or the gate.
+      Object.assign(car, approach === 'side'
+        ? { x: DOME.x, z: DOME.z + 48, y: 10, yaw: 0, vx: 0, vy: 0, vz: -20 }
+        : { x: DOME.x, z: DOME.z - DOME.flatHalfWidth - 8, y: 5, yaw: Math.PI, vx: 0, vy: 0, vz: 20 });
       for (let i = 0; i < 40 && !car.inDome; i++) step(world, new Map(), .05);
-      assert.ok(car.inDome, 'the car enters through the side');
+      assert.ok(car.inDome, `the car flies in through the ${approach}`);
     }
     assert.equal(car.domeReturn, island ? 'island' : 'sf');
     assert.ok(travelDome(world, 'p'));

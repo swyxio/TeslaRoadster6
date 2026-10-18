@@ -91,7 +91,7 @@ test('the island and its approach are open while the Oakland gates remain locked
   assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z-1),0,'air alongside the island');
   assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z+1),1,'northern water does not open Oakland');
   assert.equal(requiredLevelAt(111,60),1,'Bay Bridge remains locked');
-  assert.equal(requiredLevelAt(200,ACCESS_BOUNDARIES.islandNorthZ+.1),1,'Alcatraz approach remains locked to the south');
+  assert.equal(requiredLevelAt(200,ACCESS_BOUNDARIES.islandNorthZ+.1),1,'the island approach remains locked to the south');
 
   // Cross the old x=430 boundary on the banked oval in either direction,
   // then repeat in the air. All moves use a level-zero controlled car.

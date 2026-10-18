@@ -12,6 +12,7 @@ import {RACE_COURSES} from '../shared/race-courses';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {DOME} from '../shared/dome';
+import {ovalBankSurface} from '../shared/oval-bank';
 
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
@@ -58,6 +59,23 @@ test('Rocket Island loop and ferry approaches are clear, supported and separated
  drive(0,-180,0,(_,z)=>z< -240);
  drive(0,-1250,Math.PI,(_,z)=>z> -1090);
 });
+test('the stadium street approach is supported and clear of the bank and parking',()=>{
+ const road=ROADS.find(r=>r.x===DOME.x&&r.z===(120+DOME.z-DOME.flatHalfWidth)/2&&r.w===18);
+ assert.ok(road,'the shared approach is also rendered as a road');
+ for(let z=120;z<=DOME.z-DOME.flatHalfWidth;z+=4)for(let x=road.x-8;x<=road.x+8;x+=4){
+  assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
+  assert.ok(!isRocketIsland(x,z),`approach must be on city land at ${x},${z}`);
+  assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).some(b=>contact({x,z,w:1,d:1,yaw:0},{...b,yaw:0})),`building on the approach at ${x},${z}`);
+ }
+ const approach={...road,yaw:road.angle??0};
+ for(const lot of PARKING_LOTS){
+  const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
+  assert.equal(contact(approach,area),null,`${lot.id} overlaps the Dome approach`);
+ }
+ for(const other of ROADS.filter(r=>r.kind==='island'))
+  assert.equal(contact(approach,{...other,yaw:other.angle??0}),null,'the approach does not overlay a race course');
+});
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
  world.entities=[car];world.pickups=[];Object.assign(car,{x:80,z:0,yaw:-Math.PI/2,speed:10});
@@ -96,8 +114,8 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
   assert.ok(lot,station.id);
   const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
   const approach={x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw};
-  assert.equal(contact(area,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id}: stadium plaza`);
   const pad={x:lot.pickup.x,z:lot.pickup.z,w:14,d:14,yaw:0};
+  assert.equal(contact(area,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id}: stadium plaza`);
   assert.equal(contact(pad,approach),null,`${station.id}: pickup clears queue`);
   assert.equal(contact(area,ferry),null,`${station.id}: ferry`);
   for(const dx of [-20,-10,0,10,20])for(const dz of [-20,-10,0,10,20])
