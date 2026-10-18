@@ -1,6 +1,14 @@
 # Verification · 2026-10-17 Pacific
 
-The protocol v11 island and dome records below describe separate builds. Neither verifies the combined protocol v12 checkout.
+## Rocket Island, cockpit and Rocket Dome · protocol v12, local checks · 2026-10-17 Pacific
+
+- `pnpm test` passed 204/204 and `pnpm build` passed both TypeScript checks and Vite. The main JavaScript is 734 kB (207 kB gzip); Vite retains its chunk-size warning.
+- Local Wrangler protocol-v12 two-client integration passed ferry/activity snapshots, Rocket pads, cockpit, dome entry, a shared ball impact and goal, arena exit, movement and disconnect cleanup. The first run overlapped a build-triggered worker reload and timed out; the settled rerun passed. It did not test a multiplayer ferry crossing.
+- A same-host eight-second 64-client smoke passed with at least 69 snapshots per client, a 123 ms p95 snapshot gap and 123,476-byte maximum recipient snapshot. It began at dawn without an occupied ferry or peak traffic; it is not a WAN, sustained or production test.
+- A five-second same-process synthetic mixed-activity run included 64 players, six ferry passengers, four parking entrants, four racers and four dome players. Across 3,200 serialized snapshots, p95 simulation step was 12.45 ms, p95 batch of 64 snapshots was 35.35 ms and the largest recipient snapshot was 108,595 bytes. The run was not a network, peak-traffic, mobile, sustained or production test.
+- A continuous shared-simulation test drove onto the ferry from the SF pier, waited for its normal crossing and drove onto Rocket Island. Actual multiplayer ferry crossing, physical-device touch and full island activity playthroughs remain unverified.
+
+The protocol v11 island and dome records below describe separate builds.
 
 ## Rocket Island and cockpit · protocol v11, local checks · 2026-10-17 Pacific
 
@@ -10,6 +18,10 @@ The protocol v11 island and dome records below describe separate builds. Neither
 - `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
 - In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
 - Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
+## Rocket Dome production · 2026-10-17 Pacific
+
+- The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
+- Chrome desktop opened the live solo game and the Rocket Dome; the field, ball and first-to-five scoreboard were visible. Local desktop and touch-emulated playtests are documented below; no physical-device or production frame-rate test was performed.
 
 ## Rocket Dome with cockpit · protocol v11, local build · 2026-10-17 Pacific
 
