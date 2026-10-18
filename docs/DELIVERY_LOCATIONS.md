@@ -12,12 +12,12 @@ The catalog is integrated with geographic scheduling. Do not offer a destination
 
 ## Catalog coverage
 
-The catalog has 171 pickups, 171 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. San Francisco has eight fictional ground customers plus two rooftops, and Oakland has nine ground customers plus one rooftop. Other towns have ten fictional ground customers. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops.
+The catalog has 171 pickups, 174 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. Every town has ten fictional ground customers; San Francisco has two additional rooftops and Oakland has one. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops.
 
 | Town or subarea | Pickups | Fictional customers | Additional landmark arrivals |
 | --- | ---: | ---: | ---: |
-| San Francisco | 10 | 10 | 1 |
-| Oakland | 10 | 10 | 0 |
+| San Francisco | 10 | 12 | 1 |
+| Oakland | 10 | 11 | 0 |
 | Berkeley | 10 | 10 | 1 |
 | Emeryville | 10 | 10 | 0 |
 | Mill Valley | 10 | 10 | 0 |
