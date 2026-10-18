@@ -4,7 +4,7 @@ import { addPlayer, createWorld, makeEntity, NEUTRAL, parkingAction, raceAction,
 import { DOME } from '../shared/dome';
 import { FERRY_TRAVEL_SECONDS } from '../shared/ferry';
 import { domeSurface } from '../shared/map';
-import { hasRocket } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 
 function setup() {
   const world = createWorld();
@@ -14,15 +14,14 @@ function setup() {
   return { world, player, car };
 }
 
-test('a collected Rocket upgrade powers dome adhesion until it expires', () => {
+test('a collected Rocket upgrade powers permanent dome adhesion', () => {
   const { world, car } = setup();
   car.kind = 'model-3';
   Object.assign(car, { x: 0, z: -1160, y: 0, supportId: 'ground' });
   step(world, new Map(), .05);
-  assert.ok(hasRocket(car, world.time));
-  const expires = car.rocketUntil;
+  assert.ok(hasRockets(car));
   assert.ok(travelDome(world, 'p'));
-  assert.equal(car.rocketUntil, expires);
+  assert.ok(hasRockets(car));
   assert.equal(car.supportId, 'dome');
   Object.assign(car, { x: DOME.x - 30, z: DOME.z, domeS: DOME.flatHalfWidth, yaw: 0, speed: 45 });
   for (let i = 0; i < 100 && car.y < 49.99; i++) {
@@ -33,11 +32,10 @@ test('a collected Rocket upgrade powers dome adhesion until it expires', () => {
   const ceiling = 3 * DOME.flatHalfWidth + Math.PI * DOME.radius;
   const surface = domeSurface(ceiling);
   Object.assign(car, { x: DOME.x - 30, y: surface.y, z: surface.z, domeS: ceiling, yaw: 0, speed: 17, vx: 0, vy: 0, vz: 17 });
-  world.time = expires - .01;
+  world.time += 120;
   step(world, new Map(), .02);
-  assert.equal(car.supportId, null);
-  assert.equal(car.domeS, null);
-  assert.ok(car.vz > 16 && car.vy < 0, 'momentum continues as gravity pulls the car off the ceiling');
+  assert.equal(car.supportId, 'dome');
+  assert.ok(car.domeS !== null && hasRockets(car));
 });
 
 test('upgraded ordinary vehicles remain attached when they collide on the dome wall', () => {
@@ -46,7 +44,8 @@ test('upgraded ordinary vehicles remain attached when they collide on the dome w
   const center = 2 * DOME.flatHalfWidth + Math.PI * DOME.radius / 2;
   const cars = [center - 2.1, center + 2.1].map((arc, i) => {
     const surface = domeSurface(arc), car = makeEntity(`car-${i}`, 'model-3', DOME.x, surface.z);
-    Object.assign(car, { inDome: true, supportId: 'dome', domeS: arc, y: surface.y, yaw: 0, speed: i === 0 ? -8 : 8, rocketUntil: 30 });
+    Object.assign(car, { inDome: true, supportId: 'dome', domeS: arc, y: surface.y, yaw: 0, speed: i === 0 ? -8 : 8 });
+    car.upgrades.rocket = true;
     return car;
   });
   world.entities = cars;

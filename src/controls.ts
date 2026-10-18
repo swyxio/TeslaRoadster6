@@ -8,7 +8,7 @@ export class Controls {
   private flip = 0;
   airborne = false;
   enabled = false;
-  onAction: (action: 'interact' | 'reset' | 'camera' | 'menu' | 'autopilot' | 'fleet' | 'scores' | 'awards') => void = () => {};
+  onAction: (action: 'interact' | 'reset' | 'camera' | 'menu' | 'autopilot' | 'fleet' | 'scores' | 'awards' | 'shop') => void = () => {};
   constructor() {
     window.addEventListener('keydown', e => {
       const target=e.target as HTMLElement;
@@ -19,7 +19,7 @@ export class Controls {
       if (!e.repeat) {
         if(e.code==='KeyJ')this.jump=(this.jump+1)%2147483648;
         if(e.code==='KeyX')this.flip=(this.flip+1)%2147483648;
-        const action = {KeyF:'interact',KeyR:'reset',KeyC:'camera',KeyV:'autopilot',KeyG:'fleet',KeyL:'scores',KeyT:'awards',Escape:'menu'}[e.code];
+        const action = {KeyF:'interact',KeyR:'reset',KeyC:'camera',KeyV:'autopilot',KeyG:'fleet',KeyL:'scores',KeyT:'awards',KeyB:'shop',Escape:'menu'}[e.code];
         if (action) this.onAction(action as 'interact');
       }
     });

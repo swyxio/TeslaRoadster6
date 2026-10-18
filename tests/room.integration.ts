@@ -4,7 +4,7 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build changes the world geometry and adds the island-oval support identity.
-assert.equal(PROTOCOL_VERSION, 13);
+assert.equal(PROTOCOL_VERSION, 14);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
@@ -26,7 +26,7 @@ function connect() {
 const one = connect(), two = connect();
 try {
   const health = await (await fetch(base + '/api/health')).json() as {version:number};
-  assert.equal(health.version, 13, 'server advertises the banked-oval protocol');
+  assert.equal(health.version, 14, 'server advertises the banked-oval protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
@@ -38,8 +38,9 @@ try {
   for(const state of [one.state,two.state]){
     assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
     assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);
-    assert.ok(state.world!.pickups.some(p=>p.kind==='rocket'),'Rocket pads are replicated');
-    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'vehicle capability expiry is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-island'&&p.kind==='rocket'),'island Rocket kit is replicated');
+    assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
+    assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
   }
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
   await delay(450);
@@ -82,13 +83,17 @@ try {
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
-  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));
-  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox')??false,'fleet change visible to remote player');
+  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));await delay(500);
+  assert.ok(!two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox'),'non-Tesla selection rejected by room');
+  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'model-3'}));
+  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='model-3')??false,'Tesla fleet change visible to remote player');
+  await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket'}));await delay(500);
+  assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, ferry and activity snapshots, Rocket pads, dome entry, ball impact, goal and exit, cockpit, traffic, movement, delivery, stunts, fleet selection, invalid-input isolation and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
+  console.log(`PASS: two-client join, ferry and activity snapshots, Rocket kits, dome scoring, cockpit, movement, delivery, stunts, Tesla-only selection, rejected purchase, autonomous mode and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
 } finally { one.socket.close(); two.socket.close(); }

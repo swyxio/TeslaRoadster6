@@ -124,7 +124,7 @@ export function resolveCliffHit(car:CliffCar,hit:CliffHit,rocket:boolean):'attac
   car.vx-=1.2*dot*n.x;car.vy-=1.2*dot*n.y;
   return 'bounce';
 }
-/** Expiry or a jump keeps the actual world velocity, not a reconstructed heading. */
+/** Detachment keeps the actual world velocity, not a reconstructed heading. */
 export function detachCliff(car:CliffCar):void {
   if(car.supportId!=='island-cliff')return;
   car.supportId=null;car.loopAngle=null;car.pitchRate=0;car.flipRemaining=0;

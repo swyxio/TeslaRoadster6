@@ -62,7 +62,7 @@ function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
 /** Snapshot flags describe arcade effects, not the prototype's real control law. */
 export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
   // The stock Roadster always has its hardware. Other cars show it only while
-  // the authoritative temporary upgrade is active (including between bursts).
+  // an authoritative Rocket capability is active (including between bursts).
   const hardware=root.getObjectByName('rocket_hardware'),jets=root.getObjectByName('jets');
   const spec=VEHICLES[root.name as VehicleId];
   if(hardware instanceof T.Group&&jets instanceof T.Group&&spec){
@@ -79,6 +79,16 @@ export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capab
     const flag=name.startsWith('plume_rear')?THRUSTER_REAR:name.startsWith('plume_down_l')?THRUSTER_DOWN_LEFT:name.startsWith('plume_down_r')?THRUSTER_DOWN_RIGHT:name==='plume_side_l'?THRUSTER_SIDE_LEFT:THRUSTER_SIDE_RIGHT;
     child.visible=!!(mask&flag);
     child.scale.setScalar(.92+.08*Math.sin(time*19+child.position.z*3));
+  }
+}
+
+/** Add visible fictional retrofit hardware to a vehicle when its shared kit is installed. */
+export function addRocketKit(root:T.Group,kind:VehicleId){
+  if(root.getObjectByName('rocket-kit'))return;
+  const spec=VEHICLES[kind],w=spec.width,l=spec.length;
+  const kit=new T.Group();kit.name='rocket-kit';root.add(kit);
+  for(const side of [-1,1]){
+    box(kit,side*w*.39,.34,l*.47,.32,.3,.35,0x9b7be8);
   }
 }
 

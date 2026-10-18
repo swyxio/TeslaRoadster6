@@ -1,9 +1,11 @@
 # Verification · 2026-10-17 Pacific
 
+The v12 island and shop entries below describe separate historical builds; they do not verify the combined v14 checkout.
+
 ## Banked oval and review fixes · protocol v12, local checks · 2026-10-17 Pacific
 
 - `pnpm test` passed 213/213 and `pnpm build` passed; Vite reports a 739 kB main chunk (209 kB gzip) and its chunk-size warning. Regression tests include a driven full oval lap through all eight gates, shared mesh/simulation triangles, large vehicles, flat junctions and an eight-car grid. The physics are arcade handling, not a tire-grip simulation.
-- The final local Wrangler protocol-v12 two-client integration passed island/activity snapshots, dome scoring, cockpit, movement and existing room checks. It did not exercise a multiplayer ferry crossing.
+- The final local Wrangler protocol-v12 two-client integration passed island/activity snapshots, dome scoring, cockpit, movement and existing room checks. It did not exercise a multiplayer ferry crossing. A later two-client crossing attempt was interrupted by a local worker reload before boarding; both sockets closed and no crossing or disembarkation was observed.
 - A same-host eight-second 64-client smoke passed with at least 64 snapshots per client, a 140 ms p95 snapshot gap and 123,464-byte maximum recipient snapshot. It began at dawn without an occupied ferry or peak traffic; it is not a WAN, sustained or production test.
 - A five-second same-process synthetic workload included 64 players, six ferry passengers, four parking entrants, four racers, four dome players and four banked-oval drivers. All four remained on the oval for 100 ticks. Across 3,200 serialized snapshots, p95 simulation step was 5.85 ms, p95 batch of 64 snapshots was 21.10 ms and the largest recipient snapshot was 109,392 bytes. This is not a network, peak-traffic, mobile, sustained or production test.
 - A temporary local Chrome fixture placed a Roadster on the oval; the bank and markings rendered, and driving and steering remained supported. This was not a natural route or full browser lap. The fixture was removed.
@@ -29,6 +31,20 @@ The protocol v11 island and dome records below describe separate builds.
 - `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
 - In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
 - Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
+
+## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
+
+- After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
+- Local Wrangler's two-client room integration passed for dome entry, a shared ball impact and goal, exit, Tesla-only selection, upgrade snapshot fields and a rejected purchase. Successful purchases remain covered by the shared simulation and solo UI fixture, not a live room transaction. This is not a load test.
+- The staging preview of commit `976a204` returned protocol v12 and served the locally built browser assets. Its two-client integration passed the same room checks, including a rejected purchase. This is not a load test.
+- Chrome desktop showed both Rocket Dome and Shop in Actions, shop distance guidance, and a working trip to the dome. Chrome 390×844 portrait and 844×390 landscape emulation showed the combined driving layout; in portrait, an emulated touch opened Actions and Shop displayed its nearest-shop guidance. The shop purchase dialog was checked in both orientations before dome integration (below). No physical phone was tested.
+
+## Rocket pickups, Tesla fleet and workshops · pre-dome protocol v11 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 124 tests, both TypeScript checks and the production build. The existing JavaScript chunk-size warning remains. Tests cover all 26 families collecting a rocket kit and jumping, Tesla-only selection, shop eligibility and costs, installed upgrade effects, geometry and independent retrofit plumes.
+- Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
+- Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
+- Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.

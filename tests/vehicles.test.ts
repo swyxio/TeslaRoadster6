@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Mesh,Box3 } from 'three';
-import {createVehicle,setThrusterEffects} from '../src/vehicles';
+import {createVehicle,addRocketKit,setThrusterEffects} from '../src/vehicles';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {THRUSTER_REAR,THRUSTER_SIDE_LEFT} from '../shared/game';
 test('fleet meshes retain scale, bounded complexity and independent articulated transforms',()=>{
@@ -14,6 +14,24 @@ test('fleet meshes retain scale, bounded complexity and independent articulated 
   assert.ok(bounds.max.z-bounds.min.z<spec.length+.5,id);
   for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const a=first.getObjectByName(name)!,b=second.getObjectByName(name)!;assert.ok(a&&b);a.rotation.y=.4;assert.equal(b.rotation.y,0);}
   assert.ok(first.getObjectByName('jets'));
+ }
+});
+test('retrofit hardware and effects are independent for each non-Rocket vehicle',()=>{
+ for(const id of VEHICLE_IDS.filter(id=>!VEHICLES[id].airThrusters)){
+  const first=createVehicle(id),second=createVehicle(id);
+  addRocketKit(first,id);addRocketKit(first,id);
+  assert.equal(first.children.filter(o=>o.name==='rocket-kit').length,1,id);
+  assert.equal(second.getObjectByName('rocket-kit'),undefined,id);
+  setThrusterEffects(first,THRUSTER_REAR|THRUSTER_SIDE_LEFT,1);
+  assert.equal(first.getObjectByName('plume_rear_0')!.visible,true,id);
+  assert.equal(first.getObjectByName('plume_side_l')!.visible,true,id);
+  assert.equal(first.getObjectByName('plume_side_r')!.visible,false,id);
+  assert.equal(second.getObjectByName('jets')!.visible,false,id);
+  setThrusterEffects(first,0,2,true);
+  assert.equal(first.getObjectByName('rocket_hardware')!.visible,true,id);
+  assert.equal(first.getObjectByName('jets')!.visible,false,id);
+  const nozzles:string[]=[];first.traverse(o=>{if(o.name.startsWith('nozzle_'))nozzles.push(o.name);});
+  assert.equal(nozzles.length,10,id);
  }
 });
 test('Rocket has ten nozzles and independently controlled vapor on each clone',()=>{
