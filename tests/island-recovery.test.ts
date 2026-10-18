@@ -36,9 +36,11 @@ test('water recovery uses the island only near its actual shoreline',()=>{
   for(const [x,z,expectedIsland] of [[-540,-1800,true],[150,-800,false],[-300,-650,false]] as const){
     const {world,car}=setup();assert.equal(isSurface(x,z),false);
     Object.assign(car,{x,z,y:.01,vy:-5,vx:0,vz:0,supportId:null});
-    step(world,new Map(),.05);
+    const relocated:string[]=[];
+    step(world,new Map(),.05,{onRelocation:id=>relocated.push(id)});
     assert.equal(isRocketIsland(car.x,car.z),expectedIsland,`water at ${x},${z}`);
     assert.equal(car.supportId,'ground');
+    assert.deepEqual(relocated,['p']);
   }
 });
 

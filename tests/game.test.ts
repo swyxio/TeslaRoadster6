@@ -1,13 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, NEUTRAL, BUILDINGS } from '../shared/game';
+import { addPlayer, createWorld, interact, removePlayer, resetPlayer, simulationSubsteps, step, NEUTRAL, BUILDINGS } from '../shared/game';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { refillStationFor } from '../shared/charging';
 import { HILL, terrainHeight } from '../shared/map';
 import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
+import { ScheduledInput } from '../shared/tick-input';
+import { RoomInputClient } from './room-input-client';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
+test('presentation replay matches adaptive stepping when the authoritative count is known',()=>{
+  const {world,car}=setup();world.entities=[car];Object.assign(car,{speed:32,vz:-32});
+  const replay=structuredClone(world),inputs=new Map([['one',{...NEUTRAL,throttle:1,steer:.3}]]);
+  const substeps=simulationSubsteps(world,.05);assert.ok(substeps>1);
+  let actual=0;step(world,inputs,.05,{onSubsteps:value=>{actual=value;}});
+  step(replay,inputs,.05,{substeps});
+  assert.equal(actual,substeps);assert.deepEqual(replay,world);
+});
 test('authoritative jump and one-tap flip consume air and land', () => {
   const { world, car } = setup();
   const inputs = new Map([['one', { ...NEUTRAL, jump: 1 }]]);
@@ -72,24 +82,67 @@ test('64-player spawns do not overlap and simulation stays finite', () => {
   assert.ok(world.entities.every(e => [e.x, e.y, e.z, e.speed].every(Number.isFinite)));
 });
 test('protocol rejects malformed, non-finite, oversized and out-of-range input', () => {
-  assert.ok(parseMessage(JSON.stringify({ type: 'input', seq:1, input: NEUTRAL })));
+  const frame={type:'input',seq:1,targetTick:2,controlRevision:0,actionSeq:0,roomEpoch:'00000000-0000-0000-0000-000000000000',input:NEUTRAL};
+  assert.ok(parseMessage(JSON.stringify(frame)));
+  assert.equal(parseMessage(JSON.stringify({...frame,targetTick:0})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,controlRevision:-1})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,actionSeq:-1})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,actionSeq:1.5})),null);
+  const {actionSeq,...withoutActionSeq}=frame;
+  assert.equal(parseMessage(JSON.stringify(withoutActionSeq)),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,roomEpoch:'invalid'})),null);
   assert.equal(parseMessage(JSON.stringify({type:'input',input:NEUTRAL})),null);
-  assert.equal(parseMessage(JSON.stringify({type:'input',seq:0,input:NEUTRAL})),null);
-  assert.equal(parseMessage(JSON.stringify({type:'input',seq:1.5,input:NEUTRAL})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,seq:0})),null);
+  assert.equal(parseMessage(JSON.stringify({...frame,seq:1.5})),null);
   assert.deepEqual(parseMessage('{"type":"sync","token":2}'),{type:'sync',token:2});
   assert.equal(parseMessage('{"type":"sync","token":0}'),null);
   assert.equal(parseMessage('{'), null); assert.equal(parseMessage('x'.repeat(1025)), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, throttle: 2 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, throttle: 2 } })), null);
   assert.equal(parseMessage('{"type":"input","input":{"throttle":1e999}}'), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, boost: 1 } })), null);
-  assert.equal(parseMessage(JSON.stringify({ type: 'input', seq:1, input: { ...NEUTRAL, jump: -1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, boost: 1 } })), null);
+  assert.equal(parseMessage(JSON.stringify({ ...frame, input: { ...NEUTRAL, jump: -1 } })), null);
   assert.ok(parseMessage('{"type":"parking","action":"park"}'));
   assert.equal(parseMessage('{"type":"parking","action":"award"}'),null);
-  assert.ok(parseMessage('{"type":"race","action":"join","courseId":"short"}'));
+  const fence={actionSeq:1,edgeBaseline:{jump:0,flip:0}};
+  assert.ok(parseMessage(JSON.stringify({type:'race',action:'join',courseId:'short',...fence})));
+  assert.equal(parseMessage('{"type":"race","action":"join","courseId":"short"}'),null);
   assert.equal(parseMessage('{"type":"race","action":"finish","courseId":"short","elapsed":0}'),null);
   assert.equal(parseMessage('{"type":"race","action":"join","courseId":"__proto__"}'),null);
   assert.equal(roomSlug('/api/room/bay-1'), 'bay-1'); assert.equal(roomSlug('/api/room/../../bad'), null);
-  assert.equal(roomCapacity(), 64); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 64);
+  assert.equal(roomCapacity(), 8); assert.equal(roomCapacity('10000'), 128); assert.equal(roomCapacity('oops'), 8);
+});
+test('wire action fences require positive sequences and valid edge baselines',()=>{
+  const fence={actionSeq:1,edgeBaseline:{jump:0,flip:2147483647}};
+  const actions=[{type:'interact'},{type:'reset'},{type:'autopilot'},{type:'dome'},
+    {type:'selectVehicle',kind:'roadster'},{type:'minigame',game:'short'},
+    {type:'destination',x:0,z:0,requestId:1},{type:'race',action:'join',courseId:'short'}];
+  for(const action of actions){
+    assert.ok(parseMessage(JSON.stringify({...action,...fence})),action.type);
+    assert.equal(parseMessage(JSON.stringify(action)),null,`${action.type} needs a fence`);
+  }
+  for(const bad of [{actionSeq:0},{actionSeq:-1},{actionSeq:1.5},{edgeBaseline:null},
+    {edgeBaseline:{jump:-1,flip:0}},{edgeBaseline:{jump:0,flip:2147483648}},{edgeBaseline:{jump:0}}]){
+    assert.equal(parseMessage(JSON.stringify({type:'reset',...fence,...bad})),null);
+  }
+  assert.ok(parseMessage(JSON.stringify({type:'race',action:'start',courseId:'short'})),'non-join race actions remain unfenced');
+});
+test('local input client fences actions with its latest counters and retains action order',()=>{
+  const frames:string[]=[];
+  const socket={readyState:WebSocket.OPEN,send:(frame:string)=>frames.push(frame)} as unknown as WebSocket;
+  const client=new RoomInputClient(socket),control=new ScheduledInput(NEUTRAL).snapshot();
+  client.observe({type:'welcome',tick:10,roomEpoch:'00000000-0000-0000-0000-000000000000'});
+  client.observe({type:'state',tick:10,roomEpoch:client.roomEpoch,poseRevision:0,control});
+  client.send({...NEUTRAL,jump:1});
+  client.action({type:'reset'});
+  client.send({...NEUTRAL,jump:1,flip:1});
+  // An older snapshot cannot roll back an action already sent on the socket.
+  client.observe({type:'state',tick:12,roomEpoch:client.roomEpoch,poseRevision:0,control});
+  client.action({type:'selectVehicle',kind:'roadster'});
+  const sent=frames.map(frame=>JSON.parse(frame));
+  assert.deepEqual(sent.map(frame=>frame.actionSeq),[0,1,1,2]);
+  assert.deepEqual(sent[1].edgeBaseline,{jump:1,flip:0});
+  assert.deepEqual(sent[3].edgeBaseline,{jump:1,flip:1});
+  assert.ok(frames.every(frame=>parseMessage(frame)),'all helper frames satisfy the wire schema');
 });
 test('rooftop landing stays supported and can drive off; positive steer turns left', () => {
   const { world, car } = setup(); const roof = BUILDINGS[0];

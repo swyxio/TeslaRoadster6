@@ -25,6 +25,7 @@ export class Controls {
   airborne = false;
   enabled = false;
   onAction: (action: Action) => void = () => {};
+  onEdge: (kind:'jump'|'flip',id:number) => void = () => {};
   constructor(private getGamepads:()=>readonly (Gamepad|null)[]=pads, private now:()=>number=()=>performance.now()) {
     window.addEventListener('keydown', e => {
       const target=e.target as HTMLElement;
@@ -63,11 +64,12 @@ export class Controls {
       button.addEventListener('lostpointercapture', release);
     });
   }
-  private queueJump(){this.jump=(this.jump+1)%2147483648;this.pendingJump=this.jump;this.jumpHeldSince=null;}
-  private queueFlip(){this.flip=(this.flip+1)%2147483648;}
+  private queueJump(){this.jump=(this.jump+1)%2147483648;this.pendingJump=this.jump;this.jumpHeldSince=null;this.onEdge('jump',this.jump);}
+  private queueFlip(){this.flip=(this.flip+1)%2147483648;this.onEdge('flip',this.flip);}
   observeFlight(airborne:boolean,lastJump:number,speed=0){this.airborne=airborne;this.speed=speed;if(this.pendingJump===lastJump)this.pendingJump=null;}
   clear() { this.keys.clear(); this.pointers.clear(); this.pendingJump=null; this.jumpHeldSince=null; this.armed=false; document.querySelectorAll('.pressed').forEach(e => e.classList.remove('pressed')); }
   resetSequences(){this.jump=0;this.flip=0;this.pendingJump=null;}
+  edgeCounters():Pick<Input,'jump'|'flip'>{return {jump:this.jump,flip:this.flip};}
   read(): Input {
     let available:readonly (Gamepad|null)[]=[];
     try { available=this.getGamepads(); } catch { /* A browser may block gamepad access. */ }

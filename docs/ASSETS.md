@@ -44,3 +44,19 @@ Rocket nozzle reference: [Tesla reveal](https://www.youtube.com/live/qt5p-_tE8d0
 ## Audio
 
 The original procedural soundtrack and sound effects are synthesized locally and MIT licensed. See [AUDIO.md](AUDIO.md) for the cue contract, mix and replacement guidance. Do not add recordings or music without documenting their origin and license.
+
+## Vehicle detail budget · 2026-10-18
+
+The controlled car and police retain the full model. Other cars switch to one
+shared, vertex-colored mesh beyond 125 m from the camera and return to full
+detail within 100 m. The hysteresis prevents repeated switching at a boundary.
+Distant bodies use the same platform proportions and silhouette sections, fewer
+loft segments and eight-sided tires. Sensors, wheel articulation, rocket hardware
+and exhaust animation are omitted at that distance. The inactive model is detached from the scene graph and retained for reuse,
+so it incurs no scene matrix traversal. Entity-level incident warnings remain
+attached. Hidden retrofit/effect updates still address the cached detailed model.
+Geometry/materials are
+catalog-owned; never dispose them on entity removal. Detail selection is purely
+visual and changes neither simulation nor collisions. DOM/HUD resolution remains
+native; the WebGL drawing buffer is capped at one pixel per CSS pixel on both
+desktop and touch devices.

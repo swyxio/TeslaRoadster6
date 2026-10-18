@@ -1,0 +1,33 @@
+{
+  "name": "tesland",
+  "version": "0.0.14-alpha",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:server": "wrangler dev --port 8787",
+    "build": "pnpm typecheck && vite build && tsx scripts/build-public-pages.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "ci": "pnpm test && pnpm build",
+    "preview": "wrangler dev --port 8787",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251011.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.18.0",
+    "@types/three": "^0.180.0",
+    "marked": "^18.1.1",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "wrangler": "^4.135.0"
+  },
+  "packageManager": "pnpm@10.33.1"
+}
