@@ -1,9 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
 ## Rocket Island jump ramps · protocol v20 · 2026-10-18 Pacific
-- `pnpm test` passed 279 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Shared-simulation tests drove a Model 3 and a Roadster over both ramps, including 72 m/s Rocket approaches, launch and landing, swept ramp contact, Rocket jump direction and ground-level side impacts. The tested approach and 150 m landing corridors clear the planned banked oval shoulders and other island attractions.
+- `pnpm test` passed 283 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Shared-simulation tests drove a Model 3 and a Roadster over both ramps, including 72 m/s Rocket approaches, launch and landing, swept ramp contact, Rocket jump direction and grounded and airborne side/end impacts. Vehicle-separation checks prevent cars being pushed through ramp sides. The tested approach and 150 m landing corridors clear the planned banked oval shoulders and other island attractions.
 - Local Wrangler protocol-v20 two-client room integration passed, including activity snapshots and protocol handshakes; it did not drive a multiplayer ferry crossing or jump.
-- Chrome solo with a temporary local spawn fixture showed the Roadster launching to 5 m and landing from the west ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
+- Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
 
 ## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
 

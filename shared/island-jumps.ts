@@ -33,3 +33,35 @@ export function sweepIslandJump(a:Point,b:Point):({x:number;y:number;z:number;t:
   }
   return hit;
 }
+
+/** Sweep the car's horizontal footprint against the bounded triangular side
+ * faces and vertical end face. Vertical offsets are relative to its pivot. */
+export function sweepIslandJumpWall(a:Point,b:Point,extent:{halfX:number;halfZ:number;minY:number;maxY:number}) {
+  type Hit = Point & {t:number;normal:{x:number;z:number}};
+  let best:Hit|null=null;
+  for(const jump of ISLAND_JUMPS){
+    const sides=[
+      {axis:'x' as const, normal:1, face:jump.end, expanded:jump.end+extent.halfX},
+      {axis:'z' as const, normal:-1, face:jump.z-jump.width/2, expanded:jump.z-jump.width/2-extent.halfZ},
+      {axis:'z' as const, normal:1, face:jump.z+jump.width/2, expanded:jump.z+jump.width/2+extent.halfZ},
+    ];
+    for(const side of sides){
+      const from=(a[side.axis]-side.expanded)*side.normal,to=(b[side.axis]-side.expanded)*side.normal;
+      // Only inward movement is a collision. A pivot already overlapping the
+      // footprint but still outside the visible face is resolved at t=0.
+      if(to>=from||to>=0)continue;
+      const outsideFace=(a[side.axis]-side.face)*side.normal>=0;
+      if(from<0&&!outsideFace)continue;
+      const t=from>=0?from/(from-to):0;
+      const point={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t};
+      if(side.axis==='x'&&Math.abs(point.z-jump.z)>jump.width/2+extent.halfZ)continue;
+      if(side.axis==='z'&&(point.x+extent.halfX<jump.start||point.x-extent.halfX>jump.end))continue;
+      const top=side.axis==='x'?jump.height:Math.max(0,Math.min(jump.height,(point.x+extent.halfX-jump.start)*islandJumpSlope(jump)));
+      if(point.y+extent.minY>=top||point.y+extent.maxY<=0)continue;
+      if(best&&best.t<=t)continue;
+      point[side.axis]=side.expanded+side.normal*.01;
+      best={...point,t,normal:{x:side.axis==='x'?side.normal:0,z:side.axis==='z'?side.normal:0}};
+    }
+  }
+  return best;
+}

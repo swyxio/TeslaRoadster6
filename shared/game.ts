@@ -17,7 +17,7 @@ import { PARKING_LOTS } from './parking-lots';
 import { createRace, joinRace, leaveRace, startRace, updateRace, type RaceState } from './race';
 import { RACE_COURSES } from './race-courses';
 import { ISLAND_BANK, advanceCliff, bankSurface, bankVerticalVelocity, cliffPose, enterCliffFromGround, resolveCliffHit, sweepBank, sweepCliff } from './island-stunts';
-import { islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump } from './island-jumps';
+import { islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
 import { UPGRADES, hasRockets, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
 import { airCost, MAX_TANK_LEVEL, tankUpgradePrice, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
@@ -79,7 +79,8 @@ function insideDeckVolume(e:Entity):boolean {
 function solid(e:Entity):boolean {
   const b=body(e),radius=Math.abs(Math.cos(e.yaw))*b.w/2+Math.abs(Math.sin(e.yaw))*b.d/2;
   const rz=Math.abs(Math.sin(e.yaw))*b.w/2+Math.abs(Math.cos(e.yaw))*b.d/2;
-  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>e.y<building.h-.001&&!!contact(b,{...building,yaw:0}));
+  const islandJump=e.supportId==='island-jump'?null:islandJumpHeight(e.x,e.z);
+  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||(islandJump!==null&&e.y<islandJump-.001)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>e.y<building.h-.001&&!!contact(b,{...building,yaw:0}));
 }
 function fits(world:World,e:Entity,ignore?:Entity):boolean{return e.supportId!==null&&!solid(e)&&!world.entities.some(other=>other!==ignore&&other!==e&&e.y<other.y+dimensions(other.kind).height&&other.y<e.y+dimensions(e.kind).height&&!!contact(body(e),body(other)));}
 function sideSpawn(world:World,kind:Entity['kind'],side:FerrySide,ignore?:Entity):{x:number;z:number;yaw:number}|null {
@@ -343,6 +344,20 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
   return true;
 }
 type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null};
+function islandJumpWallHit(e:Entity,old:PreviousPose){
+  const size=dimensions(e.kind),c=Math.abs(Math.cos(e.yaw)),s=Math.abs(Math.sin(e.yaw));
+  const vertical=verticalBounds(e);
+  return sweepIslandJumpWall(old,e,{halfX:(c*size.width+s*size.length)/2,halfZ:(s*size.width+c*size.length)/2,
+    minY:vertical.min-e.y,maxY:vertical.max-e.y});
+}
+function resolveIslandJumpWall(e:Entity,old:PreviousPose,hit:NonNullable<ReturnType<typeof islandJumpWallHit>>):void {
+  e.x=hit.x;e.y=hit.y;e.z=hit.z;
+  if(old.supportId==='ground'){e.supportId='ground';e.y=terrainHeight(e.x,e.z)??old.y;e.vy=0;}
+  const into=e.vx*hit.normal.x+e.vz*hit.normal.z;
+  if(into<0){e.vx-=1.2*into*hit.normal.x;e.vz-=1.2*into*hit.normal.z;}
+  e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));
+  e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
+}
 function ferryCanBoard(world:World,e:Entity):boolean {
   return e.kind==='person'||world.entities.filter(other=>other!==e&&other.supportId==='ferry'&&other.kind!=='person').length<FERRY_DECK.vehicleCapacity;
 }
@@ -657,9 +672,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       e.vx=-Math.sin(e.yaw)*e.speed+e.pushX;e.vz=-Math.cos(e.yaw)*e.speed+e.pushZ;
       e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-(drifting?1:3)*dt);e.pushZ*=Math.exp(-(drifting?1:3)*dt);
       followSupport(world,e,old);
-      const blockedJump=islandJumpAt(e.x,e.z);
-      if(oldSupportId==='ground'&&e.supportId==='ground'&&blockedJump&&(islandJumpHeight(e.x,e.z)??0)>.05){
-        e.x=oldX;e.z=oldZ;e.y=oldY;e.speed*=-.25;e.vx=-Math.sin(e.yaw)*e.speed;e.vz=-Math.cos(e.yaw)*e.speed;
+      if(oldSupportId==='ground'){
+        const hit=islandJumpWallHit(e,old);if(hit)resolveIslandJumpWall(e,old,hit);
       }
       if(oldSupportId==='ground'&&oldX>=STUNT_RAMP.end&&e.x<STUNT_RAMP.end&&Math.abs(e.z-STUNT_RAMP.z)<STUNT_RAMP.width/2&&e.y<STUNT_RAMP.height){
         e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;e.speed*=-.25;e.vx=-Math.sin(e.yaw)*e.speed;
@@ -703,6 +717,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
         }
       }
       e.vy-=9.81*dt;e.x+=e.vx*dt;e.y+=e.vy*dt;e.z+=e.vz*dt;
+      const jumpWall=islandJumpWallHit(e,old),jumpTop=sweepIslandJump(old,e);
+      const groundTime=old.y>=0&&e.y<0?old.y/(old.y-e.y):Infinity;
+      if(jumpWall&&(!jumpTop||jumpWall.t<jumpTop.t)&&jumpWall.t<groundTime)resolveIslandJumpWall(e,old,jumpWall);
       if(!person){
         const size=dimensions(e.kind),margin=Math.abs(Math.sin(e.yaw))*size.width/2+Math.abs(Math.cos(e.yaw))*size.length/2;
         const hit=sweepCliff(old,e,margin);if(hit)resolveCliffHit(e,hit,rocket);
@@ -778,6 +795,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     // Separation can move a supported body along a slope or over an edge.
     if(a.supportId!==null)followSupport(world,a,oldA);
     if(b.supportId!==null)followSupport(world,b,oldB);
+    for(const [e,old] of [[a,oldA],[b,oldB]] as const)if(old.supportId!=='island-jump'){
+      const hit=islandJumpWallHit(e,old);if(hit)resolveIslandJumpWall(e,old,hit);
+    }
     if(a.inDome)constrainDome(a,hasRocket(a,world.time));
     if(b.inDome)constrainDome(b,hasRocket(b,world.time));
     if(blocksProgression(world,a,oldA)||solid(a))Object.assign(a,oldA);
