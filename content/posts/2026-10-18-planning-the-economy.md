@@ -28,7 +28,7 @@ That dip in cash is the interesting part. Buying a cab makes you poorer for a wh
 
 We considered an XP system, then chose a simpler direction: **your current cash balance determines your level**. Earn enough and the Bay opens up. Spend enough and your level can fall until you earn it back. Achievements and purchases stay yours.
 
-A driver who spends below a city threshold can finish a job already in progress and take local contracts. Re-entering later may require rebuilding the balance. We should show the level a purchase will leave you with before you buy it.
+Today, cities unlock from delivery count and lifetime delivery earnings. In the proposed system, a driver who spends below a city threshold can finish a job already in progress and take local contracts. Re-entering later may require rebuilding the balance. We should show the level a purchase will leave you with before you buy it.
 
 | Wallet | Level | What opens |
 | --- | ---: | --- |
