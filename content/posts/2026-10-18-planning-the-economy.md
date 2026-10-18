@@ -1,4 +1,4 @@
-The first version of our Poly AV economy had a problem. In a simulation, 250 delivery-focused players all afforded a first home within 40 hours. None of the 250 Rocket Dome regulars or 250 race-and-parking players could. If you liked car soccer, our numbers told you to get back to work.
+The first version of our Tesland economy had a problem. In a simulation, 250 delivery-focused players all afforded a first home within 40 hours. None of the 250 Rocket Dome regulars or 250 race-and-parking players could. If you liked car soccer, our numbers told you to get back to work.
 
 This is a design experiment, not a report from real players. Tesland is a Bay Area driving game with session cash and achievements; persistent wallets, Cybercabs you can dispatch to earn money, and property are proposals. We built a simulator to see whether those proposals made sense together.
 
