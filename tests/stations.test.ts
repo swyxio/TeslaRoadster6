@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {LEVELS} from '../shared/delivery';
-import {addPlayer,createWorld,enterMinigame,parkingAction,step} from '../shared/game';
-import {BUILDINGS,ROADS,STATION_VENUES,terrainHeight} from '../shared/map';
+import {LEVELS,requiredLevelAt} from '../shared/delivery';
+import {addPlayer,createWorld,enterMinigame,makeEntity,parkingAction,step} from '../shared/game';
+import {BUILDINGS,ROADS,STATION_VENUES,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {planNavigation} from '../shared/navigation';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
 import {STATIONS,chargingStationAt,stationStalls} from '../shared/stations';
@@ -21,6 +22,24 @@ test('each represented Bay area has two uniquely identified and honestly sourced
     }
     assert.equal(chargingStationAt(station.x,station.z)?.id,station.id);
     for(const stall of stationStalls(station))assert.equal(chargingStationAt(stall.x,stall.z)?.id,station.id);
+  }
+});
+
+test('Oakland Hegenberger is separated from 2nd Street with a clear level-one approach',()=>{
+  const downtown=STATIONS.find(s=>s.id==='oakland')!,hegenberger=STATIONS.find(s=>s.id==='oakland-hegenberger')!;
+  assert.ok(hegenberger.x>downtown.x&&hegenberger.z>downtown.z);
+  assert.ok(Math.hypot(hegenberger.x-downtown.x,hegenberger.z-downtown.z)>=165);
+  assert.equal(requiredLevelAt(hegenberger.x,hegenberger.z),1);
+  const car=makeEntity('station-route','roadster',330,60);
+  const route=planNavigation(car,hegenberger,1);
+  assert.ok(route,'the connected street can be reached from the Bay Bridge');
+  // Parking lots are off the lane graph; the driver finishes from the nearby road.
+  assert.ok(Math.hypot(route.destination.x-hegenberger.x,route.destination.z-hegenberger.z)<=40);
+  for(let t=0;t<=1;t+=.05){
+    const x=route.destination.x+(hegenberger.x-route.destination.x)*t;
+    const z=route.destination.z+(hegenberger.z-route.destination.z)*t;
+    assert.ok(isSurface(x,z));assert.equal(requiredLevelAt(x,z),1);
+    for(const b of nearbyBuildings(x,z,5))assert.equal(contact({x,z,w:2,d:4,yaw:0},{...b,yaw:0}),null);
   }
 });
 
