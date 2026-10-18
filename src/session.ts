@@ -1,5 +1,5 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, createEmptyWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
 import { applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
 import { LocalPrediction } from './local-prediction';
@@ -7,11 +7,12 @@ export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
-  world: World = createWorld();
+  world: World = createEmptyWorld();
   id = '';
   status: SessionStatus = 'disconnected';
   capacity = 0;
   private socket?: WebSocket;
+  private connectTimeout?: number;
   private accumulator = 0;
   private sendTime = 0;
   private lastState = 0;
@@ -48,10 +49,11 @@ export class Session {
     }
     kind ??= 'roadster';
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createEmptyWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or drive solo.'; socket.close(); } }, 10000);
+    this.connectTimeout=timeout;
     socket.onmessage = event => {
       if (this.socket !== socket) return;
       try {
@@ -63,7 +65,7 @@ export class Session {
           if(kind!=='roadster')this.actionWithBarrier({type:'selectVehicle',kind});
         }
         if (message.type === 'state' && this.id) {
-          this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout);
+          this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
           const passed=Number.isSafeInteger(message.sync)&&this.waitingSync>0&&message.sync>=this.waitingSync;
           if(passed)this.waitingSync=0;
           this.prediction.snapshot(this.world,this.id,message.inputAck,this.lastState,passed);
@@ -84,7 +86,7 @@ export class Session {
         if (message.type === 'marsResult') this.marsResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout); if (this.socket === socket) { this.prediction.reset();this.waitingSync=0;this.status = 'disconnected'; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room or drive solo.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again, choose another room, or drive solo.';} else this.error ||= 'Room disconnected. Rejoin, choose another room, or drive solo.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { this.prediction.reset();this.waitingSync=0;this.status = 'disconnected'; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room or drive solo.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again, choose another room, or drive solo.';} else this.error ||= 'Room disconnected. Rejoin, choose another room, or drive solo.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or drive solo.'; };
   }
   tick(dt: number, input: Input) {
@@ -97,7 +99,8 @@ export class Session {
       if (this.sendTime >= .05) {
         const seq=this.inputSeq+1;
         if(this.send({type:'input',seq,input})){this.inputSeq=seq;this.prediction.input(seq,input,performance.now());}
-        this.sendTime = 0;
+        // Retain the fractional frame remainder without burst-sending missed intervals.
+        this.sendTime %= .05;
       }
     }
   }
@@ -170,5 +173,5 @@ export class Session {
     const token=++this.syncToken;this.waitingSync=token;return this.send({type:'sync',token});
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.awardsBound=null;this.awardsUnbound=null;this.awardsSync=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.awardsBound=null;this.awardsUnbound=null;this.awardsSync=null;this.sendTime=0;this.status='disconnected'; }
 }

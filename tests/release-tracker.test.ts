@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CURRENT_RELEASE } from '../content/releases';
+import { releaseLabel } from '../content/version';
 import { LAST_PLAYED_KEY, readLastPlayed, writeLastPlayed } from '../src/release-tracker';
 
 function store(initial?: string) {
@@ -18,4 +19,8 @@ test('bad or unavailable browser storage never interrupts play', () => {
   const blocked = {getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}};
   assert.equal(readLastPlayed(blocked), null);
   assert.equal(writeLastPlayed(blocked), false);
+});
+test('formats known alpha versions without downloading release history',()=>{
+  assert.equal(releaseLabel('0.0.8-alpha'),'0.0.8 Alpha');
+  assert.equal(releaseLabel('external-build'),'external-build');
 });

@@ -65,6 +65,18 @@ test('police see nearby flight, chase, slow and ticket once; grace prevents inst
   car.speed=1;updatePolice(world,.05);assert.ok(player.delivery.cash<=-60);assert.equal(player.delivery.cash,-player.delivery.lastTicket!.amount);assert.equal(player.delivery.tickets,1);assert.equal(cop.police.targetId,null);
   Object.assign(car,{y:10,vy:1,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.tickets,1);
 });
+test('police choose the nearest eligible flyer, preserving player order for ties',()=>{
+  const {world,player,car}=setup(),second=addPlayer(world,'second','Second');
+  const secondCar=world.entities.find(entity=>entity.id===second.entityId)!;
+  const cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:0,z:20,y:10,supportId:null});
+  Object.assign(secondCar,{x:0,z:-20,y:10,supportId:null});
+  updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+  cop.police=newPolice();secondCar.z=-10;
+  updatePolice(world,.05);assert.equal(cop.police.targetId,second.id);
+  cop.police=newPolice();second.delivery.ticketGraceUntil=world.time+20;
+  updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+});
 test('police do not see grounded, distant or rooftop cars; an escaped chase expires',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
   Object.assign(car,{x:0,z:10,y:0});updatePolice(world,.05);assert.equal(cop.police.targetId,null);

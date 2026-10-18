@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-See [verification](docs/VERIFICATION.md) for observed checks and known limitations.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations, and the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks and next steps.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
@@ -98,7 +98,7 @@ Rooms are public-by-code. Delivery money is fictional and session-only; shooting
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
-To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. Point it only at a local server or an authorized preview: it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
+To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
 
 ## Layout
 

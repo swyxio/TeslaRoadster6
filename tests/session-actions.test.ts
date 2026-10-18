@@ -36,11 +36,12 @@ function state(socket:Socket,world:World,inputAck:number,sync?:number) {
   socket.message({type:'state',world:structuredClone(world),inputAck,...(sync === undefined ? {} : {sync})});
 }
 
-test('a new session stays disconnected until solo or a completed room join',()=>{
+test('a new session stays empty until a completed room join',()=>{
   const session = new Session();
   assert.equal(session.status,'disconnected');
   assert.equal(session.id,'');
   assert.equal(session.world.players.length,0);
+  assert.equal(session.world.entities.length,0);
   const time = session.world.time;
   session.tick(.1,drive);
   assert.equal(session.world.time,time);
@@ -49,12 +50,8 @@ test('a new session stays disconnected until solo or a completed room join',()=>
   assert.equal(session.world.players.length,0);
   session.tick(.1,drive);
   assert.equal(session.world.time,time);
-  session.solo();
-  assert.equal(session.status,'solo');
-  assert.equal(session.id,'local');
-  assert.equal(session.world.players.length,1);
-  session.tick(.1,drive);
-  assert.ok(session.world.time>0);
+  assert.equal(session.world.entities.length,0);
+  session.disconnect();
   const joined=online();
   assert.equal(joined.session.status,'online');
   assert.equal(joined.session.id,'p');
@@ -123,5 +120,16 @@ test('mini-game barriers follow actions and keep prediction suspended until the 
   assert.deepEqual(session.world.races.rounds,entered.races.rounds,'the authoritative accepted game is retained');
   session.tick(.05,drive);
   assert.notEqual(session.renderWorld(),session.world,'prediction recovers after the latest barrier');
+  session.disconnect();
+});
+
+test('an explicit solo session starts and advances locally',()=>{
+  const session=new Session();
+  session.solo();
+  assert.equal(session.status,'solo');
+  assert.equal(session.id,'local');
+  assert.equal(session.world.players.length,1);
+  session.tick(.1,drive);
+  assert.ok(session.world.time>0);
   session.disconnect();
 });

@@ -317,6 +317,9 @@ export class GameScene {
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
+    // Keep reusable meshes, but hide pickups missing from the current snapshot
+    // (including the empty presentation world while joining another room).
+    for(const mesh of this.pickups.values())mesh.visible=false;
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
       if(!mesh){
@@ -389,5 +392,22 @@ export class GameScene {
     this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
-  start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
+  start(frame:(dt:number)=>void){
+    let last=performance.now();
+    // Opt-in, bounded diagnostics for repeatable browser playtests. Frame
+    // duration is CPU-side and does not wait for the GPU to finish.
+    const diagnostic=new URLSearchParams(location.search).has('perf')?{frames:[] as number[],work:[] as number[],count:0}:null;
+    this.renderer.setAnimationLoop(now=>{
+      const elapsed=now-last,dt=Math.min(elapsed/1000,.1);last=now;
+      const started=diagnostic?performance.now():0;
+      frame(dt);
+      if(!diagnostic)return;
+      diagnostic.frames.push(elapsed);diagnostic.work.push(performance.now()-started);
+      if(diagnostic.frames.length>240){diagnostic.frames.shift();diagnostic.work.shift();}
+      if(++diagnostic.count%60)return;
+      const percentile=(values:number[])=>[...values].sort((a,b)=>a-b)[Math.floor((values.length-1)*.95)];
+      const mean=diagnostic.frames.reduce((a,b)=>a+b,0)/diagnostic.frames.length;
+      document.body.dataset.teslandPerf=JSON.stringify({samples:diagnostic.frames.length,fps:1000/mean,frameP95Ms:percentile(diagnostic.frames),cpuP95Ms:percentile(diagnostic.work),drawCalls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles,pickupMeshes:this.pickups.size,visiblePickups:[...this.pickups.values()].filter(mesh=>mesh.visible).length});
+    });
+  }
 }

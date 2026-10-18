@@ -31,8 +31,19 @@ test('a shared room connects and a disconnect never starts a solo simulation',()
   session.tick(.05,NEUTRAL);assert.equal(JSON.parse(socket.sent.at(-1)!).type,'input');
   socket.closed();assert.equal(session.status,'disconnected');const time=session.world.time;
   session.tick(1,{...NEUTRAL,throttle:1});assert.equal(session.world.time,time);
-  session.solo('model-3','Alex');assert.equal(session.status,'solo');
-  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
+});
+
+test('input cadence keeps fractional frame time without catching up in a burst',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  for(let frame=0;frame<120;frame++)session.tick(1/60,NEUTRAL);
+  const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+  assert.ok(inputs.length>=39&&inputs.length<=40,`expected approximately 40 sends, got ${inputs.length}`);
+  assert.deepEqual(inputs.map(value=>value.seq),inputs.map((_,index)=>index+1));
+  session.tick(1,NEUTRAL);
+  assert.equal(socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input').length,inputs.length+1);
+  session.disconnect();
 });
 
 test('full rooms are distinct and stale sockets cannot overwrite a new session',()=>{
@@ -75,19 +86,6 @@ test('offline navigation requests fail without starting a local session',()=>{
   assert.equal(session.world.players.length,0);
 });
 
-test('solo is explicit, advances locally and ignores an old room socket',()=>{
-  const session=new Session();session.join('bay','Alex');const old=Socket.last;
-  session.solo('model-3','Scout');
-  assert.equal(session.status,'solo');assert.equal(session.room,'');
-  assert.equal(session.world.players[0].name,'Scout');
-  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
-  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
-  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
-  assert.equal(session.status,'solo');assert.equal(session.id,'local');
-  const id=session.setDestination(-180,60);
-  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
-});
-
 test('a displayed Tesla can be requested again after taking a same-kind street car',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
@@ -124,6 +122,50 @@ test('a rejected vehicle change stays unconfirmed until its ordered state and re
     assert.equal(session.world.players[0].entityId,car.id);
     socket.closed();
   }
+});
+
+test('online Mars actions use an ordered sync barrier and clear stale results on a new drive',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const requestId=session.mars('contribute',10);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
+  assert.equal(session.marsResult?.ok,true);
+  session.join('friends','Alex');assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
+  session.disconnect();
+});
+
+test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const requestId=session.setDestination(-180,60);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'destinationResult',requestId,ok:true});
+  assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  session.join('friends','Alex');assert.equal(session.destinationResult,null);
+  socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+  session.disconnect();
+});
+
+test('solo is explicit, advances locally and ignores an old room socket',()=>{
+  const session=new Session();session.join('bay','Alex');const old=Socket.last;
+  session.solo('model-3','Scout');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');
+  assert.equal(session.world.players[0].name,'Scout');
+  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
+  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
+  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
+  assert.equal(session.status,'solo');assert.equal(session.id,'local');
+  const id=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
 });
 
 test('switching from a room to solo keeps a playable local world and ignores old socket events',()=>{
@@ -183,31 +225,17 @@ test('solo Mars contributions and boarding are local to the current drive',()=>{
   session.solo();assert.equal(session.world.mars.fund,0);assert.equal(session.marsResult,null);
 });
 
-test('online Mars actions use an ordered sync barrier and clear stale results on a new drive',()=>{
+test('switching to solo clears and ignores stale room action results',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const requestId=session.mars('contribute',10);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
-  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
-  assert.equal(session.marsResult?.ok,true);
-  session.solo();assert.equal(session.marsResult,null);
-  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
-});
-
-test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{
-  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const requestId=session.setDestination(-180,60);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId});
-  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
-  socket.message({type:'destinationResult',requestId,ok:true});
-  assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
-  session.enterMinigame('park');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park'});
-  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
-  session.solo();assert.equal(session.destinationResult,null);
-  socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+  const marsId=session.mars('contribute',10),destinationId=session.setDestination(-180,60);
+  socket.message({type:'marsResult',requestId:marsId,action:'contribute',ok:true,amount:10});
+  socket.message({type:'destinationResult',requestId:destinationId,ok:true});
+  assert.equal(session.marsResult?.ok,true);assert.equal(session.destinationResult?.ok,true);
+  session.solo();
+  assert.equal(session.marsResult,null);assert.equal(session.destinationResult,null);
+  socket.message({type:'marsResult',requestId:marsId,action:'contribute',ok:true,amount:10});
+  socket.message({type:'destinationResult',requestId:destinationId,ok:true});
+  assert.equal(session.marsResult,null);assert.equal(session.destinationResult,null);
 });

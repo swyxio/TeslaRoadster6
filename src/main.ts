@@ -40,7 +40,7 @@ import { createMarsUI } from './mars-ui';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
-import { CURRENT_RELEASE, RELEASES } from '../content/releases';
+import { CURRENT_RELEASE, releaseLabel } from '../content/version';
 import { browserStorage, readLastPlayed, writeLastPlayed } from './release-tracker';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -313,8 +313,7 @@ const roomParam = new URLSearchParams(location.search).get('room');
 const playStorage=browserStorage(),previousPlay=playStorage?readLastPlayed(playStorage):null;
 const awardSync=createAwardSync(chat,session,playStorage);
 if(previousPlay){
-  const release=RELEASES.find(item=>item.version===previousPlay.version);
-  $('last-played').textContent=`Last played ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(previousPlay.playedAt))} · ${release?.label??previousPlay.version}. Saved on this browser.`;
+  $('last-played').textContent=`Last played ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(previousPlay.playedAt))} · ${releaseLabel(previousPlay.version)}. Saved on this browser.`;
   $<HTMLAnchorElement>('release-changelog').href=`/changelog/?since=${encodeURIComponent(previousPlay.version)}`;
 }else if(!playStorage){$('last-played').textContent='Last-played history is unavailable in this browser.';}
 let playRecorded=false,lastPlayWrite=0,lastActiveSeconds=0,lastActiveAt=0;
@@ -735,7 +734,10 @@ scene.start(dt=>{
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
-  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='disconnected'?'○ DISCONNECTED':'● SOLO PLAYGROUND';
+  // A room switch clears the presentation world until an authoritative
+  // snapshot arrives; do not leave the old room's instruments on screen.
+  $('hud').classList.toggle('hidden',menu||(session.status!=='online'&&session.status!=='solo'));
+  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='solo'?'● SOLO PLAYGROUND':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`Room: ${session.room}`:'';
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}

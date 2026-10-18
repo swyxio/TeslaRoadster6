@@ -1,19 +1,36 @@
+import { CURRENT_RELEASE } from './version';
+export { CURRENT_RELEASE } from './version';
+
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.13-alpha',
-    label: '0.0.13 Alpha',
+    ...CURRENT_RELEASE,
     date: '2026-10-18',
     title: 'Take the scenic ride',
     intro: 'Settle in for smoother self-driving and keep your little victories.',
     sections: [
       { title: 'Cruise to your delivery', items: [
         'Double-tap Shift or tap Self-drive to delivery to head toward the next pickup or drop-off. Use the controls any time to take over.',
-        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.'
+        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.',
+        'Solo drives are back: choose one from the menu or when a room is unavailable.'
       ] },
       { title: 'Keep your victories', items: [
         'Scores show delivery progress and current or recent mini-game results for this drive.',
         'Earn new parking and racing awards. Confirmed awards stay with your saved driver across drives and devices; solo awards are self-reported.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.13-alpha',
+    label: '0.0.13 Alpha',
+    date: '2026-10-18',
+    title: 'A smoother shared Bay',
+    intro: 'Less work per simulation tick and more consistent input in shared rooms.',
+    sections: [
+      { title: 'Drive together', items: [
+        'At this release, the game always joined a shared room. If a room was full or unavailable, players could retry or choose another room.',
+        'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
+        'The changelog stays on its own page instead of downloading with the game.'
       ] }
     ]
   },
@@ -206,5 +223,3 @@ export const RELEASES = [
     ]
   }
 ] as const;
-
-export const CURRENT_RELEASE = RELEASES[0];
