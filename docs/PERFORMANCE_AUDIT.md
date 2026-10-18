@@ -26,6 +26,29 @@ A separate user report described forward and turning surges even with drawing di
 
 2026-10-18 · Comparing `9d81b35` (0.0.12 Alpha) with the 0.0.13 Alpha performance work. These measurements were made on a busy Apple M5 Pro development host, with other development tasks running. They are observations, not service-level objectives or production capacity claims.
 
+## Historical room follow-up experiment · protocol v31 · 2026-10-18 Pacific
+
+[PR #58](https://github.com/swyxio/TeslaRoadster6/pull/58) compared baseline `3307584` with experimental head `d8b93ce`. It collected eligible driven ground cars once per substep and short-circuited Rocket-pad and charging-station distance checks. **That optimization is not in the current build.** The measurements below are preserved as historical evidence, not current results.
+
+Two alternating pairs of a 64-driver, 120-tick Node workload exercised active racing and parking, plus staged flight, Dome and ferry poses. Simulation-phase process CPU, including instrumentation, was 2,566/2,095 ms on the baseline and 2,449/1,988 ms on the change; total measured process CPU was 3,433/2,587 ms versus 3,079/2,510 ms. Elapsed wall time ranged from 1.5 to 6.8 seconds. The four runs produced the same final-world SHA-256 `794b8a98063a6eba6ea6e332dc54599f76ca49c5fa278fdaef953259fde9d022`, and recipient snapshots matched `snapshotFor`. Each run assembled 590,736,236 bytes of decoded JSON over six simulated seconds (median 154,703 bytes per recipient snapshot); that is in-process application data, not network bandwidth.
+
+A separate 64-driver, 500-tick scripted simulation produced the same final hash `53fd944b9ce084fa15d113b85755d3181a3c353acf2c3d91915438a58d91d8c7` in four runs. Baseline process CPU was 5,571/5,098 ms and candidate CPU was 5,075/4,108 ms; elapsed time varied from 3.4 to 32.0 seconds. Host contention and process-level accounting make neither experiment a reliable Worker or end-to-end speedup claim.
+
+Local Wrangler samples used scripted drivers, same-host JSON parsing, a test-only room wrapper and 20 wall seconds per run. The tick reader's full-room warmup filter was approximate, so callback and client windows were not identical. No parsing client closed during measurement; each saw every player.
+
+| Local run | Simulated seconds in 20 wall seconds | p95 snapshot gap / ACK age | Tick p50 / p95; snapshot-tick p50 / p95 |
+| --- | --- | --- | --- |
+| Baseline, 64 clients, sampling on | 15.7 | 151 / 108 ms | 5 / 9 ms; 7 / 10 ms |
+| Change, 64 clients, sampling on | 13.0 | 171 / 134 ms | 7 / 12 ms; 9 / 12 ms |
+| Change, 64 clients, sampling off | 12.9 | 181 / 136 ms | Not sampled |
+| Change, 32 clients, sampling on | 17.9 | 121 / 73 ms | 3 / 7 ms; 4 / 7 ms |
+
+These single samples do not establish an end-to-end gain, sampling overhead or playable capacity. Callback timings are local elapsed wall time, not CPU time; timer scheduling and same-host client work also affect progress. In the 64-client candidate sample, median frames were 152,617 bytes plain and 17,997 bytes with locally negotiated `permessage-deflate`, including WebSocket headers; one observer received approximately 1,006,282 and 117,881 frame bytes per wall second respectively. These figures exclude other clients and network overhead. Wrangler logged `Network connection lost` around teardown, although parsing clients reported no closes during measurement. WAN conditions, long sessions and production transport were not measured.
+
+For finite positions, both bounding-box prechecks preserve the original strict-radius result, including at the radius boundary. The one-per-substep filter retains entity order and the Rocket pad still selects by entity ID; however, the current wallet and pickup hooks were added after this experiment. The old tests do not establish equivalence under those hooks or a current performance gain. All three changes require current behavior coverage and matched end-to-end measurements, including an explanation of any regression, before they are reconsidered.
+
+The original workload scripts and local profiling wrapper remain at experimental commit `d8b93ce`; they target the older room contract and are not restored as current tools. The profiling fixture routed all benchmark rooms to one object and exposed diagnostics. It must never be deployed; its loopback-only setup and measurement limits are recorded in that commit.
+
 ## Architecture
 
 The browser renders Three.js and immediately predicts the controlled car only where prediction is safe; authoritative snapshots reconcile it. The client aims to send current inputs at 20 Hz, preserving the fractional remainder between render frames and dropping missed intervals instead of sending a burst. A room is one active Cloudflare Durable Object: it consumes current inputs and simulates at a nominal 20 Hz, then sends recipient-filtered, complete JSON snapshots at a nominal 10 Hz. Ambient cars outside the recipient's interest radius are omitted; players and their cars remain visible. A room timer does not hibernate while the simulation runs. Chat uses a separate Durable Object. The per-room Mars fund persists; ordinary room simulation and personal game progress do not.
