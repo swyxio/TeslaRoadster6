@@ -185,6 +185,17 @@ test('hovering cars cannot rotate their nose into a ramp while their center move
   assert.ok(car.yaw<-.5,'the fixture actually turned');
 });
 
+test('a car rotating into the high end stays outside when it lands during that tick',()=>{
+  const jump=ISLAND_JUMPS[0],{world,car}=setup('roadster');
+  Object.assign(car,{x:jump.end+1.01,z:jump.z,y:.01,yaw:0,yawRate:-1.6,vx:.1,vy:-1,vz:0,speed:0,supportId:null});
+  const footprint={x:(jump.start+jump.end)/2,z:jump.z,w:jump.end-jump.start,d:jump.width,yaw:0};
+  step(world,new Map([['p',{...NEUTRAL,steer:-1}]]),.05);
+  assert.equal(car.supportId,'ground');
+  assert.equal(car.y,0);
+  assert.ok(car.yaw<-.05,'the fixture actually turned');
+  assert.equal(contact(body(car),footprint),null,'landing left the body intersecting the ramp');
+});
+
 test('vehicle collision separation cannot push grounded or airborne cars underneath a ramp side',()=>{
   for(const support of ['ground',null] as const){
     const jump=ISLAND_JUMPS[0],{world,car}=setup('model-3');

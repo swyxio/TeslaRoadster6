@@ -740,6 +740,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       }
       if(e.y>=100){e.y=100;e.vy=Math.min(e.vy,0);}
       landAirborne(world,e,old);
+      if(e.supportId==='ground'){
+        // Landing can precede the final rotated-footprint check. Resolve any
+        // wall overlap at the landed pose without overriding a ramp landing.
+        const landed={x:e.x,y:e.y,z:e.z,supportId:e.supportId};
+        const hit=islandJumpWallHit(e,landed);if(hit)resolveIslandJumpWall(e,landed,hit);
+      }
       if(e.loopAngle===null){e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;}
 
     }
