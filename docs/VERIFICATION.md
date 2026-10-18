@@ -944,4 +944,16 @@ After merging the delivery-checkpoint release into the candidate, `pnpm test` pa
 
 If an earlier queued wallet write is rejected, later unconfirmed delivery completions and checkpoints are discarded rather than replayed; a driver may have to return to the drop-off. The integrations separately cover award replay after rejection and checkpoint recovery after a lost reply, not that combined sequence.
 
-Code review identified a pre-existing browser-storage edge case: if staging a recovery code fails because storage is unavailable, the page reports that the code can be copied but does not request the corresponding wallet binding. Switching chat identities in that state can also leave the previous wallet attached. This path has not been verified in a browser and remains unresolved on this candidate.
+On that earlier candidate, code review identified a browser-storage edge case: a failed recovery-code staging prevented the corresponding wallet binding, and switching chat identities could leave the previous wallet attached. The subsequent correction and its browser verification are recorded below.
+
+## 2026-10-18 · Checkpoint production verification
+
+Production merge `aff4b14bd6b1c1dab8ddc31878349fd62285bf27` deployed via native Workers Builds. The live changelog reported 0.0.17 Alpha, the expected client asset loaded, and `/api/health` reported protocol v36 and capacity eight.
+
+Two disposable guest clients joined a production room and saw remote movement; three of 13 controls sent by the simple `RoomInputClient` helper were rejected as late. This is a short functional sample using a different input clock from the browser, not a sustained-capacity test. A prior branch Preview sample had two rejections and a repeat had none.
+
+A disposable saved production driver completed two deliveries and reconnected with two deliveries and $9,354 cash. After a third real delivery, the observed cash change included the $750 checkpoint after subtracting the fare and newly unlocked achievement rewards; the regular achievement was unlocked. Reconnecting that saved driver retained three completions and $13,912 cash, matching the pre-reconnect balance, fare earnings, and lifetime income. No duplicate payout appeared during a further 1.5 seconds. The production run used ordinary game inputs and no fixtures or administrative controls; the lost-profile-reply case was tested locally, not in production.
+
+## 2026-10-18 · Browser storage and wallet binding
+
+Focused session tests check that denied storage still starts the matching room identity request, blocks play while it resolves, and preserves an earlier remembered and unfinished code during a switch. In a local Chrome fixture with storage access denied, the identity panel displayed the new code and copy warning. A saved driver paid $5 for remote-shop access, then after reload the same recovery code restored its $2,495 balance; switching from the newly created driver to the recovered driver restored that balance in the game. The test used isolated local Worker storage.
