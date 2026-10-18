@@ -20,6 +20,9 @@ export type Profile = {
   propertyFirst: boolean;
   secondBuildReserve?: number;
   stopSpendingAfterSecondHome?: boolean;
+  tourChance?: number;
+  travelAfterTasks?: number;
+  landmarksPerCity?: number;
 };
 
 export const profiles: Profile[] = [
@@ -36,14 +39,21 @@ const cabPrices = [25000, 50000, 100000, 200000, 400000];
 const cabAwards = [5000, 10000, 20000, 40000, 80000];
 const cityThresholds = [0, 10000, 10000, 50000, 250000]; // SF, Oakland, Berkeley, Fremont, San Jose
 const cityContractTiers = [0, 1, 1, 2, 3];
+const deliveryFares = [3000, 4000, 6000, 9500, 11000, 13000, 15000, 20000, 26000];
+const deliveryMinutes = [3, 3.5, 4.5, 5.5, 6, 6.5, 7, 7.5, 8];
 const plotCost = 400000;
 const buildCost = 600000;
 const sampleMinutes = [30, 60, 120, 240, 480, 960, 1440, 2400];
 
-type Task = { kind: 'delivery' | 'dome' | 'explore' | 'travel' | 'race' | 'park'; remaining: number; fare?: number; landmark?: number; target?: number };
+type Task = { kind: 'delivery' | 'dome' | 'explore' | 'tour' | 'travel' | 'race' | 'park'; remaining: number; fare?: number; landmark?: number; target?: number };
 type Ledger = { fares: number; cabs: number; matchPay: number; activityPay: number; checkpoints: number; achievements: number; unlocks: number; spending: number; fines: number };
+export type FiveMinuteWindow = {
+  endMinute: number; gross: number; recurring: number; cabIncome: number;
+  achievementCash: number; checkinCash: number; unlockCash: number; spending: number; fines: number; cashChange: number;
+  achievements: number; cityAchievements: number; checkins: number; unlocks: number; repeatableGoals: number; tasks: number; wallet: number; level: number; cabs: number;
+};
 export type Result = {
-  profile: string; rules: RuleSet; activeMinutes: number; sessions: number; deliveries: number; wins: number;
+  profile: string; rules: RuleSet; activeMinutes: number; sessions: number; deliveries: number; wins: number; cityVisitsAwarded: number;
   cabs: number; cash: number; level: number; plotMinute: number | null; homeMinute: number | null;
   secondPlotMinute: number | null; secondHomeMinute: number | null;
   marketUnlockMinute: number | null; homeBalance: number | null;
@@ -52,7 +62,7 @@ export type Result = {
   plotRecoveryMinutes: number | null; homeRecoveryMinutes: number | null;
   maxMilestoneGap: number; maxMilestoneGapFirstHome: number; maxMilestoneGapFirst8h: number;
   maxProgressGapFirst8h: number; milestoneCount: number; milestonesFirstHour: number; milestonesFirst4h: number;
-  optionSamples: number[]; affordableSamples: number[]; ledger: Ledger; totalEarned: number;
+  optionSamples: number[]; affordableSamples: number[]; ledger: Ledger; totalEarned: number; windows: FiveMinuteWindow[];
 };
 
 // mulberry32: deterministic repeatable experiments, not a claim about player distributions.
@@ -81,14 +91,22 @@ export function premiumContractChoices(level: number): number {
   return [4, 5, 6, 7, 8].filter(tier => level >= tier).length;
 }
 
-type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean };
+// Pay is set from an expected duration at task acceptance, not how long a player waits.
+export function branchPayout(level: number, kind: 'dome' | 'race' | 'park' | 'tour'): number {
+  const expectedMinutes = { dome: 6.5, race: 5.5, park: 5.5, tour: 6 }[kind];
+  const share = { dome: 0.85, race: 0.9, park: 0.85, tour: 0.8 }[kind];
+  return Math.round(deliveryFares[level] / deliveryMinutes[level] * expectedMinutes * share / 10) * 10;
+}
+
+type SimulationOptions = { global?: boolean; room?: boolean; marketLevel?: 5 | 6; retainLocalJobs?: boolean; checkins?: boolean;
+  trackWindows?: boolean; trackWindowsUntil?: number; branchBalance?: boolean; winChance?: number; allActivityMultiplier?: boolean; cityVisitAwards?: boolean };
 export function simulate(profile: Profile, rules: RuleSet, seed: number, hours = 40,
   events: SimulationOptions = {}): Result {
   const rng = random(seed);
   const initialSeed = seed;
   let cash = 2500, minute = 0, session = 0, inSession = 0;
   let sessionStart = Math.floor(rng() * 240), roomBonusUntil = 0;
-  let deliveries = 0, wins = 0, cabs = 0, city = 0, totalCityJobs = 0;
+  let deliveries = 0, wins = 0, cabs = 0, city = 0, totalCityJobs = 0, totalCityTasks = 0, matches = 0;
   let plotMinute: number | null = null, homeMinute: number | null = null, firstCabMinute: number | null = null;
   let secondPlotMinute: number | null = null, secondHomeMinute: number | null = null;
   let marketUnlockMinute: number | null = null;
@@ -109,17 +127,32 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     { price: 800000, group: 'garage' },
   ];
   const cityJobs = [0, 0, 0, 0, 0];
-  const activities = { race: 0, park: 0 };
-  const landmarks = Array.from({ length: 15 }, () => ({ discovered: false, deliveries: 0 }));
+  const activities = { race: 0, park: 0, tour: 0 };
+  const landmarksPerCity = profile.landmarksPerCity ?? 3;
+  if (!Number.isInteger(landmarksPerCity) || landmarksPerCity < 1) throw new Error('landmarksPerCity must be a positive integer');
+  const landmarks = Array.from({ length: 5 * landmarksPerCity }, () => ({ discovered: false, deliveries: 0 }));
   const unlocked = new Set<number>([0]);
+  const visitedCities = new Set<number>([0]);
+  let cityVisitsAwarded = 0;
   const milestoneTimes: number[] = [0];
   const progress: number[] = [0];
   const optionSamples: number[] = [];
   const affordableSamples: number[] = [];
   const ledger: Ledger = { fares: 0, cabs: 0, matchPay: 0, activityPay: 0, checkpoints: 0, achievements: 0, unlocks: 2500, spending: 0, fines: 0 };
+  const windows: FiveMinuteWindow[] = [];
+  let achievementCount = 0, cityAchievementCount = 0, checkinCount = 0, unlockCount = 0, repeatableCount = 0, taskCount = 0;
+  let achievementCash = 0, checkinCash = 0;
+  let previousLedger = { ...ledger }, previousCash = cash;
+  let previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, taskCount, achievementCash, checkinCash };
   const recordProgress = () => { if (progress[progress.length - 1] !== minute) progress.push(minute); };
   const record = () => { if (milestoneTimes[milestoneTimes.length - 1] !== minute) milestoneTimes.push(minute); recordProgress(); };
-  const award = (amount: number) => { if (!amount) return; cash += amount; ledger.achievements += amount; record(); };
+  const award = (amount: number, kind: 'achievement' | 'checkin' = 'achievement') => {
+    if (!amount) return;
+    cash += amount; ledger.achievements += amount;
+    if (kind === 'achievement') { achievementCount++; achievementCash += amount; }
+    else { checkinCount++; checkinCash += amount; }
+    record();
+  };
   const spend = (amount: number) => { if (cash < amount) throw new Error('Insufficient cash'); cash -= amount; ledger.spending += amount; record(); };
   const tier = () => levelFor(cash, rules);
   const marketLevel = rules === 'candidate' ? (events.marketLevel ?? 6) : 3;
@@ -159,7 +192,10 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
       : [[1, 5000], [2, 10000], [3, 2500], [4, 0], [5, 0]];
     for (const [level, amount] of unlockRewards) {
       if (cash >= thresholds[level] && !unlocked.has(level)) {
-        unlocked.add(level); cash += amount; ledger.unlocks += amount; record();
+        unlocked.add(level); cash += amount; ledger.unlocks += amount; if (amount) unlockCount++;
+        // Each named city has its own one-off achievement, even when unlocked in a group.
+        if (rules === 'candidate' && level <= 3) cityAchievementCount += [0, 2, 4, 1][level];
+        record();
         if (level === marketLevel) marketUnlockMinute = minute;
       }
     }
@@ -221,24 +257,56 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   }
 
   function finish(t: Task) {
-    if (t.kind === 'travel') { city = t.target!; totalCityJobs = 0; record(); return; }
+    if (t.kind === 'travel') {
+      city = t.target!; totalCityJobs = 0; totalCityTasks = 0;
+      if (!visitedCities.has(city)) {
+        visitedCities.add(city);
+        if (events.cityVisitAwards && rules === 'candidate' && events.branchBalance) { award(500); cityVisitsAwarded++; }
+      }
+      record(); return;
+    }
+    totalCityTasks++; taskCount++;
     if (t.kind === 'explore') { discover(t.landmark!); return; }
-    if (t.kind === 'race' || t.kind === 'park') {
+    if (t.kind === 'race' || t.kind === 'park' || t.kind === 'tour') {
       activities[t.kind]++;
       if (rules === 'candidate') {
-        const pay = t.kind === 'race' ? 2500 : 1500;
+        const pay = (events.branchBalance ? t.fare! : t.kind === 'race' ? 2500 : t.kind === 'park' ? 1500 : 0)
+          * (events.allActivityMultiplier ? multiplier() : 1);
         cash += pay; ledger.activityPay += pay;
-        const milestones: Record<number, number> = { 1: 2000, 3: 4000, 10: 8000, 25: 16000, 50: 32000 };
+        const milestones: Record<number, number> = events.branchBalance
+          ? { 1: 2000, 3: 4000, 5: 8000, 10: 16000, 25: 32000 }
+          : { 1: 2000, 3: 4000, 10: 8000, 25: 16000, 50: 32000 };
         award(milestones[activities[t.kind]] ?? 0);
+        if (events.branchBalance) {
+          if (activities[t.kind] === 50) award(10000, 'checkin');
+          if (t.kind !== 'tour') {
+            const sportsMilestones: Record<number, number> = { 1: 500, 3: 1000, 5: 2000, 10: 4000, 25: 8000 };
+            award(sportsMilestones[activities.race + activities.park] ?? 0);
+          }
+          if (activities[t.kind] % 3 === 0) { cash += 750; ledger.checkpoints += 750; repeatableCount++; recordProgress(); }
+          if (t.kind === 'tour' && t.landmark !== undefined) discover(t.landmark);
+        }
       }
       return;
     }
     if (t.kind === 'dome') {
       // Match reward is a candidate; the original proposal had none.
-      if (rules === 'candidate') { cash += 1200; ledger.matchPay += 1200; }
-      if (rng() < 0.5) {
+      matches++;
+      // Use the rate at completion; a win starts the room bonus after this match pays.
+      const matchMultiplier = events.allActivityMultiplier ? multiplier() : 1;
+      if (rules === 'candidate') {
+        const pay = (events.branchBalance ? Math.round(t.fare! * 0.7) : 1200) * matchMultiplier;
+        cash += pay; ledger.matchPay += pay;
+        if (events.branchBalance) {
+          const milestones: Record<number, number> = { 1: 2000, 3: 4000, 5: 8000, 10: 16000, 25: 32000 };
+          award(milestones[matches] ?? 0);
+          if (matches === 50) award(10000, 'checkin');
+          if (matches % 3 === 0) { cash += 750; ledger.checkpoints += 750; repeatableCount++; recordProgress(); }
+        }
+      }
+      if (rng() < (events.winChance ?? 0.5)) {
         wins++; roomBonusUntil = clock() + 10;
-        if (rules === 'candidate') { cash += 1800; ledger.matchPay += 1800; }
+        if (rules === 'candidate') { const pay = (events.branchBalance ? Math.round(t.fare! * 0.6) : 1800) * matchMultiplier; cash += pay; ledger.matchPay += pay; }
         const winMilestones: Record<number, number> = rules === 'candidate'
           ? { 1: 2000, 3: 4000, 10: 8000, 25: 16000, 50: 32000 }
           : { 1: 5000, 3: 15000, 10: 35000, 25: 75000, 50: 150000 };
@@ -254,15 +322,15 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     const cityMilestones: Record<number, number> = rules === 'candidate'
       ? { 1: 2000, 10: 4000, 25: 8000, 50: 16000, 100: 32000 }
       : { 1: 2000, 10: 8000, 25: 20000, 50: 40000, 100: 80000 };
-    award(globalMilestones[deliveries] ?? 0);
+    award(globalMilestones[deliveries] ?? 0, deliveries === 3 || deliveries === 5 ? 'checkin' : 'achievement');
     if (rules === 'candidate' && events.checkins !== false) {
       // Small one-off goals between the five ranked tiers, not additional ranked levels.
       const deliveryCheckins: Record<number, number> = { 20: 2000, 30: 2500, 40: 3000, 75: 5000, 150: 10000, 200: 15000 };
       const cityCheckins: Record<number, number> = { 5: 1000, 15: 2000, 20: 3000 };
-      award(deliveryCheckins[deliveries] ?? 0);
-      award(cityCheckins[cityJobs[city]] ?? 0);
+      award(deliveryCheckins[deliveries] ?? 0, 'checkin');
+      award(cityCheckins[cityJobs[city]] ?? 0, 'checkin');
     }
-    if (rules === 'candidate' && deliveries % 3 === 0) { cash += 750; ledger.checkpoints += 750; recordProgress(); }
+    if (rules === 'candidate' && deliveries % 3 === 0) { cash += 750; ledger.checkpoints += 750; repeatableCount++; recordProgress(); }
     award(cityMilestones[cityJobs[city]] ?? 0);
     if (t.landmark !== undefined) {
       discover(t.landmark);
@@ -278,21 +346,29 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
 
   function nextTask(): Task {
     // Voluntary city travel after 25 jobs, only if entry is currently unlocked.
-    if (totalCityJobs >= 25 && city < 4 && cash >= cityThresholds[city + 1]) {
+    const readyToTravel = profile.travelAfterTasks === undefined ? totalCityJobs >= 25 : totalCityTasks >= profile.travelAfterTasks;
+    if (readyToTravel && city < 4 && cash >= cityThresholds[city + 1]) {
       return { kind: 'travel', remaining: 5, target: city + 1 };
     }
-    if (rng() < profile.domeChance) return { kind: 'dome', remaining: 5 + Math.floor(rng() * 4) };
-    if (rng() < profile.activityChance) return { kind: rng() < 0.5 ? 'race' : 'park', remaining: 4 + Math.floor(rng() * 4) };
-    const local = [city * 3, city * 3 + 1, city * 3 + 2];
+    const rank = rules === 'candidate' ? deliveryTier(cash, city, events.retainLocalJobs !== false) : tier();
+    if (rng() < profile.domeChance) return { kind: 'dome', remaining: 5 + Math.floor(rng() * 4), fare: branchPayout(rank, 'dome') };
+    if (rng() < profile.activityChance) {
+      const kind = rng() < 0.5 ? 'race' : 'park';
+      return { kind, remaining: 4 + Math.floor(rng() * 4), fare: branchPayout(rank, kind) };
+    }
+    const local = Array.from({ length: landmarksPerCity }, (_, i) => city * landmarksPerCity + i);
     const undiscovered = local.filter(id => !landmarks[id].discovered);
+    if (events.branchBalance && (profile.tourChance ?? 0) > 0 && rng() < profile.tourChance!) {
+      return { kind: 'tour', remaining: 5 + Math.floor(rng() * 3), fare: branchPayout(rank, 'tour'),
+        landmark: undiscovered.length ? undiscovered[Math.floor(rng() * undiscovered.length)] : undefined };
+    }
     if (undiscovered.length && rng() < profile.exploreChance) {
       return { kind: 'explore', remaining: 4 + Math.floor(rng() * 3), landmark: undiscovered[Math.floor(rng() * undiscovered.length)] };
     }
     // A player already in a city can keep taking its local jobs after spending lowers their rank.
     // More advanced cash-gated contracts are available only while the current balance allows them.
-    const rank = rules === 'candidate' ? deliveryTier(cash, city, events.retainLocalJobs !== false) : tier();
-    const base = rules === 'candidate' ? [3000, 4000, 6000, 9500, 11000, 13000, 15000, 20000, 26000][rank] : 2150;
-    const duration = rules === 'candidate' ? [3, 3.5, 4.5, 5.5, 6, 6.5, 7, 7.5, 8][rank] : 3;
+    const base = rules === 'candidate' ? deliveryFares[rank] : 2150;
+    const duration = rules === 'candidate' ? deliveryMinutes[rank] : 3;
     const fare = base * (0.8 + 0.4 * rng());
     const remaining = Math.max(1, Math.ceil(duration * profile.speed * (0.8 + 0.4 * rng())));
     const landmark = rng() < profile.landmarkChance ? local[Math.floor(rng() * local.length)] : undefined;
@@ -309,6 +385,21 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
     minute++; inSession++; task.remaining--;
     if (task.remaining <= 0) { finish(task); task = null; }
     updateUnlocks();
+    if (events.trackWindows && minute % 5 === 0 && minute <= (events.trackWindowsUntil ?? Infinity)) {
+      const diff = (key: keyof Ledger) => ledger[key] - previousLedger[key];
+      const recurring = diff('fares') + diff('cabs') + diff('matchPay') + diff('activityPay') + diff('checkpoints');
+      const aCash = achievementCash - previousCounts.achievementCash;
+      const cCash = checkinCash - previousCounts.checkinCash;
+      const unlockCash = diff('unlocks');
+      windows.push({ endMinute: minute, gross: recurring + aCash + cCash + unlockCash, recurring, cabIncome: diff('cabs'),
+        achievementCash: aCash, checkinCash: cCash, unlockCash, spending: diff('spending'), fines: diff('fines'), cashChange: cash - previousCash,
+        achievements: achievementCount - previousCounts.achievementCount + cityAchievementCount - previousCounts.cityAchievementCount,
+        cityAchievements: cityAchievementCount - previousCounts.cityAchievementCount, checkins: checkinCount - previousCounts.checkinCount,
+        unlocks: unlockCount - previousCounts.unlockCount, repeatableGoals: repeatableCount - previousCounts.repeatableCount,
+        tasks: taskCount - previousCounts.taskCount, wallet: cash, level: tier(), cabs });
+      previousLedger = { ...ledger }; previousCash = cash;
+      previousCounts = { achievementCount, cityAchievementCount, checkinCount, unlockCount, repeatableCount, taskCount, achievementCash, checkinCash };
+    }
     if (sampleMinutes.includes(minute)) { optionSamples.push(options()); affordableSamples.push(affordable()); }
     if (inSession === profile.sessionMinutes) { session++; inSession = 0; sessionStart = Math.floor(rng() * 240); }
   }
@@ -320,13 +411,13 @@ export function simulate(profile: Profile, rules: RuleSet, seed: number, hours =
   };
   const earned = ledger.fares + ledger.cabs + ledger.matchPay + ledger.activityPay + ledger.checkpoints + ledger.achievements + ledger.unlocks;
   if (Math.abs(cash - (earned - ledger.spending - ledger.fines)) > 1e-5) throw new Error(`Ledger mismatch: ${profile.name} ${initialSeed}`);
-  return { profile: profile.name, rules, activeMinutes: minute, sessions: Math.ceil(minute / profile.sessionMinutes), deliveries, wins,
+  return { profile: profile.name, rules, activeMinutes: minute, sessions: Math.ceil(minute / profile.sessionMinutes), deliveries, wins, cityVisitsAwarded,
     cabs, cash, level: tier(), plotMinute, homeMinute, secondPlotMinute, secondHomeMinute, marketUnlockMinute, homeBalance,
     secondHomeBalance, secondHomeBeforeLevel, secondHomeAfterLevel, secondHomeRecoveryMinutes, firstCabMinute, afterPlotLevel, afterHomeLevel,
     plotRecoveryMinutes, homeRecoveryMinutes, maxMilestoneGap: maxGap(milestoneTimes, minute), maxMilestoneGapFirstHome: maxGap(milestoneTimes, homeMinute ?? minute),
     maxMilestoneGapFirst8h: maxGap(milestoneTimes, Math.min(480, minute)), maxProgressGapFirst8h: maxGap(progress, Math.min(480, minute)),
     milestoneCount: milestoneTimes.length - 1, milestonesFirstHour: milestoneTimes.filter(t => t > 0 && t <= 60).length,
-    milestonesFirst4h: milestoneTimes.filter(t => t > 0 && t <= 240).length, optionSamples, affordableSamples, ledger, totalEarned: earned };
+    milestonesFirst4h: milestoneTimes.filter(t => t > 0 && t <= 240).length, optionSamples, affordableSamples, ledger, totalEarned: earned, windows };
 }
 
 function percentile(values: number[], q: number) {

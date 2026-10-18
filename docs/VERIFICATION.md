@@ -2,11 +2,16 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island controls with economy research integration · protocol v26 · 2026-10-18 Pacific
+
+- After integrating the mini-game control fix and the separate economy research materials, `pnpm test` passed 394 tests and `pnpm build` passed. Vite retains its large-chunk warning. The latest local room, chat, capacity, jump and browser checks are recorded under the v26 entries below; the economy merge changed no gameplay or wire code.
+
 ## Integrated Tesland and island playground · protocol v26 · 2026-10-18 Pacific
 
 - After integrating Tesland branding and its shared landmark collision geometry, `pnpm test` passed 384 tests and `pnpm build` passed. Vite retains its large-chunk warning. The protocol version distinguishes the combined map and simulation from both earlier v25 builds.
 - Isolated local Wrangler checks passed two-client room integration including five-goal soccer, wall refill, navigation and mini-game entry, global chat, room-full signaling, and a two-client ramp fixture observing a 5.12 m launch and landing. These are functional checks, not load tests.
 - Local Chrome joined a live room, displayed the Tesland map with a monument, switched explicitly to solo, drove to 55 km/h, and entered the police-free island oval. Portrait and landscape views were inspected with browser emulation, including the corrected minimap and race controls. Earlier ferry, parking and stadium playthroughs are documented below. No physical device was tested.
+- After integrating the mini-game and navigation follow-up, `pnpm test` passed 388 tests and `pnpm build` passed. Local Wrangler room, chat, capacity and two-client jump checks passed; the jump reached 5.12 m. Chrome desktop online showed confirmation when starting and leaving a parking queue. These are functional checks, not load tests or physical-device tests.
 
 ## Integrated island, stadium and navigation · protocol v25 · 2026-10-18 Pacific
 
@@ -48,6 +53,13 @@ These entries describe separate historical builds. Check the version and scope i
 - Chrome solo with temporary local spawn fixtures showed the Roadster launching to 5 m and landing from the west ramp, and a stock Model 3 reaching 5 m and landing from the east ramp. Emulated 390×844 portrait and 844×390 landscape layouts were inspected; a held portrait touch accelerated to 54 km/h. No console errors were observed. This was not a ferry traversal or a physical-device test.
 - A temporary solo spawn at the SF lot's approach allowed a desktop keyboard playthrough: joined Cut the queue, started it, reversed into a marked stall, and saw a scored finish in 11.3 seconds. This was a single-player check, not a competitive queue playthrough.
 - With a temporary spawn near the SF ferry dock, a desktop solo Roadster drove aboard, departed secured with controls locked, crossed to Rocket Island and drove off. The HUD marked the ferry and island police-free. This was a single-car trip, not a full-deck or multiplayer crossing.
+## Five-minute economy design experiment · 2026-10-18 Pacific
+
+- On the checkout integrating main at `7b48759`, `pnpm test` passed 341 tests. `pnpm build` passed the two project typechecks, Vite and public-page generation; Vite retained its large-chunk warning. The standalone simulation and its tests also passed a separate TypeScript check.
+- After integrating main at `5986edb`, `pnpm test` passed 346 tests and `pnpm build` passed, with the same large-chunk warning.
+- Ran `node --experimental-strip-types scripts/economy-five-minute.ts --players 250 --hours 40 --json`, then the same command with `--events` and with `--events --all-activities`. These seeded hypothetical paths have balanced ledgers; the report records five-minute payouts, separate achievement categories, 30-minute distributions and their unmet pacing targets. The multiplier test covers the triggering match and later eligible payouts. None of this verifies player behavior, matchmaking, gameplay, devices or production, and no game or protocol rules changed.
+- After integrating Tesland main at `9ec81f0`, `pnpm test` passed 349 tests and `pnpm build` passed; Vite retains its large-chunk warning. Standalone strict TypeScript checked the chart and economy scripts and tests. The 250-seed first-visit and 20-landmarks-per-city sensitivities ran with balanced ledgers; seven 250-seed chart series were generated, checked as SVG XML and spot-checked by independent recomputation.
+- Local Wrangler served the article and correct Tesland canonical URL. Chrome showed the article and charts at desktop, portrait and landscape; the responsive sources loaded and page width matched viewport width at observed CSS viewport sizes of 433×937 and 937×433. These are browser previews, not physical-device tests. The preview preceded a main integration that changed the game menu stylesheet, not the public article layout.
 
 ## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
 
