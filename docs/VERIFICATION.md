@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
+
+- After integrating the additional Bay landmarks, `pnpm test` passed 281 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, and match scoring and vehicle-specific achievements. The San Mateo Supercharger lot was relocated to clear the arena.
+- Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
+
 ## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
 
 - After integrating main's flight controls, tank levels, progression and chat, `pnpm test` passed 261 tests and `pnpm build` passed. The build retains Vite's existing large-chunk warning. Tests cover the ferry crossing, temporary Rocket expiry, parking and races, island surfaces, and level-zero access to the island and SF playground.
@@ -342,3 +347,10 @@ After merging main's sky currents and configurable controls, 191 tests and `pnpm
 After integrating current main, `pnpm test` passed 205 tests and `pnpm build` passed, including client and Worker typechecks; Vite's existing large-chunk warning remains. Simulation tests cover real ball collisions, Roadster/retrofit/stock classification, goals at either end, tied winners, spectators, leaving, disconnects, car switches, match resets and all five award rules. The local Wrangler room and chat integrations passed.
 
 The two-client Wrangler test played five goals, replicated the winner and both Roadster awards, and confirmed that the observing nonparticipant received none. An earlier run timed out because the observer exceeded the server's 30-second inactivity limit; the test now sends neutral input to keep it connected. Before the main integration, a Chrome solo five-goal Roadster match displayed both earned awards. After integrating main, the dome scoreboard was inspected on desktop and in 390×844 portrait and 844×390 landscape touch emulation; an emulated landscape touch on Drive accelerated the car. No console errors were observed. These are local checks, not physical-device or multiplayer load evidence.
+## 2026-10-18 · More Bay landmarks and billboards
+
+In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` passed, including TypeScript checks. The local Wrangler two-client room integration passed on protocol v18, which versions the new collision and terrain data; this is not a load test. Tests cover the 100 new landmark identities, physical envelopes, highway clearance, billboard placement, and driving over the three authored hills. The room landing check was updated to accept a supported landing on terrain or a roof rather than requiring sea-level ground.
+
+Chrome local solo play exercised keyboard driving at desktop size and inspected 390×844 portrait and 844×390 landscape with touch emulation. Temporary spawn fixtures inspected the Palace of Fine Arts and a roadside Moon Goose billboard; the fixture was removed from the final build. A billboard post was shortened after it obscured the panel. No console errors were observed during the local playtest. The new sites are stylized and compressed, and the hills are authored rather than surveyed terrain. This was not a complete manual visit to every site or a physical-device test; touch interaction was not verified in this pass.
+
+After integrating the Rocket Island, ferry and parking changes from main, 273 tests and the build passed. The local two-client room integration passed on protocol v19, including ferry and activity snapshots. Tests also check the new landmarks, hills and billboards against parking areas, the ferry corridor and island race routes. Chrome showed the merged solo start at desktop, portrait and landscape emulation; no physical device was tested.

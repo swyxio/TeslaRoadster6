@@ -5,6 +5,11 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
+// A stale server would simulate a different map, so health and room handshakes
+// must both advertise the same version as this client's static terrain data.
+const health = await fetch(base + '/api/health');
+assert.equal(health.status, 200);
+assert.equal((await health.json() as {version:number}).version, PROTOCOL_VERSION);
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
   const deadline = Date.now() + timeout;
@@ -79,7 +84,7 @@ try {
   for(let i=0;i<12;i++){one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1,throttle:1,hover:true}}));await delay(50);}
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId===null&&((e.x-flightOrigin.x)*-Math.sin(flightOrigin.yaw)+(e.z-flightOrigin.z)*-Math.cos(flightOrigin.yaw)>1)&&(e.thrusters&THRUSTER_REAR)!==0;},'remote forward flight and hover replicated');
   one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
-  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId!==null;},'assisted landing on a shared surface replicated');
   // A double jump from the Bay approach reaches the low City Glide lane.
   // Check its server-applied refill from the other client's snapshots.
   // The second connection can win the first spawn on a real network. Move it
