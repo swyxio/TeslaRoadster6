@@ -904,6 +904,8 @@ A final local v36 Chrome playtest bought, collected and drove the Lamborghini Re
 
 On the isolated v36 checkpoint branch, `pnpm test` passed 684 tests and `pnpm build` passed both TypeScript checks and the production build, with the existing Vite large-chunk warning. Focused simulation checks cover every third delivery, a zero-fare completion, combined fare and achievement awards, deferred pickup and dropoff, another driver's progress during deferral, and the ordering and detached payload of a verified Dome win. The new payout hook does not itself persist event-component records or enable multipliers.
 
+After integrating wallet recovery merge `ce844b5`, the 684-test suite, build, checkpoint lost-reply integration and focused unavailable-bind retry integration passed again.
+
 A local-only Wrangler fixture completed three actual room deliveries, held a lost profile-commit reply on the third, and verified that the other driver continued receiving room ticks. Retrying and recovering the saved driver preserved one checkpoint payment, and the global-income outbox caught up without duplicating it. This is local test evidence, not production recovery verification.
 
 The standard two-client room integration also passed against local Wrangler, including driving, delivery, a five-goal Dome match and invalid-input isolation. Its advertised capacity of eight is not a load-test result.
