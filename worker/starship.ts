@@ -1,4 +1,4 @@
-import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributors, type StarshipStatus } from '../shared/starship';
+import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributorGroup, type StarshipContributors, type StarshipStatus } from '../shared/starship';
 import { normalizeName } from './global-chat-core';
 
 type Completion =
@@ -105,12 +105,30 @@ export class StarshipLedger {
     return normalized;
   }
 
-  /** Build the frozen read model in bounded transactions, then page only that fixed index. */
-  async contributors(cursor?:string):Promise<StarshipContributors> {
-    const startAfter=cursor===undefined?undefined:await this.decodeCursor(cursor);
+  /** The goal index is frozen. Later confirmations page the live copy-on-write keys. */
+  async contributors(group:StarshipContributorGroup,cursor?:string):Promise<StarshipContributors> {
+    if(group!=='at-goal'&&group!=='later')throw new Error('Invalid contributor group');
+    const prefix=group==='at-goal'?'launch-index:':'launch-income:';
+    const startAfter=cursor===undefined?undefined:await this.decodeCursor(cursor,prefix);
     const page=await this.storage.transaction(async txn=>{
       const total=await txn.get<number>('total')??0;validIncome(total);
       if(!await captureExisting(txn,total))return {state:'pending' as const,contributors:[],after:undefined as string|undefined};
+      if(group==='later'){
+        const rows=await txn.list<number>({prefix,...(startAfter?{startAfter}:{}),limit:PAGE_SIZE+1});
+        const selected=[...rows].slice(0,PAGE_SIZE);
+        const ids=selected.map(([key])=>key.slice(prefix.length));
+        const details=ids.length?await txn.get<unknown>(ids.flatMap(id=>[incomeKey(id),nameKey(id)])):new Map<string,unknown>();
+        const entries:StarshipContributors['contributors']=[];
+        for(const [key,frozen] of selected){
+          const id=key.slice(prefix.length),current=details.get(incomeKey(id)),publicName=details.get(nameKey(id));
+          validIncome(frozen);
+          if(typeof current!=='number')throw new Error('Missing contributor income');
+          validIncome(current);
+          if(current<=frozen)throw new Error('Invalid contributor snapshot');
+          entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount:typeof publicName==='string'?current-frozen:null});
+        }
+        return {state:'ready' as const,contributors:entries,after:rows.size>PAGE_SIZE?selected.at(-1)?.[0]:undefined};
+      }
       const index=await txn.get<ContributorIndex>('launch-index-state');
       if(!index)throw new Error('Missing contributor index snapshot');
       if(!index.done){
@@ -131,19 +149,19 @@ export class StarshipLedger {
         // The next request observes the committed index, including the final batch.
         return {state:'building' as const,contributors:[],after:undefined as string|undefined};
       }
-      const rows=await txn.list<number>({prefix:'launch-index:',...(startAfter?{startAfter}:{}),limit:PAGE_SIZE+1});
+      const rows=await txn.list<number>({prefix,...(startAfter?{startAfter}:{}),limit:PAGE_SIZE+1});
       const selected=[...rows].slice(0,PAGE_SIZE);
-      const ids=selected.map(([key])=>key.slice('launch-index:'.length));
+      const ids=selected.map(([key])=>key.slice(prefix.length));
       const names=ids.length?await txn.get<string>(ids.map(nameKey)):new Map<string,string>();
       const entries:StarshipContributors['contributors']=[];
       for(const [key,amount] of selected){
         validIncome(amount);
-        const id=key.slice('launch-index:'.length),publicName=names.get(nameKey(id));
+        const id=key.slice(prefix.length),publicName=names.get(nameKey(id));
         entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount:typeof publicName==='string'?amount:null});
       }
       return {state:'ready' as const,contributors:entries,after:rows.size>PAGE_SIZE?selected.at(-1)?.[0]:undefined};
     });
-    return {state:page.state,contributors:page.contributors,next:page.after?await this.encodeCursor(page.after):null};
+    return {group,state:page.state,contributors:page.contributors,next:page.after?await this.encodeCursor(page.after):null};
   }
 
   private async cursorKey():Promise<CryptoKey> {
@@ -161,7 +179,7 @@ export class StarshipLedger {
     const bytes=new Uint8Array(iv.length+encrypted.length);bytes.set(iv);bytes.set(encrypted,iv.length);
     return btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
   }
-  private async decodeCursor(cursor:string):Promise<string> {
+  private async decodeCursor(cursor:string,prefix:string):Promise<string> {
     if(typeof cursor!=='string'||cursor.length>512||!/^[a-zA-Z0-9_-]+$/.test(cursor))throw new Error('Invalid contributor cursor');
     try{
       const raw=atob(cursor.replaceAll('-','+').replaceAll('_','/'));
@@ -169,8 +187,8 @@ export class StarshipLedger {
       if(bytes.length<29)throw new Error('Invalid cursor');
       const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.slice(0,12)},await this.cursorKey(),bytes.slice(12));
       const key=new TextDecoder().decode(plaintext);
-      if(!key.startsWith('launch-index:'))throw new Error('Invalid cursor');
-      validId(key.slice('launch-index:'.length));
+      if(!key.startsWith(prefix))throw new Error('Invalid cursor');
+      validId(key.slice(prefix.length));
       return key;
     }catch{throw new Error('Invalid contributor cursor');}
   }

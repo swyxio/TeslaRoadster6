@@ -1,6 +1,6 @@
 import './starship-panel.css';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
-import { STARSHIP_GOAL, STARSHIP_STAGE_PERCENTAGES, type StarshipContributor, type StarshipStatus } from '../shared/starship';
+import { STARSHIP_GOAL, STARSHIP_STAGE_PERCENTAGES, type StarshipContributor, type StarshipContributorGroup, type StarshipStatus } from '../shared/starship';
 import type { StarshipClock } from './starship-timeline';
 
 const LAUNCH_DURATION_MS=MARS_LAUNCH_SECONDS*1000;
@@ -8,6 +8,7 @@ const dollars=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
 
 export type StarshipContributorPage = {
   status:'idle'|'loading'|'building'|'ready'|'error';
+  group:StarshipContributorGroup;
   /** The page being displayed or requested; null is the first page. */
   cursor:string|null;
   entries:readonly StarshipContributor[];
@@ -42,10 +43,10 @@ function duration(ms:number):string {
  * Host mounts this view inside its closable Mars dialog and calls update(state, performance.now()) as state or
  * the monotonic clock changes. The host owns all loading, pagination, stale
  * detection, replay, dialog and input-control behavior. onLoad must transition
- * the page to loading and return one page for the requested cursor. When the
- * service is building the frozen list, expose building and retry the first page.
+ * the page to loading for the requested group and cursor, ignore stale responses,
+ * and expose building when the frozen list needs another first-page retry.
  */
-export function createStarshipPanel(options:{onLoadContributors:(cursor:string|null)=>void;onReplay:()=>void;onSetPublicName:(name:string|null)=>void}) {
+export function createStarshipPanel(options:{onLoadContributors:(group:StarshipContributorGroup,cursor:string|null)=>void;onReplay:()=>void;onSetPublicName:(name:string|null)=>void}) {
   const root=element('section','starship-panel');root.setAttribute('aria-label','Game-wide Starship mission');
   const eyebrow=element('span','starship-eyebrow','ALL TESLAND / ONE MISSION');
   const heading=element('h3','starship-heading','Build the Starship together');
@@ -56,12 +57,13 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
   const progressTitle=element('span','starship-progress-title','GAME-WIDE EARNINGS');
   const total=element('strong','starship-total');progressLabel.append(progressTitle,total);
   const progress=element('progress','starship-progress-bar');progress.max=STARSHIP_GOAL;progress.setAttribute('aria-label','Confirmed game-wide Starship progress');
+  const lifetime=element('p','starship-pending');
   const personal=element('p','starship-personal');
   const pending=element('p','starship-pending');
   const stage=element('p','starship-stage');
   const launch=element('p','starship-launch');launch.setAttribute('role','status');
   const replay=element('button','starship-replay','Replay the launch');replay.type='button';replay.onclick=()=>options.onReplay();
-  progressBox.append(progressLabel,progress,personal,pending,stage,launch,replay);
+  progressBox.append(progressLabel,progress,lifetime,personal,pending,stage,launch,replay);
 
   const privacy=element('form','starship-privacy');
   const privacyTitle=element('h4','starship-privacy-title','Your launch crew name');
@@ -84,21 +86,31 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
 
   const contributors=element('section','starship-contributors');contributors.setAttribute('aria-label','Launch contributors');
   const contributorsTitle=element('h4','starship-contributors-title','The crew');
-  const contributorsCopy=element('p','starship-contributors-copy','Confirmed earnings at the goal are shown here. Earnings still being reconciled may arrive later.');
+  const contributorsCopy=element('p','starship-contributors-copy');
+  const groups=element('div','starship-contributor-actions');groups.setAttribute('aria-label','Contributor lists');
+  const atGoal=element('button','starship-at-goal','At the goal');atGoal.type='button';
+  const later=element('button','starship-later','Later confirmations');later.type='button';
+  groups.append(atGoal,later);
   const contributorStatus=element('p','starship-contributor-status');contributorStatus.setAttribute('role','status');
   const list=element('ul','starship-contributor-list');
   const buttons=element('div','starship-contributor-actions');
   const first=element('button','starship-first','First page');first.type='button';
   const load=element('button','starship-load');load.type='button';
-  buttons.append(first,load);contributors.append(contributorsTitle,contributorsCopy,contributorStatus,list,buttons);
+  buttons.append(first,load);contributors.append(contributorsTitle,groups,contributorsCopy,contributorStatus,list,buttons);
   root.append(eyebrow,heading,intro,status,progressBox,privacy,contributors);
   let current:StarshipPanelState|null=null,lastEntries='',lastPrivacy:string|null|undefined=undefined;
-  first.onclick=()=>{first.disabled=true;load.disabled=true;options.onLoadContributors(null);};
+  function request(group:StarshipContributorGroup,cursor:string|null):void {
+    first.disabled=load.disabled=atGoal.disabled=later.disabled=true;
+    options.onLoadContributors(group,cursor);
+  }
+  atGoal.onclick=()=>request('at-goal',null);
+  later.onclick=()=>request('later',null);
+  first.onclick=()=>{if(current)request(current.contributors.group,null);};
   load.onclick=()=>{
     if(!current)return;
     const page=current.contributors;
     const cursor=page.status==='error'?page.cursor:page.status==='ready'?page.next:null;
-    first.disabled=true;load.disabled=true;options.onLoadContributors(cursor);
+    request(page.group,cursor);
   };
 
   function update(state:StarshipPanelState,now=performance.now()):void {
@@ -111,13 +123,15 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     progress.hidden=!valid;
     if(valid){
       const actual=confirmed!.launchTotal??confirmed!.cutoverTotal??confirmed!.total;
+      text(progressTitle,confirmed!.crossing==='recorded'?'CONFIRMED AT THE GOAL':confirmed!.crossing==='unknown'?'CONFIRMED AT TRACKING START':'GAME-WIDE EARNINGS');
       text(total,`${money(actual)} / ${money(STARSHIP_GOAL)}`);progress.value=Math.min(actual,STARSHIP_GOAL);
+      text(lifetime,confirmed!.crossing==='pending'?'':`Current confirmed lifetime earnings: ${money(confirmed!.total)}.`);
       text(personal,`Your confirmed lifetime earnings: ${money(confirmed!.personal)}`);
       text(pending,amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
       const next=STARSHIP_STAGE_PERCENTAGES.find(percent=>actual<STARSHIP_GOAL*percent/100);
       text(stage,next?`Next construction milestone: ${next}% · ${money(STARSHIP_GOAL*next/100)}.`:'All construction milestones reached.');
     }else{
-      text(total,'Unavailable');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');text(stage,'');
+      text(progressTitle,'GAME-WIDE EARNINGS');text(total,'Unavailable');text(lifetime,'');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');text(stage,'');
     }
     const completed=valid&&confirmed!.crossing==='recorded'&&confirmed!.completedAt!==null;
     const unknown=valid&&confirmed!.crossing==='unknown';
@@ -148,9 +162,14 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':'');
 
     contributors.hidden=!completed&&!unknown;
-    text(contributorsCopy,unknown?'Confirmed earnings when launch tracking began are shown here.':'Confirmed earnings at the goal are shown here. Earnings still being reconciled may arrive later.');
     const page=state.contributors;
-    const entries=(page.status==='building'?[]:page.entries).slice(0,20).filter(entry=>typeof entry.name==='string'&&(entry.amount===null||amount(entry.amount)));
+    text(atGoal,`${unknown?'At tracking start':'At the goal'}${page.group==='at-goal'?' ✓':''}`);
+    text(later,`Later confirmations${page.group==='later'?' ✓':''}`);
+    atGoal.setAttribute('aria-pressed',String(page.group==='at-goal'));later.setAttribute('aria-pressed',String(page.group==='later'));
+    atGoal.disabled=later.disabled=page.status==='loading';
+    text(contributorsCopy,page.group==='later'?(unknown?'Confirmations after tracking began may include earnings committed earlier. Drivers may appear on both lists or first contribute later.':'Confirmations after the goal may include earnings committed earlier. Drivers may appear on both lists or first contribute later.'):
+      (unknown?'Earnings confirmed when launch tracking began. The historical crossing is unknown.':'Earnings confirmed when the goal was reached. Later confirmations may include earnings committed earlier.'));
+    const entries=(page.status==='ready'?page.entries:[]).slice(0,20).filter(entry=>typeof entry.name==='string'&&(entry.amount===null||amount(entry.amount)));
     const entriesKey=JSON.stringify(entries);
     if(entriesKey!==lastEntries){
       lastEntries=entriesKey;
@@ -163,8 +182,9 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
       list.replaceChildren(...rows);
     }
     text(contributorStatus,page.status==='loading'?'Loading contributors…':page.status==='building'?'Building the contributor list. Check again shortly.':page.status==='error'?'Could not load contributors. Please try again.':
-      page.status==='idle'?'Explore the frozen contributor list.':entries.length?(unknown?'Confirmed contributors at cutover.':'Confirmed contributors at launch.'):'No contributors on this page.');
-    first.hidden=page.cursor===null;first.disabled=page.status==='loading';
+      page.status==='idle'?'Explore the contributor lists.':entries.length?(page.group==='later'?'Later confirmations.':unknown?'Confirmed contributors at tracking start.':'Confirmed contributors at the goal.'):'No contributors on this page.');
+    first.hidden=page.cursor===null&&page.group!=='later';first.disabled=page.status==='loading';
+    text(first,page.cursor===null?'Refresh':'First page');
     load.hidden=page.status==='ready'&&page.next===null;
     load.disabled=page.status==='loading';
     text(load,page.status==='loading'?'Loading…':page.status==='building'?'Check again':page.status==='error'?'Try again':page.status==='ready'?'Next page':'View contributors');

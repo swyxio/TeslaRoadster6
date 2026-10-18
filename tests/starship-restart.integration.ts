@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributors, type StarshipStatus } from '../shared/starship';
+import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributorGroup, type StarshipContributors, type StarshipStatus } from '../shared/starship';
 
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean|Promise<boolean>){
@@ -47,13 +47,13 @@ async function credit(driverId:string,total:number,lost=false,instance?:string){
 async function status(driver?:string,instance?:string):Promise<StarshipStatus>{
   const response=await fetch(base+path('/status',instance,driver?{driver}:{}));assert.ok(response.ok);return response.json() as Promise<StarshipStatus>;
 }
-async function page(cursor?:string,instance?:string):Promise<StarshipContributors>{
-  const response=await fetch(base+path('/contributors',instance,cursor?{cursor}:{}));assert.ok(response.ok);return response.json() as Promise<StarshipContributors>;
+async function page(cursor?:string,instance?:string,group:StarshipContributorGroup='at-goal'):Promise<StarshipContributors>{
+  const response=await fetch(base+path('/contributors',instance,{group,...(cursor?{cursor}:{})}));assert.ok(response.ok);return response.json() as Promise<StarshipContributors>;
 }
-async function all(instance?:string){
+async function all(instance?:string,group:StarshipContributorGroup='at-goal'){
   const entries:StarshipContributors['contributors']=[];let cursor:string|null=null,pages=0;
   do{
-    const result=await page(cursor??undefined,instance);assert.ok(++pages<100);
+    const result=await page(cursor??undefined,instance,group);assert.ok(++pages<100);assert.equal(result.group,group);
     if(result.state==='building'){
       assert.equal(cursor,null);assert.deepEqual(result.contributors,[]);assert.equal(result.next,null);continue;
     }
@@ -85,7 +85,9 @@ try{
   assert.equal((await status('guest-a')).personal,300);
   const pending=await status();assert.equal(pending.total,13_300,'legacy rows and retry share one counter');
   assert.equal(pending.crossing,'pending');assert.equal(pending.cutoverTotal,null);assert.equal(pending.cutoverAt,null);
-  assert.deepEqual(await page(),{state:'pending',contributors:[],next:null});
+  assert.deepEqual(await page(),{group:'at-goal',state:'pending',contributors:[],next:null});
+  assert.deepEqual(await page(undefined,undefined,'later'),{group:'later',state:'pending',contributors:[],next:null});
+  assert.equal((await fetch(base+'/contributors?group=invalid')).status,400);
   const before=Date.now();
   const crossing=await Promise.all([credit('threshold-a',600_000_000),credit('threshold-b',400_000_000)]);
   assert.ok(crossing.every(response=>response.ok));
@@ -105,10 +107,27 @@ try{
   assert.ok(initial.filter(row=>row.name==='Anonymous driver').every(row=>row.amount===null),'anonymous amounts are private');
   assert.ok((await credit('legacy-a',10_500)).ok);
   assert.deepEqual((await all()).find(row=>row.name==='Ada'),{name:'Ada',amount:10_000},'the public amount remains frozen at crossing');
+  assert.deepEqual(await all(undefined,'later'),[{name:'Ada',amount:500}]);
+  assert.equal((await credit('legacy-a',10_500,true)).status,503);
+  assert.ok((await credit('legacy-a',10_500)).ok);
+  assert.deepEqual(await all(undefined,'later'),[{name:'Ada',amount:500}],'retries do not add a second confirmation');
   // Post-launch identities, including many before the cursor's sort position,
   // are excluded without hiding earlier contributors or stalling pagination.
   for(let i=0;i<55;i++)assert.ok((await credit(`aaa-${String(i).padStart(2,'0')}`,1)).ok);
+  assert.ok((await post('/name',{driverId:'aaa-00',name:'Late'})).ok);
+  const laterFirst=await page(undefined,undefined,'later');
+  assert.equal(laterFirst.state,'ready');assert.equal(laterFirst.contributors.length,20);assert.ok(laterFirst.next);
+  assert.ok(!laterFirst.next!.includes('aaa-'),'later cursor hides the identity');
+  assert.equal((await fetch(base+path('/contributors',undefined,{group:'later',cursor:firstPage.next!}))).status,400);
+  assert.equal((await fetch(base+path('/contributors',undefined,{group:'at-goal',cursor:laterFirst.next!}))).status,400);
+  const laterRows=await all(undefined,'later');assert.equal(laterRows.length,56);
+  assert.deepEqual(laterRows.find(row=>row.name==='Late'),{name:'Late',amount:1},'a first credit after the goal appears only in later confirmations');
+  assert.deepEqual(laterRows.find(row=>row.name==='Ada'),{name:'Ada',amount:500},'an existing driver can appear in both groups');
+  assert.ok(laterRows.filter(row=>row.name==='Anonymous driver').every(row=>row.amount===null));
   assert.ok((await post('/name',{driverId:'legacy-a',name:null})).ok);
+  assert.ok(!(await all(undefined,'later')).some(row=>row.name==='Ada'),'opt-out immediately hides later amounts');
+  assert.ok((await post('/name',{driverId:'aaa-00',name:null})).ok);
+  assert.ok((await all(undefined,'later')).every(row=>row.amount===null));
   const after=await all();assert.equal(after.length,initial.length);
   assert.ok(after.every(row=>row.name==='Anonymous driver'),'privacy changes apply after launch');
   assert.ok(after.every(row=>row.amount===null),'opt-out also hides the previously public amount');
@@ -124,6 +143,7 @@ try{
   assert.ok((await credit('prior-driver',STARSHIP_GOAL+100,false,'prior')).ok);
   assert.ok((await credit('aaa-late',20,false,'prior')).ok);
   assert.deepEqual(await all('prior'),[{name:'Prior',amount:STARSHIP_GOAL}],'status-first cutover freezes the pre-credit amount');
+  assert.deepEqual((await all('prior','later')).find(row=>row.name==='Prior'),{name:'Prior',amount:100});
   assert.equal((await status(undefined,'prior')).cutoverAt,prior.cutoverAt);
 
   // On a credit-first cutover, the snapshot must exclude the arriving credit.
@@ -139,6 +159,7 @@ try{
   assert.ok((await credit('late-driver',10,false,'credit-first')).ok);
   assert.ok((await credit('aaa-late',10,false,'credit-first')).ok);
   assert.deepEqual((await all('credit-first')).find(row=>row.name==='First'),{name:'First',amount:STARSHIP_GOAL-100});
+  assert.deepEqual((await all('credit-first','later')).find(row=>row.name==='First'),{name:'First',amount:500});
   assert.equal((await all('credit-first')).length,2,'new identities after the cutover do not join the frozen roster');
 
   // A roster can also be the first operation on the legacy counter.
@@ -158,11 +179,11 @@ try{
   for(let i=0;i<110;i++)assert.ok((await credit(`a-${String(i).padStart(3,'0')}`,1,false,indexInstance)).ok);
   assert.ok((await credit('zzz-after',1,false,indexInstance)).ok);
   const building=await page(undefined,indexInstance);
-  assert.deepEqual(building,{state:'building',contributors:[],next:null});
+  assert.deepEqual(building,{group:'at-goal',state:'building',contributors:[],next:null});
   assert.ok((await credit('m-100',9,false,indexInstance)).ok,'copy-on-write freezes an unindexed contributor');
   await stop(child);child=undefined;child=start();await ready();
   // Exactly four further bounded batches remain; restarting from zero would need five.
-  for(let i=0;i<4;i++)assert.deepEqual(await page(undefined,indexInstance),{state:'building',contributors:[],next:null});
+  for(let i=0;i<4;i++)assert.deepEqual(await page(undefined,indexInstance),{group:'at-goal',state:'building',contributors:[],next:null});
   const indexedFirst=await page(undefined,indexInstance);
   assert.equal(indexedFirst.state,'ready');assert.equal(indexedFirst.contributors.length,20);
   const indexed=await all(indexInstance);
@@ -177,19 +198,25 @@ try{
   assert.equal(renamed.length,107);assert.ok(!renamed.some(row=>row.name==='Owner'));
   assert.deepEqual(renamed.find(row=>row.name==='Renamed'),{name:'Renamed',amount:1});
   assert.ok(renamed.filter(row=>row.name==='Anonymous driver').every(row=>row.amount===null),'privacy is resolved at read time');
+  const laterAfterRestart=await all(indexInstance,'later');
+  assert.equal(laterAfterRestart.length,112);
+  assert.deepEqual(laterAfterRestart.find(row=>row.name==='Renamed'),{name:'Renamed',amount:8});
+  assert.ok(!laterAfterRestart.some(row=>row.name==='Crossing'));
   const restarted=await status('legacy-a');
   assert.equal(restarted.total,completed.total+555);assert.equal(restarted.launchId,completed.launchId);assert.equal(restarted.launchAt,completed.launchAt);
   assert.ok((await page(firstPage.next!)).contributors.length,'encrypted cursor survives restart');
+  assert.ok((await page(laterFirst.next!,undefined,'later')).contributors.length,'later encrypted cursor survives restart');
   assert.ok((await credit('legacy-a',10_500)).ok);
   assert.equal((await status()).total,restarted.total,'retry after restart remains a no-op');
   assert.equal(restarted.launchTotal,completed.total,'later income does not change the completed season');
   assert.equal(await (await fetch(base+'/name?driver=legacy-a')).json(),null,'opt-out survives restart');
   assert.ok((await all()).every(row=>row.amount===null),'anonymous amounts remain hidden after restart');
+  assert.ok((await all(undefined,'later')).every(row=>row.amount===null),'later amounts remain hidden after restart');
   const priorAgain=await status(undefined,'prior');
   assert.equal(priorAgain.crossing,'unknown');assert.equal(priorAgain.cutoverAt,prior.cutoverAt);assert.equal(priorAgain.launchAt,null);
   assert.deepEqual(await all('prior'),[{name:'Prior',amount:STARSHIP_GOAL}]);
   const creditFirstAgain=await status(undefined,'credit-first');
   assert.equal(creditFirstAgain.cutoverAt,creditFirst.cutoverAt);assert.equal(creditFirstAgain.cutoverTotal,STARSHIP_GOAL);assert.equal(creditFirstAgain.launchAt,null);
   assert.deepEqual((await all('credit-first')).find(row=>row.name==='First'),{name:'First',amount:STARSHIP_GOAL-100});
-  console.log('PASS: bounded frozen index, cutovers, privacy, pagination and restart.');
+  console.log('PASS: frozen and later confirmations, cutovers, privacy, pagination and restart.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

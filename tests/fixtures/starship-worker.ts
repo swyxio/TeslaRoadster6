@@ -1,12 +1,13 @@
 // Test-only adapter for the same storage keys as the canonical GlobalIncome DO.
 import { DurableObject } from 'cloudflare:workers';
 import { StarshipLedger } from '../../worker/starship';
+import type { StarshipContributorGroup } from '../../shared/starship';
 
 export class GlobalIncome extends DurableObject {
   private ledger=new StarshipLedger(this.ctx.storage);
   credit(driverId:string,total:number){return this.ledger.credit(driverId,total);}
   status(driverId?:string){return this.ledger.status(driverId);}
-  contributors(cursor?:string){return this.ledger.contributors(cursor);}
+  contributors(group:StarshipContributorGroup,cursor?:string){return this.ledger.contributors(group,cursor);}
   setName(driverId:string,name:string|null){return this.ledger.setPublicName(driverId,name);}
   publicName(driverId:string){return this.ledger.publicName(driverId);}
   async seed(driverId:string,total:number){
@@ -35,7 +36,7 @@ export default {
       }
       if(url.pathname==='/name')return Response.json(await income.publicName(url.searchParams.get('driver')??''));
       if(url.pathname==='/status')return Response.json(await income.status(url.searchParams.get('driver')??undefined));
-      if(url.pathname==='/contributors')return Response.json(await income.contributors(url.searchParams.get('cursor')??undefined));
+      if(url.pathname==='/contributors')return Response.json(await income.contributors((url.searchParams.get('group')??'at-goal') as StarshipContributorGroup,url.searchParams.get('cursor')??undefined));
       return new Response('Not found',{status:404});
     }catch(error){return new Response(String(error),{status:400});}
   }
