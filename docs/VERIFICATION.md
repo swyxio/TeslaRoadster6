@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## 2026-10-18 · Independent global Starship components
+
+At an earlier worktree snapshot based on `43490ec`, `pnpm test` passed 452 tests and `pnpm build` passed with Vite's existing large-chunk warning. Focused bonus tests cover event boundaries, exclusions, the 3× cap and split-invariant fractional cab accrual. Two additional clock-helper tests passed separately. An isolated local Wrangler test exercised the new global ledger's concurrent retries, conflicting and out-of-order updates, independent room identities, concurrent threshold crossing, paginated frozen launch recognition and persistence through a Wrangler restart. A 64-request synthetic burst on that local fixture measured p50 439.8 ms and p95 459.8 ms; it was not a loaded room or a production measurement. An independent global-event fixture passed scheduling, lease, history and restart checks; its 100-lease local burst took 373 ms in one run.
+
+The current checkpoint has not had a full test or build after later files were added. Its journal's latest synchronous-KV changes are untested, and its single-source interface cannot safely commit a multi-reward transition. The unbound panel has no stylesheet or visual verification. The components are not connected to player earnings or the game UI. Guest identity and attachment, durable wallet integration, batched source receipts, room event triggers, synchronized launch, authenticated operator control and live gameplay verification remain outstanding. The test did not modify the existing room Mars fund or verify production state.
+
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
 - After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.
