@@ -78,6 +78,19 @@ test('Rocket has ten nozzles and independently controlled vapor on each clone',(
  setThrusterEffects(first,0,2);assert.equal(first.getObjectByName('jets')!.visible,false);
 });
 
+test('rocket vapor moves outward while retaining its bounded shared sprite pool',()=>{
+ const car=createVehicle('roadster'),other=createVehicle('roadster');
+ setThrusterEffects(car,THRUSTER_REAR,1,true);
+ const plume=car.getObjectByName('plume_rear_0')!,puffs=[...plume.children];
+ const before=puffs.map(puff=>puff.position.y);
+ setThrusterEffects(car,THRUSTER_REAR,1.01,true);
+ assert.deepEqual(plume.children,puffs,'a live burst reuses its original objects');
+ assert.ok(puffs.some((puff,i)=>puff.position.y>before[i]),'visible exhaust moves away from its nozzle');
+ for(const puff of puffs){assert.ok(puff.position.y>=.15&&puff.position.y<=2.75);assert.ok(puff.scale.x>=0&&puff.scale.x<=1);}
+ assert.equal(other.getObjectByName('jets')!.visible,false,'another car does not inherit the burst');
+ setThrusterEffects(car,0,2,true);assert.equal(car.getObjectByName('jets')!.visible,false);
+});
+
 test('distant fleet preserves silhouettes, bounds geometry and restores independent upgrades',()=>{
  for(const id of VEHICLE_IDS){
   const car=createVehicle(id),other=createVehicle(id);

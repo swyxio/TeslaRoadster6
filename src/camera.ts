@@ -1,6 +1,13 @@
 import * as T from 'three';
 import type { VehicleSpec } from '../shared/vehicles';
 
+/** A bounded, frame-rate independent lens response for powered chase views. */
+export function chaseLens(current:number, thrusting:boolean, dt:number) {
+  const target=thrusting?60:55;
+  const next=target+(current-target)*Math.exp(-4*Math.min(.1,Math.max(0,dt)));
+  return Math.abs(next-target)<.01?target:next;
+}
+
 /** Camera and car share an orientation: Three cameras look along local -Z. */
 export function cockpitPose(position:T.Vector3, rotation:T.Quaternion, vehicle:Pick<VehicleSpec,'width'|'height'|'length'|'shape'>) {
   const eye=vehicle.shape==='motorcycle'

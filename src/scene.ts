@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { VEHICLES } from '../shared/vehicles';
-import { type World } from '../shared/game';
+import { THRUSTER_REAR, type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
@@ -20,7 +20,8 @@ import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrust
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
-import { cockpitPose } from './camera';
+import { chaseLens, cockpitPose } from './camera';
+import { LandingPulse } from './landing-pulse';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
@@ -46,6 +47,9 @@ export class GameScene {
   private sky = new T.Color();
   private nightSky = new T.Color(0x334b62);
   private daySky = new T.Color(0xa8cbd0);
+  private twilightSky = new T.Color(0xe7b59c);
+  private daylightSun = new T.Color(0xffdfb5);
+  private twilightSun = new T.Color(0xffbb87);
   private hemisphere = new T.HemisphereLight(0xe9f5ff,0x626953,1.4);
   private sun = new T.DirectionalLight(0xffdfb5,2.2);
   private signalRed = new T.MeshBasicMaterial({color:0x551b19});
@@ -92,10 +96,13 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  private landingPulse = new LandingPulse();
   private predictedEntity?:string;
   cameraMode:CameraMode = 'chase';
   private renderedCockpit=false;
   private marker = new T.Vector3();
+  landed(strength:number){this.landingPulse.trigger(strength);}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'wide':'chase';this.cameraReady=false;}
   objectiveScreen(){
     this.marker.copy(this.objective.position);this.marker.y+=3;this.marker.project(this.camera);
@@ -260,11 +267,16 @@ export class GameScene {
     // The shared clock advances the sky; vehicle physics always use real simulation seconds.
     const phase=(dayMinute(world.time)-360)/1440*Math.PI*2;
     const daylight=Math.max(0,Math.min(1,(Math.sin(phase)+.22)/.55));
+    const twilight=Math.max(0,1-Math.abs(Math.sin(phase))/.3);
     this.sky.copy(this.nightSky).lerp(this.daySky,daylight);
+    // A slight warm coastal horizon at sunrise/sunset, with the existing
+    // sky and fog sharing one color and no extra post-processing pass.
+    this.sky.lerp(this.twilightSky,twilight*.18);
     (this.scene.background as T.Color).copy(this.sky);
     (this.scene.fog as T.Fog).color.copy(this.sky);
     this.hemisphere.intensity=.8+daylight*.6;
     this.sun.intensity=.5+daylight*1.7;
+    this.sun.color.copy(this.daylightSun).lerp(this.twilightSun,twilight);
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
     this.ferryMotion.copy(this.ferry.position).multiplyScalar(-1);
@@ -304,7 +316,14 @@ export class GameScene {
     this.skyCurrents.group.visible=!controlled?.inDome;
     this.skyCurrents.update(world.time,controlled);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
+    const landingScale=this.landingPulse.update(controlled?.id,!!controlled&&controlled.supportId!==null,menu||cockpit,snapLocal||snapCamera,this.reducedMotion.matches,dt);
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
+    if(!cockpit){
+      // Rear thrust includes boost and powered flight. Keep the cockpit lens and
+      // the menu stable; the chase lens returns smoothly when thrust ends.
+      const fov=chaseLens(this.camera.fov,!!controlled&&!menu&&!this.reducedMotion.matches&&!!(controlled.thrusters&THRUSTER_REAR),dt);
+      if(fov!==this.camera.fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
+    }
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -318,6 +337,8 @@ export class GameScene {
         const blue=box(mesh,.23,h+.15,0,.4,.15,.28,0x3caaff);blue.name='police-blue';
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
+      const scale=e.id===controlled?.id?landingScale:1;
+      if(mesh.scale.y!==scale)mesh.scale.y=scale;
       mesh.visible=!(cockpit&&e.id===controlled?.id);
       const interpolatedRemote=remoteSampled&&e.id!==controlled?.id&&e.supportId!=='ferry';
       const ahead=e.id===controlled?.id||e.supportId==='ferry'||interpolatedRemote?0:elapsed;
@@ -446,7 +467,7 @@ export class GameScene {
       if(detailed&&e.kind!=='person'){
         setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+        setThrusterEffects(mesh,e.thrusters,world.time+elapsed,hasRockets(e));
         const spec=VEHICLES[e.kind];
         if(spec.shape==='motorcycle'){
           const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;

@@ -4,8 +4,19 @@ import * as T from 'three';
 import { addPlayer, createWorld, NEUTRAL, step } from '../shared/game';
 import { orderTarget } from '../shared/delivery';
 import { terrainHeight } from '../shared/map';
-import { cockpitPose } from '../src/camera';
+import { chaseLens, cockpitPose } from '../src/camera';
 import { parseMessage } from '../worker/protocol';
+
+test('chase lens eases toward thrust and recovers independently of frame rate',()=>{
+  const run=(hz:number,thrusting:boolean,from:number)=>{
+    let fov=from;for(let i=0;i<hz;i++)fov=chaseLens(fov,thrusting,1/hz);return fov;
+  };
+  const fast=run(120,true,55),slow=run(30,true,55);
+  assert.ok(fast>55&&fast<60);assert.ok(Math.abs(fast-slow)<1e-9);
+  assert.ok(run(60,false,fast)<fast,'release returns toward the standard lens');
+  assert.equal(chaseLens(55,true,0),55);
+  assert.ok(chaseLens(55,true,10)<57,'a long stall cannot cause a sudden full lens kick');
+});
 
 test('cockpit follows car position, pitch and roll instead of keeping the horizon upright',()=>{
   const rotation=new T.Quaternion().setFromEuler(new T.Euler(Math.PI/4,.7,Math.PI));
