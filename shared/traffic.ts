@@ -408,8 +408,8 @@ function routeDistancePose(routeId:number,fraction:number){
 }
 
 type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=12; // Alongside eight city cars and four police.
-const AMBIENT_POOL_MAX=16; // Also bounds taken and abandoned optional cars.
+const AMBIENT_MAX=4; // Alongside eight city cars and four police.
+const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
 const NEAR_DISTANCE=3000, RECYCLE_DISTANCE=4000;
@@ -418,7 +418,7 @@ const NEAR_DISTANCE=3000, RECYCLE_DISTANCE=4000;
 const HIGHWAY_MIN_TOP_SPEED=20;
 const highwayVehicles=VEHICLE_IDS.filter(kind=>VEHICLES[kind].maxSpeed>=HIGHWAY_MIN_TOP_SPEED);
 
-function desiredAmbient(time:number):number{return Math.round(7+5*trafficDemand(time).intensity);}
+function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
 function observers(world:World):Entity[]{
   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
 }
@@ -567,9 +567,7 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
 
 /** Called after the small city and parked cohorts have been created. */
 export function seedHighwayTraffic(world:World,make:EntityFactory):void {
-  // Keep the starting fleet small; replenish the higher daytime target after
-  // drivers join, so added cars enter beyond every driver's snapshot radius.
-  const target=Math.min(5,desiredAmbient(world.time));
+  const target=desiredAmbient(world.time);
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
 }
 

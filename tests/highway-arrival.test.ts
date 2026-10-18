@@ -15,14 +15,15 @@ function stagedWorld(){
   return {world,player,car};
 }
 
-test('a clear oncoming replacement enters moving, hidden from every snapshot and with physics clearance',()=>{
+test('a clear oncoming car enters moving, hidden from every snapshot and with physics clearance',()=>{
   const {world,player}=stagedWorld();
+  world.entities=world.entities.filter(entity=>!entity.id.startsWith('ambient-'));
   for(let i=0;i<99;i++)step(world,new Map([[player.id,{...neutral,throttle:1}]]),.05);
   const original=structuredClone(world);world.time=5;
   const before=new Set(world.entities.map(entity=>entity.id));
   updateHighwayTraffic(world,.05,makeEntity);
   const replacement=world.entities.find(entity=>!before.has(entity.id)&&entity.id.startsWith('ambient-'));
-  assert.ok(replacement,'far traffic is replaced on the first reconciliation');
+  assert.ok(replacement,'traffic enters on the first reconciliation');
   const entry={x:replacement.x,z:replacement.z,yaw:replacement.yaw};
   assert.ok(replacement.speed>=10,'a clear straight permits a moving entry');
   assert.equal(replacement.vx,-Math.sin(replacement.yaw)*replacement.speed);

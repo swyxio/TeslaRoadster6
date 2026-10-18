@@ -41,7 +41,7 @@ test('highway fleet replenishes around separated drivers without appearing in ei
     }
   }
   const cars=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(cars.length,12);
+  assert.equal(cars.length,4);
   for(const viewer of [one,two])assert.ok(cars.some(car=>Math.hypot(car.x-viewer.x,car.z-viewer.z)<3000),'both separated drivers receive traffic');
 });
 
@@ -53,20 +53,15 @@ test('only an isolated, hidden, moving highway car is recycled',()=>{
     Object.assign(entity,{npc:true,autopilot:true,routeId:HIGHWAY_ROUTE_IDS[0],speed});
     world.entities.push(entity);return entity;
   };
-  const incident=car(TRAFFIC_INCIDENT.entityId,500,9000,20);
   const far=car('ambient-far',1000,9000,20);
   const stopped=car('ambient-stopped',1200,9000,0);
   const queued=car('ambient-queued',1225,9000,20);
-  const visible=car('ambient-visible',viewer.x+100,viewer.z,20);
-  const visible2=car('ambient-visible-2',viewer.x+200,viewer.z,20);
-  const visible3=car('ambient-visible-3',viewer.x+300,viewer.z,20);
-  const visible4=car('ambient-visible-4',viewer.x+400,viewer.z,20);
-  const moreVisible=Array.from({length:4},(_,i)=>car(`ambient-visible-${i+5}`,viewer.x+500+i*100,viewer.z,20));
+  const incident=car(TRAFFIC_INCIDENT.entityId,viewer.x+100,viewer.z,20);
   const taken=car('ambient-taken',1400,9000,20);taken.driver='other';taken.autopilot=false;
   const previous=new Set(world.entities.map(entity=>entity.id));
   world.time=240;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(far),'a hidden free-flowing car was recycled');
-  for(const keep of [incident,stopped,queued,visible,visible2,visible3,visible4,...moreVisible,taken])assert.ok(world.entities.includes(keep),`${keep.id} was retained`);
+  for(const keep of [stopped,queued,incident,taken])assert.ok(world.entities.includes(keep),`${keep.id} was retained`);
   const added=world.entities.filter(entity=>!previous.has(entity.id));
   assert.equal(added.length,1,'replacement enters during the same reconciliation');
   const distance=Math.hypot(added[0].x-viewer.x,added[0].z-viewer.z);
@@ -82,7 +77,7 @@ test('recycling followed by a takeover replenishes with a unique ID',()=>{
     world.entities.push(car);return car;
   };
   const far=add('ambient-far',1000,9000);
-  const visible=Array.from({length:11},(_,i)=>add(`ambient-visible-${i}`,viewer.x+100+i*100,viewer.z));
+  const visible=Array.from({length:3},(_,i)=>add(`ambient-visible-${i}`,viewer.x+100+i*100,viewer.z));
   world.time=240;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(far));
   const replacement=world.entities.find(entity=>entity.id==='ambient-49');
@@ -96,8 +91,8 @@ test('recycling followed by a takeover replenishes with a unique ID',()=>{
 
   world.time=245;updateHighwayTraffic(world,5,makeEntity);
   const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(ambient.length,13);
-  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot).length,12);
+  assert.equal(ambient.length,5);
+  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot).length,4);
   assert.equal(new Set(ambient.map(entity=>entity.id)).size,ambient.length);
   assert.ok(world.entities.includes(replacement));
   assert.equal(target.driver,'take');
@@ -113,7 +108,7 @@ test('owned and ferry-supported vehicles are never reclaimed outside the normal 
   };
   const owned=add('ambient-owned',1000,9000);owned.owner='p';
   const ferry=add('ambient-ferry',1200,9000);ferry.supportId='ferry';
-  for(let i=0;i<10;i++)add(`ambient-visible-${i}`,viewer.x+100+i*50,viewer.z);
+  for(let i=0;i<2;i++)add(`ambient-visible-${i}`,viewer.x+100+i*50,viewer.z);
   world.time=240;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(world.entities.includes(owned));assert.ok(world.entities.includes(ferry));
   // Also preserve those cars when demand is falling rather than redistributing.
