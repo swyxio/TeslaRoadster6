@@ -83,6 +83,28 @@ test('collection awards and their events are visible only to their owner',()=>{
   assert.equal(one.achievements.unlocked.length,14,'projection leaves authoritative awards unchanged');
 });
 
+test('owner receives interleaved public and collection events once across recovery',()=>{
+  const world=createWorld(),owner=addPlayer(world,'owner','Owner'),observer=addPlayer(world,'observer','Observer');
+  const tracker=new AchievementEventTracker(),control=new ScheduledInput(NEUTRAL).snapshot();
+  const project=(viewer:string)=>JSON.parse(prepareSnapshots(world,0,'epoch',1)(viewer,control,0)).world.players.find((p:{id:string})=>p.id===owner.id).achievements;
+  owner.achievements.unlocked=['luxury-visit'];
+  assert.deepEqual(tracker.update(project(owner.id)),[],'restored awards remain silent');
+  owner.achievements.unlocked.push('park-it');owner.achievements.lastUnlock={id:1,achievement:'park-it'};
+  assert.deepEqual(tracker.update(project(owner.id)),['park-it']);
+  owner.achievements.unlocked.push('vault-drive-chiron');owner.achievements.lastUnlock={id:2,achievement:'vault-drive-chiron'};
+  assert.deepEqual(tracker.update(project(owner.id)),['vault-drive-chiron']);
+  assert.equal(project(observer.id).lastUnlock,null);
+  owner.achievements.unlocked.push('roof-rider');owner.achievements.lastUnlock={id:3,achievement:'roof-rider'};
+  assert.deepEqual(tracker.update(project(owner.id)),['roof-rider']);
+  assert.deepEqual(tracker.update(project(owner.id)),[],'repeated snapshot does not repeat the toast');
+  assert.deepEqual(project(observer.id).unlocked,['luxury-visit','park-it','roof-rider']);
+  tracker.reset();owner.achievements.lastUnlock=null;
+  assert.deepEqual(tracker.update(project(owner.id)),[],'recovered awards remain silent in a new room');
+  owner.achievements.unlocked.push('tesla-drive-1');owner.achievements.lastUnlock={id:1,achievement:'tesla-drive-1'};
+  assert.deepEqual(tracker.update(project(owner.id)),['tesla-drive-1']);
+  assert.deepEqual(tracker.update(project(owner.id)),[]);
+});
+
 test('cached snapshots retain a distant dome player and ferry passenger',()=>{
   const world=createWorld(),viewer=addPlayer(world,'viewer','Viewer'),visitor=addPlayer(world,'visitor','Visitor');
   const person=world.entities.find(entity=>entity.id===visitor.entityId)!;
