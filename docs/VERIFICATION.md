@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Repeatable two-delivery playtest · 2026-10-18 Pacific
+
+- Against separately built `15b0a500bad046a95e87abd01e7c07090386d684` (0.0.25-alpha) and `5c1a7c61b6d19ca9168c2327fa889326507b9b7c` (0.0.28-alpha), the same seeded fixture and browser scenario completed two deliveries, two jump bursts with a landing between them, and forward-powered flight. The five received paths passed the per-leg comparison: overall p95 separation was 0.846 m and maximum was 3.205 m. Flight reached 6.069 m and 6.075 m respectively; neither room respawned. The 0.0.28 trace recorded one expired jump followed by a successful retry.
+- Both 1280 × 720 VP9 recordings were reviewed at delivery and airborne frames, and contained no page or console errors. The recordings were made concurrently on a busy Apple M5 Pro with ANGLE Metal; their frame and room numbers are **not** a performance baseline. Reports, compressed snapshot and input traces, and video hashes are retained in [the paired evidence](performance-baselines/2026-10-18-paired-video-route/). The large WebM files remain in the local ignored `playtest-runs/paired-proof-2026-10-18` directory.
+- A separate [no-video CI pair](performance-baselines/2026-10-18-paired-ci-route/) completed the same two revisions and aligned all five route legs within 1.842 m maximum. The three-core virtual runner was heavily loaded; its frame and room observations are descriptive and do not establish a regression or budget.
+- After integrating main through `f309834`, `pnpm test` passed 905 tests and `pnpm build` passed. The live Wrangler staged-room integration verified matching seeded starts, fenced pre-start input, rejection of missing or incorrect stage secrets and one-time authenticated begin. A separate real-browser smoke advanced the authenticated room from tick 2 to 60 without exposing the secret in artifacts or logs. CI separately runs no-video measurements for selected substantial changes. This is one desktop-browser/one-room check, not a physical-device or production-capacity result.
+
 ## Workshop redesign · 2026-10-18 Pacific
 
 - In an isolated local workshop fixture, Chrome showed the redesigned garage at desktop, emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape. The upgrade list scrolled to its final service item; the shop closed with Escape and reopened. The 3D car preview remained within its stage in the short landscape layout.
