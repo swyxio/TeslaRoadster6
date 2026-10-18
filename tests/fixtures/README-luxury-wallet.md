@@ -51,7 +51,10 @@ pnpm exec tsx tests/luxury-wallet-throughput.bench.ts http://127.0.0.1:8797 /tmp
 Pass `--drive` after the output path to place the five clients on an open-road
 route and hold throttle instead of brake. The trace includes each controlled
 vehicle's sampled positions and the sample requires at least one saved driver
-to cover 100 m. It remains a same-host fixture observation, not a capacity test.
+to cover 100 m. Add `--expect-collection` after `--drive` when testing a build
+with vehicle collections to require a saved collection in the resulting wallet.
+Omit that flag on a baseline without the feature. It remains a same-host fixture
+observation, not a capacity test.
 
 The sample connects four funded drivers and an observer, warms up, measures a
 five-second no-purchase baseline, then samples 60 seconds of production room

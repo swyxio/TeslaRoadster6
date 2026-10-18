@@ -16,6 +16,7 @@ const base=new URL(process.argv[2]??'http://127.0.0.1:8797');
 if(base.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(base.hostname))throw new Error('Use an isolated local fixture only');
 const output=resolve(process.argv[3]??`/tmp/tesland-wallet-throughput-${Date.now()}.json`);
 const driving=process.argv[4]==='--drive';
+const expectCollection=process.argv.includes('--expect-collection');
 const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 const dirtyWorktree=execFileSync('git',['status','--porcelain=v1'],{encoding:'utf8'}).trim().length>0;
 const room=`throughput-${randomUUID().slice(0,8)}`,sockets:WebSocket[]=[];
@@ -167,9 +168,10 @@ try{
   const ledgerKeys=await rpc<string[]>('economy-keys',{room});
   const profileKeys=await Promise.all(clients.slice(0,4).map(client=>rpc<string[]>('profile-keys',{driverId:client.driverId})));
   const baseline=summarize(baselineData,baselineServer),active=summarize(activeData,activeServer);
+  const collectedModels=clients.slice(0,4).map(client=>client.messages.filter(message=>message.type==='wallet').at(-1)?.vehicleCollections?.driven??null);
   const results={timestamp:new Date().toISOString(),protocol:health.version,assumptions:{clients:5,activeDrivers:4,inputHz:20,control:driving?'sustained throttle':'brake',baselineSeconds:5,activeSeconds:60,styleIntervalSeconds:5,OTA:'active; normal renewal is 120 simulated seconds',transport:'local Wrangler, same-host load generator and JSON decoding',tickTiming:'fixture measures synchronous production tick wall time',inputAck:'latency to a snapshot whose applied sequence reaches this frame; a later applied frame may have superseded it',distance:'sum of same-vehicle snapshot displacements; gaps over 24 m and pose revisions excluded'},
     environment:{revision,dirtyWorktree,node:process.version,cpu:cpus()[0]?.model,logicalCpus:cpus().length,loadBefore,loadAfter:loadavg(),clientEventLoopP95Ms:loop.percentile(95)/1e6,clientEventLoopMaxMs:loop.max/1e6},
-    baseline,active,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
+    baseline,active,collectedModels,profileCommitAttempts:commitAfter.map((item,i)=>item.started-commitBefore[i].started),
     pendingLedgerKeys:ledgerKeys.filter(key=>/^(pending|unacked|cleanup|intent):/.test(key)).length,
     profileReceiptCounts:profileKeys.map(keys=>keys.filter(key=>key.startsWith('receipt:')).length),closed:clients.filter(client=>client.socket.readyState!==WebSocket.OPEN).length,inputRejections:clients.map(client=>client.input.rejectionCount),repliesDrained,queuesDrained,
     raw:{baseline:{server:baselineServer,inputs:baselineData.inputs,snapshots:baselineData.snapshots},active:{server:activeServer,inputs:activeData.inputs,snapshots:activeData.snapshots,actions:activeData.actions}}};
@@ -181,6 +183,7 @@ try{
   assert.equal(active.droppedTickSamples,0);assert.equal(active.unacknowledgedInputs,0);assert.equal(results.closed,0);assert.deepEqual(results.inputRejections,[0,0,0,0,0]);
   assert.equal(active.actionsAttempted,48);assert.equal(active.actionsSucceeded,48);assert.equal(active.missedActions,0);
   if(driving)assert.ok(active.drivenDistanceM.slice(0,4).some(distance=>distance>=100),'at least one saved driver must move at least 100 m during the sample');
+  if(expectCollection)assert.ok(collectedModels.some(models=>Array.isArray(models)&&models.length>0),'at least one saved collection must be observed');
   assert.equal(results.pendingLedgerKeys,0);assert.deepEqual(results.profileReceiptCounts,[0,0,0,0]);
 }finally{
   phase=undefined;loop.disable();if(timer)clearInterval(timer);
