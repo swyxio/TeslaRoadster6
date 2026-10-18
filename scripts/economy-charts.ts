@@ -1,4 +1,4 @@
-// Reproducible visualizations of the hypothetical economy, not telemetry from the game.
+// Reproducible visualizations of the economy model.
 // Run: pnpm exec tsx scripts/economy-charts.ts [--players 250]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { paths } from './economy-five-minute.ts';
@@ -89,7 +89,7 @@ function walletChart(data: ChartPath[], players: number): string {
   const details = data.map(p => `${p.name}: ${p.homeReached}/${players} first homes, median ${p.homeMedianHours ?? 'unreached'} hours`).join('; ');
   let svg = header('Seven ways to grow a wallet',
     MOBILE ? `Median · ${players} runs per path · bonuses off` : `Median wallet · ${players} simulated players per path · event bonuses off`, height,
-    `Seven charts show the median simulated wallet every five active minutes over 40 hours. The dashed line marks the $2 million current-cash property market gate. Purchases lower cash, and the median does not track one individual. ${details}. These are proposed rules, not player telemetry.`);
+    `Seven charts show the median modeled wallet every five active minutes over 40 hours. The dashed line marks the $2 million current-cash property market gate. Purchases lower cash. Each point is the median across the runs. ${details}.`);
   data.forEach((p, i) => {
     const y = top + i * panelH, chartY = y + (MOBILE ? 55 : 37);
     const home = p.homeMedianHours === null ? `Home: ${p.homeReached}/${players} by 40h` : `First home: ${fmt(p.homeMedianHours)}h median`;
@@ -107,10 +107,10 @@ function walletChart(data: ChartPath[], players: number): string {
   svg += xTicks(end - 3, [0, 10, 20, 30, 40], 40);
   svg += t((LEFT + RIGHT) / 2, end + 23, 'Active hours', `font-size="18" fill="${MUTED}" text-anchor="middle"`);
   svg += footer(MOBILE ? ['Dashed line: $2m cash gate. Purchases',
-    'lower the wallet.', 'Each point is a median, not one player.',
-    'Core redesign; events off. Simulated data.'] : ['Dashed line = $2m cash gate. Buying a home or upgrades lowers the wallet.',
-    'Each point is a fresh median; the line is not one person’s wallet history.',
-    'Core redesign, no event bonuses. Simulated data, not gameplay telemetry.'], end + 55);
+    'lower the wallet.', 'Each point is the median across runs.',
+    'Economy model · events off.'] : ['Dashed line = $2m cash gate. Buying a home or upgrades lowers the wallet.',
+    'Each point is the median across runs.',
+    'Economy model · events off.'], end + 55);
   return svg;
 }
 
@@ -126,7 +126,7 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   let svg = header(achievement ? 'Achievements arrive in bursts' : 'Earnings per five active minutes',
     MOBILE ? (achievement ? `Mean achievements per 30m · ${players} runs` : `Median gross per 5m · ${players} runs`)
       : (achievement ? `Mean one-off achievements per 30-minute block · ${players} simulated players` : `Median 30-minute gross, divided by six · ${players} simulated players`), height,
-    `${achievement ? 'Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings, and excludes purchases and fines.'} Event bonuses are off, and this is a simulated core economy design, not game telemetry. ${details}.`);
+    `${achievement ? 'Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target.' : 'Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings; purchases and fines affect wallet balance.'} Event bonuses are off. ${details}.`);
   data.forEach((p, i) => {
     const y = top + i * panelH, chartY = y + (MOBILE && achievement ? 56 : 34);
     svg += t(24, y + 20, labels[p.name] ?? p.name, 'font-size="21" font-weight="700"');
@@ -150,19 +150,19 @@ function blocksChart(data: ChartPath[], players: number, kind: 'achievements' | 
   const lines = MOBILE ? (achievement ? [
     'Shading: 2–4 one-off achievements per', '30-minute block, first two active hours.',
     'City badges count; initial SF, check-ins and', 'repeatable goals do not. Means can hide dry spells.',
-    'Core redesign, events off. Simulated data.',
+    'Economy model · events off.',
   ] : [
-    'Gross includes task pay, awards and cab income.', 'Purchases and fines do not count.',
+    'Gross includes task pay, awards and cab income.', 'Wallet balance also reflects purchases and fines.',
     'Each bar is the 30-minute median divided by six.', 'Five-minute windows can be empty during a task.',
-    'Core redesign, events off. Simulated data.',
+    'Economy model · events off.',
   ]) : achievement ? [
     'Shaded band: target 2–4 one-off achievements per block, first 2h only.',
     'City badges count; initial SF, check-ins and repeatable goals do not.',
     'Core redesign, events off. Means can hide individual dry spells.',
   ] : [
-    'Gross includes task pay, cash awards and active-cab income; it is not wallet change.',
+    'Gross includes task pay, cash awards and active-cab income.',
     'Each bar is a median across 250 runs; longer tasks can leave five-minute gaps.',
-    'Core redesign, event bonuses off. Simulated data, not telemetry.',
+    'Economy model · events off.',
   ];
   // Match the player count in the caption when using a non-default run size.
   if (!achievement && !MOBILE) lines[1] = `Each bar is a median across ${players} runs; longer tasks can leave five-minute gaps.`;

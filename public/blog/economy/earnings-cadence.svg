@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1293" role="img" aria-labelledby="chart-title chart-description">
-<title id="chart-title">Earnings per five active minutes</title><desc id="chart-description">Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings, and excludes purchases and fines. Event bonuses are off, and this is a simulated core economy design, not game telemetry. Delivery saver first 30-minute block earns a median $40,637 gross; First cab first 30-minute block earns a median $47,949 gross; Fleet reinvestor first 30-minute block earns a median $47,949 gross; Customizer first 30-minute block earns a median $39,850 gross; Delivery explorer first 30-minute block earns a median $44,023 gross; 30-minute casual first 30-minute block earns a median $38,824 gross; Mixed economy first 30-minute block earns a median $36,622 gross.</desc>
+<title id="chart-title">Earnings per five active minutes</title><desc id="chart-description">Each chart shows the median gross earnings in a 30-minute block divided by six, over the first eight active hours. Gross includes cash awards and cab earnings; purchases and fines affect wallet balance. Event bonuses are off. Delivery saver first 30-minute block earns a median $40,637 gross; First cab first 30-minute block earns a median $47,949 gross; Fleet reinvestor first 30-minute block earns a median $47,949 gross; Customizer first 30-minute block earns a median $39,850 gross; Delivery explorer first 30-minute block earns a median $44,023 gross; 30-minute casual first 30-minute block earns a median $38,824 gross; Mixed economy first 30-minute block earns a median $36,622 gross.</desc>
 <rect width="720" height="1293" rx="16" fill="#fff"/>
 <g font-family="system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" fill="#1e2933">
 <text x="24" y="39" font-size="26" font-weight="700">Earnings per five active minutes</text>
@@ -29,7 +29,7 @@
 <text x="232.5" y="1163" font-size="17" fill="#4d5f6d" text-anchor="middle">2</text>
 <text x="385" y="1163" font-size="17" fill="#4d5f6d" text-anchor="middle">4</text>
 <text x="537.5" y="1163" font-size="17" fill="#4d5f6d" text-anchor="middle">6</text>
-<text x="690" y="1163" font-size="17" fill="#4d5f6d" text-anchor="middle">8</text><text x="385" y="1188" font-size="18" fill="#4d5f6d" text-anchor="middle">Active hours · one bar = 30 minutes</text><text x="24" y="1221" font-size="17" fill="#4d5f6d">Gross includes task pay, cash awards and active-cab income; it is not wallet change.</text>
+<text x="690" y="1163" font-size="17" fill="#4d5f6d" text-anchor="middle">8</text><text x="385" y="1188" font-size="18" fill="#4d5f6d" text-anchor="middle">Active hours · one bar = 30 minutes</text><text x="24" y="1221" font-size="17" fill="#4d5f6d">Gross includes task pay, cash awards and active-cab income.</text>
 <text x="24" y="1246" font-size="17" fill="#4d5f6d">Each bar is a median across 250 runs; longer tasks can leave five-minute gaps.</text>
-<text x="24" y="1271" font-size="17" fill="#4d5f6d">Core redesign, event bonuses off. Simulated data, not telemetry.</text>
+<text x="24" y="1271" font-size="17" fill="#4d5f6d">Economy model · events off.</text>
 </g></svg>

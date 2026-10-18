@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 1531" role="img" aria-labelledby="chart-title chart-description">
-<title id="chart-title">Seven ways to grow a wallet</title><desc id="chart-description">Seven charts show the median simulated wallet every five active minutes over 40 hours. The dashed line marks the $2 million current-cash property market gate. Purchases lower cash, and the median does not track one individual. Delivery saver: 250/250 first homes, median 17.7 hours; First cab: 250/250 first homes, median 16.2 hours; Fleet reinvestor: 250/250 first homes, median 15.2 hours; Customizer: 250/250 first homes, median 17 hours; Delivery explorer: 250/250 first homes, median 17.7 hours; 30-minute casual: 250/250 first homes, median 21.7 hours; Mixed economy: 250/250 first homes, median 18.4 hours. These are proposed rules, not player telemetry.</desc>
+<title id="chart-title">Seven ways to grow a wallet</title><desc id="chart-description">Seven charts show the median modeled wallet every five active minutes over 40 hours. The dashed line marks the $2 million current-cash property market gate. Purchases lower cash. Each point is the median across the runs. Delivery saver: 250/250 first homes, median 17.7 hours; First cab: 250/250 first homes, median 16.2 hours; Fleet reinvestor: 250/250 first homes, median 15.2 hours; Customizer: 250/250 first homes, median 17 hours; Delivery explorer: 250/250 first homes, median 17.7 hours; 30-minute casual: 250/250 first homes, median 21.7 hours; Mixed economy: 250/250 first homes, median 18.4 hours.</desc>
 <rect width="460" height="1531" rx="16" fill="#fff"/>
 <g font-family="system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" fill="#1e2933">
 <text x="24" y="39" font-size="26" font-weight="700">Seven ways to grow a wallet</text>
@@ -24,6 +24,6 @@
 <text x="345.25" y="1368" font-size="17" fill="#4d5f6d" text-anchor="middle">30</text>
 <text x="440" y="1368" font-size="17" fill="#4d5f6d" text-anchor="middle">40</text><text x="250.5" y="1394" font-size="18" fill="#4d5f6d" text-anchor="middle">Active hours</text><text x="24" y="1426" font-size="17" fill="#4d5f6d">Dashed line: $2m cash gate. Purchases</text>
 <text x="24" y="1451" font-size="17" fill="#4d5f6d">lower the wallet.</text>
-<text x="24" y="1476" font-size="17" fill="#4d5f6d">Each point is a median, not one player.</text>
-<text x="24" y="1501" font-size="17" fill="#4d5f6d">Core redesign; events off. Simulated data.</text>
+<text x="24" y="1476" font-size="17" fill="#4d5f6d">Each point is the median across runs.</text>
+<text x="24" y="1501" font-size="17" fill="#4d5f6d">Economy model · events off.</text>
 </g></svg>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 1507" role="img" aria-labelledby="chart-title chart-description">
-<title id="chart-title">Achievements arrive in bursts</title><desc id="chart-description">Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target. Event bonuses are off, and this is a simulated core economy design, not game telemetry. Delivery saver 37.9% of first-two-hour blocks have 2–4 achievements; First cab 27.8% of first-two-hour blocks have 2–4 achievements; Fleet reinvestor 20.4% of first-two-hour blocks have 2–4 achievements; Customizer 18.5% of first-two-hour blocks have 2–4 achievements; Delivery explorer 11.8% of first-two-hour blocks have 2–4 achievements; 30-minute casual 36.1% of first-two-hour blocks have 2–4 achievements; Mixed economy 12.4% of first-two-hour blocks have 2–4 achievements.</desc>
+<title id="chart-title">Achievements arrive in bursts</title><desc id="chart-description">Each chart shows the mean number of one-off achievements in each 30-minute block. A target of two to four per block applies only to the first two hours. Means can conceal uneven blocks, so the chart reports the percentage of blocks within target. Event bonuses are off. Delivery saver 37.9% of first-two-hour blocks have 2–4 achievements; First cab 27.8% of first-two-hour blocks have 2–4 achievements; Fleet reinvestor 20.4% of first-two-hour blocks have 2–4 achievements; Customizer 18.5% of first-two-hour blocks have 2–4 achievements; Delivery explorer 11.8% of first-two-hour blocks have 2–4 achievements; 30-minute casual 36.1% of first-two-hour blocks have 2–4 achievements; Mixed economy 12.4% of first-two-hour blocks have 2–4 achievements.</desc>
 <rect width="460" height="1507" rx="16" fill="#fff"/>
 <g font-family="system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" fill="#1e2933">
 <text x="24" y="39" font-size="26" font-weight="700">Achievements arrive in bursts</text>
@@ -33,5 +33,5 @@
 <text x="24" y="1400" font-size="17" fill="#4d5f6d">30-minute block, first two active hours.</text>
 <text x="24" y="1425" font-size="17" fill="#4d5f6d">City badges count; initial SF, check-ins and</text>
 <text x="24" y="1450" font-size="17" fill="#4d5f6d">repeatable goals do not. Means can hide dry spells.</text>
-<text x="24" y="1475" font-size="17" fill="#4d5f6d">Core redesign, events off. Simulated data.</text>
+<text x="24" y="1475" font-size="17" fill="#4d5f6d">Economy model · events off.</text>
 </g></svg>
