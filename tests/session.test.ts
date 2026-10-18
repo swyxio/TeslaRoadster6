@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
+import { FREMONT_SPACEPORT } from '../shared/map';
+import { MARS_GOAL } from '../shared/mars';
 
 class Socket {
   static OPEN = 1;
@@ -158,6 +160,40 @@ test('solo mini-game requests use the local simulation',()=>{
   assert.equal(session.parkingAction('leave'),true);
   assert.equal(session.enterMinigame('oval'),true);
   assert.ok(session.world.races.rounds.some(round=>round.courseId==='oval'&&round.entrants.some(entry=>entry.playerId===session.id)));
+});
+
+test('solo Mars contributions and boarding are local to the current drive',()=>{
+  const session=new Session();session.solo();
+  const player=session.world.players[0],car=session.world.entities.find(entity=>entity.id===player.entityId)!;
+  player.delivery.cash=80;
+  let requestId=session.mars('contribute',25);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:25});
+  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
+  requestId=session.mars('contribute',56);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:false,amount:0});
+  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
+  session.world.mars.fund=MARS_GOAL-10;
+  requestId=session.mars('contribute',20);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:10});
+  assert.equal(player.delivery.cash,45);assert.equal(session.world.mars.fund,MARS_GOAL);
+  Object.assign(car,FREMONT_SPACEPORT.entrance,{speed:0,supportId:'ground'});
+  requestId=session.mars('board');
+  assert.deepEqual(session.marsResult,{requestId,action:'board',ok:true,amount:0});
+  assert.ok(player.achievements.unlocked.includes('to-mars'));
+  session.solo();assert.equal(session.world.mars.fund,0);assert.equal(session.marsResult,null);
+});
+
+test('online Mars actions use an ordered sync barrier and clear stale results on a new drive',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const requestId=session.mars('contribute',10);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
+  assert.equal(session.marsResult?.ok,true);
+  session.solo();assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
 });
 
 test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{

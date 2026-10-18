@@ -30,7 +30,9 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
-import { BRIDGES, DISTRICTS, FERRY_DOCKS, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
+import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
+import { MARS_GOAL } from '../shared/mars';
+import { createMarsUI } from './mars-ui';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -61,9 +63,9 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -402,6 +404,7 @@ function minimap(entity:Entity|undefined,level:Level){
     for(const district of DISTRICTS.filter(d=>(d.id==='san-jose'||d.id==='fremont'||d.id==='palo-alto')&&visible(d.x,d.z)))base.fillText(district.name.toUpperCase(),px(district.x)+4,pz(district.z));
     for(const landmark of LANDMARKS.filter(l=>visible(l.arrival.x,l.arrival.z))){base.fillStyle='#fff2c6';base.beginPath();base.arc(px(landmark.arrival.x),pz(landmark.arrival.z),2.5,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(landmark.name,px(landmark.arrival.x)+4,pz(landmark.arrival.z)-4);}
     for(const monument of TESLAND_MONUMENTS.filter(p=>visible(p.x,p.z))){base.fillStyle='#ffd080';base.beginPath();base.arc(px(monument.x),pz(monument.z),3,0,Math.PI*2);base.fill();if(mapLocal)base.fillText(monument.name.toUpperCase(),px(monument.x)+4,pz(monument.z)-4);}
+    if(visible(FREMONT_SPACEPORT.entrance.x,FREMONT_SPACEPORT.entrance.z)){base.fillStyle='#ffad70';base.beginPath();base.arc(px(FREMONT_SPACEPORT.entrance.x),pz(FREMONT_SPACEPORT.entrance.z),4,0,Math.PI*2);base.fill();if(mapLocal)base.fillText('MARS SPACEPORT',px(FREMONT_SPACEPORT.entrance.x)+5,pz(FREMONT_SPACEPORT.entrance.z)-5);}
     if(visible(STUNT_LOOP.x,STUNT_LOOP.z)){base.fillStyle='#ffc77f';base.beginPath();base.arc(px(STUNT_LOOP.x),pz(STUNT_LOOP.z),3,0,Math.PI*2);base.fill();base.fillText('LOOP',px(STUNT_LOOP.x)+4,pz(STUNT_LOOP.z)-3);}
     base.fillStyle='#91dfff';base.beginPath();base.arc(px(DOME.x),pz(DOME.z),3,0,Math.PI*2);base.fill();base.fillText('ROCKET DOME',px(DOME.x)+4,pz(DOME.z)-3);
   }
@@ -454,7 +457,9 @@ function minimap(entity:Entity|undefined,level:Level){
 
 const scoresDialog=$<HTMLDialogElement>('scores-dialog');
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
-const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount)}`;
+const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
+const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+$('mars-quick').onclick=()=>marsUi.open();$('mars-action').onclick=()=>marsUi.open();
 function updateScores(){
   const list=$('scores-list');list.replaceChildren();
   const available=session.status==='solo'||session.status==='online';
@@ -507,7 +512,7 @@ function announceAchievements(){
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
   setDrawer(null);
-  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();mapDialog.close();minigames.close();chatPanel.close();
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();marsUi.close();mapDialog.close();minigames.close();chatPanel.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;
   $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;
@@ -689,6 +694,8 @@ scene.start(dt=>{
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
+  marsUi.update(e);
+  $('mars-quick').textContent=session.world.mars.fund>=MARS_GOAL?'🚀 Mars funded · board in Fremont':`🚀 Mars mission · ${money(session.world.mars.fund)} / $1B`;
   minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');

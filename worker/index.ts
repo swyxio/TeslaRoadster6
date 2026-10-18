@@ -4,6 +4,7 @@ import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
+import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
 
 export { GlobalChat };
 
@@ -28,14 +29,21 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Sessions and world are deliberately ephemeral. Deploy/restart/last disconnect
-// resets a room. Real-time physics cannot hibernate while participants are active.
+// Physics and player cash are session-only. The room's Mars fund is durable.
 export class GameRoom extends DurableObject<Env> {
   private world = createWorld();
   private sessions = new Map<WebSocket, Session>();
   private inputs = new Map<string, Input>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCount = 0;
+
+  constructor(ctx:DurableObjectState,env:Env) {
+    super(ctx,env);
+    ctx.blockConcurrencyWhile(async()=>{
+      const fund=await ctx.storage.get<number>('mars-fund');
+      if(Number.isSafeInteger(fund) && fund!>=0 && fund!<=MARS_GOAL)this.world.mars.fund=fund!;
+    });
+  }
 
   fetch(): Response {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
@@ -58,7 +66,7 @@ export class GameRoom extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: client });
     }
     this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
-    server.addEventListener('message', event => this.onMessage(server, event.data));
+    server.addEventListener('message', event => { void this.onMessage(server, event.data); });
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
     server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
@@ -67,7 +75,7 @@ export class GameRoom extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private onMessage(socket: WebSocket, raw: string | ArrayBuffer): void {
+  private async onMessage(socket: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const session = this.sessions.get(socket);
     if (!session) return;
     const now = Date.now();
@@ -103,6 +111,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
       if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       return;
     }
     session.lastAction = now;
@@ -119,6 +128,26 @@ export class GameRoom extends DurableObject<Env> {
     }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
     if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:subscribeOta(this.world,session.id,message.enabled)}));
+    if(message.type==='mars'){
+      if(message.action==='board'){
+        const ok=boardMars(this.world,session.id);
+        socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0}));
+      }else{
+        const amount=marsContribution(this.world,session.id,message.amount);
+        let ok=false;
+        if(amount>0){
+          let saved=false;
+          try {
+            // The storage input gate keeps later sync events behind this continuation;
+            // the output gate holds messages until the write is durable.
+            await this.ctx.storage.put('mars-fund',this.world.mars.fund+amount);
+            saved=true;
+          } catch { /* No cash is deducted if the contribution cannot be saved. */ }
+          if(saved){applyMarsContribution(this.world,session.id,amount);ok=true;}
+        }
+        try { socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:ok?amount:0})); } catch { /* The driver disconnected while saving. */ }
+      }
+    }
   }
 
   private tick(): void {
@@ -147,7 +176,8 @@ export class GameRoom extends DurableObject<Env> {
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }
     if (!this.sessions.size) {
       if (this.timer) clearInterval(this.timer);
-      this.timer = null; this.tickCount = 0; this.world = createWorld();
+      const fund=this.world.mars.fund;
+      this.timer = null; this.tickCount = 0; this.world = createWorld(); this.world.mars.fund=fund;
     }
   }
 }

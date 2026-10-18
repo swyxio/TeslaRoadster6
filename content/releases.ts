@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.8-alpha',
-    label: '0.0.8 Alpha',
+    version: '0.0.9-alpha',
+    label: '0.0.9 Alpha',
     date: '2026-10-18',
     title: 'Drive together',
     intro: 'Smoother shared driving and longer-lasting Rocket pickups.',
@@ -10,7 +10,24 @@ export const RELEASES = [
       { title: 'Drive together', items: [
         'Driving in a shared room responds sooner to your controls while the room keeps the game in sync.',
         'Desktop rendering uses fewer pixels on high-density displays to reduce graphics work while keeping the HUD sharp.',
-        'A Rocket pickup now equips its car for the rest of the session.'
+        'A Rocket pickup now equips its car for the rest of the session.',
+        'Choose an explicit solo drive from the menu when you want a private local session.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.8-alpha',
+    label: '0.0.8 Alpha',
+    date: '2026-10-18',
+    title: 'The road to Mars',
+    intro: 'A new Fremont spaceport gives every room a wildly ambitious shared destination.',
+    sections: [
+      { title: 'Build the mission together', items: [
+        'Visit the fictional Tesla × SpaceX gigafactory and Starship/Super Heavy launch complex in Fremont, unlocked with the South Bay at level 2.',
+        'Contribute earned session cash to your room’s permanent $1 billion Mars fund. Other drivers in the same room can contribute too; every dollar counts once.',
+        'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
+        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.',
+        'Play always joins a shared room; if the Bay is full, retry or name another room.'
       ] }
     ]
   },

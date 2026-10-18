@@ -26,7 +26,7 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt } from './sky-currents';
 
-export const PROTOCOL_VERSION=28;
+export const PROTOCOL_VERSION=29;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -39,7 +39,7 @@ export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:numb
 export type CockpitStats = { active:boolean; activeSeconds:number; deliveries:number; orderEligible:boolean; orderSeconds:number };
 export type Player = {id:string;name:string;entityId:string;delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air'|'rocket';active:boolean;readyAt?:number};
-export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState};
+export type World = {entities:Entity[];players:Player[];pickups:Pickup[];ferry:Ferry;parking:ParkingState;races:RaceState;time:number;soccer:SoccerState;mars:{fund:number;launchAt:number|null}};
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const MAX_FLIGHT_SPEED=80; // 288 km/h: an arcade limit that keeps contact sampling bounded.
@@ -48,7 +48,7 @@ export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:
   return {id,kind,x,y:height??0,z,yaw:0,pitch:0,roll:0,vx:0,vy:0,vz:0,pitchRate:0,yawRate:0,rollRate:0,speed:0,health:100,air:100,tankLevel:1,upgrades:{rocket:false,economy:false,motor:false,armor:false},driver,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,navigation:null,routeId:0,waypoint:0,pauseUntil:0,lastJump:0,lastFlip:0,flipRemaining:0,stunts:0,loopAngle:null,loopDirection:1,inDome:false,domeReturn:'sf',domeS:null,thrusters:0,jumpBurstUntil:0,supportId:height===null?null:'ground'};
 };
 export function createWorld():World {
-  const world:World={entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-300+(i%6)*60,z:i<6?-55:113,kind:i%2?'air':'repair',active:true}))};
+  const world:World={entities:[],players:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer(),mars:{fund:0,launchAt:null},pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-300+(i%6)*60,z:i<6?-55:113,kind:i%2?'air':'repair',active:true}))};
   world.pickups.push({id:'rocket-island',x:0,z:-1160,kind:'rocket',active:true});
   for(const lot of PARKING_LOTS)world.pickups.push({id:`rocket-${lot.id}`,...lot.pickup,kind:'rocket',active:true});
   for(const [i,[x,z]] of [[0,60],[390,0],[510,120],[-240,180],[-1200,2080],[-40,6080],[1580,6070],[1530,8860]].entries())world.pickups.push({id:`rocket-${i}`,x,z,kind:'rocket',active:true});

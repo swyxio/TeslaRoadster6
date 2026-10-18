@@ -10,6 +10,8 @@ The streets still connect San Francisco, Oakland and the rest of the Bay. There 
 
 On the Marin side of the Golden Gate, the **Elon Colossus** keeps a watchful eye on the Bay. Nearby, the **First Delivery Monument** remembers the brave fictional courier who discovered that the shortest route to dinner is sometimes straight up. Look for their gold dots on the local map.
 
+In Fremont, an imaginary Tesla × SpaceX gigafactory has a very big neighbor: a Super Heavy rocket waiting for a one-way trip to Mars. Drivers can pool their earnings toward the room’s $1 billion mission. When the fund is ready, the gold ring at the spaceport is your boarding gate. The Bay can keep on driving after you win.
+
 ## The fine print of the future
 
 Tesland is an independent work of fiction and satire, not a prediction or an official Tesla or SpaceX product. The ownership of the Bay, the monuments, flight, air refills and delivery economy are invented for the game. Real businesses and landmarks appear in a compressed, playful setting; no affiliation or endorsement is implied.

@@ -12,6 +12,7 @@ export const ACHIEVEMENTS = {
   'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match.' },
   'garage-champion': { name:'Garage Champion', description:'Win a Rocket Dome match with a goal credited to your rocket-retrofitted car.' },
   'no-rockets-needed': { name:'No Rockets Needed', description:'Win with a goal, touching the ball only in cars without rockets.' },
+  'to-mars': { name:'To Mars', description:'Fund the room’s $1 billion mission together and board at the Fremont spaceport.' },
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
 type Shore = 'sf' | 'oakland';
@@ -22,6 +23,7 @@ function unlock(state:AchievementState,achievement:AchievementId):void {
   if(state.unlocked.includes(achievement))return;
   state.unlocked.push(achievement);state.lastUnlock={id:(state.lastUnlock?.id??0)+1,achievement};
 }
+export function awardMarsAchievement(player:Player):void { unlock(player.achievements,'to-mars'); }
 /** Award completed Dome matches from server-owned touches and goal credits. */
 export function awardDomeMatchAchievements(player:Player,participant:DomeParticipant,won:boolean):void {
   const state=player.achievements;

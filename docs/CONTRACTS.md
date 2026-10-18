@@ -1,4 +1,4 @@
-# Implementation contracts · v28
+# Implementation contracts · v29
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -30,14 +30,14 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 - `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil, and current `navigation` route and arrival status; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, lifetime session delivery earnings, level, last blocked access attempt, active time, order, completed runs, ticket state and OTA subscription), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
-- `World`: entities, players, pickups, ferry, parking rounds, race rounds, time and authoritative `soccer` (ball position/velocity, both scores, goal/win phase, per-player class-specific touches and credited goals, last touch, and winning player IDs). Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
+- `World`: entities, players, pickups, ferry, parking rounds, race rounds, time, `mars` (`fund`, `launchAt`) and authoritative `soccer` (ball position/velocity, both scores, goal/win phase, per-player class-specific touches and credited goals, last touch, and winning player IDs). A Rocket kit installed by pickup or purchase counts as a retrofit. Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; holding the jump control sets hover after a short delay; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v28
+## Wire protocol v29
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:28,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:29,capacity:number}`.
 
 Client messages:
 
@@ -61,23 +61,26 @@ Client messages:
 {"type":"race","action":"leave","courseId":"short"}
 {"type":"minigame","game":"park"}
 {"type":"destination","x":-120,"z":60,"requestId":3}
+{"type":"mars","action":"contribute","amount":50,"requestId":4}
+{"type":"mars","action":"board","requestId":5}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:28, capacity:number}
+{type:"welcome", id:string, version:29, capacity:number}
 {type:"state", world:World, inputAck:number, sync?:number}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
+{type:"marsResult", requestId:number, action:"contribute"|"board", ok:boolean, amount:number}
 ```
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient’s complete filtered JSON. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz with a strictly increasing positive sequence; the server keeps the latest intent and acknowledges the latest sequence actually used in a physics tick. The same input can run for multiple ticks, and intermediate sequences may be skipped. `sync` tags the next regular snapshot after preceding socket messages; multiple requests are coalesced and do not force extra snapshots or physics ticks.
 
 For local presentation only, the client replays at most three unacknowledged inputs with shared physics from each snapshot. It stops prediction when snapshots are stale, input backlog is excessive, another body is close, the vehicle is airborne or on a special surface, or an action is waiting for its `sync` barrier. A new vehicle or discontinuity clears pending preview. The server alone owns collisions, position, pickups, races, cash and HUD state; this short preview can be corrected when the next snapshot arrives, particularly when inputs are batched or reused. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
-Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v23 includes the relocated Rocket Dome world geometry and soccer match state; v24 adds navigation; v25 adds Tesland monument bases; v26 adds charging-lot and venue collision geometry; v27 combines those changes with island jump surfaces; v28 adds sequenced prediction acknowledgements and session-long Rocket pickups. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
+Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. Protocol v27 combined the charging lots and island geometry. Two independently developed v28 builds added, respectively, sequenced driving acknowledgements and session-long Rocket pickups, or the Fremont spaceport and Mars mission. Protocol v29 combines both changes so incompatible clients cannot connect. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
 Two static, collision-backed monument bases in the Marin headlands use `TESLAND_MONUMENTS` in `shared/map.ts` for their footprints and landable roofs. The sculptures above are decorative; rendering and map markers use the same positions. They are fictional game art and do not imply affiliation.
 
@@ -85,7 +88,13 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade and OTA requests carry a positive safe-integer request ID, echoed only to the requester with the server's success or rejection, including cooldown rejection. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Shared room state is memory-only. Start timer with first connection; stop and reset when empty. No persistent promise of garages or game progress. Do not replace with a global room object or client-authoritative coordinates.
+Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per room. Start timer with first connection; stop and reset simulation when empty. Each room's Mars fund is durable; players, cash, awards, vehicles and all other simulation state remain ephemeral. Do not replace with a global room object or client-authoritative coordinates.
+
+## Mars mission
+
+`shared/mars.ts` owns the $1,000,000,000 target, contribution validation and boarding eligibility. `World.mars.fund` is a nonnegative integer capped at the goal. A room accepts whole-dollar contributions only from a connected player's current session cash, deducts exactly the amount added, and caps the final contribution at the remaining goal. A DO storage write must succeed before cash is debited or success is acknowledged; Cloudflare storage input/output gates serialize writes and keep uncommitted results private. Per-room durable `mars-fund` is loaded before connections and retained across an empty room, restart and deployment. An explicit solo session has a separate local fund which disappears when that session ends. There is no contributor ledger, refund, identity binding or cross-room pool. Do not describe session cash or personal achievements as persistent.
+
+Once funded, a player must be stopped on the ground within 14 m of the shared Fremont boarding point to request boarding. The room awards `to-mars` to that player, broadcasts `launchAt` in simulation time, and returns a private result. Each player may board once per session; additional drivers joining an active 12-second launch do not restart it, while a later driver starts a new launch. The cinematic launch and victory presentation are client-side, and free roam continues afterwards. There is no playable Mars surface. Rates, request IDs, errors and timeouts are handled like other room actions. The fund is a long-term objective: current fares are small; higher-paying levels remain future work.
 
 ## Global chat and saved identities
 
@@ -99,7 +108,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?,name?)`, `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. Game startup joins `bay` by default or the room named by an invite. Solo remains an explicit menu/error choice. Rejoining the currently connected room preserves the seat; an actual disconnect ends that room session. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`, `roomFull`; commands `solo(kind?,name?)`, `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `mars(action,amount?)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. Game startup joins `bay` by default or the room named by an invite. Solo remains an explicit menu/error choice. Rejoining the currently connected room preserves the seat; an actual disconnect ends that room session. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -176,11 +185,11 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v28 requires matching world geometry and soccer match state on both ends.
+`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v29 requires matching world geometry and soccer match state on both ends.
 
 Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. It also works on the ceiling and while boosting, including with a Rocket kit from a pickup; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change and clients display replicated air and eligibility.
 
-`shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first color to five ends the match; after a six-second winner display, both scores, player match stats and the ball reset. The last driven car to physically strike the ball earns the goal for its driver and its class; an undriven car's strike clears the last touch. The player(s) present in the dome at match completion with the most credited goals win; if no eligible player has a credited goal, the match has no player winner. Leaving and returning before the finish retains the player’s match goals. Departing the room removes that driver's match stats and pending touch. Physics, scoring and timing are authoritative in solo and online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
+`shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes play for three simulation seconds, then returns the ball to center. The first color to five ends the match; after a six-second winner display, both scores, player match stats and the ball reset. The last driven car to physically strike the ball earns the goal for its driver and its class; an undriven car's strike clears the last touch. The player(s) present in the dome at match completion with the most credited goals win; if no eligible player has a credited goal, the match has no player winner. Leaving and returning before the finish retains the player’s match goals. Departing the room removes that driver's match stats and pending touch. Physics, scoring and timing are authoritative in online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 
 
 ## Citations, rooftops and achievements

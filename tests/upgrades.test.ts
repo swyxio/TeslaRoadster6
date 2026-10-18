@@ -62,6 +62,15 @@ test('solo shop reports authoritative purchase and rejection results',()=>{
   const third=session.buyUpgrade('tank');assert.deepEqual(session.upgradeResult,{requestId:third,upgrade:'tank',ok:true});
   assert.equal(car.tankLevel,2);assert.equal(car.air,100);assert.equal(player.delivery.cash,0);
 });
+test('shop purchases deduct funds once and refill a tank in the shared simulation',()=>{
+  const {world,player,car}=setup();player.delivery.cash=UPGRADES.rocket.price;
+  assert.equal(buyUpgrade(world,'p','rocket'),true);
+  assert.equal(player.delivery.cash,0);assert.ok(car.upgrades.rocket);
+  assert.equal(buyUpgrade(world,'p','rocket'),false);
+  player.delivery.cash=30;car.air=12;
+  assert.equal(buyUpgrade(world,'p','tank'),true);
+  assert.equal(car.tankLevel,2);assert.equal(car.air,100);assert.equal(player.delivery.cash,0);
+});
 test('every charger lot pickup installs the session kit',()=>{
   for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
     const {world,car}=setup(),pickup=createWorld().pickups.find(p=>p.id===`rocket-${lot.id}`)!;
