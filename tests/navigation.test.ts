@@ -203,8 +203,10 @@ test('securing a ferry passenger and issuing a ticket cancel chosen navigation',
 });
 
 test('destination and mini-game protocol accepts only finite bounded requests',()=>{
-  assert.deepEqual(parseMessage('{"type":"destination","x":12,"z":-100,"requestId":2}'),{type:'destination',x:12,z:-100,requestId:2});
-  assert.equal(parseMessage('{"type":"destination","x":10001,"z":0,"requestId":1}'),null);
-  assert.equal(parseMessage('{"type":"destination","x":0,"z":0,"requestId":0}'),null);
-  assert.equal(parseMessage('{"type":"minigame","game":"bogus"}'),null);
+  const fence={actionSeq:1,edgeBaseline:{jump:0,flip:0}};
+  const valid={type:'destination',x:12,z:-100,requestId:2,...fence};
+  assert.deepEqual(parseMessage(JSON.stringify(valid)),valid);
+  assert.equal(parseMessage(JSON.stringify({...valid,x:10001})),null);
+  assert.equal(parseMessage(JSON.stringify({...valid,requestId:0})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'minigame',game:'bogus',...fence})),null);
 });

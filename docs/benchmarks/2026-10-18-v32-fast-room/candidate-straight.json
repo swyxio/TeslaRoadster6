@@ -1,0 +1,134 @@
+{
+  "version": 32,
+  "players": 1,
+  "mode": "straight",
+  "staged": "Roadster x=-300 z=1500, ground, speed 56 m/s, heading +z; full throttle after join",
+  "inputSchedule": "20 Hz full throttle, steer 0",
+  "fixtureWallSeconds": 10.01,
+  "simulatedSeconds": 9.4,
+  "simToWall": 0.939,
+  "ticks": 188,
+  "tickRate": 18.78,
+  "substeps": {
+    "6": 188
+  },
+  "entitiesMin": 23,
+  "entitiesMax": 23,
+  "fleet": [
+    {
+      "id": "traffic-0",
+      "kind": "waymo-cascadia"
+    },
+    {
+      "id": "traffic-1",
+      "kind": "cruise-bolt"
+    },
+    {
+      "id": "traffic-2",
+      "kind": "zoox-highlander"
+    },
+    {
+      "id": "traffic-3",
+      "kind": "model-s"
+    },
+    {
+      "id": "traffic-4",
+      "kind": "model-y-l"
+    },
+    {
+      "id": "traffic-5",
+      "kind": "tesla-semi"
+    },
+    {
+      "id": "traffic-6",
+      "kind": "waymo-lexus"
+    },
+    {
+      "id": "traffic-7",
+      "kind": "waymo-ipace"
+    },
+    {
+      "id": "parked-0",
+      "kind": "model-y-l"
+    },
+    {
+      "id": "parked-1",
+      "kind": "tesla-semi"
+    },
+    {
+      "id": "parked-2",
+      "kind": "waymo-lexus"
+    },
+    {
+      "id": "parked-3",
+      "kind": "waymo-ipace"
+    },
+    {
+      "id": "parked-4",
+      "kind": "waymo-cascadia"
+    },
+    {
+      "id": "parked-5",
+      "kind": "cruise-bolt"
+    },
+    {
+      "id": "parked-6",
+      "kind": "zoox-highlander"
+    },
+    {
+      "id": "parked-7",
+      "kind": "model-s"
+    }
+  ],
+  "driverSpeedMin": 56,
+  "driverSpeedMax": 56,
+  "maxOtherSpeed": 27.82,
+  "ticksWithOtherAbove50": 0,
+  "elapsedCallbackWall": {
+    "all": {
+      "count": 188,
+      "p50Ms": 1,
+      "p95Ms": 2,
+      "maxMs": 48
+    },
+    "simulationOnly": {
+      "count": 94,
+      "p50Ms": 1,
+      "p95Ms": 2,
+      "maxMs": 7
+    },
+    "snapshot": {
+      "count": 94,
+      "p50Ms": 1,
+      "p95Ms": 3,
+      "maxMs": 48
+    }
+  },
+  "finalObserved": {
+    "x": -300,
+    "z": 2137.85,
+    "speed": 56,
+    "support": "ground"
+  },
+  "appliedSeq": 233,
+  "inputRejections": 0,
+  "workerdProcessCpu": {
+    "pid": 72498,
+    "seconds": 0.42,
+    "observationWallSeconds": 10.309
+  },
+  "host": {
+    "logicalCpus": 18,
+    "loadBefore": [
+      10.169921875,
+      12.2529296875,
+      16.7138671875
+    ],
+    "loadAfter": [
+      10.05078125,
+      12.1611328125,
+      16.62890625
+    ]
+  },
+  "note": "Local fixture, one driver and normal ambient entities. Initial pose and speed are staged; later motion, input scheduling, substeps and snapshots are production logic. Callback numbers are integer-ms local elapsed wall time, not CPU; instrumentation and contention affect them. workerd process CPU, when supplied, covers the entire local process and slightly wider interval, not just room ticks. No production, WAN, device, multiplayer-capacity or sustained claim."
+}

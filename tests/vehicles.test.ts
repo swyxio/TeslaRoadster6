@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Mesh,Box3 } from 'three';
-import {createVehicle,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
+import { Mesh,InstancedMesh,Box3,Object3D } from 'three';
+import {createVehicle,setVehicleDetail,addRocketKit,setRocketKit,setThrusterEffects} from '../src/vehicles';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {THRUSTER_REAR,THRUSTER_SIDE_LEFT} from '../shared/game';
 test('fleet meshes retain scale, bounded complexity and independent articulated transforms',()=>{
  for(const id of VEHICLE_IDS){
   const first=createVehicle(id),second=createVehicle(id),spec=VEHICLES[id];let triangles=0;
-  first.traverse(o=>{if(o instanceof Mesh){triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;for(const v of o.geometry.attributes.position.array)assert.ok(Number.isFinite(v));}});
+  first.traverse(o=>{if(o instanceof Mesh){triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o instanceof InstancedMesh?o.count:1);for(const v of o.geometry.attributes.position.array)assert.ok(Number.isFinite(v));}});
   assert.ok(triangles<12000,`${id}: ${triangles}`);
   const jets=first.getObjectByName('jets')!;first.remove(jets);
   const bounds=new Box3().setFromObject(first);first.add(jets);
@@ -51,4 +51,32 @@ test('Rocket has ten nozzles and independently controlled vapor on each clone',(
  assert.equal(first.getObjectByName('plume_down_l_f')!.visible,false);
  assert.equal(second.getObjectByName('jets')!.visible,false);
  setThrusterEffects(first,0,2);assert.equal(first.getObjectByName('jets')!.visible,false);
+});
+
+test('distant fleet preserves silhouettes, bounds geometry and restores independent upgrades',()=>{
+ for(const id of VEHICLE_IDS){
+  const car=createVehicle(id),other=createVehicle(id);
+  const warning=new Object3D();warning.name='traffic-hazard';car.add(warning);
+  setThrusterEffects(car,THRUSTER_REAR,1,true);
+  assert.equal(setVehicleDetail(car,130**2),false,id);
+  const far=car.getObjectByName('vehicle-distant') as Mesh;
+  assert.ok(far instanceof Mesh);
+  assert.ok((far.geometry.index?.count??far.geometry.attributes.position.count)/3<4000,id);
+  assert.equal(car.getObjectByName('vehicle-detail'),undefined,'inactive detail is outside the scene traversal');
+  let nodes=0;car.traverse(()=>nodes++);assert.equal(nodes,3,'only root, distant mesh and warning need transform updates');
+  assert.equal(warning.parent,car,'incident warning survives detail changes');
+  assert.equal(other.getObjectByName('vehicle-distant'),undefined);
+  assert.equal(setVehicleDetail(car,110**2),false,'hysteresis retains distant detail');
+  setRocketKit(car,id,true);setRocketKit(car,id,true);setRocketKit(car,id,false);
+  setThrusterEffects(car,0,2,true);
+  assert.equal(setVehicleDetail(car,99**2),true);
+  const near=car.getObjectByName('vehicle-detail')!;
+  assert.equal(near.children.filter(child=>child.name==='rocket-kit').length,1,'hidden updates do not duplicate hardware');
+  assert.equal(car.getObjectByName('rocket-kit')!.visible,false);
+  assert.equal(warning.parent,car);
+  assert.equal(far.parent,null);assert.equal(car.getObjectByName('jets')!.visible,false);
+  setThrusterEffects(car,THRUSTER_REAR,3,true);assert.equal(car.getObjectByName('jets')!.visible,true);
+  assert.equal(setVehicleDetail(car,120**2),true,'hysteresis retains near detail');
+  assert.equal(setVehicleDetail(car,2000**2,true),true,'controlled and police detail is retained');
+ }
 });

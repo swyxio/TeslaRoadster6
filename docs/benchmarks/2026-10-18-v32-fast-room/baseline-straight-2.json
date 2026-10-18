@@ -1,0 +1,278 @@
+{
+  "version": 32,
+  "players": 1,
+  "mode": "straight",
+  "staged": "Roadster x=-300 z=1500, ground, speed 56 m/s, heading +z; full throttle after join",
+  "inputSchedule": "20 Hz full throttle, steer 0",
+  "fixtureWallSeconds": 10.007,
+  "simulatedSeconds": 9.05,
+  "simToWall": 0.904,
+  "ticks": 181,
+  "tickRate": 18.09,
+  "substeps": {
+    "6": 181
+  },
+  "entitiesMin": 68,
+  "entitiesMax": 68,
+  "fleet": [
+    {
+      "id": "traffic-0",
+      "kind": "roadster-original"
+    },
+    {
+      "id": "traffic-1",
+      "kind": "roadster"
+    },
+    {
+      "id": "traffic-2",
+      "kind": "model-s"
+    },
+    {
+      "id": "traffic-3",
+      "kind": "model-3"
+    },
+    {
+      "id": "traffic-4",
+      "kind": "model-x"
+    },
+    {
+      "id": "traffic-5",
+      "kind": "model-y"
+    },
+    {
+      "id": "traffic-6",
+      "kind": "model-y-l"
+    },
+    {
+      "id": "traffic-7",
+      "kind": "cybertruck"
+    },
+    {
+      "id": "traffic-8",
+      "kind": "cybercab"
+    },
+    {
+      "id": "traffic-9",
+      "kind": "tesla-semi"
+    },
+    {
+      "id": "traffic-10",
+      "kind": "robovan"
+    },
+    {
+      "id": "traffic-11",
+      "kind": "waymo-prius"
+    },
+    {
+      "id": "traffic-12",
+      "kind": "waymo-lexus"
+    },
+    {
+      "id": "traffic-13",
+      "kind": "waymo-firefly"
+    },
+    {
+      "id": "traffic-14",
+      "kind": "waymo-pacifica"
+    },
+    {
+      "id": "traffic-15",
+      "kind": "waymo-ipace"
+    },
+    {
+      "id": "traffic-16",
+      "kind": "waymo-ojai"
+    },
+    {
+      "id": "traffic-17",
+      "kind": "waymo-ioniq5"
+    },
+    {
+      "id": "traffic-18",
+      "kind": "waymo-peterbilt"
+    },
+    {
+      "id": "traffic-19",
+      "kind": "waymo-cascadia"
+    },
+    {
+      "id": "traffic-20",
+      "kind": "cruise-rp1"
+    },
+    {
+      "id": "traffic-21",
+      "kind": "cruise-leaf"
+    },
+    {
+      "id": "traffic-22",
+      "kind": "cruise-bolt"
+    },
+    {
+      "id": "traffic-23",
+      "kind": "cruise-origin"
+    },
+    {
+      "id": "traffic-24",
+      "kind": "zoox"
+    },
+    {
+      "id": "traffic-25",
+      "kind": "zoox-highlander"
+    },
+    {
+      "id": "parked-0",
+      "kind": "roadster-original"
+    },
+    {
+      "id": "parked-1",
+      "kind": "roadster"
+    },
+    {
+      "id": "parked-2",
+      "kind": "model-s"
+    },
+    {
+      "id": "parked-3",
+      "kind": "model-3"
+    },
+    {
+      "id": "parked-4",
+      "kind": "model-x"
+    },
+    {
+      "id": "parked-5",
+      "kind": "model-y"
+    },
+    {
+      "id": "parked-6",
+      "kind": "model-y-l"
+    },
+    {
+      "id": "parked-7",
+      "kind": "cybertruck"
+    },
+    {
+      "id": "parked-8",
+      "kind": "cybercab"
+    },
+    {
+      "id": "parked-9",
+      "kind": "tesla-semi"
+    },
+    {
+      "id": "parked-10",
+      "kind": "robovan"
+    },
+    {
+      "id": "parked-11",
+      "kind": "waymo-prius"
+    },
+    {
+      "id": "parked-12",
+      "kind": "waymo-lexus"
+    },
+    {
+      "id": "parked-13",
+      "kind": "waymo-firefly"
+    },
+    {
+      "id": "parked-14",
+      "kind": "waymo-pacifica"
+    },
+    {
+      "id": "parked-15",
+      "kind": "waymo-ipace"
+    },
+    {
+      "id": "parked-16",
+      "kind": "waymo-ojai"
+    },
+    {
+      "id": "parked-17",
+      "kind": "waymo-ioniq5"
+    },
+    {
+      "id": "parked-18",
+      "kind": "waymo-peterbilt"
+    },
+    {
+      "id": "parked-19",
+      "kind": "waymo-cascadia"
+    },
+    {
+      "id": "parked-20",
+      "kind": "cruise-rp1"
+    },
+    {
+      "id": "parked-21",
+      "kind": "cruise-leaf"
+    },
+    {
+      "id": "parked-22",
+      "kind": "cruise-bolt"
+    },
+    {
+      "id": "parked-23",
+      "kind": "cruise-origin"
+    },
+    {
+      "id": "parked-24",
+      "kind": "zoox"
+    },
+    {
+      "id": "parked-25",
+      "kind": "zoox-highlander"
+    }
+  ],
+  "driverSpeedMin": 56,
+  "driverSpeedMax": 56,
+  "maxOtherSpeed": 27.81,
+  "ticksWithOtherAbove50": 0,
+  "elapsedCallbackWall": {
+    "all": {
+      "count": 181,
+      "p50Ms": 3,
+      "p95Ms": 8,
+      "maxMs": 10
+    },
+    "simulationOnly": {
+      "count": 91,
+      "p50Ms": 3,
+      "p95Ms": 8,
+      "maxMs": 9
+    },
+    "snapshot": {
+      "count": 90,
+      "p50Ms": 3,
+      "p95Ms": 7,
+      "maxMs": 10
+    }
+  },
+  "finalObserved": {
+    "x": -300,
+    "z": 2109.85,
+    "speed": 56,
+    "support": "ground"
+  },
+  "appliedSeq": 233,
+  "inputRejections": 0,
+  "workerdProcessCpu": {
+    "pid": 73459,
+    "seconds": 0.93,
+    "observationWallSeconds": 10.308
+  },
+  "host": {
+    "logicalCpus": 18,
+    "loadBefore": [
+      8.86572265625,
+      11.6357421875,
+      16.25634765625
+    ],
+    "loadAfter": [
+      8.8125,
+      11.5322265625,
+      16.1650390625
+    ]
+  },
+  "note": "Local fixture, one driver and normal ambient entities. Initial pose and speed are staged; later motion, input scheduling, substeps and snapshots are production logic. Callback numbers are integer-ms local elapsed wall time, not CPU; instrumentation and contention affect them. workerd process CPU, when supplied, covers the entire local process and slightly wider interval, not just room ticks. No production, WAN, device, multiplayer-capacity or sustained claim."
+}

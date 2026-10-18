@@ -1,4 +1,5 @@
 import type { Entity, World } from '../shared/game';
+import type { ControlSnapshot } from '../shared/tick-input';
 
 // Keep other drivers visible on the whole-Bay map; only ambient cars are local.
 // This exceeds the renderer's fog distance and includes owned/unoccupied cars.
@@ -23,16 +24,17 @@ export function snapshotFor(world: World, playerId: string): World {
 // Serialize common data and each entity once per tick, then assemble a complete
 // recipient-filtered snapshot. This avoids re-stringifying every player and car
 // for every socket while preserving the normal JSON wire shape.
-export function prepareSnapshots(world: World): (playerId: string, inputAck: number, sync?: number) => string {
+export function prepareSnapshots(world: World, tick:number, roomEpoch:string, substeps:number): (playerId: string, control:ControlSnapshot, poseRevision:number, sync?: number) => string {
   const playerEntities = new Set(world.players.map(player=>player.entityId));
   const entities = world.entities.map(entity=>({entity,json:JSON.stringify(entity)}));
   const byId = new Map(world.entities.map(entity=>[entity.id,entity]));
   const controlled = new Map(world.players.map(player=>[player.id,byId.get(player.entityId)]));
   const common = Object.entries(world).filter(([key,value])=>key!=='entities'&&value!==undefined)
     .map(([key,value])=>`${JSON.stringify(key)}:${JSON.stringify(value)}`).join(',');
-  return (playerId,inputAck,sync) => {
+  const metadata=`"tick":${tick},"roomEpoch":${JSON.stringify(roomEpoch)},"substeps":${substeps}`;
+  return (playerId,control,poseRevision,sync) => {
     const current=controlled.get(playerId);
     const selected=current?entities.filter(({entity})=>visible(entity,current,playerId,playerEntities)):entities;
-    return `{"type":"state","world":{${common},"entities":[${selected.map(item=>item.json).join(',')}]},"inputAck":${inputAck}${sync===undefined?'':`,"sync":${sync}`}}`;
+    return `{"type":"state","world":{${common},"entities":[${selected.map(item=>item.json).join(',')}]},${metadata},"poseRevision":${poseRevision},"control":${JSON.stringify(control)}${sync===undefined?'':`,"sync":${sync}`}}`;
   };
 }

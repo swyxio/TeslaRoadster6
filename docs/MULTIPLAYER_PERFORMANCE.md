@@ -11,7 +11,7 @@ Research and implementation notes, 2026-10-18 Pacific. The goal is responsive dr
 
 ## Implemented approach
 
-The combined build predicts only the local controlled car for a bounded number of input ticks and reconciles with server acknowledgements. Prediction pauses around nearby moving bodies, special surfaces, stale snapshots and gameplay actions. Other cars are smoothed with brief presentation-only extrapolation. Game outcomes remain authoritative. The snapshot serializer reuses common serialized data, but no capacity gain has been established from that change.
+The v32 candidate predicts the controlled car on a bounded tick timeline using the shared simulation and nearby collision bodies, then reconciles against authoritative tick and input state. Other cars are interpolated from snapshots; nearby vehicles may share the predicted presentation timeline when their static path is safe. Prediction holds on stale snapshots or unsafe relocations. Remote inputs remain estimates and all game outcomes remain authoritative. The snapshot serializer reuses common serialized data, but that alone does not establish playable capacity.
 
 ## Baseline and measurement
 

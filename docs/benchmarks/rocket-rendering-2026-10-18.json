@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-18 Pacific",
+  "baselineRef": "7363106",
+  "scope": "Stationary upgraded vehicles only, same fixture. Draw-call and raster comparison; shared-host timings do not establish game FPS.",
+  "baseline": {
+    "baseline": true,
+    "mode": "fleet",
+    "buildMs": 16.799999952316284,
+    "objects": 6,
+    "width": 1280,
+    "height": 720,
+    "rows": [
+      {
+        "view": "roadster",
+        "calls": 43,
+        "triangles": 11568,
+        "geometries": 18,
+        "cpuP50": 0.6000001430511475,
+        "cpuP95": 1.7000000476837158,
+        "frameP95": 9.199999999999818
+      },
+      {
+        "view": "model-3",
+        "calls": 41,
+        "triangles": 11292,
+        "geometries": 31,
+        "cpuP50": 0.40000009536743164,
+        "cpuP95": 1,
+        "frameP95": 9.199999999999818
+      },
+      {
+        "view": "cybertruck",
+        "calls": 42,
+        "triangles": 6880,
+        "geometries": 43,
+        "cpuP50": 0.5,
+        "cpuP95": 1.0999999046325684,
+        "frameP95": 9.200000000000728
+      },
+      {
+        "view": "zoox",
+        "calls": 42,
+        "triangles": 7572,
+        "geometries": 57,
+        "cpuP50": 0.40000009536743164,
+        "cpuP95": 0.7000000476837158,
+        "frameP95": 9.199999999998909
+      }
+    ]
+  },
+  "candidate": {
+    "baseline": false,
+    "mode": "fleet",
+    "buildMs": 20.200000047683716,
+    "objects": 6,
+    "width": 1280,
+    "height": 720,
+    "rows": [
+      {
+        "view": "roadster",
+        "calls": 25,
+        "triangles": 11568,
+        "geometries": 18,
+        "cpuP50": 0.5,
+        "cpuP95": 0.8999998569488525,
+        "frameP95": 9.299999999999272,
+        "baselineCalls": 43,
+        "changedPixelsPct": 0,
+        "changedOver4Pct": 0,
+        "meanChannelError": 0
+      },
+      {
+        "view": "model-3",
+        "calls": 23,
+        "triangles": 11292,
+        "geometries": 31,
+        "cpuP50": 0.39999985694885254,
+        "cpuP95": 0.8000001907348633,
+        "frameP95": 9.199999999999818,
+        "baselineCalls": 41,
+        "changedPixelsPct": 0,
+        "changedOver4Pct": 0,
+        "meanChannelError": 0
+      },
+      {
+        "view": "cybertruck",
+        "calls": 24,
+        "triangles": 6880,
+        "geometries": 43,
+        "cpuP50": 0.3000001907348633,
+        "cpuP95": 0.5999999046325684,
+        "frameP95": 9.200000000000728,
+        "baselineCalls": 42,
+        "changedPixelsPct": 0.00021701388888888888,
+        "changedOver4Pct": 0,
+        "meanChannelError": 7.233796296296296e-07
+      },
+      {
+        "view": "zoox",
+        "calls": 24,
+        "triangles": 7572,
+        "geometries": 57,
+        "cpuP50": 0.39999985694885254,
+        "cpuP95": 0.6000001430511475,
+        "frameP95": 9.100000000000364,
+        "baselineCalls": 42,
+        "changedPixelsPct": 0,
+        "changedOver4Pct": 0,
+        "meanChannelError": 0
+      }
+    ]
+  }
+}

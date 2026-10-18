@@ -36,7 +36,9 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Planning:** [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md) (not yet implemented).
 
-**North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups equip any vehicle with the Roadster's fictional air moves for the rest of its session. The two parking playgrounds and 24 charging lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+**North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups equip any vehicle with the Roadster's fictional air moves for the rest of its session. Parking playgrounds, charging lots and Caltrain-area lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
+
+**Caltrain and campuses:** Explore compressed, fictional interpretations of Caltrain stops from San Francisco to San José, joined by decorative tracks, local streets and short optional sky lanes. The tracks do not simulate train service. Real company names identify original miniature campus landmarks; game placement is invented. See [the map notes](docs/MAP.md) and [campus references](docs/TECH_CAMPUSES.md).
 
 ## Run
 
@@ -59,7 +61,7 @@ pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
 pnpm exec tsx tests/mars-restart.integration.ts # isolated Worker with endgame test fixture
-pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
+pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 8
 ```
 
 The network checks need the local Worker running. See [deployment](docs/DEPLOYMENT.md) for a separate Cloudflare deployment and the native build/preview workflow; deploying is not needed to contribute.
@@ -85,7 +87,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - Stop inside a mint station ring or marked charging bay to refill air. Green diamonds repair; amber diamonds refill air. Each also gives $5 in session cash and returns after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
-- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground or charging lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
+- Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground, charging lot or Caltrain lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Opening the game joins the shared `bay` room, or the room named by an invite link. Use **Invite** to copy the current link; the menu also offers another room. A full or disconnected room offers retry or another room.
 
 ## Boundaries
@@ -94,9 +96,9 @@ This is a working foundation, not GTA-scale content or a persistent MMO. Twenty 
 
 Rooms are public-by-code. Delivery money is fictional and session-only; shooting and death/respawn are not implemented. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room simulation resets on deployment, runtime restart, or last disconnect; only each room’s shared Mars fund persists. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
-Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
+Rooms default to **eight players**, with retry or another named room when full. This conservative limit replaces 64 after local load tests showed substantial simulation slowdown at 64. The eight-player sample also narrowly missed the simulation-time target on the busy test host; it is not validated production capacity. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Raise the deployed limit only after measuring playable performance. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
 
-To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8797 64 10` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. This is a short synthetic check, not proof of player experience or sustained production capacity.
+To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8787 8 60` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage. For larger local experiments, start Wrangler with an explicit override such as `pnpm exec wrangler dev --var MAX_PLAYERS:64`. This is a synthetic check, not proof of player experience or sustained production capacity.
 
 ## Layout
 

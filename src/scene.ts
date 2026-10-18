@@ -15,7 +15,7 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
@@ -25,6 +25,8 @@ import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
+import { buildTechCampuses } from './tech-campuses';
+import { buildEastSouthAdditions } from './east-south-additions';
 import { buildBillboards } from './billboards';
 import { buildTeslandMonuments } from './tesland-monuments';
 import { buildFremontSpaceport } from './fremont-spaceport';
@@ -46,6 +48,9 @@ export class GameScene {
   private pickups = new Map<string,T.Group>();
   private pickupLabels = new Map<string,T.SpriteMaterial>();
   private ferry = new T.Group();
+  private ferryMotion = new T.Vector3();
+  private controlledUp = new T.Vector3(0,1,0);
+  private controlledUpId = '';
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
@@ -87,9 +92,8 @@ export class GameScene {
   }
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-    // Keep high-density desktop displays from multiplying the game's fill cost;
-    // HUD text remains native-resolution DOM and touch keeps its existing cap.
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer: fine)').matches?1:1.5));
+    // Bound GPU fill on desktop and touch. HUD text stays native-resolution DOM.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1));
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
@@ -110,6 +114,8 @@ export class GameScene {
     buildBay(scene);
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
+    buildTechCampuses(scene);
+    buildEastSouthAdditions(scene);
     buildTeslandMonuments(scene);
     this.spaceport=buildFremontSpaceport(scene);
     buildBillboards(scene);
@@ -218,8 +224,8 @@ export class GameScene {
   }
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
-  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false) {
-    if(snapLocal)this.cameraReady=false;
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false,remoteSampled=false) {
+    if(snapCamera)this.cameraReady=false;
     const now=performance.now();
     if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
     // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
@@ -238,7 +244,9 @@ export class GameScene {
     this.sun.intensity=.5+daylight*1.7;
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
+    this.ferryMotion.copy(this.ferry.position).multiplyScalar(-1);
     if(this.ferry.position.distanceTo(ferryTarget)>35)this.ferry.position.copy(ferryTarget);else this.ferry.position.lerp(ferryTarget,1-Math.exp(-14*dt));
+    this.ferryMotion.add(this.ferry.position);
     for(const side of ['sf','island'] as const){
       const target=world.ferry.phase===side?Math.PI/2:0,gate=this.ferryGates[side];
       gate.rotation.z+=(target-gate.rotation.z)*(1-Math.exp(-6*dt));
@@ -287,23 +295,31 @@ export class GameScene {
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       mesh.visible=!(cockpit&&e.id===controlled?.id);
-      const ahead=e.id===controlled?.id?0:elapsed;
+      const interpolatedRemote=remoteSampled&&e.id!==controlled?.id&&e.supportId!=='ferry';
+      const ahead=e.id===controlled?.id||e.supportId==='ferry'||interpolatedRemote?0:elapsed;
       const target=new T.Vector3(e.x+e.vx*ahead,e.y+e.vy*ahead,e.z+e.vz*ahead);
+      if(e.supportId==='ferry'){
+        // Passengers and the visual hull share one moving reference frame.
+        target.x+=this.ferry.position.x-world.ferry.x;target.z+=this.ferry.position.z-world.ferry.z;
+        if(mesh.userData.onFerry)mesh.position.add(this.ferryMotion);
+      }
+      mesh.userData.onFerry=e.supportId==='ferry';
       // When a preview is suspended, return directly to authority rather than
       // interpolating the car through a newly reported obstacle or shoreline.
       const returningToAuthority=e.id===controlled?.id&&(snapLocal||this.predictedEntity===e.id&&!localPredicted);
-      const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
+      const blend=e.supportId==='ferry'?alpha:returningToAuthority||interpolatedRemote||localPredicted&&e.id===controlled?.id?1:alpha;
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
-      if(e.kind!=='person'){
-        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
-      }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
       this.surfaceUp.set(0,surface?.normalY??normal?.y??1,surface?.normalZ??normal?.z??0);
       if(!surface)this.surfaceUp.x=normal?.x??0;
-      const visualYaw=e.yaw+e.yawRate*(e.id===controlled?.id?0:elapsed);
+      if(e.id===controlled?.id){
+        if(this.controlledUpId!==e.id||snapLocal)this.controlledUp.copy(this.surfaceUp);
+        else this.controlledUp.lerp(this.surfaceUp,1-Math.exp(-25*dt)).normalize();
+        this.controlledUpId=e.id;this.surfaceUp.copy(this.controlledUp);
+      }
+      const visualYaw=e.yaw+e.yawRate*(e.id===controlled?.id||interpolatedRemote?0:elapsed);
       this.surfaceBack.set(Math.sin(visualYaw),surface?Math.cos(visualYaw)*surface.tangentY:0,surface?Math.cos(visualYaw)*surface.tangentZ:Math.cos(visualYaw));
       this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
@@ -315,7 +331,7 @@ export class GameScene {
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-      if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+
     }
     // Keep reusable meshes, but hide pickups missing from the current snapshot
     // (including the empty presentation world while joining another room).
@@ -390,7 +406,18 @@ export class GameScene {
       this.camera.lookAt(this.focus);
     }
     this.predictedEntity=localPredicted?controlled?.id:undefined;
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    this.camera.updateMatrixWorld();
+    // Choose detail against the final camera pose, including reset/cockpit cuts.
+    for(const e of world.entities){
+      const mesh=this.entities.get(e.id)!;
+      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police);
+      if(detailed&&e.kind!=='person'){
+        if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+      }
+      if(detailed&&e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
+    }
+    for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){
     let last=performance.now();

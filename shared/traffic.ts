@@ -1,6 +1,7 @@
 import type { Entity, Input, World } from './game';
 import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
+import { CALTRAIN_ACCESS_ROUTES } from './caltrain';
 import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
@@ -56,6 +57,8 @@ for(const cross of PENINSULA_CROSS_STREETS)ROUTES.push([
   {x:cross.x+cross.w/2-12,z:cross.z-3},
   {x:cross.x-cross.w/2+12,z:cross.z-3},
 ]);
+// Local two-way streets extend the same directed graph to the station lots.
+ROUTES.push(...CALTRAIN_ACCESS_ROUTES);
 
 /** A fictional disabled-car vignette; timing uses real room seconds. */
 export const TRAFFIC_INCIDENT={entityId:'ambient-seed-0',cycleSeconds:360,startSeconds:180,endSeconds:240} as const;
@@ -198,12 +201,12 @@ function routeDistancePose(routeId:number,fraction:number){
 }
 
 type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=34; // Target for unattended traffic, in addition to catalog NPCs and police.
-const AMBIENT_POOL_MAX=68; // Also bounds taken and abandoned optional cars.
+const AMBIENT_MAX=4; // Alongside eight city cars and four police.
+const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
 
-function desiredAmbient(time:number):number{return Math.round(5+29*trafficDemand(time).intensity);}
+function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
 function observers(world:World):Entity[]{
   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
 }
@@ -228,7 +231,7 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
   return false;
 }
 
-/** Called after the permanent 26 NPCs and parked fleet have been created. */
+/** Called after the small city and parked cohorts have been created. */
 export function seedHighwayTraffic(world:World,make:EntityFactory):void {
   const target=desiredAmbient(world.time);
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
