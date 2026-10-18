@@ -1,6 +1,6 @@
 # The Vault: a luxury showroom
 
-**Candidate implementation · 2026-10-18.** The Vault is a fictional independent showroom near Stanford with six cars and motorcycles priced as long-term goals. The candidate branch includes the showroom, model registry, purchase and collection interface, and achievement definitions. The persistent wallet and transaction flow remain in progress; visual, game-world and performance verification are pending.
+**Candidate implementation · 2026-10-18.** The Vault is an independent showroom near Stanford with six cars and motorcycles priced as long-term goals. The candidate branch includes the showroom, model registry, persistent wallet, purchase and collection flow, and achievement definitions. Visual, game-world, recovery and performance verification are pending.
 
 The original low-poly models are integrated through `src/luxury-models.ts` and `src/vehicles.ts`. Motorcycles have separate front and rear wheels and a rider, with visual steering, lean and cockpit positioning. The showroom uses an on-demand model preview. [PERSISTENCE_ISOLATION.md](PERSISTENCE_ISOLATION.md) describes the wallet design.
 
@@ -8,13 +8,13 @@ The original low-poly models are integrated through `src/luxury-models.ts` and `
 
 **The Vault · Palo Alto** replaces a generated midrise near Stanford and the Stanford Shopping Center charger. `shared/luxury.ts` defines a 24 × 22 × 9 m building centered at `x=-828.56, z=4003.44`, and a forecourt centered at `x=-829, z=4030` with a 10 m radius. `shared/map.ts` uses that footprint for the collision building; `src/bay-world.ts` renders it and its gold ring. The location is a fictional independent venue.
 
-To purchase, the player stops on the marked forecourt and opens the Vault with the shop control. The proposed authoritative flow checks location and wallet before completing a transaction; a remote workshop subscription does not permit purchases elsewhere. The dialog shows model previews, prices and the projected cash and level after payment. After purchase, the owner can request collection at the Vault or at a physical workshop while stopped in a car. An OTA subscription alone does not provide remote collection. The complete wallet, location and recovery flows still need verification.
+To purchase, the player stops on the marked forecourt and opens the Vault with the shop control. The candidate's authoritative flow checks location and wallet before completing a transaction; a remote workshop subscription does not permit purchases elsewhere. The dialog shows model previews, prices and the projected cash and level after payment. After purchase, the owner can request collection at the Vault or at a physical workshop while stopped. An OTA subscription alone does not provide remote collection. The complete wallet, location and recovery flows still need verification.
 
 Validate the building and driveway against Caltrain tracks and platforms, workshops, pickups, landmark access and authoritative surface heights. Check that cars and bikes can approach, park and leave without obstructing the street. [MAP.md](MAP.md) owns the map and collision rules.
 
 ## The collection
 
-These candidate prices use the proposed economy's $1m starter home as a reference. They are in-game prices, not real-market quotations. Performance descriptions are arcade design targets to tune and measure.
+These candidate prices use the proposed economy's $1m starter home as a reference. Performance descriptions are arcade design targets to tune and measure.
 
 | Vehicle / registry ID | Price | Driving character | Visual signature |
 | --- | ---: | --- | --- |
@@ -29,7 +29,7 @@ All six together cost $30m before achievement awards. They should feel different
 
 As a rough upper-rate comparison, a $26k delivery every eight minutes plus five cabs running at 75% utilization would gross about $251,250 per active hour before awards, events or operating costs. At that steady rate, $30m is about 119 active hours. Buying vehicles can lower the driver's level and job tier, and actual traffic, travel, cab uptime and choices change the result. Add this purchase path to the existing five-minute simulations before treating the prices as balanced.
 
-The six special IDs are outside `VEHICLE_IDS`, the 26-model ambient roster. Do not seed them into parked cars, NPC traffic, highway traffic or free fleet selection. Their intended acquisition is a Vault purchase; an owned model can then be collected at the Vault or a physical workshop, including after a level drop. Persistent recovery is being implemented and must be verified through reconnects and room changes. Home garages and player resale remain future design work.
+The six special IDs are outside `VEHICLE_IDS`, the 26-model ambient roster. Do not seed them into parked cars, NPC traffic, highway traffic or free fleet selection. Their intended acquisition is a Vault purchase; an owned model can then be collected at the Vault or a physical workshop, including after a level drop. Persistent recovery must be verified through reconnects and room changes. Home garages and player resale remain future design work.
 
 ## Awards and level changes
 
@@ -64,6 +64,6 @@ The integrated bikes use two wheel groups, a rider and a driver seat. The render
 
 ## Remaining verification
 
-The persistent wallet, recovery and ownership transaction are in progress. Verify debit, ownership and one-off awards under repeated requests, lost replies, slow storage, reconnects and room changes; check another player's takeover attempt and collection without owning a home. A slow profile must not block room input, physics or snapshots.
+Verify the candidate's debit, ownership and one-off awards under repeated requests, lost replies, slow storage, reconnects and room changes; check another player's takeover attempt and collection without owning a home. A slow profile must not block room input, physics or snapshots.
 
 Render and drive all six models in the actual game on desktop and touch. Inspect the showroom approach, model silhouettes, rider placement, steering, lean, landing, collisions and workshop retrieval. Measure upgraded and Rocket speeds, crowded-room input latency and delivery earning rates before treating the tuning or prices as balanced. Record observations in [VERIFICATION.md](VERIFICATION.md).
