@@ -6,6 +6,32 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A better workshop',
+    intro: 'Give your ride some attention in a new garage.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'See your car and balance while you browse upgrades, paint, decals and the remote shop.',
+        'Find flight, driving and self-driving upgrades in their own groups. The shop explains when an item needs cash or another upgrade.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.27-alpha',
+    label: '0.0.27 Alpha',
+    date: '2026-10-18',
+    title: 'Build Starship together',
+    intro: 'Watch the Fremont launch site grow as Tesland earns.',
+    sections: [
+      { title: 'A mission in the making', items: [
+        'The Starship rises with confirmed game-wide earnings, while workers, vehicles and rocket parts bring the construction yard to life.',
+        'Find the Fremont mission sign or open the nearby mission shortcut to learn how to board for Mars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.26-alpha',
+    label: '0.0.26 Alpha',
+    date: '2026-10-18',
     title: 'More room to drive',
     intro: 'Bring more drivers together in the Bay.',
     sections: [

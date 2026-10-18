@@ -54,8 +54,11 @@ try {
   await action({ type: 'waitFor', selector: '#hud:not(.hidden)', state: 'attached', timeoutMs: 1000 });
   await action({ type: 'recordStart' });
   await action({ type: 'keyDown', key: 'KeyW' });
+  await action({ type: 'frameStart' });
   // A human or agent may wait between requests without sending a wait action.
   await delay(1400);
+  const timing = await action({ type: 'frameStop' });
+  assert.ok(timing.result.intervalsMs.length >= 10 && !timing.result.truncated, 'Frame capture must retain browser callback intervals.');
   const sample = await action({ type: 'sample' });
   assert.ok(Number(sample.result.speed) > 0, 'Driving input must move the car.');
   await action({ type: 'keyUp', key: 'KeyW' });
@@ -89,6 +92,7 @@ try {
   const replayManifest = JSON.parse(await readFile(join(replayOutput, 'manifest.json'), 'utf8'));
   assert.equal(replayManifest.status, 'complete');
   assert.ok(replayManifest.events.some((event: { type: string; sample?: { speed?: string } }) => event.type === 'sample' && Number(event.sample?.speed) > 0), 'Replayed controls must move the car.');
+  assert.ok(replayManifest.events.some((event: { type: string; sample?: { intervalsMs?: number[] } }) => event.type === 'frameStop' && (event.sample?.intervalsMs?.length ?? 0) >= 10), 'Replay must capture animation intervals.');
 
   // Observe real DOM touch events so releasing either finger is checked
   // independently of the runner's own bookkeeping.

@@ -1,0 +1,142 @@
+{
+  "format": 1,
+  "startedAt": "2026-10-18T21:01:48.854Z",
+  "finishedAt": "2026-10-18T21:03:05.384Z",
+  "target": {
+    "revision": "00f8ffeeaefa7a184816244c26b515cf19585539",
+    "dirty": false,
+    "version": "0.0.27-alpha",
+    "protocol": 43
+  },
+  "environment": {
+    "platform": "darwin",
+    "release": "25.4.0",
+    "arch": "arm64",
+    "cpu": "Apple M5 Pro",
+    "logicalCpus": 18,
+    "loadAverageBefore": [
+      16.1455078125,
+      11.55810546875,
+      12.998046875
+    ],
+    "loadAverageAfter": [
+      34.7216796875,
+      17.13623046875,
+      14.92529296875
+    ],
+    "ci": false,
+    "runner": {
+      "platform": "darwin",
+      "architecture": "arm64",
+      "release": "25.4.0",
+      "cpu": "Apple M5 Pro",
+      "nodeVersion": "v22.22.2",
+      "playwrightVersion": "1.64.1",
+      "browserChannel": "chromium",
+      "gpuMode": "metal",
+      "headed": false,
+      "browserVersion": "156.0.8078.4",
+      "webgl": {
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+        "vendor": "Google Inc. (Apple)"
+      }
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720,
+      "deviceScaleFactor": 1
+    }
+  },
+  "fixture": {
+    "scenarioSha256": "4319061719d9b163462adb100a509545454d33eab0c920686fda455166b4afa2",
+    "recorderSha256": "0ecc273968bc1fc9d588dcdc85e6a717bacb9545559ed252de608a4b6deaf203",
+    "reporterSha256": "df21669ff4e2eac6e145b158531b378cffc25b16d93c1fcb184ece5b1f9fbfb9",
+    "motionBenchmarkSha256": "7dbcbcaef9232cc0b6061caaad2f40caf0840275f200116eebe6af186b1c22a2",
+    "motionAdapterSha256": "97b93e90e47e6e1c6b64d8ed1fb17f45a47d2db49ed2b59b11da33e427bcc5e7",
+    "start": {
+      "x": -300,
+      "z": -2050,
+      "yaw": 3.141592653589793
+    },
+    "captureVideo": false
+  },
+  "metrics": {
+    "browserFrameIntervalP95": {
+      "status": "available",
+      "p95Ms": 16.7,
+      "samples": 360,
+      "observedSeconds": 6
+    },
+    "modeledMotion": {
+      "steady150": {
+        "status": "available",
+        "speedRatio": {
+          "samples": 891,
+          "p05": 0.983,
+          "p50": 1,
+          "p95": 1.052
+        },
+        "maxStepM": 0.478,
+        "steeringResponseMs": {
+          "left": 8.333,
+          "right": 16.667
+        },
+        "rejectedInputs": 0
+      },
+      "bunched150": {
+        "status": "available",
+        "speedRatio": {
+          "samples": 867,
+          "p05": 0.936,
+          "p50": 0.999,
+          "p95": 1.151
+        },
+        "maxStepM": 0.5,
+        "steeringResponseMs": {
+          "left": 8.333,
+          "right": 16.667
+        },
+        "rejectedInputs": 39
+      }
+    },
+    "roomProgress": {
+      "status": "available",
+      "wallSeconds": 62.353,
+      "simulationSeconds": 57,
+      "ratio": 0.914,
+      "snapshots": 571,
+      "maxGapMs": 430
+    }
+  },
+  "route": {
+    "first": {
+      "atMs": 9222,
+      "tick": 144,
+      "poseRevision": 1,
+      "x": -300,
+      "y": 0,
+      "z": -2019.4790425000008,
+      "yaw": 3.141592653589793,
+      "speed": 31.85159999999997
+    },
+    "last": {
+      "atMs": 15152,
+      "tick": 256,
+      "poseRevision": 1,
+      "x": -326.41516428959864,
+      "y": 0.08777960769495022,
+      "z": -1727.9726107612773,
+      "yaw": 2.6904021404203786,
+      "speed": 56
+    },
+    "samples": 57,
+    "displacementM": 292.701
+  },
+  "notes": [
+    "Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.",
+    "Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.",
+    "The room observation includes a short drive followed by 54 seconds without held driving controls.",
+    "One local client and live background traffic; the server and browser share this host. Paths and contacts can diverge.",
+    "Single runs are descriptive, not a statistical regression verdict."
+  ]
+}
