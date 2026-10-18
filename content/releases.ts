@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A better workshop',
+    intro: 'Give your ride some attention in a new garage.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'See your car and balance while you browse upgrades, paint, decals and the remote shop.',
+        'Find flight, driving and self-driving upgrades in their own groups. The shop explains when an item needs cash or another upgrade.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.27-alpha',
+    label: '0.0.27 Alpha',
+    date: '2026-10-18',
     title: 'Build Starship together',
     intro: 'Watch the Fremont launch site grow as Tesland earns.',
     sections: [

@@ -5,6 +5,7 @@
 - In an isolated local workshop fixture, Chrome showed the redesigned garage at desktop, emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape. The upgrade list scrolled to its final service item; the shop closed with Escape and reopened. The 3D car preview remained within its stage in the short landscape layout.
 - The tab strip worked with keyboard arrows and emulated touch. Guest purchases of paint, a decal and an air-tank upgrade updated the car, balance and confirmation; a remote-shop subscription could be enabled and cancelled. These were test-only guest purchases, not live wallet operations. No physical device was tested.
 - All 893 tests and `pnpm build` passed before integration with subsequent main-branch releases; the build retained its existing large-chunk warning.
+- After integrating main through PR #93, all 899 tests and the 0.0.28 build passed, with the same large-chunk warning.
 
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
