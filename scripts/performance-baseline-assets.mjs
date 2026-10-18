@@ -6,8 +6,9 @@ import { brotliCompressSync, gzipSync } from 'node:zlib';
 
 const digest = (data) => createHash('sha256').update(data).digest('hex');
 function attr(tag, name) {
-  const match = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
-  return match?.[1] ?? match?.[2] ?? match?.[3];
+  for (const match of tag.matchAll(/\s+([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+    if (match[1].toLowerCase() === name) return match[2] ?? match[3] ?? match[4];
+  }
 }
 function localAsset(value) {
   const url = new URL(value, 'http://baseline.invalid/');
@@ -38,14 +39,14 @@ export function measureGraph(manifestDir, sampledDistDir) {
   const referenced = [];
   const scripts = [];
   const moduleScripts = [];
-  for (const match of html.matchAll(/<script\b[^>]*>/gi)) {
+  for (const match of html.matchAll(/<script\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi)) {
     const src = attr(match[0], 'src');
     if (!src) throw new Error('Inline script in built index.html is not accounted for.');
     scripts.push(localAsset(src));
     referenced.push(scripts.at(-1));
     if ((attr(match[0], 'type') ?? '').toLowerCase() === 'module') moduleScripts.push(scripts.at(-1));
   }
-  for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
+  for (const match of html.matchAll(/<link\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi)) {
     const rel = (attr(match[0], 'rel') ?? '').toLowerCase().split(/\s+/);
     if (rel.includes('modulepreload') || (rel.includes('preload') && (attr(match[0], 'as') ?? '').toLowerCase() === 'script')) {
       const href = attr(match[0], 'href');

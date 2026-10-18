@@ -75,8 +75,9 @@ for (let sample = 1; sample <= Number(countArg); sample++) {
   delete html.decoded;
   if (/<base\b/i.test(htmlText)) throw new Error('Served HTML contains a base element; script URLs cannot be accounted for safely.');
   const attribute = (tag, name) => {
-    const match = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
-    return match?.[1] ?? match?.[2] ?? match?.[3];
+    for (const match of tag.matchAll(/\s+([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+      if (match[1].toLowerCase() === name) return match[2] ?? match[3] ?? match[4];
+    }
   };
   const expectedUrls = new Set(graph.assets.map((asset) => new URL(`/${asset.file}`, origin).href));
   const extraHtmlRequests = [];

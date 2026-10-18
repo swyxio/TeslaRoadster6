@@ -73,6 +73,17 @@ test('rejects missing entry scripts and extra HTML script requests', () => {
   } finally { f.cleanup(); }
 });
 
+test('accounts for script and preload tags containing quoted greater-than characters', () => {
+  const f = fixture();
+  try {
+    const entry = `<script data-label=" > src='/not-an-attribute.js' " type="module" src="/assets/main.js"></script>`;
+    f.setHtml(`${entry}<link data-label='> rel="not-an-attribute"' rel="modulepreload" href="/assets/shared.js">`);
+    assert.equal(measureGraph(f.generated, f.sampled).assets.length, 3);
+    f.setHtml(`${entry}<link data-label='>' rel="preload" as="script" href="/assets/extra.js">`);
+    assert.throws(() => measureGraph(f.generated, f.sampled), /outside the static manifest graph/);
+  } finally { f.cleanup(); }
+});
+
 test('rejects a manifest build whose assets differ from the measured build', () => {
   const f = fixture();
   try {

@@ -110,8 +110,8 @@ for (const encoding of ['identity', 'gzip', 'br'] as const) {
 }
 
 test('reports injected scripts and preloads, including quoted greater-than signs', async () => {
-  const html = `${baselineHtml}<script data-note=">" src="/extra.js"></script>` +
-    `<link data-note='>' rel="preload" as="script" href="/preload.js">` +
+  const html = `${baselineHtml}<script data-note=" > src='/not-an-attribute.js' " src="/extra.js"></script>` +
+    `<link data-note='> rel="not-an-attribute"' rel="preload" as="script" href="/preload.js">` +
     `<link rel="modulepreload" href="https://thirdparty.invalid/module.js"><script>void 0</script>`;
   await withFixture(async ({ origin, probe, requests }) => {
     const result = await probe();
