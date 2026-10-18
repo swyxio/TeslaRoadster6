@@ -5,7 +5,7 @@ These entries describe separate historical builds. Check the version and scope i
 ## Persistent chat names · protocol v28 · 2026-10-18 Pacific
 
 - On the integrated v28 build, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning.
-- Local two-client Wrangler chat integration verified repeated guest and saved-driver renames, collision handling, message attribution and recovery with the same ID and code. An isolated Wrangler restart test submitted save and rename together, restarted the Worker, and recovered the same ID with the updated name. The standard two-client room integration passed on rerun after one Rocket Dome kickoff timeout. These are functional checks, not load tests.
+- Local two-client Wrangler chat integration verified repeated guest and saved-driver renames, collision handling, message attribution and recovery with the same ID and code. An isolated Wrangler restart test submitted save and rename together, restarted the Worker, and recovered the same ID with the updated name. A delayed storage-write test and a two-client chat run checked message order across renames; request IDs correlate confirmations with their requests. The standard two-client room integration passed on rerun after one Rocket Dome kickoff timeout. These are functional checks, not load tests.
 - Chrome on the local game changed the name twice in chat and once in Driver identity while retaining the same ID; after reload the saved name and ID returned. The recovery code remained hidden until requested. The chat editor was inspected in emulated 390×844 portrait and 844×390 landscape. No physical device was tested.
 
 ## Mars mission with Rocket Island · protocol v28 · 2026-10-18 Pacific

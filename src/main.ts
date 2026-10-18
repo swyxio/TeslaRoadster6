@@ -149,7 +149,7 @@ let rememberRequested=true;
 try { rememberRequested=localStorage.getItem(rememberPreferenceKey)!=='off';if(rememberRequested)rememberedCode=localStorage.getItem(storageKey)||undefined; } catch { /* Browser storage is optional. */ }
 let currentCode:string|undefined=rememberedCode;
 let nameEdited=false, identityNameDirty=false, authError=false, pendingRecovery=false, pendingSave=false, savingDriver=false, pendingName=false, renameInFlight=false, showRecoveryCode=false, pendingShowCode=false, unread=0;
-let requestedName='Driver', renameTimer=0;
+let requestedName='Driver', renameTimer=0, nextRenameId=0, activeRenameId=0;
 function identityFeedback(message:string){$('identity-feedback').textContent=message;}
 function rememberCode(code:string){
   try { localStorage.setItem(storageKey,code);rememberedCode=code;return true; }
@@ -166,7 +166,7 @@ function updateChatBadge(){
   $('chat-button').setAttribute('aria-label',unread?`Open global chat, ${unread} unread`:'Open global chat');
 }
 const chat=new GlobalChat({
-  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();if(status==='offline'){savingDriver=false;if(renameInFlight){clearTimeout(renameTimer);renameInFlight=false;chatPanel.finishRename('Connection lost. Your name will be retried.',false);}if(pendingName)identityFeedback('Chat is offline. Your name will be retried.');}},
+  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();if(status==='offline'){savingDriver=false;if(renameInFlight){activeRenameId=0;clearTimeout(renameTimer);renameInFlight=false;chatPanel.finishRename('Connection lost. Your name will be retried.',false);}if(pendingName)identityFeedback('Chat is offline. Your name will be retried.');}},
   onReady(id,name,messages){
     const desired=normalizeName(nameInput.value);
     const needsRename=nameEdited&&desired!==name;
@@ -181,18 +181,21 @@ const chat=new GlobalChat({
     if(needsRename)requestName(desired);
     else if(pendingName){pendingName=false;identityFeedback(`Now going by ${name}.`);}
   },
-  onRenamed(id,name){
-    clearTimeout(renameTimer);renameInFlight=false;const newer=nameEdited&&normalizeName(nameInput.value)!==requestedName;
-    chatPanel.setIdentity(id,name);chatPanel.finishRename('',true);session.setName(name);
+  onRenamed(id,name,requestId){
+    chatPanel.setIdentity(id,name);session.setName(name);
+    if(requestId!==activeRenameId)return;
+    activeRenameId=0;clearTimeout(renameTimer);renameInFlight=false;const newer=nameEdited&&normalizeName(nameInput.value)!==requestedName;
+    chatPanel.finishRename('',true);
     if(!newer){nameInput.value=name;nameEdited=false;if(!identityNameDirty)identityName.value=name;pendingName=false;}
     identityFeedback(name===requestedName?`Now going by ${name}.`:`That name is in use. You’re ${name}.`);refreshIdentity();
     if(newer)requestName(normalizeName(nameInput.value));
   },
   onMessage(message){chatPanel.append(message);if(!chatPanel.element.open&&message.playerId!==chat.playerId){unread++;updateChatBadge();}},
   onRecovery(code){savingDriver=false;currentCode=code;if(pendingShowCode){showRecoveryCode=true;pendingShowCode=false;}const stored=!rememberRequested||rememberCode(code);refreshIdentity();if(stored)identityFeedback('Driver saved. Keep your recovery code private if you copy it.');},
-  onError(message,code){
+  onError(message,code,requestId){
     if(code==='save_failed')savingDriver=false;
-    if(renameInFlight&&code==='rename_failed'){clearTimeout(renameTimer);renameInFlight=false;pendingName=false;chatPanel.finishRename(message,false);}
+    if(code==='rename_failed'&&requestId!==activeRenameId)return;
+    if(renameInFlight&&code==='rename_failed'){activeRenameId=0;clearTimeout(renameTimer);renameInFlight=false;pendingName=false;chatPanel.finishRename(message,false);}
     if(chat.status==='offline'){authError=true;pendingSave=false;chatPanel.setConnection('offline',message);identityFeedback(message+' Retry the code or choose a new guest.');}
     else {const detail=code==='save_failed'?`${message} Your driver may not be remembered after disconnecting.`:message;identityFeedback(detail);chatPanel.setConnection('online',detail);}
   },
@@ -220,9 +223,10 @@ function ensureChat(){
 function requestName(name:string){
   if(chat.status!=='online'||renameInFlight)return false;
   requestedName=name;pendingName=true;
-  if(!chat.rename(name)){pendingName=false;return false;}
-  renameInFlight=true;identityFeedback('Saving your name…');
-  renameTimer=window.setTimeout(()=>{if(renameInFlight){renameInFlight=false;pendingName=false;identityFeedback('Name change did not complete. Please try again.');chatPanel.finishRename('Name change did not complete. Please try again.',false);}},10_000);
+  const requestId=++nextRenameId;
+  if(!chat.rename(name,requestId)){pendingName=false;return false;}
+  activeRenameId=requestId;renameInFlight=true;identityFeedback('Saving your name…');
+  renameTimer=window.setTimeout(()=>{if(activeRenameId===requestId){activeRenameId=0;renameInFlight=false;pendingName=false;identityFeedback('Name change did not complete. Please try again.');chatPanel.finishRename('Name change did not complete. Please try again.',false);}},10_000);
   return true;
 }
 nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
@@ -270,10 +274,10 @@ $('identity-recover').addEventListener('submit',event=>{
   event.preventDefault();const code=identityEntry.value.trim();
   if(!code){identityFeedback('Paste a recovery code first.');return;}
   if(chat.status==='online'&&currentCode===code){identityFeedback('This driver is already connected.');return;}
-  clearTimeout(renameTimer);renameInFlight=false;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=true;pendingSave=false;savingDriver=false;pendingName=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
+  clearTimeout(renameTimer);activeRenameId=0;renameInFlight=false;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=true;pendingSave=false;savingDriver=false;pendingName=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
 });
 $('identity-guest').onclick=()=>{
-  clearTimeout(renameTimer);showRecoveryCode=false;pendingShowCode=false;pendingRecovery=false;pendingSave=false;savingDriver=false;pendingName=false;renameInFlight=false;authError=false;nameEdited=false;currentCode=undefined;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Starting a new driver…');chat.connect(requestedName,undefined,true);
+  clearTimeout(renameTimer);activeRenameId=0;showRecoveryCode=false;pendingShowCode=false;pendingRecovery=false;pendingSave=false;savingDriver=false;pendingName=false;renameInFlight=false;authError=false;nameEdited=false;currentCode=undefined;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Starting a new driver…');chat.connect(requestedName,undefined,true);
 };
 if(rememberedCode)ensureChat();
 

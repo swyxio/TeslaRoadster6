@@ -57,7 +57,7 @@ test('socket teardown and racing recovery retain one live owner and persistent h
       close() { this.closed++; },
     });
     const attach = (chat: any, socket: ReturnType<typeof makeSocket>) => {
-      const session = { ip: 'test', lastActivity: Date.now(), authenticating: false, saving: false, authFailures: 0, inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null };
+      const session = { ip: 'test', lastActivity: Date.now(), authenticating: false, saving: false, updates: Promise.resolve(), authFailures: 0, inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null };
       chat.sessions.set(socket, session);
       return session;
     };
@@ -144,6 +144,27 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     globalLimit.onMessage(limitedSocket, JSON.stringify({ type: 'save' }));
     assert.match(limitedSocket.sent.at(-1).message, /temporarily limited/);
     assert.equal(globalLimit.allowIdentityCreation('one-more', globalNow + 3_600_001), true);
+
+    // Hold the durable rename write so a later message arrives while the old
+    // name is still committed. The socket's order must remain observable.
+    let releaseWrite!: () => void;
+    const held = new Promise<void>(resolve => { releaseWrite = resolve; });
+    const orderedHub = new GlobalChat({ storage: { get: storage.get, put: async (key: string, value: unknown) => { await held; await storage.put(key, value); } } });
+    const sender = makeSocket(), observer = makeSocket();
+    const senderSession = attach(orderedHub, sender), observerSession = attach(orderedHub, observer);
+    await orderedHub.hello(sender, senderSession, '', code);
+    await orderedHub.hello(observer, observerSession, 'Observer');
+    orderedHub.onMessage(sender, JSON.stringify({ type: 'message', text: 'before' }));
+    orderedHub.onMessage(sender, JSON.stringify({ type: 'rename', name: 'New Name', requestId: 7 }));
+    orderedHub.onMessage(sender, JSON.stringify({ type: 'message', text: 'after' }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.ok(observer.sent.some(event => event.type === 'message' && event.message.text === 'before'));
+    assert.ok(!observer.sent.some(event => event.type === 'message' && event.message.text === 'after'));
+    releaseWrite();
+    await senderSession.updates;
+    const orderedMessages = observer.sent.filter(event => event.type === 'message');
+    assert.deepEqual(orderedMessages.map(event => [event.message.text, event.message.name]), [['before', 'Driver One'], ['after', 'New Name']]);
+    assert.equal(sender.sent.find(event => event.type === 'renamed').requestId, 7);
   } finally {
     Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
   }

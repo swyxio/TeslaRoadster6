@@ -130,7 +130,7 @@ try {
   await until(() => first.events.some(event => event.type === 'message' && event.message?.text === marker), 'message before restart');
   send(first.socket, { type: 'save' });
   const renamed = `Again${randomUUID().slice(0, 8)}`;
-  send(first.socket, { type: 'rename', name: renamed });
+  send(first.socket, { type: 'rename', name: renamed, requestId: 1 });
   await until(() => first.events.some(event => event.type === 'recovery'), 'recovery code');
   const code = first.events.find(event => event.type === 'recovery')!.code;
   assert.ok(code);

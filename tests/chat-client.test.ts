@@ -59,9 +59,9 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     assert.deepEqual(first.packets().at(-1), { type: 'ping' });
     assert.equal(client.save(), true);
     first.receive({ type: 'recovery', code: 'private-code' });
-    assert.equal(client.rename('Sky Again'), true);
-    assert.deepEqual(first.packets().at(-1), { type: 'rename', name: 'Sky Again' });
-    first.receive({ type: 'renamed', playerId: 'id-1', name: 'Sky Again' });
+    assert.equal(client.rename('Sky Again', 1), true);
+    assert.deepEqual(first.packets().at(-1), { type: 'rename', name: 'Sky Again', requestId: 1 });
+    first.receive({ type: 'renamed', playerId: 'id-1', name: 'Sky Again', requestId: 1 });
     assert.equal(client.playerId, 'id-1');
     assert.equal(client.name, 'Sky Again');
     first.finishClose();
