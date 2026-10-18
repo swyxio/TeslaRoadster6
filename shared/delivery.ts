@@ -1,6 +1,6 @@
 import type { Entity, Input, Player, World } from './game';
 import { BUILDINGS, terrainHeight } from './map';
-import { VEHICLES } from './vehicles';
+import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
 
 // Real business identities; game positions are artistic, not surveyed locations.
@@ -91,7 +91,7 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     if (payout > 0) reward(delivery, 'delivery', payout);
     delivery.lastPayout = payout;
     delivery.completed++;
-    delivery.order = orderFor(delivery.completed, entity, entity.kind !== 'person' && VEHICLES[entity.kind].airThrusters);
+    delivery.order = orderFor(delivery.completed, entity, hasRockets(entity));
   }
 }
 

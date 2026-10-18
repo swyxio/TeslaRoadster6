@@ -18,7 +18,7 @@ The always-visible **♫** button opens Sound settings from the menu or drive. M
 | Police | Alert on pursuit; swept siren that fades with distance and pans toward the closest active patrol | Shared police target and car positions; no sound for patrols without a pursuit |
 | Citation | Descending warning | Increase in local player's authoritative ticket count |
 | Restaurant pickup / customer delivery | Different ascending chimes | Order stage and completed-delivery count, including zero-bonus pickups |
-| Repair / compressed-air pickup | Distinct chime / hiss | A nearby pickup disappearing from the shared world; attribution is approximate when drivers overlap |
+| Repair / compressed-air / rocket pickup | Distinct chime / hiss / rising rocket chime | A nearby pickup disappearing from the shared world; attribution is approximate when drivers overlap |
 | Station refill | Brief soft confirmation | Local car on ground and stopped in a station ring while refilling |
 | Achievement | Short four-note flourish | Increase in locally observed unlocked achievements |
 

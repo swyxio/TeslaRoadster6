@@ -1,5 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
+## Rocket pickups, Tesla fleet and workshops · protocol v11 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 124 tests, both TypeScript checks and the production build. The existing JavaScript chunk-size warning remains. Tests cover all 26 families collecting a rocket kit and jumping, Tesla-only selection, shop eligibility and costs, installed upgrade effects, geometry and independent retrofit plumes.
+- Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
+- Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
+- Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
+
 ## Cockpit view · protocol v10 · 2026-10-17 Pacific
 
 - After merging the road-first HUD, `pnpm run ci` passed 116 tests and the production build; local Wrangler two-client integration replicated cockpit selection, active time and switching back, alongside existing multiplayer checks. Camera pose tests cover pitch and roll; simulation tests cover complete and mixed-view runs, paused intervals, on-foot use and malformed flags. Camera claims are not anti-cheat proof.
