@@ -321,7 +321,7 @@ export class GameScene {
     if(!cockpit){
       // Rear thrust includes boost and powered flight. Keep the cockpit lens and
       // the menu stable; the chase lens returns smoothly when thrust ends.
-      const fov=chaseLens(this.camera.fov,!!controlled&&!menu&&!this.reducedMotion.matches&&!!(controlled.thrusters&THRUSTER_REAR),dt);
+      const fov=chaseLens(this.camera.fov,!!controlled&&!menu&&!!(controlled.thrusters&THRUSTER_REAR),dt,this.reducedMotion.matches);
       if(fov!==this.camera.fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
     }
     const ids=new Set(world.entities.map(e=>e.id));
@@ -467,7 +467,7 @@ export class GameScene {
       if(detailed&&e.kind!=='person'){
         setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time+elapsed,hasRockets(e));
+        setThrusterEffects(mesh,e.thrusters,world.time+elapsed,hasRockets(e),this.reducedMotion.matches);
         const spec=VEHICLES[e.kind];
         if(spec.shape==='motorcycle'){
           const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;

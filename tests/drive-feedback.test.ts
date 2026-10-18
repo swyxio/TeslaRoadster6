@@ -18,19 +18,61 @@ function setup(){
   return {world,player,car,element,feedback,audio,observe};
 }
 
-test('boost feedback requires a firing rear thruster and sounds once per activation',()=>{
+test('boost feedback follows the held input and sounds once per input edge',()=>{
   const {car,element,observe}=setup();
   const boost={...NEUTRAL,boost:true,throttle:1};
-  assert.equal(observe(boost).boostStarted,false,'holding boost without a firing thruster is not shown as boost');
+  car.thrusters=0;
+  assert.equal(observe({...NEUTRAL,boost:true}).boostStarted,false,'ground boost without throttle is unavailable');
   assert.equal(element.hidden,true);
-  car.thrusters=THRUSTER_REAR;
-  assert.equal(observe(boost).boostStarted,true);
-  assert.equal(element.textContent,'BOOST');
+  assert.equal(observe(boost).boostStarted,true,'feedback is immediate even before a thruster update');
+  assert.equal(element.textContent,'BOOST HELD');
   assert.equal(observe(boost).boostStarted,false);
+  observe(NEUTRAL,.05);
+  assert.equal(element.hidden,true,'releasing boost clears the input indicator');
+  assert.equal(observe(boost,.05).boostStarted,false,'rapid re-press is rate limited');
   observe(NEUTRAL,.25);observe(NEUTRAL,.25);
   assert.equal(observe(boost).boostStarted,true,'a later activation gets its own cue');
-  car.air=0;observe(boost);
-  assert.equal(element.hidden,true,'an empty tank cannot claim boost');
+});
+
+test('ordinary airborne thrust does not count as boost input',()=>{
+  const {car,element,observe}=setup();
+  car.supportId=null;car.thrusters=THRUSTER_REAR;
+  assert.equal(observe({...NEUTRAL,throttle:1}).boostStarted,false);
+  assert.equal(element.hidden,true,'normal forward flight alone does not show the boost input');
+  assert.equal(observe({...NEUTRAL,throttle:1,boost:true}).boostStarted,true);
+  assert.equal(element.textContent,'BOOST HELD');
+  observe(NEUTRAL,.25);observe(NEUTRAL,.25);car.thrusters=0;
+  assert.equal(observe({...NEUTRAL,boost:true}).boostStarted,true,'airborne boost can be requested without forward throttle');
+});
+
+test('boost input survives a partial last tick, but clears when air and plume are gone',()=>{
+  const {car,element,observe}=setup();
+  const boost={...NEUTRAL,boost:true};
+  car.supportId=null;
+  car.air=.001;car.thrusters=THRUSTER_REAR;
+  assert.equal(observe(boost).boostStarted,true);
+  car.air=0;
+  assert.equal(observe(boost).boostStarted,false,'the same hold does not repeat its cue');
+  assert.equal(element.textContent,'BOOST HELD','a rear plume may represent a partial last boost');
+  car.thrusters=0;
+  assert.equal(observe(boost).boostStarted,false);
+  assert.equal(element.hidden,true,'empty air with no plume is unavailable');
+  observe(NEUTRAL,.25);observe(NEUTRAL,.25);
+  assert.equal(observe(boost).boostStarted,false,'an empty-tank press makes no sound');
+  car.thrusters=THRUSTER_REAR;
+  assert.equal(observe(boost).boostStarted,true,'a first observed partial last tick can still cue');
+  assert.equal(element.textContent,'BOOST HELD');
+});
+
+test('vehicles without rockets have no boost input feedback',()=>{
+  const {car,element,observe}=setup();
+  const boost={...NEUTRAL,boost:true,throttle:1};
+  car.kind='model-3';car.upgrades.rocket=false;car.thrusters=THRUSTER_REAR;
+  assert.equal(observe(boost).boostStarted,false);
+  assert.equal(element.hidden,true);
+  car.upgrades.rocket=true;car.thrusters=0;
+  assert.equal(observe(boost).boostStarted,true,'adding rockets makes the held input available');
+  assert.equal(element.textContent,'BOOST HELD');
 });
 
 test('liftoff and supported landing share the snapshot-derived audio events',()=>{

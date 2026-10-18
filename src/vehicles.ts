@@ -75,7 +75,7 @@ function addRocketNozzles(hardware:T.Group,jets:T.Group,spec:VehicleSpec){
 }
 
 /** Snapshot flags describe arcade effects, not the prototype's real control law. */
-export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0){
+export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capable=mask!==0,reducedMotion=false){
   // The stock Roadster always has its hardware. Other cars show it only while
   // an authoritative Rocket capability is active (including between bursts).
   const detail=vehicleDetails.get(root)?.near??root;
@@ -95,14 +95,14 @@ export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capab
     const flag=name.startsWith('plume_rear')?THRUSTER_REAR:name.startsWith('plume_down_l')?THRUSTER_DOWN_LEFT:name.startsWith('plume_down_r')?THRUSTER_DOWN_RIGHT:name==='plume_side_l'?THRUSTER_SIDE_LEFT:THRUSTER_SIDE_RIGHT;
     child.visible=!!(mask&flag);
     if(!child.visible)continue;
-    // Reuse the existing soft sprites as a short cold-gas trail. Each puff
-    // travels out from its nozzle and grows then shrinks to zero; wrapping its
-    // normalized age therefore does not pop. No particles are allocated during
-    // a burst, and the four shared-material sprites keep the existing draw count.
+    // Reuse the existing soft sprites as a short cold-gas trail. Animated puffs
+    // grow and shrink as they travel; reduced motion holds them in place.
+    // No particles are allocated during a burst.
     const length=name.startsWith('plume_rear')?2.6:name.startsWith('plume_down')?1.8:1.5;
     for(let i=0;i<child.children.length;i++){
       const cloud=child.children[i];
-      const age=((time*.8+i/child.children.length+child.position.x*.15+child.position.z*.12)%1+1)%1;
+      const age=reducedMotion?(i+.5)/child.children.length:
+        ((time*.8+i/child.children.length+child.position.x*.15+child.position.z*.12)%1+1)%1;
       cloud.position.y=.15+age*length;
       cloud.scale.setScalar((.28+.65*age)*Math.sin(Math.PI*age));
     }

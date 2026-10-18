@@ -18,6 +18,14 @@ test('chase lens eases toward thrust and recovers independently of frame rate',(
   assert.ok(chaseLens(55,true,10)<57,'a long stall cannot cause a sudden full lens kick');
 });
 
+test('reduced motion immediately restores the neutral chase lens',()=>{
+  const widened=chaseLens(55,true,.1);
+  assert.ok(widened>55);
+  assert.equal(chaseLens(widened,true,0,true),55,'preference change does not animate back');
+  assert.equal(chaseLens(55,true,.1,true),55,'thrust does not widen the lens');
+  assert.ok(chaseLens(55,true,.1,false)>55,'animation resumes when the preference is removed');
+});
+
 test('cockpit follows car position, pitch and roll instead of keeping the horizon upright',()=>{
   const rotation=new T.Quaternion().setFromEuler(new T.Euler(Math.PI/4,.7,Math.PI));
   const origin=new T.Vector3(40,12,-30),size={width:2,height:1.5,length:4,shape:'sedan' as const};
