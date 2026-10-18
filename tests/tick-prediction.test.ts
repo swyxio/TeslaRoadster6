@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, NEUTRAL } from '../shared/game';
 import { ScheduledInput } from '../shared/tick-input';
+import { terrainHeight } from '../shared/map';
 import { TickPrediction } from '../src/tick-prediction';
 
 function setup(){
@@ -54,6 +55,36 @@ test('a close peer and the local car rebase on the same 1.5x timeline',()=>{
   assert.ok(Math.abs(after.x-before.x-before.vx*.0125)<.002,'local car uses presentation time');
   assert.ok(Math.abs(afterPeer.x-beforePeer.x-beforePeer.vx*.0125)<.002,'nearby peer uses the same time');
   assert.ok(Math.abs((afterPeer.x-after.x)-(beforePeer.x-before.x))<.1,'the following gap stays nearly steady');
+});
+
+test('local and nearby supported poses follow the shared curved hill at fractional ticks',()=>{
+  const {world,car,control}=setup(),other=addPlayer(world,'q','Other');
+  const peer=world.entities.find(entity=>entity.id===other.entityId)!;
+  for(const [entity,x] of [[car,-345.5],[peer,-338.5]] as const)
+    Object.assign(entity,{x,z:150,y:terrainHeight(x,150)!,yaw:-Math.PI/2,speed:20,vx:20,vz:0,supportId:'ground'});
+  const prediction=new TickPrediction();prediction.snapshot(world,'p',100,control,0,5,0);
+  for(let frame=0;frame<=10;frame++){
+    const shown=prediction.renderWorld(frame*5,103,100,frame/10)!;
+    for(const entity of shown.entities){
+      assert.equal(entity.supportId,'ground');
+      assert.ok(Math.abs(entity.y-terrainHeight(entity.x,entity.z)!)<.001,`vehicle follows shared terrain at frame ${frame}`);
+    }
+  }
+});
+
+test('a ground correction follows the hill surface without a chord-induced cut',()=>{
+  const {world,car,control}=setup(),prediction=new TickPrediction();
+  Object.assign(car,{x:-345.5,z:150,y:terrainHeight(-345.5,150)!,speed:0,vx:0,vz:0,supportId:'ground'});
+  prediction.snapshot(world,'p',100,control,0,5,0);
+  const before=prediction.renderWorld(0,101,100,0)!.entities[0];
+  const next=structuredClone(world);next.entities[0].x=-334.5;next.entities[0].y=terrainHeight(-334.5,150)!;
+  prediction.snapshot(next,'p',102,control,0,5,50);
+  for(let frame=0;frame<=20;frame++){
+    const shown=prediction.renderWorld(50+frame*1000/120,103,102,0)!.entities[0];
+    assert.ok(Math.abs(shown.y-terrainHeight(shown.x,shown.z)!)<.001,`ground height at frame ${frame}`);
+    assert.equal(prediction.takeSnap(),false,`no unnecessary cut at frame ${frame}`);
+    if(frame===0)assert.ok(Math.abs(shown.x-before.x)<.01,'correction begins at the previous displayed pose');
+  }
 });
 
 test('confirmed relocations or entity changes cut the camera',()=>{

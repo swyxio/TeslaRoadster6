@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { addPlayer, createEmptyWorld, makeEntity } from '../shared/game';
 import { BUILDINGS, DOME_PERIMETER, OVERPASS, STUNT_RAMP, buildingRoofHeight, isSurface, rampHeight, terrainHeight } from '../shared/map';
 import { ISLAND_JUMPS, islandJumpHeight } from '../shared/island-jumps';
+import { ovalBankSurface } from '../shared/oval-bank';
 import { body, contact } from '../shared/physics';
-import { remotePathClear, RemotePresentation } from '../src/remote-presentation';
+import { presentationTransitionPathClear, projectGroundOval, projectedGroundOvalPathClear, remotePathClear, RemotePresentation } from '../src/remote-presentation';
 
 function setup(){
   const world=createEmptyWorld(),player=addPlayer(world,'local','Local');
@@ -52,7 +53,7 @@ test('large relocations, collisions, ownership and support changes do not blend 
     else if(change==='damage'){car.x=2;car.health=80;}
     else if(change==='driver'){car.x=2;car.driver='new-driver';}
     else if(change==='kind'){car.x=2;car.kind='roadster';}
-    else if(change==='support'){car.x=2;car.supportId=null;}
+    else if(change==='support'){car.x=2;car.supportId='overpass';}
     else car.x=2;
     presentation.snapshot(world,'local',change==='gap'?12:2);
     assert.equal(remote(presentation.render(world,'local',1)).x,car.x,change);
@@ -119,6 +120,199 @@ test('does not interpolate or extrapolate through sampled hilly terrain',()=>{
   presentation.reset();Object.assign(car,{x:-117,z:630,y:terrainHeight(-117,630)!,vx:30,supportId:'ground'});
   presentation.snapshot(world,'local',200);car.x=-114;car.y=terrainHeight(car.x,car.z)!;presentation.snapshot(world,'local',202);
   assert.equal(remote(presentation.render(world,'local',204)),car,'flat-velocity extrapolation cannot cut into a rising hill');
+});
+
+test('interpolates a remote car along the shared banked oval without cutting below it',()=>{
+  const {world,remote:car,presentation}=setup();
+  const from={x:-118.29336915636121,z:-1954.317076855921};
+  const to={x:-114.3096728425141,z:-1943.8520411421414};
+  Object.assign(car,from,{y:ovalBankSurface(from.x,from.z)!.height,supportId:'island-oval',vx:22,vz:52});
+  presentation.snapshot(world,'local',100);
+  Object.assign(car,to,{y:ovalBankSurface(to.x,to.z)!.height});
+  presentation.snapshot(world,'local',104);
+  for(let frame=0;frame<=24;frame++){
+    const t=frame/24,shown=remote(presentation.render(world,'local',100+4*t));
+    const x=from.x+(to.x-from.x)*t,z=from.z+(to.z-from.z)*t;
+    assert.ok(Math.abs(shown.x-x)<1e-9&&Math.abs(shown.z-z)<1e-9,`frame ${frame} follows buffered playback`);
+    assert.ok(Math.abs(shown.y-ovalBankSurface(x,z)!.height)<1e-9,`frame ${frame} follows the bank`);
+  }
+});
+
+test('straight-chord safety rejects a path beneath the bank while surface playback follows it',()=>{
+  const {remote:car}=setup();
+  const from={...car,x:-118.29336915636121,z:-1954.317076855921,supportId:'island-oval' as const};
+  const to={...from,x:-114.3096728425141,z:-1943.8520411421414};
+  from.y=ovalBankSurface(from.x,from.z)!.height;to.y=ovalBankSurface(to.x,to.z)!.height;
+  const t=.85,x=from.x+(to.x-from.x)*t,z=from.z+(to.z-from.z)*t;
+  assert.ok(ovalBankSurface(x,z)!.height-(from.y+(to.y-from.y)*t)>.1,'the straight path penetrates the shared bank');
+  assert.equal(remotePathClear(from,to),false,'a straight-chord consumer must reject it');
+  assert.equal(projectedGroundOvalPathClear(from,to),true,'a consumer projecting every displayed pose may follow the surface');
+});
+
+test('projected ground/oval paths retain shared surface and static geometry safety',()=>{
+  const {remote:car}=setup();
+  const ground={...car,x:-120.56290103569259,z:-1959.4362491630998,y:0,supportId:'ground' as const};
+  const raised={...ground,x:-118.29336915636121,z:-1954.317076855921};
+  const bank=projectGroundOval(raised)!;
+  assert.equal(bank.supportId,'island-oval');assert.equal(bank.y,ovalBankSurface(bank.x,bank.z)!.height);
+  assert.equal(projectedGroundOvalPathClear(ground,bank),true);
+  assert.equal(projectedGroundOvalPathClear(bank,ground),true);
+  assert.equal(projectedGroundOvalPathClear({...ground,y:1},bank),false,'unprojected endpoint is rejected');
+  assert.equal(projectedGroundOvalPathClear({...ground,driver:'replacement'},bank),false,'identity changes are rejected');
+  assert.equal(projectedGroundOvalPathClear({...ground,health:99},bank),false,'damage is rejected');
+  assert.equal(projectGroundOval({...ground,supportId:null}),null,'airborne poses are not projected');
+  assert.equal(projectGroundOval({...ground,x:2000,z:2000}),null,'unsupported ground is not projected');
+  const building=BUILDINGS[0],half=building.w/2;
+  const left=projectGroundOval({...ground,x:building.x-half-5,z:building.z})!;
+  const right=projectGroundOval({...ground,x:building.x+half+5,z:building.z})!;
+  assert.equal(projectedGroundOvalPathClear(left,right),false,'projection cannot cross a building');
+});
+
+test('projected ground paths follow curved shared terrain without authorizing the straight chord',()=>{
+  const {remote:car}=setup();
+  const from=projectGroundOval({...car,x:-114,z:630,supportId:'ground'})!;
+  const to=projectGroundOval({...car,x:-100,z:630,supportId:'ground'})!;
+  assert.ok(terrainHeight(-108,630)!>from.y+(to.y-from.y)*6/14,'the chord cuts through the hill');
+  assert.equal(remotePathClear(from,to),false,'a straight-chord consumer must reject the hill');
+  assert.equal(projectedGroundOvalPathClear(from,to),true,'a consumer projecting every displayed pose follows the hill');
+  for(let i=0;i<=24;i++){
+    const t=i/24,x=from.x+(to.x-from.x)*t;
+    const shown=projectGroundOval({...from,x,y:from.y+(to.y-from.y)*t})!;
+    assert.equal(shown.supportId,'ground');assert.equal(shown.y,terrainHeight(x,630));
+  }
+});
+
+test('oval playback cuts unsupported changes, relocations and paths that leave the bank',()=>{
+  const {world,remote:car,presentation}=setup();
+  const from={x:-118.29336915636121,z:-1954.317076855921};
+  const to={x:-114.3096728425141,z:-1943.8520411421414};
+  Object.assign(car,from,{y:ovalBankSurface(from.x,from.z)!.height,supportId:'island-oval',vx:1,vz:0});
+  const original=structuredClone(car);
+  presentation.snapshot(world,'local',100);
+  Object.assign(car,to,{y:ovalBankSurface(to.x,to.z)!.height});
+  presentation.snapshot(world,'local',102);
+  assert.equal(remote(presentation.render(world,'local',101)),car,'an implausible relocation cuts to authority');
+
+  presentation.reset();Object.assign(car,original);presentation.snapshot(world,'local',200);
+  car.supportId='island-cliff';car.y+=1;presentation.snapshot(world,'local',202);
+  assert.equal(remote(presentation.render(world,'local',201)),car,'an unknown support change cuts to authority');
+  const unsupported={...original,z:original.z+80};
+  assert.equal(ovalBankSurface(unsupported.x,unsupported.z),null);
+  assert.equal(remotePathClear(original,unsupported),false,'an unsupported target is not a bank path');
+  assert.equal(remotePathClear({...original,supportId:null},{...original,supportId:null,x:to.x,z:to.z,y:ovalBankSurface(to.x,to.z)!.height}),false,'airborne motion cannot cut through the bank');
+  const lowFlight={...original,x:from.x,z:from.z,y:3,pitch:.4,supportId:null};
+  assert.equal(remotePathClear(lowFlight,{...lowFlight,x:to.x,z:to.z}),false,'a low-flight path through the bank remains blocked');
+});
+
+test('airborne playback follows a clear chord above the oval but never one through it',()=>{
+  const {world,remote:car,presentation}=setup();
+  const from={x:-111.1417911876265,y:3.6964290144086602,z:-1936.5220332247443};
+  const to={x:-108.83612535327195,y:3.9554925596646986,z:-1931.080400934801};
+  Object.assign(car,from,{supportId:null,vx:23,vz:54});
+  const start=structuredClone(car);presentation.snapshot(world,'local',100);
+  Object.assign(car,to);presentation.snapshot(world,'local',102);
+  assert.equal(remotePathClear(start,car),true,'the actual airborne chord stays above the shared bank');
+  const shown=remote(presentation.render(world,'local',101));
+  assert.ok(Math.abs(shown.x-(from.x+to.x)/2)<1e-9);
+  assert.ok(Math.abs(shown.y-(from.y+to.y)/2)<1e-9);
+  assert.ok(Math.abs(shown.z-(from.z+to.z)/2)<1e-9);
+
+  const bankA={x:-118.29336915636121,z:-1954.317076855921};
+  const bankB={x:-114.3096728425141,z:-1943.8520411421414};
+  presentation.reset();Object.assign(car,bankA,{y:ovalBankSurface(bankA.x,bankA.z)!.height+.05});
+  const above=structuredClone(car);presentation.snapshot(world,'local',200);
+  Object.assign(car,bankB,{y:ovalBankSurface(bankB.x,bankB.z)!.height+.05});presentation.snapshot(world,'local',204);
+  assert.equal(remotePathClear(above,car),false,'endpoints above the bank do not make a penetrating chord safe');
+  assert.equal(remote(presentation.render(world,'local',202)),car,'penetrating flight cuts to authority');
+});
+
+test('continuous oval takeoff and landing interpolate without changing authority',()=>{
+  const {world,remote:car,presentation}=setup();
+  const x=-118.29336915636121,z=-1954.317076855921,y=ovalBankSurface(x,z)!.height;
+  for(const [fromSupport,toSupport,fromY,toY] of [['island-oval',null,y,y+1],[null,'island-oval',y+1,y]] as const){
+    presentation.reset();Object.assign(car,{x,z,y:fromY,supportId:fromSupport,vx:0,vz:0});presentation.snapshot(world,'local',100);
+    const from=structuredClone(car);
+    Object.assign(car,{y:toY,supportId:toSupport});presentation.snapshot(world,'local',102);
+    const before=structuredClone(world),shown=remote(presentation.render(world,'local',101));
+    assert.equal(presentationTransitionPathClear(from,car),true,'the verified straight transition is clear');
+    assert.notEqual(shown,car);assert.equal(shown.supportId,null);assert.ok(Math.abs(shown.y-(fromY+toY)/2)<1e-9);
+    assert.deepEqual(world,before,'visual transition leaves the authoritative state unchanged');
+  }
+  presentation.reset();Object.assign(car,{x,z,y:y+1,supportId:null,vx:0,vz:0});presentation.snapshot(world,'local',200);
+  Object.assign(car,{x:x+70,z:z+1,y:0,supportId:'ground'});presentation.snapshot(world,'local',202);
+  assert.equal(remote(presentation.render(world,'local',201)),car,'an implausible landing relocation still cuts');
+  assert.equal(presentationTransitionPathClear({...car,x,z,y:y+1,supportId:null},{...car,x,z,y:y+1,supportId:'island-oval'}),false,'a mislabeled bank endpoint is rejected');
+});
+
+test('continuous ground takeoff and landing follow the same transition path',()=>{
+  const {world,remote:car,presentation}=setup();
+  for(const [fromSupport,toSupport,fromY,toY] of [['ground',null,0,1],[null,'ground',1,0]] as const){
+    presentation.reset();Object.assign(car,{x:-120.56290103569259,z:-1959.4362491630998,y:fromY,supportId:fromSupport,vx:0,vz:0});
+    const from=structuredClone(car);presentation.snapshot(world,'local',100);
+    Object.assign(car,{y:toY,supportId:toSupport});presentation.snapshot(world,'local',102);
+    const shown=remote(presentation.render(world,'local',101));
+    assert.equal(presentationTransitionPathClear(from,car),true);
+    assert.notEqual(shown,car);assert.equal(shown.supportId,null);assert.equal(shown.y,.5);
+  }
+});
+
+test('interpolates both directions across the ground-to-oval shoulder with the sampled support',()=>{
+  const ground={x:-120.56290103569259,z:-1959.4362491630998},bank={x:-118.29336915636121,z:-1954.317076855921};
+  for(const [from,to] of [[ground,bank],[bank,ground]]){
+    const {world,remote:car,presentation}=setup();
+    const put=(point:{x:number;z:number})=>{
+      const oval=ovalBankSurface(point.x,point.z);
+      Object.assign(car,point,{y:oval?.height??terrainHeight(point.x,point.z)!,supportId:oval?'island-oval':'ground',vx:22,vz:52});
+    };
+    put(from);presentation.snapshot(world,'local',90);
+    put(to);presentation.snapshot(world,'local',92);
+    const authority=structuredClone(world);
+    for(let frame=0;frame<=24;frame++){
+      const t=frame/24,x=from.x+(to.x-from.x)*t,z=from.z+(to.z-from.z)*t;
+      const oval=ovalBankSurface(x,z),shown=remote(presentation.render(world,'local',90+2*t));
+      assert.ok(Math.abs(shown.x-x)<1e-9&&Math.abs(shown.z-z)<1e-9,`frame ${frame} follows buffered playback`);
+      assert.equal(shown.supportId,oval?'island-oval':'ground',`frame ${frame} uses the sampled support`);
+      assert.ok(Math.abs(shown.y-(oval?.height??terrainHeight(x,z)!))<1e-9,`frame ${frame} follows shared surface height`);
+    }
+    assert.deepEqual(world,authority,'visual playback does not change authority');
+  }
+});
+
+test('a plausible ground-to-oval transition continues on the bank while snapshots bunch',()=>{
+  const {world,remote:car,presentation}=setup();
+  Object.assign(car,{x:-120.56290103569259,z:-1959.4362491630998,y:0,supportId:'ground',vx:21.87084986709601,vz:51.55255492602571});
+  presentation.snapshot(world,'local',90);
+  Object.assign(car,{x:-118.29336915636121,z:-1954.317076855921,supportId:'island-oval'});
+  car.y=ovalBankSurface(car.x,car.z)!.height;presentation.snapshot(world,'local',92);
+  const mid=remote(presentation.render(world,'local',91));
+  assert.ok(mid.x> -120.56290103569259&&mid.x<car.x,'a continuous support change interpolates');
+  const before=remote(presentation.render(world,'local',94));
+  assert.notEqual(before,car,'a plausible transition can continue for the bounded extrapolation window');
+  assert.equal(before.y,ovalBankSurface(before.x,before.z)!.height);
+  assert.deepEqual(remote(presentation.render(world,'local',200)),before,'extrapolation remains capped at two ticks');
+  Object.assign(car,{x:-116.20807324746781,z:-1949.1201314980062});
+  car.y=ovalBankSurface(car.x,car.z)!.height;presentation.snapshot(world,'local',94);
+  Object.assign(car,{x:-114.3096728425141,z:-1943.8520411421414});
+  car.y=ovalBankSurface(car.x,car.z)!.height;presentation.snapshot(world,'local',96);
+  const after=remote(presentation.render(world,'local',94.17245152684815));
+  assert.ok(Math.hypot(after.x-before.x,after.y-before.y,after.z-before.z)<1,'batched frames do not create a large catch-up jump');
+  assert.equal(after.y,ovalBankSurface(after.x,after.z)!.height);
+
+  presentation.reset();Object.assign(car,{x:-200,z:-1959,y:0,supportId:'ground'});presentation.snapshot(world,'local',100);
+  Object.assign(car,{x:-118.29336915636121,z:-1954.317076855921,supportId:'island-oval'});
+  car.y=ovalBankSurface(car.x,car.z)!.height;presentation.snapshot(world,'local',102);
+  assert.equal(remote(presentation.render(world,'local',104)),car,'an implausible relocation does not extrapolate');
+});
+
+test('ground-to-oval interpolation rejects mismatched endpoints and unknown supports',()=>{
+  const {world,remote:car,presentation}=setup();
+  const ground={x:-120.56290103569259,z:-1959.4362491630998,y:0},bank={x:-118.29336915636121,z:-1954.317076855921};
+  for(const change of ['invalid-bank-height','invalid-ground-support','unknown-support'] as const){
+    presentation.reset();Object.assign(car,ground,{supportId:change==='invalid-ground-support'?'island-oval':'ground',vx:22,vz:52});presentation.snapshot(world,'local',90);
+    Object.assign(car,bank,{y:ovalBankSurface(bank.x,bank.z)!.height+(change==='invalid-bank-height'?1:0),supportId:change==='unknown-support'?'island-bank':'island-oval'});presentation.snapshot(world,'local',92);
+    assert.equal(remote(presentation.render(world,'local',91)),car,`${change} cuts to authority`);
+    assert.equal(remote(presentation.render(world,'local',94)),car,`${change} does not extrapolate`);
+  }
 });
 
 test('bounds playback lag when snapshots continue arriving',()=>{

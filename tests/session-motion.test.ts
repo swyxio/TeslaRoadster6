@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createEmptyWorld, NEUTRAL, PROTOCOL_VERSION, step, type Entity, type World } from '../shared/game';
 import { body, contact } from '../shared/physics';
 import { ScheduledInput } from '../shared/tick-input';
+import { ovalBankSurface } from '../shared/oval-bank';
 import { Session } from '../src/session';
 
 class Socket {
@@ -304,5 +305,69 @@ test('a convoy remains smooth while travelling parallel to a nearby building',()
     if(previous)assert.ok(Math.hypot(shown.peer.x-previous.x,shown.peer.y-previous.y,shown.peer.z-previous.z)<1,`peer frame ${frame}`);
     previous=shown.peer;
   }
+  session.disconnect();
+});
+
+for(const gap of [7,10])test(`a ${gap} m convoy stays on one timeline across the banked oval`,()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];
+  const speed=Math.hypot(22,52),yaw=Math.atan2(-22,-52);
+  Object.assign(local,{x:-127,z:-1974,y:0,yaw,speed,vx:22,vz:52,supportId:'ground'});
+  Object.assign(peer,{x:-127+gap*22/speed,z:-1974+gap*52/speed,y:0,yaw,speed,vx:22,vz:52,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const packet=(tick:number)=>{const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=inputs.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
+  const drive=new Map([['p',input],['q',input]]);
+  socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,drive,.05,{substeps:5});socket.message(packet(14));
+  const queue:{when:number;packet:unknown}[]=[];let previous:{local:Entity;peer:Entity}|undefined;
+  for(let frame=0;frame<=120;frame++){
+    now=frame*1000/120;if(frame&&frame%6===0)step(world,drive,.05,{substeps:5});
+    if(frame&&frame%12===0)queue.push({when:now+75,packet:packet(14+frame/6)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld());
+    assert.equal(session.localPresentationActive,true,`frame ${frame}`);
+    assert.equal(session.takePresentationSnap(),false,`local cut at frame ${frame}`);
+    for(const entity of [shown.local,shown.peer])if(entity.supportId==='island-oval'){
+      const surface=ovalBankSurface(entity.x,entity.z);
+      assert.ok(surface&&Math.abs(entity.y-surface.height)<.001,`vehicle follows bank at frame ${frame}`);
+    }
+    if(previous)assert.ok(Math.hypot(shown.peer.x-previous.peer.x,shown.peer.y-previous.peer.y,shown.peer.z-previous.peer.z)<1,`peer frame ${frame}`);
+    previous=shown;
+  }
+  assert.equal(local.health,100);assert.equal(peer.health,100);
+  session.disconnect();
+});
+
+test('a nearby car remains continuous while jumping off the banked oval',()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];peer.upgrades.rocket=true;
+  const speed=Math.hypot(22,52),yaw=Math.atan2(-22,-52),gap=7;
+  Object.assign(local,{x:-127,z:-1974,y:0,yaw,speed,vx:22,vz:52,supportId:'ground'});
+  Object.assign(peer,{x:-127+gap*22/speed,z:-1974+gap*52/speed,y:0,yaw,speed,vx:22,vz:52,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const packet=(tick:number)=>{const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=inputs.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:structuredClone(control),poseRevision:0,substeps:5};};
+  const drive=new Map([['p',input],['q',input]]);
+  socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,drive,.05,{substeps:5});socket.message(packet(14));
+  const queue:{when:number;packet:unknown}[]=[];let previous:Entity|undefined,sawFlight=false;
+  for(let frame=0;frame<=120;frame++){
+    now=frame*1000/120;
+    if(frame&&frame%6===0)step(world,new Map([['p',input],['q',{...input,jump:now>=400?1:0}]]),.05,{substeps:5});
+    if(frame&&frame%12===0)queue.push({when:now+75,packet:packet(14+frame/6)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld());
+    sawFlight||=shown.peer.supportId===null;
+    const bank=ovalBankSurface(shown.peer.x,shown.peer.z);
+    if(shown.peer.supportId===null&&bank)assert.ok(shown.peer.y>=bank.height-.001,`peer remains above bank at frame ${frame}`);
+    if(previous)assert.ok(Math.hypot(shown.peer.x-previous.x,shown.peer.y-previous.y,shown.peer.z-previous.z)<1,`peer frame ${frame}`);
+    previous=shown.peer;
+  }
+  assert.ok(sawFlight,'the peer actually jumped');assert.equal(peer.health,100);
   session.disconnect();
 });

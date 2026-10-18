@@ -8,7 +8,7 @@ import { sweepIslandJumpWall } from '../shared/island-jumps';
 import { requiredLevelAt } from '../shared/delivery';
 import { hasRockets } from '../shared/upgrades';
 import { VEHICLES } from '../shared/vehicles';
-import { remotePathClear } from './remote-presentation';
+import { presentationTransitionPathClear, projectGroundOval, projectedGroundOvalPathClear, remotePathClear } from './remote-presentation';
 import { buildingSweepBlocked } from './building-sweep';
 
 const TICK=.05;
@@ -32,10 +32,30 @@ function interpolate(a:Entity,b:Entity,alpha:number):Entity {
   };
 }
 
+// Shared physics supplies the endpoints; render each supported intermediate
+// pose on the same terrain used by the simulation.
+function sampleSupported(entity:Entity):Entity {
+  return projectGroundOval(entity)??entity;
+}
+function isGroundSupported(entity:Entity):boolean {
+  return entity.supportId==='ground'||entity.supportId==='island-oval';
+}
+function sampleBetween(a:Entity,b:Entity,alpha:number):Entity {
+  const sampled=interpolate(a,b,alpha);
+  return isGroundSupported(a)&&isGroundSupported(b)?sampleSupported(sampled):sampled;
+}
+function presentationPathClear(from:Entity,to:Entity):boolean {
+  if(isGroundSupported(from)&&isGroundSupported(to))return projectedGroundOvalPathClear(from,to);
+  if(from.supportId===null||to.supportId===null)return presentationTransitionPathClear(from,to);
+  return remotePathClear(from,to);
+}
+
 // Static safety for a render-only correction. Dynamic contacts remain
 // authoritative and do not suppress presentation.
 function correctionClear(from:Entity,to:Entity):boolean {
   if(from.id!==to.id||from.health!==to.health)return false;
+  const projected=isGroundSupported(from)&&isGroundSupported(to);
+  if(projected&&!projectedGroundOvalPathClear(from,to))return false;
   const distance=Math.hypot(from.x-to.x,from.y-to.y,from.z-to.z);
   if(distance>12)return false;
   const spec=dimensions(to.kind),radius=Math.hypot(spec.width,spec.length)/2+.5;
@@ -66,7 +86,7 @@ function correctionClear(from:Entity,to:Entity):boolean {
   for(let i=0;i<=count;i++){
     const x=from.x+(to.x-from.x)*i/count,z=from.z+(to.z-from.z)*i/count,y=from.y+(to.y-from.y)*i/count;
     const terrain=terrainHeight(x,z);
-    if(terrain!==null&&y<terrain-.001)return false;
+    if(!projected&&terrain!==null&&y<terrain-.001)return false;
     if((from.supportId==='ground'||to.supportId==='ground')&&(!isSurface(x,z)||requiredLevelAt(x,z)!==level))return false;
   }
   return true;
@@ -245,7 +265,8 @@ export class TickPrediction {
       return this.heldWorld(shown);
     }
     const alpha=Math.max(0,Math.min(1,phase??estimate-Math.floor(estimate)));
-    const goal=interpolate(this.segment.previous,this.segment.next,alpha);
+    const onGround=isGroundSupported(this.segment.previous)&&isGroundSupported(this.segment.next);
+    const goal=sampleBetween(this.segment.previous,this.segment.next,alpha);
     const presentationTick=target-1+alpha;
     // Match the clock used to interpolate the replay; bound abrupt clock
     // jumps to the clock's normal 1.5x slew and never advance a held pose.
@@ -256,8 +277,9 @@ export class TickPrediction {
       // A held pose did not travel while frozen. Extrapolating its old
       // velocity over the outage creates a large kick on reconnection.
       const dt=elapsed;
-      const expected={...this.presented,x:this.presented.x+this.presented.vx*dt,y:this.presented.y+this.presented.vy*dt,z:this.presented.z+this.presented.vz*dt,
+      const extrapolated={...this.presented,x:this.presented.x+this.presented.vx*dt,y:this.presented.y+this.presented.vy*dt,z:this.presented.z+this.presented.vz*dt,
         yaw:this.presented.yaw+this.presented.yawRate*dt,pitch:this.presented.pitch+this.presented.pitchRate*dt,roll:this.presented.roll+this.presented.rollRate*dt};
+      const expected=onGround&&isGroundSupported(extrapolated)?sampleSupported(extrapolated):extrapolated;
       // A confirmed impact changes health, but does not itself require a
       // positional cut. Static geometry still decides whether this
       // correction can be shown safely.
@@ -282,6 +304,7 @@ export class TickPrediction {
     for(const key of ['x','y','z','yaw','pitch','roll'] as const)this.offset[key]*=decay;
     let car={...goal,x:goal.x+this.offset.x,y:goal.y+this.offset.y,z:goal.z+this.offset.z,
       yaw:goal.yaw+this.offset.yaw,pitch:goal.pitch+this.offset.pitch,roll:goal.roll+this.offset.roll};
+    if(onGround)car=sampleSupported(car);
     // The path proved clear when the offset was created can become unsafe as
     // the replayed car turns or moves. Recheck the current correction and the
     // displayed frame transition before using the remaining offset.
@@ -302,24 +325,25 @@ export class TickPrediction {
         if(!actual||!a||!b||actual.supportId==='ferry'||unsafePeers.has(entity.id))continue;
         const distance=Math.min(Math.hypot(entity.x-car.x,entity.z-car.z),Math.hypot(actual.x-car.x,actual.z-car.z));
         if(distance>=35){this.peerOffsets.delete(entity.id);continue;}
-        const forecast=interpolate(a,b,alpha);
+        const forecast=sampleBetween(a,b,alpha);
         // Health can change in speculative contact; it is not geometry and
         // must not leave the displayed peer on a different time base.
-        if(!remotePathClear({...actual,health:forecast.health},forecast)||!remotePathClear({...entity,health:forecast.health},forecast)){
+        if(!presentationPathClear({...actual,health:forecast.health},forecast)||!presentationPathClear({...entity,health:forecast.health},forecast)){
           this.peerOffsets.delete(entity.id);continue;
         }
         // Fade onto the common replay timeline near the controlled vehicle.
         // Unknown peer controls may still create a temporary visual overlap.
         const amount=Math.max(0,Math.min(1,(35-distance)/15));
-        const pose=interpolate(entity,forecast,amount);
+        const pose=sampleBetween(entity,forecast,amount);
         // Peer replay is presentation only. Keep damage, fuel, ownership and
         // other gameplay state from the latest confirmed snapshot.
-        const goal={...actual,x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,pitch:pose.pitch,roll:pose.roll,steering:pose.steering};
+        const goal={...actual,x:pose.x,y:pose.y,z:pose.z,yaw:pose.yaw,pitch:pose.pitch,roll:pose.roll,steering:pose.steering,supportId:pose.supportId};
         const old=prior?.get(entity.id);
         if(this.peerRebase&&old){
           const dt=amount===1?elapsed:peerElapsed;
-          const expected={...old,x:old.x+old.vx*dt,y:old.y+old.vy*dt,z:old.z+old.vz*dt,health:goal.health};
-          if(Math.hypot(expected.x-goal.x,expected.y-goal.y,expected.z-goal.z)<12&&remotePathClear(expected,goal)){
+          const extrapolated={...old,x:old.x+old.vx*dt,y:old.y+old.vy*dt,z:old.z+old.vz*dt,health:goal.health};
+          const expected=isGroundSupported(old)?sampleSupported(extrapolated):extrapolated;
+          if(Math.hypot(expected.x-goal.x,expected.y-goal.y,expected.z-goal.z)<12&&presentationPathClear(expected,goal)){
             this.peerOffsets.set(entity.id,{x:expected.x-goal.x,y:expected.y-goal.y,z:expected.z-goal.z,
               yaw:Math.atan2(Math.sin(expected.yaw-goal.yaw),Math.cos(expected.yaw-goal.yaw)),
               pitch:Math.atan2(Math.sin(expected.pitch-goal.pitch),Math.cos(expected.pitch-goal.pitch)),
@@ -329,9 +353,10 @@ export class TickPrediction {
         const offset=this.peerOffsets.get(entity.id);
         if(offset){
           if(!this.peerRebase){const decay=Math.exp(-6*peerElapsed);for(const key of ['x','y','z','yaw','pitch','roll'] as const)offset[key]*=decay;}
-          const corrected={...goal,x:goal.x+offset.x,y:goal.y+offset.y,z:goal.z+offset.z,
+          let corrected={...goal,x:goal.x+offset.x,y:goal.y+offset.y,z:goal.z+offset.z,
             yaw:goal.yaw+offset.yaw,pitch:goal.pitch+offset.pitch,roll:goal.roll+offset.roll};
-          if(remotePathClear(goal,corrected)&&(!old||remotePathClear({...old,health:corrected.health},corrected)))result[i]=corrected;
+          if(isGroundSupported(goal))corrected=sampleSupported(corrected);
+          if(presentationPathClear(goal,corrected)&&(!old||presentationPathClear({...old,health:corrected.health},corrected)))result[i]=corrected;
           else {this.peerOffsets.delete(entity.id);result[i]=goal;}
         }else result[i]=goal;
       }
