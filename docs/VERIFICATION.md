@@ -1,6 +1,17 @@
 # Verification · 2026-10-17 Pacific
 
-## Rocket Island, cockpit and Rocket Dome · protocol v12, local checks · 2026-10-17 Pacific
+## Banked oval and review fixes · protocol v12, local checks · 2026-10-17 Pacific
+
+- `pnpm test` passed 213/213 and `pnpm build` passed; Vite reports a 739 kB main chunk (209 kB gzip) and its chunk-size warning. Regression tests include a driven full oval lap through all eight gates, shared mesh/simulation triangles, large vehicles, flat junctions and an eight-car grid. The physics are arcade handling, not a tire-grip simulation.
+- The final local Wrangler protocol-v12 two-client integration passed island/activity snapshots, dome scoring, cockpit, movement and existing room checks. It did not exercise a multiplayer ferry crossing.
+- A same-host eight-second 64-client smoke passed with at least 64 snapshots per client, a 140 ms p95 snapshot gap and 123,464-byte maximum recipient snapshot. It began at dawn without an occupied ferry or peak traffic; it is not a WAN, sustained or production test.
+- A five-second same-process synthetic workload included 64 players, six ferry passengers, four parking entrants, four racers, four dome players and four banked-oval drivers. All four remained on the oval for 100 ticks. Across 3,200 serialized snapshots, p95 simulation step was 5.85 ms, p95 batch of 64 snapshots was 21.10 ms and the largest recipient snapshot was 109,392 bytes. This is not a network, peak-traffic, mobile, sustained or production test.
+- A temporary local Chrome fixture placed a Roadster on the oval; the bank and markings rendered, and driving and steering remained supported. This was not a natural route or full browser lap. The fixture was removed.
+- Automated review identified island/dome vehicle replacement overlap, shore-side vehicles straddling a departing ferry, and water recoveries far from the island; fixes have focused regression coverage, including both docks and a full deck.
+- On the prior combined v12 build, a Chrome desktop pedestrian boarded at SF, rode the secured crossing and walked onto the island; delivery stayed paused. Car boarding and crossing were exercised in shared simulation, not end-to-end in the browser or between two clients. The resized dock sign was rechecked in Chrome.
+- Portrait touch emulation opened Actions, but repeated Drive holds did not register reliably in the automation session. No physical-device touch, complete island activity playthrough, mobile frame-rate or production performance verification was performed.
+
+## Rocket Island, cockpit and Rocket Dome · protocol v12, before banked oval · 2026-10-17 Pacific
 
 - `pnpm test` passed 204/204 and `pnpm build` passed both TypeScript checks and Vite. The main JavaScript is 734 kB (207 kB gzip); Vite retains its chunk-size warning.
 - Local Wrangler protocol-v12 two-client integration passed ferry/activity snapshots, Rocket pads, cockpit, dome entry, a shared ball impact and goal, arena exit, movement and disconnect cleanup. The first run overlapped a build-triggered worker reload and timed out; the settled rerun passed. It did not test a multiplayer ferry crossing.

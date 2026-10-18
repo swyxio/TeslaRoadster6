@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_RIGHT, type World } from '../shared/game';
 import { DOME } from '../shared/dome';
 const base = process.argv[2] ?? 'http://localhost:8787';
+// This build changes the world geometry and adds the island-oval support identity.
+assert.equal(PROTOCOL_VERSION, 13);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
@@ -23,6 +25,8 @@ function connect() {
 }
 const one = connect(), two = connect();
 try {
+  const health = await (await fetch(base + '/api/health')).json() as {version:number};
+  assert.equal(health.version, 13, 'server advertises the banked-oval protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));

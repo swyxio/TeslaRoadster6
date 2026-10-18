@@ -1,5 +1,5 @@
 import { FERRY_DOCKS, isRocketIsland } from './map';
-import { dimensions } from './physics';
+import { body, contact, dimensions } from './physics';
 import type { Entity, World } from './game';
 
 // A single, server-owned ferry. Times are simulation seconds, not wall time.
@@ -61,7 +61,11 @@ export function updateFerry(world:World,dt:number,relocate:(entity:Entity,side:F
     f.blocked=null;f.remaining=Math.max(0,f.remaining-dt);
     if(f.remaining>0)return;
     const occupants=world.entities.filter(e=>e.supportId==='ferry').sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
-    if(occupants.some(e=>!whollyOnFerry(f,e)||Math.abs(e.speed)>1||Math.hypot(e.pushX,e.pushZ)>1)){
+    // A shore-supported body may overlap the deck before its center crosses
+    // the seam. Hold departure until it clears or is fully on the ferry.
+    const deck={x:f.x,z:f.z,w:FERRY_DECK.width,d:FERRY_DECK.length,yaw:0};
+    const shoreObstruction=world.entities.some(e=>e.supportId==='ground'&&Math.abs(e.y)<.05&&contact(body(e),deck));
+    if(shoreObstruction||occupants.some(e=>!whollyOnFerry(f,e)||Math.abs(e.speed)>1||Math.hypot(e.pushX,e.pushZ)>1)){
       f.blocked='ramp';return;
     }
     if(occupants.filter(e=>e.kind!=='person').length>FERRY_DECK.vehicleCapacity){f.blocked='capacity';return;}

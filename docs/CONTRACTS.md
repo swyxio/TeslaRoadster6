@@ -6,7 +6,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 
 | Lane | Owns | May depend on | Must not change incidentally |
 |---|---|---|---|
-| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `achievements.ts`, `physics.ts`, `traffic.ts`, `ferry.ts`, `rocket.ts`, `island-stunts.ts`, `dome*.ts`, `soccer.ts`, `parking*.ts`, `race*.ts`, simulation tests | Shared map and registry | Renderer, DOM, transport |
+| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `achievements.ts`, `physics.ts`, `traffic.ts`, `ferry.ts`, `rocket.ts`, `island-stunts.ts`, `oval-bank.ts`, `dome*.ts`, `soccer.ts`, `parking*.ts`, `race*.ts`, simulation tests | Shared map and registry | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
@@ -17,11 +17,11 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island cliff, dome, ferry, roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, dome, ferry, roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided when needed for fast motion. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
-- `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt and dome geometry and `BUILDINGS`; `shared/island-stunts.ts` owns the bank and cliff geometry and contact functions. See [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a checked free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
+- `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt and dome geometry and `BUILDINGS`; `shared/island-stunts.ts` owns the separate bank and cliff geometry and contact functions, and `shared/oval-bank.ts` owns the banked oval surface. See [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a checked free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
 
 ## World schema
 
@@ -121,6 +121,8 @@ Geometry/materials in the renderer are shared static caches. Removing an entity 
 Dock signs show the current status, countdown and vehicle occupancy from snapshots. The deck has painted walking lanes and gates that open visually at the corresponding dock; these markings and gates do not provide collision geometry. A nearby player hears a synthesized horn cue on a departure or arrival phase change. These are presentation cues; the simulation owns boarding, departure and passenger safety.
 
 `shared/island-stunts.ts` defines a bank with tapered ground transitions and a separate parametric inverted cliff. Meshes and physics use the same vertices. Cliff attachment retains a local angle; Rocket-capable cars can adhere beyond vertical and ordinary cars detach or bounce. Airborne crossings use swept contacts and detachments preserve world velocity. Island and ferry support clear police pursuits and prevent detection; the current order timer pauses there while active-play time retains its normal rules. Previous tickets remain charged.
+
+`shared/oval-bank.ts` defines the speed oval's triangulated height and normals, shoulders and swept landing; banked support uses `supportId: 'island-oval'`, and the renderer follows those triangles. The race start/grid, short-course overlap and dock junction are flat and blend into the bank. The oval still uses the general arcade steering and traction model, not a realistic simulation of banking or a guarantee of high-speed grip.
 
 `shared/parking-lots.ts` defines the two registered playgrounds and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 

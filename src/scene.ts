@@ -117,10 +117,10 @@ export class GameScene {
     this.scene.add(this.ferry);
     for(const side of ['sf','island'] as const){
       const dock=FERRY_DOCKS[side],z=dock.z+(side==='sf'?15:-15);
-      box(scene,16,2,z,.35,4,.35,0x394e4e);
+      box(scene,18,2,z,.35,4,.35,0x394e4e);
       const canvas=document.createElement('canvas');canvas.width=768;canvas.height=160;
       const texture=new T.CanvasTexture(canvas);
-      const sign=new T.Sprite(new T.SpriteMaterial({map:texture,transparent:true}));sign.position.set(16,5,z);sign.scale.set(24,5,1);scene.add(sign);
+      const sign=new T.Sprite(new T.SpriteMaterial({map:texture,transparent:true}));sign.position.set(18,5,z);sign.scale.set(12,2.5,1);scene.add(sign);
       this.dockSigns.push({side,canvas,texture,text:''});
     }
     for(const lot of PARKING_LOTS){

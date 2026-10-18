@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,interact,makeEntity,NEUTRAL,removePlayer,resetPlayer,step,type World} from '../shared/game';
 import {FERRY_DOCKS,isRocketIsland,terrainHeight} from '../shared/map';
-import {FERRY_TRAVEL_SECONDS,updateFerry,whollyOnFerry} from '../shared/ferry';
+import {FERRY_DECK,FERRY_TRAVEL_SECONDS,updateFerry,whollyOnFerry} from '../shared/ferry';
+import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS} from '../shared/vehicles';
 
 function setup(){
@@ -73,6 +74,20 @@ test('blocked arrivals and unsafe boarding hold the ferry instead of overlapping
   updateFerry(world,.05,()=>true);assert.equal(world.ferry.blocked,'ramp');assert.equal(world.ferry.phase,'sf');
 });
 
+test('a shore-supported vehicle straddling either dock holds departure until it clears',()=>{
+  for(const side of ['sf','island'] as const){
+    const {world,car}=setup();
+    Object.assign(world.ferry,{phase:side,z:FERRY_DOCKS[side].deckZ,remaining:0});
+    const z=FERRY_DOCKS[side].z+(side==='sf'?2:-2);
+    Object.assign(car,{x:0,z,y:0,yaw:0,speed:0,supportId:'ground'});
+    updateFerry(world,.05,()=>true);
+    assert.equal(world.ferry.phase,side);assert.equal(world.ferry.blocked,'ramp');
+    car.z+=side==='sf'?8:-8;
+    updateFerry(world,.05,()=>true);
+    assert.equal(world.ferry.phase,side==='sf'?'to-island':'to-sf');assert.equal(world.ferry.blocked,null);
+  }
+});
+
 test('an arriving rider who exits a car on deck is relocated with the car before departure',()=>{
   const {world,player,car}=setup();
   Object.assign(world.ferry,{phase:'island',z:FERRY_DOCKS.island.deckZ,remaining:11.99,arrivals:[car.id]});
@@ -103,7 +118,37 @@ test('a full deck leaves the seventh car on shore and can still depart',()=>{
   Object.assign(car,{x:0,z:-245,y:0,yaw:0,speed:7,supportId:'ground'});
   for(let i=0;i<80;i++)advance(world,.05,{...NEUTRAL,throttle:.5});
   assert.equal(car.supportId,'ground');assert.ok(car.z>=FERRY_DOCKS.sf.z);
+  assert.equal(contact(body(car),{x:world.ferry.x,z:world.ferry.z,w:FERRY_DECK.width,d:FERRY_DECK.length,yaw:0}),null);
   world.ferry.remaining=0;advance(world,.1);assert.equal(world.ferry.phase,'to-island');assert.equal(world.ferry.passengers.length,6);
+});
+
+test('a car landing across a full ferry seam can withdraw but cannot drive aboard',()=>{
+  for(const side of ['sf','island'] as const)for(const exit of ['reverse','sideways'] as const){
+    const {world,car}=setup(),dock=FERRY_DOCKS[side],shore=side==='sf'?1:-1;
+    Object.assign(world.ferry,{phase:side,z:dock.deckZ,remaining:30});
+    for(const x of [-3.5,3.5])for(const offset of [-11,0,11]){
+      const occupant=makeEntity(`parked-${x}-${offset}`,'waymo-firefly',x,world.ferry.z+offset);
+      occupant.supportId='ferry';world.entities.push(occupant);
+    }
+    const deck={x:world.ferry.x,z:world.ferry.z,w:FERRY_DECK.width,d:FERRY_DECK.length,yaw:0};
+    Object.assign(car,{x:0,z:dock.z+shore,y:.1,vy:-5,yaw:side==='sf'?0:Math.PI,speed:0,supportId:null});
+    advance(world,.05);
+    assert.equal(car.supportId,'ground');assert.ok(contact(body(car),deck),'the landing straddles the seam');
+    world.ferry.remaining=0;advance(world,.05);
+    assert.equal(world.ferry.phase,side);assert.equal(world.ferry.blocked,'ramp');
+    const landed=car.z;
+    advance(world,.5,{...NEUTRAL,throttle:1});
+    assert.ok(shore*(car.z-landed)>=-1e-6,'driving toward the full deck is blocked');
+    assert.equal(car.supportId,'ground');assert.equal(world.ferry.phase,side);
+    if(exit==='sideways')car.yaw=-Math.PI/2;
+    advance(world,2,{...NEUTRAL,throttle:exit==='reverse'?-1:1});
+    if(exit==='reverse')assert.ok(shore*(car.z-landed)>2,'reverse moves the car back onto the pier');
+    else assert.ok(car.x>7,'the car can also leave sideways');
+    assert.equal(contact(body(car),deck),null);
+    advance(world,.05);
+    assert.equal(world.ferry.phase,side==='sf'?'to-island':'to-sf');
+    assert.equal(world.ferry.passengers.length,6);
+  }
 });
 
 test('delivery order pauses on the island and the ferry while active time continues',()=>{
