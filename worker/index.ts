@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -39,9 +39,14 @@ export class GameRoom extends DurableObject<Env> {
 
   fetch(): Response {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
-    if (this.sessions.size >= capacity) return reply('Room full. Choose another room.', 503);
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    // Browsers cannot inspect a rejected WebSocket upgrade's HTTP status.
+    if (this.sessions.size >= capacity) {
+      server.accept();
+      server.close(ROOM_FULL_CODE, 'Room full');
+      return new Response(null, { status: 101, webSocket: client });
+    }
     const id = crypto.randomUUID();
     const now = Date.now();
     server.accept();

@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Shared Bay development · protocol v21 · 2026-10-18 Pacific
+
+- Local Wrangler's two-client room integration passed, as did a separate two-seat full-room check: the third connection received close code 4001, a different room accepted a connection, and a freed seat accepted another. Focused session tests covered same-room seat retention, explicit solo and stale-socket isolation. The desktop/phone UI has not yet been playtested on this build.
+- A local two-client input check recorded 271 ms from the driver's first throttle input to more than 0.2 m of authoritative displacement observed by each client. This single observation includes acceleration and snapshot timing; it is not a browser display, WAN, or latency-percentile measurement.
+- The reproducible local load harness sends inputs and parses every snapshot from all headless clients. On the main baseline, 64 clients saw all peers with no disconnects over 10 seconds, but the room advanced only 4.9 simulated seconds, delivered 5.05 snapshots per client per second (p95 gap 283 ms), and transferred 452.83 MiB to the clients. The load-generator event-loop p95 was 24.3 ms. These are evidence of slowdown on that same host, not a safe room limit or a production-capacity measurement.
+- An experimental common-snapshot serialization approach reduced isolated construction CPU in a synthetic batch, but a later 64-client run advanced only 0.6–0.7 simulated seconds in 10.31 wall seconds, with client event-loop p95 168.3 ms and heavy concurrent system load. Different host contention prevents attributing the discrepancy to the change. The experiment was removed pending representative Worker/send-path and network measurements; there is no validated capacity improvement here.
+
 ## Main documentation integration · protocol v20 · 2026-10-18 Pacific
 
 - After integrating main's economy proposal and development-blog updates, `pnpm test` again passed 305 tests and `pnpm build` passed both typechecks and public-page generation. Vite retained its large-chunk warning. No gameplay or protocol files changed in this integration; the room and route observations below were made on the earlier v20 build.
