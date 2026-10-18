@@ -1,4 +1,17 @@
-# Verification · 2026-10-17 Pacific
+# Verification · 2026-10-18 Pacific
+
+## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
+
+- After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including requester-only shop rejection results, global chat and saved-driver recovery. An isolated Wrangler restart again preserved the saved ID and name and cleared history. These are not load tests.
+- Chrome desktop solo showed the combined game and connected chat with a chosen name. Earlier portrait and landscape layout checks and touch limitations are documented below.
+
+## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 157 tests, both typechecks and the build; Vite's existing chunk-size warning remains. Regression checks cover reused retrofit meshes, solo purchase results and validated request IDs.
+- Local Wrangler two-client integration passed with requester-only results for a rejected purchase and a second immediate request. Successful multiplayer purchases remain covered by shared simulation, not a live room transaction; this is not a load test.
+- Staging preview of commit `39b41c4` returned protocol v13, matched the locally built browser assets, and passed the same two-client integration. This is not a load test.
+- Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. Chrome 390×844 portrait touch emulation bought the kit and displayed its confirmation; 844×390 landscape showed it after scrolling the shop. The fixture is absent from the built source. No physical device was tested for this follow-up.
 
 ## Global chat with rocket shops · protocol v12 · 2026-10-17 Pacific
 
