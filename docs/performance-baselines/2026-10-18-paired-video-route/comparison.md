@@ -1,6 +1,6 @@
 ## Tesland performance observation
 
-Base: 0.0.25-alpha · 15b0a500bad0  
+Base: 0.0.25-alpha · 15b0a500bad0
 Candidate: 0.0.28-alpha · 5c1a7c61b6d1
 
 | Metric | Base | Candidate | Change |
