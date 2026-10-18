@@ -12,6 +12,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Charger signs and Oakland placement candidate · 2026-10-18 Pacific
+
+- Against the protocol-v41 baseline at `fb65d4e`, `pnpm test` passed 839 tests and `pnpm build` passed with the existing Vite large-chunk warning. Focused checks cover sign placement, station identity and lot clearances. This is local functional evidence, not a production or capacity result.
+- The Hegenberger road route currently ends about 35 m from the station. A separate charger-routing change must reach an actual refill bay; this candidate does not prove automatic refill. The changed shared station position needs coordinated protocol versioning and room integration before release. Desktop, portrait and landscape visual checks remain outstanding while the current recording has desktop focus.
+
 ## Repeatable achievement tiers · protocol v43 candidate · 2026-10-18 Pacific
 
 - On the rebased 0.0.23 candidate `2ff9d1d` atop the 0.0.22 merge `0aa7bcc`, all 876 tests, `pnpm build`, the local two-client room integration and local tick-prediction integration passed. The build retained the Vite large-chunk warning. A Cloudflare branch preview advertised protocol v43 and capacity eight; a disposable guest joined and received a wallet with 14 achievement families. Its entry JavaScript and CSS matched the local build byte-for-byte. These are functional checks, not load or capacity measurements.
