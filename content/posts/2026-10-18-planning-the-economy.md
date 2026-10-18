@@ -55,6 +55,16 @@ We want owners to find their cars on the map, follow them through the city, and 
 
 At a workshop today you can buy paint for $18 and decals for $12 or $18. The finish stays on that car for the session, and other players see your driver name above it.
 
+<figure>
+<img src="/blog/economy/workshop-current.png" alt="The current workshop shows a Roadster with mint paint and a speed stripe applied." loading="lazy">
+<figcaption>The workshop after buying mint paint and a stripe in a funded test drive.</figcaption>
+</figure>
+
+<figure>
+<img src="/blog/economy/multiplayer-finish.png" alt="A second driver sees the mint Roadster and its driver's name above it." loading="lazy">
+<figcaption>Another driver's view of that same car.</figcaption>
+</figure>
+
 In the expanded economy, there's plenty to spend on before buying a house. Paint starts at $2k, decals and lettering at $5k, wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. Early vehicle and flight kits start at $10k, $20k and $40k. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
 
 ## A place of your own

@@ -2,6 +2,13 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Research stops, car finishes and economy article · protocol v31 · 2026-10-18 Pacific
+
+- After integrating the North Bay and sky-current changes, `pnpm test` passed 467 tests and `pnpm build` passed. The existing Vite large-chunk warning remains.
+- Local two-client room and global-chat integrations passed. A separate local workshop fixture started each driver with $200 at a shop. Buying $18 mint paint and a $12 stripe left $170; both finishes appeared in the other driver's snapshot and purchase results remained private. The fixture is test-only.
+- Chrome showed the finished Roadster and its driver's name to a second driver, and the workshop screenshot in the article comes from that funded test. The workshop was inspected in desktop and emulated portrait and landscape; landscape uses the dialog's scroll. The home planner showed $875,000 and level 4 after all four upgrades. No physical mobile device was tested.
+- The university and airport rate calculations and the seven delivery-led simulation paths are design experiments. The article identifies the property, earning Cybercabs and game-wide lifetime earnings goal as planned work.
+
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
 - After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.

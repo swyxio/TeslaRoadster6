@@ -1,6 +1,20 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.13-alpha',
+    label: '0.0.13 Alpha',
+    date: '2026-10-18',
+    title: 'Research runs and custom rides',
+    intro: 'Visit the Bay’s research stops and give your car a look of its own.',
+    sections: [
+      { title: 'Make it yours', items: [
+        'Buy paint and decals at a workshop. Your finish stays on that car for the drive, and other drivers can see your name above your vehicle.',
+        'Stop at UCSF, Berkeley, Stanford and SFO for one-time cash and a matching upgrade discount. A first SFO delivery earns an extra reward.',
+        'Explore our economy design and interactive simulations in the development blog.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.12-alpha',
     label: '0.0.12 Alpha',
     date: '2026-10-18',
