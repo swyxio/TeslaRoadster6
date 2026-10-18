@@ -151,8 +151,13 @@ export class Session {
     this.remotePresentationActive=true;
     const predicted=this.prediction.renderWorld(now,this.clock.target(now),this.clock.estimate(now),this.clock.alpha(now),display,this.remote.ready);
     this.localPresentationActive=!!predicted;
-    // Local replay can pause on the ferry while other cars still use playback.
-    return predicted??display;
+    if(predicted)return predicted;
+    // Ferry passengers share the authoritative deck while shore traffic plays
+    // back normally. Other unsafe replay states must keep every car on one
+    // authoritative frame. Keep remotePresentationActive so the scene does not
+    // extrapolate those peers away from it.
+    const onFerry=this.world.entities.some(entity=>entity.driver===this.id&&entity.supportId==='ferry');
+    return onFerry?display:this.world;
   }
   takePresentationSnap():boolean {return this.prediction.takeSnap();}
   takeCameraSnap():boolean {return this.prediction.takeCameraSnap();}
