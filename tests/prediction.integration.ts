@@ -6,11 +6,12 @@ const base=process.argv[2]??'http://localhost:8787';
 const health=await fetch(base+'/api/health');assert.equal((await health.json() as {version:number}).version,PROTOCOL_VERSION);
 const socket=new WebSocket(base.replace(/^http/,'ws')+`/api/room/predict-${Date.now()}`);
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
-let id='',world:World|undefined,ack=-1,sync=0,states=0;
+let id='',world:World|undefined,ack=-1,sync=0,states=0,destinationResult:{requestId:number;ok:boolean}|undefined;
 socket.addEventListener('message',event=>{
   const message=JSON.parse(String(event.data));
   if(message.type==='welcome'){assert.equal(message.version,PROTOCOL_VERSION);id=message.id;}
   if(message.type==='state'){states++;world=message.world;ack=message.inputAck;sync=message.sync??sync;}
+  if(message.type==='destinationResult')destinationResult=message;
 });
 async function until(check:()=>boolean,label:string){
   const end=Date.now()+4000;while(Date.now()<end){if(check())return;await delay(10);}throw new Error(`Timed out: ${label}`);
@@ -35,5 +36,11 @@ try{
   const before=states;for(let token=100;token<120;token++)socket.send(JSON.stringify({type:'sync',token}));
   await until(()=>sync===119,'coalesced barriers');
   assert.ok(states-before<10,'barrier burst must not force a snapshot per request');
-  console.log('PASS: sequence ACK, batched/skipped and repeated intents, stale input rejection and coalesced post-action snapshot barrier');
+  await delay(500);
+  socket.send(JSON.stringify({type:'minigame',game:'short'}));socket.send(JSON.stringify({type:'sync',token:120}));
+  await until(()=>sync===120&&!!world?.races.rounds.some(round=>round.courseId==='short'&&round.entrants.some(entrant=>entrant.playerId===id)),'barrier follows mini-game entry');
+  socket.send(JSON.stringify({type:'destination',x:-120,z:60,requestId:42}));socket.send(JSON.stringify({type:'sync',token:121}));
+  await until(()=>sync===121&&destinationResult?.requestId===42,'barrier follows rejected action');
+  assert.equal(destinationResult!.ok,false,'action cooldown rejects the immediate destination request');
+  console.log('PASS: sequence ACK, batched/skipped and repeated intents, stale input rejection and coalesced post-action and mini-game/rejection snapshot barriers');
 }finally{socket.close();}
