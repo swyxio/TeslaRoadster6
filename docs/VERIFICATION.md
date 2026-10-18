@@ -1127,3 +1127,5 @@ The article candidate based on `82c37f1` passed `pnpm test` (848 tests) and `pnp
 The deployed Workers preview served the static MP4 with HTTP 200 to a Range request, leaving Chrome unable to seek. The article therefore uses the identical MP4 at the immutable GitHub raw URL for commit `f2a5799`; it returned HTTP 206 and the expected byte range. Headless Chrome and WebKit played it and sought to 10.5 and 20.8 seconds at desktop and 320 px. The site's MP4 remains available as a download. Merge the article branch without squashing so that the referenced commit remains reachable from main.
 
 After merging current main at `0aa7bcc` into the article branch, `pnpm test` passed 854 tests and `pnpm build` passed with the existing large-chunk warning.
+
+After also merging main at `5c3779d`, `pnpm test` passed 876 tests and `pnpm build` passed with the same warning.
