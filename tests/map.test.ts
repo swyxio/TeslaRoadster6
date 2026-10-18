@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,HIGHWAYS,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,isLand,isSurface,nearbyBuildings} from '../shared/map';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,HIGHWAYS,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,isLand,isSurface,nearbyBuildings} from '../shared/map';
 import {STATIONS} from '../shared/stations';
 import {body,contact} from '../shared/physics';
 
@@ -69,6 +69,16 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
   for(let z=AIRPORT_RUNWAY.z-AIRPORT_RUNWAY.d/2;z<=AIRPORT_RUNWAY.z+AIRPORT_RUNWAY.d/2;z+=10)assert.ok(isSurface(x,z),'runway');
  for(const island of LAKE_MERRITT.islands)assert.ok(isLand(island.x,island.z),'decorative island');
  assert.ok(!isSurface(MYSTERY_YACHT.x,MYSTERY_YACHT.z),'fictional yacht is offshore');
+});
+
+test('new building landmarks share collision identities and remain distinct from the prior landmarks',()=>{
+ assert.equal(EXTRA_LANDMARKS.length,100);
+ assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,105);
+ for(const place of EXTRA_LANDMARKS){
+  const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
+  if(place.id==='mission-peak')assert.equal(matching.length,0);
+  else {assert.equal(matching.length,1,place.id);assert.equal(matching[0].h,place.h,place.id);}
+ }
 });
 
 test('autopilot can cross the Bay and return without teleporting',()=>{

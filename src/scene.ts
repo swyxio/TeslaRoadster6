@@ -16,6 +16,9 @@ import { SHOPS } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
+import { buildNorthLandmarks } from './north-landmarks';
+import { buildSouthLandmarks } from './south-landmarks';
+import { buildBillboards } from './billboards';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -85,6 +88,9 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    buildNorthLandmarks(scene);
+    buildSouthLandmarks(scene);
+    buildBillboards(scene);
     for(const gate of Object.values(this.progressionGates))scene.add(gate);
     scene.add(this.dome.group);
     scene.add(this.skyCurrents.group);

@@ -1,8 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {makeEntity,NEUTRAL,step,type Entity,type World} from '../shared/game';
-import {BUILDINGS,HIGHWAYS,HILL,OVERPASS,isLand,overpassHeight,supportHeight,supportNormal,terrainHeight} from '../shared/map';
-import {dimensions} from '../shared/physics';
+import {BUILDINGS,HIGHWAYS,HILL,NATURAL_HILLS,OVERPASS,ROADS,isLand,overpassHeight,supportHeight,supportNormal,terrainHeight} from '../shared/map';
+import {contact,dimensions} from '../shared/physics';
+import {STATIONS} from '../shared/stations';
+import {SHOPS} from '../shared/upgrades';
+import {CUSTOMERS,RESTAURANTS} from '../shared/delivery';
 import {initialSoccer} from '../shared/soccer';
 
 const isolated=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()});
@@ -32,6 +35,40 @@ test('a car drives up and over the hill on the shared surface',()=>{
   assert.equal(car.supportId,'ground');assert.ok(Math.abs(car.y-terrainHeight(car.x,car.z)!)<1e-7);
  }
  assert.ok(car.x>HILL.maxX+5,`stopped on hill at ${car.x}`);assert.ok(highest>9);
+});
+
+test('Bay summit hills support cars and use the same sampled slope as ground physics',()=>{
+ for(const hill of NATURAL_HILLS){
+  const midZ=(hill.minZ+hill.maxZ)/2;
+  const peakX=hill.twin?hill.minX+(hill.maxX-hill.minX)*.25:(hill.minX+hill.maxX)/2;
+  assert.ok(Math.abs(terrainHeight(peakX,midZ)!-hill.height)<1e-8,hill.id);
+  for(const x of [hill.minX,hill.maxX])assert.equal(terrainHeight(x,midZ),0,hill.id);
+  const slopeX=hill.minX+(hill.maxX-hill.minX)*.18,normal=supportNormal('ground',slopeX,midZ)!,epsilon=.0001;
+  assert.ok(Math.abs((terrainHeight(slopeX+epsilon,midZ)!-terrainHeight(slopeX,midZ)!)/epsilon+normal.x/normal.y)<1e-6,hill.id);
+  const car=makeEntity('p','roadster',hill.minX-4,midZ,'p');car.yaw=-Math.PI/2;
+  const world=isolated(car);let highest=0;
+  for(let i=0;i<500&&car.x<hill.maxX+4;i++){
+   step(world,drive,.05);highest=Math.max(highest,car.y);
+   assert.equal(car.supportId,'ground',hill.id);
+   assert.ok(Math.abs(car.y-terrainHeight(car.x,car.z)!)<1e-7,hill.id);
+  }
+  assert.ok(car.x>hill.maxX+4,`${hill.id}: car stopped at ${car.x}`);
+  assert.ok(highest>hill.height*.75,`${hill.id}: car did not climb the hill`);
+ }
+});
+
+test('Bay summit hills stay on land and clear of roads, buildings and gameplay markers',()=>{
+ for(const hill of NATURAL_HILLS){
+  const area={x:(hill.minX+hill.maxX)/2,z:(hill.minZ+hill.maxZ)/2,w:hill.maxX-hill.minX,d:hill.maxZ-hill.minZ,yaw:0};
+  for(let i=0;i<=4;i++)for(let j=0;j<=4;j++){
+   assert.ok(isLand(hill.minX+area.w*i/4,hill.minZ+area.d*j/4),`${hill.id} extends off land`);
+  }
+  for(const road of ROADS)assert.ok(!contact(area,{...road,yaw:road.angle??0}),`${hill.id} overlaps a road`);
+  for(const building of BUILDINGS)assert.ok(!contact(area,{...building,yaw:0}),`${hill.id} overlaps a building`);
+  for(const marker of [...STATIONS,...SHOPS,...CUSTOMERS,...RESTAURANTS]){
+   assert.ok(marker.x<=hill.minX-10||marker.x>=hill.maxX+10||marker.z<=hill.minZ-10||marker.z>=hill.maxZ+10,`${hill.id} overlaps ${marker.id}`);
+  }
+ }
 });
 
 test('overpass is driven from either ground-level ramp and returns to ground',()=>{
