@@ -135,7 +135,7 @@ test('a patrol safely waits behind a stopped car and resumes when the road clear
   const obstacle=makeEntity('obstacle','model-3',pose.x,pose.z);
   Object.assign(obstacle,{yaw,speed:0});world.entities.push(obstacle);
   cop.police!.targetId=player.id;cop.police!.cause='speeding';cop.police!.lastSeen=0;
-  for(let i=0;i<60;i++){
+  for(let i=0;i<400;i++){
     step(world,new Map([[player.id,NEUTRAL]]),.05);
     assert.equal(contact(body(cop),body(obstacle)),null,'the patrol does not overlap the stopped car');
     assert.equal(cop.health,100);assert.equal(obstacle.health,100);

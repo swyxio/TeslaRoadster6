@@ -116,8 +116,10 @@ test('a fresh highway drive fills in traffic without stopping or visible spawns'
   let distance=0;
   for(let tick=0;tick<1400;tick++){
     const x=car.x,z=car.z;step(world,new Map(),.05);distance+=Math.hypot(car.x-x,car.z-z);
+    let active=0;
     for(const other of world.entities){
       if(!other.id.startsWith('ambient-')||other.driver)continue;
+      if(other.autopilot)active++;
       if(!known.has(other.id)){
         assert.ok(world.players.every(player=>{
           const viewer=world.entities.find(entity=>entity.id===player.entityId)!;
@@ -129,8 +131,11 @@ test('a fresh highway drive fills in traffic without stopping or visible spawns'
       const side=Math.abs(dx*Math.cos(car.yaw)-dz*Math.sin(car.yaw));
       if(ahead>0&&side<=ahead*Math.tan(35*Math.PI/180)&&Math.hypot(dx,dz)<=600)seen.add(other.id);
     }
+    assert.ok(active<=4,`the active highway fleet is bounded: ${active}`);
   }
   assert.ok(distance>1400,`the car travels ${distance} m`);
-  assert.ok(seen.size>=4,`${seen.size} cars enter the forward cone`);
+  // The game starts with two cars before morning demand rises. The drive
+  // should encounter traffic without exceeding the room's fleet budget.
+  assert.ok(seen.size>=2,`${seen.size} cars enter the forward cone`);
   assert.equal(car.health,100);
 });
