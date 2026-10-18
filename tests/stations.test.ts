@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {LEVELS} from '../shared/delivery';
 import {addPlayer,createWorld,enterMinigame,parkingAction,step} from '../shared/game';
 import {BUILDINGS,ROADS,STATION_VENUES,terrainHeight} from '../shared/map';
 import {PARKING_LOTS} from '../shared/parking-lots';
@@ -41,7 +42,7 @@ test('every station supports Park It and Cut the queue in the authoritative simu
   for(const station of STATIONS){
     const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
     const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-    player.delivery.level=3;world.entities=[car];world.pickups=[];
+    player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
     Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,yaw:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0});
     assert.equal(parkingAction(world,'p','park'),true,`${station.id}: park join`);
     const round=world.parking.rounds[0],stall=lot.stalls.find(s=>s.id===round.entrants[0].targetId)!;
@@ -60,7 +61,7 @@ test('the mini-game menu uses the current station, including its queue approach'
     const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
     for(const game of ['park','queue'] as const){
       const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-      player.delivery.level=3;world.entities=[car];world.pickups=[];
+      player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
       Object.assign(car,{x:lot.approach.x,z:lot.approach.z,y:0,supportId:'ground',autopilot:true});
       assert.equal(enterMinigame(world,'p',game),true,`${station.id}: ${game}`);
       assert.equal(world.parking.rounds[0].lotId,lot.id);
@@ -68,7 +69,7 @@ test('the mini-game menu uses the current station, including its queue approach'
       assert.equal(car.autopilot,false);
     }
     const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
-    player.delivery.level=3;world.entities=[car];world.pickups=[];
+    player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;world.entities=[car];world.pickups=[];
     Object.assign(car,{x:lot.area.x,z:lot.area.z-10,y:0,supportId:'ground'});
     assert.equal(enterMinigame(world,'p','queue'),true,`${station.id}: move to local approach`);
     assert.equal(world.parking.rounds[0].lotId,lot.id);

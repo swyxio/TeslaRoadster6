@@ -1,4 +1,4 @@
-// Protocol-v32 live control test. Run only against local Wrangler:
+// Protocol-v36 live control test. Run only against local Wrangler:
 // pnpm exec tsx tests/prediction.integration.ts http://127.0.0.1:8787
 import assert from 'node:assert/strict';
 import { RoomInputClient } from './room-input-client';
@@ -7,7 +7,7 @@ import { NEUTRAL, PROTOCOL_VERSION, type World } from '../shared/game';
 const base=new URL(process.argv[2]??'http://127.0.0.1:8787');
 assert.ok(base.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(base.hostname),'run only against local Wrangler');
 const health=await fetch(new URL('/api/health',base));assert.equal((await health.json() as {version:number}).version,PROTOCOL_VERSION);
-assert.equal(PROTOCOL_VERSION,32);
+assert.equal(PROTOCOL_VERSION,36);
 const url=new URL(`/api/room/predict-${Date.now()}`,base);url.protocol='ws:';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean,label:string,timeout=6000){
@@ -15,11 +15,12 @@ async function until(check:()=>boolean,label:string,timeout=6000){
 }
 function connect(){
   const socket=new WebSocket(url),input=new RoomInputClient(socket);
-  const state:{id?:string;world?:World;sync?:number;states:number;closed?:number}={states:0};
+  const state:{id?:string;world?:World;sync?:number;states:number;closed?:number;destinationResult?:{requestId:number;ok:boolean}}={states:0};
   socket.addEventListener('message',event=>{
     const message=JSON.parse(String(event.data));input.observe(message);
-    if(message.type==='welcome'){assert.equal(message.version,PROTOCOL_VERSION);state.id=message.id;}
+    if(message.type==='welcome'){assert.equal(message.version,PROTOCOL_VERSION);state.id=message.id;socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
     if(message.type==='state'){state.states++;state.world=message.world;state.sync=message.sync??state.sync;}
+    if(message.type==='destinationResult')state.destinationResult=message;
   });
   socket.addEventListener('close',event=>{state.closed=event.code;});
   return {socket,input,state};
@@ -31,7 +32,7 @@ driver.socket.addEventListener('message',event=>{
   if(message.type==='inputEdge'||message.type==='inputRejected')timeline.push(message);
 });
 try{
-  await until(()=>driver.input.ready&&observer.input.ready&&driver.state.world?.players.length===2&&observer.state.world?.players.length===2,'both clients and control states');
+  await until(()=>driver.input.active&&observer.input.active&&driver.state.world?.players.length===2&&observer.state.world?.players.length===2,'both identified clients and control states');
   assert.equal(driver.input.control!.appliedSeq,0);assert.equal(observer.input.control!.appliedSeq,0);
   const send=(value:Parameters<RoomInputClient['send']>[0],options?:Parameters<RoomInputClient['send']>[1])=>driver.input.send(value,options);
   const waitReject=(seq:number,reason:string)=>until(()=>driver.input.rejections.some(item=>item.seq===seq&&item.reason===reason),`${reason} rejection for ${seq}`);
@@ -155,13 +156,22 @@ try{
   assert.equal(driver.input.control!.revision,beforeNoop+1);
   assert.equal(driver.input.poseRevision,poseBeforeNoop,`same-pose reset preserves the pose revision: ${JSON.stringify({before:entityBeforeNoop,after:driver.state.world!.entities.find(entity=>entity.driver===driver.state.id)})}`);
 
+  // Preserve barriers across mini-game entry and an action rejected by cooldown.
+  driver.input.action({type:'minigame',game:'short'});driver.socket.send(JSON.stringify({type:'sync',token:124}));
+  await until(()=>driver.state.sync===124&&!!driver.state.world?.races.rounds.some(round=>round.courseId==='short'&&round.entrants.some(entrant=>entrant.playerId===driver.state.id)),'barrier follows mini-game entry');
+  await delay(500);
+  driver.input.action({type:'reset'});
+  driver.input.action({type:'destination',x:-120,z:60,requestId:42});driver.socket.send(JSON.stringify({type:'sync',token:125}));
+  await until(()=>driver.state.sync===125&&driver.state.destinationResult?.requestId===42,'barrier follows rejected destination');
+  assert.equal(driver.state.destinationResult!.ok,false,'action cooldown rejects the immediate destination request');
+
   // A reconnect is a new session with fresh controls, while the other player
   // keeps the room instance alive.
   const oldId=driver.state.id!,oldEpoch=driver.input.roomEpoch;
   driver.socket.close(1000,'reconnect test');
   await until(()=>driver.state.closed===1000&&!observer.state.world?.players.some(player=>player.id===oldId),'disconnected session removed');
   const again=connect();sockets.push(again.socket);
-  await until(()=>again.input.ready&&!!again.state.id,'new session joins');
+  await until(()=>again.input.active&&!!again.state.id,'new session joins');
   assert.notEqual(again.state.id,oldId);assert.equal(again.input.roomEpoch,oldEpoch);
   assert.equal(again.input.control!.receivedSeq,0);assert.equal(again.input.control!.appliedSeq,0);assert.equal(again.input.control!.revision,0);
   const first=again.input.send({...NEUTRAL,steer:1});
@@ -169,17 +179,17 @@ try{
   again.socket.close();await until(()=>again.state.closed!==undefined,'close reconnected client');
 
   const duplicate=connect();sockets.push(duplicate.socket);
-  await until(()=>duplicate.input.ready,'duplicate-action test client');
+  await until(()=>duplicate.input.active,'duplicate-action test client');
   duplicate.input.action({type:'reset'});
   await until(()=>duplicate.input.control?.actionSeq===1,'first action sequence recorded');
   duplicate.socket.send(JSON.stringify({type:'reset',actionSeq:1,edgeBaseline:{jump:0,flip:0}}));
   await until(()=>duplicate.state.closed===1008,'duplicate action sequence closes only that client');
 
   const backward=connect();sockets.push(backward.socket);
-  await until(()=>backward.input.ready,'backward-baseline test client');
+  await until(()=>backward.input.active,'backward-baseline test client');
   backward.input.send({...NEUTRAL,jump:1});
   await until(()=>backward.input.control?.jump.seen===1,'new jump counter observed');
   backward.socket.send(JSON.stringify({type:'reset',actionSeq:1,edgeBaseline:{jump:0,flip:0}}));
   await until(()=>backward.state.closed===1008,'backward action baseline closes only that client');
-  console.log('PASS: v32 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.');
+  console.log('PASS: v36 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.');
 }finally{for(const socket of sockets)if(socket.readyState===WebSocket.OPEN)socket.close();}

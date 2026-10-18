@@ -6,18 +6,8 @@ export const MARS_GOAL = 1_000_000_000;
 export const BOARDING_RADIUS = 14;
 export const MARS_LAUNCH_SECONDS = 12;
 
-/** A contribution is real session cash, capped at the remaining goal. */
-export function marsContribution(world:World, playerId:string, amount:number):number {
-  const player=world.players.find(p=>p.id===playerId);
-  if(!player || !Number.isSafeInteger(amount) || amount<=0 || amount>player.delivery.cash) return 0;
-  return Math.min(amount,MARS_GOAL-world.mars.fund);
-}
-
-/** Called only after the authoritative fund write succeeds. */
-export function applyMarsContribution(world:World,playerId:string,amount:number):void {
-  const player=world.players.find(p=>p.id===playerId)!;
-  player.delivery.cash-=amount;
-  world.mars.fund+=amount;
+export function marsGoalReached(mars:World['mars']):boolean {
+  return mars.fund>=MARS_GOAL || mars.roomFund>=MARS_GOAL;
 }
 
 export function atMarsBoarding(e:Entity):boolean {
@@ -28,7 +18,7 @@ export function atMarsBoarding(e:Entity):boolean {
 export function boardMars(world:World,playerId:string):boolean {
   const player=world.players.find(p=>p.id===playerId);
   const entity=world.entities.find(e=>e.id===player?.entityId);
-  if(world.mars.fund<MARS_GOAL || !player || !entity || player.achievements.unlocked.includes('to-mars') || !atMarsBoarding(entity)) return false;
+  if(!marsGoalReached(world.mars) || !player || !entity || player.achievements.unlocked.includes('to-mars') || !atMarsBoarding(entity)) return false;
   awardMarsAchievement(player);
   if(world.mars.launchAt===null || world.time-world.mars.launchAt>=MARS_LAUNCH_SECONDS) world.mars.launchAt=world.time;
   return true;

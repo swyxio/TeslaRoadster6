@@ -1,6 +1,6 @@
 # Fleet research and modeling contract
 
-Researched 2026-10-17. The playable roster covers **26 vehicle/platform families**, including historical and announced designs. “All models” means identifiable road-vehicle families, not every trim, year, sensor generation, regional homologation or laboratory chassis. Entries do not assert current sales or local service availability. This is a curated catalog, not a live product feed.
+Researched 2026-10-17. The ambient roster covers **26 vehicle/platform families**, including historical and announced designs. The candidate branch adds six separate special vehicles for the Vault collection. “All models” means identifiable road-vehicle families, not every trim, year, sensor generation, regional homologation or laboratory chassis. Entries do not assert current sales or local service availability. This is a curated catalog, not a live product feed.
 
 ## Evidence and units
 
@@ -63,6 +63,21 @@ All Cruise geometry, equipment mass and steering numbers are game estimates. His
 | `zoox-highlander` | Dark Toyota Highlander Hybrid SUV with roof sensor module | [Zoox testing-fleet account](https://zoox.com/journal/autonomous-zoox-testing-vehicle) explains the 2023 roof module revision and supervised mapping/testing role; [2026 operator testing-fleet protocol](https://zoox.com/common/files/global-202604-zoox-leip-testing-fleet.pdf) identifies Highlander Hybrids. |
 
 [Zoox's development retrospective](https://zoox.com/journal/10-years-of-building-zoox) shows successive internal proof-of-concept chassis. It does not establish a reliable complete publicly named VH model roster or published dimensions. These iterations are documented research scope, not invented additional production models. [LabBot](https://zoox.com/journal/labbot) is a laboratory hardware-in-the-loop system and is excluded from drivable vehicles.
+
+## The Vault: 6 special vehicles
+
+`LUXURY_CATALOG` in `shared/luxury.ts` defines the collection and prices; `LUXURY_VEHICLE_IDS` derives from it, while `VEHICLE_IDS` remains the 26-model ambient roster. The six IDs must stay out of ambient parked, NPC and highway traffic and free fleet selection. Their intended path is purchase at the Vault followed by owner collection at the Vault or a physical workshop. Persistent wallet and ownership flow remain in progress; visual and performance verification are pending. See [LUXURY_SHOWROOM.md](LUXURY_SHOWROOM.md).
+
+| Registry ID | Source-based geometry and explicit estimates |
+|---|---|
+| `ducati-panigale-v4` | 2025 Panigale V4: 1.485 m wheelbase from [Ducati](https://media.ducati.com/dam/MY25_Panigale_V4_EU_UC662332.pdf); the game body envelope and mass are estimates. |
+| `kawasaki-ninja-h2-carbon` | 2019 Ninja H2 Carbon: 2.085 × 0.770 × 1.125 m, 1.455 m wheelbase from [Kawasaki](https://global.kawasaki.com/en/corp/newsroom/news/detail/?f=20180810_1441); game mass includes an estimated rider. |
+| `lamborghini-temerario` | 4.706 × 1.996 × 1.201 m, 2.658 m wheelbase from the [Lamborghini brochure](https://www.lamborghini.com/original/DAM/lamborghini/0_facelift_2025/model_details_new/temerario_2/brochure_2026/Lamborghini%20Temerario_DIGITAL_BROCHURE_2026_EN.pdf); game mass estimated. |
+| `lamborghini-revuelto` | 4.947 × 2.033 × 1.160 m, 2.779 m wheelbase from the [Lamborghini brochure](https://www.lamborghini.com/original/DAM/lamborghini/facelift_2019/model_detail/revuelto/2024/brochure/REVUELTO_DIGITAL_BROCHURE_CN_2024.pdf); game mass estimated. |
+| `bugatti-chiron` | 4.544 × 2.038 × 1.212 m, 2.711 m wheelbase from [Bugatti](https://newsroom.bugatti.com/api/en/press-releases/pdf/bugatti-eb110-vs-chiron-super-sports-and-hyper-sports-cars-compared); game mass and durability tuning estimated. |
+| `bugatti-tourbillon` | 4.671 × 2.051 × 1.189 m, 2.740 m wheelbase from the [Bugatti launch specifications](https://worldpremiere.bugatti.com/fr); source measurements need re-verification and game mass is estimated. |
+
+The car widths exclude mirrors. Bike envelopes exclude the rider and fictional Rocket hardware. All six use arcade handling and damage tuning rather than manufacturer performance values. Their original procedural models share cached geometry; bikes have two wheels and an occupant-dependent rider.
 
 ## Contributor boundaries and gameplay intent
 

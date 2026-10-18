@@ -15,7 +15,7 @@ try {
   for(let i=0;i<sockets.length;i++)sockets[i].addEventListener('message',event=>{
     const message=JSON.parse(String(event.data));
     inputs[i].observe(message);
-    if(message.type==='welcome')ids[i]=message.id;
+    if(message.type==='welcome'){ids[i]=message.id;sockets[i].send(JSON.stringify({type:'identity',code:null,requestId:1}));}
     if(message.type!=='state')return;
     const world=message.world as World;worlds[i]=world;
     if(started===undefined||!initial||seen[i]!==undefined)return;
@@ -24,11 +24,11 @@ try {
     if(car&&Math.hypot(car.x-initial.x,car.z-initial.z)>.2)seen[i]=performance.now()-started;
   });
   const deadline=performance.now()+10000;
-  while((ids.length<2||!worlds[0]||!worlds[1]||worlds[0]!.players.length<2||worlds[1]!.players.length<2)&&performance.now()<deadline)await wait(20);
-  assert.ok(ids[0]&&ids[1]&&worlds[0]&&worlds[1]&&worlds[0]!.players.length===2&&worlds[1]!.players.length===2,'both clients joined');
+  while((ids.length<2||!worlds[0]||!worlds[1]||worlds[0]!.players.length<2||worlds[1]!.players.length<2||!inputs.every(input=>input.active))&&performance.now()<deadline)await wait(20);
+  assert.ok(ids[0]&&ids[1]&&worlds[0]&&worlds[1]&&worlds[0]!.players.length===2&&worlds[1]!.players.length===2&&inputs.every(input=>input.active),'both clients joined and chose guest identity');
   const player=worlds[0]!.players.find(p=>p.id===ids[0])!,car=worlds[0]!.entities.find(entity=>entity.id===player.entityId)!;
   initial={x:car.x,z:car.z};started=performance.now();
-  const send=()=>{for(let i=0;i<sockets.length;i++)if(inputs[i].ready)inputs[i].send({...NEUTRAL,throttle:i===0?1:0});};
+  const send=()=>{for(let i=0;i<sockets.length;i++)if(inputs[i].active)inputs[i].send({...NEUTRAL,throttle:i===0?1:0});};
   send();timer=setInterval(send,50);
   while((seen[0]===undefined||seen[1]===undefined)&&performance.now()-started<5000)await wait(20);
   assert.ok(seen[0]!==undefined&&seen[1]!==undefined,'both clients observe authoritative driving');

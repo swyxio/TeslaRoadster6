@@ -26,6 +26,12 @@ async function sample(requestCompression:boolean):Promise<Sample>{
         const headers=pending.subarray(0,end).toString();pending=pending.subarray(end+4);
         if(!/^HTTP\/1\.1 101\b/.test(headers)){clearTimeout(timeout);socket.destroy();reject(new Error(`Upgrade failed: ${headers.split('\r\n')[0]}`));return;}
         result.extension=headers.match(/^sec-websocket-extensions:\s*(.*)$/im)?.[1]?.trim()??'';
+        // Client-to-server WebSocket frames are masked, even when this sample
+        // only examines server frames without decoding their payloads.
+        const payload=Buffer.from(JSON.stringify({type:'identity',code:null,requestId:1})),mask=randomBytes(4);
+        const frame=Buffer.alloc(6+payload.length);frame[0]=0x81;frame[1]=0x80|payload.length;mask.copy(frame,2);
+        for(let i=0;i<payload.length;i++)frame[6+i]=payload[i]^mask[i%4];
+        socket.write(frame);
         handshake=false;clearTimeout(timeout);resolve(result);
       }
       while(pending.length>=2){

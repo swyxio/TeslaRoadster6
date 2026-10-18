@@ -40,7 +40,7 @@ function connect() {
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     input.observe(data);
-    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; }
+    if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; socket.send(JSON.stringify({type:'identity',code:null,requestId:1})); }
     if (data.type === 'state') state.world = data.world;
   });
   socket.addEventListener('close', event => { state.closed = event.code; });
@@ -79,7 +79,7 @@ try {
     if (sawLaunch && entity.supportId === 'ground' && entity.x > jump.end + 1) sawLanding = true;
   });
   inputTimer = setInterval(() => {
-    if(driver.input.ready)driver.input.send({ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 });
+    if(driver.input.active)driver.input.send({ ...NEUTRAL, throttle:sawLaunch ? 0 : 1 });
   }, 50);
   await eventually(() => sawRamp && sawLaunch && sawLanding, 'observer sees ramp support, takeoff and landing');
   assert.ok((driver.input.control?.appliedSeq ?? 0) > 0, 'driver input was applied');

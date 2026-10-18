@@ -54,7 +54,14 @@ function navigationGraph():RoadGraph {
 }
 function allowed(a:Point,b:Point,level:Level):boolean{
   const count=Math.max(1,Math.ceil(distance(a,b)/30));
-  for(let i=0;i<=count;i++){const t=i/count;if(requiredLevelAt(a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t)>level)return false;}
+  // A purchase may lower a driver's level while they are in a locked area.
+  // Permit egress, but never let a route climb back into a higher tier.
+  let ceiling=Math.max(level,requiredLevelAt(a.x,a.z));
+  for(let i=1;i<=count;i++){
+    const t=i/count,required=requiredLevelAt(a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t);
+    if(required>ceiling)return false;
+    ceiling=Math.max(level,required);
+  }
   return true;
 }
 

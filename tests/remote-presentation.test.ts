@@ -32,6 +32,28 @@ test('interpolates a buffered remote pose and wrapped angles without changing lo
   assert.notEqual(shown,world);
 });
 
+test('remote motorcycle playback keeps the latest finish and occupant',()=>{
+  for(const kind of ['ducati-panigale-v4','kawasaki-ninja-h2-carbon'] as const){
+    const {world,presentation}=setup();
+    const bike=makeEntity('remote',kind,0,0,'other');
+    Object.assign(bike,{y:2,supportId:null,vx:20,owner:'other',driver:'other',steering:0});
+    world.entities[world.entities.findIndex(entity=>entity.id==='remote')]=bike;
+    presentation.snapshot(world,'local',10);
+    bike.x=2;bike.steering=.8;bike.style={paint:'mint',decal:'stripe'};bike.upgrades.rocket=true;
+    presentation.snapshot(world,'local',12);
+    const before=structuredClone(world),shown=remote(presentation.render(world,'local',11));
+    assert.equal(shown.x,1,kind);assert.equal(shown.steering,.4,kind);
+    assert.deepEqual(shown.style,{paint:'mint',decal:'stripe'},kind);
+    assert.equal(shown.owner,'other',kind);assert.equal(shown.driver,'other',kind);
+    assert.equal(shown.upgrades.rocket,true,kind);
+    assert.deepEqual(world,before,'playback never changes the saved finish or occupant');
+    bike.x=4;bike.driver=null;presentation.snapshot(world,'local',14);
+    const parked=remote(presentation.render(world,'local',13));
+    assert.equal(parked,bike,'a rider leaving cuts to the latest occupant state');
+    assert.equal(parked.driver,null);
+  }
+});
+
 test('samples are copied, support irregular snapshot ticks, and do not revive missing entities',()=>{
   const {world,remote:car,presentation}=setup();
   presentation.snapshot(world,'local',1);car.x=3;presentation.snapshot(world,'local',4);

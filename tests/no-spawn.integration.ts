@@ -6,13 +6,13 @@ const base=process.argv[2]??'http://localhost:8787';
 const sockets:WebSocket[]=[];
 type Result={type:'welcome';version:number;capacity:number}|{type:'close';code:number;reason:string};
 function connect():Promise<Result>{
-  const socket=new WebSocket(base.replace(/^http/,'ws')+'/room');
+  const socket=new WebSocket(base.replace(/^http/,'ws')+'/api/room/blocked');
   sockets.push(socket);
   return new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('Timed out waiting for welcome or close')),10000);
     socket.addEventListener('message',event=>{
       const message=JSON.parse(String(event.data));
-      if(message.type==='welcome'){clearTimeout(timeout);resolve(message);}
+      if(message.type==='welcome'){socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));clearTimeout(timeout);resolve(message);}
     });
     socket.addEventListener('close',event=>{clearTimeout(timeout);resolve({type:'close',code:event.code,reason:event.reason});},{once:true});
     socket.addEventListener('error',()=>{clearTimeout(timeout);reject(new Error('WebSocket connection failed'));},{once:true});

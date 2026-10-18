@@ -15,7 +15,8 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects, setVehicleStyle } from './vehicles';
+import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
@@ -30,6 +31,7 @@ import { buildEastSouthAdditions } from './east-south-additions';
 import { buildBillboards } from './billboards';
 import { buildTeslandMonuments } from './tesland-monuments';
 import { buildFremontSpaceport } from './fremont-spaceport';
+import { RESEARCH_SITES, researchArrival } from '../shared/research';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -45,6 +47,7 @@ export class GameScene {
   private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
+  private driverLabels = new DriverLabels(this.scene);
   private pickups = new Map<string,T.Group>();
   private pickupLabels = new Map<string,T.SpriteMaterial>();
   private ferry = new T.Group();
@@ -54,6 +57,7 @@ export class GameScene {
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
+  private researchMarkers = new Map<string,T.Group>();
   private parkingClaims = new Map<string,T.Group>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
@@ -213,6 +217,12 @@ export class GameScene {
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['NORTH BAY PLAYGROUND FERRY',0,-230],['NORTH BAY PLAYGROUND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const site of RESEARCH_SITES){
+      const point=researchArrival(site),marker=new T.Group();marker.position.set(point.x,(terrainHeight(point.x,point.z)??0)+.2,point.z);
+      const ring=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0x83d9f7,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;marker.add(ring);
+      const label=this.label('RESEARCH · STOP HERE');label.position.y=8;marker.add(label);
+      scene.add(marker);this.researchMarkers.set(site.achievement,marker);
+    }
     for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+19,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
@@ -275,6 +285,7 @@ export class GameScene {
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
+    for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
     for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
@@ -325,16 +336,19 @@ export class GameScene {
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
       this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'?e.pitch:0));
-      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
+      // The bike leans into grounded turns; flight and surface roll remain
+      // authoritative. Lean is visual and does not change the collision body.
+      const lean=e.kind!=='person'&&VEHICLES[e.kind].shape==='motorcycle'&&e.driver&&e.supportId!==null&&e.loopAngle===null
+        ?e.steering*Math.min(Math.abs(e.speed)/18,1)*Math.sign(e.speed)*.32:0;
+      this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll+lean));
       mesh.quaternion.slerp(this.orientation,blend);
       const incident=isTrafficIncident(e,world.time);
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
-
     }
-    // Keep reusable meshes, but hide pickups missing from the current snapshot
-    // (including the empty presentation world while joining another room).
+    this.driverLabels.update(world,this.entities,menu,controlled?.id);
+    // Hide pickups absent from the current authoritative snapshot.
     for(const mesh of this.pickups.values())mesh.visible=false;
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
@@ -410,12 +424,19 @@ export class GameScene {
     // Choose detail against the final camera pose, including reset/cockpit cuts.
     for(const e of world.entities){
       const mesh=this.entities.get(e.id)!;
-      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police);
+      // Custom finishes need their detailed meshes; the shared distant mesh has stock colors.
+      const customized=e.kind!=='person'&&(e.style.paint!=='stock'||e.style.decal!=='none');
+      const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police||customized);
       if(detailed&&e.kind!=='person'){
+        setVehicleStyle(mesh,e.kind,e.style);
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+        const spec=VEHICLES[e.kind];
+        if(spec.shape==='motorcycle'){
+          const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;
+          const wheel=mesh.getObjectByName('wheel_f');if(wheel)wheel.rotation.y=e.steering*spec.steerAngle;
+        }else for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}
       }
-      if(detailed&&e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
     for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
