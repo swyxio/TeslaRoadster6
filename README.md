@@ -4,7 +4,7 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 **[Play Tesland](https://tesland.swyx.io)** · [Changelog](https://tesland.swyx.io/changelog/) · [Dev blog](https://tesland.swyx.io/blog/) · [The story](https://tesland.swyx.io/lore/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
+See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, [performance baselines](docs/PERFORMANCE_BASELINES.md) for selective regression reports, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 

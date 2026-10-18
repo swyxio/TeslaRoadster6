@@ -27,14 +27,14 @@ const { values } = parseArgs({ options: {
   mobile: { type: 'boolean', default: false }, help: { type: 'boolean', default: false },
 } });
 if (values.help) {
-  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--gpu default|metal|vulkan]');
+  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--gpu default|metal|vulkan|swiftshader]');
   process.exit(0);
 }
 if (!values.url || !values['target-ref'] || (!!values.scenario === !!values.serve)) throw new Error('Specify --url, --target-ref, and exactly one of --scenario or --serve.');
 const target = new URL(values.url);
 if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('URL must be HTTP(S) without embedded credentials.');
 if (!['chromium', 'chrome'].includes(values.browser!)) throw new Error('Browser must be chromium or chrome.');
-if (!['default', 'metal', 'vulkan'].includes(values.gpu!)) throw new Error('GPU must be default, metal, or vulkan.');
+if (!['default', 'metal', 'vulkan', 'swiftshader'].includes(values.gpu!)) throw new Error('GPU must be default, metal, vulkan, or swiftshader.');
 const secret = process.env.TESLAND_PLAYTEST_SECRET;
 if (values.serve && (!secret || Buffer.byteLength(secret) < 32)) throw new Error('Set TESLAND_PLAYTEST_SECRET to at least 32 bytes for the local control server.');
 const fps = Number(values.fps);
@@ -225,6 +225,37 @@ async function act(action: Action): Promise<unknown> {
         touches.delete(id); break;
       }
       case 'sample': result = await sample(); break;
+      case 'frameStart': {
+        // Keep this browser callback as plain source: tsx's function-name
+        // helpers do not exist inside Playwright's isolated page evaluation.
+        await page!.evaluate(`(() => {
+          if (window.__teslandFrames?.active) throw new Error('Frame capture already active.');
+          const capture = { active: true, intervals: [], truncated: false };
+          window.__teslandFrames = capture;
+          let last;
+          const frame = (now) => {
+            if (!capture.active) return;
+            if (last !== undefined) {
+              if (capture.intervals.length < 20000) capture.intervals.push(now - last);
+              else capture.truncated = true;
+            }
+            last = now;
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        })()`);
+        break;
+      }
+      case 'frameStop': {
+        result = await page!.evaluate(() => {
+          const w = window as typeof window & { __teslandFrames?: { active: boolean; intervals: number[]; truncated: boolean } };
+          const capture = w.__teslandFrames;
+          if (!capture?.active) throw new Error('Frame capture is not active.');
+          capture.active = false;
+          return { intervalsMs: capture.intervals, truncated: capture.truncated };
+        });
+        break;
+      }
       case 'assertNumberAbove': {
         const text = await page!.locator(textField(action, 'selector')).first().textContent();
         const threshold = action.value;
@@ -292,7 +323,7 @@ async function body(req: IncomingMessage): Promise<Action> {
 function json(res: ServerResponse, status: number, value: unknown) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); }
 
 try {
-  const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : [];
+  const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : values.gpu === 'swiftshader' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
   browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : undefined, headless: !values.headed, args });
   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
   context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
