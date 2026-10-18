@@ -49,19 +49,19 @@ The first five Cybercabs cost **$25k, $50k, $100k, $200k and $400k**. Their owne
 We want owners to find their cars on the map, follow them through the city, and put their name and colors on them. A driver and an owner should each be identifiable when they are different people. The garage holds personalized car configurations; dispatched Cybercabs can stay out earning.
 
 <figure>
-<img src="/blog/economy/cybercab-current.png" alt="The current fleet menu shows the gold Cybercab model available to select and drive." loading="lazy">
+<img src="/blog/economy/cybercab-current.jpg" alt="The current fleet menu shows the gold Cybercab model available to select and drive." loading="lazy">
 <figcaption>You can already select and drive the Cybercab from the fleet menu.</figcaption>
 </figure>
 
 At a workshop today you can buy paint for $18 and decals for $12 or $18. The finish stays on that car for the session, and other players see your driver name above it.
 
 <figure>
-<img src="/blog/economy/workshop-current.png" alt="The current workshop shows a Roadster with mint paint and a speed stripe applied." loading="lazy">
+<img src="/blog/economy/workshop-current.jpg" alt="The current workshop shows a Roadster with mint paint and a speed stripe applied." loading="lazy">
 <figcaption>The workshop after buying mint paint and a stripe in a funded test drive.</figcaption>
 </figure>
 
 <figure>
-<img src="/blog/economy/multiplayer-finish.png" alt="A second driver sees the mint Roadster and its driver's name above it." loading="lazy">
+<img src="/blog/economy/multiplayer-finish.jpg" alt="A second driver sees the mint Roadster and its driver's name above it." loading="lazy">
 <figcaption>Another driver's view of that same car.</figcaption>
 </figure>
 
@@ -185,7 +185,7 @@ How long might that take? In a [community run](https://github.com/swyxio/TeslaRo
 There's already a Mars mission in the game: open the mission menu, contribute from your session cash and watch your room's progress bar fill. At $1 billion, reach the Fremont spaceport to board. The room fund persists; solo progress lasts for that drive. The game-wide earnings meter will need persistent identities and a reliable way to count each reward once.
 
 <figure>
-<img src="/blog/economy/mars-mission-menu.png" alt="The current Mars mission menu shows the room fund, contribution controls and boarding instructions for Fremont." loading="lazy">
+<img src="/blog/economy/mars-mission-menu.jpg" alt="The current Mars mission menu shows the room fund, contribution controls and boarding instructions for Fremont." loading="lazy">
 <figcaption>The mission menu in today's game. The future global meter will follow everyone's earnings automatically.</figcaption>
 </figure>
 
