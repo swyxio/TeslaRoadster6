@@ -17,6 +17,7 @@ window.addEventListener('keydown', async event => {
     oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); await audio.resume();
   }
   if (event.code === 'KeyB') { document.body.style.background = '#fff'; gain.gain.value = 0.4; }
+  if (event.code === 'KeyC') window.__teslandAudioCapture.stop = () => { throw new Error('Simulated audio failure'); };
 });</script>`;
 const server = createServer((request, response) => { response.writeHead(200, {'content-type': 'text/html'}); response.end(html); });
 try {
@@ -45,6 +46,19 @@ try {
   const delta = Math.abs(visual - audible);
   assert(delta < 0.25, `Visual and audio cues differ by ${delta.toFixed(3)} seconds`);
   console.log(`Audio/video calibration: visual ${visual.toFixed(3)}s, sound ${audible.toFixed(3)}s, difference ${delta.toFixed(3)}s`);
+
+  const failureScenario = join(temp, 'failure.json'), failureRun = join(temp, 'failed-run');
+  await writeFile(failureScenario, JSON.stringify({viewport:{width:640,height:360},steps:[
+    {type:'keyPress', key:'KeyA'}, {type:'recordStart'}, {type:'wait', ms:500},
+    {type:'keyPress', key:'KeyC'}, {type:'recordStop'},
+  ]}));
+  await assert.rejects(promisify(execFile)('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${server.address().port}/`, '--target-ref', 'audio-failure-calibration', '--scenario', failureScenario, '--out', failureRun, '--audio'], {timeout:120000}));
+  const failed = JSON.parse(await readFile(join(failureRun, 'manifest.json'), 'utf8'));
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.capture.audioFinalizationFailed, true);
+  assert.equal(failed.recordings.length, 1);
+  execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', join(failureRun, failed.recordings[0])]);
+  console.log('Audio finalization failure retained the finalized video and failed the run.');
 } finally {
   await new Promise(resolve => server.close(resolve));
   await rm(temp, {recursive:true, force:true});

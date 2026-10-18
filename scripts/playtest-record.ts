@@ -166,16 +166,24 @@ async function sample() {
 }
 async function stopRecording() {
   if (!recording) throw new Error('No recording is active.');
+  let audioFailure: unknown;
   if (pendingAudio) {
-    const encoded = await page!.evaluate('window.__teslandAudioCapture.stop()') as string;
-    await writeFile(join(out, pendingAudio.file), Buffer.from(encoded, 'base64'), { flag: 'wx' });
-    audioRecordings.push(pendingAudio);
-    pendingAudio = undefined;
+    try {
+      const encoded = await page!.evaluate('window.__teslandAudioCapture.stop()') as string;
+      await writeFile(join(out, pendingAudio.file), Buffer.from(encoded, 'base64'), { flag: 'wx' });
+      audioRecordings.push(pendingAudio);
+    } catch (error) {
+      audioFailure = error;
+      (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
+    } finally { pendingAudio = undefined; }
   }
-  if (!values['no-video']) await page!.screencast.stop();
-  recording = false;
-  if (!values['no-video']) recordings.push(pendingVideo);
-  pendingVideo = '';
+  try {
+    if (!values['no-video']) {
+      await page!.screencast.stop();
+      recordings.push(pendingVideo);
+    }
+  } finally { recording = false; pendingVideo = ''; }
+  if (audioFailure) throw audioFailure;
 }
 async function releaseInputs() {
   for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
