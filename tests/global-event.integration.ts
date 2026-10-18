@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { GLOBAL_EVENT_DURATION_MS } from '../shared/earnings-events.ts';
+import { GLOBAL_EVENT_DURATION_MS, globalWindowsForInstant } from '../shared/earnings-events.ts';
 import type { EarningsWindow } from '../shared/earnings-events.ts';
 
 const GLOBAL_EVENT_LEAD_MS=60_000,GLOBAL_EVENT_LEASE_MS=15_000;
@@ -90,6 +90,10 @@ try{
 
   const afterBoth=adjacent.endsAtMs+1;
   await setTime(afterBoth);
+  const lateLease=await ok<{issuedAtMs:number;validUntilMs:number;windows:EarningsWindow[]}>('lease');
+  assert.deepEqual(lateLease.windows,[]);
+  assert.throws(()=>globalWindowsForInstant(lateLease,first.endsAtMs-1),/does not cover/,'a late reply cannot replace history for an earlier payout');
+  assert.deepEqual((await ok<{windows:EarningsWindow[]}>('history',{from:first.endsAtMs-1,to:first.endsAtMs})).windows,[first]);
   assert.deepEqual((await ok<{windows:EarningsWindow[]}>('history',{from:startAt-1,to:startAt})).windows,[]);
   assert.deepEqual((await ok<{windows:EarningsWindow[]}>('history',{from:startAt,to:startAt+1})).windows,[first]);
   assert.deepEqual((await ok<{windows:EarningsWindow[]}>('history',{from:first.endsAtMs,to:first.endsAtMs+1})).windows,[adjacent]);

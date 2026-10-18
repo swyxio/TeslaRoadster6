@@ -1,7 +1,9 @@
 import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributors, type StarshipStatus } from '../shared/starship';
 import { normalizeName } from './global-chat-core';
 
-type Completion = { completedAt:number; launchAt:number; launchId:string; total:number };
+type Completion =
+  | {kind:'recorded';completedAt:number;launchAt:number;launchId:string;total:number}
+  | {kind:'unknown';observedAt:number;total:number};
 const incomeKey=(driverId:string)=>`income:${driverId}`;
 const launchKey=(driverId:string)=>`launch-income:${driverId}`;
 const nameKey=(driverId:string)=>`launch-name:${driverId}`;
@@ -15,10 +17,24 @@ function validIncome(amount:number):void {
 }
 function complete(total:number):Completion {
   const completedAt=Date.now();
-  return {completedAt,launchAt:completedAt+STARSHIP_LAUNCH_DELAY_MS,launchId:crypto.randomUUID(),total};
+  return {kind:'recorded',completedAt,launchAt:completedAt+STARSHIP_LAUNCH_DELAY_MS,launchId:crypto.randomUUID(),total};
 }
 function status(total:number,personal:number,completion:Completion|undefined):StarshipStatus {
-  return {total,personal,launchTotal:completion?.total??null,completedAt:completion?.completedAt??null,launchAt:completion?.launchAt??null,launchId:completion?.launchId??null};
+  const recorded=completion?.kind==='recorded'?completion:null;
+  const cutover=completion?.kind==='unknown'?completion:null;
+  return {total,personal,crossing:completion?.kind??'pending',launchTotal:recorded?.total??null,
+    completedAt:recorded?.completedAt??null,launchAt:recorded?.launchAt??null,launchId:recorded?.launchId??null,
+    cutoverTotal:cutover?.total??null,cutoverAt:cutover?.observedAt??null};
+}
+
+/** Freeze the cutover state before a new credit can change a legacy counter. */
+async function captureExisting(txn:DurableObjectTransaction,total:number):Promise<Completion|undefined> {
+  let completion=await txn.get<Completion>('launch-completion');
+  if(!completion && total>=STARSHIP_GOAL){
+    completion={kind:'unknown',observedAt:Date.now(),total};
+    await txn.put('launch-completion',completion);
+  }
+  return completion;
 }
 
 /**
@@ -34,7 +50,7 @@ export class StarshipLedger {
     return this.storage.transaction(async txn=>{
       const key=incomeKey(driverId),previous=await txn.get<number>(key)??0,total=await txn.get<number>('total')??0;
       validIncome(previous);validIncome(total);
-      let completion=await txn.get<Completion>('launch-completion');
+      let completion=await captureExisting(txn,total);
       const next=total+Math.max(0,cumulative-previous);
       validIncome(next);
       if(cumulative>previous){
@@ -56,13 +72,9 @@ export class StarshipLedger {
   async status(driverId?:string):Promise<StarshipStatus> {
     if(driverId!==undefined)validId(driverId);
     return this.storage.transaction(async txn=>{
-      const total=await txn.get<number>('total')??0;
+      const total=await txn.get<number>('total')??0;validIncome(total);
       const personal=driverId===undefined?0:await txn.get<number>(incomeKey(driverId))??0;
-      let completion=await txn.get<Completion>('launch-completion');
-      // If the pre-existing counter already reached the goal before this code
-      // was installed, record the launch once on first observation. The prior
-      // crossing time cannot be reconstructed from a cumulative counter.
-      if(!completion && total>=STARSHIP_GOAL){completion=complete(total);await txn.put('launch-completion',completion);}
+      const completion=await captureExisting(txn,total);
       return status(total,personal,completion);
     });
   }
@@ -86,7 +98,8 @@ export class StarshipLedger {
   async contributors(cursor?:string):Promise<StarshipContributors> {
     const startAfter=cursor===undefined?undefined:await this.decodeCursor(cursor);
     const page=await this.storage.transaction(async txn=>{
-      if(!await txn.get<Completion>('launch-completion'))return {contributors:[],after:undefined as string|undefined};
+      const total=await txn.get<number>('total')??0;validIncome(total);
+      if(!await captureExisting(txn,total))return {contributors:[],after:undefined as string|undefined};
       const rows=await txn.list<number>({prefix:'income:',...(startAfter?{startAfter}:{}),limit:SCAN_SIZE});
       const ids=[...rows.keys()].map(key=>key.slice('income:'.length));
       const details=ids.length?await txn.get<unknown>(ids.flatMap(id=>[launchKey(id),nameKey(id)])):new Map<string,unknown>();
@@ -98,7 +111,7 @@ export class StarshipLedger {
         const amount=typeof frozen==='number'?frozen:current;
         if(amount>0){
           const publicName=details.get(nameKey(id));
-          entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount});
+          entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount:typeof publicName==='string'?amount:null});
         }
         if(entries.length===PAGE_SIZE)break;
       }

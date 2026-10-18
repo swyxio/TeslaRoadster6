@@ -2,12 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   CAB_REMAINDER_DENOMINATOR, GLOBAL_EVENT_DURATION_MS, ROOM_WIN_DURATION_MS,
-  activityPayout, bonusEligible, cabAccrual, earningsMultiplier, globalEarningsEvent, recordRoomWin,
+  activityPayout, bonusEligible, cabAccrual, earningsMultiplier, globalEarningsEvent, globalWindowsForInstant, globalWindowsForInterval, recordRoomWin,
   type EarningsEvents, type EarningsSource,
 } from '../shared/earnings-events.ts';
 
 const start=Date.UTC(2026,9,18,12), minute=60_000;
 const none:EarningsEvents={room:[],global:[]};
+
+test('global leases cover both ends of each evaluated time range',()=>{
+  const event=globalEarningsEvent(start),end=event.endsAtMs;
+  const lateLease={issuedAtMs:end,validUntilMs:end+15_000,windows:[]};
+  assert.throws(()=>globalWindowsForInstant(lateLease,end-1),/does not cover/,'a lease acquired after an event ends cannot price an earlier payout');
+  assert.throws(()=>globalWindowsForInterval(lateLease,end-1,end),/does not cover/,'settlement needs history for an earlier interval');
+  assert.deepEqual(globalWindowsForInstant(lateLease,end),[]);
+  assert.throws(()=>globalWindowsForInstant(lateLease,end+15_000),/does not cover/);
+  assert.deepEqual(globalWindowsForInterval(lateLease,end,end+15_000),[],'the right end is exclusive');
+  assert.throws(()=>globalWindowsForInterval(lateLease,end,end+15_001),/does not cover/);
+});
 
 test('a verified win starts and refreshes a room bonus after the match payment',()=>{
   const prior:EarningsEvents={room:[],global:[globalEarningsEvent(start)]};

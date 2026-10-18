@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { GLOBAL_EVENT_DURATION_MS, globalEarningsEvent, type EarningsWindow } from '../shared/earnings-events';
+import { GLOBAL_EVENT_DURATION_MS, globalEarningsEvent, type EarningsWindow, type GlobalEventLease } from '../shared/earnings-events';
 
 export const GLOBAL_EVENT_LEAD_MS = 60_000;
 export const GLOBAL_EVENT_LEASE_MS = 15_000;
@@ -7,7 +7,6 @@ const HISTORY_PAGE_SIZE = 100;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 type EventRow = { request_id:string; starts_at:number; ends_at:number };
 
-export type GlobalEventLease = { issuedAtMs:number; validUntilMs:number; windows:EarningsWindow[] };
 export type GlobalEventHistory = { windows:EarningsWindow[]; next:number|null };
 
 function validTime(value:number):void {

@@ -64,7 +64,7 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
 
   const privacy=element('form','starship-privacy');
   const privacyTitle=element('h4','starship-privacy-title','Your launch crew name');
-  const privacyCopy=element('p','starship-privacy-copy','You appear as Anonymous driver unless you choose a public name. You can change this later.');
+  const privacyCopy=element('p','starship-privacy-copy','On the crew list, your name and contribution stay private unless you choose a public name. You can change this later.');
   const privacyLabel=element('label','starship-privacy-label');
   const showName=element('input','starship-show-name');showName.type='checkbox';
   privacyLabel.append(showName,document.createTextNode('Show my name on the crew list'));
@@ -109,7 +109,7 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
       freshness==='live'?'Live · confirmed game-wide':freshness==='loading'?'Last confirmed · refreshing…':'Last confirmed · updates unavailable');
     progress.hidden=!valid;
     if(valid){
-      const actual=confirmed!.launchTotal??confirmed!.total;
+      const actual=confirmed!.launchTotal??confirmed!.cutoverTotal??confirmed!.total;
       text(total,`${money(actual)} / ${money(STARSHIP_GOAL)}`);progress.value=Math.min(actual,STARSHIP_GOAL);
       text(personal,`Your confirmed lifetime earnings: ${money(confirmed!.personal)}`);
       text(pending,amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
@@ -118,14 +118,16 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     }else{
       text(total,'Unavailable');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');text(stage,'');
     }
-    const completed=valid&&confirmed!.completedAt!==null;
+    const completed=valid&&confirmed!.crossing==='recorded'&&confirmed!.completedAt!==null;
+    const unknown=valid&&confirmed!.crossing==='unknown';
     const launchAt=confirmed?.launchAt;
     const clock=state.clock;
     const validClock=!!clock&&amount(clock.serverTime)&&Number.isFinite(clock.receivedAt)&&Number.isFinite(now)&&now>=clock.receivedAt&&
       amount(launchAt)&&clock.launchAt===launchAt;
     const estimatedServerTime=validClock?clock!.serverTime+now-clock!.receivedAt:null;
     let replayReady=false;
-    if(!completed)text(launch,'The launch begins after the $1 billion goal is reached.');
+    if(unknown)text(launch,'The goal was reached before launch tracking began. The crossing time is unknown.');
+    else if(!completed)text(launch,'The launch begins after the $1 billion goal is reached.');
     else if(!validClock)text(launch,'Launch timing is unavailable.');
     else if(freshness!=='live'){
       replayReady=clock!.serverTime>=launchAt!+LAUNCH_DURATION_MS;
@@ -144,22 +146,23 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     showName.disabled=nameInput.disabled=privacySave.disabled=privacyBusy;
     text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':'');
 
-    contributors.hidden=!completed;
+    contributors.hidden=!completed&&!unknown;
+    text(contributorsCopy,unknown?'Confirmed earnings when launch tracking began are shown here.':'Confirmed earnings at the goal are shown here. Earnings still being reconciled may arrive later.');
     const page=state.contributors;
-    const entries=page.entries.slice(0,20).filter(entry=>typeof entry.name==='string'&&amount(entry.amount));
+    const entries=page.entries.slice(0,20).filter(entry=>typeof entry.name==='string'&&(entry.amount===null||amount(entry.amount)));
     const entriesKey=JSON.stringify(entries);
     if(entriesKey!==lastEntries){
       lastEntries=entriesKey;
       const rows=entries.map(entry=>{
         const row=element('li','starship-contributor');
         const name=element('span','starship-contributor-name',entry.name);
-        const contribution=element('span','starship-contributor-amount',money(entry.amount));
+        const contribution=element('span','starship-contributor-amount',entry.amount===null?'Private':money(entry.amount));
         row.append(name,contribution);return row;
       });
       list.replaceChildren(...rows);
     }
     text(contributorStatus,page.status==='loading'?'Loading contributors…':page.status==='error'?'Could not load contributors. Please try again.':
-      page.status==='idle'?'Explore the frozen contributor list.':entries.length?'Confirmed contributors at launch.':'No contributors on this page.');
+      page.status==='idle'?'Explore the frozen contributor list.':entries.length?(unknown?'Confirmed contributors at cutover.':'Confirmed contributors at launch.'):'No contributors on this page.');
     first.hidden=page.cursor===null;first.disabled=page.status==='loading';
     load.hidden=page.status==='ready'&&page.next===null;
     load.disabled=page.status==='loading';

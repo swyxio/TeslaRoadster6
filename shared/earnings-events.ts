@@ -1,6 +1,7 @@
 /** All event and settlement times are UTC Unix timestamps in whole milliseconds. */
 export type EarningsWindow = { startsAtMs:number; endsAtMs:number };
 export type EarningsEvents = { room:readonly EarningsWindow[]; global:readonly EarningsWindow[] };
+export type GlobalEventLease = { issuedAtMs:number; validUntilMs:number; windows:EarningsWindow[] };
 
 export const ROOM_WIN_DURATION_MS = 10 * 60 * 1000;
 export const GLOBAL_EVENT_DURATION_MS = 30 * 60 * 1000;
@@ -33,6 +34,24 @@ function validateEvents(events:EarningsEvents):void {
         throw new RangeError(`Invalid ${scope} earnings event duration`);
     }
   }
+}
+
+/** A fresh lease cannot establish the rate for an earlier earned timestamp. */
+export function globalWindowsForInstant(lease:GlobalEventLease,atMs:number):readonly EarningsWindow[] {
+  timestamp(atMs);timestamp(lease.issuedAtMs);timestamp(lease.validUntilMs);
+  if(lease.issuedAtMs>=lease.validUntilMs||atMs<lease.issuedAtMs||atMs>=lease.validUntilMs)
+    throw new RangeError('Global event lease does not cover payout time');
+  validateEvents({room:[],global:lease.windows});
+  return lease.windows;
+}
+
+/** For older or longer cab intervals consume complete paginated history instead. */
+export function globalWindowsForInterval(lease:GlobalEventLease,fromMs:number,toMs:number):readonly EarningsWindow[] {
+  timestamp(fromMs);timestamp(toMs);timestamp(lease.issuedAtMs);timestamp(lease.validUntilMs);
+  if(lease.issuedAtMs>=lease.validUntilMs||fromMs>toMs||fromMs<lease.issuedAtMs||toMs>lease.validUntilMs)
+    throw new RangeError('Global event lease does not cover earnings interval');
+  validateEvents({room:[],global:lease.windows});
+  return lease.windows;
 }
 
 /** Schedule a 30-minute developer event. Overlapping global events still pay only 2x. */

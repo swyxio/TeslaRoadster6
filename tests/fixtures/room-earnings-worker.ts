@@ -4,7 +4,9 @@ import { RoomEarningsEvents, type RoomEventCursor } from '../../worker/room-earn
 
 export class RoomEconomy extends DurableObject {
   private events=new RoomEarningsEvents(this.ctx.storage);
-  recordWin(id:string,time:number){return this.events.recordWin(id,time);}
+  prepareWin(id:string,time:number){return this.events.prepareWin(id,time);}
+  commitWin(id:string){return this.events.commitWin(id);}
+  pendingWin(){return this.events.pendingWin();}
   activeUntil(time:number){return this.events.activeUntil(time);}
   history(from:number,to:number,cursor?:RoomEventCursor){return this.events.history(from,to,cursor);}
 }
@@ -15,8 +17,16 @@ export default {
     try{
       if(url.pathname==='/health')return new Response('ok');
       if(url.pathname==='/win'){
-        const input=await request.json() as {id:string;time:number};return Response.json(await room.recordWin(input.id,input.time));
+        const input=await request.json() as {id:string;time:number};await room.prepareWin(input.id,input.time);return Response.json(await room.commitWin(input.id));
       }
+      if(url.pathname==='/prepare'){
+        const input=await request.json() as {id:string;time:number};return Response.json(await room.prepareWin(input.id,input.time));
+      }
+      if(url.pathname==='/commit'){
+        const input=await request.json() as {id:string};const result=await room.commitWin(input.id);
+        return url.searchParams.has('lose-reply')?new Response('Simulated lost reply',{status:503}):Response.json(result);
+      }
+      if(url.pathname==='/pending')return Response.json(await room.pendingWin());
       if(url.pathname==='/active')return Response.json(await room.activeUntil(Number(url.searchParams.get('time'))));
       if(url.pathname==='/history'){
         const input=await request.json() as {from:number;to:number;cursor?:RoomEventCursor};return Response.json(await room.history(input.from,input.to,input.cursor));

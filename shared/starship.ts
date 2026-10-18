@@ -12,12 +12,17 @@ export function starshipStage(total:number):number {
 export type StarshipStatus = {
   total: number;
   personal: number;
+  /** Unknown means the existing counter had already reached the goal before tracking began. */
+  crossing: 'pending' | 'recorded' | 'unknown';
   /** The un-capped confirmed total at the threshold; lifetime total continues. */
   launchTotal: number | null;
   completedAt: number | null;
   launchAt: number | null;
   launchId: string | null;
+  /** A legacy snapshot records observation at cutover, not the historical crossing. */
+  cutoverTotal: number | null;
+  cutoverAt: number | null;
 };
 
-export type StarshipContributor = { name: string; amount: number };
+export type StarshipContributor = { name: string; amount: number | null };
 export type StarshipContributors = { contributors: StarshipContributor[]; next: string | null };
