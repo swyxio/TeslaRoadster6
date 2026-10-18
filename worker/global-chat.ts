@@ -6,14 +6,14 @@ import { chooseAvailableName, createRecoveryCode, hashRecoverySecret, normalizeC
  * One global object, shared across rooms. WebSocket client sends:
  *   {type:'hello',name:string,code?:string}, {type:'message',text:string},
  *   {type:'rename',name:string,requestId:number}, {type:'save'}, {type:'awardTicket',requestId:number},
- *   {type:'soloAwards',achievements:string[]}, {type:'getAwards'}, or {type:'ping'}.
+ *   {type:'getAwards'}, or {type:'ping'}.
  * Server sends:
  *   {type:'ready',playerId,name,messages}, {type:'message',message},
  *   {type:'renamed',playerId,name,requestId}, {type:'recovery',code}, or {type:'error',message}.
  * Recovery codes are bearer credentials: never broadcast or include in history.
  */
 export type ChatMessage = { id: string; playerId: string; name: string; text: string; time: number };
-export type AwardProgress = { room: AchievementId[]; solo: AchievementId[] };
+export type AwardProgress = AchievementId[];
 export type ChatServerMessage =
   | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[]; awards: AwardProgress | null }
   | { type: 'message'; message: ChatMessage }
@@ -183,17 +183,6 @@ export class GlobalChat extends DurableObject {
       session.updates = session.updates.then(() => this.sendAwards(socket, session));
       return;
     }
-    if (data.type === 'soloAwards') {
-      if (!validAwards(data.achievements)) { this.send(socket, { type: 'error', code: 'awards_failed', message: 'Invalid solo award request.' }); return; }
-      const achievements = data.achievements;
-      session.updates = session.updates.then(async () => {
-        if (!this.sessions.has(socket)) return;
-        if (!session.playerId || !session.issuedCode) { this.send(socket, { type: 'error', code: 'awards_failed', message: 'Save your driver before saving awards.' }); return; }
-        try { await this.recordAwards(session.playerId, achievements, 'solo'); }
-        catch { this.send(socket, { type: 'error', code: 'awards_failed', message: 'Could not save your solo awards. Please try again.' }); }
-      });
-      return;
-    }
     if (data.type === 'save') {
       if (session.issuedCode) {
         this.send(socket, { type: 'recovery', code: session.issuedCode });
@@ -233,7 +222,7 @@ export class GlobalChat extends DurableObject {
     this.error(socket, 'Unknown chat request.');
   }
 
-  // Each profile has its own queue: room RPCs, solo claims and reads cannot
+  // Each profile has its own queue: room RPCs and reads cannot
   // overwrite or overtake one another. Rename writes use a different key.
   private withAwardLock<T>(playerId: string, operation: () => Promise<T>): Promise<T> {
     const result = (this.awardUpdates.get(playerId) ?? Promise.resolve()).then(operation);
@@ -245,17 +234,17 @@ export class GlobalChat extends DurableObject {
 
   private async readAwards(playerId: string): Promise<AwardProgress> {
     const saved = await this.ctx.storage.get<AwardProgress>(`awards:${playerId}`);
-    if (saved === undefined) return { room: [], solo: [] };
-    if (!saved || !validAwards(saved.room) || !validAwards(saved.solo)) throw new Error('Invalid saved award profile');
-    const room = new Set(saved.room), solo = new Set(saved.solo);
-    return { room: AWARD_IDS.filter(id => room.has(id)), solo: AWARD_IDS.filter(id => solo.has(id) && !room.has(id)) };
+    if (saved === undefined) return [];
+    if (!validAwards(saved)) throw new Error('Invalid saved award profile');
+    const unlocked = new Set(saved);
+    return AWARD_IDS.filter(id => unlocked.has(id));
   }
 
   private async sendAwards(socket: WebSocket, session: Session): Promise<void> {
     if (!session.playerId || !this.sessions.has(socket)) return;
     try {
       await this.withAwardLock(session.playerId, async () => {
-        const awards = session.issuedCode ? await this.readAwards(session.playerId!) : { room: [], solo: [] };
+        const awards = session.issuedCode ? await this.readAwards(session.playerId!) : [];
         if (this.sessions.has(socket)) this.send(socket, { type: 'awards', awards });
       });
     } catch {
@@ -291,23 +280,15 @@ export class GlobalChat extends DurableObject {
 
   /** Internal room-to-chat RPC. Only the authoritative room calls this. */
   async recordRoomAwards(playerId: string, achievements: AchievementId[]): Promise<AwardProgress> {
-    return this.recordAwards(playerId, achievements, 'room');
-  }
-
-  private async recordAwards(playerId: string, achievements: AchievementId[], source: 'room' | 'solo'): Promise<AwardProgress> {
     if (typeof playerId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(playerId) || !validAwards(achievements)) {
       throw new Error('Invalid award request');
     }
     return this.withAwardLock(playerId, async () => {
       if (!await this.ctx.storage.get<StoredIdentity>(`identity:${playerId}`)) throw new Error('Saved driver unavailable');
       const before = await this.readAwards(playerId);
-      const room = new Set(before.room), solo = new Set(before.solo);
-      for (const id of achievements) {
-        if (source === 'room') { room.add(id); solo.delete(id); }
-        else if (!room.has(id)) solo.add(id);
-      }
-      const awards: AwardProgress = { room: AWARD_IDS.filter(id => room.has(id)), solo: AWARD_IDS.filter(id => solo.has(id)) };
-      if (awards.room.length !== before.room.length || awards.solo.length !== before.solo.length) {
+      const unlocked = new Set([...before, ...achievements]);
+      const awards = AWARD_IDS.filter(id => unlocked.has(id));
+      if (awards.length !== before.length) {
         await this.ctx.storage.put(`awards:${playerId}`, awards);
       }
       for (const [socket, session] of this.sessions) {
@@ -353,7 +334,7 @@ export class GlobalChat extends DurableObject {
         session.ready = true;
         this.send(socket, { type: 'ready', playerId, name: session.name!, messages: this.history, awards });
       };
-      if (!knownCode) ready({ room: [], solo: [] });
+      if (!knownCode) ready([]);
       else {
         try { await this.withAwardLock(playerId, async () => ready(await this.readAwards(playerId))); }
         catch {

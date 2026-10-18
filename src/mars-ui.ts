@@ -18,7 +18,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
   const $=<T extends HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
   const input=$<HTMLInputElement>('#mars-amount'),feedback=$<HTMLElement>('.mars-feedback'),submit=$<HTMLButtonElement>('.mars-submit'),board=$<HTMLButtonElement>('.mars-board');
   let pending:{id:number;action:'contribute'|'board';sent:number}|null=null,winQueued=false,busyUntil=0;
-  let playerId=session.id,room=session.room,soloWorld=session.status==='solo'?session.world:null;
+  let playerId=session.id,room=session.room;
   const close=()=>{if(dialog.open)dialog.close();};
   dialog.querySelector<HTMLButtonElement>('.mars-close')!.onclick=close;
   win.querySelector<HTMLButtonElement>('.mars-win-close')!.onclick=()=>win.close();
@@ -28,13 +28,12 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     event.preventDefault();
     const amount=Number(input.value),player=session.world.players.find(p=>p.id===session.id);
     if(!Number.isSafeInteger(amount)||amount<=0||amount>(player?.delivery.cash??0)){feedback.textContent='Enter a whole-dollar amount you have available.';return;}
-    busyUntil=performance.now()+800;pending={id:session.mars('contribute',amount),action:'contribute',sent:performance.now()};feedback.textContent=session.status==='solo'?'Adding contribution…':'Saving contribution…';
+    busyUntil=performance.now()+800;pending={id:session.mars('contribute',amount),action:'contribute',sent:performance.now()};feedback.textContent='Saving contribution…';
   };
   board.onclick=()=>{busyUntil=performance.now()+800;pending={id:session.mars('board'),action:'board',sent:performance.now()};feedback.textContent='Preparing to board…';};
   function update(entity:Entity|undefined){
-    const currentSoloWorld=session.status==='solo'?session.world:null;
-    if(playerId!==session.id||room!==session.room||soloWorld!==currentSoloWorld){
-      playerId=session.id;room=session.room;soloWorld=currentSoloWorld;pending=null;winQueued=false;busyUntil=0;feedback.textContent='';
+    if(playerId!==session.id||room!==session.room){
+      playerId=session.id;room=session.room;pending=null;winQueued=false;busyUntil=0;feedback.textContent='';
     }
     if(pending){
       const result=session.marsResult;
@@ -45,19 +44,18 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
       }else if(performance.now()-pending.sent>5000){feedback.textContent='No reply yet. Check the fund and your cash before trying again.';pending=null;}
     }
     if(winQueued&&!document.querySelector('dialog[open]')){
-      winQueued=false;win.querySelector<HTMLElement>('.mars-win-copy')!.textContent=session.status==='solo'?'You funded the mission in this solo drive and boarded at Fremont.':'Your room raised $1 billion and you boarded at Fremont. The Bay made this journey together.';onOpen();win.showModal();
+      winQueued=false;win.querySelector<HTMLElement>('.mars-win-copy')!.textContent='Your room raised $1 billion and you boarded at Fremont. The Bay made this journey together.';onOpen();win.showModal();
     }
     if(!dialog.open)return;
-    const solo=session.status==='solo';
-    $('.mars-eyebrow').textContent=solo?'TESLAND 2050 / SOLO MISSION':'TESLAND 2050 / A ROOM-WIDE MISSION';
-    $('.mars-intro').textContent=solo?'Fund a Starship in this solo drive, then board at the fictional Fremont spaceport.':'Fund a Starship together, then board at the fictional Fremont spaceport. Each room has its own lasting fund.';
-    $('.mars-note').textContent=solo?'Contributions reduce your cash. The solo fund resets when this drive ends. Awards can be saved to your driver; solo awards are self-reported. Today’s deliveries are small: future levels will add higher earnings.':'Contributions are permanent and reduce your session cash. The room fund survives restarts; confirmed awards can be saved to your driver. Today’s deliveries are small: future levels will add higher earnings.';
+    $('.mars-eyebrow').textContent='TESLAND 2050 / A ROOM-WIDE MISSION';
+    $('.mars-intro').textContent='Fund a Starship together, then board at the fictional Fremont spaceport. Each room has its own lasting fund.';
+    $('.mars-note').textContent='Contributions are permanent and reduce your session cash. The room fund survives restarts; confirmed awards can be saved to your driver. Today’s deliveries are small: future levels will add higher earnings.';
     const fund=session.world.mars.fund,remaining=MARS_GOAL-fund,player=session.world.players.find(p=>p.id===session.id),cash=player?.delivery.cash??0;
     $('.mars-total').textContent=`${money(fund)} / ${money(MARS_GOAL)}`;
     $<HTMLProgressElement>('progress').value=fund;
     $('.mars-remaining').textContent=remaining>0?`${money(remaining)} to launch`:'Fully funded · ready to board';
     $('.mars-cash').textContent=`${money(cash)} available`;
-    const busy=!!pending||performance.now()<busyUntil||(session.status!=='online'&&session.status!=='solo');
+    const busy=!!pending||performance.now()<busyUntil||session.status!=='online';
     submit.disabled=busy||cash<1||remaining<=0;
     const dx=entity?FREMONT_SPACEPORT.entrance.x-entity.x:0,dz=entity?FREMONT_SPACEPORT.entrance.z-entity.z:0;
     const distance=Math.round(Math.hypot(dx,dz)),direction=['north','northeast','east','southeast','south','southwest','west','northwest'][(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8];
@@ -65,5 +63,5 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     $('.mars-location').textContent=boarded?'You already boarded for Mars this session.':entity?`${distance} m ${distance>25?direction:'away'} · ${player&&player.delivery.level<2?'Unlock the South Bay at level 2. ':''}Stop in the gold ring to board once the fund is complete.`:'Connect to your room to board.';
     board.disabled=busy||remaining>0||boarded||!entity||!atMarsBoarding(entity);
   }
-  return {open(){if(session.status!=='online'&&session.status!=='solo')return;onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close,update};
+  return {open(){if(session.status!=='online')return;onOpen();feedback.textContent='';if(!dialog.open)dialog.showModal();update(undefined);},close,update};
 }

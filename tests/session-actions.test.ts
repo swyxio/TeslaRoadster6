@@ -122,14 +122,3 @@ test('mini-game barriers follow actions and keep prediction suspended until the 
   assert.notEqual(session.renderWorld(),session.world,'prediction recovers after the latest barrier');
   session.disconnect();
 });
-
-test('an explicit solo session starts and advances locally',()=>{
-  const session=new Session();
-  session.solo();
-  assert.equal(session.status,'solo');
-  assert.equal(session.id,'local');
-  assert.equal(session.world.players.length,1);
-  session.tick(.1,drive);
-  assert.ok(session.world.time>0);
-  session.disconnect();
-});

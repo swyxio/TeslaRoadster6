@@ -2,8 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
-import { FREMONT_SPACEPORT } from '../shared/map';
-import { MARS_GOAL } from '../shared/mars';
 
 class Socket {
   static OPEN = 1;
@@ -155,87 +153,25 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   session.disconnect();
 });
 
-test('solo is explicit, advances locally and ignores an old room socket',()=>{
-  const session=new Session();session.join('bay','Alex');const old=Socket.last;
-  session.solo('model-3','Scout');
-  assert.equal(session.status,'solo');assert.equal(session.room,'');
-  assert.equal(session.world.players[0].name,'Scout');
-  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
-  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
-  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
-  assert.equal(session.status,'solo');assert.equal(session.id,'local');
-  const id=session.setDestination(-180,60);
-  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
-});
-
-test('switching from a room to solo keeps a playable local world and ignores old socket events',()=>{
-  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const online=createWorld();addPlayer(online,'p','Alex');socket.message({type:'state',world:online,inputAck:0});
-  session.solo('model-3','Solo Alex');
-  assert.equal(session.status,'solo');assert.equal(session.room,'');assert.equal(socket.readyState,3);
-  const player=session.world.players.find(p=>p.id===session.id)!;
-  const car=session.world.entities.find(e=>e.id===player.entityId)!;
-  assert.equal(player.name,'Solo Alex');assert.equal(car.kind,'model-3');
-  socket.message({type:'state',world:online,inputAck:0});socket.closed();
-  assert.equal(session.status,'solo');assert.equal(session.world.players[0].id,'local');
-  session.tick(.05,NEUTRAL);assert.ok(session.world.time>0);
-  session.setName('Renamed');assert.equal(player.name,'Renamed');
-  session.action('dome');assert.ok(car.inDome);
-  assert.equal(session.parkingAction('leave'),true);
-  const requestId=session.setOta(true);assert.deepEqual(session.otaResult,{requestId,enabled:true,ok:true});
-  session.join('friends','Solo Alex');assert.equal(session.status,'connecting');assert.equal(session.world.players.length,0);
-  Socket.last.closed();
-});
-
-test('a full-room error can be followed by an explicit solo drive',()=>{
-  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
-  socket.closed(ROOM_FULL_CODE);assert.equal(session.roomFull,true);
-  session.solo();assert.equal(session.status,'solo');assert.equal(session.roomFull,false);assert.equal(session.error,'');
-  assert.equal(session.world.players.length,1);
-});
-
-test('solo mini-game requests use the local simulation',()=>{
-  const session=new Session();session.solo('model-3','Scout');
-  assert.equal(session.enterMinigame('park'),true);
-  assert.ok(session.world.parking.rounds.some(round=>round.mode==='park'&&round.entrants.some(entry=>entry.playerId===session.id)));
-  assert.equal(session.parkingAction('leave'),true);
-  assert.equal(session.enterMinigame('oval'),true);
-  assert.ok(session.world.races.rounds.some(round=>round.courseId==='oval'&&round.entrants.some(entry=>entry.playerId===session.id)));
-});
-
-test('solo Mars contributions and boarding are local to the current drive',()=>{
-  const session=new Session();session.solo();
-  const player=session.world.players[0],car=session.world.entities.find(entity=>entity.id===player.entityId)!;
-  player.delivery.cash=80;
-  let requestId=session.mars('contribute',25);
-  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:25});
-  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
-  requestId=session.mars('contribute',56);
-  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:false,amount:0});
-  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
-  session.world.mars.fund=MARS_GOAL-10;
-  requestId=session.mars('contribute',20);
-  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:10});
-  assert.equal(player.delivery.cash,45);assert.equal(session.world.mars.fund,MARS_GOAL);
-  Object.assign(car,FREMONT_SPACEPORT.entrance,{speed:0,supportId:'ground'});
-  requestId=session.mars('board');
-  assert.deepEqual(session.marsResult,{requestId,action:'board',ok:true,amount:0});
-  assert.ok(player.achievements.unlocked.includes('to-mars'));
-  session.solo();assert.equal(session.world.mars.fund,0);assert.equal(session.marsResult,null);
-});
-
-test('switching to solo clears and ignores stale room action results',()=>{
-  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const marsId=session.mars('contribute',10),destinationId=session.setDestination(-180,60);
-  socket.message({type:'marsResult',requestId:marsId,action:'contribute',ok:true,amount:10});
-  socket.message({type:'destinationResult',requestId:destinationId,ok:true});
-  assert.equal(session.marsResult?.ok,true);assert.equal(session.destinationResult?.ok,true);
-  session.solo();
-  assert.equal(session.marsResult,null);assert.equal(session.destinationResult,null);
-  socket.message({type:'marsResult',requestId:marsId,action:'contribute',ok:true,amount:10});
-  socket.message({type:'destinationResult',requestId:destinationId,ok:true});
-  assert.equal(session.marsResult,null);assert.equal(session.destinationResult,null);
+test('award binding is private to the current online room and clears on reconnect',()=>{
+  const session=new Session();
+  assert.equal(session.bindAwards('ticket',1),false);
+  assert.equal(session.unbindAwards(2),false);
+  session.join('bay','Alex');const old=Socket.last;
+  old.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');old.message({type:'state',world,inputAck:0});
+  assert.equal(session.bindAwards('ticket',3),true);
+  assert.deepEqual(JSON.parse(old.sent.at(-1)!),{type:'bindAwards',ticket:'ticket',requestId:3});
+  old.message({type:'awardsBound',requestId:3,ok:true});
+  old.message({type:'awardsSync',ok:true});
+  assert.deepEqual(session.awardsBound,{requestId:3,ok:true});assert.equal(session.awardsSync,true);
+  assert.equal(session.unbindAwards(4),true);
+  assert.deepEqual(JSON.parse(old.sent.at(-1)!),{type:'unbindAwards',requestId:4});
+  old.message({type:'awardsUnbound',requestId:4,ok:true});
+  assert.deepEqual(session.awardsUnbound,{requestId:4,ok:true});
+  session.join('another','Alex');assert.equal(session.awardsBound,null);assert.equal(session.awardsUnbound,null);assert.equal(session.awardsSync,null);
+  old.message({type:'awardsBound',requestId:3,ok:true});
+  old.message({type:'awardsSync',ok:true});
+  assert.equal(session.awardsBound,null);assert.equal(session.awardsSync,null);
+  session.disconnect();
 });

@@ -56,7 +56,7 @@ document.querySelector('#app')!.innerHTML = `
  <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="bay" pattern="[a-z0-9-]+" value="${DEFAULT_ROOM}" autocapitalize="none" spellcheck="false"></label></div>
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
  <button id="join" class="primary">Join room <span>↗</span></button>
- <button id="solo" class="secondary">Take a solo drive <span>→</span></button><p class="form-note" id="form-note" role="status">Join friends with a room code, or drive solo. Change rides here or use Actions → Fleet.</p>
+ <p class="form-note" id="form-note" role="status">Join friends with a room code. Change rides here or use Actions → Fleet.</p>
  <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <div class="release-links"><span>${CURRENT_RELEASE.label}</span><a id="release-changelog" href="/changelog/">Changelog</a><a href="/blog/">Dev blog</a><a href="/lore/">The story</a></div><p id="last-played" class="last-played">No earlier play recorded on this browser.</p>
@@ -89,7 +89,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
-<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="error-solo" class="secondary">Drive solo</button><button id="error-menu" class="text-button">Room settings</button></div>
+<div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
 let selectedVehicle:VehicleId='roadster';
 let startingRideChanged=false;
@@ -143,7 +143,7 @@ for(const event of ['pointerdown','keydown'] as const)window.addEventListener(ev
 refreshSoundSettings();refreshRadio();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
-catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-room-label').hidden=true; $('error-join').hidden=true; $('error-solo').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
+catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-room-label').hidden=true; $('error-join').hidden=true; $('error-menu').hidden=true; throw new Error('WebGL unavailable'); }
 let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
 let lastLevel:Level|undefined,lastBlockedAt=-1,lastBlockedNoticeAt=-10;
 let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
@@ -311,7 +311,7 @@ if(rememberedCode)ensureChat();
 
 const roomParam = new URLSearchParams(location.search).get('room');
 const playStorage=browserStorage(),previousPlay=playStorage?readLastPlayed(playStorage):null;
-const awardSync=createAwardSync(chat,session,playStorage);
+const awardSync=createAwardSync(chat,session);
 if(previousPlay){
   $('last-played').textContent=`Last played ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(previousPlay.playedAt))} · ${releaseLabel(previousPlay.version)}. Saved on this browser.`;
   $<HTMLAnchorElement>('release-changelog').href=`/changelog/?since=${encodeURIComponent(previousPlay.version)}`;
@@ -327,7 +327,7 @@ let menuRidePending:{kind:VehicleId;closeOnSuccess:boolean;expires:number}|null=
 function updateRideMenu(){
   const sameRoom=session.status==='online'&&$<HTMLInputElement>('room').value.trim().toLowerCase()===session.room;
   $('apply-ride').hidden=!sameRoom;
-  if(!menuRidePending)$('form-note').textContent=sameRoom?'Choose a ride and use Change to this ride, or return to keep your current car.':'Join friends with a room code, or drive solo. Change rides here or use Actions → Fleet.';
+  if(!menuRidePending)$('form-note').textContent=sameRoom?'Choose a ride and use Change to this ride, or return to keep your current car.':'Join friends with a room code. Change rides here or use Actions → Fleet.';
 }
 function toggleMenu(show: boolean) {if(!show&&menuRidePending)return;if(show&&!menu){startingRideChanged=false;updateRideMenu();}menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started||session.status==='disconnected');$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function requestMenuRide(closeOnSuccess:boolean){
@@ -345,11 +345,11 @@ function requestMenuRide(closeOnSuccess:boolean){
   $<HTMLButtonElement>('apply-ride').disabled=true;
   $('form-note').textContent='Requesting your ride…';
 }
-function begin(solo:boolean,userGesture=true){
+function begin(userGesture=true){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
-  if(!solo&&!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
+  if(!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
-  if(!solo&&session.status==='online'&&session.room===room){
+  if(session.status==='online'&&session.room===room){
     session.join(room,chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
     if(userGesture)void audio.unlock();
     if(startingRideChanged)requestMenuRide(true);else toggleMenu(false);
@@ -360,18 +360,18 @@ function begin(solo:boolean,userGesture=true){
   pendingShop=null;pendingOta=null;pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
-  $<HTMLInputElement>('room').value=room;controls.resetSequences();if(solo){session.solo(selectedVehicle,nameInput.value.trim()||'Driver');history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
+  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
+$('join').onclick=()=>begin();$('retry').onclick=()=>begin();
 $('apply-ride').onclick=()=>requestMenuRide(false);
 $<HTMLInputElement>('room').addEventListener('input',updateRideMenu);
 $('error-join').onclick=()=>{
   const room=$<HTMLInputElement>('error-room').value.trim().toLowerCase();
   if(!validRoom(room)){$('error-room-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return;}
-  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin(false);
+  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin();
 };
 $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;shopBusyUntil=0;session.disconnect();toggleMenu(true);};
@@ -399,7 +399,6 @@ const minigames=setupMinigames({session,controls,closeDrawer:()=>setDrawer(null)
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
 $('invite').onclick=async()=>{
-  if(session.status==='solo'){toggleMenu(true);notice('Join a room to invite friends.');return;}
   try{await navigator.clipboard.writeText(location.href);notice('Invite link copied. Send it to your crew.');}catch{notice('Copy the address in your browser to invite a friend.');}
 };
 const map=$<HTMLCanvasElement>('minimap').getContext('2d')!;
@@ -700,7 +699,7 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);awardSync.update();progressPanels.update();audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));
+  session.tick(dt,input);awardSync.update();progressPanels.update();audio.update(session.world,session.id,started&&!menu&&session.status==='online');
   const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world,session.takePresentationSnap());
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
@@ -722,7 +721,7 @@ scene.start(dt=>{
     if(result?.requestId===pendingDestination.requestId){notice(result.ok?(pendingDestination.success??'Self-driving to your destination. Use the controls to take over.'):(pendingDestination.failure??'No route found. Choose an unlocked nearby road and try again.'));pendingDestination=null;}
     else if(performance.now()>pendingDestination.expires){notice('Could not confirm the route. Please try again.');pendingDestination=null;}
   }
-  if(started&&!menu&&!document.hidden&&(session.status==='solo'||session.status==='online')&&observedPlayer){
+  if(started&&!menu&&!document.hidden&&session.status==='online'&&observedPlayer){
     const now=Date.now(),active=observedPlayer.delivery.activeSeconds;
     if(active>lastActiveSeconds)lastActiveAt=now;
     if(!playRecorded||(active>lastActiveSeconds&&now-lastPlayWrite>=10000))recordPlay(now);
@@ -736,8 +735,8 @@ scene.start(dt=>{
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
   // A room switch clears the presentation world until an authoritative
   // snapshot arrives; do not leave the old room's instruments on screen.
-  $('hud').classList.toggle('hidden',menu||(session.status!=='online'&&session.status!=='solo'));
-  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='solo'?'● SOLO PLAYGROUND':'○ DISCONNECTED';
+  $('hud').classList.toggle('hidden',menu||session.status!=='online');
+  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`Room: ${session.room}`:'';
   $('joining').classList.toggle('hidden',!started||menu||session.status!=='connecting');
   if(started&&!menu&&session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-title').textContent=session.roomFull?'This room is full.':'Let’s get you back on the road.';$('error-copy').textContent=session.error;}
@@ -843,4 +842,4 @@ scene.start(dt=>{
 // A malformed invite must not silently place friends in a different room.
 if(roomParam!==null&&!validRoom(roomParam)){
   $('form-note').textContent='Invalid room link. Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';
-}else begin(false,false);
+}else begin(false);

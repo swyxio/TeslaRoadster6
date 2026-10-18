@@ -11,12 +11,11 @@ export const RELEASES = [
     sections: [
       { title: 'Cruise to your delivery', items: [
         'Double-tap Shift or tap Self-drive to delivery to head toward the next pickup or drop-off. Use the controls any time to take over.',
-        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.',
-        'Solo drives are back: choose one from the menu or when a room is unavailable.'
+        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.'
       ] },
       { title: 'Keep your victories', items: [
         'Scores show delivery progress and current or recent mini-game results for this drive.',
-        'Earn new parking and racing awards. Confirmed awards stay with your saved driver across drives and devices; solo awards are self-reported.'
+        'Earn new parking and racing awards. Confirmed awards stay with your saved driver across drives and devices.'
       ] }
     ]
   },

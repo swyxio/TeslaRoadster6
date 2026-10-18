@@ -9,6 +9,8 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { NEUTRAL, type World } from '../shared/game';
+import { DOME } from '../shared/dome';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let interrupted = false;
@@ -98,7 +100,7 @@ async function waitForServer(child: ChildProcess, base: string) {
   }, 'isolated Wrangler startup', 25_000);
 }
 
-type ChatEvent = { type: string; playerId?: string; name?: string; code?: string; ticket?: string; requestId?: number; expiresAt?: number; awards?: { room: string[]; solo: string[] } | null; messages?: unknown[]; message?: { text?: string } };
+type ChatEvent = { type: string; playerId?: string; name?: string; code?: string; ticket?: string; requestId?: number; expiresAt?: number; awards?: string[] | null; messages?: unknown[]; message?: { text?: string } };
 function connect(url: string) {
   const socket = new WebSocket(url);
   const events: ChatEvent[] = [];
@@ -131,22 +133,52 @@ try {
   send(first.socket, { type: 'save' });
   const renamed = `Again${randomUUID().slice(0, 8)}`;
   send(first.socket, { type: 'rename', name: renamed, requestId: 1 });
-  send(first.socket, { type: 'soloAwards', achievements: ['regular', 'roof-rider'] });
   send(first.socket, { type: 'awardTicket', requestId: 2 });
   await until(() => first.events.some(event => event.type === 'recovery'), 'recovery code');
   const code = first.events.find(event => event.type === 'recovery')!.code;
   assert.ok(code);
   await until(() => first.events.some(event => event.type === 'renamed'), 'renamed driver before restart');
   assert.equal(first.events.find(event => event.type === 'renamed')?.playerId, guest.playerId);
-  await until(() => first.events.some(event => event.type === 'awards' && event.awards?.solo.includes('regular')), 'solo awards saved');
-  const savedAwards = first.events.find(event => event.type === 'awards' && event.awards?.solo.includes('regular'))!.awards;
-  assert.deepEqual(savedAwards, { room: [], solo: ['roof-rider', 'regular'] });
   await until(() => first.events.some(event => event.type === 'awardTicket'), 'private room grant');
   const ticket = first.events.find(event => event.type === 'awardTicket')!;
   assert.equal(ticket.requestId, 2);
   assert.match(ticket.ticket!, /^[0-9a-f]{64}$/);
   assert.ok(ticket.expiresAt! > Date.now());
   assert.ok(!JSON.stringify(ticket).includes(code), 'the room grant never contains a recovery code');
+
+  // Earn the awards through the authoritative simulation before restarting.
+  const room = new WebSocket(`ws://127.0.0.1:${port}/api/room/restart-${randomUUID().slice(0,8)}`);
+  sockets.push(room);
+  let roomId='', world:World|undefined, bound=false, seq=0;
+  room.addEventListener('message',event=>{
+    const message=JSON.parse(String(event.data));
+    if(message.type==='welcome')roomId=message.id;
+    if(message.type==='state')world=message.world;
+    if(message.type==='awardsBound'&&message.requestId===1)bound=message.ok;
+  });
+  await until(()=>!!roomId&&!!world,'room joins');
+  send(room,{type:'bindAwards',ticket:ticket.ticket,requestId:1});
+  await until(()=>bound,'saved driver binds to room');
+  send(room,{type:'dome'});
+  await until(()=>!!world?.entities.some(entity=>entity.driver===roomId&&entity.inDome),'Dome entry');
+  for(let score=1;score<=5;score++){
+    if(score>1){
+      await until(()=>world?.soccer.phase==='play','next kickoff',20_000);
+      send(room,{type:'reset'});
+      await until(()=>!!world?.entities.some(entity=>entity.driver===roomId&&Math.abs(entity.x-(DOME.x-30))<1&&Math.abs(entity.z-DOME.z)<1),'shooting position');
+    }
+    const start=world!.time,deadline=Date.now()+30_000;
+    while((world?.time??start)-start<3.5&&Date.now()<deadline){
+      send(room,{type:'input',seq:++seq,input:{...NEUTRAL,throttle:1}});
+      await delay(50);
+    }
+    assert.ok((world?.time??start)-start>=3.5,'room advances enough simulation time for the shot');
+    send(room,{type:'input',seq:++seq,input:NEUTRAL});
+    await until(()=>world?.soccer.blueScore===score,`goal ${score}`,20_000);
+  }
+  await until(()=>first.events.some(event=>event.type==='awards'&&event.awards?.includes('rocket-rookie')&&event.awards.includes('roadster-champion')),'room awards saved',20_000);
+  const savedAwards=first.events.find(event=>event.type==='awards'&&event.awards?.includes('rocket-rookie')&&event.awards.includes('roadster-champion'))!.awards;
+  assert.deepEqual(savedAwards,['rocket-rookie','roadster-champion']);
   await stop(child);
   child = undefined;
 
@@ -161,9 +193,9 @@ try {
   assert.ok(recovered, 'saved recovery code must be accepted after the restart');
   assert.equal(recovered.playerId, guest.playerId);
   assert.equal(recovered.name, renamed);
-  assert.deepEqual(recovered.awards, savedAwards, 'confirmed solo awards survive a restart with their identity');
+  assert.deepEqual(recovered.awards, savedAwards, 'confirmed room awards survive a restart with their identity');
   assert.deepEqual(recovered.messages, [], 'chat history must not survive a restart');
-  console.log('PASS: real local Wrangler restart preserved saved player ID, name, and solo awards and discarded chat history.');
+  console.log('PASS: real local Wrangler restart preserved saved player ID, name, and authoritative room awards and discarded chat history.');
 } finally {
   for (const socket of sockets) if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
   if (child) await stop(child);

@@ -4,7 +4,7 @@ import type { Player } from '../shared/game';
 import type { Session } from './session';
 import { awardProgress, deliveryStandings, GameResultHistory, nextDeliveryLevel, type GameScores } from './progress-model';
 
-export type SavedAwards = { unlocked:readonly AchievementId[]; solo?:readonly AchievementId[]; status:string };
+export type SavedAwards = { unlocked:readonly AchievementId[]; status:string };
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const plural=(number:number,word:string)=>`${number} ${word}${number===1?'':'s'}`;
@@ -30,15 +30,14 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
     dialog.addEventListener('close',onClose);
   }
   const history=new GameResultHistory();
-  let playerId=session.id,room=session.room,soloWorld=session.status==='solo'?session.world:null;
+  let playerId=session.id,room=session.room;
   let games:GameScores={current:[],recent:[]},lastRender=0;
-  const available=()=>session.status==='online'||session.status==='solo';
+  const available=()=>session.status==='online';
   function observe(){
-    const currentSolo=session.status==='solo'?session.world:null;
-    if(playerId!==session.id||room!==session.room||(currentSolo!==null&&currentSolo!==soloWorld)){
+    if(playerId!==session.id||room!==session.room){
       history.clear();games={current:[],recent:[]};
     }
-    playerId=session.id;room=session.room;soloWorld=currentSolo;
+    playerId=session.id;room=session.room;
     if(available())games=history.observe(session.world,session.id);
   }
   function appendGameList(parent:HTMLElement,title:string,items:GameScores['current']){
@@ -79,7 +78,7 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
     }else personal.append(element('p','progress-empty','Your delivery stats are not available yet.'));
     body.append(personal);
     const standings=element('section','progress-section');
-    standings.append(element('h3','',session.status==='solo'?'Solo delivery score':'Room delivery standings'),element('p','progress-note','Ranked by deliveries completed, then total earned. Cash can be spent or lost to tickets.'));
+    standings.append(element('h3','','Room delivery standings'),element('p','progress-note','Ranked by deliveries completed, then total earned. Cash can be spent or lost to tickets.'));
     if(session.world.players.length){
       const wrapper=element('div','progress-table-wrap'),table=element('table','progress-table');
       const head=element('thead',''),header=element('tr','');
@@ -105,7 +104,7 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
   }
   function renderAwards(){
     const body=awardsDialog.querySelector<HTMLElement>('.progress-awards-body')!,saveStatus=awardsDialog.querySelector<HTMLElement>('.progress-save-status')!;
-    body.replaceChildren();const saved=awards(),savedIds=new Set(saved.unlocked),soloIds=new Set(saved.solo??[]),player=available()?session.world.players.find(item=>item.id===session.id):undefined;
+    body.replaceChildren();const saved=awards(),savedIds=new Set(saved.unlocked),player=available()?session.world.players.find(item=>item.id===session.id):undefined;
     const current=new Set(player?.achievements.unlocked??[]),all=new Set([...savedIds,...current]);
     const sessionOnly=[...current].filter(id=>!savedIds.has(id)).length;
     saveStatus.textContent=saved.status;
@@ -115,7 +114,7 @@ export function createProgressPanels({session,awards,onOpen,onClose}:{
       const id=key as AchievementId,isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
       const row=element('li',`progress-award${earned?' is-earned':''}`),icon=element('span','progress-award-icon',earned?'★':'◇');icon.setAttribute('aria-hidden','true');
       const copy=element('div','progress-award-copy');copy.append(element('strong','',award.name),element('p','',award.description));
-      const status=isSaved?(soloIds.has(id)?'Saved to your driver · solo, self-reported':'Saved to your driver'):isCurrent?'Earned this drive · not saved':awardProgress(id,player,session.world);
+      const status=isSaved?'Saved to your driver':isCurrent?'Earned this drive · not saved':awardProgress(id,player,session.world);
       copy.append(element('small','progress-award-status',status));
       if(id==='regular'&&!earned&&player){const bar=element('progress','progress-award-bar');bar.max=3;bar.value=Math.min(player.delivery.completed,3);bar.setAttribute('aria-label','Neighborhood Regular delivery progress');copy.append(bar);}
       row.append(icon,copy);list.append(row);

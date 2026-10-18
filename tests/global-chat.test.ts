@@ -212,15 +212,15 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     awardsHub.awardTickets.get(expiredTicket).expiresAt = Date.now() - 1;
     assert.equal(awardsHub.consumeAwardTicket(expiredTicket), null, 'expired grants cannot be consumed');
 
-    awardsHub.onMessage(owner, JSON.stringify({ type: 'soloAwards', achievements: ['regular', 'roof-rider'] }));
-    await ownerSession.updates;
-    assert.deepEqual(owner.sent.at(-1).awards, { room: [], solo: ['roof-rider', 'regular'] });
-    assert.ok(!other.sent.some(event => event.type === 'awards' && event.awards.solo.length));
-    const roomAwards = await awardsHub.recordRoomAwards(ownerId, ['regular', 'sky-delivery', 'regular']);
-    assert.deepEqual(roomAwards, { room: ['sky-delivery', 'regular'], solo: ['roof-rider'] }, 'room evidence upgrades a solo award');
+    // Chat clients cannot self-report an award: only the room RPC can record it.
     awardsHub.onMessage(owner, JSON.stringify({ type: 'soloAwards', achievements: ['regular'] }));
     await ownerSession.updates;
-    assert.deepEqual(owner.sent.at(-1).awards, roomAwards, 'a repeated solo claim cannot downgrade room provenance');
+    assert.match(owner.sent.at(-1).message, /Unknown chat request/);
+    assert.equal(data.get(`awards:${ownerId}`), undefined);
+    const roomAwards = await awardsHub.recordRoomAwards(ownerId, ['regular', 'sky-delivery', 'regular']);
+    assert.deepEqual(roomAwards, ['sky-delivery', 'regular']);
+    assert.ok(!other.sent.some(event => event.type === 'awards' && event.awards.length));
+    assert.deepEqual(await awardsHub.recordRoomAwards(ownerId, ['regular']), roomAwards, 'repeated awards are idempotent');
     await assert.rejects(awardsHub.recordRoomAwards(ownerId, ['not-real']), /Invalid award request/);
     await assert.rejects(awardsHub.recordRoomAwards(crypto.randomUUID(), ['regular']), /Saved driver unavailable/);
     assert.deepEqual(data.get(`awards:${ownerId}`), roomAwards);
@@ -246,23 +246,19 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     await new Promise(resolve => setTimeout(resolve, 0));
     unblockAward();
     await Promise.all([firstWrite, secondWrite]);
-    assert.deepEqual((data.get(`awards:${ownerId}`) as any).room, ['bay-hopper', 'sky-delivery', 'regular', 'rocket-rookie']);
+    assert.deepEqual(data.get(`awards:${ownerId}`), ['bay-hopper', 'sky-delivery', 'regular', 'rocket-rookie']);
     failAward = true;
     const notices = guarded.sent.filter(event => event.type === 'awards').length;
     await assert.rejects(guardedHub.recordRoomAwards(ownerId, ['to-mars']), /storage failure/);
     assert.equal(guarded.sent.filter(event => event.type === 'awards').length, notices);
-    guardedHub.onMessage(guarded, JSON.stringify({ type: 'soloAwards', achievements: ['to-mars'] }));
-    await guardedSession.updates;
-    assert.equal(guarded.sent.at(-1).code, 'awards_failed');
-    assert.ok(!(data.get(`awards:${ownerId}`) as any).solo.includes('to-mars'));
+    assert.ok(!(data.get(`awards:${ownerId}`) as string[]).includes('to-mars'));
     failAward = false;
-    guardedHub.onMessage(guarded, JSON.stringify({ type: 'soloAwards', achievements: ['to-mars'] }));
-    await guardedSession.updates;
-    assert.ok(guarded.sent.at(-1).awards.solo.includes('to-mars'));
+    await guardedHub.recordRoomAwards(ownerId, ['to-mars']);
+    assert.ok(guarded.sent.at(-1).awards.includes('to-mars'));
     guardedHub.onMessage(guarded, JSON.stringify({ type: 'rename', name: 'Award Driver Renamed', requestId: 8 }));
     await guardedSession.updates;
     assert.equal(guarded.sent.find(event => event.type === 'renamed').name, 'Award Driver Renamed');
-    assert.ok(guarded.sent.at(-1).awards.solo.includes('to-mars'), 'renaming refreshes the same profile');
+    assert.ok(guarded.sent.at(-1).awards.includes('to-mars'), 'renaming refreshes the same profile');
     guardedHub.onMessage(guarded, JSON.stringify({ type: 'awardTicket', requestId: 5 }));
     await guardedSession.updates;
     const disconnectedTicket = guarded.sent.at(-1).ticket;
@@ -272,8 +268,8 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     const restored = makeSocket(), restoredSession = attach(restoredHub, restored);
     await restoredHub.hello(restored, restoredSession, '', ownerCode);
     assert.equal(restored.sent.at(-1).name, 'Award Driver Renamed');
-    assert.ok(restored.sent.at(-1).awards.solo.includes('to-mars'));
-    assert.ok(restored.sent.at(-1).awards.room.includes('bay-hopper'));
+    assert.ok(restored.sent.at(-1).awards.includes('to-mars'));
+    assert.ok(restored.sent.at(-1).awards.includes('bay-hopper'));
 
     // A broken awards read does not masquerade as an empty profile or block
     // the chat identity. The driver can retry when storage recovers.
@@ -289,7 +285,7 @@ test('socket teardown and racing recovery retain one live owner and persistent h
     failRead = false;
     readHub.onMessage(readSocket, JSON.stringify({ type: 'getAwards' }));
     await readSession.updates;
-    assert.ok(readSocket.sent.at(-1).awards.room.includes('bay-hopper'));
+    assert.ok(readSocket.sent.at(-1).awards.includes('bay-hopper'));
   } finally {
     Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
   }

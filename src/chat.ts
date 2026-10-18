@@ -2,7 +2,7 @@ import type { ChatMessage } from './chat-panel';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 
 export type ChatStatus = 'connecting' | 'online' | 'offline';
-export type AwardProgress = { room: AchievementId[]; solo: AchievementId[] };
+export type AwardProgress = AchievementId[];
 export type AwardTicket = { requestId:number; ticket:string; expiresAt:number };
 type ChatCallbacks = {
   onStatus: (status: ChatStatus, detail?: string) => void;
@@ -16,10 +16,8 @@ type ChatCallbacks = {
 };
 
 function parseAwards(value:unknown):AwardProgress|null {
-  if(!value||typeof value!=='object')return null;
-  const {room,solo}=value as Record<string,unknown>;
-  const valid=(ids:unknown):ids is AchievementId[]=>Array.isArray(ids)&&ids.every(id=>typeof id==='string'&&Object.hasOwn(ACHIEVEMENTS,id));
-  return valid(room)&&valid(solo)?{room:[...new Set(room)],solo:[...new Set(solo)]}:null;
+  if(!Array.isArray(value)||!value.every(id=>typeof id==='string'&&Object.hasOwn(ACHIEVEMENTS,id)))return null;
+  return [...new Set(value as AchievementId[])];
 }
 
 /** Global chat is independent of the current driving room. */
@@ -77,7 +75,6 @@ export class GlobalChat {
   save(): boolean { return this.sendPacket({ type: 'save' }); }
   rename(name: string, requestId: number): boolean { return this.sendPacket({ type: 'rename', name, requestId }); }
   requestAwardTicket(requestId:number):boolean { return this.sendPacket({type:'awardTicket',requestId}); }
-  saveSoloAwards(achievements:AchievementId[]):boolean { return this.sendPacket({type:'soloAwards',achievements}); }
   getAwards():boolean { return this.sendPacket({type:'getAwards'}); }
 
   private receiveAwards(value:unknown) {

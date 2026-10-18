@@ -40,7 +40,7 @@ function connect() {
   return { socket, state };
 }
 const one = connect(), two = connect();
-type ChatEvent = { type:string; playerId?:string; name?:string; code?:string; ticket?:string; requestId?:number; awards?:{room:string[];solo:string[]}|null };
+type ChatEvent = { type:string; playerId?:string; name?:string; code?:string; ticket?:string; requestId?:number; awards?:string[]|null };
 const chatSockets:WebSocket[] = [];
 function chatConnection() {
   const socket = new WebSocket(base.replace(/^http/, 'ws') + '/api/chat');
@@ -225,17 +225,17 @@ try {
   },'match winner and both Roadster awards replicated');
   assert.deepEqual(two.state.world!.players.find(p=>p.id===two.state.id)!.achievements.unlocked,[],'nonparticipant receives no Dome award');
   if(winningDriver&&spectatorDriver) {
-    const ownsAwards=(event:ChatEvent)=>event.type==='awards'&&!!event.awards?.room.includes('rocket-rookie')&&event.awards.room.includes('roadster-champion');
+    const ownsAwards=(event:ChatEvent)=>event.type==='awards'&&!!event.awards?.includes('rocket-rookie')&&event.awards.includes('roadster-champion');
     await eventually(()=>winningDriver!.events.some(ownsAwards),'room-earned awards are durably confirmed to the winner',15000);
     assert.ok(!spectatorDriver.events.some(ownsAwards),'room-earned awards are not sent to another identity');
     winningDriver.socket.close();
     spectatorDriver.socket.close();
     const [winnerRecovered,spectatorRecovered]=await Promise.all([recoverDriver(winningDriver.code),recoverDriver(spectatorDriver.code)]);
     assert.equal(winnerRecovered.ready.playerId,winningDriver.playerId);
-    assert.ok(winnerRecovered.ready.awards?.room.includes('rocket-rookie'));
-    assert.ok(winnerRecovered.ready.awards?.room.includes('roadster-champion'));
+    assert.ok(winnerRecovered.ready.awards?.includes('rocket-rookie'));
+    assert.ok(winnerRecovered.ready.awards?.includes('roadster-champion'));
     assert.equal(spectatorRecovered.ready.playerId,spectatorDriver.playerId);
-    assert.deepEqual(spectatorRecovered.ready.awards,{room:[],solo:[]},'another saved driver cannot inherit the winner’s awards');
+    assert.deepEqual(spectatorRecovered.ready.awards,[],'another saved driver cannot inherit the winner’s awards');
   }
   if(awardsOnly) {
     console.log('PASS: saved drivers bind privately; room ticket replay is rejected; a real five-goal Dome match saves awards to the winning driver; recovery restores those awards and isolates the spectator.');
