@@ -35,6 +35,7 @@ try{
   if(!response.ok)throw new Error(`${await response.text()}\n${logs}`);
   const speculative=await response.json() as Result;
   assert.equal(speculative.draft.delivery.completed,1,'the speculative target was actually visited');
+  assert.equal(speculative.writes.some(item=>item.action.kind==='delivery'),true,'the physical visit is retained for replay');
   assert.equal(speculative.saved.completed,0,'a visit that does not match the restored order is a no-op');
   assert.equal(speculative.saved.cash,speculative.initial.cash);
   assert.equal(speculative.saved.achievementTiers?.deliveries.count,0,'an unmatched stop does not advance tiers');
@@ -64,6 +65,18 @@ try{
   assert.equal(unknown.driverMoved,true,'the affected driver continues moving while the rate is held');
   assert.equal(unknown.otherMoved,true,'another player continues moving independently');
   assert.equal(unknown.health,100,'a supply pickup observed during the hold still applies after settlement');
+  const knownResponse=await fetch(base+'/known',{signal:AbortSignal.timeout(5_000)});
+  if(!knownResponse.ok)throw new Error(`${await knownResponse.text()}\n${logs}`);
+  const known=await knownResponse.json() as typeof unknown;
+  assert.deepEqual(known.writes.map(item=>item.action.kind),['delivery','supply','delivery']);
+  assert.equal(known.writes[0].action.kind==='delivery'&&known.writes[0].action.multiplier,2);
+  assert.equal(known.writes[2].action.kind==='delivery'&&known.writes[2].action.atMs,2_000,'later stop retains its observation time');
+  assert.equal(known.saved.completed,1);
+  assert.equal(known.saved.order.stage,'dropoff','a stop observed during assignment is replayed after the final target exists');
+  assert.equal(known.saved.earned,known.expectedFare+known.expectedPickup);
+  assert.equal(known.saved.achievementTiers?.pickups.count,1);
+  assert.equal(known.deferredSpend,true);
+  assert.equal(known.driverMoved&&known.otherMoved,true);
   const backlogResponse=await fetch(base+'/backlog',{signal:AbortSignal.timeout(5_000)});
   if(!backlogResponse.ok)throw new Error(`${await backlogResponse.text()}\n${logs}`);
   const backlog=await backlogResponse.json() as {closed:boolean;queued:number};

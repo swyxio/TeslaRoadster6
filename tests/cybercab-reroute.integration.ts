@@ -40,7 +40,7 @@ try{
   assert.ok(result);assert.equal(result.writes[0].action.kind,'cab-income');
   const reply=result.messages.find(message=>message.type==='marsResult'&&message.requestId===1);
   assert.ok(reply,'spend receives a response');
-  assert.equal(result.persisted.cash,reply.ok?29_000:49_000,'the cab income, region award, and optional spend settle exactly once');
+  assert.equal(result.persisted.cash,reply.ok?28_500:48_500,'the $20,000 cab income, $2,000 cab award, $500 region award, and optional spend settle exactly once');
   assert.ok(result.persisted.unlocked.includes('region-oakland'));
   assert.equal(result.persisted.level,1,'the final balance still permits Oakland');
   assert.deepEqual(result.persisted.order,result.original,'a delayed cab credit must not reroute an Oakland delivery when the resulting balance still permits it');
@@ -48,7 +48,7 @@ try{
   if(!historyResponse.ok)throw new Error(`history spend fixture failed: ${await historyResponse.text()}\n${logs}`);
   const beforeCredit=await historyResponse.json() as typeof result;
   assert.deepEqual(beforeCredit.writes.map(write=>write.action.kind),['contribute','cab-income']);
-  assert.equal(beforeCredit.persisted.cash,29_000);
+  assert.equal(beforeCredit.persisted.cash,28_500);
   assert.ok(beforeCredit.persisted.unlocked.includes('region-oakland'));
   assert.notEqual(beforeCredit.persisted.order.customer,beforeCredit.original.customer,'spend at the available pre-credit balance reroutes the inaccessible order');
   for(const mode of ['history','profile']){
@@ -67,7 +67,7 @@ try{
   const rejected=await rejectedResponse.json() as {saved:DriverProgress;writes:EconomyIntent[];barrier:number};
   assert.deepEqual(rejected.writes.map(write=>write.action.kind),['progress','cab-income','progress','cab-income']);
   assert.ok(rejected.writes.every((write,i)=>i===0||write.sequence>rejected.writes[i-1].sequence));
-  assert.equal(rejected.saved.cash,27_102,'rejected spending is removed while both staged credits and the awards survive');
+  assert.equal(rejected.saved.cash,26_602,'rejected spending is removed while both staged credits and the awards survive');
   assert.ok(rejected.saved.unlocked.includes('region-oakland'));
   assert.equal(rejected.saved.cybercabs!.assets[0].gross,2);
   assert.ok(rejected.saved.unlocked.includes('park-it'));
@@ -78,7 +78,9 @@ try{
   assert.equal(transient.patrolReset,true);assert.equal(transient.draft.delivery.tickets,1);
   assert.equal(transient.draft.delivery.completed,1);assert.ok(transient.draft.achievements.unlocked.includes('roof-rider'));
   assert.equal(transient.saved.tickets,1,'the immutable stop is replayed after the rejected debit');
-  assert.equal(transient.saved.cash,34_602,'the ticket and delivery settle from the restored wallet without resurrecting spending');
+  assert.equal(transient.saved.earned,5_214,'the original early-delivery fare settles once');
+  assert.equal(transient.saved.cash,26_000-112+5_214+500+500+100,
+    'the original wallet, ticket, fare, delivery award, region award and early tier settle once');
   assert.equal(transient.saved.completed,1,'the observed delivery survives the rejected predecessor');
   // This fixture manually injects the roof award through the legacy snapshot path.
   assert.ok(!transient.saved.unlocked.includes('roof-rider'));

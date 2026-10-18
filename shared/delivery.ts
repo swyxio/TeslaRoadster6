@@ -5,7 +5,7 @@ export { ACCESS_BOUNDARIES } from './service-areas';
 import { hasRockets } from './upgrades';
 import { initialOta, type OtaSubscription } from './ota';
 import { dropoffPayouts, pickupPayout, resolveDeliveryPayout, type DeliveryPayoutResolver, type ResolvedDeliveryPayout } from './delivery-payout';
-import { createDeliveryScheduler } from './delivery-scheduler';
+import { createDeliveryScheduler, type DeliverySearchCursor } from './delivery-scheduler';
 import { ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS, type DeliveryAreaId, type DeliveryCityId } from './delivery-locations';
 
 // Current spendable cash determines level; ownership and awards survive a drop.
@@ -79,10 +79,11 @@ export const CUSTOMERS: Customer[] = [
   }),
   ...ADDED_CUSTOMERS,
 ];
-export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
+type DeliverySearch = {kind:'next'|'reroute';origin:{x:number;z:number;supportId?:Entity['supportId']};level:Level;canFly:boolean;cursor:DeliverySearchCursor};
+export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number; search?:DeliverySearch };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
 export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
-export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'|'unavailable'} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
+export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'|'unavailable'|'searching'|'ready';origin?:{x:number;z:number};level?:Level} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
@@ -101,7 +102,7 @@ function matchesTarget(stop:DeliveryPose,target:{x:number;y?:number;z:number;roo
   const targetHeight=terrainHeight(target.x,target.z);
   return targetHeight!==null&&Math.hypot(stop.x-target.x,stop.y-targetHeight,stop.z-target.z)<=9;
 }
-export function matchesDeliveryStop(order:Order,stop:DeliveryPose):boolean {return matchesTarget(stop,orderTarget(order));}
+export function matchesDeliveryStop(order:Order,stop:DeliveryPose):boolean {return !order.search&&matchesTarget(stop,orderTarget(order));}
 
 // Delivery evidence is sampled on every simulation tick. Index target centers
 // once so a large venue catalog only checks stops within the marker radius.
@@ -140,10 +141,37 @@ function quotedOrder(restaurant:number,customer:number,origin:{x:number;z:number
   const distanceFactor=Math.max(.5,Math.min(2,distance/700));
   return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: Math.round(BASE_FARES[level]*distanceFactor) };
 }
-function orderFor(index:number,origin:{x:number;z:number;supportId?:Entity['supportId']},level:Level,canFly=false,previous?:Order):Order|null {
+function beginDeliverySearch(delivery:DeliveryState,kind:DeliverySearch['kind'],origin:DeliverySearch['origin'],canFly:boolean):void {
+  delivery.order.search={kind,origin:{x:origin.x,z:origin.z,...(origin.supportId!==undefined?{supportId:origin.supportId}:{})},
+    level:delivery.level,canFly,cursor:{pair:0,leg:0,heading:0}};
+  delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'searching'};
+}
+
+/** Advance at most one bounded batch; the unfinished cursor is persisted. */
+export function advanceDeliverySearch(delivery:DeliveryState,canFly:boolean):boolean {
+  const old=delivery.order,search=old.search;if(!search)return false;
+  if(search.kind==='reroute'&&isOrderAccessible(old,delivery.level)){
+    delete old.search;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'ready'};return true;
+  }
+  if(search.level!==delivery.level||search.canFly!==canFly){
+    search.level=delivery.level;search.canFly=canFly;search.cursor={pair:0,leg:0,heading:0};
+  }
   chooseDelivery??=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
-  const choice=chooseDelivery(index,origin,level,canFly,previous);
-  return choice?quotedOrder(choice.restaurant,choice.customer,origin,level):null;
+  const result=chooseDelivery.advance(delivery.completed,search.origin,search.level,search.canFly,old,search.cursor);
+  if(result.status==='pending'){search.cursor=result.cursor;return false;}
+  if(result.status==='none'){
+    delete old.search;
+    delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:search.kind==='next'?'repeat':'unavailable',
+      ...(search.kind==='reroute'?{origin:{x:search.origin.x,z:search.origin.z},level:search.level}:{})};
+    return true;
+  }
+  const next=quotedOrder(result.choice.restaurant,result.choice.customer,search.origin,delivery.level);
+  // A collected order stays collected; never grant a second pickup bonus.
+  if(search.kind==='reroute'&&old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
+  delivery.order=next;
+  delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,
+    reason:search.kind==='next'?'ready':isRocketIsland(search.origin.x,search.origin.z)||search.origin.supportId==='ferry'?'ferry':undefined};
+  return true;
 }
 export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
   // Stable, road-connected first job. Profile reconstruction also calls this
@@ -163,16 +191,10 @@ export function isOrderAccessible(order:Order,level:Level):boolean {
 export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},canFly=false):boolean {
   const old=delivery.order;
   if(isOrderAccessible(old,delivery.level))return false;
-  const next=orderFor(delivery.completed,origin,delivery.level,canFly,old);
-  if(!next){
-    if(delivery.lastReroute?.reason==='unavailable')return false;
-    delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'unavailable'};
-    return true;
-  }
-  // A collected order stays collected; never grant a second pickup bonus.
-  if(old.stage==='dropoff'){next.stage='dropoff';next.elapsed=old.elapsed;next.base=Math.min(old.base,next.base);}
-  delivery.order=next;delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,
-    ...(isRocketIsland(origin.x,origin.z)||origin.supportId==='ferry'?{reason:'ferry' as const}:{})};
+  if(old.search&&old.search.level===delivery.level)return false;
+  if(delivery.lastReroute?.reason==='unavailable'&&delivery.lastReroute.level===delivery.level&&
+    delivery.lastReroute.origin?.x===origin.x&&delivery.lastReroute.origin.z===origin.z)return false;
+  beginDeliverySearch(delivery,'reroute',origin,canFly);
   return true;
 }
 export function pickupBonusFor(order: Order): number {
@@ -184,17 +206,19 @@ export function payoutFor(order: Order): number {
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
   return Math.max(0, order.base + bonus - latePenalty);
 }
-export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false, resolvePayout?:DeliveryPayoutResolver): ResolvedDeliveryPayout[] | null | undefined {
+export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false, resolvePayout?:DeliveryPayoutResolver, advanceSearch=true): ResolvedDeliveryPayout[] | null | undefined {
   const delivery = player.delivery;
   const elapsedBefore=delivery.order.elapsed;
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
+  const searching=!!delivery.order.search;
   const unavailable=delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(delivery.order,delivery.level);
   if (active) {
     delivery.activeSeconds += dt;
-    if(!orderPaused&&!entity.inDome&&!unavailable)delivery.order.elapsed += dt;
+    if(!orderPaused&&!entity.inDome&&!unavailable&&!searching)delivery.order.elapsed += dt;
   }
+  if(searching){if(advanceSearch)advanceDeliverySearch(delivery,hasRockets(entity));return;}
   if(orderPaused||entity.inDome||unavailable)return;
   const payouts=applyDeliveryStop(delivery,entity,resolvePayout);
   if(payouts===null)delivery.order.elapsed=elapsedBefore;
@@ -230,14 +254,9 @@ export function applyDeliveryStop(delivery:DeliveryState,stop:DeliveryStop|Entit
     delivery.completed++;
     updateLevel(delivery);
     const previous=delivery.order;
-    const next=orderFor(delivery.completed,stop,delivery.level,'canFly' in stop?stop.canFly:hasRockets(stop),previous);
-    if(next)delivery.order=next;
-    else {
-      // The completed pair is known to be playable. Keep the driver earning
-      // and explain the exceptional repeat instead of inventing an unsafe job.
-      delivery.order=quotedOrder(previous.restaurant,previous.customer,stop,delivery.level);
-      delivery.lastReroute={id:(delivery.lastReroute?.id??0)+1,reason:'repeat'};
-    }
+    // Finish payment first. Search for the next job across later room frames.
+    delivery.order=quotedOrder(previous.restaurant,previous.customer,stop,delivery.level);
+    beginDeliverySearch(delivery,'next',stop,'canFly' in stop?stop.canFly:hasRockets(stop));
     return parts;
   }
 }

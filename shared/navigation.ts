@@ -121,6 +121,12 @@ export function prepareNavigationGraph():void {
   navigationGraph();
 }
 
+/** A necessary, inexpensive test before planning a delivery route. */
+export function canSnapDeliveryDestination(destination:Point,level:Level):boolean {
+  if(!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return false;
+  return navigationGraph().segments.some(segment=>distance(destination,projection(destination,segment).point)<=DELIVERY_DESTINATION_SNAP);
+}
+
 /** Nearest supported road lane for localizing a job, not a route or teleport. */
 export function nearestNavigationAnchor(origin:Point,level:Level):{point:Point;distance:number}|null {
   const ceiling=Math.max(level,requiredLevelAt(origin.x,origin.z));

@@ -1,14 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, LEVELS, RESTAURANTS, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryStop, type Level, type Order } from '../shared/delivery';
-import { createDeliveryScheduler, DELIVERY_MAX_PICKUP_DISTANCE, DELIVERY_MAX_TRIP_DISTANCE } from '../shared/delivery-scheduler';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, LEVELS, RESTAURANTS, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
+import { createDeliveryScheduler, DELIVERY_MAX_PICKUP_DISTANCE, DELIVERY_MAX_TRIP_DISTANCE, DELIVERY_SEARCH_CANDIDATES_PER_STEP, DELIVERY_SEARCH_PAIRS_PER_STEP, DELIVERY_SEARCH_PLANS_PER_STEP } from '../shared/delivery-scheduler';
 import { addPlayer, createWorld, NEUTRAL } from '../shared/game';
-import { terrainHeight } from '../shared/map';
+import { isSurface, terrainHeight } from '../shared/map';
+import { nearestNavigationAnchor } from '../shared/navigation';
 
 const choose=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
 const metres=(a:{x:number;z:number},b:{x:number;z:number})=>Math.hypot(a.x-b.x,a.z-b.z);
 function order(choice:{restaurant:number;customer:number}):Order {
   return {...choice,stage:'dropoff',elapsed:0,pickupEstimate:20,estimate:30,base:100};
+}
+function finishSearch(delivery:DeliveryState,canFly=false){
+  for(let i=0;i<10_000&&delivery.order.search;i++)advanceDeliverySearch(delivery,canFly);
+  assert.equal(delivery.order.search,undefined,'the bounded search eventually finishes');
 }
 test('assignment is deterministic, bounded, avoids consecutive venues, and introduces Oakland',()=>{
   let origin={x:0,z:-180},previous=order({restaurant:0,customer:2});
@@ -74,6 +79,7 @@ test('relocking a collected order preserves the stage and cannot pay pickup twic
   delivery.order={...delivery.order,customer:4,stage:'dropoff',elapsed:12,base:1000};
   const cash=delivery.cash;
   assert.equal(rerouteInaccessibleOrder(delivery,{x:-120,z:60},false),true);
+  finishSearch(delivery);
   assert.equal(delivery.order.stage,'dropoff');assert.equal(delivery.order.elapsed,12);
   const pickup=RESTAURANTS[delivery.order.restaurant],dropoff=CUSTOMERS[delivery.order.customer];
   const pose=(point:{x:number;z:number}):DeliveryStop=>({x:point.x,z:point.z,y:terrainHeight(point.x,point.z)!,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false});
@@ -90,6 +96,7 @@ test('a relocked job at the far end of the playground is assigned on the mainlan
     const delivery=initialDelivery({x:-120,z:60});
     delivery.level=0;delivery.order={...delivery.order,customer:4,stage:'dropoff',elapsed:12};
     assert.equal(rerouteInaccessibleOrder(delivery,origin),true,JSON.stringify(origin));
+    finishSearch(delivery);
     assert.equal(delivery.order.stage,'dropoff');assert.equal(delivery.order.elapsed,12);
     assert.equal(delivery.lastReroute?.reason,'ferry');
     for(const place of [RESTAURANTS[delivery.order.restaurant],CUSTOMERS[delivery.order.customer]])
@@ -101,6 +108,7 @@ test('a remote airborne driver can receive an open job without a road at their p
   const delivery=initialDelivery({x:0,z:0});
   delivery.level=0;delivery.order={...delivery.order,customer:4,stage:'dropoff',elapsed:12};
   assert.equal(rerouteInaccessibleOrder(delivery,{x:-1700,z:-1600,supportId:null},true),true);
+  finishSearch(delivery,true);
   assert.equal(delivery.order.stage,'dropoff');
   for(const place of [RESTAURANTS[delivery.order.restaurant],CUSTOMERS[delivery.order.customer]])
     assert.equal(requiredLevelAt(place.x,place.z),0);
@@ -113,6 +121,7 @@ test('an unavailable relock preserves and pauses the job until an open-road retr
   const original={...delivery.order};
   // An isolated synthetic origin makes the scheduler return no safe pair.
   assert.equal(rerouteInaccessibleOrder(delivery,{x:0,z:1e9}),true);
+  assert.equal(delivery.lastReroute?.reason,'searching');finishSearch(delivery);
   assert.deepEqual(delivery.order,original);assert.equal(delivery.lastReroute?.reason,'unavailable');
   assert.equal(isOrderAccessible(delivery.order,delivery.level),false);
   const notice=delivery.lastReroute?.id;
@@ -121,7 +130,36 @@ test('an unavailable relock preserves and pauses the job until an open-road retr
   updateDelivery(world,player,car,{...NEUTRAL,throttle:1},1);
   assert.equal(delivery.order.elapsed,12,'the unavailable job clock stays paused');
   assert.equal(rerouteInaccessibleOrder(delivery,{x:-120,z:60}),true);
+  finishSearch(delivery);
   assert.equal(delivery.order.stage,'dropoff');assert.equal(delivery.order.elapsed,12);
   assert.equal(isOrderAccessible(delivery.order,delivery.level),true);
   assert.notEqual(delivery.lastReroute?.reason,'unavailable');
+});
+
+
+test('a disconnected catalog resumes candidate and route work without dropping pairs',()=>{
+  const pickups=RESTAURANTS.filter(place=>place.cityId==='fremont');
+  const origin=CUSTOMERS.find(place=>place.cityId==='fremont'&&!place.rooftop)!;
+  const destinations:{id:string;x:number;z:number;rooftop:boolean}[]=[];
+  for(let x=origin.x-300;x<=origin.x+300&&destinations.length<60;x+=17){
+    for(let z=origin.z-300;z<=origin.z+300&&destinations.length<60;z+=19){
+      const point={x,z};
+      if(isSurface(x,z)&&requiredLevelAt(x,z)===5&&metres(point,pickups[0])>=60&&
+        (nearestNavigationAnchor(point,5)?.distance??0)>7)destinations.push({id:`offroad-${destinations.length}`,x,z,rooftop:false});
+    }
+  }
+  assert.equal(destinations.length,60);
+  const select=createDeliveryScheduler(pickups,destinations,requiredLevelAt);
+  let result=select.advance(2,origin,5,false,undefined),steps=0,scans=0;
+  for(;;){
+    assert.ok(result.scans<=DELIVERY_SEARCH_CANDIDATES_PER_STEP);
+    assert.ok(result.plans<=DELIVERY_SEARCH_PLANS_PER_STEP);
+    assert.ok(result.pairs<=DELIVERY_SEARCH_PAIRS_PER_STEP);
+    scans+=result.scans;steps++;
+    if(result.status!=='pending')break;
+    assert.ok(steps<1_000,'the search progresses');
+    result=select.advance(2,origin,5,false,undefined,result.cursor);
+  }
+  assert.ok(scans>DELIVERY_SEARCH_CANDIDATES_PER_STEP,'candidate construction crossed a batch boundary');
+  assert.equal(result.status,'none','every disconnected destination was considered');
 });

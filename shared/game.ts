@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
-import { CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -34,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=43;
+export const PROTOCOL_VERSION=44;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -375,6 +375,7 @@ export function setDestination(world:World,id:string,destination:{x:number;z:num
 }
 export function setDeliveryDestination(world:World,id:string,mode:DriveMode='road'):boolean {
   const player=world.players.find(p=>p.id===id);if(!player)return false;
+  if(player.delivery.order.search)return false;
   const target=orderTarget(player.delivery.order);
   return !target.rooftop&&navigate(world,id,target,mode,DELIVERY_DESTINATION_SNAP);
 }
@@ -816,9 +817,11 @@ export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{su
   dt=Math.min(dt,.05);
   const steps=Number.isInteger(options?.substeps)&&options!.substeps!>=1&&options!.substeps!<=8?options!.substeps!:simulationSubsteps(world,dt);
   options?.onSubsteps?.(steps);
-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy);
+  const waiting=world.players.filter(player=>player.delivery.order.search);
+  const searchDriver=waiting.length?waiting[Math.floor((world.time+.001)/.05)%waiting.length].id:undefined;
+  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy,i===steps-1?searchDriver:undefined);
 }
-function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
+function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks,searchDriver?:string):void {
   const update=(player:Player,apply:()=>EconomyUpdateResult,ticket?:TicketEvidence)=>economy?economy.update(player,apply,ticket):apply();
   const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
   world.time+=dt;
@@ -1184,11 +1187,20 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       update(player,()=>{
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
-      const orderPaused=islandProtected(entity)||entity.inDome||
+      // A pure simulation without economy hooks must initiate or retry a relocked order.
+      // Once a failed search is unavailable, retry only after reaching open ground.
+      if(!economy&&!player.delivery.order.search&&!isOrderAccessible(player.delivery.order,player.delivery.level)&&
+        (player.delivery.lastReroute?.reason!=='unavailable'||
+          (entity.supportId==='ground'&&!entity.inDome&&requiredLevelAt(entity.x,entity.z)<=player.delivery.level)))
+        rerouteInaccessibleOrder(player.delivery,entity,hasRockets(entity));
+      const stopPaused=islandProtected(entity)||entity.inDome||
         (player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level));
-      economy?.deliveryStart?.(player,entity,orderPaused);
+      const orderPaused=!!player.delivery.order.search||stopPaused;
+      // Keep sampling physical stops behind an unresolved wallet event. Their
+      // immutable pose is replayed after the preceding assignment commits.
+      economy?.deliveryStart?.(player,entity,stopPaused);
       const payouts=updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused,
-        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined);
+        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined,!economy&&searchDriver===player.id);
       const activeTime=player.delivery.activeSeconds-activeBefore;
       economy?.deliveryEnd?.(player,orderPaused?0:activeTime,payouts);
       if(payouts===null){

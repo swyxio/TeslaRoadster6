@@ -7,7 +7,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { CUSTOMERS, initialDelivery, payoutFor, type DeliveryStop } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop } from '../shared/delivery';
+import { initialAchievements } from '../shared/achievements';
+import { applyTicketEvidence } from '../shared/police';
+import { applyAcceptedDelivery } from '../worker/achievement-progress';
 import { terrainHeight } from '../shared/map';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
 import type { AchievementStage, DeliveryStage, TicketStage } from '../worker/room-economy';
@@ -158,6 +161,90 @@ try{
   assert.deepEqual(await rpc('sources',lost),['earned-source:delivery:1:dropoff']);
   const newFence=randomUUID();await rpc('acquire',{...lost,fence:newFence});
   assert.equal((await rpc<Profile>('profile',lost)).progress.cash,before.progress.cash);
+
+  // Both physical stops are accepted while historical settlement is held.
+  // Kill the profile only after a non-final assignment checkpoint is durable.
+  const assignmentCrash=entry(),assignmentInitial=await acquire(assignmentCrash),assignmentAt=Date.now()-2_000;
+  await rpc('room-pending',{...assignmentCrash,eventId:'assignment-win',at:assignmentAt-1_000});
+  const firstStop=stage(assignmentCrash,1,5,pose(4),null,assignmentAt);
+  const preview=initialDelivery(firstStop.action.stop),priorOrder={...assignmentInitial.progress.order,elapsed:45};
+  Object.assign(preview,{cash:assignmentInitial.progress.cash,lifetimeIncome:assignmentInitial.progress.eligibleIncome,
+    earned:assignmentInitial.progress.earned,completed:assignmentInitial.progress.completed,level:assignmentInitial.progress.level,order:priorOrder});
+  const previewParts=applyDeliveryStop(preview,firstStop.action.stop,part=>Math.round(part.amount*1.5));assert.ok(previewParts);
+  const previewAwards=initialAchievements();previewAwards.unlocked=[...assignmentInitial.progress.unlocked];
+  applyAcceptedDelivery(preview,previewAwards,assignmentInitial.progress.achievementTiers!,priorOrder,false,CUSTOMERS[4].id,true);
+  for(let i=0;i<10_000&&preview.order.search;i++)advanceDeliverySearch(preview,false);
+  assert.equal(preview.order.search,undefined);
+  const pickup=RESTAURANTS[preview.order.restaurant],pickupY=terrainHeight(pickup.x,pickup.z);assert.notEqual(pickupY,null);
+  const pickupPose:DeliveryStop={x:pickup.x,y:pickupY!,z:pickup.z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false};
+  const laterStop=stage(assignmentCrash,2,6,pickupPose,2,assignmentAt+500);
+  assert.equal(await rpc('stage',{...assignmentCrash,stage:firstStop}),'accepted');
+  assert.equal(await rpc('submit',{...assignmentCrash,intent:intent(firstStop,0,1)}),null,'unknown rate stays pending');
+  assert.equal(await rpc('stage',{...assignmentCrash,stage:laterStop}),'accepted');
+  await rpc('hold-assignment',assignmentCrash);await rpc('room-resolve',{...assignmentCrash,eventId:'assignment-win'});
+  const assignmentFlight=rpc('submit',{...assignmentCrash,intent:intent(firstStop,0,1)},30_000);void assignmentFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',assignmentCrash),'assignment checkpoint held');
+  const checkpoint=await rpc<{done:boolean;version:number}>('assignment',{...assignmentCrash,eventId:firstStop.eventId});
+  assert.equal(checkpoint.done,false);assert.ok(checkpoint.version>=1);
+  assert.equal((await rpc<Profile>('profile',assignmentCrash)).progress.completed,0,'payout is not committed before assignment');
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',assignmentCrash,15_000);
+  const assignmentRecovered=await rpc<Profile>('profile',assignmentCrash);
+  assert.equal(assignmentRecovered.progress.completed,1);assert.equal(assignmentRecovered.progress.order.stage,'dropoff');
+  assert.equal(assignmentRecovered.progress.order.search,undefined);
+  assert.equal(assignmentRecovered.progress.earned,Math.round(baseFare*1.5)+2*pickupBonusFor({...preview.order,elapsed:1}));
+  assert.equal(assignmentRecovered.progress.achievementTiers?.pickups.count,1);
+  assert.deepEqual((await rpc<string[]>('sources',assignmentCrash)).sort(),['earned-source:delivery:1:dropoff','earned-source:delivery:2:pickup']);
+  assert.equal(await rpc('assignment',{...assignmentCrash,eventId:firstStop.eventId}),null,'completed checkpoint is removed');
+
+  // A ticket relocks an already-collected Oakland order. The later physical
+  // dropoff is accepted while the replacement assignment is checkpointed.
+  const relock=entry(),relockInitial=await acquire(relock);
+  await rpc('persistent-producer',{...relock,active:true});
+  const ticketEvidence={seconds:16,peakHeight:20,at:1,x:450,z:0,canFly:false};
+  const relockTicket:TicketStage={eventId:randomUUID(),driverId:relock.driverId,fence:relock.fence,roomId:relock.room,walletOrder:1,clock:5,
+    action:{kind:'ticket',evidence:ticketEvidence,orderBefore:relockInitial.progress.order,completedBefore:0}};
+  const relockIntent:EconomyIntent={eventId:relockTicket.eventId,driverId:relock.driverId,fence:relock.fence,roomId:relock.room,
+    revision:0,sequence:1,clock:relockTicket.clock,action:relockTicket.action};
+  const relockPreview=initialDelivery(ticketEvidence);
+  Object.assign(relockPreview,{cash:relockInitial.progress.cash,level:relockInitial.progress.level,tickets:relockInitial.progress.tickets,
+    completed:relockInitial.progress.completed,order:{...relockInitial.progress.order,elapsed:45}});
+  applyTicketEvidence(relockPreview,ticketEvidence);
+  assert.equal(relockPreview.level,0);assert.equal(relockPreview.cash,9_976);
+  assert.equal(rerouteInaccessibleOrder(relockPreview,ticketEvidence,false),true);
+  for(let i=0;i<10_000&&relockPreview.order.search;i++)advanceDeliverySearch(relockPreview,false);
+  assert.equal(relockPreview.order.search,undefined);
+  assert.equal(relockPreview.order.stage,'dropoff');assert.equal(relockPreview.order.elapsed,45);
+  assert.ok(isOrderAccessible(relockPreview.order,0));
+  assert.notEqual(relockPreview.order.customer,relockInitial.progress.order.customer);
+  const replacementStop=stage(relock,2,6,pose(relockPreview.order.customer),2);
+  const replacementIntent=intent(replacementStop,1,2);
+  assert.equal(await rpc('stage-ticket',{...relock,stage:relockTicket}),'accepted');
+  await rpc('hold-assignment',relock);
+  const ticketFlight=rpc('submit',{...relock,intent:relockIntent},30_000);void ticketFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',relock),'ticket assignment checkpoint held');
+  const relockCheckpoint=await rpc<{done:boolean;version:number}>('assignment',{...relock,eventId:relockTicket.eventId});
+  assert.equal(relockCheckpoint.done,false);assert.ok(relockCheckpoint.version>=1);
+  const beforeTicketCommit=await rpc<Profile>('profile',relock);
+  assert.equal(beforeTicketCommit.progress.tickets,0);assert.equal(beforeTicketCommit.progress.cash,10_120);
+  assert.equal(await rpc('stage',{...relock,stage:replacementStop}),'accepted');
+  await stop(child);child=undefined;child=start();await ready();
+  const resolvedTicket=await rpc<DriverOutcome>('submit',{...relock,intent:relockIntent},15_000);success(resolvedTicket);
+  assert.equal(resolvedTicket.progress.tickets,1);assert.equal(resolvedTicket.progress.cash,9_976);
+  assert.equal(resolvedTicket.progress.level,0);assert.equal(resolvedTicket.progress.order.stage,'dropoff');
+  assert.deepEqual(resolvedTicket.progress.order,relockPreview.order);
+  assert.ok(resolvedTicket.assignment,'the recovered ticket reports the resolved assignment');
+  assert.deepEqual(await rpc('sources',relock),[],'rerouting a collected order grants no pickup');
+  const replacementPaid=await rpc<DriverOutcome>('submit',{...relock,intent:replacementIntent},15_000);success(replacementPaid);
+  const replacementFare=2*payoutFor({...relockPreview.order,elapsed:46});
+  assert.equal(replacementPaid.delivery?.matched,true);
+  assert.equal(replacementPaid.progress.completed,1);assert.equal(replacementPaid.progress.tickets,1);
+  assert.equal(replacementPaid.progress.earned,replacementFare);
+  assert.deepEqual(await rpc('sources',relock),['earned-source:delivery:1:dropoff']);
+  assert.deepEqual(await rpc('submit',{...relock,intent:replacementIntent},15_000),replacementPaid,'replaying the recovered dropoff pays once');
+  await rpc('freeze',relock,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',relock)).progress,replacementPaid.progress);
+  assert.deepEqual(await rpc('sources',relock),['earned-source:delivery:1:dropoff']);
+  assert.equal(await rpc('assignment',{...relock,eventId:relockTicket.eventId}),null);
 
   // Acceptance survives a lost stage reply; a late stale producer cannot
   // insert after freeze sealed the old profile fence.

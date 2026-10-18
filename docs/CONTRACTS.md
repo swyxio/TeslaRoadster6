@@ -1,4 +1,4 @@
-# Implementation contracts · v43 candidate
+# Implementation contracts · v44 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v43 candidate
+## Wire protocol v44 candidate
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:43,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:44,capacity:number}`.
 
 Client messages:
 
@@ -88,7 +88,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:43, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:44, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -248,6 +248,8 @@ The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games
 ## Delivery and police contract
 
 `shared/vehicle-style.ts` defines paint and decal prices, current-cash level gates and replicated IDs. The room validates the level and cash before charging each new application; restoring original paint or removing a decal is free. A finish already applied stays after a level drop. `vehicleStyle` carries a category, choice and request ID; the room commits the personal vehicle configuration before publishing the result. Cab paint uses the same gates and prices. Finishes replicate to other drivers; the workshop shows locked options and offers a preview and keyboard/touch buttons. Saved personal-vehicle configuration is keyed by vehicle kind in the driver profile. Other drivers’ cars show the current driver’s room name; your own label is hidden locally. Cached materials remain shared. Protocol v42 covers the expanded replicated finish IDs; clients with a different version must reload.
+
+The optional `order.search` records a pending next assignment or relock reroute, its origin, level, flight capability and resumable cursor. The order timer pauses during the search. The shared simulation without economy hooks advances at most one bounded batch per frame; the production multiplayer room prepares bounded batches in the Driver Profile, checkpointed outside the room tick. There is no single-player product mode. The event's payout, awards, resulting order and receipt commit together once the search finishes. Later server-observed stops retain their position, clock and earnings rate and are re-evaluated in order against the committed assignment. A collected reroute keeps its dropoff stage and cannot pay a second pickup. If no new assignment exists, an accessible next order may repeat; an unavailable relocked order pauses and retries after the driver moves or the level changes. Durable checkpoints recover accepted work after restart, not observations that were never accepted into the journal.
 
 `shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. Pickup has its own active-time estimate based on distance from where the order began; reaching the restaurant early pays up to 40% of base fare immediately. The delivery estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the pickup and delivery estimates and leaderboard clock pause. `lastReward` contains the most recent positive pickup, delivery or research award with a monotonically increasing per-player ID; a renderer may celebrate each new ID once, but cannot create payouts. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
 

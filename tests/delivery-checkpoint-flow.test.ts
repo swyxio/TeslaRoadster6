@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, NEUTRAL, step, type EconomyHooks } from '../shared/game';
-import { CUSTOMERS, RESTAURANTS, orderTarget, rerouteInaccessibleOrder, updateDelivery } from '../shared/delivery';
+import { advanceDeliverySearch, CUSTOMERS, RESTAURANTS, orderTarget, rerouteInaccessibleOrder, updateDelivery } from '../shared/delivery';
 import { updateAchievements } from '../shared/achievements';
 
 function readyDropoff(completed:number,elapsed=100) {
@@ -82,6 +82,8 @@ test('rerouting the single accepted job does not change its completion source ID
   const {world,player,car}=readyDropoff(2);
   player.delivery.cash=0;player.delivery.level=0;player.delivery.order.customer=4;
   assert.equal(rerouteInaccessibleOrder(player.delivery,car),true);
+  for(let i=0;i<10_000&&player.delivery.order.search;i++)advanceDeliverySearch(player.delivery,false);
+  assert.equal(player.delivery.order.search,undefined);
   const target=orderTarget(player.delivery.order);
   Object.assign(car,{x:target.x,z:target.z,y:target.y,speed:0,vy:0,supportId:'ground'});
   const parts=updateDelivery(world,player,car,NEUTRAL,0)!;

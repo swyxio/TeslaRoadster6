@@ -191,7 +191,8 @@ test('eligible Roadster orders can be rooftop after Oakland unlock; ordinary car
   for(const kind of ['roadster','model-3'] as const){
     const {world,player,car}=setup();car.kind=kind;player.delivery.cash=10_000;player.delivery.level=1;player.delivery.earned=50;player.delivery.completed=6;
     const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
-    Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world);
+    Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world,NEUTRAL,20);
+    assert.equal(player.delivery.order.search,undefined);
     assert.equal(player.delivery.completed,7);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');
   }
 });

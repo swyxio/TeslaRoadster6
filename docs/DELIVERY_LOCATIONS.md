@@ -8,11 +8,11 @@ New pickups have a stable `id`, `name`, `cityId`, `areaId`, `cuisine`, `cuisineI
 
 `cuisineIcon` is a small presentation hint, separate from the descriptive `cuisine`. Its complete values are `pizza`, `burger`, `sandwich`, `noodles`, `taco`, `bakery`, `bowl`, and `plate`. These are original food pictograms, not restaurant branding. Do not send the static catalog in every room snapshot or scan every place on every physics tick; the progression owner supplies a static spatial stop index.
 
-The new catalog is a staging layer until the progression owner integrates it with geographic scheduling and validates routes. Do not offer a destination merely because it is near a lane: a directed route can be rejected for an unsafe turnaround or a very long detour. The island and Dome are protected playgrounds, not delivery cities.
+The catalog is integrated with geographic scheduling. Do not offer a destination merely because it is near a lane: a directed route can be rejected for an unsafe turnaround or a very long detour. The island and Dome are protected playgrounds, not delivery cities.
 
-## Coverage of the current staged catalog
+## Catalog coverage
 
-The catalog has 171 pickups, 171 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. These figures count authored data, not jobs already enabled by the scheduler. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops; visual and traffic checks remain.
+The catalog has 171 pickups, 171 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. San Francisco has eight fictional ground customers plus two rooftops, and Oakland has nine ground customers plus one rooftop. Other towns have ten fictional ground customers. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops.
 
 | Town or subarea | Pickups | Fictional customers | Additional landmark arrivals |
 | --- | ---: | ---: | ---: |
@@ -35,4 +35,4 @@ The catalog has 171 pickups, 171 fictional customers and six additional historic
 | Hayward | 10 | 10 | 0 |
 | Fremont | 10 | 10 | 1 |
 
-The six historic landmark arrivals are UCSF, Berkeley, SFO, Stanford, San Jose City Hall and Mission San Jose. The Marin, SFO and southern catalogs require their accompanying authoritative streets and have not yet been enabled or visually playtested. The airport pickup is a fictional roadside handoff for the real terminal business; it does not imply cars enter the terminal.
+The six historic landmark arrivals are UCSF, Berkeley, SFO, Stanford, San Jose City Hall and Mission San Jose. The Marin, SFO and southern catalogs use their accompanying authoritative streets. The airport pickup is a fictional roadside handoff for the real terminal business; it does not imply cars enter the terminal. See [VERIFICATION.md](VERIFICATION.md) for the checks performed on this candidate.
