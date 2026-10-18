@@ -44,7 +44,7 @@ Alternatives can change style, HUD organization and models. Preserve the same ga
 
 ## Multiplayer scale
 
-Target is a busy small playground, not a single giant universe. Default eight participants per room; higher capacities require measurement. Multiple independent rooms scale horizontally through Durable Objects. A platform connection limit is not a simulation capacity promise. The implementation sends recipient-filtered 10 Hz snapshots and uses a spatial index for entity collisions. Increase room limits only after CPU, memory, outbound bytes, snapshot gaps, input-to-observed latency and mobile rendering have been measured.
+Target is a busy small playground, not a single giant universe. The default admission limit is 64 participants per room, but playable performance at that occupancy has not been established. Multiple independent rooms use separate Durable Objects. A platform connection limit is not a simulation capacity promise. The implementation sends recipient-filtered 10 Hz snapshots and uses a spatial index for entity collisions. Measure CPU, memory, outbound bytes, snapshot gaps, input-to-observed latency and mobile rendering at the intended occupancy; see the [overflow plan](ROOM_OVERFLOW_PLAN.md) for a future way to place additional public players.
 
 Snapshots always retain players and occupied cars, plus nearby ambient entities; the room remains authoritative for the entire world. Building and entity collisions use spatial indexes. The client predicts local motion and reconciles against tick-stamped authoritative snapshots. Driver wallets persist across rooms; the rest of the physical world remains room-local. Compact delta snapshots are a possible future optimization.
 
