@@ -395,6 +395,45 @@ test('the carousel has an open underside and a solid canopy above its platform',
  assert.ok(Math.abs(car.y-place.h*.14)<.05,`lost platform under canopy: ${car.y}`);
 });
 
+test('a pitched car hits the carousel canopy with its body when rising and landing',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-tilden-merry-go-round')!;
+ const x=place.x+place.w*.15,z=place.z+place.d*.10,canopyBottom=place.h*.69;
+ const rising=setup();rising.world.entities=[rising.car];rising.world.pickups=[];
+ const size=dimensions(rising.car.kind);
+ Object.assign(rising.car,{x,z,y:canopyBottom-3.3,yaw:0,pitch:1.2,roll:0,vy:6,vx:0,vz:0,speed:0,supportId:null});
+ let highestTop=-Infinity,attempted=false;
+ for(let i=0;i<45;i++){
+  step(rising.world,new Map(),.05);
+  // The nose and rear extend vertically with pitch; the upright-height-only
+  // calculation would let the visible end of this 4.5m car enter the roof.
+  const top=rising.car.y+Math.abs(Math.sin(rising.car.pitch))*size.length/2+Math.cos(rising.car.pitch)*size.height;
+  highestTop=Math.max(highestTop,top);
+  if(top>canopyBottom-.5)attempted=true;
+  assert.ok(top<=canopyBottom+.08,`pitched car penetrated canopy: top ${top}, underside ${canopyBottom}`);
+  if(rising.car.supportId!==null)break;
+ }
+ assert.ok(attempted,`pitched car never reached canopy: top ${highestTop}`);
+ assert.ok(rising.car.vy<=0,'canopy did not stop upward motion');
+
+ const landing=setup();landing.world.entities=[landing.car];landing.world.pickups=[];
+ // This authored position has a visible canopy top of 9.9612m by raycast.
+ // Keep pitch nonzero during the fall so the car's lower end contacts first.
+ const roofTop=9.9612;
+ Object.assign(landing.car,{x:place.x+place.w*.15,z:place.z,y:place.h+3,yaw:0,pitch:1,roll:0,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ let tiltedInFlight=false;
+ for(let i=0;i<100&&landing.car.supportId===null;i++){
+  step(landing.world,new Map(),.05);
+  if(landing.car.supportId===null){
+   const bottom=landing.car.y-Math.abs(Math.sin(landing.car.pitch))*size.length/2;
+   assert.ok(bottom>=roofTop-.08,`pitched car penetrated roof before landing: bottom ${bottom}, roof ${roofTop}`);
+   tiltedInFlight||=Math.abs(landing.car.pitch)>.4;
+  }
+ }
+ assert.ok(tiltedInFlight,'car did not remain tilted during descent');
+ assert.ok(landing.car.supportId?.startsWith('roof:'),`tilted landing missed roof: ${landing.car.supportId}`);
+ assert.ok(Math.abs(landing.car.y-roofTop)<.12,`landed at ${landing.car.y}`);
+});
+
 test('supply diamonds are separate and never sit on the initial player spawns',()=>{
  const world=createWorld();world.entities=[];
  const supplies=world.pickups.filter(p=>p.kind!=='rocket');

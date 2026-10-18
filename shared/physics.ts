@@ -1,8 +1,17 @@
 import { VEHICLES, type VehicleId } from './vehicles';
 export type Pose = {kind: VehicleId | 'person'; x:number;z:number;y:number;yaw:number};
 export type Body = {x:number;z:number;w:number;d:number;yaw:number};
+export type OrientedPose = Pose & {pitch:number;roll:number;supportId:string|null};
 export function dimensions(kind: Pose['kind']) { return kind === 'person' ? {width:.7,length:.7,height:1.9,massKg:80} : VEHICLES[kind]; }
 export function body(e:Pose):Body { const s=dimensions(e.kind);return {x:e.x,z:e.z,w:s.width,d:s.length,yaw:e.yaw}; }
+/** Vertical body bounds around the underside pivot, including airborne tilt. */
+export function verticalBounds(e:OrientedPose):{min:number;max:number} {
+  const size=dimensions(e.kind);
+  if(e.supportId!==null&&e.supportId!=='stunt-loop'&&e.supportId!=='island-cliff')return {min:e.y,max:e.y+size.height};
+  const cosPitch=Math.cos(e.pitch),span=Math.abs(Math.sin(e.pitch))*size.length/2+Math.abs(Math.sin(e.roll)*cosPitch)*size.width/2;
+  const height=Math.cos(e.roll)*cosPitch*size.height;
+  return {min:e.y-span+Math.min(0,height),max:e.y+span+Math.max(0,height)};
+}
 /** Separating-axis test: normal points from A toward B; overlap in meters. */
 export function contact(a:Body,b:Body):{nx:number;nz:number;depth:number}|null {
   if(Math.hypot(b.x-a.x,b.z-a.z)>(a.w+a.d+b.w+b.d)/2)return null;

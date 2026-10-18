@@ -1,5 +1,5 @@
 import type { Building } from './map';
-import { body, contact, dimensions, type Pose } from './physics';
+import { body, contact, verticalBounds, type OrientedPose, type Pose } from './physics';
 import { newLandmarkPrimitives, sampleLandmarkPrimitive, type StructuralPrimitive } from './new-landmark-surfaces';
 
 type Point={x:number;z:number};
@@ -65,12 +65,12 @@ export function landmarkPartContact(building:Building,part:StructuralPrimitive,e
   const base=building.landmarkBase??0;
   return {bottom:base+surface.bottom,top:base+surface.top};
 }
-export function landmarkBlocksPose(building:Building,e:Pose):boolean {
+export function landmarkBlocksPose(building:Building,e:OrientedPose):boolean {
   if(!building.landmarkId)return false;
-  const height=dimensions(e.kind).height;
+  const vertical=verticalBounds(e);
   for(const part of newLandmarkPrimitives(building.landmarkId)){
     const surface=landmarkPartContact(building,part,e);
-    if(surface&&e.y<surface.top-.001&&e.y+height>surface.bottom+.001)return true;
+    if(surface&&vertical.min<surface.top-.001&&vertical.max>surface.bottom+.001)return true;
   }
   return false;
 }

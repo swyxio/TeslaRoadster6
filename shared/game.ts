@@ -3,7 +3,7 @@ import { DOME, DOME_CHARGE_RATE, chargingDomeWall } from './dome';
 export { BUILDINGS } from './map';
 import { refillStationFor } from './charging';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
-import { body, contact, dimensions } from './physics';
+import { body, contact, dimensions, verticalBounds } from './physics';
 import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
 import { newLandmarkPrimitives, sampleLandmarkPrimitive } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
@@ -494,15 +494,6 @@ function capFlightSpeed(e:Entity):void {
   e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
 }
 function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;e.vx+=x;e.vz+=z;capFlightSpeed(e);}
-// The pivot is the center of the vehicle's underside. When pitched or rolled,
-// its length and width contribute to vertical extent on a loop or in the air.
-function verticalBounds(e:Entity):{min:number;max:number} {
-  const size=dimensions(e.kind);
-  if(e.supportId!==null&&e.supportId!=='stunt-loop'&&e.supportId!=='island-cliff')return {min:e.y,max:e.y+size.height};
-  const cosPitch=Math.cos(e.pitch),span=Math.abs(Math.sin(e.pitch))*size.length/2+Math.abs(Math.sin(e.roll)*cosPitch)*size.width/2;
-  const height=Math.cos(e.roll)*cosPitch*size.height;
-  return {min:e.y-span+Math.min(0,height),max:e.y+span+Math.max(0,height)};
-}
 type Vector3={x:number;y:number;z:number};
 const dot3=(a:Vector3,b:Vector3)=>a.x*b.x+a.y*b.y+a.z*b.z;
 function domeTangent(e:Entity,v:Vector3):Vector3 {
@@ -558,7 +549,7 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
   }
   return true;
 }
-type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null};
+type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null;pitch?:number;roll?:number;yaw?:number};
 function islandJumpWallHit(e:Entity,old:PreviousPose){
   const size=dimensions(e.kind);
   // The exact oriented sweep is only relevant near a ramp. The circumscribed
@@ -725,6 +716,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
+  const landmarkVertical=verticalBounds(e),oldLandmarkVertical=verticalBounds({...e,x:old.x,y:old.y,z:old.z,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
   for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
     if(b.landmarkId){
       const base=b.landmarkBase??0,parts=newLandmarkPrimitives(b.landmarkId);
@@ -735,7 +727,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
         if(!surface&&!edge)continue;
         const height=surface?base+surface.top:edge!.top,previous=sampleLandmarkPrimitive(part,old.x-b.x,old.z-b.z);
         const oldHeight=previous?base+previous.top:height;
-        if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
+        if(e.vy<=0&&oldLandmarkVertical.min>=oldHeight-.001&&landmarkVertical.min<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
       }
     }else{
       const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
@@ -759,12 +751,13 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   // An elevated roof or deck has a real underside: upward motion stops there
   // without filling the air below it with an invisible building.
   if(e.supportId===null&&e.vy>0){
-    const height=dimensions(e.kind).height;
+    const previousVertical=verticalBounds({...e,x:old.x,z:old.z,y:old.y,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
     for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
       if(!b.landmarkId)continue;
       for(const part of newLandmarkPrimitives(b.landmarkId)){
-        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y});
-        if(surface&&previous&&old.y+height<=previous.bottom+.001&&e.y+height>surface.bottom){e.y=surface.bottom-height;e.vy=0;}
+        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
+        const current=verticalBounds(e);
+        if(surface&&previous&&previousVertical.max<=previous.bottom+.001&&current.max>surface.bottom){e.y=surface.bottom-(current.max-e.y);e.vy=0;}
       }
     }
   }
@@ -920,7 +913,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       e.supportId='dome';e.domeS=e.z-DOME.z+DOME.flatHalfWidth;
     }
     const oldX=e.x,oldZ=e.z,oldY=e.y,oldYaw=e.yaw,oldSupportId=e.supportId;
-    const old={x:oldX,y:oldY,z:oldZ,supportId:oldSupportId};
+    const old={x:oldX,y:oldY,z:oldZ,supportId:oldSupportId,pitch:e.pitch,roll:e.roll,yaw:oldYaw};
     const onRamp=e.supportId==='stunt-ramp',onDome=e.supportId==='dome'&&e.domeS!==null;
     const rampSlope=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
     let grounded=e.supportId!==null&&e.supportId!=='stunt-loop'&&e.supportId!=='island-cliff';
