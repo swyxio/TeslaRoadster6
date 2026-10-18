@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bay scenery performance fixture</title>
+<style>body{margin:0;background:#182c32;color:#eee;font:14px system-ui}header,pre{padding:12px;margin:0}button{padding:8px;margin:3px}canvas{display:block;width:min(100%,1280px)}pre{white-space:pre-wrap}</style>
+<header>Static Bay scenery · 1280 × 720 · DPR 1 · <button id="run">Measure all views</button><span id="views"></span></header>
+<canvas id="view"></canvas><pre id="report">Loading…</pre>
+<script type="module">
+import * as T from 'three';
+import { buildBay } from '../../src/bay-world.ts';
+
+// Kept outside the production entry point. Compare the same fixture across refs.
+// ?baseline=1 stores a raster and measurement for each view in this origin only.
+const baseline = new URLSearchParams(location.search).has('baseline');
+const canvas = document.querySelector('#view');
+const report = document.querySelector('#report');
+const renderer = new T.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1); renderer.setSize(1280,720,false);
+renderer.outputColorSpace=T.SRGBColorSpace;
+renderer.toneMapping=T.ACESFilmicToneMapping; renderer.toneMappingExposure=.82;
+const scene = new T.Scene(); scene.background=new T.Color(0xa8cbd0); scene.fog=new T.Fog(0xa8cbd0,350,1200);
+scene.add(new T.HemisphereLight(0xe9f5ff,0x626953,1.4));
+const sun=new T.DirectionalLight(0xffdfb5,2.2); sun.position.set(-100,160,80); scene.add(sun);
+const buildStart=performance.now(); buildBay(scene); const buildMs=performance.now()-buildStart;
+const camera=new T.PerspectiveCamera(55,1280/720,.1,1800);
+const views=[
+  {name:'Golden Gate',eye:[-215,22,-250],target:[-240,25,-360]},
+  {name:'Bay Bridge',eye:[90,22,80],target:[240,22,60]},
+  {name:'Waterfront',eye:[175,42,-40],target:[50,10,-40]},
+  {name:'Oakland port',eye:[265,30,250],target:[320,13,185]},
+  {name:'SFO',eye:[-640,35,1270],target:[-700,12,1200]},
+  {name:'Stanford',eye:[-900,27,4055],target:[-940,28,4000]},
+];
+const draw=v=>{camera.position.set(...v.eye); camera.lookAt(...v.target); renderer.render(scene,camera);};
+const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
+const percentile=(a,p)=>[...a].sort((a,b)=>a-b)[Math.floor((a.length-1)*p)];
+for(const view of views){const b=document.createElement('button');b.textContent=view.name;b.onclick=()=>draw(view);document.querySelector('#views').append(b);}
+draw(views[0]);
+report.textContent=baseline?'Ready to record baseline.':'Ready to compare with the recorded baseline.';
+document.querySelector('#run').onclick=async()=>{
+  const buttons=[...document.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+  const rows=[];
+  try{
+    for(const view of views){
+      report.textContent=`Measuring ${view.name}…`;
+      for(let n=0;n<15;n++){await frame();draw(view);}
+      const cpu=[],intervals=[];let previous=0;
+      for(let n=0;n<90;n++){
+        const now=await frame();if(previous)intervals.push(now-previous);previous=now;
+        const start=performance.now();draw(view);cpu.push(performance.now()-start);
+      }
+      const row={view:view.name,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,cpuP50:percentile(cpu,.5),cpuP95:percentile(cpu,.95),frameP95:percentile(intervals,.95)};
+      const key=`tesland-bay-performance-v1:${view.name}`;
+      if(baseline)localStorage.setItem(key,JSON.stringify({row,png:canvas.toDataURL()}));
+      else if(localStorage.getItem(key)){
+        const old=JSON.parse(localStorage.getItem(key)),image=new Image();image.src=old.png;await image.decode();
+        const copy=document.createElement('canvas');copy.width=1280;copy.height=720;const ctx=copy.getContext('2d',{willReadFrequently:true});
+        ctx.drawImage(image,0,0);const a=ctx.getImageData(0,0,1280,720).data;
+        draw(view);ctx.clearRect(0,0,1280,720);ctx.drawImage(canvas,0,0);const b=ctx.getImageData(0,0,1280,720).data;
+        let changed=0,large=0,error=0;for(let i=0;i<a.length;i+=4){let max=0;for(let j=0;j<3;j++){const d=Math.abs(a[i+j]-b[i+j]);error+=d;max=Math.max(max,d);}if(max)changed++;if(max>4)large++;}
+        Object.assign(row,{baselineCalls:old.row.calls,changedPixelsPct:changed/(1280*720)*100,changedOver4Pct:large/(1280*720)*100,meanChannelError:error/(1280*720*3)});
+      }
+      rows.push(row);
+    }
+    const result={baseline,buildMs,objects:scene.children.length,width:1280,height:720,rows};
+    report.textContent=JSON.stringify(result,null,2);document.body.dataset.result=JSON.stringify(result);
+    draw(views[0]);
+  }catch(error){report.textContent=String(error);throw error;}
+  finally{buttons.forEach(b=>b.disabled=false);}
+};
+</script>
+</html>
