@@ -16,7 +16,7 @@ origin.searchParams.set('perf', '');
 const secret = randomBytes(32).toString('hex');
 const output = join(await mkdtemp(join(tmpdir(), 'tesland-recorder-test-')), 'run');
 const gpu = process.env.TESLAND_PLAYTEST_GPU ?? 'default';
-const child = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', origin.href, '--target-ref', 'integration-test', '--serve', '--gpu', gpu, '--out', output], {
+const child = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', origin.href, '--target-ref', 'integration-test', '--serve', '--trajectory', '--gpu', gpu, '--out', output], {
   env: { ...process.env, TESLAND_PLAYTEST_SECRET: secret }, stdio: ['ignore', 'pipe', 'pipe'],
 });
 let stderr = '';
@@ -52,6 +52,7 @@ try {
   assert.ok(live, 'Game must be live before sending driving input.');
   await action({ type: 'waitFor', selector: '#connection:has-text("LIVE")', timeoutMs: 1000 });
   await action({ type: 'waitFor', selector: '#hud:not(.hidden)', state: 'attached', timeoutMs: 1000 });
+  await action({ type: 'waitForDelivery', completed: 0, stage: 'pickup', timeoutMs: 1000 });
   await action({ type: 'recordStart' });
   await action({ type: 'keyDown', key: 'KeyW' });
   await action({ type: 'frameStart' });
@@ -76,6 +77,7 @@ try {
   assert.equal(manifest.status, 'complete');
   assert.equal(manifest.replay.replayable, true);
   assert.ok(replay.steps.some((step: { type: string; key?: string }) => step.type === 'keyDown' && step.key === 'KeyW'));
+  assert.ok(replay.steps.some((step: { type: string; timeoutMs?: number }) => step.type === 'waitForDelivery' && (step.timeoutMs ?? 0) >= 180000), 'A replay must allow delivery milestones time to recur.');
   const downIndex = replay.steps.findIndex((step: { type: string }) => step.type === 'keyDown');
   const sampleIndex = replay.steps.findIndex((step: { type: string }) => step.type === 'sample');
   assert.ok(replay.steps.slice(downIndex + 1, sampleIndex).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve the hold between requests.');
@@ -85,7 +87,7 @@ try {
   const replayTarget = new URL(origin);
   replayTarget.searchParams.set('room', `replay-${randomBytes(6).toString('hex')}`);
   const replayOutput = join(dirname(output), 'replay');
-  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', 'integration-test', '--scenario', join(output, 'replay.json'), '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', 'integration-test', '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
   let replayError = '';
   replayChild.stderr.on('data', chunk => { replayError += chunk; });
   assert.equal(await new Promise<number | null>(resolve => replayChild.once('exit', resolve)), 0, replayError);
