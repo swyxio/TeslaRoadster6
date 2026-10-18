@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { browserFrameMetrics, frameMetrics, motionMetrics, performanceRoomName, roomProgress } from '../scripts/performance-report.mjs';
+import { browserFrameMetrics, deliveryRoute, frameMetrics, motionMetrics, performanceRoomName, roomProgress } from '../scripts/performance-report.mjs';
 import { selectPerformance } from '../scripts/performance-select.mjs';
 
 test('performance CI ignores documentation and small runtime edits unless explicitly selected', () => {
@@ -91,8 +91,50 @@ test('frame intervals report a real percentile and reject missing or truncated d
   assert.equal(browserFrameMetrics(manifest, { sample: { intervalsMs: intervals } }, 5).status, 'unavailable');
 });
 
+test('delivery route requires both completed deliveries and observed jumps and powered flight', () => {
+  const stages = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']] as const;
+  const poses = stages.flatMap(([deliveryCompleted, deliveryStage], i) => Array.from({ length: 4 }, (_, j) => ({
+    atMs: (i * 4 + j) * 100, tick: (i * 4 + j) * 2, poseRevision: 1, x: i * 20 + j, z: 0, y: 0,
+    deliveryCompleted, deliveryStage, lastJump: 0, jumpBurstUntil: 0, supported: true, thrusters: 0, vy: 0,
+  })));
+  poses.push(...Array.from({ length: 8 }, (_, i) => ({ atMs: 2000 + i * 100, tick: 40 + i * 2, poseRevision: 1, x: 84 + i, z: 0, y: i === 2 ? 0 : i, deliveryCompleted: 2, deliveryStage: 'pickup' as const, lastJump: i < 3 ? 1 : 2, jumpBurstUntil: i < 3 ? 2 : 3, supported: i === 2, thrusters: i === 2 ? 0 : i < 3 ? 6 : 7, vy: i === 2 ? 0 : 5 })));
+  const route = deliveryRoute(poses);
+  assert.equal(route.status, 'available');
+  assert.equal(route.jumpCount, 2);
+  assert.equal(route.legs.length, 5);
+  assert.equal(deliveryRoute(poses.filter(p => p.deliveryCompleted < 2)).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: 0 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, lastJump: 0 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, poseRevision: p.tick >= 44 ? 2 : 1 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, vy: 0 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, jumpBurstUntil: 0 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters ? 2 : 0 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters & 6 }))).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => p.tick === 44 ? { ...p, supported: false } : p)).status, 'unavailable');
+});
+
+test('comparison holds when intermediate route legs diverge despite matching endpoints', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-perf-path-'));
+  try {
+    const report = JSON.parse(readFileSync(fileURLToPath(new URL('../docs/performance-baselines/2026-10-18-v0.0.24-aeb5704/report.json', import.meta.url)), 'utf8'));
+    report.fixture.reporterSha256 = 'same-reporter';
+    report.fixture.stageSha256 = 'same-stage';
+    report.fixture.seed = 0;
+    report.fixture.captureVideo = false;
+    report.route = { status: 'available', legs: Array.from({ length: 5 }, () => ({ lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]) })) };
+    const before = join(dir, 'before.json'), after = join(dir, 'after.json');
+    writeFileSync(before, JSON.stringify(report));
+    for (let i = 5; i < 35; i++) report.route.legs[1].points[i][1] = 80;
+    writeFileSync(after, JSON.stringify(report));
+    const script = fileURLToPath(new URL('../scripts/performance-compare.mjs', import.meta.url));
+    const result = execFileSync(process.execPath, [script, before, after], { encoding: 'utf8' });
+    assert.match(result.split('\n').find(line => line.startsWith('| Room simulated')) ?? '', /\| HOLD \|$/);
+    assert.match(result, /path divergence exceeds tolerance/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('room progress requires a long continuous monotonic tick stream', () => {
-  const pose = (atMs: number, tick: number, poseRevision = 1) => ({ atMs, tick, poseRevision });
+  const pose = (atMs: number, tick: number, poseRevision = 1) => ({ atMs, tick, worldTime: tick * .05, poseRevision });
   const ticks = Array.from({ length: 601 }, (_, i) => pose(100 + i * 100, 100 + i * 2));
   assert.deepEqual(roomProgress(ticks, 0, 61000), { status: 'available', wallSeconds: 60, simulationSeconds: 60, ratio: 1, snapshots: 601, maxGapMs: 100 });
   assert.equal(roomProgress(ticks.slice(0, 100), 0, 61000).status, 'unavailable');
@@ -100,6 +142,8 @@ test('room progress requires a long continuous monotonic tick stream', () => {
   assert.equal(roomProgress(ticks.filter(p => p.atMs < 20000 || p.atMs > 23000), 0, 61000).status, 'unavailable');
   assert.equal(roomProgress([pose(100, 100), pose(60100, 90)], 0, 61000).status, 'unavailable');
   assert.equal(roomProgress([pose(100, 100), pose(60100, 1300, 2)], 0, 61000).status, 'unavailable');
+  assert.equal(roomProgress(ticks.map(p => ({ ...p, worldTime: null })), 0, 61000).status, 'unavailable');
+  assert.equal(roomProgress(ticks.map(p => ({ ...p, worldTime: p.worldTime * .5 })), 0, 61000).ratio, .5);
 });
 
 test('motion summaries do not substitute zeros for missing responses', () => {
