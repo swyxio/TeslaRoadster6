@@ -145,6 +145,16 @@ test('Peninsula and San Jose gates apply in the air and allow the next unlocked 
   }
 });
 
+test('an airborne car can slide and descend along a southbound progression gate',()=>{
+  const {world,player,car}=setup();
+  Object.assign(car,{x:-200,z:ACCESS_BOUNDARIES.bayMaxZ-.2,y:150,vx:8,vy:0,vz:30,air:0,supportId:null});
+  step(world,new Map(),.05);
+  assert.equal(player.delivery.lastBlocked?.level,2);
+  assert.ok(car.z<=ACCESS_BOUNDARIES.bayMaxZ);
+  assert.ok(car.x> -200,'movement along the boundary is preserved');
+  assert.ok(car.y<150,'gravity is preserved');
+});
+
 test('vehicle takeover cannot transport a locked player through the gate; dome and reset remain open',()=>{
   const {world,player,car}=setup();
   assert.ok(travelDome(world,'p'));assert.equal(car.inDome,true);

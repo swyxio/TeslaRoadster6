@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
 import { initialSoccer } from '../shared/soccer';
 import { createFerry } from '../shared/ferry';
 import { createParking } from '../shared/parking';
 import { createRace } from '../shared/race';
-import { currentAt, JET_STREAMS, THERMALS } from '../shared/sky-currents';
+import { currentAt, FLIGHT_CEILING, JET_STREAMS, THERMALS } from '../shared/sky-currents';
+import { ACCESS_BOUNDARIES, requiredLevelAt } from '../shared/delivery';
 import { BUILDINGS, terrainHeight } from '../shared/map';
 
 const worldFor=(car:Entity):World=>({entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer(),ferry:createFerry(),parking:createParking(),races:createRace()});
@@ -15,7 +16,7 @@ test('jet lanes push in their marked direction and refill an empty tank, includi
  const lane=JET_STREAMS[0],car=makeEntity('car','zoox',lane.start.x+80,lane.start.z,'p');
  Object.assign(car,{y:lane.height,supportId:null,air:0});const world=worldFor(car);
  tick(world,20);
- assert.ok(car.vx>10);assert.ok(car.air>6.5);assert.ok(car.y>=lane.height-lane.halfHeight);
+ assert.ok(car.vx>7);assert.ok(car.air>6.5);assert.ok(car.y>=lane.height-lane.halfHeight);
  assert.equal(car.upgrades.rocket,false);
  car.air=99.9;tick(world);assert.equal(car.air,100);
 });
@@ -30,7 +31,8 @@ test('wind refills the same air units across tank upgrades without overflowing',
  }
 });
 
-test('thermals start above the road, lift a jumping car and replenish air to the skyline',()=>{
+test('the remaining thermal starts above the road, lifts a jumping car and replenishes air',()=>{
+ assert.equal(THERMALS.length,1);
  for(const thermal of THERMALS){
   const landmark=BUILDINGS.find(b=>b.style===(thermal.id==='pyramid'?'pyramid':thermal.id==='coit'?'coit':'salesforce'))!;
   assert.ok(Math.hypot(thermal.x-landmark.x,thermal.z-landmark.z)<45);
@@ -42,6 +44,97 @@ test('thermals start above the road, lift a jumping car and replenish air to the
   assert.ok(car.y>70,`${thermal.name} lifts a regular jump`);
   assert.ok(car.air>afterJump,`${thermal.name} refills the tank`);
  }
+});
+
+function controlledCar(){
+ const world=createWorld(),player=addPlayer(world,'p','Pilot'),car=world.entities.find(e=>e.id===player.entityId)!;
+ world.entities=[car];world.pickups=[];return {world,player,car};
+}
+
+test('the raised Skyline is harder to enter accidentally but reachable from the thermal',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!,thermal=THERMALS[0];
+ assert.ok(skyline.height-skyline.halfHeight>=140);assert.ok(skyline.height+skyline.halfHeight<FLIGHT_CEILING);
+ const {world,car}=controlledCar();
+ Object.assign(car,{x:-100,z:skyline.start.z,y:88,supportId:null});
+ assert.notEqual(currentAt(car)?.id,'skyline','the former height no longer enters the lane');
+ Object.assign(car,{x:thermal.x,z:thermal.z,y:0,yaw:0,air:100,supportId:'ground'});
+ tick(world,220,{...NEUTRAL,jump:1});
+ let jump=1;
+ for(let i=0;i<220&&car.y<145;i++){
+  if(i%20===0)jump++;
+  tick(world,1,{...NEUTRAL,jump});
+ }
+ assert.ok(car.y>=145,`the Roadster climbed to ${car.y} m`);
+ for(let i=0;i<100&&currentAt(car)?.id!=='skyline';i++){
+  if(i%20===0)jump++;
+  tick(world,1,{...NEUTRAL,jump,throttle:1});
+ }
+ assert.equal(currentAt(car)?.id,'skyline');assert.ok(car.air>0);
+});
+
+test('ordinary forward and reverse flight can overcome a sky lane without boost',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!;
+ for(const [yaw,throttle] of [[Math.PI/2,1],[-Math.PI/2,-1]] as const){
+  const {world,car}=controlledCar();
+  Object.assign(car,{x:-100,z:skyline.start.z,y:skyline.height,yaw,supportId:null,air:100});
+  tick(world,40,{...NEUTRAL,throttle});
+  assert.ok(car.x< -110,`${throttle>0?'forward':'reverse'} leaves the wind behind`);
+  assert.ok(car.vx<0,'thrust overcomes the current');
+ }
+});
+
+test('the Skyline progression gate preserves vertical and sideways escape, even with an empty tank',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!;
+ for(const kind of ['roadster','model-3'] as const){
+  const {world,player,car}=controlledCar();
+  Object.assign(car,{kind,x:ACCESS_BOUNDARIES.oaklandX-.2,z:skyline.start.z,y:skyline.height,
+   yaw:-Math.PI/2,vx:30,vy:0,vz:-6,air:0,supportId:null});
+  tick(world);
+  assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX);assert.equal(player.delivery.lastBlocked?.level,1);
+  assert.ok(car.z<skyline.start.z,'checkpoint preserves lateral movement');
+  assert.ok(car.y<skyline.height,'checkpoint preserves gravity');
+  tick(world,20);
+  assert.ok(car.y<skyline.height-4,'wind no longer holds a car against the gate');
+  assert.ok(requiredLevelAt(car.x,car.z)<=player.delivery.level);
+ }
+});
+
+test('a Rocket with an initially empty tank can turn and fly away from the Skyline gate',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!;
+ for(const [yaw,throttle] of [[Math.PI/2,1],[-Math.PI/2,-1]] as const){
+  const {world,car}=controlledCar();
+  Object.assign(car,{x:ACCESS_BOUNDARIES.oaklandX-.2,z:skyline.start.z,y:skyline.height,
+   yaw,vx:30,vy:0,vz:0,air:0,supportId:null});
+  tick(world,60,{...NEUTRAL,throttle});
+  assert.ok(car.x<ACCESS_BOUNDARIES.oaklandX-20,`${throttle>0?'forward':'reverse'} escapes the gate`);
+ }
+ const {world,car}=controlledCar();
+ Object.assign(car,{x:ACCESS_BOUNDARIES.oaklandX-.2,z:skyline.start.z,y:skyline.height,
+  yaw:-Math.PI/2,vx:30,vy:0,vz:0,air:0,supportId:null});
+ tick(world,35,{...NEUTRAL,steer:1});
+ assert.ok(car.yaw>0,'steering turns the car even while blocked');
+ tick(world,60,{...NEUTRAL,throttle:1});
+ assert.ok(car.x<ACCESS_BOUNDARIES.oaklandX-20,'the new heading can fly away');
+});
+
+test('a player already displaced into a locked region can return against the lane',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!,{world,player,car}=controlledCar();
+ Object.assign(car,{x:ACCESS_BOUNDARIES.oaklandX+10,z:skyline.start.z,y:skyline.height,
+  yaw:Math.PI/2,vx:0,vy:0,vz:0,air:0,supportId:null});
+ assert.equal(requiredLevelAt(car.x,car.z),1);
+ tick(world,40,{...NEUTRAL,throttle:1});
+ assert.ok(car.x<ACCESS_BOUNDARIES.oaklandX,'the player can return to the unlocked side');
+ assert.ok(requiredLevelAt(car.x,car.z)<=player.delivery.level);
+});
+
+test('an unlocked player can still ride the Skyline across the bridge gate',()=>{
+ const skyline=JET_STREAMS.find(lane=>lane.id==='skyline')!,{world,player,car}=controlledCar();
+ player.delivery.level=1;
+ Object.assign(car,{x:ACCESS_BOUNDARIES.oaklandX-1,z:skyline.start.z,y:skyline.height,
+  vx:0,vy:0,vz:0,air:100,supportId:null});
+ tick(world,20);
+ assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);assert.ok(car.vx>0);
+ assert.ok(Math.abs(car.y-skyline.height)<.01,'the lane keeps holding altitude');
 });
 
 test('membership respects height, width, support, dome, and people',()=>{
