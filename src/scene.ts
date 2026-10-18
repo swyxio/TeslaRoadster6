@@ -71,6 +71,7 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private predictedEntity?:string;
   cameraMode:CameraMode = 'chase';
   private renderedCockpit=false;
   private marker = new T.Vector3();
@@ -212,7 +213,7 @@ export class GameScene {
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
-  render(world: World, playerId: string, dt: number, menu: boolean) {
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false) {
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
@@ -276,7 +277,11 @@ export class GameScene {
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       mesh.visible=!(cockpit&&e.id===controlled?.id);
       const target=new T.Vector3(e.x,e.y,e.z);
-      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
+      // When a preview is suspended, return directly to authority rather than
+      // interpolating the car through a newly reported obstacle or shoreline.
+      const returningToAuthority=this.predictedEntity===e.id&&!localPredicted;
+      const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
+      if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
       if(e.kind!=='person'){
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
@@ -292,7 +297,7 @@ export class GameScene {
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
       this.orientation.multiply(this.pitchRotation.setFromAxisAngle(this.pitchAxis,e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'?e.pitch:0));
       this.orientation.multiply(this.rollRotation.setFromAxisAngle(this.rollAxis,e.roll));
-      mesh.quaternion.slerp(this.orientation,alpha);
+      mesh.quaternion.slerp(this.orientation,blend);
       const incident=isTrafficIncident(e,world.time);
       let hazard=mesh.getObjectByName('traffic-hazard');
       if(incident&&!hazard&&e.kind!=='person'){hazard=box(mesh,0,VEHICLES[e.kind].height+.2,0,.9,.2,.35,0xffa63d);hazard.name='traffic-hazard';}
@@ -365,6 +370,7 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
+    this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}

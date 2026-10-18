@@ -8,7 +8,7 @@ import { chooseAvailableName } from './global-chat-core';
 export { GlobalChat };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number };
+type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number };
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -45,13 +45,13 @@ export class GameRoom extends DurableObject<Env> {
     const id = crypto.randomUUID();
     const now = Date.now();
     server.accept();
-    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0 });
+    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
     addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
     server.addEventListener('message', event => this.onMessage(server, event.data));
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
     server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
-    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id) }));
+    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), inputAck:0 }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -66,7 +66,16 @@ export class GameRoom extends DurableObject<Env> {
     const message = parseMessage(raw);
     if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
     session.lastMessage = now;
-    if (message.type === 'input') { this.inputs.set(session.id, message.input); session.lastInput = now; return; }
+    if (message.type === 'input') {
+      if(message.seq>session.inputSeq){this.inputs.set(session.id, message.input);session.lastInput=now;session.inputSeq=message.seq;}
+      return;
+    }
+    // Coalesce barriers into the next regular snapshot. WebSocket ordering
+    // places it after preceding actions, including cooldown rejections.
+    if(message.type==='sync'){
+      session.pendingSync=Math.max(session.pendingSync,message.token);
+      return;
+    }
     if (message.type === 'name') {
       const player = this.world.players.find(p => p.id === session.id);
       if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
@@ -96,10 +105,14 @@ export class GameRoom extends DurableObject<Env> {
       if (now - session.lastMessage > 30_000) this.disconnect(socket, 1001, 'Connection inactive');
     }
     if (!this.sessions.size) return;
+    for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
     step(this.world, this.inputs, 0.05);
     if (++this.tickCount % 2) return;
     for (const [socket, session] of this.sessions) {
-      try { socket.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, session.id) })); } catch { this.disconnect(socket); }
+      try {
+        socket.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, session.id), inputAck:session.appliedSeq, ...(session.pendingSync?{sync:session.pendingSync}:{}) }));
+        session.pendingSync=0;
+      } catch { this.disconnect(socket); }
     }
   }
 

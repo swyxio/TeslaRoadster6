@@ -4,8 +4,9 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
+let inputSeq=0;
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 21);
+assert.equal(PROTOCOL_VERSION, 22);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -62,29 +63,29 @@ try {
   const entityId = one.state.world!.players.find(p => p.id === id)!.entityId;
   const initial = one.state.world!.entities.find(e => e.id === entityId)!;
   const origin={x:initial.x,z:initial.z,yaw:initial.yaw};
-  for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 1, cockpit: true } })); await delay(50); }
+  for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', seq:++inputSeq, input: { ...NEUTRAL, throttle: 1, cockpit: true } })); await delay(50); }
   await eventually(() => {const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&((e.x-origin.x)*-Math.sin(origin.yaw)+(e.z-origin.z)*-Math.cos(origin.yaw)>4);}, 'remote player receives authoritative movement');
   await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.delivery.activeSeconds>.5&&p.delivery.order.elapsed>.5;},'active pickup time replicated');
   await eventually(()=>{const p=two.state.world?.players.find(p=>p.id===id);return !!p&&p.cockpit.active&&p.cockpit.activeSeconds>.5;},'self-reported cockpit view and active time replicated');
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,steer:1,brake:true}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,steer:1,brake:true}}));
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.cockpit.active===false,'leaving cockpit view replicated');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&Math.hypot(e.pushX,e.pushZ)>.4;},'drift lateral motion replicated');
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1,boost:true}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1,boost:true}}));
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_REAR),'remote boost exhaust replicated');
-  one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:NEUTRAL}));
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   // The press is counted, so a complete tap between input frames is retained.
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:1}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>.5&&e.air<100&&(e.thrusters&(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT))===(THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT);},'jump exhaust and air use replicated');
   const remaining=two.state.world!.entities.find(e=>e.id===entityId)!.air;
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:1,flip:1}}));
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_SIDE_RIGHT),'remote flip exhaust replicated');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-4.5))<.01;},'one-tap flip completion replicated');
   const flightStart=two.state.world!.entities.find(e=>e.id===entityId)!;
   const flightOrigin={x:flightStart.x,z:flightStart.z,yaw:flightStart.yaw};
-  for(let i=0;i<12;i++){one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1,throttle:1,hover:true}}));await delay(50);}
+  for(let i=0;i<12;i++){one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:1,flip:1,throttle:1,hover:true}}));await delay(50);}
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId===null&&((e.x-flightOrigin.x)*-Math.sin(flightOrigin.yaw)+(e.z-flightOrigin.z)*-Math.cos(flightOrigin.yaw)>1)&&(e.thrusters&THRUSTER_REAR)!==0;},'remote forward flight and hover replicated');
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:1,flip:1}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:1,flip:1}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.supportId!==null;},'assisted landing on a shared surface replicated');
   // A double jump from the Bay approach reaches the low City Glide lane.
   // Check its server-applied refill from the other client's snapshots.
@@ -103,9 +104,9 @@ try {
     spawnAttempts.push(e&&{x:e.x,y:e.y,z:e.z,supportId:e.supportId,speed:e.speed});
   }
   assert.ok(laneSpawn,`a free ground spawn beneath City Glide is available: ${JSON.stringify(spawnAttempts)}`);
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:2}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:2}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>4.5;},'first jump near its peak toward sky lane');
-  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:3}}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,jump:3}}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.lastJump===3&&e.vy<=11;},'air jump restores capped upward speed');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&currentAt(e)?.id==='market';},'remote car enters shared sky lane');
   const streamAir=two.state.world!.entities.find(e=>e.id===entityId)!.air;
@@ -114,9 +115,9 @@ try {
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'arena entry replicated');
   assert.equal(two.state.world!.soccer.blueScore,0);assert.equal(two.state.world!.soccer.orangeScore,0);
-  for(let i=0;i<70;i++){one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,throttle:1}}));await delay(50);}
+  for(let i=0;i<70;i++){one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1}}));await delay(50);}
   await eventually(()=>!!two.state.world&&two.state.world.soccer.ball.x>DOME.x+2,'car impact moves the shared ball');
-  one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
+  one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:NEUTRAL}));
   await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000);
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
@@ -152,7 +153,7 @@ try {
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
-  one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
+  one.socket.send(JSON.stringify({ type: 'input', seq:++inputSeq, input: { ...NEUTRAL, throttle: 900 } }));
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
