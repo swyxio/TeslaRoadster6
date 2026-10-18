@@ -43,7 +43,7 @@ test('nearby collected items, refills and police pursuit have cues without repea
   const {world,player,car,observe}=setup();
   const pickup=world.pickups[0];pickup.x=car.x;pickup.z=car.z;observe();pickup.active=false;
   assert.deepEqual(names(observe()),['repair']);
-  assert.deepEqual(names(observe(.05,true)),['refill']);assert.deepEqual(names(observe(.05,true)),[]);
+  car.air=95;assert.deepEqual(names(observe(.05,true)),['refill']);assert.deepEqual(names(observe(.05,true)),[]);
   const cop=world.entities.find(e=>e.police)!;cop.police!.targetId=player.id;
   assert.deepEqual(names(observe()),['pursuit']);assert.deepEqual(names(observe()),[]);
 });
@@ -55,4 +55,12 @@ test('reset, teleport, vehicle changes, and initial snapshots do not replay old 
   assert.deepEqual(names(observe()),[]);
   tracker.reset();player.delivery.tickets=4;assert.deepEqual(names(observe()),[]);
   world.time=0;player.delivery.completed=8;assert.deepEqual(names(tracker.update(world,player.id,false)),[]);
+});
+
+
+test('a nearly full tank that reaches full between observations confirms refill once',()=>{
+  const {car,observe}=setup();
+  car.air=99;observe();
+  car.air=100;assert.deepEqual(names(observe(.05,true)),['refill']);
+  assert.deepEqual(names(observe(.05,true)),[]);
 });

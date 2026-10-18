@@ -151,8 +151,8 @@ export class GameAudio {
     if(active!==this.active){this.active=active;this.applyVolumes();if(active&&this.ctx)this.nextNote=this.ctx.currentTime+.05;}
     const player=world.players.find(p=>p.id===playerId),entity=world.entities.find(e=>e.id===player?.entityId);
     if(!active||!entity){this.tracker.reset();this.environment(undefined,world);return;}
-    const refilling=entity.kind!=='person'&&entity.y<1&&Math.abs(entity.speed)<1&&entity.air<99.8&&STATIONS.some(s=>Math.hypot(entity.x-s.x,entity.z-s.z)<9);
-    for(const event of this.tracker.update(world,playerId,refilling))this.play(event.cue,event.strength);
+    const atStation=entity.kind!=='person'&&entity.loopAngle===null&&entity.y<1&&Math.abs(entity.speed)<1&&STATIONS.some(s=>Math.hypot(entity.x-s.x,entity.z-s.z)<9);
+    for(const event of this.tracker.update(world,playerId,atStation))this.play(event.cue,event.strength);
     this.environment(entity,world);this.scheduleMusic();
   }
   private environment(e:Entity|undefined,world:World):void {

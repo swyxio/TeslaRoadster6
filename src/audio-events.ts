@@ -8,7 +8,7 @@ export type SoundEvent = { cue: SoundCue; strength?: number };
 
 type Sample = {
   playerId: string; entityId: string; time: number; x: number; z: number; y: number; vy: number;
-  speed: number; health: number; grounded: boolean; jumpBurstUntil: number; stage: 'pickup' | 'dropoff';
+  speed: number; health: number; air: number; grounded: boolean; jumpBurstUntil: number; stage: 'pickup' | 'dropoff';
   completed: number; tickets: number; awards: number; pursued: boolean; refilling: boolean;
   pickups: Map<string, boolean>;
 };
@@ -25,15 +25,18 @@ export class SoundEventTracker {
   private lastCrash = -Infinity;
   reset(): void { this.previous=undefined; this.lastCrash=-Infinity; }
 
-  update(world: World, playerId: string, refilling: boolean): SoundEvent[] {
+  update(world: World, playerId: string, atStation: boolean): SoundEvent[] {
     const p=world.players.find(player=>player.id===playerId);
     const e=world.entities.find(entity=>entity.id===p?.entityId);
     if(!p||!e){this.reset();return [];}
-    const sample:Sample={playerId,entityId:e.id,time:world.time,x:e.x,z:e.z,y:e.y,vy:e.vy,speed:e.speed,health:e.health,
+    const previous=this.previous;
+    // A near-full tank can reach 100% between observations, so include a measured increase.
+    const refilling=atStation&&(e.air<99.8||(previous?.entityId===e.id&&e.air>previous.air+.01));
+    const sample:Sample={playerId,entityId:e.id,time:world.time,x:e.x,z:e.z,y:e.y,vy:e.vy,speed:e.speed,health:e.health,air:e.air,
       grounded:grounded(e),jumpBurstUntil:e.jumpBurstUntil,stage:p.delivery.order.stage,completed:p.delivery.completed,
       tickets:p.delivery.tickets,awards:p.achievements.unlocked.length,pursued:world.entities.some(car=>car.police?.targetId===playerId),
       refilling,pickups:new Map(world.pickups.map(pickup=>[pickup.id,pickup.active]))};
-    const previous=this.previous;this.previous=sample;
+    this.previous=sample;
     if(!previous||previous.playerId!==playerId||sample.time<previous.time){this.lastCrash=-Infinity;return [];}
     if(sample.time===previous.time)return [];
     const events:SoundEvent[]=[];
