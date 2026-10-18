@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
-import { deliveryRoofAccess, CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { deliveryRoofAccess, CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -34,7 +34,7 @@ import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=44;
+export const PROTOCOL_VERSION=46;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -271,9 +271,10 @@ export function interact(world:World,playerId:string):void {
     person.lastJump=e.lastJump;person.lastFlip=e.lastFlip;release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);resetAchievementFlight(player);
   }
 }
-export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
+/** allowAnyVehicle is reserved for an isolated sandbox authority. */
+export function chooseVehicle(world:World,id:string,kind:VehicleId,allowAnyVehicle=false):boolean {
   const player=world.players.find(p=>p.id===id),old=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!old||old.supportId===null||old.supportId==='ferry'||old.loopAngle!==null||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind)||VEHICLES[kind].brand!=='Tesla')return false;
+  if(!player||!old||old.supportId===null||old.supportId==='ferry'||old.loopAngle!==null||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind)||(!allowAnyVehicle&&VEHICLES[kind].brand!=='Tesla'))return false;
   // Owned cars and the on-foot avatar are removed below; borrowed cars remain
   // in the world and must still block a replacement spawn.
   const removed=(old.owner===id&&!old.cab)||old.id===`person-${id}`;
@@ -375,6 +376,7 @@ export function setDestination(world:World,id:string,destination:{x:number;z:num
 }
 export function setDeliveryDestination(world:World,id:string,mode:DriveMode='road'):boolean {
   const player=world.players.find(p=>p.id===id);if(!player)return false;
+  if(player.delivery.order.search)return false;
   const target=orderTarget(player.delivery.order);
   return !target.rooftop&&navigate(world,id,target,mode,DELIVERY_DESTINATION_SNAP);
 }
@@ -390,6 +392,23 @@ export function resetPlayer(world:World,id:string):void {
     return;
   }
   if(baySpawn)placeEntity(e,baySpawn,false);
+}
+/** Caller authorizes sandbox access. Never accepts a height or bypasses collisions. */
+export function teleportPlayer(world:World,id:string,point:{x:number;z:number}):boolean {
+  const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car||!Number.isFinite(point.x)||!Number.isFinite(point.z))return false;
+  for(const radius of [0,5,10,20])for(let n=0;n<(radius?8:1);n++){
+    const angle=n*Math.PI/4,x=point.x+Math.cos(angle)*radius,z=point.z+Math.sin(angle)*radius;
+    const candidate=makeEntity('teleport',car.kind,x,z);candidate.yaw=car.yaw;
+    const deck=overpassHeight(x,z);
+    if(deck!==null&&deck>candidate.y){candidate.y=deck;candidate.supportId='overpass';}
+    if(!fits(world,candidate,car))continue;
+    leaveParking(world.parking,id);leaveRace(world.races,id);removeFerryPassenger(world.ferry,car.id);
+    placeEntity(car,{x,z,yaw:car.yaw},false);
+    car.y=candidate.y;car.supportId=candidate.supportId;
+    resetAchievementFlight(player);return true;
+  }
+  return false;
 }
 export function parkingAction(world:World,id:string,action:ParkingMode|'start'|'leave'):boolean {
   if(action==='leave'){leaveParking(world.parking,id);return true;}
@@ -816,9 +835,11 @@ export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{su
   dt=Math.min(dt,.05);
   const steps=Number.isInteger(options?.substeps)&&options!.substeps!>=1&&options!.substeps!<=8?options!.substeps!:simulationSubsteps(world,dt);
   options?.onSubsteps?.(steps);
-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy);
+  const waiting=world.players.filter(player=>player.delivery.order.search);
+  const searchDriver=waiting.length?waiting[Math.floor((world.time+.001)/.05)%waiting.length].id:undefined;
+  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy,i===steps-1?searchDriver:undefined);
 }
-function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks):void {
+function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks,searchDriver?:string):void {
   const update=(player:Player,apply:()=>EconomyUpdateResult,ticket?:TicketEvidence)=>economy?economy.update(player,apply,ticket):apply();
   const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
   world.time+=dt;
@@ -1194,16 +1215,27 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     if(entity){
       const evidence:AchievementEvidence[]=[];
       update(player,()=>{
-      // Repair a saved or switched-vehicle job before accepting any new stop.
-      // On foot, retain an accessible roof but still repair a locked region.
-      if(economy?.decisionsAvailable?.(player)!==false&&
-        rerouteInaccessibleOrder(player.delivery,entity,deliveryRoofAccess(entity)))return;
+      // Preserve an accessible roof on foot while still repairing locked regions.
+      // Unavailable jobs use the bounded retry path.
+      const roofAccess=deliveryRoofAccess(entity);
+      if(player.delivery.lastReroute?.reason!=='unavailable'&&economy?.decisionsAvailable?.(player)!==false&&
+        rerouteInaccessibleOrder(player.delivery,entity,roofAccess))return;
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
-      const orderPaused=islandProtected(entity)||entity.inDome;
-      economy?.deliveryStart?.(player,entity,orderPaused);
+      // A pure simulation without economy hooks must initiate or retry a relocked order.
+      // Once a failed search is unavailable, retry only after reaching open ground.
+      if(!economy&&!player.delivery.order.search&&!isOrderAccessible(player.delivery.order,player.delivery.level,roofAccess)&&
+        (player.delivery.lastReroute?.reason!=='unavailable'||
+          (entity.supportId==='ground'&&!entity.inDome&&requiredLevelAt(entity.x,entity.z)<=player.delivery.level)))
+        rerouteInaccessibleOrder(player.delivery,entity,roofAccess);
+      const stopPaused=islandProtected(entity)||entity.inDome||
+        (player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,roofAccess));
+      const orderPaused=!!player.delivery.order.search||stopPaused;
+      // Keep sampling physical stops behind an unresolved wallet event. Their
+      // immutable pose is replayed after the preceding assignment commits.
+      economy?.deliveryStart?.(player,entity,stopPaused);
       const payouts=updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused,
-        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined);
+        economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined,!economy&&searchDriver===player.id);
       const activeTime=player.delivery.activeSeconds-activeBefore;
       economy?.deliveryEnd?.(player,orderPaused?0:activeTime,payouts);
       if(payouts===null){

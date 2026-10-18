@@ -12,7 +12,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Research tour:** Find the blue rings at UCSF Parnassus in SF, the Berkeley Campanile, Stanford’s Hoover Tower and SFO’s control tower; the map labels each landmark. Stop in each ring for a one-time award: UCSF pays $250; Berkeley pays $400 and gives 20% off efficient nozzles; Stanford pays $600 and gives 20% off sport motors; SFO pays $600 and gives 20% off air tanks. Complete a delivery to SFO for an additional $1,000 achievement. Open **Actions → Awards** to see each goal.
 
-**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 2, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
+**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 5, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
 
 **Sound and radio:** Use **♫** to choose the original 8-bit soundtrack or a random episode from the last two months of Latent Space or ThursdAI. Play, pause and skip episodes while driving; master, music/radio and effects levels are separate. The station and sound preferences stay on this browser. Podcast audio streams from the publisher. See [audio design](docs/AUDIO.md).
 
@@ -23,6 +23,8 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 **Map and mini-games:** Open the map to choose an accessible destination; double-tap Shift or tap **Self-drive to delivery** for the current pickup or drop-off. Street Pilot can try to rejoin roads and recover from a blockage. In the SpaceX shop, buy Ludicrous Leap for traffic hops and Maximum Plaid for flight and helpful air currents; both need rockets. Select the mode for your next trip, and use the driving controls to take over. Rooftop orders still require manual flight. The Mini-games picker offers quick entry to the Dome, parking games and island races.
 
 **Scores and awards:** Scores show delivery milestones, room standings and current or recently observed mini-game results. Results last for the drive. Awards show your progress and save status; confirmed awards follow a saved driver across drives and devices.
+
+**Vehicle collections:** Drive each Tesla and Vault model for 100 m in one ride to add it to your collection. Take different NPC or seeded parked fleet models from the street for takeover milestones. Actions → Awards shows the model lists and cash rewards; other players' cars and Cybercabs do not count as takeovers. Earlier drives and takeovers were not recorded, so the new collections begin empty.
 
 **Tesland in 2050:** Cross the Golden Gate to the wooded Marin headlands, where the fictional First Delivery Monument celebrates the Bay’s most important cargo. Its base is solid and landable. See [the setting](content/lore.md).
 
@@ -169,3 +171,9 @@ No framework is needed for this small HUD. Keep the simulation independent from 
 ## License and attribution
 
 First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). The highway source extract and generated traces are © OpenStreetMap contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); see [map provenance and the reproducible bake](docs/MAP.md). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Restaurant names identify real places, with fictional in-game locations and no affiliation. Tesla, Waymo, Cruise, Zoox and SpaceX names are used for fictional game content; they do not imply endorsement, and the MIT license does not grant trademark rights.
+
+For a fresh balance test, use **Room settings → Playtest → Fresh driver**. For
+maximum upgrades, all vehicles, unlimited spending and map teleport, join
+[`sandbox`](https://tesland.swyx.io/?room=sandbox) or share a `sandbox-*` code.
+These multiplayer rooms leave your saved driver untouched and do not save
+progress. [Playtest modes and boundaries](docs/PLAYTEST_ROOMS.md).

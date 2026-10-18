@@ -3,7 +3,9 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { ACHIEVEMENT_TIER_IDS, ACHIEVEMENT_TIER_NAMES, selectAchievementTierLadder, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import type { Player } from '../shared/game';
 import type { Session } from './session';
-import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers, type GameScores } from './progress-model';
+import { TESLA_COLLECTION_IDS, VAULT_COLLECTION_IDS } from '../shared/vehicle-collections';
+import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../shared/vehicles';
+import { AWARD_FAMILY_DESCRIPTIONS, AWARD_GROUPS, awardCardState, awardDeliveryTarget, awardDetails, awardFamilyGroup, awardGroup, awardProgress, awardSaveView, awardTier, deliveryStandings, GameResultHistory, nextDeliveryLevel, savedAwardTiers, vehicleCollectionAwardProgress, type GameScores } from './progress-model';
 
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
@@ -32,6 +34,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
   const history=new GameResultHistory();
   let games:GameScores={current:[],recent:[]},lastRender=0,lastAwardsKey='';
   const expandedFamilies=new Set<AchievementTierId>();
+  const expandedCollections=new Set<string>();
   const entries=Object.entries(ACHIEVEMENTS) as [AchievementId,typeof ACHIEVEMENTS[AchievementId]][];
   const available=()=>session.status==='online'&&(session.walletStatus==='guest'||(session.walletStatus==='ready'&&!!session.wallet));
   function observe(){
@@ -55,10 +58,10 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     }
     const player=session.world.players.find(item=>item.id===session.id);
     const personal=element('section','progress-section');
-    personal.append(element('h3','','Your delivery progress'),element('p','progress-note',session.walletStatus==='guest'?'Guest drive · save your driver to keep delivery progress.':'Delivery progress is saved to your driver.'));
+    personal.append(element('h3','','Your delivery progress'),element('p','progress-note',session.playtest?'Playtest progress is not saved.':session.walletStatus==='guest'?'Guest drive · save your driver to keep delivery progress.':'Delivery progress is saved to your driver.'));
     if(player){
       const stats=element('div','progress-stats');
-      for(const [label,value] of [['Deliveries',String(player.delivery.completed)],['Delivery earnings',money(player.delivery.earned)],['Cash now',money(session.wallet?.cash??player.delivery.cash)]]){
+      for(const [label,value] of [['Deliveries',String(player.delivery.completed)],['Delivery earnings',money(player.delivery.earned)],['Cash now',session.sandbox?'∞':money(session.wallet?.cash??player.delivery.cash)]]){
         const item=element('div','progress-stat');item.append(element('span','',label),element('strong','',value));stats.append(item);
       }
       personal.append(stats);
@@ -103,9 +106,11 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     const body=awardsDialog.querySelector<HTMLElement>('.progress-awards-body')!,saveStatus=awardsDialog.querySelector<HTMLElement>('.progress-save-status')!;
     const player=available()?session.world.players.find(item=>item.id===session.id):undefined;
     const view=awardSaveView(session.status==='online',session.walletStatus,session.wallet?.unlocked??null,player?.achievements.unlocked??[]);
+    if(session.playtest)view.text='Playtest progress is not saved. Vehicle collections are tracked in normal rooms.';
     const savedIds=new Set(view.saved),current=new Set(view.observed),all=new Set([...savedIds,...current]);
     const tiers=savedAwardTiers(session.status==='online',session.walletStatus,session.wallet?.achievementTiers??null);
-    const key=JSON.stringify([view,tiers,player?.delivery.completed,entries.map(([id])=>awardProgress(id,player,session.world))]);
+    const collections=available()?session.wallet?.vehicleCollections??null:null;
+    const key=JSON.stringify([view,tiers,collections,player?.delivery.completed,entries.map(([id])=>awardProgress(id,player,session.world))]);
     saveStatus.textContent=view.text;
     if(key===lastAwardsKey)return;
     lastAwardsKey=key;
@@ -113,9 +118,14 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       const id=details.dataset.family as AchievementTierId;
       if(details.open)expandedFamilies.add(id);else expandedFamilies.delete(id);
     }
+    for(const details of body.querySelectorAll<HTMLDetailsElement>('details[data-collection]')){
+      const id=details.dataset.collection!;
+      if(details.open)expandedCollections.add(id);else expandedCollections.delete(id);
+    }
     const active=document.activeElement instanceof HTMLElement?document.activeElement:null;
     const activeCard=active?.closest<HTMLElement>('[data-award-id]');
     const activeId=activeCard?.dataset.awardId,summaryFocused=active?.tagName==='SUMMARY';
+    const activeCollection=active?.closest<HTMLDetailsElement>('details[data-collection]')?.dataset.collection;
     const scrollTop=awardsDialog.scrollTop;
     body.replaceChildren();
     if(available())body.append(element('p','progress-awards-count',`${all.size} / ${entries.length} one-time awards earned${session.walletStatus==='ready'?` · ${savedIds.size} saved`:''}`));
@@ -129,10 +139,33 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       if(available()&&items.length)heading.append(element('span','',`${items.filter(([id])=>all.has(id)).length} / ${items.length} one-time awards earned`));
       section.append(heading);
       const list=element('ul','progress-award-list');
+      if(group.id==='collection'){
+        section.append(element('p','progress-award-description',session.playtest?'Vehicle collections are tracked in normal rooms.':'Drive 100 m in one ride to collect a model. Take over NPC or parked fleet cars to collect thefts.'));
+        list.classList.add('progress-collection-list');
+        const groups:{id:string;title:string;ids:readonly VehicleId[];completed:readonly VehicleId[]|undefined}[]=[
+          {id:'tesla',title:'Tesla models driven',ids:TESLA_COLLECTION_IDS,completed:collections?.driven},
+          {id:'npc',title:'Street models taken',ids:VEHICLE_IDS,completed:collections?.stolen},
+          {id:'vault',title:'Vault models driven',ids:VAULT_COLLECTION_IDS,completed:collections?.driven},
+        ];
+        for(const collection of groups){
+          const done=new Set(collection.completed??[]),count=collection.ids.filter(id=>done.has(id)).length;
+          const row=element('li','progress-award progress-collection-card');
+          const details=element('details','progress-tier-details');details.dataset.collection=collection.id;details.open=expandedCollections.has(collection.id);
+          details.append(element('summary','',`${collection.title} · ${collection.completed?`${count} / ${collection.ids.length}`:'Progress unavailable'}`));
+          const models=element('ul','progress-tier-ladder');
+          for(const id of collection.ids){
+            const item=element('li','progress-tier-step');
+            item.append(element('span','',VEHICLES[id].name),element('span','',collection.completed?(done.has(id)?'Collected':'Not yet'):'Unavailable'));
+            models.append(item);
+          }
+          details.append(models);row.append(details);list.append(row);
+        }
+      }
       for(const id of families)list.append(renderTierCard(id,tiers?.find(row=>row.id===id)));
       for(const [id,award] of items){
         const isSaved=savedIds.has(id),isCurrent=current.has(id),earned=isSaved||isCurrent;
         const status=awardCardState(available(),isSaved,isCurrent,session.walletStatus),details=awardDetails(id);
+        if(session.playtest)status.save='Playtest progress is not saved';
         const row=element('li',`progress-award is-${status.state}`),top=element('div','progress-award-top');
         row.id=`progress-award-${id}`;row.dataset.awardId=id;row.tabIndex=-1;
         const tier=element('span','progress-award-tier',awardTier(id));
@@ -142,7 +175,8 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
         row.append(top,title,element('p','progress-award-description',details.description));
         const target=awardDeliveryTarget(id),progress=element('div','progress-award-progress');
         progress.append(element('span','progress-award-label','Progress'));
-        progress.append(element('span','progress-award-progress-text',earned&&!target?'Completed':awardProgress(id,player,session.world)));
+        const vehicleAward=id.startsWith('tesla-drive-')||id.startsWith('npc-theft-')||id.startsWith('vault-drive-');
+        progress.append(element('span','progress-award-progress-text',session.playtest&&vehicleAward?'Tracked in normal rooms':earned&&!target?'Completed':vehicleCollectionAwardProgress(id,collections)??awardProgress(id,player,session.world)));
         if(target&&player){
           const bar=element('progress','progress-award-bar');bar.max=target;bar.value=Math.min(player.delivery.completed,target);
           bar.setAttribute('aria-label',`${award.name} delivery progress`);progress.append(bar);
@@ -157,7 +191,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
       const replacement=document.getElementById(`progress-award-${activeId}`);
       const target=summaryFocused?replacement?.querySelector<HTMLElement>('summary'):replacement;
       target?.focus({preventScroll:true});
-    }
+    }else if(activeCollection&&summaryFocused)body.querySelector<HTMLElement>(`details[data-collection="${activeCollection}"] summary`)?.focus({preventScroll:true});
     awardsDialog.scrollTop=scrollTop;
   }
   function renderTierCard(id:AchievementTierId,data:AchievementTierRow|undefined){
@@ -170,7 +204,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     const progress=element('div','progress-award-progress');progress.append(element('span','progress-award-label','Progress'));
     const number=(value:number)=>value.toLocaleString('en-US');
     const text=data?(data.nextTarget===null?`${number(data.count)} · all five ranks reached`:`${number(data.count)} / ${number(data.nextTarget)} toward rank ${data.rank+1}`):
-      session.status==='online'&&session.walletStatus==='guest'?'Save your driver to track these ranks':'Connect your saved driver to see progress';
+      session.playtest?'Ranks are tracked in normal rooms':session.status==='online'&&session.walletStatus==='guest'?'Save your driver to track these ranks':'Connect your saved driver to see progress';
     progress.append(element('span','progress-award-progress-text',text));
     if(data?.nextTarget){
       const bar=element('progress','progress-award-bar');bar.max=data.nextTarget;bar.value=Math.min(data.count,data.nextTarget);
@@ -178,7 +212,7 @@ export function createProgressPanels({session,driverId,onOpen,onClose}:{
     }
     const footer=element('div','progress-award-footer'),reward=element('div','progress-award-reward');
     reward.append(element('span','progress-award-label','Extra tier bonus'),element('strong','',data?.nextCash===null?'All ranks reached':data?money(data.nextCash!):'See tier details'));
-    footer.append(reward,element('span','progress-award-save',data?'Saved to your driver':session.walletStatus==='guest'?'Guest drive · not saved':'Save status unavailable'));
+    footer.append(reward,element('span','progress-award-save',session.playtest?'Playtest progress is not saved':data?'Saved to your driver':session.walletStatus==='guest'?'Guest drive · not saved':'Save status unavailable'));
     const details=element('details','progress-tier-details');details.dataset.family=id;details.open=expandedFamilies.has(id);
     const summary=element('summary','','View all 5 tiers');details.append(summary);
     const ladder=element('ol','progress-tier-ladder');

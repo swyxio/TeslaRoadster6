@@ -12,7 +12,7 @@ import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
 // Both clients must agree on finishes, self-drive modes and the tick/action contract.
-assert.equal(PROTOCOL_VERSION, 44);
+assert.equal(PROTOCOL_VERSION, 46);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -29,12 +29,13 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 function connect() {
   const socket = new WebSocket(url);
   const input = new RoomInputClient(socket);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; walletReady?:boolean; starshipStatus?:{privacyPending:boolean;publicName:string|null;status:{personal:number}}; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; walletReady?:boolean; teleportRejected?:boolean; starshipStatus?:{privacyPending:boolean;publicName:string|null;status:{personal:number}}; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     input.observe(data);
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; socket.send(JSON.stringify({type:'identity',code:null,requestId:1})); }
     if (data.type === 'state') state.world = data.world;
+    if(data.type==='teleportResult'&&data.requestId===990)state.teleportRejected=!data.ok;
     if (data.type === 'wallet') state.walletReady = true;
     if (data.type === 'starshipStatus') state.starshipStatus = data;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
@@ -73,6 +74,10 @@ try {
     assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
     assert.ok(state.world!.mars.fund>=0&&state.world!.mars.fund<=1_000_000_000);assert.equal(state.world!.mars.launchAt,null);
   }
+  const poseRevision=one.input.poseRevision;
+  one.input.action({type:'teleport',x:-165,z:180,requestId:990});
+  await eventually(()=>!!one.state.teleportRejected,'ordinary room rejects sandbox teleport');
+  assert.equal(one.input.poseRevision,poseRevision);
   const forger=connect();
   await eventually(()=>!!forger.state.id,'research forger joins');
   forger.socket.send(JSON.stringify({type:'research',site:'ucsf'}));

@@ -20,6 +20,18 @@ export class GlobalEarningsEvent extends ProductionGlobalEvents {
   }
 }
 export class DriverProfile extends WalletDriverProfile {
+  private holdAssignment=false;
+  private assignmentHeld=false;
+  private releaseAssignment:(()=>void)|undefined;
+  fixtureHoldAssignment(){this.holdAssignment=true;}
+  fixtureAssignmentHeld(){return this.assignmentHeld;}
+  fixtureReleaseAssignment(){this.releaseAssignment?.();this.releaseAssignment=undefined;}
+  protected override async assignmentCheckpointed(_eventId:string,_done:boolean){
+    if(this.holdAssignment){
+      this.holdAssignment=false;this.assignmentHeld=true;
+      await new Promise<void>(resolve=>{this.releaseAssignment=resolve;});
+    }
+  }
   override async commit(intent:EconomyIntent,events?:EarningsEvents){
     if(intent.action.kind==='delivery')await this.ctx.storage.put(`fixture-delivery:${intent.eventId}`,{intent,events});
     return super.commit(intent,events);
@@ -69,6 +81,9 @@ export default {
     if(request.method!=='POST')return new Response('POST required',{status:405});
     const body=await request.json() as {room:string;driverId:string;playerId:string;eventId:string;stage:DeliveryStage};
     if(path==='/__delivery-crash/seed-event')return Response.json(await env.GLOBAL_EVENTS.get(env.GLOBAL_EVENTS.idFromName('global')).fixtureSeedExpiring());
+    if(path==='/__delivery-crash/hold-assignment'){await env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId)).fixtureHoldAssignment();return Response.json(true);}
+    if(path==='/__delivery-crash/assignment-held')return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId)).fixtureAssignmentHeld());
+    if(path==='/__delivery-crash/release-assignment'){await env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId)).fixtureReleaseAssignment();return Response.json(true);}
     if(path==='/__delivery-crash/sources')return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId)).fixtureSources());
     if(path==='/__delivery-crash/replay-intent')return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId)).fixtureReplay(body.eventId));
     const economy=env.ECONOMIES.get(env.ECONOMIES.idFromName(body.room));

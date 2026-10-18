@@ -91,26 +91,40 @@ test('frame intervals report a real percentile and reject missing or truncated d
   assert.equal(browserFrameMetrics(manifest, { sample: { intervalsMs: intervals } }, 5).status, 'unavailable');
 });
 
-test('delivery route requires both completed deliveries and observed jumps and powered flight', () => {
-  const stages = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']] as const;
+const initialOrder = { restaurant: { id: 'tartine', x: -180, z: 120 }, customer: { id: 'cable', x: 0, y: 0, z: -180, rooftop: false } };
+
+test('performance scenario completes only the initial delivery before flight', () => {
+  const scenario = JSON.parse(readFileSync(fileURLToPath(new URL('../scripts/playtests/performance-drive.json', import.meta.url)), 'utf8'));
+  const milestones = scenario.steps.filter((step: { type: string }) => step.type === 'waitForDelivery');
+  assert.deepEqual(milestones.map(({ completed, stage }: { completed: number; stage: string }) => [completed, stage]), [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup']]);
+  const completedIndex = scenario.steps.indexOf(milestones.at(-1));
+  assert.ok(!scenario.steps.slice(completedIndex + 1).some((step: { type: string; key?: string }) => step.type === 'keyPress' && step.key === 'Shift'));
+  assert.equal(scenario.steps.filter((step: { type: string }) => step.type === 'jumpUntilAirborne').length, 2);
+});
+
+test('delivery route requires one completed delivery and observed jumps and powered flight', () => {
+  const stages = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup']] as const;
   const poses = stages.flatMap(([deliveryCompleted, deliveryStage], i) => Array.from({ length: 4 }, (_, j) => ({
     atMs: (i * 4 + j) * 100, tick: (i * 4 + j) * 2, poseRevision: 1, x: i * 20 + j, z: 0, y: 0,
     deliveryCompleted, deliveryStage, lastJump: 0, jumpBurstUntil: 0, supported: true, thrusters: 0, vy: 0,
   })));
-  poses.push(...Array.from({ length: 8 }, (_, i) => ({ atMs: 2000 + i * 100, tick: 40 + i * 2, poseRevision: 1, x: 84 + i, z: 0, y: i === 2 ? 0 : i, deliveryCompleted: 2, deliveryStage: 'pickup' as const, lastJump: i < 3 ? 1 : 2, jumpBurstUntil: i < 3 ? 2 : 3, supported: i === 2, thrusters: i === 2 ? 0 : i < 3 ? 6 : 7, vy: i === 2 ? 0 : 5 })));
-  const route = deliveryRoute(poses);
+  poses.push(...Array.from({ length: 9 }, (_, i) => ({ atMs: 1200 + i * 100, tick: 24 + i * 2, poseRevision: 1, x: 44 + i, z: 0, y: i === 2 || i === 8 ? 0 : i, deliveryCompleted: 1, deliveryStage: 'pickup' as const, lastJump: i < 3 ? 1 : 2, jumpBurstUntil: i < 3 ? 2 : 3, supported: i === 2 || i === 8, thrusters: i === 2 || i === 8 ? 0 : i < 3 ? 6 : 7, vy: i === 2 || i === 8 ? 0 : 5 })));
+  const route = deliveryRoute(poses, initialOrder);
   assert.equal(route.status, 'available');
+  assert.deepEqual(route.initialOrder, initialOrder);
   assert.equal(route.jumpCount, 2);
-  assert.equal(route.legs.length, 5);
-  assert.equal(deliveryRoute(poses.filter(p => p.deliveryCompleted < 2)).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: 0 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, lastJump: 0 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, poseRevision: p.tick >= 44 ? 2 : 1 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, vy: 0 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, jumpBurstUntil: 0 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters ? 2 : 0 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters & 6 }))).status, 'unavailable');
-  assert.equal(deliveryRoute(poses.map(p => p.tick === 44 ? { ...p, supported: false } : p)).status, 'unavailable');
+  assert.equal(route.legs.length, 3);
+  assert.equal(deliveryRoute(poses, undefined).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.filter(p => p.deliveryCompleted < 1), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: 0 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, lastJump: 0 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, poseRevision: p.tick >= 28 ? 2 : 1 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, vy: 0 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, jumpBurstUntil: 0 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters ? 2 : 0 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => ({ ...p, thrusters: p.thrusters & 6 })), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => p.tick === 28 ? { ...p, supported: false } : p), initialOrder).status, 'unavailable');
+  assert.equal(deliveryRoute(poses.map(p => p.tick === 40 ? { ...p, supported: false } : p), initialOrder).status, 'unavailable');
 });
 
 test('comparison holds when intermediate route legs diverge despite matching endpoints', () => {
@@ -121,7 +135,7 @@ test('comparison holds when intermediate route legs diverge despite matching end
     report.fixture.stageSha256 = 'same-stage';
     report.fixture.seed = 0;
     report.fixture.captureVideo = false;
-    report.route = { status: 'available', legs: Array.from({ length: 5 }, () => ({ lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]) })) };
+    report.route = { status: 'available', initialOrder, legs: Array.from({ length: 3 }, () => ({ lengthM: 100, points: Array.from({ length: 41 }, (_, i) => [i, 0, 0]) })) };
     const before = join(dir, 'before.json'), after = join(dir, 'after.json');
     writeFileSync(before, JSON.stringify(report));
     for (let i = 5; i < 35; i++) report.route.legs[1].points[i][1] = 80;

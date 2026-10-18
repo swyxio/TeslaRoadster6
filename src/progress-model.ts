@@ -7,6 +7,7 @@ import { RACE_COURSES } from '../shared/race-courses';
 import { domeGoals } from '../shared/soccer';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { selectAchievementTiers, type AchievementTierId, type AchievementTierProgress, type AchievementTierRow } from '../shared/achievement-tiers';
+import { TESLA_COLLECTION_IDS, type VehicleCollections } from '../shared/vehicle-collections';
 
 export type GameResult = { key:string; game:string; detail:string };
 export type GameScores = { current:GameResult[]; recent:GameResult[] };
@@ -97,7 +98,7 @@ export function awardGroup(id:AchievementId):AwardGroup {
   if(awardDeliveryTarget(id)||id==='sky-delivery'||id==='sfo-express')return 'delivery';
   if(['rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner'].includes(id))return 'games';
   if(['bay-hopper','roof-rider','coit-landing','salesforce-landing'].includes(id))return 'flight';
-  if(id.startsWith('luxury-'))return 'collection';
+  if(id.startsWith('luxury-')||id.startsWith('tesla-drive-')||id.startsWith('npc-theft-')||id.startsWith('vault-drive-'))return 'collection';
   return 'exploration';
 }
 
@@ -199,4 +200,14 @@ export function awardProgress(id:AchievementId,player:Player|undefined,world:Wor
     case 'no-rockets-needed':return participant.touches.roadster||participant.touches.retrofit?'Try a stock car next match':participant.goals.stock>0?'Stock-car goal · win the match':'Ready to earn';
     default:return 'Ready to earn';
   }
+}
+
+/** Only confirmed owner-wallet observations are shown as collection progress. */
+export function vehicleCollectionAwardProgress(id:AchievementId,collections:VehicleCollections|null):string|null {
+  const match=/^(tesla-drive|npc-theft)-(\d+)$/.exec(id);
+  if(!match)return null;
+  if(!collections)return 'Connect to see collection progress';
+  const target=Number(match[2]);
+  const count=match[1]==='tesla-drive'?collections.driven.filter(vehicle=>TESLA_COLLECTION_IDS.includes(vehicle as typeof TESLA_COLLECTION_IDS[number])).length:collections.stolen.length;
+  return `${Math.min(count,target)} / ${target} ${target===1?'model':'models'}`;
 }

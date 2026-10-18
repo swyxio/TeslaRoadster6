@@ -7,6 +7,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { CUSTOMERS } from '../shared/delivery';
+import { LANDMARKS } from '../shared/map';
 import type { DriverProgress } from '../worker/driver-profile';
 
 type Message={type:string;[key:string]:any};
@@ -138,7 +140,68 @@ try {
   await sleep(700);
   assert.equal(await rpc<number>('/__checkpoint-test/income',{}),expectedIncome,'retry does not duplicate global income');
   assert.equal(driver.messages.slice(rewardStart).filter(message=>message.type==='reward').length,2,'lost reply does not duplicate notifications');
+
+  // Seed a second driver's prior completion count and let the real scheduler
+  // assign the third job from an SF origin. The landmark itself is untouched.
+  const ucsfChat=connect('/api/chat');await until(()=>ucsfChat.socket.readyState===WebSocket.OPEN,'UCSF chat opens');
+  send(ucsfChat,{type:'hello',name:'UCSF Checkpoint Driver'});await until(()=>!!ucsfChat.last('ready'),'UCSF chat ready');
+  send(ucsfChat,{type:'save'});await until(()=>!!ucsfChat.last('recovery'),'UCSF recovery code');
+  const ucsfCode=ucsfChat.last('recovery')!.code as string,ucsfRoom=`ucsf-${randomUUID().slice(0,8)}`;
+  const setup=await joinRoom(ucsfRoom,ucsfCode),setupId=setup.last('welcome')!.id as string;
+  const ucsfEntries=await wallet<Array<{playerId:string;driverId:string}>>('players',{room:ucsfRoom});
+  const ucsfDriverId=ucsfEntries.find(entry=>entry.playerId===setupId)!.driverId;
+  await barrier(setup);setup.socket.close();await until(()=>setup.socket.readyState===WebSocket.CLOSED,'UCSF setup disconnects');
+  await until(async()=>(await wallet<Array<{playerId:string}>>('players',{room:ucsfRoom})).every(entry=>entry.playerId!==setupId),'UCSF setup removed');
+  const seeded=await rpc<DriverProgress>('/__checkpoint-test/seed-ucsf',{driverId:ucsfDriverId});
+  assert.equal(seeded.completed,2,'prior completion count is fixture setup');
+  assert.equal(CUSTOMERS[seeded.order.customer].id,'landmark-ucsf','the scheduler assigns the real UCSF customer');
+  assert.ok(!seeded.unlocked.includes('ucsf-research'));
+
+  const ucsf=await joinRoom(ucsfRoom,ucsfCode),ucsfId=ucsf.last('welcome')!.id as string;
+  assert.equal(CUSTOMERS[player(ucsf).delivery.order.customer].id,'landmark-ucsf');
+  await wallet('delivery-pickup',{room:ucsfRoom,playerId:ucsfId});
+  await until(()=>player(ucsf)?.delivery.order.stage==='dropoff','UCSF pickup committed');await barrier(ucsf);
+  const ucsfInspect=async()=>wallet<{progress:DriverProgress}>('inspect',{driverId:ucsfDriverId});
+  const ucsfBefore=(await ucsfInspect()).progress;
+  assert.equal(CUSTOMERS[ucsfBefore.order.customer].id,'landmark-ucsf');
+  assert.ok(!ucsfBefore.unlocked.includes('ucsf-research'));
+  const ucsfRewardStart=ucsf.messages.length;
+  const ucsfArmed=await wallet<{started:number}>('arm',{driverId:ucsfDriverId,fault:'hold-lost-reply'});
+  const ucsfStop=await rpc<{x:number;z:number}>('/__checkpoint-test/dropoff',{room:ucsfRoom,playerId:ucsfId});
+  assert.deepEqual(ucsfStop,LANDMARKS.find(landmark=>landmark.id==='ucsf')!.arrival,'drop-off uses the actual research location');
+  await until(async()=>(await wallet<{held:boolean}>('fault-state',{driverId:ucsfDriverId})).held,'UCSF delivery reply held');
+  const ucsfHeld=await wallet<{heldAction:{kind:string}}>('fault-state',{driverId:ucsfDriverId});
+  assert.equal(ucsfHeld.heldAction.kind,'delivery');
+  assert.equal((await ucsfInspect()).progress.completed,3,'UCSF checkpoint commits before the lost reply');
+  assert.equal(player(ucsf).delivery.completed,2,'UCSF unacknowledged completion stays private');
+  await wallet('release',{driverId:ucsfDriverId});
+  await until(()=>player(ucsf)?.delivery.completed===3&&player(ucsf)?.achievements.unlocked.includes('ucsf-research'),'UCSF completion and research commit');
+  await barrier(ucsf);
+  const ucsfAfter=(await ucsfInspect()).progress,ucsfFare=ucsfAfter.earned-ucsfBefore.earned;
+  assert.ok(ucsfFare>0);
+  assert.equal(ucsfAfter.unlocked.filter(award=>award==='ucsf-research').length,1);
+  assert.ok(ucsfAfter.unlocked.includes('regular'));
+  assert.equal(ucsfAfter.achievementTiers!['early-deliveries'].count,1);
+  assert.equal(ucsfAfter.cash-ucsfBefore.cash,ucsfFare+350+400+100+250,'fare, checkpoint, milestone, early tier and real UCSF reward are credited once');
+  assert.equal(ucsfAfter.eligibleIncome-ucsfBefore.eligibleIncome,ucsfFare+350+400+100+250);
+  assert.ok((await wallet<{started:number}>('fault-state',{driverId:ucsfDriverId})).started>=ucsfArmed.started+2,'UCSF delivery commit was retried');
+  const ucsfRewards=ucsf.messages.slice(ucsfRewardStart).filter(message=>message.type==='reward').map(message=>message.reward);
+  assert.deepEqual(ucsfRewards.map(reward=>reward.kind),['delivery-research','research']);
+  assert.deepEqual(ucsfRewards.map(reward=>reward.amount),[ucsfFare+350+400+100,250]);
+  ucsf.socket.close();await until(()=>ucsf.socket.readyState===WebSocket.CLOSED,'UCSF driver disconnects');
+  await until(async()=>(await wallet<Array<{playerId:string}>>('players',{room:ucsfRoom})).every(entry=>entry.playerId!==ucsfId),'UCSF driver removed');
+  const ucsfRecovered=await joinRoom(ucsfRoom,ucsfCode);await barrier(ucsfRecovered);
+  assert.equal(player(ucsfRecovered).delivery.completed,3);
+  assert.equal(ucsfRecovered.last('wallet')!.cash,ucsfAfter.cash);
+  assert.equal(ucsfRecovered.last('wallet')!.eligibleIncome,ucsfAfter.eligibleIncome);
+  assert.equal((await ucsfInspect()).progress.cash,ucsfAfter.cash,'UCSF recovery does not repay either reward');
+  await until(async()=>await rpc<number>('/__checkpoint-test/income',{})===expectedIncome+ucsfAfter.eligibleIncome,'UCSF global income outbox catches up');
+  await sleep(700);
+  assert.equal(await rpc<number>('/__checkpoint-test/income',{}),expectedIncome+ucsfAfter.eligibleIncome,'UCSF retry does not duplicate global income');
+  assert.equal(ucsf.messages.slice(ucsfRewardStart).filter(message=>message.type==='reward').length,2,'UCSF retry does not duplicate notifications');
+
   console.log('PASS: completed checkpoint committed once through a lost reply, another driver remained live, and recovery preserved cash and income.');
+  console.log('PASS: scheduler-selected UCSF checkpoint and research reward committed once through a lost reply and recovery (prior two completions seeded).');
 } finally {
   for(const socket of sockets)try{socket.close();}catch{}
   if(child)await stop(child);
