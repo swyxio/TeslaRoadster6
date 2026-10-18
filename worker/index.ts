@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
-import { snapshotFor } from './snapshot';
+import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 
@@ -119,9 +119,10 @@ export class GameRoom extends DurableObject<Env> {
     for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
     step(this.world, this.inputs, 0.05);
     if (++this.tickCount % 2) return;
+    const snapshot = prepareSnapshots(this.world);
     for (const [socket, session] of this.sessions) {
       try {
-        socket.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, session.id), inputAck:session.appliedSeq, ...(session.pendingSync?{sync:session.pendingSync}:{}) }));
+        socket.send(snapshot(session.id,session.appliedSeq,session.pendingSync||undefined));
         session.pendingSync=0;
       } catch { this.disconnect(socket); }
     }

@@ -25,8 +25,8 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt } from './sky-currents';
 
-export const PROTOCOL_VERSION=23;
-export const ROOM_FULL_CODE=4001;
+export const PROTOCOL_VERSION=24;
+export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
   constructor(){super('No free spawn position');this.name='NoSpawnError';}
