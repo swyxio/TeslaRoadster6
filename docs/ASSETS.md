@@ -47,7 +47,7 @@ Rocket nozzle reference: [Tesla reveal](https://www.youtube.com/live/qt5p-_tE8d0
 
 The original procedural soundtrack and sound effects are synthesized locally and MIT licensed. See [AUDIO.md](AUDIO.md) for the cue contract, mix and replacement guidance. Do not add recordings or music without documenting their origin and license.
 
-The silent clip and poster in `public/blog/recording-webgl-playtests/` are original captures of Tesland's own procedural game assets, made in an isolated local room with the checked-in `scripts/playtests/blog-drive.json` scenario. They contain no third-party audio. The capture and publication procedure is in [HEADLESS_PLAYTESTING.md](HEADLESS_PLAYTESTING.md#record-a-video-for-the-dev-blog).
+The clips and posters in `public/blog/recording-webgl-playtests/` are original captures of Tesland's own procedural game assets, made in an isolated local room with the checked-in `scripts/playtests/blog-drive.json` scenario. The audio-enabled clip contains the game’s original synthesized soundtrack and effects, not third-party audio. The capture and publication procedure is in [HEADLESS_PLAYTESTING.md](HEADLESS_PLAYTESTING.md#record-a-video-for-the-dev-blog).
 
 ## Vehicle detail budget · 2026-10-18
 
