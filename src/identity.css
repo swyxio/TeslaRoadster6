@@ -1,0 +1,24 @@
+.chat-button { position: relative; font-size: 17px; }
+.chat-unread { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 9px; background: #f3977f; color: #183139; font: 700 10px/17px system-ui, sans-serif; text-align: center; }
+.driver-name-note { margin: -5px 0 12px; color: #b9cdc3; font-size: 10px; line-height: 1.5; }
+.driver-name-note button { padding: 0; border: 0; background: transparent; color: #ffd18c; text-decoration: underline; cursor: pointer; }
+dialog.identity-dialog { width: min(520px, 94vw); max-height: 90dvh; overflow-y: auto; }
+.identity-dialog h2 { font-size: 25px; }
+.identity-dialog > p { color: #c3d4cd; font-size: 12px; line-height: 1.45; }
+.identity-current { color: #a4e2c0 !important; font-weight: 700; overflow-wrap: anywhere; }
+.identity-block { margin: 12px 0; padding: 13px; border: 1px solid #ffffff22; border-radius: 8px; background: #102a3055; }
+.identity-block strong { color: #f6e5c9; font-size: 13px; }
+.identity-block p { margin: 6px 0 10px; color: #b6cabc; font-size: 11px; line-height: 1.45; }
+.identity-block label:not(.identity-remember) { display: block; margin: 9px 0 5px; color: #c5d7ce; font-size: 11px; }
+.identity-block textarea { box-sizing: border-box; display: block; width: 100%; min-height: 44px; resize: vertical; padding: 9px; border: 1px solid #a9cbbb66; border-radius: 5px; background: #102a30; color: #fff3df; font: 13px/1.4 ui-monospace, monospace; overflow-wrap: anywhere; }
+.identity-button { min-height: 40px; padding: 8px 11px; border: 1px solid #ffffff45; border-radius: 6px; background: #ffffff12; color: #f7ecd6; font-size: 12px; cursor: pointer; }
+.identity-button:hover { background: #ffffff20; }
+#identity-code-group .identity-button { margin-top: 8px; }
+.identity-remember { display: flex; align-items: center; gap: 8px; margin-top: 13px; color: #d8e7dd; font-size: 11px; line-height: 1.4; cursor: pointer; }
+.identity-remember input { width: 18px; height: 18px; margin: 0; padding: 0; flex: none; }
+.identity-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.identity-feedback { min-height: 1.4em; color: #ffcf8f !important; }
+@media (max-width: 400px) { .chat-button { width: 38px; height: 38px; } .top-actions { gap: 4px; } .topbar { padding-inline: 10px; } .brand { font-size: 16px; } .alpha { display: none; } .pill { font-size: 7px; letter-spacing: .4px; padding: 6px; white-space: nowrap; } }
+@media (max-height: 550px) { dialog.identity-dialog { max-height: 94dvh; padding: 12px 16px; } .identity-dialog h2 { margin: 3px 0; font-size: 20px; } .identity-dialog > p { margin: 5px 0; } .identity-block { margin: 7px 0; padding: 8px; } .identity-block p { margin: 4px 0 6px; } }
+.launch-card > .primary { margin-bottom: 8px; }
+.identity-dialog textarea:focus-visible { outline: 2px solid #ffdb9f; outline-offset: 3px; }

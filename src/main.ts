@@ -1,4 +1,9 @@
 import './style.css';
+import './identity.css';
+import { createChatPanel } from './chat-panel';
+import { GlobalChat } from './chat';
+import { limitDriverNameInput } from './driver-name';
+import { MAX_NAME_LENGTH } from '../worker/global-chat-core';
 import mapSourceUrl from '../shared/bay-route-source.json?url';
 import mapTraceUrl from '../shared/bay-highway-traces.ts?url&no-inline';
 import mapBakeUrl from '../shared/bake-bay-highways.py?url&no-inline';
@@ -27,14 +32,15 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 document.querySelector('#app')!.innerHTML = `
 <canvas id="world" aria-label="Poly AV 3D driving world"></canvas>
 <div class="vignette"></div>
-<header class="topbar"><a class="brand" href="/" aria-label="Poly AV home"><span class="brand-icon">↗</span> POLY<span class="brand-light">AV</span><span class="alpha">POLY AVENUE / 02</span></a><div class="top-actions"><span id="connection" class="pill"><i></i> SOLO PLAYGROUND</span><button id="sound-button" class="icon-button sound-button" aria-label="Sound settings" aria-haspopup="dialog">♫</button><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
+<header class="topbar"><a class="brand" href="/" aria-label="Poly AV home"><span class="brand-icon">↗</span> POLY<span class="brand-light">AV</span><span class="alpha">POLY AVENUE / 02</span></a><div class="top-actions"><span id="connection" class="pill"><i></i> SOLO PLAYGROUND</span><button id="chat-button" class="icon-button chat-button" aria-label="Open global chat" aria-haspopup="dialog">💬<span id="chat-unread" class="chat-unread" hidden></span></button><button id="sound-button" class="icon-button sound-button" aria-label="Sound settings" aria-haspopup="dialog">♫</button><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
 <section id="menu" class="menu">
  <div class="intro"><div class="eyebrow"><span class="line"></span> SAN FRANCISCO BAY AREA</div><h1>Many rides.<br>Zero <em>commitment.</em></h1><p class="intro-copy">A low-poly love letter to San Francisco.<br>Deliver food. Catch air. Make your own shortcuts.</p>
  <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / DELIVER</span></div><p class="cockpit-invitation">Find a glowing purple rocket to make any car fly, or earn cash for upgrades at a purple shop. Try cockpit view with C or Actions → Camera.</p>
  <div class="launch-card"><div class="card-heading"><span class="eyebrow">YOUR NEXT DETOUR</span><span class="online-dot">● FREE ROAM</span></div>
  <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
+ <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
+ <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
  <button id="solo" class="primary">Take a solo drive <span>↗</span></button>
- <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="24" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
  <button id="join" class="secondary">Drive with friends <span>→</span></button><p class="form-note" id="form-note" role="status">Same room code, same playground. No account needed.</p>
  <button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
@@ -47,7 +53,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">ALCATRAZ / ROCKET DOME · FIRST TO 5</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Hit the ball into either goal · no teams</span><small>Delivery paused · no police</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="dome">⚽ Rocket Dome</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button><button id="parking-park">Park It</button><button id="parking-queue">Cut the queue</button><button id="parking-start">Start queue</button><button id="parking-leave">Leave parking game</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="dome">⚽ Rocket Dome</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button><button id="parking-park">Park It</button><button id="parking-queue">Cut the queue</button><button id="parking-start">Start queue</button><button id="parking-leave">Leave parking game</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -62,6 +68,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR ROOM / ACTIVE DRIVERS</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by cash and active play. First-person time and deliveries are self-reported; a first-person delivery requires the whole active run in cockpit view. Scores last only for this session.</p><div class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
 <dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR SESSION / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, take the scenic route, and earn these once per session.</p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / POLY AV RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">An original little soundtrack, plus sounds for your drive. Adjust them anytime.</p><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
+<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER / OPTIONAL</span><h2 id="identity-title">Save your driver</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><p>Choose a name for this session. If another driver is using it, we add a number. Driver IDs are assigned automatically.</p><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="error" class="error hidden" role="alert"><h2>Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Rejoin room</button><button id="error-solo" class="secondary">Drive solo</button><button id="error-menu" class="text-button">Back to menu</button></div>
@@ -114,21 +121,115 @@ $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'con
 $('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button')){setDrawer(null);if(event.detail===0)$('actions-toggle').focus();}},{capture:true});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
+const nameInput=$<HTMLInputElement>('name');
+const identityDialog=$<HTMLDialogElement>('identity-dialog');
+const rememberInput=$<HTMLInputElement>('identity-remember');
+const identityCode=$<HTMLTextAreaElement>('identity-code');
+const identityEntry=$<HTMLTextAreaElement>('identity-enter-code');
+const storageKey='poly-av-driver-recovery';
+let rememberedCode:string|undefined;
+try { rememberedCode=localStorage.getItem(storageKey)||undefined; } catch { /* Browser storage is optional. */ }
+let currentCode:string|undefined=rememberedCode;
+let nameEdited=false, authError=false, pendingRecovery=false, pendingSave=false, unread=0;
+let requestedName='Driver', rememberRequested=!!rememberedCode;
+function identityFeedback(message:string){$('identity-feedback').textContent=message;}
+function rememberCode(code:string){
+  try { localStorage.setItem(storageKey,code);rememberedCode=code;return true; }
+  catch { rememberRequested=false;rememberInput.checked=false;identityFeedback('Browser storage is unavailable. Copy your code somewhere safe.');return false; }
+}
+function refreshIdentity(){
+  $('identity-current').textContent=chat.playerId&&chat.status==='online'?`${chat.name} · #${chat.playerId.slice(0,8)}`:chat.status==='connecting'?'Connecting to chat…':'Chat is offline';
+  $('identity-code-group').hidden=!currentCode;
+  identityCode.value=currentCode||'';
+  rememberInput.checked=rememberRequested;
+}
+function updateChatBadge(){
+  const badge=$('chat-unread');badge.hidden=unread===0;badge.textContent=unread>99?'99+':String(unread);
+  $('chat-button').setAttribute('aria-label',unread?`Open global chat, ${unread} unread`:'Open global chat');
+}
+const chat=new GlobalChat({
+  onStatus(status,detail){chatPanel.setConnection(status,detail);refreshIdentity();},
+  onReady(id,name,messages){
+    // A previous handshake may complete after the player has edited the name.
+    // Start the requested guest session before applying any stale identity.
+    if(nameEdited&&(nameInput.value.trim()||'Driver')!==requestedName){pendingRecovery=false;pendingSave=false;ensureChat();return;}
+    currentCode=chat.code;authError=false;
+    if(!nameEdited||nameInput.value.trim()===requestedName){nameInput.value=name;nameEdited=false;}
+    chatPanel.setIdentity(id,name);chatPanel.setMessages(messages);session.setName(name);
+    if(pendingRecovery){pendingRecovery=false;const stored=!rememberRequested||!currentCode||rememberCode(currentCode);identityEntry.value='';if(stored)identityFeedback(`Recovered ${name}.`);}
+    refreshIdentity();
+    if(pendingSave){pendingSave=false;if(!chat.save())identityFeedback('Could not request a code. Try again.');}
+  },
+  onMessage(message){chatPanel.append(message);if(!chatPanel.element.open&&message.playerId!==chat.playerId){unread++;updateChatBadge();}},
+  onRecovery(code){currentCode=code;const stored=!rememberRequested||rememberCode(code);refreshIdentity();if(stored)identityFeedback('Recovery code ready. Keep it private and copy it somewhere safe.');},
+  onError(message){
+    if(chat.status==='offline'){authError=true;pendingSave=false;chatPanel.setConnection('offline',message);identityFeedback(message+' Retry the code or choose a new guest.');}
+    else {identityFeedback(message);chatPanel.setConnection('online',message);}
+  },
+});
+const chatPanel=createChatPanel({
+  onSend:text=>chat.send(text),
+  onOpenChange(open){
+    if(open){unread=0;updateChatBadge();}
+    controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');
+  },
+});
+document.body.append(chatPanel.element);
+function ensureChat(){
+  if(authError&&!nameEdited)return;
+  const name=nameInput.value.trim()||'Driver';
+  if(nameEdited){currentCode=undefined;rememberRequested=false;}
+  requestedName=name;chat.connect(name,currentCode);
+}
+nameInput.addEventListener('input',event=>{nameEdited=true;if(!(event as InputEvent).isComposing)limitDriverNameInput(nameInput);});
+nameInput.addEventListener('compositionend',()=>limitDriverNameInput(nameInput));
+$('chat-button').onclick=()=>{setDrawer(null);ensureChat();chatPanel.open();};
+function openIdentity(){setDrawer(null);ensureChat();refreshIdentity();identityDialog.showModal();controls.clear();controls.enabled=false;}
+$('identity-button').onclick=openIdentity;$('identity-action').onclick=openIdentity;
+$('identity-close').onclick=()=>identityDialog.close();
+identityDialog.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
+$('identity-save').onclick=()=>{
+  if(chat.status!=='online'){if(authError){identityFeedback('Retry recovery or choose a new guest first.');return;}pendingSave=true;ensureChat();identityFeedback('Connecting before creating your code…');return;}
+  if(!chat.save())identityFeedback('Could not request a code. Try again.');
+};
+$('identity-copy').onclick=async()=>{
+  if(!currentCode)return;
+  try {await navigator.clipboard.writeText(currentCode);identityFeedback('Recovery code copied. Keep it private.');}
+  catch {identityCode.focus();identityCode.select();identityFeedback('Copy the selected recovery code and keep it private.');}
+};
+rememberInput.addEventListener('change',()=>{
+  rememberRequested=rememberInput.checked;
+  if(rememberInput.checked){if(currentCode){if(rememberCode(currentCode))identityFeedback('This browser will remember this driver.');}else identityFeedback('Create or recover a driver first.');}
+  else if(currentCode&&rememberedCode===currentCode){try {localStorage.removeItem(storageKey);rememberedCode=undefined;identityFeedback('This browser will no longer remember this driver.');}catch {identityFeedback('Could not clear browser storage.');}}
+});
+$('identity-recover').addEventListener('submit',event=>{
+  event.preventDefault();const code=identityEntry.value.trim();
+  if(!code){identityFeedback('Paste a recovery code first.');return;}
+  if(chat.status==='online'&&currentCode===code){identityFeedback('This driver is already connected.');return;}
+  pendingRecovery=true;pendingSave=false;authError=false;nameEdited=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback('Checking your recovery code…');chat.connect(requestedName,code,true);
+});
+$('identity-guest').onclick=()=>{
+  pendingRecovery=false;pendingSave=false;authError=false;nameEdited=false;currentCode=undefined;rememberRequested=false;rememberInput.checked=false;requestedName=nameInput.value.trim()||'Driver';identityFeedback(rememberedCode?'Starting a new guest. This browser still remembers a different driver.':'Starting a new guest driver.');chat.connect(requestedName,undefined,true);
+};
+if(rememberedCode)ensureChat();
+
 const roomParam = new URLSearchParams(location.search).get('room');
 if (roomParam && /^[a-z0-9][a-z0-9-]{0,31}$/.test(roomParam)) $<HTMLInputElement>('room').value=roomParam;
 function toggleMenu(show: boolean) {menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started);$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
+  ensureChat();
   lastRewardId=0;lastTicketCount=0;resetCelebration();audio.reset();void audio.unlock();
   pendingShop=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   controls.resetSequences();if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
+  session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
-$('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
+$('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;shopBusyUntil=0;session.solo();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
@@ -295,7 +396,7 @@ function announceAchievements(){
 function showTicket(ticket:Ticket){
   // A citation takes precedence over informational dialogs.
   setDrawer(null);
-  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();if(soundDialog.open)soundDialog.close();if(shopDialog.open)shopDialog.close();if(identityDialog.open)identityDialog.close();chatPanel.close();
   controls.clear();controls.enabled=false;
   $('ticket-amount').textContent=`−${money(ticket.amount)}`;
   $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;

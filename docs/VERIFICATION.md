@@ -1,6 +1,17 @@
-# Verification · 2026-10-17 Pacific
+# Verification · 2026-10-18 Pacific
 
-The v12 and v13 entries below describe separate historical builds; they do not verify the combined v14 checkout.
+These entries describe separate historical builds; they do not verify the combined island and global-chat checkout.
+
+## Two-client ferry crossing · protocol v14, before global chat and queue fix · 2026-10-18 Pacific
+
+- In local Wrangler, two clients joined a fresh room and used normal input messages. One player walked from the starting vehicle to the SF dock, boarded after the ferry's normal return, rode to Rocket Island and walked onto island ground. The second client observed boarding, the secured passenger in transit, arrival and disembarkation. Both connections remained open until cleanup.
+- This pedestrian check preceded the global-chat merge and queue scoring fix. It did not verify a car crossing, production, physical touch or peak traffic.
+
+## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
+
+- After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including requester-only shop rejection results, global chat and saved-driver recovery. An isolated Wrangler restart again preserved the saved ID and name and cleared history. These are not load tests.
+- Chrome desktop solo showed the combined game and connected chat with a chosen name. Earlier portrait and landscape layout checks and touch limitations are documented below.
 
 ## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
 
@@ -39,6 +50,19 @@ The protocol v11 island and dome records below describe separate builds.
 - In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
 - Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
 
+## Global chat with rocket shops · protocol v12 · 2026-10-17 Pacific
+
+- The combined build after review fixes passed `pnpm test` (163/163) and `pnpm build`. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including global delivery, private recovery, name collisions and the existing arena and shop checks. An isolated Wrangler restart restored the saved driver and cleared transient chat history. A room run overlapping the rebuild timed out at the dome goal; the stable rerun passed. These are not load tests.
+- The pre-review Cloudflare preview passed chat integration. One room run timed out on vehicle selection, then repeated runs passed; the test now checks the car is stationary and allows more time around the action cooldown.
+- Chrome desktop showed chat alongside the rocket shops; the reviewed build accepted a 20-emoji name and retained an invalid Unicode draft. 390×844 portrait and 844×390 landscape emulation showed the chat layout before the review fixes. No browser console errors were observed. Emulated touch activation of the chat button and physical devices remain unverified.
+
+## Global chat and saved drivers · pre-rocket-shops local build · 2026-10-17 Pacific
+
+- `pnpm test` passed 152/152 tests and `pnpm build` passed; the existing Vite large-chunk warning remains.
+- Local Wrangler integration passed for global message delivery, case-insensitive name collisions in chat and rooms, private recovery codes, repeated save, recovery, invalid-code rejection and cross-origin rejection. A separate isolated Wrangler restart test restored the same saved ID and name and confirmed the chat history was gone. The existing two-client room integration also passed. These are not load tests.
+- Chrome desktop solo showed a chosen name, sent a local chat message, generated a recovery code and displayed an invalid-code error. Chrome emulation at 390×844 and 844×390 showed chat and the scrollable recovery dialog; keyboard activation worked. Emulated pointer/touch activation did not register for the chat button, so touch activation and physical devices remain unverified. No browser console errors were observed.
+
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
@@ -52,6 +76,7 @@ The protocol v11 island and dome records below describe separate builds.
 - Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
 - Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
 - Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
+
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
