@@ -17,7 +17,7 @@ async function stop(child:ChildProcess){
   for(let i=0;i<100&&child.exitCode===null&&child.signalCode===null;i++)await delay(50);
   if(child.exitCode===null&&child.signalCode===null){try{process.kill(-child.pid!,'SIGKILL');}catch{}}
 }
-type Event={type:string;id?:string;world?:World;requestId?:number;action?:string;ok?:boolean;amount?:number};
+type Event={type:string;id?:string;world?:World;requestId?:number;action?:string;ok?:boolean;amount?:number;sync?:number};
 function connect(url:string){const socket=new WebSocket(url),events:Event[]=[];socket.onmessage=e=>events.push(JSON.parse(String(e.data)));return {socket,events,world:()=>events.filter(e=>e.type==='state').at(-1)?.world,id:()=>events.find(e=>e.type==='welcome')?.id};}
 const dir=await mkdtemp(join(tmpdir(),'tesland-mars-'));
 const p=await port(),base=`http://127.0.0.1:${p}`,url=`ws://127.0.0.1:${p}/api/room/mars-test`,config=join(dir,'wrangler.json');
@@ -33,8 +33,19 @@ try{
   const a=connect(url),b=connect(url);sockets.push(a.socket,b.socket);
   await until(()=>!!a.id()&&!!b.id()&&a.world()?.players.length===2&&a.world()!.players.every(p=>p.delivery.cash===600_000_000),'fixture players connected');
   a.socket.send(JSON.stringify({type:'mars',action:'contribute',amount:500_000_000,requestId:1}));
+  a.socket.send(JSON.stringify({type:'sync',token:101}));
   b.socket.send(JSON.stringify({type:'mars',action:'contribute',amount:500_000_000,requestId:2}));
+  b.socket.send(JSON.stringify({type:'sync',token:102}));
   await until(()=>a.events.some(e=>e.requestId===1&&e.ok)&&b.events.some(e=>e.requestId===2&&e.ok)&&a.world()?.mars.fund===1_000_000_000&&b.world()?.mars.fund===1_000_000_000,'concurrent contributions saved and replicated');
+  await until(()=>a.events.some(e=>e.type==='state'&&e.sync===101)&&b.events.some(e=>e.type==='state'&&e.sync===102),'post-contribution barriers');
+  for(const [client,token,requestId] of [[a,101,1],[b,102,2]] as const){
+    const resultIndex=client.events.findIndex(e=>e.type==='marsResult'&&e.requestId===requestId&&e.ok);
+    const barrierIndex=client.events.findIndex(e=>e.type==='state'&&e.sync===token);
+    const world=client.events[barrierIndex].world!;
+    assert.ok(resultIndex>=0&&resultIndex<barrierIndex,'barrier follows the private result');
+    assert.equal(world.players.find(p=>p.id===client.id())!.delivery.cash,100_000_000,'barrier includes the contributor debit');
+    assert.equal(world.mars.fund,world.players.reduce((total,p)=>total+600_000_000-p.delivery.cash,0),'barrier contains a consistent fund and debits');
+  }
   await until(()=>a.world()!.players.every(p=>p.delivery.cash===100_000_000),'cash debited exactly once');
   await delay(500);
   a.socket.send(JSON.stringify({type:'mars',action:'board',requestId:3}));b.socket.send(JSON.stringify({type:'mars',action:'board',requestId:4}));
@@ -50,7 +61,7 @@ try{
   await until(()=>restarted.world()?.mars.fund===1_000_000_000,'fund survives Wrangler restart');
   const other=connect(`ws://127.0.0.1:${p}/api/room/mars-other`);sockets.push(other.socket);
   await until(()=>other.world()?.mars.fund===0,'another room has an independent fund');
-  console.log('PASS: two concurrent real room contributions and boarding; fund survives last disconnect and Wrangler restart, and rooms are isolated. Test fixture grants cash and positions.');
+  console.log('PASS: concurrent contributions, ordered post-contribution barriers and boarding; fund survives last disconnect and Wrangler restart, and rooms are isolated. Test fixture grants cash and positions.');
 } finally{
   for(const socket of sockets)if(socket.readyState===WebSocket.OPEN||socket.readyState===WebSocket.CONNECTING)socket.close();
   if(child)await stop(child);await rm(dir,{recursive:true,force:true});

@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -9,7 +9,7 @@ import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '.
 export { GlobalChat };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number };
+type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number };
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -49,9 +49,7 @@ export class GameRoom extends DurableObject<Env> {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    // Browsers cannot read the HTTP status of a rejected WebSocket upgrade.
-    // Close an accepted socket with an application code so the client can
-    // distinguish a full room from a network or server failure.
+    // Browsers cannot inspect a rejected WebSocket upgrade's HTTP status.
     if (this.sessions.size >= capacity) {
       server.accept();
       server.close(ROOM_FULL_CODE, 'Room full');
@@ -60,13 +58,19 @@ export class GameRoom extends DurableObject<Env> {
     const id = crypto.randomUUID();
     const now = Date.now();
     server.accept();
-    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0 });
-    addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
+    try {
+      addPlayer(this.world, id, chooseAvailableName('Driver', this.world.players.map(player => player.name)));
+    } catch (error) {
+      if (!(error instanceof NoSpawnError)) { server.close(1011, 'Could not start session'); throw error; }
+      server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
     server.addEventListener('message', event => { void this.onMessage(server, event.data); });
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
     server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
-    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id) }));
+    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), inputAck:0 }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -81,7 +85,16 @@ export class GameRoom extends DurableObject<Env> {
     const message = parseMessage(raw);
     if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
     session.lastMessage = now;
-    if (message.type === 'input') { this.inputs.set(session.id, message.input); session.lastInput = now; return; }
+    if (message.type === 'input') {
+      if(message.seq>session.inputSeq){this.inputs.set(session.id, message.input);session.lastInput=now;session.inputSeq=message.seq;}
+      return;
+    }
+    // Coalesce barriers into the next regular snapshot. WebSocket ordering
+    // places it after preceding actions, including cooldown rejections.
+    if(message.type==='sync'){
+      session.pendingSync=Math.max(session.pendingSync,message.token);
+      return;
+    }
     if (message.type === 'name') {
       const player = this.world.players.find(p => p.id === session.id);
       if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
@@ -123,12 +136,14 @@ export class GameRoom extends DurableObject<Env> {
         const amount=marsContribution(this.world,session.id,message.amount);
         let ok=false;
         if(amount>0){
+          let saved=false;
           try {
-            // DO storage gates serialize the write and release outgoing messages only after it is durable.
+            // The storage input gate keeps later sync events behind this continuation;
+            // the output gate holds messages until the write is durable.
             await this.ctx.storage.put('mars-fund',this.world.mars.fund+amount);
-            applyMarsContribution(this.world,session.id,amount);
-            ok=true;
+            saved=true;
           } catch { /* No cash is deducted if the contribution cannot be saved. */ }
+          if(saved){applyMarsContribution(this.world,session.id,amount);ok=true;}
         }
         try { socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:ok?amount:0})); } catch { /* The driver disconnected while saving. */ }
       }
@@ -142,11 +157,15 @@ export class GameRoom extends DurableObject<Env> {
       if (now - session.lastMessage > 30_000) this.disconnect(socket, 1001, 'Connection inactive');
     }
     if (!this.sessions.size) return;
+    for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
     step(this.world, this.inputs, 0.05);
     if (++this.tickCount % 2) return;
     const snapshot = prepareSnapshots(this.world);
     for (const [socket, session] of this.sessions) {
-      try { socket.send(snapshot(session.id)); } catch { this.disconnect(socket); }
+      try {
+        socket.send(snapshot(session.id,session.appliedSeq,session.pendingSync||undefined));
+        session.pendingSync=0;
+      } catch { this.disconnect(socket); }
     }
   }
 

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
+import { FREMONT_SPACEPORT } from '../shared/map';
+import { MARS_GOAL } from '../shared/mars';
 
 class Socket {
   static OPEN = 1;
@@ -11,55 +13,59 @@ class Socket {
   onmessage?: (event: {data:string}) => void;
   onclose?: (event: {code:number}) => void;
   onerror?: () => void;
-  constructor(public url: string) { Socket.last = this; }
-  send(value: string) { this.sent.push(value); }
+  constructor(public url:string) { Socket.last = this; }
+  send(value:string) { this.sent.push(value); }
   close() { this.readyState = 3; }
-  message(value: unknown) { this.onmessage?.({data:JSON.stringify(value)}); }
-  closed(code = 1000) { this.readyState = 3; this.onclose?.({code}); }
+  message(value:unknown) { this.onmessage?.({data:JSON.stringify(value)}); }
+  closed(code=1000) { this.readyState = 3; this.onclose?.({code}); }
 }
-Object.assign(globalThis, { WebSocket: Socket, window: globalThis, location: {protocol:'https:',host:'example.com'} });
+Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
 
-test('sessions join a room and never simulate a local player while disconnected',()=>{
-  assert.equal(DEFAULT_ROOM,'bay');
-  assert.ok(validRoom('bay')); assert.ok(validRoom('friends-2')); assert.ok(!validRoom('../bay'));
-  const session = new Session();
-  assert.equal(session.status,'disconnected'); assert.equal(session.world.players.length,0);
-  const requestId = session.buyUpgrade('rocket');
-  assert.deepEqual(session.upgradeResult,{requestId,upgrade:'rocket',ok:false});
-  session.tick(1,NEUTRAL); assert.equal(session.world.time,0);
-  session.join(DEFAULT_ROOM,'Alex'); const socket=Socket.last;
+test('a shared room connects and a disconnect never starts a solo simulation',()=>{
+  assert.equal(DEFAULT_ROOM,'bay'); assert.ok(validRoom('friends-2')); assert.ok(!validRoom('../bay'));
+  const session=new Session();session.join(DEFAULT_ROOM,'Alex');const socket=Socket.last;
   assert.equal(socket.url,'wss://example.com/api/room/bay');
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const world=createWorld(); addPlayer(world,'p','Alex'); socket.message({type:'state',world});
-  assert.equal(session.status,'online'); assert.equal(session.id,'p');
-  session.tick(.05,NEUTRAL);
-  assert.equal(JSON.parse(socket.sent[0]).type,'name'); assert.equal(JSON.parse(socket.sent[1]).type,'input');
-  socket.closed(); assert.equal(session.status,'disconnected');
-  assert.match(session.error,/room disconnected/i);
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  assert.equal(session.status,'online');assert.equal(session.id,'p');
+  session.tick(.05,NEUTRAL);assert.equal(JSON.parse(socket.sent.at(-1)!).type,'input');
+  socket.closed();assert.equal(session.status,'disconnected');const time=session.world.time;
+  session.tick(1,{...NEUTRAL,throttle:1});assert.equal(session.world.time,time);
+  session.solo('model-3','Alex');assert.equal(session.status,'solo');
+  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
 });
 
-test('full rooms report a distinct error and old sockets cannot replace the new session',()=>{
+test('full rooms are distinct and stale sockets cannot overwrite a new session',()=>{
   const session=new Session();session.join('bay','Driver');const old=Socket.last;
   old.onerror?.();old.closed(ROOM_FULL_CODE);
   assert.equal(session.status,'disconnected');assert.equal(session.roomFull,true);assert.match(session.error,/full/i);
   session.join('another-room','Driver');const current=Socket.last;
-  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});
-  old.closed(1000);
-  assert.equal(session.status,'connecting');assert.equal(session.id,'');assert.equal(session.roomFull,false);
+  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();old.onerror?.();
+  assert.equal(session.status,'connecting');assert.equal(session.id,'');assert.equal(session.error,'');
   current.closed();assert.equal(session.status,'disconnected');
 });
 
-test('joining the current room keeps the occupied seat and current ride',()=>{
+test('a blocked spawn reports a retryable error rather than a full room or solo mode',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.onerror?.();socket.closed(ROOM_NO_SPAWN_CODE);
+  assert.equal(session.status,'disconnected');assert.equal(session.roomFull,false);
+  assert.match(session.error,/no safe starting space/i);
+  session.join('bay','Driver');assert.equal(session.status,'connecting');assert.equal(session.error,'');
+  Socket.last.closed();
+});
+
+test('joining the current room keeps its seat and may select a car',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:2});
-  const world=createWorld();const player=addPlayer(world,'p','Alex');
-  world.entities.find(entity=>entity.id===player.entityId)!.kind='zoox';
-  socket.message({type:'state',world});const existingWorld=session.world;
-  session.join('bay','Alex','model-3');
-  assert.equal(Socket.last,socket);assert.equal(socket.readyState,Socket.OPEN);
-  assert.equal(session.world,existingWorld);assert.equal(session.id,'p');
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});const existingWorld=session.world;
+  const sentBefore=socket.sent.length;
+  session.join('bay','Alex');
+  assert.equal(socket.sent.length,sentBefore+1);
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'name',name:'Alex'});
-  assert.ok(!socket.sent.some(message=>JSON.parse(message).type==='selectVehicle'));
+  session.join('bay','Alex','model-3');
+  assert.equal(Socket.last,socket);assert.equal(socket.readyState,Socket.OPEN);assert.equal(session.world,existingWorld);assert.equal(session.id,'p');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.closed();
 });
 
@@ -69,16 +75,139 @@ test('offline navigation requests fail without starting a local session',()=>{
   assert.equal(session.world.players.length,0);
 });
 
-test('online destination and mini-game requests use the current socket',()=>{
+test('solo is explicit, advances locally and ignores an old room socket',()=>{
+  const session=new Session();session.join('bay','Alex');const old=Socket.last;
+  session.solo('model-3','Scout');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');
+  assert.equal(session.world.players[0].name,'Scout');
+  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
+  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
+  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
+  assert.equal(session.status,'solo');assert.equal(session.id,'local');
+  const id=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
+});
+
+test('a displayed Tesla can be requested again after taking a same-kind street car',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world});
+  const world=createWorld(),player=addPlayer(world,'p','Alex');
+  const borrowed=world.entities.find(entity=>entity.id===player.entityId)!;
+  borrowed.owner=null;world.entities=[borrowed];world.pickups=[];
+  socket.message({type:'state',world,inputAck:0});
+  session.join('bay','Alex','roadster');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'roadster'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'state',world,inputAck:0});assert.equal(session.vehicleResult,null);
+  const accepted=structuredClone(world);assert.equal(chooseVehicle(accepted,'p','roadster'),true);
+  socket.message({type:'state',world:accepted,inputAck:0,sync:1});
+  assert.deepEqual(session.vehicleResult,{kind:'roadster',ok:true});
+  assert.notEqual(accepted.players[0].entityId,borrowed.id);
+  socket.closed();
+});
+
+test('a rejected vehicle change stays unconfirmed until its ordered state and reports failure',()=>{
+  for(const condition of ['moving','ferry'] as const){
+    const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+    socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+    const world=createWorld(),player=addPlayer(world,'p','Alex'),car=world.entities.find(entity=>entity.id===player.entityId)!;
+    world.entities=[car];world.pickups=[];
+    if(condition==='moving')car.speed=4;else car.supportId='ferry';
+    socket.message({type:'state',world,inputAck:0});
+    session.selectVehicle('model-3');
+    assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3'});
+    assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+    assert.equal(chooseVehicle(world,'p','model-3'),false);
+    socket.message({type:'state',world,inputAck:0,sync:0});assert.equal(session.vehicleResult,null);
+    socket.message({type:'state',world,inputAck:0,sync:1});
+    assert.deepEqual(session.vehicleResult,{kind:'model-3',ok:false},condition);
+    assert.equal(session.world.players[0].entityId,car.id);
+    socket.closed();
+  }
+});
+
+test('switching from a room to solo keeps a playable local world and ignores old socket events',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const online=createWorld();addPlayer(online,'p','Alex');socket.message({type:'state',world:online,inputAck:0});
+  session.solo('model-3','Solo Alex');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');assert.equal(socket.readyState,3);
+  const player=session.world.players.find(p=>p.id===session.id)!;
+  const car=session.world.entities.find(e=>e.id===player.entityId)!;
+  assert.equal(player.name,'Solo Alex');assert.equal(car.kind,'model-3');
+  socket.message({type:'state',world:online,inputAck:0});socket.closed();
+  assert.equal(session.status,'solo');assert.equal(session.world.players[0].id,'local');
+  session.tick(.05,NEUTRAL);assert.ok(session.world.time>0);
+  session.setName('Renamed');assert.equal(player.name,'Renamed');
+  session.action('dome');assert.ok(car.inDome);
+  assert.equal(session.parkingAction('leave'),true);
+  const requestId=session.setOta(true);assert.deepEqual(session.otaResult,{requestId,enabled:true,ok:true});
+  session.join('friends','Solo Alex');assert.equal(session.status,'connecting');assert.equal(session.world.players.length,0);
+  Socket.last.closed();
+});
+
+test('a full-room error can be followed by an explicit solo drive',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.closed(ROOM_FULL_CODE);assert.equal(session.roomFull,true);
+  session.solo();assert.equal(session.status,'solo');assert.equal(session.roomFull,false);assert.equal(session.error,'');
+  assert.equal(session.world.players.length,1);
+});
+
+test('solo mini-game requests use the local simulation',()=>{
+  const session=new Session();session.solo('model-3','Scout');
+  assert.equal(session.enterMinigame('park'),true);
+  assert.ok(session.world.parking.rounds.some(round=>round.mode==='park'&&round.entrants.some(entry=>entry.playerId===session.id)));
+  assert.equal(session.parkingAction('leave'),true);
+  assert.equal(session.enterMinigame('oval'),true);
+  assert.ok(session.world.races.rounds.some(round=>round.courseId==='oval'&&round.entrants.some(entry=>entry.playerId===session.id)));
+});
+
+test('solo Mars contributions and boarding are local to the current drive',()=>{
+  const session=new Session();session.solo();
+  const player=session.world.players[0],car=session.world.entities.find(entity=>entity.id===player.entityId)!;
+  player.delivery.cash=80;
+  let requestId=session.mars('contribute',25);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:25});
+  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
+  requestId=session.mars('contribute',56);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:false,amount:0});
+  assert.equal(player.delivery.cash,55);assert.equal(session.world.mars.fund,25);
+  session.world.mars.fund=MARS_GOAL-10;
+  requestId=session.mars('contribute',20);
+  assert.deepEqual(session.marsResult,{requestId,action:'contribute',ok:true,amount:10});
+  assert.equal(player.delivery.cash,45);assert.equal(session.world.mars.fund,MARS_GOAL);
+  Object.assign(car,FREMONT_SPACEPORT.entrance,{speed:0,supportId:'ground'});
+  requestId=session.mars('board');
+  assert.deepEqual(session.marsResult,{requestId,action:'board',ok:true,amount:0});
+  assert.ok(player.achievements.unlocked.includes('to-mars'));
+  session.solo();assert.equal(session.world.mars.fund,0);assert.equal(session.marsResult,null);
+});
+
+test('online Mars actions use an ordered sync barrier and clear stale results on a new drive',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
+  const requestId=session.mars('contribute',10);
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'mars',action:'contribute',amount:10,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});
+  assert.equal(session.marsResult?.ok,true);
+  session.solo();assert.equal(session.marsResult,null);
+  socket.message({type:'marsResult',requestId,action:'contribute',ok:true,amount:10});assert.equal(session.marsResult,null);
+});
+
+test('online destination and mini-game requests use ordered barriers and ignore stale results',()=>{
+  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
   const requestId=session.setDestination(-180,60);
-  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'destination',x:-180,z:60,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'destinationResult',requestId,ok:true});
   assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
-  session.enterMinigame('park');assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'minigame',game:'park'});
-  session.join('another-room','Alex');assert.equal(session.destinationResult,null);
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
+  session.solo();assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
-  Socket.last.closed();
 });

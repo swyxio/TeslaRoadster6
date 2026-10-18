@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasRocket, ROCKET_DURATION, ROCKET_PAD_COOLDOWN, updateRocketPickup } from '../shared/rocket';
+import { ROCKET_PAD_COOLDOWN, updateRocketPickup } from '../shared/rocket';
+import { hasRockets } from '../shared/upgrades';
 import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../shared/vehicles';
 import { createVehicle, setThrusterEffects } from '../src/vehicles';
 import { makeEntity, THRUSTER_REAR, THRUSTER_SIDE_LEFT } from '../shared/game';
@@ -15,16 +16,15 @@ test('Rocket pads choose a stable winner, cool down and refresh without stacking
     const a = car('a'), b = car('b'), pickup = pad();
     assert.equal(updateRocketPickup(pickup, reverse ? [b, a] : [a, b], 100), 'a');
     assert.equal(a.air, 100);
-    assert.equal(a.rocketUntil, 100 + ROCKET_DURATION);
-    assert.equal(b.rocketUntil, 0);
-    assert.equal(a.upgrades.rocket, false);
+    assert.equal(a.upgrades.rocket, true);
+    assert.equal(b.upgrades.rocket, false);
     assert.equal(pickup.readyAt, 100 + ROCKET_PAD_COOLDOWN);
     assert.equal(updateRocketPickup(pickup, [a, b], 119.99), null);
     assert.equal(pickup.active, false);
-    assert.equal(updateRocketPickup(pickup, [a, b], 120), 'a');
-    assert.equal(a.rocketUntil, 210);
-    assert.equal(hasRocket(a, 209.999), true);
-    assert.equal(hasRocket(a, 210), false);
+    assert.equal(updateRocketPickup(pickup, [a, b], 120), 'b');
+    assert.equal(b.upgrades.rocket, true);
+    assert.equal(a.upgrades.rocket, true);
+    assert.equal(hasRockets(a), true);
   }
 });
 
@@ -51,23 +51,19 @@ test('all fleet models get entity-local capabilities while the stock Rocket rema
     const upgraded = car('upgraded', kind), other = car('other', kind);
     assert.equal(updateRocketPickup(pad(), [upgraded], 5), 'upgraded');
     assert.equal(upgraded.air, 100);
-    assert.equal(hasRocket(upgraded, 94.999), true, kind);
-    assert.equal(hasRocket(upgraded, 95), VEHICLES[kind].airThrusters, kind);
-    assert.equal(hasRocket(other, 5), VEHICLES[kind].airThrusters, kind);
-    assert.equal(upgraded.rocketUntil, VEHICLES[kind].airThrusters ? 0 : 95, kind);
-    assert.equal(upgraded.upgrades.rocket, false, kind);
+    assert.equal(hasRockets(upgraded), true, kind);
+    assert.equal(hasRockets(other), kind === 'roadster', kind);
+    assert.equal(upgraded.upgrades.rocket, true, kind);
   }
-  const person = car('person', 'person'); person.rocketUntil = 100;
-  assert.equal(hasRocket(person, 5), false);
+  assert.equal(hasRockets(car('person', 'person')), false);
   assert.equal(JSON.stringify(VEHICLES), registry);
 });
 
 test('a purchased rocket kit remains installed when its vehicle collects a pickup', () => {
-  const upgraded = car('purchased'); upgraded.upgrades.rocket = true;
+  const upgraded = { ...car('purchased'), upgrades: { rocket: true } };
   assert.equal(updateRocketPickup(pad(), [upgraded], 5), 'purchased');
   assert.equal(upgraded.air, 100);
-  assert.equal(upgraded.rocketUntil, 0);
-  assert.equal(hasRocket(upgraded, 1000), true);
+  assert.equal(hasRockets(upgraded), true);
   assert.equal(upgraded.upgrades.rocket, true);
 });
 
@@ -89,13 +85,9 @@ test('all fleet meshes show independent upgrade hardware and replicated exhaust 
   }
 });
 
-test('full stock or purchased Rocket cars leave the pad for others',()=>{
- for(const kind of ['roadster','model-3'] as const){
-  const full=car('a',kind),other=car('b');full.air=100;
-  if(kind==='model-3')full.upgrades.rocket=true;
-  const pickup=pad();assert.equal(updateRocketPickup(pickup,[full,other],1),'b');
-  assert.equal(other.rocketUntil,1+ROCKET_DURATION);assert.equal(full.air,100);
-  const pad2=pad();assert.equal(updateRocketPickup(pad2,[full],1),null);assert.equal(pad2.active,true);
-  full.air=50;assert.equal(updateRocketPickup(pad2,[full],1),'a');assert.equal(full.air,100);
- }
+test('full permanently equipped cars leave the rocket pad for others',()=>{
+ const full={...car('a','roadster'),air:100},other=car('b');const pickup=pad();
+ assert.equal(updateRocketPickup(pickup,[full,other],1),'b');
+ const pad2=pad();assert.equal(updateRocketPickup(pad2,[full],1),null);assert.equal(pad2.active,true);
+ full.air=50;assert.equal(updateRocketPickup(pad2,[full],1),'a');assert.equal(full.air,100);
 });
