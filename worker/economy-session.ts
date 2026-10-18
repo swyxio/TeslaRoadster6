@@ -1,4 +1,4 @@
-import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, levelForCash, matchesDeliveryStop, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
+import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, isOrderAccessible, levelForCash, matchesDeliveryStop, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
 import { hasRockets, initialVehicleUpgrades } from '../shared/upgrades';
 import { restoreOta } from '../shared/ota';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
@@ -50,6 +50,7 @@ export class EconomySession {
   private failed=false;
   private pickupGenerations:Map<string,number>;
   private lastTimerCheckpoint=0;
+  private nextDeliveryRetry=0;
   private lastOrderElapsed=0;
   private lastOtaRemaining:number|null=null;
   private committedOtaPeriodEnd:number|null=null;
@@ -333,6 +334,14 @@ export class EconomySession {
       if(player.delivery.level<previousLevel){
         const car=this.world.entities.find(e=>e.id===player.entityId);
         if(car)rerouteInaccessibleOrder(player.delivery,car,hasRockets(car));
+      }else if(!ticket&&!this.pending&&!this.processing&&!this.uncertainDeliveries&&
+        player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level)&&
+        this.world.time>=this.nextDeliveryRetry){
+        const car=this.world.entities.find(e=>e.id===player.entityId);
+        if(car?.supportId==='ground'&&!car.inDome&&requiredLevelAt(car.x,car.z)<=player.delivery.level){
+          this.nextDeliveryRetry=this.world.time+5;
+          rerouteInaccessibleOrder(player.delivery,car,hasRockets(car));
+        }
       }
     }finally{
       player.delivery=live.delivery;player.achievements=live.achievements;player.cockpit=live.cockpit;

@@ -3,7 +3,7 @@ import { EconomySession } from '../../worker/economy-session';
 import { applyAcceptedDelivery, applyTierProgress } from '../../worker/achievement-progress';
 import { progressFrom, type DriverOutcome, type EconomyIntent } from '../../worker/driver-profile';
 import { addPlayer, createEmptyWorld, NEUTRAL, step } from '../../shared/game';
-import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, payoutFor, pickupBonusFor, RESTAURANTS, updateDelivery } from '../../shared/delivery';
+import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, payoutFor, pickupBonusFor, RESTAURANTS, rerouteInaccessibleOrder, updateDelivery } from '../../shared/delivery';
 import { applyAchievementAwards, initialAchievements } from '../../shared/achievements';
 import { normalizeAchievementTiers } from '../../shared/achievement-tiers';
 import { terrainHeight } from '../../shared/map';
@@ -174,7 +174,39 @@ async function backlogScenario(){
   return {closed,queued:(Reflect.get(session,'queue') as unknown[]).length};
 }
 
+async function unavailableRetryScenario(){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver'),car=world.entities.find(entity=>entity.id===player.entityId)!;
+  player.delivery.cash=0;player.delivery.level=0;player.delivery.activeUntil=100;
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:4,elapsed:12};
+  if(!rerouteInaccessibleOrder(player.delivery,{x:0,z:1e9}))throw new Error('Expected synthetic no-candidate result');
+  const initial=progressFrom(player.delivery,[],{},[],0,0);
+  let saved=structuredClone(initial),release=()=>{},started=()=>{};
+  const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
+  const writes:EconomyIntent[]=[];
+  const ledger={async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+    writes.push(structuredClone(intent));started();await held;
+    if(intent.action.kind!=='progress')throw new Error('Expected a progress write');
+    saved=structuredClone(intent.action.progress);
+    return {ok:true,revision:intent.revision+1,progress:structuredClone(saved),awards:[]};
+  },async acknowledge(){return true;}};
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  const hooks=session.hooks(),inputs=new Map([[player.id,{...NEUTRAL,throttle:1}]]);
+  Object.assign(car,{x:450,z:60,y:0,speed:0,vy:0,supportId:'ground'});world.time=1;
+  step(world,inputs,.05,{economy:{...hooks,achievement:undefined,canCollect:()=>false}});
+  const whileLocked={order:{...player.delivery.order},reason:player.delivery.lastReroute?.reason,
+    clock:Reflect.get(session,'deliveryClock') as number,writes:writes.length};
+  Object.assign(car,{x:-120,z:60,y:0,speed:0,vy:0,supportId:'ground'});world.time=2;
+  step(world,inputs,.05,{economy:{...hooks,achievement:undefined,canCollect:()=>false}});
+  await began;
+  const whileHeld={order:{...player.delivery.order},reason:player.delivery.lastReroute?.reason};
+  release();
+  for(let i=0;i<2_000&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(Reflect.get(session,'processing'))throw new Error('Retry queue did not drain');
+  return {initial,whileLocked,whileHeld,saved,live:{order:player.delivery.order,reason:player.delivery.lastReroute?.reason},writes};
+}
+
 export default {async fetch(request:Request){
-  try{const path=new URL(request.url).pathname;return Response.json(path==='/unknown'?await unknownRateScenario():path==='/backlog'?await backlogScenario():await scenario(path==='/speculative'?'speculative':'committed'));}
+  try{const path=new URL(request.url).pathname;return Response.json(path==='/unknown'?await unknownRateScenario():path==='/backlog'?await backlogScenario():path==='/unavailable-retry'?await unavailableRetryScenario():await scenario(path==='/speculative'?'speculative':'committed'));}
   catch(error){return new Response(String(error),{status:500});}
 }};

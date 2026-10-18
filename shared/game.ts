@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
-import { CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { CUSTOMERS, initialDelivery, isOrderAccessible, levelForCash, orderTarget, requiredLevelAt, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -1184,7 +1184,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       update(player,()=>{
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
-      const orderPaused=islandProtected(entity)||entity.inDome;
+      const orderPaused=islandProtected(entity)||entity.inDome||
+        (player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level));
       economy?.deliveryStart?.(player,entity,orderPaused);
       const payouts=updateDelivery(world,player,entity,input,dt,stuntPlayers.has(player.id),orderPaused,
         economy?.resolveDeliveryPayout?component=>economy.resolveDeliveryPayout!(player,component):undefined);

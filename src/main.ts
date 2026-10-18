@@ -509,7 +509,7 @@ function driveToDelivery(){
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.kind==='person'){notice('Get into a car to self-drive to your delivery.');return;}
   if(car.supportId!=='ground'||car.inDome){notice('Land on the ground outside the Dome first.');return;}
-  if(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level)){notice('Return to an open road, then reconnect to retry your delivery.');return;}
+  if(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level)){notice('Return to an open road to retry your delivery.');return;}
   const target=orderTarget(player.delivery.order);
   if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
@@ -1168,7 +1168,7 @@ scene.start(dt=>{
     $('mission-label').textContent=unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
-    $('mission').textContent=unavailable?'Return to an open road, then reconnect to retry.':`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
+    $('mission').textContent=unavailable?'Return to an open road to retry.':`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
     const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
     $('hint').textContent=unavailable?'Your current delivery is saved until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
@@ -1184,7 +1184,7 @@ scene.start(dt=>{
     const levelEvent=levelEvents.update(d,session.snapshotVersion);
     if(levelEvent==='up')notice(`${LEVELS[d.level].name} unlocked!`);
     if(levelEvent==='down')notice(`Level ${d.level} · Your purchases stay yours.`);
-    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice(d.lastReroute.reason==='repeat'?'No new nearby route was available, so your last pickup is offered again.':d.lastReroute.reason==='ferry'?'Your delivery moved to an open area. Take the ferry to the mainland.':d.lastReroute.reason==='unavailable'?'No safe delivery route found. Return to an open road, then reconnect to retry.':'Your delivery was rerouted to an open area.');}
+    if(d.lastReroute&&d.lastReroute.id>lastRerouteId){lastRerouteId=d.lastReroute.id;notice(d.lastReroute.reason==='repeat'?'No new nearby route was available, so your last pickup is offered again.':d.lastReroute.reason==='ferry'?'Your delivery moved to an open area. Take the ferry to the mainland.':d.lastReroute.reason==='unavailable'?'No safe delivery route found. Return to an open road to retry.':'Your delivery was rerouted to an open area.');}
     if(d.lastBlocked&&d.lastBlocked.at>lastBlockedAt){lastBlockedAt=d.lastBlocked.at;if(session.world.time-lastBlockedNoticeAt>=5){lastBlockedNoticeAt=session.world.time;const goal=LEVELS[d.lastBlocked.level];notice(`${goal.name} opens at ${money(goal.cash)} cash.`);}}
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'North Bay Playground and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
