@@ -1,4 +1,54 @@
-# Verification · 2026-10-17 Pacific
+# Verification · 2026-10-18 Pacific
+
+## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
+
+- After integrating main's flight controls, tank levels, progression and chat, `pnpm test` passed 261 tests and `pnpm build` passed. The build retains Vite's existing large-chunk warning. Tests cover the ferry crossing, temporary Rocket expiry, parking and races, island surfaces, and level-zero access to the island and SF playground.
+- Local Wrangler two-client room integration passed protocol v18, shared flight/sky currents, activity snapshots, soccer scoring, OTA, fleet and disconnect checks. An initial room run timed out at dome entry while the build was running; a subsequent run after the build passed. Local chat and an isolated real Wrangler restart test passed. These are functional checks, not load tests.
+- Chrome desktop solo: opened the combined activity menu, entered the dome, drove into the ball and observed Blue score. At emulated 390×844 portrait and 844×390 landscape, inspected touch controls and the scrollable activity menu. This is browser emulation, not a physical-device test; the ferry crossing was verified in simulation rather than the browser.
+
+## Flight and steering feel · 2026-10-18 Pacific
+
+- `pnpm test` passed 198 tests after integrating the latest main branch, and `pnpm build` passed. Vite retains its existing large-chunk warning. Tests cover held jump/hover across keyboard, touch and simulated gamepad, rebound controls, proportional low-air launches, forward thrust while hovering, steering at road speeds and in reverse, and existing drift/autopilot behavior. No physical controller or phone was tested.
+- Local Wrangler two-client room integration passed movement, jump/flip/landing, sky currents and the existing room checks; this is not a load test.
+- Chrome desktop solo: holding E launched and hovered at 4 m; a steering input visibly turned the moving car. A temporary, removed local fixture set the tank to 9%: the HUD showed a low-air refill direction, and a 350 ms E press launched to 4 m with 2% remaining. Chrome emulation showed the combined Jump / Hover control at 390×844 portrait and 844×390 landscape. Touch activation and subjective handling on a physical device remain unverified.
+
+## Release notes and dev blog · 2026-10-18 Pacific
+
+- `pnpm test` passed 195 tests, including browser-storage failure, return-visit records, and changelog comparisons against synthetic older, current and unknown releases. `pnpm build` passed both TypeScript checks and emitted the static blog index, first post and changelog. Vite's existing large-chunk warning remains.
+- The local two-client Wrangler room integration passed, including shared movement, deliveries, police, sky currents and Rocket Dome; this was not a load test. Local Wrangler served complete article and changelog HTML, the game and `/api/health`. In Chrome, starting a solo drive and reloading displayed the recorded date and version; the changelog reported no newer release. The blog index, article and changelog were inspected at desktop size; the article was inspected at emulated 390×844 portrait and 844×390 landscape, and the game menu was inspected at those sizes. These are browser-emulation observations, not physical-device checks. The game remains playable when browser storage is unavailable according to the focused storage test.
+
+## Chat quota test timing · 2026-10-18 Pacific
+
+- The production build for merge `843657f` failed in the existing global-chat quota test: its simulated one-hour reset was based on a timestamp taken before the tested quota bucket was constructed. The test now uses a timestamp taken immediately after construction, avoiding a race on loaded builders without changing the runtime limit.
+- On the latest controls integration, `pnpm test` passed 182 tests and `pnpm build` passed both TypeScript checks and the production build; Vite's existing large-chunk warning remains.
+- The subsequent production build `bb85cf4` deployed protocol v16 and served the locally built assets. Its two-client room integration passed, including sky-lane speed and refill. Two initial runs exposed a test setup assumption: either connection can occupy the Bay spawn; the test now moves the other car when needed and checks the actual launch position. This is not a load test.
+- After integrating Bay progression (protocol v17), `pnpm test` passed 191 tests, `pnpm build` passed, and the local two-client room integration again passed the sky-lane check. This is not a load test.
+
+## Gamepad and keyboard bindings · 2026-10-18 Pacific
+
+- After integrating sky currents, `pnpm test` passed 182 tests and `pnpm build` passed; the controls and network protocol were unchanged by this integration.
+
+- `pnpm test` passed 177 tests on rerun and `pnpm build` passed; one prior run failed an unrelated timing-sensitive global-chat test while the build was running concurrently. Vite's existing chunk-size warning remains. Unit tests cover simulated standard-controller analog steering, braking/reverse, flight, button edges, disconnect and safe resume, keyboard remapping, storage errors and touch independence. No physical controller was tested.
+- Chrome desktop: rebound forward from W to I, confirmed focus returned to its binding, and drove a solo Roadster to 82 km/h with I. Chrome emulation at 390×844 portrait and 844×390 landscape showed the scrollable settings dialog. Mobile interaction through the emulated browser targeted a different button, so touch activation and physical devices remain unverified.
+
+## Sky currents with flight controls and global chat · protocol v16 · 2026-10-18 Pacific
+
+- After integrating flight-control and tank upgrades, `pnpm test` passed 178 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. The sky tests additionally verify that the same air units refill tanks of different capacities.
+- Local Wrangler two-client room integration passed, including a double jump into City Glide and server-applied speed and air refill. Local global-chat and isolated restart integration also passed. These are functional checks, not concurrency or production-load tests.
+- Staging at commit `5851eca` returned protocol v16, served the locally built assets, and passed the two-client room integration, including sky-lane refill and acceleration. This is not a load test.
+- Chrome desktop solo reached City Glide with two timed E jumps, showing its speed and air indicator while police pursued. Chrome emulation at 390×844 portrait and 844×390 landscape showed the active lane indicator and updated touch controls. A temporary, removed local fixture placed the Roadster beside Transamerica: one E jump entered the thermal, rose to 19 m and refilled air. Thermal touch jumping was also independently checked before the flight-control integration below. No physical phone, subjective comfort or frame rate was tested.
+
+## Sky currents with global chat · before flight-control integration · protocol v14 · 2026-10-18 Pacific
+
+- After integrating the global-chat changes, `pnpm test` passed 168 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. Shared simulation tests cover directional acceleration, free air, tank cap, all three thermal locations, jump reachability, vehicle eligibility, boundaries and determinism.
+- Local Wrangler two-client room integration observed a double jump enter City Glide and verified the server-applied speed and air refill in the second client's snapshots. Local global-chat and isolated restart integration also passed. These are functional checks, not a concurrency or production-load test.
+- Chrome desktop in the combined build reached City Glide by double jump and the car accelerated across the Bay without holding boost. A separate temporary local-only fixture placed the car by Transamerica: one jump entered the thermal, rose above the skyline and refilled the tank; the fixture was removed before the final build. Chrome 390×844 portrait emulation used the touch Jump control to enter that thermal, and 844×390 landscape and portrait emulation showed the combined sky-lane HUD and controls. Invalid room validation was visible, and the final local browser session reported no console errors. No physical phone, subjective comfort or frame rate was tested.
+
+## Global chat with shop feedback · protocol v13 · 2026-10-18 Pacific
+
+- After integrating the shop feedback fixes, `pnpm test` passed 164/164 and `pnpm build` passed. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including requester-only shop rejection results, global chat and saved-driver recovery. An isolated Wrangler restart again preserved the saved ID and name and cleared history. These are not load tests.
+- Chrome desktop solo showed the combined game and connected chat with a chosen name. Earlier portrait and landscape layout checks and touch limitations are documented below.
 
 ## Supercharger parking lots · protocol v14 · 2026-10-18 Pacific
 
@@ -46,6 +96,19 @@ The protocol v11 island and dome records below describe separate builds.
 - Staging preview of commit `39b41c4` returned protocol v13, matched the locally built browser assets, and passed the same two-client integration. This is not a load test.
 - Chrome desktop solo with a temporary, removed fixture: a Model 3 bought a rocket for $60 from $200, displayed “Rocket kit installed” and showed the retrofit; restarting the same Model 3 removed the hardware and showed no air tank. Chrome 390×844 portrait touch emulation bought the kit and displayed its confirmation; 844×390 landscape showed it after scrolling the shop. The fixture is absent from the built source. No physical device was tested for this follow-up.
 
+## Global chat with rocket shops · protocol v12 · 2026-10-17 Pacific
+
+- The combined build after review fixes passed `pnpm test` (163/163) and `pnpm build`. Vite's large-chunk warning remains.
+- Local Wrangler room and chat integrations passed, including global delivery, private recovery, name collisions and the existing arena and shop checks. An isolated Wrangler restart restored the saved driver and cleared transient chat history. A room run overlapping the rebuild timed out at the dome goal; the stable rerun passed. These are not load tests.
+- The pre-review Cloudflare preview passed chat integration. One room run timed out on vehicle selection, then repeated runs passed; the test now checks the car is stationary and allows more time around the action cooldown.
+- Chrome desktop showed chat alongside the rocket shops; the reviewed build accepted a 20-emoji name and retained an invalid Unicode draft. 390×844 portrait and 844×390 landscape emulation showed the chat layout before the review fixes. No browser console errors were observed. Emulated touch activation of the chat button and physical devices remain unverified.
+
+## Global chat and saved drivers · pre-rocket-shops local build · 2026-10-17 Pacific
+
+- `pnpm test` passed 152/152 tests and `pnpm build` passed; the existing Vite large-chunk warning remains.
+- Local Wrangler integration passed for global message delivery, case-insensitive name collisions in chat and rooms, private recovery codes, repeated save, recovery, invalid-code rejection and cross-origin rejection. A separate isolated Wrangler restart test restored the same saved ID and name and confirmed the chat history was gone. The existing two-client room integration also passed. These are not load tests.
+- Chrome desktop solo showed a chosen name, sent a local chat message, generated a recovery code and displayed an invalid-code error. Chrome emulation at 390×844 and 844×390 showed chat and the scrollable recovery dialog; keyboard activation worked. Emulated pointer/touch activation did not register for the chat button, so touch activation and physical devices remain unverified. No browser console errors were observed.
+
 ## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
 
 - After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
@@ -59,6 +122,7 @@ The protocol v11 island and dome records below describe separate builds.
 - Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
 - Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
 - Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
+
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.
@@ -250,3 +314,25 @@ In the isolated release worktree, `pnpm run ci` passed; the two-client Wrangler 
 ## 2026-10-17 · Road-first HUD
 
 In the isolated worktree, `pnpm test` passed 112 tests after integrating the sound-settings change, including keyboard focus/Tab and Space brake coverage; `pnpm build` passed. Chrome local solo play was inspected at desktop and emulated 390×844 portrait and 844×390 landscape. The action drawer exposed all eight actions, fleet opened, both drawers closed with Escape, and sound settings opened from the action drawer; a citation interrupted and closed the guide and acknowledgement resumed play. After opening the action drawer, an emulated touch on Drive closed it and accelerated to 42 km/h, a touch on Brake stopped the car, and steering showed its pressed state on the same touch; a jump used air and changed Drive to Flip and steering labels to Bank. No physical phone or multiplayer-specific behavior was verified for this HUD change. Screenshots and concept comparison are linked from DESIGN.md.
+
+## 2026-10-17 · Flight controls and arcade tanks
+
+In the isolated worktree, `pnpm test` passed 159 tests and `pnpm build` passed. A local Wrangler two-client room integration verified protocol v13, tank-level snapshots, jump, flip, and forward flight while hovering; this was not a load test. Chrome solo play verified E plus W produced airborne motion (52 km/h before the tank change), and the updated Level 1 HUD and Jump were exercised. Phone emulation at 390×844 and 844×390 showed separate forward, flip, jump, hover and roll controls. These are emulations, not physical-device tests. Tank purchase progression, full refill, prices and capacity doubling through Level 5 were verified in the authoritative simulation tests.
+
+After integrating the shop confirmation follow-up, 161 tests and `pnpm build` passed; the local two-client Wrangler room test passed on protocol v14, including forward flight while hovering and purchase result messages. A focused solo shop test also confirmed a tank purchase reports success, deducts cash and refills. Chrome solo play additionally showed H holding altitude and X producing a visible roll.
+
+## 2026-10-17 · Remote OTA shop
+
+`pnpm test` passed 166 tests and `pnpm build` passed. The local two-client Wrangler room integration and a deployed Cloudflare preview passed with protocol v15, including subscription acknowledgement, paused state and cancellation replication. Shared-simulation tests exercise payment, renewal, insufficient funds, automatic resumption, cancellation, and remote airborne purchases. A controls regression covers delayed jump acknowledgement and preserves brake-before-jump ordering. In Chrome solo play, opening the shop away from a workshop showed the price and allowed enrollment with $0, displaying the paused state. The dialog was inspected at desktop and emulated 390×844 portrait and 844×390 landscape; physical phones were not tested.
+
+One additional local integration run timed out at the existing Tesla fleet-change assertion while Wrangler reloaded; a subsequent run passed. The preview integration also passed.
+
+After integrating main's global chat, 173 tests and `pnpm build` passed. Both the room and global-chat integrations passed against local Wrangler. Chrome portrait emulation showed the combined game and remote shop; no physical device was tested.
+
+## 2026-10-18 · Bay delivery progression and landmarks
+
+In the isolated release worktree, `pnpm test` passed 182 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. The local Wrangler two-client room integration passed on protocol v16. Shared-simulation tests exercise the delivery and earnings thresholds, per-player access, locked boundaries on the ground and in flight, collisions and takeover, and supported, collision-clear landmark arrivals. The integration is not a load test.
+
+In Chrome local solo play, the level-zero objective pointed into SF, attempting to cross the locked Bay Bridge showed the Oakland requirements and stopped the car, and the expanded map concealed locked regions. The desktop cockpit, invalid-room feedback, and 390×844 portrait and 844×390 landscape emulated layouts were inspected; a landscape HUD overlap and the starting heading were corrected. Keyboard driving moved the car. Emulated pointer actions did not reliably target the requested control in this browser session, so mobile touch behavior was not verified by this playtest. No physical device or complete manual drive through all unlocks was tested. Lake Merritt and its islands are decorative, not physical water.
+
+After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.

@@ -49,6 +49,10 @@ export const PARKS=[
  {id:'lake-merritt',x:480,z:150,w:44,d:44,color:0x8cab83},
  {id:'yerba-green',x:201,z:55,w:50,d:38,color:0x94a985},
 ];
+// Lake Merritt is a shallow decorative feature: the shared ground remains drivable.
+export const LAKE_MERRITT={x:480,z:150,rx:18,rz:21,islands:[{x:474,z:145,r:4},{x:484,z:148,r:3.5},{x:480,z:157,r:3}]} as const;
+// A fictional sightseeing easter egg, not a depiction of any real person's vessel.
+export const MYSTERY_YACHT={x:210,z:-115,name:'Larry’s Imaginary Yacht'} as const;
 export function insidePolygon(x:number,z:number,points:MapPoint[]):boolean {
   let inside=false;
   for(let i=0,j=points.length-1;i<points.length;j=i++){
@@ -182,12 +186,23 @@ export const DISTRICTS=[
  {id:'fremont',name:'Fremont',...pointAtZ(HIGHWAYS[1],6000)},
  {id:'east-bay',name:'East Bay',...pointAtZ(HIGHWAYS[1],3000)},
 ] as const;
+// Recognizable places, entirely re-positioned and scaled for the arcade map.
+// Arrival points are clear of shared building collision for delivery gameplay.
+export const LANDMARKS=[
+ {id:'berkeley',name:'UC Berkeley · Campanile',x:540,z:-260,w:14,d:14,h:66,district:'oakland',style:'campanile',arrival:{x:510,z:-240}},
+ {id:'sfo',name:'SFO · Airport',x:-740,z:1200,w:20,d:20,h:46,district:'peninsula',style:'airport',arrival:{x:-710,z:1200}},
+ {id:'stanford',name:'Stanford · Hoover Tower',x:-940,z:4000,w:16,d:16,h:60,district:'peninsula',style:'hoover',arrival:{x:-940,z:4030}},
+ {id:'mission-san-jose',name:'Fremont · Mission San José',x:1770,z:6000,w:26,d:18,h:20,district:'east-bay',style:'mission',arrival:{x:1770,z:6035}},
+ {id:'san-jose-city-hall',name:'San José · City Hall',x:1680,z:8700,w:22,d:22,h:23,district:'south-bay',style:'rotunda',arrival:{x:1705,z:8730}},
+] as const;
+// Runway paint sits on the same supported land as the cars; no aircraft simulation.
+export const AIRPORT_RUNWAY={x:-660,z:1200,w:20,d:110} as const;
 for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z;
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -240,6 +255,7 @@ for(const district of DISTRICTS){
   BUILDINGS.push({x,z,w,d,h,district:district.id==='san-jose'?'south-bay':district.id==='fremont'||district.id==='east-bay'?'east-bay':'peninsula',style:high?'tower':h>22?'midrise':'house'});
  }
 }
+for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,district,style});
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){

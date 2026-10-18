@@ -13,7 +13,7 @@ test('authoritative jump and one-tap flip consume air and land', () => {
   step(world, inputs, .05);
   inputs.set('one', { ...NEUTRAL, jump: 1, flip: 1 });
   for (let i = 0; i < 20; i++) step(world, inputs, .05);
-  assert.ok(car.y > 1); assert.ok(car.stunts === 1); assert.equal(car.air, 67);
+  assert.ok(car.y > 1); assert.ok(car.stunts === 1); assert.equal(car.air, 89.5);
   for (let i = 0; i < 80; i++) step(world, inputs, .05);
   assert.equal(car.y, 0); assert.equal(car.roll, 0); assert.equal(car.vy, 0);
 });
@@ -139,4 +139,16 @@ test('drift keeps a high-speed car on the shared hill surface', () => {
     assert.equal(car.supportId,'ground');assert.ok(Math.abs(car.y-terrainHeight(car.x,car.z)!)<1e-7);
   }
   assert.ok(maxSlip>1);
+});
+
+test('manual driving turns sharply at road speeds and in reverse',()=>{
+  const {world,car}=setup();world.entities=[car];
+  for(const speed of [10,20,40]){
+    Object.assign(car,{x:0,z:0,y:0,supportId:'ground',yaw:0,speed,steering:0,autopilot:false});
+    for(let i=0;i<10;i++)step(world,new Map([['one',{...NEUTRAL,steer:1,throttle:1}]]),.05);
+    assert.ok(car.yaw>(speed===40?.2:.35),`speed ${speed}: yaw ${car.yaw}`);
+  }
+  Object.assign(car,{x:0,z:0,y:0,supportId:'ground',yaw:0,speed:-8,steering:0,autopilot:false});
+  for(let i=0;i<5;i++)step(world,new Map([['one',{...NEUTRAL,steer:1}]]),.05);
+  assert.ok(car.yaw<0,'reverse steering changes direction');
 });

@@ -1,22 +1,28 @@
 # Poly AV
 
-Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, drive through an inverted stunt loop, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Drive a 19.9 km circuit through the Peninsula, San Jose, Fremont and Oakland, cross the Bay Bridge via Yerba Buena Island, or take the Golden Gate north to Marin.
+Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Pick up food and deliver it for cash, dodge police, jump and flip a Roadster, swap cars, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Start in San Francisco and unlock Oakland, the Peninsula, Fremont and San Jose through deliveries; the full circuit is about 19.9 game km. The Golden Gate and Rocket Dome are available from the start.
 
-**[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
+**[Play Poly AV](https://polyav.swyx.io)** · [Changelog](https://polyav.swyx.io/changelog/) · [Dev blog](https://polyav.swyx.io/blog/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
 This checkout contains the Rocket Island expansion and Rocket Dome; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
-**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and potentially a costly citation; repeat and more serious flights increase the fine. Some orders for rocket-equipped vehicles lead to rooftops. Earn session achievements for rooftop landings, deliveries, and flying across the Bay. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
+**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Deliveries and total earnings unlock more of the map for your session, with longer runs as it opens. Spending money or paying a ticket does not undo an unlock. The HUD shows the next milestone. Flying near police can lead to a citation; some rocket-equipped orders lead to rooftops. See [delivery design](docs/DELIVERY.md).
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
 **Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena connected to Rocket Island. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay or island where you entered.
 
+**Global chat:** Pick a driver name and chat with players across rooms, including from solo play. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
+
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
-**Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+**Rocket shops:** Collect a purple rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+
+**Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
+
+**Release history:** The menu shows the current release and, after a successful drive starts, the last-played version and time saved in this browser. The changelog highlights known releases since that visit. History starts with 0.0.1 Alpha; earlier visits cannot be recovered. Browser storage is local to the origin and may be cleared or unavailable; it does not preserve game progress. See [publishing notes](docs/PUBLISHING.md).
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
@@ -39,20 +45,31 @@ For frontend hot reload, leave Wrangler running and start `pnpm dev` in another 
 ```sh
 pnpm run ci # tests, TypeScript checks and production build
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
+pnpm exec tsx tests/chat.integration.ts http://localhost:8787
+pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
 pnpm exec tsx tests/capacity.integration.ts http://localhost:8787 64
 ```
 
 The network checks need the local Worker running. See [deployment](docs/DEPLOYMENT.md) for a separate Cloudflare deployment and the native build/preview workflow; deploying is not needed to contribute.
 
+### Controls and gamepads
+
+Open **Controls & gamepad** from the start screen or the Actions menu to customize up to two keyboard keys per action, or restore defaults. Bindings stay in this browser; touch controls are unchanged. Space brakes and drifts on the road and flips in the air by default. Browser shortcuts remain available.
+
+Standard-mapped Xbox/PlayStation-style controllers use the left stick to steer, right trigger to accelerate and left trigger to brake and then reverse (or fly backward). A/Cross jumps and holds to hover, X/Square flips, B/Circle boosts, and the bumpers or right stick roll. D-pad up enters/exits, down changes camera, left unsticks and right toggles autopilot. Menu/Options opens the menu; use keyboard, mouse or touch in menus. A controller must return to neutral after connecting, focus loss or a menu before driving resumes. Non-standard controllers are reported as unsupported.
+
+The trigger layout follows familiar racing conventions ([Forza Motorsport accessibility notes](https://forums.forza.net/t/meet-the-most-accessible-forza-motorsport-ever/597587/38)); browser controller detection uses the [Gamepad API](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API).
+
 ## Play
 
 - **WASD / arrows:** accelerate, reverse, steer. **Space:** brake; steer while braking or reversing to drift, then release to regain grip.
-- **J:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
+- **E:** tap to jump (or fictional air jump), hold to hover; J also works. **Space** in the air or **X:** one-tap flip. **Shift:** boost. **Q/R:** manual airborne roll. W/S provide forward/reverse thrust in the air; A/D turn.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** Tesla fleet catalog; select a new ride while stopped. **B:** enter a shop when stopped in its purple ring.
 - **L:** room leaderboard with cash and active play time. **T:** session achievements.
-- **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **R:** unstuck recovery, preserving air and condition.
-- Touch: steering and pedals; hold Brake or Rev while steering to drift. Tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
+- **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
+- Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump / Hover to jump and hold it for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
+- Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
 - Stop in a marked Supercharger stall to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds; the stock Rocket Roadster remains capable permanently.
@@ -61,9 +78,9 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 
 ## Boundaries
 
-This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, account, or Tesla API integration. No affiliation is implied.
+This is a working foundation, not GTA-scale content or a persistent MMO. Four station identities are sourced from Tesla, but their game positions are compressed artistic placements. Compressed-air refills, repeated air jumps and the game’s thrust and suction tuning are fictional. The Rocket is inspired by a prototype, not a production-car specification. No live charging availability, payment, telemetry, or Tesla account/API integration. No affiliation is implied.
 
-Rooms are ephemeral and public-by-code. No authentication, persistent progression, saving, shooting, or death/respawn yet. Delivery money is fictional and session-only. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control.
+Rooms are ephemeral and public-by-code. Delivery money is fictional and session-only; there is no persistent game progression, shooting, or death/respawn yet. Traffic is deterministic arcade driving, not real AV software. Combat and recovery expansion are designed in `docs/DESIGN.md`. Room state resets on deployment, runtime restart, or last disconnect. Room codes are not access control. Saved chat identities persist separately, but room labels are self-asserted and are not proof of a chat identity. Global chat retains only a recent, transient history, which disappears on server restart.
 
 Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up to a provisional ceiling of 128. This is a gameplay limit, not Cloudflare's WebSocket maximum. Player-relevant snapshots and a collision spatial index reduce work in the larger world; increase the ceiling only after measurement. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency.
 
@@ -74,6 +91,7 @@ shared/game.ts      Pure authoritative simulation and world schema
 shared/map.ts       Shared land, bridges, road and collision geometry
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/upgrades.ts  Fictional shop locations, prices and eligibility
+shared/sky-currents.ts  Shared sky-lane and thermal volumes
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous routes and traffic demand
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
@@ -91,18 +109,23 @@ shared/parking*.ts  Parking playground definitions and rounds
 shared/race*.ts     Island courses and race rounds
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
+worker/global-chat.ts  Global chat and optional saved identities
 src/session.ts     Solo/multiplayer transport adapter
-src/controls.ts    Keyboard and multitouch intent adapter
+src/controls.ts    Keyboard, gamepad and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
 src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera
+src/sky-currents.ts  Animated sky-lane and thermal markers
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/island-stunts.ts  Bank and cliff meshes from shared geometry
 src/rocket-dome.ts  Dome, goals and ball visuals
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment
+content/releases.ts  Dated release notes and current game version
+content/posts/     Markdown development posts, rendered to static pages at build
+scripts/build-public-pages.ts  Blog and changelog page generator
 tests/             Simulation, protocol and live connection checks
 ```
 
