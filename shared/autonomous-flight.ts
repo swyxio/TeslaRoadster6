@@ -164,7 +164,10 @@ export function autonomousFlight(car:Entity,world:World,level:Level,mode:DriveMo
     const input:Input={...groundInput,throttle,steer:steering,brake:false,boost:false,hover,roll:0};
     return {input,jump,active:true};
   }
-  if(car.supportId!=='ground'||nav.join||world.time-state.lastLaunch<10||car.air<airCost(45*airUse,car.tankLevel)||
+  // Never demand more than 90% of the installed tank: a heavy Level 1
+  // vehicle still needs a substantial reserve but can actually take off.
+  const launchReserve=Math.min(90,airCost(45*airUse,car.tankLevel));
+  if(car.supportId!=='ground'||nav.join||world.time-state.lastLaunch<10||car.air<launchReserve||
      Math.abs(car.speed)>12||car.speed<-.2||world.time<state.nextCheck)return ground;
   const next=nav.path[nav.index];if(!next)return ground;
   const distance=length(car,next);if(distance<70)return ground;
