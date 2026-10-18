@@ -90,6 +90,9 @@ export function assessCapture({ trace, authority, profile, routed, connections, 
   // Match snapshots received during the first W-only interval to authority by
   // tick, without assuming Worker and browser clocks measure CPU time alike.
   const firstWAtMs = scenarioEvents[0]?.atMs, firstTurnAtMs = scenarioEvents[1]?.atMs;
+  const firstWIndex = events.indexOf(scenarioEvents[0]), firstTurnIndex = events.indexOf(scenarioEvents[1]);
+  const firstStraightInterrupted = firstWIndex >= 0 && firstTurnIndex > firstWIndex &&
+    events.slice(firstWIndex + 1, firstTurnIndex).some(e => e.trusted && e.type === 'keyup' && e.code === 'KeyW');
   const firstStraightStates = states.filter(s => s.atMs >= firstWAtMs && s.atMs < firstTurnAtMs);
   const firstStraightStart = firstStraightStates[0], firstStraightEnd = firstStraightStates.at(-1);
   const firstStraightStartTick = finalPoseTicks.find(t => t.tick === firstStraightStart?.tick);
@@ -105,6 +108,7 @@ export function assessCapture({ trace, authority, profile, routed, connections, 
   fail('incomplete-window-snapshots', states.length >= 5 && ordered(states) && states[0]?.atMs - startMs <= 1000 && lastSnapshotAgeMs >= 0 && lastSnapshotAgeMs <= 1000);
   fail('insufficient-motion', displacementM > 10 && stateDisplacementM > 10 && authorityDisplacementM > 10);
   fail('insufficient-first-straight-motion', firstStraightMotion);
+  fail('interrupted-first-straight', !firstStraightInterrupted);
   fail('incomplete-controls', ordered(controls) && ordered(sentEntries) && observedControlStages === predicates.length && sentControlStages === predicates.length);
   fail('missing-or-unordered-events', ordered(events) && missingEvents.length === 0);
   fail('missing-turnaround', turnaroundCount > 0);

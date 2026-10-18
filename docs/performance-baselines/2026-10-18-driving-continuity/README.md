@@ -82,6 +82,53 @@ first-input pause. The final candidate captured all brackets, but used about
 conservative analysis yielded zero eligible speed samples. Its overhead was
 not compared with an unpolled run. This result cannot establish the gate.
 
+## Clock experiment and additional evidence
+
+A visual-clock slew cap was tested at `89726ae` and **reverted** at `95b8037`.
+The bunched-delivery capture rejected 123 late controls and the authoritative
+vehicle did not move during the first W-only segment. The cap also slowed the
+clock used to timestamp wire inputs. The earlier `4656339` bunched capture
+covered 105.86 m in the same segment. Capture completeness now requires
+movement during that first segment, not merely later in the scenario. Neither
+the reverted experiment nor that completeness check establishes the speed gate.
+
+The [additional raw evidence](clock-experiment-evidence.tar.gz) retains the
+four rejected-experiment captures, a second room pair, tooling samples, the
+held-write recovery log and a native-clock collector experiment. SHA-256:
+`46685b017440eb500a949e7949eabe59c5afe914676df312a77b2b32349f048b`.
+The Chromium trace retains its events but omits browser metadata; local
+fixture secrets and Worker logs are excluded. Native capture 01 did not retain
+the files needed to diagnose its failed marker match. Capture 02 retained two
+process logs; one was incompatible with all tick markers and the other had
+multiple possible matches for every tick. Clock-source equivalence, browser
+trace clock mapping and instrumentation overhead remain unproven, so neither
+capture supplies same-instant reference speeds.
+
+The second fresh local five-client pair used baseline `1f722dd` and experiment
+`89726ae`. Its independent `RoomInputClient` does not exercise the broken
+Session clock: Worker, shared simulation and benchmark client were identical
+to the subsequent revert. The baseline advanced 57.25 s in 60.006 s; the
+experiment advanced 60.00 s in 60.007 s. Both completed 48/48 fixture
+purchases and acknowledged 5,915/5,915 inputs; maximum wallet queue was one.
+Snapshot p95 was 106.52 / 101.88 ms, acknowledgement p95 206.90 / 196.98 ms,
+and decoded bytes 46,390,478 / 49,609,612. One-minute host load was
+7.23 → 5.82 / 5.69 → 6.77. This is not exact full-tree evidence for the
+subsequent candidate, a production CPU measurement, or a capacity result.
+
+One contended tooling sample recorded test/build times of 10.87/16.66 s on
+the baseline and 10.68/9.21 s on `16448ae`; one-minute host load rose from
+7.26 to 15.52 and 15.16 to 18.50, respectively. These samples do not support
+a speed comparison. The static initial JavaScript graph was 1,232,633 raw /
+364,473 gzip / 299,288 Brotli bytes on baseline and 1,234,822 / 365,219 /
+299,806 bytes on `16448ae`. This estimate excludes injected scripts and does
+not measure actual initial or repeat transfer or cache behavior.
+
+The `95b8037` local recovery integration held an actual collection write
+while another driver's neutral inputs applied and the world advanced; the
+write then committed and survived saved recovery. It also exercised a
+rejected predecessor and once-only settlement. The latter did not separately
+measure unrelated world progress during a failed write.
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's
@@ -97,5 +144,5 @@ recorders completed with no page or console errors. Their saved trajectories
 and release screenshots are in the adjacent touch directories. This was not a
 physical-device test; the attached iPhone and iPad were listed offline.
 Representative city, traffic and flight GPU/frame timing, physical mobile,
-full recovery/contact coverage, delayed-write isolation, startup transfer,
+full recovery/contact coverage, failed-write isolation, startup transfer,
 and same-instant steady-motion evidence remain open for this release.

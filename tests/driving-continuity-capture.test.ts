@@ -155,6 +155,18 @@ test('scenario completeness requires authoritative motion during the initial W-o
   assert.ok(assessCapture(wrongTick).invalid.includes('insufficient-first-straight-motion'));
 });
 
+test('scenario completeness rejects a trusted W release during the first straight segment', () => {
+  const candidate = completeCapture();
+  candidate.trace.events.splice(1, 0,
+    { type: 'keyup', code: 'KeyW', atMs: 1200, trusted: true },
+    { type: 'keydown', code: 'KeyW', atMs: 1300, trusted: true });
+  const result = assessCapture(candidate);
+  assert.deepEqual(result.invalid, ['interrupted-first-straight']);
+  assert.equal(result.complete, false);
+  candidate.trace.events[1].trusted = false;
+  assert.equal(assessCapture(candidate).complete, true);
+});
+
 test('gap completeness requires a held message to be forwarded after the full hold and no intermediate sends', () => {
   const candidate = completeCapture(); candidate.profile = 'gap250';
   candidate.routed.gap = { armedAtNodeMs: 100, startAtNodeMs: 110, endTargetAtNodeMs: 360, firstAfterNodeMs: 360, held: 1 };
