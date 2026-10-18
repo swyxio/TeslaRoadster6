@@ -95,14 +95,18 @@ the reverted experiment nor that completeness check establishes the speed gate.
 The [additional raw evidence](clock-experiment-evidence.tar.gz) retains the
 four rejected-experiment captures, a second room pair, tooling samples, the
 held-write recovery log and a native-clock collector experiment. SHA-256:
-`46685b017440eb500a949e7949eabe59c5afe914676df312a77b2b32349f048b`.
+`2c6f8f6ecb24e9206542227209d68bf513b151ccf8851ada1b50910f33522597`.
 The Chromium trace retains its events but omits browser metadata; local
 fixture secrets and Worker logs are excluded. Native capture 01 did not retain
 the files needed to diagnose its failed marker match. Capture 02 retained two
 process logs; one was incompatible with all tick markers and the other had
 multiple possible matches for every tick. Clock-source equivalence, browser
 trace clock mapping and instrumentation overhead remain unproven, so neither
-capture supplies same-instant reference speeds.
+capture supplies same-instant reference speeds. An offline sensitivity study
+formed a conservative hull of all possible matches: even assuming favorable
+clock mappings and the stated interpolation convention, it found no eligible
+speed intervals. The study, assumptions and inputs are retained in the archive;
+the result is diagnostic rather than a gate verdict.
 
 The second fresh local five-client pair used baseline `1f722dd` and experiment
 `89726ae`. Its independent `RoomInputClient` does not exercise the broken
