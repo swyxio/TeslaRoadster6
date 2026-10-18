@@ -1,6 +1,6 @@
 import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
-import { OVERPASS, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
+import { OVERPASS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
 import { engageAutopilot, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
 
@@ -52,7 +52,10 @@ function heightAboveSurface(e:Entity){
   let floor=terrainHeight(e.x,e.z)??0;
   const deck=overpassHeight(e.x,e.z);if(deck!==null&&deck<=e.y)floor=Math.max(floor,deck);
   const ramp=rampHeight(e.x,e.z);if(ramp!==null&&ramp<=e.y)floor=Math.max(floor,ramp);
-  for(const b of nearbyBuildings(e.x,e.z,0))if(b.h<=e.y&&Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2)floor=Math.max(floor,b.h);
+  const dome=domeRoofHeight(e.x,e.z);if(dome!==null&&dome<=e.y)floor=Math.max(floor,dome);
+  for(const b of nearbyBuildings(e.x,e.z,0))if(Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2){
+    const roof=buildingRoofHeight(b,e.x,e.z);if(roof<=e.y)floor=Math.max(floor,roof);
+  }
   return e.y-floor;
 }
 function flightHeight(e:Entity){return e.kind!=='person'&&e.supportId===null?Math.max(0,heightAboveSurface(e)):0;}

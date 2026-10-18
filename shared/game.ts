@@ -463,7 +463,8 @@ function followSupport(world:World,e:Entity,old:PreviousPose):void {
     ((old.x>=OVERPASS.start&&e.x<OVERPASS.start)||(old.x<=OVERPASS.end&&e.x>OVERPASS.end));
   const stuntStart=e.supportId==='stunt-ramp'&&old.x>=STUNT_RAMP.start&&e.x<STUNT_RAMP.start&&Math.abs(e.z-STUNT_RAMP.z)<=STUNT_RAMP.width/2;
   const previousJump=e.supportId==='island-jump'?islandJumpAt(old.x,old.z):undefined;
-  const islandJumpStart=previousJump&&e.x<previousJump.start&&Math.abs(e.z-previousJump.z)<=previousJump.width/2;
+  // Leaving the low edge can cross a side edge in the same step.
+  const islandJumpStart=previousJump&&e.x<previousJump.start;
   if((rampEnd||stuntStart||islandJumpStart||e.supportId==='island-bank'||e.supportId==='island-oval')&&ground!==null&&Math.abs(old.y-ground)<.5){e.supportId='ground';e.y=ground;e.vy=0;}
   else if(e.supportId==='overpass'&&contact(body(e),deckBody)){e.y=deckTopAt(e.x);e.vy=0;}
   else if(e.supportId.startsWith('roof:')){

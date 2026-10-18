@@ -66,7 +66,7 @@ function scoreCrossing(ball:SoccerBall,dx:number,dy:number,dz:number):{t:number;
   return fitsGoal(y,z)?{t,side:dx>0?'blue':'orange'}:null;
 }
 
-function recordGoal(state:SoccerState,side:SoccerSide,time:number):void {
+function recordGoal(state:SoccerState,side:SoccerSide,time:number,entities:readonly Entity[]):void {
   const touch=state.lastTouch,scorer=state.participants.find(p=>p.playerId===touch?.playerId);
   if(touch&&scorer)scorer.goals[touch.carClass]++;
   state.lastTouch=null;
@@ -74,8 +74,10 @@ function recordGoal(state:SoccerState,side:SoccerSide,time:number):void {
   state.lastScorer=side;
   state.winner=(side==='blue'?state.blueScore:state.orangeScore)>=WIN_SCORE?side:null;
   if(state.winner){
-    const high=Math.max(0,...state.participants.map(domeGoals));
-    state.winningPlayers=high>0?state.participants.filter(p=>domeGoals(p)===high).map(p=>p.playerId):[];
+    const present=new Set(entities.filter(entity=>entity.inDome&&entity.driver).map(entity=>entity.driver!));
+    const eligible=state.participants.filter(participant=>present.has(participant.playerId));
+    const high=Math.max(0,...eligible.map(domeGoals));
+    state.winningPlayers=high>0?eligible.filter(participant=>domeGoals(participant)===high).map(participant=>participant.playerId):[];
   }
   state.phase=state.winner?'win':'goal';
   state.phaseUntil=time+(state.winner?WIN_SECONDS:GOAL_SECONDS);
@@ -156,7 +158,7 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number
     const crossing=scoreCrossing(ball,dx,dy,dz);
     if(crossing&&(!hit||crossing.t<=hit.t)){
       ball.x+=dx*crossing.t;ball.y+=dy*crossing.t;ball.z+=dz*crossing.t;
-      recordGoal(state,crossing.side,time);return;
+      recordGoal(state,crossing.side,time,entities);return;
     }
     const fraction=hit?.t??1;
     ball.x+=dx*fraction;ball.y+=dy*fraction;ball.z+=dz*fraction;

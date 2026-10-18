@@ -631,8 +631,10 @@ scene.start(dt=>{
     const goalCount=(participant:typeof soccer.participants[number])=>participant.goals.roadster+participant.goals.retrofit+participant.goals.pickup+participant.goals.stock;
     const ownParticipant=soccer.participants.find(participant=>participant.playerId===session.id);
     const ownGoals=ownParticipant?goalCount(ownParticipant):0;
-    const topGoals=Math.max(0,...soccer.participants.map(goalCount));
-    const leaders=topGoals?soccer.participants.filter(participant=>goalCount(participant)===topGoals):[];
+    const present=new Set(session.world.entities.filter(entity=>entity.inDome&&entity.driver).map(entity=>entity.driver));
+    const eligible=soccer.participants.filter(participant=>present.has(participant.playerId));
+    const topGoals=Math.max(0,...eligible.map(goalCount));
+    const leaders=topGoals?eligible.filter(participant=>goalCount(participant)===topGoals):[];
     const driverName=(id:string)=>id===session.id?'You':session.world.players.find(player=>player.id===id)?.name??'Driver';
     const leader=leaders.length?`${driverName(leaders[0].playerId)}${leaders.length>1?` +${leaders.length-1}`:''} (${topGoals})`:'No leader yet';
     const standings=`Your goals: ${ownGoals} · ${leaders.length?`Leader: ${leader}`:leader}`;
