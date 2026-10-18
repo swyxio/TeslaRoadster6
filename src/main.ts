@@ -9,6 +9,8 @@ import { type Entity } from '../shared/game';
 import { BRIDGES, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP } from '../shared/map';
 import { orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
 import { celebrateReward, resetCelebration } from './rewards';
+import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import type { Ticket } from '../shared/delivery';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -31,15 +33,18 @@ document.querySelector('#app')!.innerHTML = `
 </section>
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
+ <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
- <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button></div>
+ <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div>
  <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: San Francisco, Oakland, Marin and bridges; mint dots are Superchargers, yellow ring is your delivery, red dots are police, orange arrow is you"></canvas><div class="map-key"><b>▲ YOU</b> <i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="keyboard-help"><kbd>W A S D</kbd> drive / pitch / bank <kbd>SPACE</kbd> brake · steer to drift <kbd>J</kbd> jump <kbd>X</kbd> flip <kbd>H</kbd> hover <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>V</kbd> autopilot <kbd>G</kbd> fleet <kbd>L</kbd> scores</div>
+ <div class="keyboard-help"><kbd>W A S D</kbd> drive / pitch / bank <kbd>SPACE</kbd> brake · steer to drift <kbd>J</kbd> jump <kbd>X</kbd> flip <kbd>H</kbd> hover <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>V</kbd> autopilot <kbd>G</kbd> fleet <kbd>L</kbd> scores <kbd>T</kbd> awards</div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyJ" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / VEHICLE COLLECTION</span><h2 id="fleet-title">See other vehicles.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Every model is driving around town and parked nearby. Borrow one, or choose your next ride here.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR ROOM / ACTIVE DRIVERS</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by cash. The clock counts active play, with a short grace period when you stop. Scores last only while you are in this session.</p><div class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
+<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR SESSION / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, take the scenic route, and earn these once per session.</p><ul id="awards-list" class="awards-list"></ul></dialog>
+<dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="error" class="error hidden" role="alert"><h2>Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Rejoin room</button><button id="error-solo" class="secondary">Drive solo</button><button id="error-menu" class="text-button">Back to menu</button></div>
 `;
@@ -54,27 +59,31 @@ const controls = new Controls();
 let scene: GameScene;
 try { scene = new GameScene($<HTMLCanvasElement>('world')); }
 catch { $('error').classList.remove('hidden'); $('error-copy').textContent='This device could not start WebGL. Enable hardware acceleration or try another browser.'; $('retry').hidden=true; $('error-solo').hidden=true; throw new Error('WebGL unavailable'); }
-let menu = true, started = false, hudTime = 0, lastRewardId = 0;
+let menu = true, started = false, hudTime = 0, lastRewardId = 0, lastTicketCount = 0;
+let seenAchievements = new Set<AchievementId>(), achievementQueue:AchievementId[] = [], achievementTimer = 0;
 const roomParam = new URLSearchParams(location.search).get('room');
 if (roomParam && /^[a-z0-9][a-z0-9-]{0,31}$/.test(roomParam)) $<HTMLInputElement>('room').value=roomParam;
 function toggleMenu(show: boolean) {menu=show;controls.enabled=!show;controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started);$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function begin(solo:boolean){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!solo&&!/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
-  lastRewardId=0;resetCelebration();
+  lastRewardId=0;lastTicketCount=0;resetCelebration();
+  seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
+  for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
   controls.resetSequences();if(solo){session.solo(selectedVehicle);history.replaceState(null,'',location.pathname);}else{session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);}
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
 $('solo').onclick=()=>begin(true);$('error-solo').onclick=()=>begin(true);$('join').onclick=()=>begin(false);$('retry').onclick=()=>begin(false);
 $('resume').onclick=()=>toggleMenu(false);$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();session.solo();toggleMenu(true);};
-function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'){
+function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'|'awards'){
+  if(type==='awards'){openAwards();return;}
   if(type==='scores'){openScores();return;}
   if(type==='fleet'){openFleet();return;}
   if(type==='menu')toggleMenu(!menu);else if(type==='camera')scene.wideCamera=!scene.wideCamera;else session.action(type);
 }
 controls.onAction=action;
-$('autopilot').onclick=()=>action('autopilot');$('fleet').onclick=()=>openFleet();$('scores').onclick=()=>openScores();
+$('autopilot').onclick=()=>action('autopilot');$('fleet').onclick=()=>openFleet();$('scores').onclick=()=>openScores();$('awards').onclick=()=>openAwards();
 $('interact').onclick=()=>action('interact');$('recover').onclick=()=>action('reset');$('camera').onclick=()=>action('camera');
 let noticeTimer=0;
 function notice(message:string){$('notice').textContent=message;$('notice').classList.remove('hidden');clearTimeout(noticeTimer);noticeTimer=window.setTimeout(()=>$('notice').classList.add('hidden'),4000);}
@@ -124,6 +133,37 @@ function openScores(){controls.clear();controls.enabled=false;updateScores();sco
 function closeScores(){scoresDialog.close();controls.clear();controls.enabled=!menu;}
 $('scores-close').onclick=closeScores;scoresDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
 
+const awardsDialog=$<HTMLDialogElement>('awards-dialog');
+const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
+function updateAwards(){
+  const player=session.world.players.find(p=>p.id===session.id),list=$('awards-list');list.replaceChildren();
+  for(const [id,award] of Object.entries(ACHIEVEMENTS)){
+    const unlocked=player?.achievements.unlocked.includes(id as AchievementId)??false;
+    const row=document.createElement('li');row.className=unlocked?'unlocked':'';
+    const badge=document.createElement('span');badge.className='award-icon';badge.textContent=unlocked?'★':'◇';
+    const copy=document.createElement('div'),name=document.createElement('strong'),description=document.createElement('p');name.textContent=award.name;description.textContent=award.description;copy.append(name,description);
+    const status=document.createElement('span');status.className='award-status';status.textContent=unlocked?'EARNED':'TO DISCOVER';row.append(badge,copy,status);list.append(row);
+  }
+}
+function openAwards(){controls.clear();controls.enabled=false;updateAwards();awardsDialog.showModal();}
+function closeAwards(){awardsDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
+$('awards-close').onclick=closeAwards;awardsDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
+function announceAchievements(){
+  const id=achievementQueue.shift();if(!id){achievementTimer=0;$('achievement-toast').classList.add('hidden');return;}
+  $('achievement-toast').textContent=`★ ACHIEVEMENT UNLOCKED · ${ACHIEVEMENTS[id].name}`;$('achievement-toast').classList.remove('hidden');
+  achievementTimer=window.setTimeout(announceAchievements,3500);
+}
+function showTicket(ticket:Ticket){
+  // A citation takes precedence over informational dialogs.
+  if(awardsDialog.open)awardsDialog.close();if(scoresDialog.open)scoresDialog.close();if(fleetDialog.open)fleetDialog.close();
+  controls.clear();controls.enabled=false;
+  $('ticket-amount').textContent=`−${money(ticket.amount)}`;
+  $('ticket-detail').textContent=`Offense #${ticket.offense} · ${ticket.flightSeconds}s airborne · ${ticket.peakHeight}m peak | Base $60 + flight $${ticket.durationFine+ticket.heightFine} + repeat $${ticket.repeatFine}`;
+  ticketDialog.showModal();$<HTMLButtonElement>('ticket-acknowledge').focus();
+}
+ticketDialog.addEventListener('cancel',event=>event.preventDefault());
+$('ticket-acknowledge').onclick=()=>{ticketDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';};
+
 const fleetDialog=$<HTMLDialogElement>('fleet-dialog');
 let previewVehicle:VehicleId='roadster';
 let fleetPreview:FleetPreview|undefined;
@@ -167,19 +207,23 @@ scene.start(dt=>{
   $('station-status').classList.toggle('refilling',refilling);
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
-    $('mission-label').textContent=order.stage==='pickup'?'PICK UP / FOOD RUN':'DELIVER / FOOD RUN';
+    $('mission-label').textContent=order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
     $('mission').textContent=`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
     const paused=session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
-    $('hint').textContent=order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused?' · paused':''} · ${money(payoutFor(order))} if delivered now`;
+    $('hint').textContent=order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`;
     if(d.lastReward&&d.lastReward.id>lastRewardId){lastRewardId=d.lastReward.id;celebrateReward(d.lastReward);}
     $('delivery-stats').textContent=`${money(d.cash)} earned · ${clock(d.activeSeconds)} active${d.lastPayout!==null?` · last delivery +${money(d.lastPayout)}`:''}`;
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
-    $('police-status').textContent=chased?'POLICE CHASE · land and escape, or risk a $25 ticket':d.lastTicket!==null?`Last ticket −${money(d.lastTicket)} · flying near police starts a chase`:'Flying near police starts a chase.';
+    $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
     $('police-status').classList.toggle('chased',chased);
-    if(scoresDialog.open)updateScores();
+    if(scoresDialog.open)updateScores();if(awardsDialog.open)updateAwards();
+    const newAwards=player.achievements.unlocked.filter(id=>!seenAchievements.has(id));
+    for(const id of newAwards){seenAchievements.add(id);achievementQueue.push(id);}
+    if(newAwards.length&&!achievementTimer)announceAchievements();
+    if(d.lastTicket&&d.tickets>lastTicketCount&&!menu&&session.status!=='disconnected'&&!ticketDialog.open){lastTicketCount=d.tickets;showTicket(d.lastTicket);}
   }
   $('air').textContent=spec?.airThrusters?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=spec?.airThrusters?`${e.air}%`:'0%';
   $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e);

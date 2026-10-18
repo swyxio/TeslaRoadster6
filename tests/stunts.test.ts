@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {makeEntity,NEUTRAL,step,THRUSTER_REAR,THRUSTER_DOWN_LEFT,THRUSTER_DOWN_RIGHT,THRUSTER_SIDE_RIGHT,type Input,type World} from '../shared/game';
 import {STUNT_LOOP,STUNT_RAMP,rampHeight} from '../shared/map';
 import {initialDelivery} from '../shared/delivery';
+import {initialAchievements} from '../shared/achievements';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z})}],pickups:[],time:0};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements()}],pickups:[],time:0};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }

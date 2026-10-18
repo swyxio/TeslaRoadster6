@@ -32,3 +32,15 @@
 @media(max-height:550px) and (pointer:coarse){.map-panel{display:block;bottom:125px;left:16px;width:96px;padding:6px}.map-panel #minimap{width:82px;height:82px}.map-panel .map-title{font-size:7px;margin-bottom:3px}.map-panel .map-key{display:none}.reward{top:48%}.reward-card{min-width:160px;padding:8px 14px}.reward-card strong{font-size:40px}}
 @media(prefers-reduced-motion:reduce){.reward.celebrate{animation:none}.celebrate .confetti i{display:none}}
 @media(pointer:coarse),(max-width:800px){.touch-flight .hover-control{font-size:9px;min-width:54px}}
+
+/* Citation and session achievements */
+.ticket-dialog{width:min(480px,94vw);background:#2c2023;border:2px solid #fa766d;box-shadow:0 0 0 7px #df4f4f38,0 25px 80px #170b0dbb;text-align:center;padding:30px}
+.ticket-dialog::backdrop{background:#23080cdb;backdrop-filter:blur(6px)}
+.ticket-icon{display:grid;place-items:center;width:52px;height:52px;margin:0 auto 14px;border:2px solid #ff9b8e;border-radius:50%;color:#ff9b8e;font-size:32px;font-weight:800}
+.ticket-kicker{font:700 10px ui-monospace,monospace;letter-spacing:1.3px;color:#ffaaa0}.ticket-dialog h2{font-size:36px;margin:9px 0}.ticket-dialog p{font-size:14px;line-height:1.5;color:#f0d4c9}.ticket-amount{display:block;font-size:54px;line-height:1.1;color:#ff8d7d;margin:14px 0}.ticket-detail{font:11px/1.6 ui-monospace,monospace;color:#ffd7c4;padding:12px;background:#ffffff0b;border-radius:6px}.ticket-dialog .ticket-footnote{font-size:11px}.ticket-dialog .primary{background:#ff9583;color:#351a1a;margin-top:18px;justify-content:center}
+.awards-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}.awards-list li{display:flex;align-items:center;gap:14px;padding:14px;border:1px solid #ffffff20;border-radius:8px;background:#ffffff08}.award-icon{font-size:24px;color:#a2b6ad}.unlocked .award-icon{color:#ffd080}.awards-list strong{font-size:14px}.awards-list p{font-size:11px;color:#b4cabc;margin:4px 0 0;line-height:1.45}.award-status{margin-left:auto;white-space:nowrap;font:9px ui-monospace,monospace;color:#b7c8be}.unlocked .award-status{color:#ffcf85}#awards-dialog{width:min(620px,94vw)}
+.achievement-toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:21;max-width:90vw;text-align:center;pointer-events:none;padding:13px 20px;background:#193b37;border:1px solid #ffd080;border-radius:9px;color:#ffe0a5;font:700 11px ui-monospace,monospace;letter-spacing:1px;box-shadow:0 8px 30px #102b34a0}
+.mission #police-status.chased{color:#fff1df;background:#a72832;border-radius:4px;padding:5px 7px;animation:police-alarm 1s ease-in-out infinite alternate}
+@keyframes police-alarm{to{background:#e55645;box-shadow:0 0 12px #ff665688}}
+@media(max-height:550px){.ticket-dialog{padding:16px;max-height:94dvh}.ticket-icon{width:36px;height:36px;font-size:24px;margin-bottom:5px}.ticket-dialog h2{font-size:26px;margin:5px}.ticket-dialog p{margin:5px 0;font-size:12px}.ticket-amount{font-size:35px;margin:5px}.ticket-detail{padding:6px}.ticket-dialog .primary{margin-top:8px;min-height:40px}}
+@media(prefers-reduced-motion:reduce){.mission #police-status.chased{animation:none}}

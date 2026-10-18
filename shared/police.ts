@@ -1,11 +1,12 @@
 import type { Entity, Input, World } from './game';
 import { NEUTRAL } from './game';
-import { isSurface, nearbyBuildings } from './map';
+import { isSurface, nearbyBuildings, rampHeight } from './map';
+import { onRoof } from './achievements';
 import { engageAutopilot } from './traffic';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
-const SIGHT=85, PURSUIT_RANGE=110, ESCAPE_SECONDS=10, TICKET=25;
+const SIGHT=85, PURSUIT_RANGE=110, ESCAPE_SECONDS=10;
 const points:Point[]=[];
 const rows=[-240,-180,-120,-60,0,60,120,180,240];
 for(const x of [-360,-300,-240,-180,-120,-60,0,60,330,390,450,510,570]) for(const z of rows)
@@ -31,19 +32,25 @@ function route(from:Point,to:Point):Point[]{
   return result;
 }
 export function newPolice():PoliceState{return {targetId:null,lastSeen:0,nextPlan:0,path:[]};}
-function airborne(e:Entity){
-  if(e.y<=3||e.y>80||e.kind==='person')return false;
-  // A car sitting on a roof is not flying.
-  return !nearbyBuildings(e.x,e.z,4).some(b=>Math.abs(e.y-b.h)<.2&&Math.abs(e.x-b.x)<b.w/2+1&&Math.abs(e.z-b.z)<b.d/2+1);
+function flying(e:Entity){
+  if(e.y<=.05||e.kind==='person'||e.loopAngle!==null)return false;
+  const ramp=rampHeight(e.x,e.z);
+  if(ramp!==null&&Math.abs(e.y-ramp)<.08)return false;
+  return !onRoof(e);
 }
 export function updatePolice(world:World,dt:number):void {
+  for (const player of world.players) {
+    const e=world.entities.find(e=>e.id===player.entityId), flight=player.delivery.flight;
+    if(e && flying(e)){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,e.y);flight.lastAirborneAt=world.time;}
+    else if(world.time-flight.lastAirborneAt>3&&!world.entities.some(c=>c.police?.targetId===player.id)){flight.seconds=0;flight.peakHeight=0;}
+  }
   for(const cop of world.entities){
     const state=cop.police;if(!state)continue;
     let player=world.players.find(p=>p.id===state.targetId);
     let target=world.entities.find(e=>e.id===player?.entityId);
     if(!player||!target||world.time<player.delivery.ticketGraceUntil){state.targetId=null;player=undefined;target=undefined;}
     if(!target){
-      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&airborne(e)&&distance(cop,e)<SIGHT).sort((a,b)=>distance(cop,a.e!)-distance(cop,b.e!))[0];
+      const candidate=world.players.map(p=>({p,e:world.entities.find(e=>e.id===p.entityId)})).filter(({p,e})=>e&&world.time>=p.delivery.ticketGraceUntil&&e.y>3&&e.y<=80&&flying(e)&&distance(cop,e)<SIGHT).sort((a,b)=>distance(cop,a.e!)-distance(cop,b.e!))[0];
       if(candidate?.e){player=candidate.p;target=candidate.e;state.targetId=player.id;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
     }
     if(!player||!target)continue;
@@ -51,9 +58,14 @@ export function updatePolice(world:World,dt:number):void {
     if(d<PURSUIT_RANGE)state.lastSeen=world.time;
     if(world.time-state.lastSeen>ESCAPE_SECONDS){state.targetId=null;state.path=[];engageAutopilot(cop);continue;}
     if(target.y<1&&d<12){
-      target.speed*=Math.exp(-1.4*dt);
+      target.speed*=Math.exp(-2.2*dt);
       if(d<7&&Math.abs(target.speed)<4){
-        player.delivery.cash-=TICKET;player.delivery.lastTicket=TICKET;player.delivery.tickets++;player.delivery.ticketGraceUntil=world.time+20;
+        const delivery=player.delivery, flight=delivery.flight;
+        const durationFine=Math.min(120,Math.floor(flight.seconds/2)*8),heightFine=Math.min(80,Math.floor(flight.peakHeight/10)*10),repeatFine=delivery.tickets*35;
+        const amount=60+durationFine+heightFine+repeatFine;
+        delivery.tickets++;delivery.lastTicket={amount,offense:delivery.tickets,flightSeconds:Math.floor(flight.seconds),peakHeight:Math.round(flight.peakHeight),durationFine,heightFine,repeatFine};
+        delivery.cash-=amount;delivery.ticketGraceUntil=world.time+20;flight.seconds=0;flight.peakHeight=0;
+        target.autopilot=false;target.speed=0;target.vx=0;target.vz=0;target.pushX=0;target.pushZ=0;
         for(const other of world.entities)if(other.police?.targetId===player.id){other.police.targetId=null;other.police.path=[];engageAutopilot(other);}
         continue;
       }

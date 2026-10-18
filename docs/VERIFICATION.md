@@ -81,3 +81,8 @@ Primary Tesla pages read2026-10-17; site identity/address only, not live stall a
 - San Mateo Park Place,1200 Park Place: https://www.tesla.com/en_CA/findus/location/supercharger/sanmateosupercharger
 
 Cloudflare reference: https://developers.cloudflare.com/durable-objects/api/state/ documents a32,768 hibernation-API WebSocket connection ceiling and explicitly notes practical CPU/memory limits. This game uses standard accepted WebSockets and an active physics timer; that ceiling is not its gameplay capacity. Reference: https://developers.cloudflare.com/durable-objects/best-practices/websockets/ .
+
+
+## 2026-10-17 · Citations and session achievements
+
+In the isolated release worktree, `pnpm run ci` passed; the two-client Wrangler room integration passed on localhost. Shared-simulation tests cover scaling fines, repeat-offense grace, flight above the sight ceiling, supported stunt surfaces, rooftop delivery, ground/air eligibility, and a physically simulated two-jump Bay crossing. In Chrome, a solo flight triggered a pursuit and a real $60 citation; Escape left it open, acknowledgement resumed play, and the wallet showed the deduction. The achievement panel was inspected on desktop and at 390×844 emulated portrait; the citation and touch acknowledgement were inspected at 844×390 emulated landscape. A temporary scene fixture also showed the gold marker above its actual shared rooftop; it did not exercise a full manually driven delivery. These are emulations, not physical-device or multiplayer load tests.

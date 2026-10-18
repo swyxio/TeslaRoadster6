@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
-import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor } from '../shared/delivery';
+import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, isSurface, nearbyBuildings } from '../shared/map';
+import { BUILDINGS, STUNT_LOOP, STUNT_RAMP, rampHeight, isSurface, nearbyBuildings } from '../shared/map';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -11,7 +11,7 @@ function setup(){
 }
 function tick(world:World,input=NEUTRAL,n=1){for(let i=0;i<n;i++)step(world,new Map([['p',input]]),.05);}
 test('restaurant and fictional customer markers are on clear, reachable ground',()=>{
-  for(const place of [...RESTAURANTS,...CUSTOMERS]){
+  for(const place of [...RESTAURANTS,...CUSTOMERS.filter(c=>!c.rooftop)]){
     assert.ok(isSurface(place.x,place.z),place.name);
     assert.ok(!nearbyBuildings(place.x,place.z,4).some(b=>Math.abs(place.x-b.x)<b.w/2+2&&Math.abs(place.z-b.z)<b.d/2+2),place.name);
   }
@@ -60,7 +60,7 @@ test('police see nearby flight, chase, slow and ticket once; grace prevents inst
   const {world,player,car}=setup(),cop=makeEntity('police-test','model-3',0,0);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
   Object.assign(car,{x:0,z:30,y:10,vy:1});tick(world);assert.equal(cop.police.targetId,'p');
   Object.assign(car,{x:0,z:6,y:0,vy:0,speed:10});const before=car.speed;updatePolice(world,.05);assert.ok(car.speed<before);assert.equal(player.delivery.tickets,0);
-  car.speed=1;updatePolice(world,.05);assert.equal(player.delivery.cash,-25);assert.equal(player.delivery.tickets,1);assert.equal(cop.police.targetId,null);
+  car.speed=1;updatePolice(world,.05);assert.ok(player.delivery.cash<=-60);assert.equal(player.delivery.cash,-player.delivery.lastTicket!.amount);assert.equal(player.delivery.tickets,1);assert.equal(cop.police.targetId,null);
   Object.assign(car,{y:10,vy:1});updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.tickets,1);
 });
 test('police do not see grounded, distant or rooftop cars; an escaped chase expires',()=>{
@@ -84,4 +84,65 @@ test('police follow a turn instead of circling back to an intersection',()=>{
   Object.assign(car,{x:-60,z:0,y:20,vy:0});cop.yaw=0;
   for(let i=0;i<210;i++){car.y=20;car.vy=0;tick(world);}
   assert.ok(Math.hypot(cop.x-car.x,cop.z-car.z)<20,`police should follow the corner: ${cop.x}, ${cop.z}`);
+});
+
+
+test('rooftop customers use flat physical roofs and require an actual landing',()=>{
+  const {world,player,car}=setup();
+  for(const target of CUSTOMERS.filter(c=>c.rooftop)){
+    assert.ok(BUILDINGS.some(b=>b.x===target.x&&b.z===target.z&&b.h===target.y&&b.style==='midrise'),target.name);
+  }
+  const customer=CUSTOMERS.findIndex(c=>c.rooftop),target=CUSTOMERS[customer];
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer};
+  Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});
+  // Direct update proves a car below the roof cannot collect the delivery.
+  updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
+  Object.assign(car,{y:target.y+.03,vy:-5});updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
+  Object.assign(car,{x:target.x,z:target.z,y:target.y+2,speed:0,vy:-4});
+  tick(world,NEUTRAL,20);
+  assert.equal(car.y,target.y);assert.equal(player.delivery.completed,1);
+  assert.ok(player.achievements.unlocked.includes('roof-rider'));assert.ok(player.achievements.unlocked.includes('sky-delivery'));
+});
+
+test('the next eligible Roadster order is rooftop; ordinary cars receive ground orders',()=>{
+  for(const kind of ['roadster','model-3'] as const){
+    const {world,player,car}=setup();car.kind=kind;
+    const target=CUSTOMERS[player.delivery.order.customer];player.delivery.order.stage='dropoff';
+    Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});tick(world);
+    assert.equal(player.delivery.completed,1);assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,kind==='roadster');
+  }
+});
+
+test('citations increase with flight duration, height and repeat offenses without double charging',()=>{
+  function fine(seconds:number,height:number,prior:number){
+    const {world,player,car}=setup(),cop=makeEntity('cop','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
+    player.delivery.tickets=prior;player.delivery.flight={seconds,peakHeight:height,lastAirborneAt:world.time};
+    Object.assign(car,{x:0,z:6,y:0,speed:0});cop.police.targetId=player.id;cop.police.lastSeen=world.time;
+    updatePolice(world,.05);const result=player.delivery.lastTicket!;
+    assert.equal(player.delivery.tickets,prior+1);assert.equal(player.delivery.cash,-result.amount);assert.equal(result.offense,prior+1);
+    updatePolice(world,.05);assert.equal(player.delivery.cash,-result.amount);return result;
+  }
+  const first=fine(2,10,0),long=fine(12,10,0),high=fine(2,50,0),repeat=fine(2,10,2);
+  assert.ok(long.amount>first.amount);assert.ok(high.amount>first.amount);assert.equal(repeat.amount,first.amount+70);
+});
+
+
+test('flight above police sight ceiling continues to increase citation severity during a pursuit',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',0,0);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:0,z:6,y:90,vy:0});world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+  car.y=50;world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,player.id);
+  car.y=2;world.time+=.05;updatePolice(world,.05);assert.ok(player.delivery.flight.seconds>=.15);
+  car.y=90;for(let i=0;i<240;i++){world.time+=.05;updatePolice(world,.05);}
+  assert.ok(player.delivery.flight.seconds>=12);assert.equal(player.delivery.flight.peakHeight,90);
+  Object.assign(car,{y:0,vy:0,speed:0});world.time+=.05;updatePolice(world,.05);
+  assert.ok(player.delivery.lastTicket!.durationFine>=48);assert.equal(player.delivery.lastTicket!.heightFine,80);
+});
+
+test('supported stunt-loop and ramp travel is not police-detectable flight',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',STUNT_LOOP.x,STUNT_LOOP.z);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:STUNT_LOOP.x,z:STUNT_LOOP.z,y:24,vy:3,loopAngle:Math.PI});
+  world.time=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
+  const x=STUNT_RAMP.end-1,z=STUNT_RAMP.z;Object.assign(cop,{x,z});
+  Object.assign(car,{x,z,y:rampHeight(x,z),vy:2,loopAngle:null});
+  world.time+=.05;updatePolice(world,.05);assert.equal(cop.police.targetId,null);assert.equal(player.delivery.flight.seconds,0);
 });

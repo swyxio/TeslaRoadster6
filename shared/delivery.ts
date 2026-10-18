@@ -1,4 +1,7 @@
 import type { Entity, Input, Player, World } from './game';
+import { BUILDINGS } from './map';
+import { VEHICLES } from './vehicles';
+import { onRoof } from './achievements';
 
 // Real business identities; game positions are artistic, not surveyed locations.
 export const RESTAURANTS = [
@@ -11,31 +14,46 @@ export const RESTAURANTS = [
 ] as const;
 
 // Customer addresses are fictional and placed on streets in the compressed world.
-export const CUSTOMERS = [
-  { id: 'poly', name: '88 Poly Ave · SF', x: -120, z: 60 },
-  { id: 'fog', name: '12 Foggy Lane · SF', x: -240, z: 180 },
-  { id: 'cable', name: '45 Cable Court · SF', x: 0, z: -180 },
-  { id: 'coast', name: '19 Sunset Steps · SF', x: -300, z: 0 },
-  { id: 'oak', name: '77 Oak Walk · Oakland', x: 450, z: 0 },
-  { id: 'lake', name: '34 Lake Lane · Oakland', x: 510, z: -180 },
-  { id: 'port', name: '8 Port Place · Oakland', x: 330, z: 120 },
-] as const;
+type Customer = { id:string; name:string; x:number; z:number; y:number; rooftop:boolean };
+export const CUSTOMERS: Customer[] = [
+  { id: 'poly', name: '88 Poly Ave · SF', x: -120, z: 60, y: 0, rooftop: false },
+  { id: 'fog', name: '12 Foggy Lane · SF', x: -240, z: 180, y: 0, rooftop: false },
+  { id: 'cable', name: '45 Cable Court · SF', x: 0, z: -180, y: 0, rooftop: false },
+  { id: 'coast', name: '19 Sunset Steps · SF', x: -300, z: 0, y: 0, rooftop: false },
+  { id: 'oak', name: '77 Oak Walk · Oakland', x: 450, z: 0, y: 0, rooftop: false },
+  { id: 'lake', name: '34 Lake Lane · Oakland', x: 510, z: -180, y: 0, rooftop: false },
+  { id: 'port', name: '8 Port Place · Oakland', x: 330, z: 120, y: 0, rooftop: false },
+];
+// Pick flat, physically supported rooftops from the shared map rather than inventing altitudes.
+for (const {x,z,district,name} of [
+  {x:-78,z:-90,district:'sf',name:'Skyline Terrace · SF'},
+  {x:42,z:150,district:'sf',name:'Bayview Rooftop · SF'},
+  {x:350,z:-30,district:'oakland',name:'Oakland Sky Deck'},
+] as const) {
+  const building = BUILDINGS.filter(b=>b.district===district&&b.style==='midrise'&&b.w>=15&&b.d>=20&&b.h<=30)
+    .sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
+  if (!building) throw new Error(`No flat rooftop in ${district}`);
+  CUSTOMERS.push({ id:`roof-${district}-${x}-${z}`, name, x:building.x, z:building.z, y:building.h, rooftop:true });
+}
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number };
-export type DeliveryState = { cash: number; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: number | null; tickets: number; ticketGraceUntil: number };
+export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number };
+export type DeliveryState = { cash: number; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReward: { id: number; kind: 'pickup' | 'delivery'; amount: number } | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
-function orderFor(index: number, origin: { x: number; z: number }): Order {
+function orderFor(index: number, origin: { x: number; z: number }, canFly = false): Order {
   const restaurant = index % RESTAURANTS.length;
   // Never choose a destination beside the pickup.
-  const candidates = CUSTOMERS.map((customer, i) => ({ customer, i })).filter(({ customer }) => Math.hypot(customer.x - RESTAURANTS[restaurant].x, customer.z - RESTAURANTS[restaurant].z) > 100);
+  const candidates = CUSTOMERS.map((customer, i) => ({ customer, i })).filter(({ customer }) => customer.rooftop === (canFly && index % 3 === 1) && Math.hypot(customer.x - RESTAURANTS[restaurant].x, customer.z - RESTAURANTS[restaurant].z) > 100);
   const customer = candidates[Math.floor(index / RESTAURANTS.length + index * 3) % candidates.length].i;
   const distance = Math.hypot(CUSTOMERS[customer].x - RESTAURANTS[restaurant].x, CUSTOMERS[customer].z - RESTAURANTS[restaurant].z);
   const pickupDistance = Math.hypot(origin.x - RESTAURANTS[restaurant].x, origin.z - RESTAURANTS[restaurant].z);
   return { restaurant, customer, stage: 'pickup', elapsed: 0, pickupEstimate: Math.max(20, Math.round(pickupDistance / 8 + 15)), estimate: Math.max(30, Math.round(distance / 8 + 18)), base: 20 + Math.round(distance / 15) };
 }
 export function initialDelivery(origin: { x: number; z: number }): DeliveryState {
-  return { cash: 0, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0 };
+  return { cash: 0, activeSeconds: 0, activeUntil: 0, completed: 0, order: orderFor(0, origin), lastPayout: null, lastReward: null, lastTicket: null, tickets: 0, ticketGraceUntil: 0, flight: { seconds:0, peakHeight:0, lastAirborneAt:0 } };
 }
-export function orderTarget(order: Order) { return order.stage === 'pickup' ? RESTAURANTS[order.restaurant] : CUSTOMERS[order.customer]; }
+export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
+  return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
+}
 export function pickupBonusFor(order: Order): number {
   return Math.round(order.base * .4 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
 }
@@ -55,7 +73,7 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     delivery.order.elapsed += dt;
   }
   const target = orderTarget(delivery.order);
-  if (entity.y > 1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > 9) return;
+  if (Math.abs(entity.y - target.y) > (target.rooftop ? .05 : 1) || (target.rooftop && !onRoof(entity)) || entity.vy > .1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > (target.rooftop ? 6 : 9)) return;
   if (delivery.order.stage === 'pickup') {
     const bonus = pickupBonusFor(delivery.order);
     if (bonus > 0) reward(delivery, 'pickup', bonus);
@@ -67,7 +85,7 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     if (payout > 0) reward(delivery, 'delivery', payout);
     delivery.lastPayout = payout;
     delivery.completed++;
-    delivery.order = orderFor(delivery.completed, entity);
+    delivery.order = orderFor(delivery.completed, entity, entity.kind !== 'person' && VEHICLES[entity.kind].airThrusters);
   }
 }
 

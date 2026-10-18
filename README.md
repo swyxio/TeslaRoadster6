@@ -6,7 +6,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
-**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and a possible ticket. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
+**Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and potentially a costly citation; repeat and more serious flights increase the fine. Some Roadster orders lead to rooftops. Earn session achievements for rooftop landings, deliveries, and flying across the Bay. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
 
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
@@ -40,7 +40,7 @@ The network checks need the local Worker running. See [deployment](docs/DEPLOYME
 - **J:** Rocket jump (or fictional air jump). **H:** hold for fictional thruster hover. **X:** one-tap flip. **Shift:** air boost. **Q/E:** manual airborne roll. In the air, steering turns and W/S pitch.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
 - **V:** toggle autonomous cruise (manual input takes over). **G:** fleet catalog; select a new ride while stopped.
-- **L:** room leaderboard with cash and active play time.
+- **L:** room leaderboard with cash and active play time. **T:** session achievements.
 - **C:** alternate chase camera. **R:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake or Rev while steering to drift. Tap Jump and the airborne Flip button; hold Hover for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
@@ -63,7 +63,8 @@ shared/vehicles.ts  26-model registry with provenance and tuning
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous street loops
 shared/delivery.ts  Orders, restaurant data, cash and active-time scoring
-shared/police.ts    Police detection, chase and tickets
+shared/police.ts    Police detection, chase and severity-based tickets
+shared/achievements.ts  Session awards and flight tracking
 shared/stations.ts  Curated real station provenance + game placements
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
