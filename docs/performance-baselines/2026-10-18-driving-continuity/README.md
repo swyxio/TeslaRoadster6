@@ -133,6 +133,18 @@ write then committed and survived saved recovery. It also exercised a
 rejected predecessor and once-only settlement. The latter did not separately
 measure unrelated world progress during a failed write.
 
+At experimental `044e24d`, a bunched-delivery local browser capture completed
+the first straight with 111.46 m of authoritative movement and no rejected
+inputs sent during the drive; 13 neutral startup inputs were rejected before
+the drive. First W to a scene-transform movement over 1 mm was 22.4 ms. Host
+one-minute load was 28.81 → 26.91, so this is a functional observation, not a
+paired performance result. The [raw capture](separated-clock-functional.tar.gz)
+has SHA-256 `81a1b553030e3df730667e7f829472e4442e28f313b70be3c38f878cefdcd98a`.
+All 1,079 tests and the build passed on the corresponding working tree. A
+separate deterministic burst case on the experimental clock exposed a 14.19 m
+presentation cut in one frame. Clock convergence near traffic and recovery
+after such a burst are not established; the experiment remains on hold.
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's
