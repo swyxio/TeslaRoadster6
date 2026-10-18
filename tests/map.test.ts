@@ -1,12 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,EXTRA_LANDMARKS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,NATURAL_HILLS,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {STATIONS} from '../shared/stations';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {fitsParkingStall} from '../shared/parking';
 import {FERRY_DECK} from '../shared/ferry';
 import {ROUTES} from '../shared/traffic';
+import {BILLBOARDS,BILLBOARD_WIDTH} from '../shared/billboards';
+import {RACE_COURSES} from '../shared/race-courses';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {DOME} from '../shared/dome';
@@ -167,6 +169,34 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
   for(let z=AIRPORT_RUNWAY.z-AIRPORT_RUNWAY.d/2;z<=AIRPORT_RUNWAY.z+AIRPORT_RUNWAY.d/2;z+=10)assert.ok(isSurface(x,z),'runway');
  for(const island of LAKE_MERRITT.islands)assert.ok(isLand(island.x,island.z),'decorative island');
  assert.ok(!isSurface(MYSTERY_YACHT.x,MYSTERY_YACHT.z),'fictional yacht is offshore');
+});
+
+test('new building landmarks share collision identities and remain distinct from the prior landmarks',()=>{
+ assert.equal(EXTRA_LANDMARKS.length,100);
+ assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,105);
+ for(const place of EXTRA_LANDMARKS){
+  const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
+  if(place.id==='mission-peak')assert.equal(matching.length,0);
+  else {assert.equal(matching.length,1,place.id);assert.equal(matching[0].h,place.h,place.id);}
+ }
+});
+
+test('new landmarks, hills and signs clear parking, ferry and race gameplay areas',()=>{
+ const features=[
+  ...EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak').map(place=>({id:place.id,x:place.x,z:place.z,w:place.w,d:place.d,yaw:0})),
+  ...NATURAL_HILLS.map(hill=>({id:hill.id,x:(hill.minX+hill.maxX)/2,z:(hill.minZ+hill.maxZ)/2,w:hill.maxX-hill.minX,d:hill.maxZ-hill.minZ,yaw:0})),
+  ...BILLBOARDS.map((sign,i)=>({id:`billboard-${i}`,x:sign.x,z:sign.z,w:BILLBOARD_WIDTH+.35,d:1,yaw:sign.yaw})),
+ ];
+ const areas=[
+  ...PARKING_LOTS.flatMap(lot=>[lot.area,lot.approach].map((area,i)=>({id:`${lot.id}:${i?'approach':'lot'}`,x:area.x,z:area.z,w:area.width,d:area.length,yaw:area.yaw}))),
+  ...RACE_COURSES.flatMap(course=>course.gates.map(gate=>({id:`${course.id}:${gate.id}`,x:gate.x,z:gate.z,w:gate.width,d:12,yaw:gate.yaw}))),
+  ...ROADS.filter(road=>road.kind==='island').map((road,i)=>({id:`island-road-${i}`,...road,yaw:road.angle??0})),
+  {id:'sf-ferry-approach',x:0,z:-225,w:24,d:60,yaw:0},
+  {id:'ferry-corridor',x:0,z:(FERRY_DOCKS.sf.deckZ+FERRY_DOCKS.island.deckZ)/2,w:24,d:FERRY_DOCKS.sf.deckZ-FERRY_DOCKS.island.deckZ,yaw:0},
+ ];
+ for(const area of areas)for(const feature of features){
+  assert.ok(!contact(area,feature),`${feature.id} overlaps ${area.id}`);
+ }
 });
 
 test('autopilot can cross the Bay and return without teleporting',()=>{
