@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
-import { snapshotFor } from './snapshot';
+import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 
@@ -39,9 +39,16 @@ export class GameRoom extends DurableObject<Env> {
 
   fetch(): Response {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
-    if (this.sessions.size >= capacity) return reply('Room full. Choose another room.', 503);
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    // Browsers cannot read the HTTP status of a rejected WebSocket upgrade.
+    // Close an accepted socket with an application code so the client can
+    // distinguish a full room from a network or server failure.
+    if (this.sessions.size >= capacity) {
+      server.accept();
+      server.close(ROOM_FULL_CODE, 'Room full');
+      return new Response(null, { status: 101, webSocket: client });
+    }
     const id = crypto.randomUUID();
     const now = Date.now();
     server.accept();
@@ -98,8 +105,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.sessions.size) return;
     step(this.world, this.inputs, 0.05);
     if (++this.tickCount % 2) return;
+    const snapshot = prepareSnapshots(this.world);
     for (const [socket, session] of this.sessions) {
-      try { socket.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, session.id) })); } catch { this.disconnect(socket); }
+      try { socket.send(snapshot(session.id)); } catch { this.disconnect(socket); }
     }
   }
 

@@ -74,8 +74,8 @@ test('level gates stop ground driving, jumps and the north approach while leavin
   step(world,new Map(),.05);assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX);assert.equal(player.delivery.lastBlocked?.level,1);assert.equal(car.health,100);
   Object.assign(car,{x:109.9,z:60,y:20,yaw:-Math.PI/2,speed:70,vx:70,vz:0,vy:0,supportId:null});
   step(world,new Map(),.05);assert.ok(car.x<=ACCESS_BOUNDARIES.oaklandX,'flight cannot bypass the bridge gate');
-  Object.assign(car,{x:200,z:ACCESS_BOUNDARIES.alcatrazNorthZ-.1,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
-  step(world,new Map(),.05);assert.ok(car.z<ACCESS_BOUNDARIES.alcatrazNorthZ,'the northern corridor cannot enter Oakland');
+  Object.assign(car,{x:200,z:ACCESS_BOUNDARIES.islandNorthZ-.1,y:20,yaw:Math.PI,speed:70,vx:0,vz:70,vy:0,supportId:null});
+  step(world,new Map(),.05);assert.ok(car.z<ACCESS_BOUNDARIES.islandNorthZ,'the northern corridor cannot enter Oakland');
   player.delivery.level=1;Object.assign(car,{x:109.9,z:60,y:0,yaw:-Math.PI/2,speed:70,vx:0,vz:0,supportId:'ground'});
   step(world,new Map(),.05);assert.ok(car.x>ACCESS_BOUNDARIES.oaklandX);
   const npc=makeEntity('npc','model-3',109.9,60);Object.assign(npc,{yaw:-Math.PI/2,speed:70,npc:true});world.entities=[npc];
@@ -91,17 +91,17 @@ test('the island and its approach are open while the Oakland gates remain locked
   assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z-1),0,'air alongside the island');
   assert.equal(requiredLevelAt(600,FERRY_DOCKS.island.z+1),1,'northern water does not open Oakland');
   assert.equal(requiredLevelAt(111,60),1,'Bay Bridge remains locked');
-  assert.equal(requiredLevelAt(200,ACCESS_BOUNDARIES.alcatrazNorthZ+.1),1,'Alcatraz approach remains locked to the south');
+  assert.equal(requiredLevelAt(200,ACCESS_BOUNDARIES.islandNorthZ+.1),1,'the island approach remains locked to the south');
 
   // Cross the old x=430 boundary on the banked oval in either direction,
   // then repeat in the air. All moves use a level-zero controlled car.
   for(const direction of [-1,1])for(const airborne of [false,true]){
-    const {world,player,car}=setup(),x=ACCESS_BOUNDARIES.alcatrazMaxX-direction*.1,z=-1338;
+    const {world,player,car}=setup(),x=ACCESS_BOUNDARIES.islandMaxX-direction*.1,z=-1338;
     const surface=ovalBankSurface(x,z);assert.ok(surface,'fixture lies on the banked oval');
     Object.assign(car,{x,z,y:airborne?30:surface.height,yaw:direction>0?-Math.PI/2:Math.PI/2,
       speed:12,vx:direction*12,vy:0,vz:0,supportId:airborne?null:'island-oval'});
     step(world,new Map(),.05);
-    assert.ok(direction*(car.x-ACCESS_BOUNDARIES.alcatrazMaxX)>0,`${airborne?'air':'oval'} direction ${direction}`);
+    assert.ok(direction*(car.x-ACCESS_BOUNDARIES.islandMaxX)>0,`${airborne?'air':'oval'} direction ${direction}`);
     assert.equal(player.delivery.lastBlocked,null);
   }
 });

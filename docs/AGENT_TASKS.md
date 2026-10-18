@@ -4,7 +4,7 @@ All tasks begin: read AGENTS.md and docs/CONTRACTS.md, DESIGN.md, ASSETS.md. Pre
 
 ## Alternate UI model
 
-Own `src/main.ts` and `src/style.css`. Produce a coherent alternate menu/HUD treatment for desktop and touch. Preserve Tesla-only fleet selection, shop and pickup feedback, Session/Controls APIs, explicit solo versus multiplayer, room invitation, live/disconnected states, vehicle entry, lift/boost/roll/brake, recovery, air/condition/nearest-station feedback. Keep a visible menu/exit at every state. Test390×844 and844×390 plus desktop. Do not edit physics, station placements, assets, Wrangler or the protocol. Deliver screenshots of menu, driving and connection error; check touch target layout and input neutralization. Prefer making the existing DOM cleaner over adding a framework.
+Own `src/main.ts` and `src/style.css`. Produce a coherent alternate menu/HUD treatment for desktop and touch. Preserve Tesla-only fleet selection, shop and pickup feedback, Session/Controls APIs, automatic shared-room entry, room invitation, full-room alternatives, live/disconnected states, vehicle entry, lift/boost/roll/brake, recovery, air/condition/nearest-station feedback. Keep a visible menu/exit at every state. Test390×844 and844×390 plus desktop. Do not edit physics, station placements, assets, Wrangler or the protocol. Deliver screenshots of menu, driving and connection error; check touch target layout and input neutralization. Prefer making the existing DOM cleaner over adding a framework.
 
 ## Vehicle artist/coding model
 

@@ -32,9 +32,10 @@ test('both bridges traverse water and connect the correct shores',()=>{
 test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
  assert.ok(isRocketIsland(200,-1650));
  assert.ok(!isRocketIsland(0,-800));
- // The connected dome shares the island's protected area.
+ // The dome is on the SF waterfront, separate from the island.
  assert.ok(isLand(DOME.x,DOME.z));
- assert.ok(isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isRocketIsland(DOME.x,DOME.z));
+ assert.ok(!isLand(300,-850),'the old Alcatraz arena land is gone');
  for(let i=0;i<ISLAND_TRACK.length;i++){
   const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
   for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){
@@ -58,21 +59,21 @@ test('Rocket Island loop and ferry approaches are clear, supported and separated
  drive(0,-180,0,(_,z)=>z< -240);
  drive(0,-1250,Math.PI,(_,z)=>z> -1090);
 });
-test('the island-to-Dome road is supported, protected and clear of the bank and parking',()=>{
- const road=ROADS.find(r=>r.kind==='island'&&r.x===300&&r.z===-1090);
+test('the stadium street approach is supported and clear of the bank and parking',()=>{
+ const road=ROADS.find(r=>r.x===DOME.x&&r.z===(120+DOME.z-DOME.flatHalfWidth)/2&&r.w===18);
  assert.ok(road,'the shared approach is also rendered as a road');
- for(let z=-1246;z<=-934;z+=4)for(let x=road.x-12;x<=road.x+12;x+=4){
+ for(let z=120;z<=DOME.z-DOME.flatHalfWidth;z+=4)for(let x=road.x-8;x<=road.x+8;x+=4){
   assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
-  assert.ok(isRocketIsland(x,z),`approach not protected at ${x},${z}`);
+  assert.ok(!isRocketIsland(x,z),`approach must be on city land at ${x},${z}`);
   assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
-  assert.ok(!nearbyBuildings(x,z,7).length,`building near the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).some(b=>contact({x,z,w:1,d:1,yaw:0},{...b,yaw:0})),`building on the approach at ${x},${z}`);
  }
  const approach={...road,yaw:road.angle??0};
  for(const lot of PARKING_LOTS){
   const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
   assert.equal(contact(approach,area),null,`${lot.id} overlaps the Dome approach`);
  }
- for(const other of ROADS.filter(r=>r.kind==='island'&&r!==road))
+ for(const other of ROADS.filter(r=>r.kind==='island'))
   assert.equal(contact(approach,{...other,yaw:other.angle??0}),null,'the approach does not overlay a race course');
 });
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
@@ -93,6 +94,16 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  assert.ok(BUILDINGS.length>100);
 });
 
+test('the Rocket Dome plaza and street entrance are clear of city buildings and billboards',()=>{
+ const plaza={x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0};
+ const entrance={x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:28,d:DOME.z-DOME.flatHalfWidth-120,yaw:0};
+ for(const area of [plaza,entrance]){
+  for(const building of BUILDINGS)assert.equal(contact(area,{...building,yaw:0}),null,`building at ${building.x},${building.z}`);
+  for(const billboard of BILLBOARDS)assert.equal(contact(area,{...billboard,w:BILLBOARD_WIDTH,d:.35}),null,`billboard at ${billboard.x},${billboard.z}`);
+ }
+ assert.ok(!EXTRA_LANDMARKS.some(place=>place.id==='oracle-park'),'the Rocket Dome replaces the miniature ballpark');
+});
+
 test('charger playgrounds, posts and pickups clear roads, buildings, spawns and ferry',()=>{
  const world=createWorld();
  const ferry={x:0,z:(FERRY_DOCKS.sf.deckZ+FERRY_DOCKS.island.deckZ)/2,w:FERRY_DECK.width,
@@ -104,6 +115,7 @@ test('charger playgrounds, posts and pickups clear roads, buildings, spawns and 
   const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
   const approach={x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw};
   const pad={x:lot.pickup.x,z:lot.pickup.z,w:14,d:14,yaw:0};
+  assert.equal(contact(area,{x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0}),null,`${station.id}: stadium plaza`);
   assert.equal(contact(pad,approach),null,`${station.id}: pickup clears queue`);
   assert.equal(contact(area,ferry),null,`${station.id}: ferry`);
   for(const dx of [-20,-10,0,10,20])for(const dz of [-20,-10,0,10,20])

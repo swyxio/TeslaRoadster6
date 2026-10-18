@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## China Basin Rocket Dome · protocol v20 · 2026-10-18 Pacific
+
+- After integrating the additional Bay landmarks, `pnpm test` passed 286 tests and `pnpm build` passed both TypeScript checks; Vite retains its large-chunk warning. Simulation covers the shared waterfront, clear plaza and street approach, all 26 vehicle types entering and leaving without teleporting, island separation, wall charging at every tank level, and match scoring and vehicle-specific achievements including temporary Rocket pickups. The San Mateo Supercharger lot was relocated to clear the arena.
+- Local Wrangler room integration passed two-client play on protocol v20, including five goals, the authoritative winner and Roadster awards, spectator exclusion, wall refill visible to both clients, and exit. Local chat integration also passed. These are functional checks, not a load test.
+- Local Chrome desktop solo showed the street-facing stadium and player statues, and driving from the city reached the pitch. A manual drive through the exact marked gate was not established; gate traversal was covered in simulation. Gold wall markings and the refill hint were visible in desktop solo. The in-game scoreboard and arena were inspected at emulated 390×844 portrait and 844×390 landscape; a landscape touch on Drive accelerated the car. No browser console errors were observed. These are local and emulated checks, not physical-device evidence.
+
 ## Economy progression simulations · 2026-10-18 Pacific
 
 - On the checkout based on `e503e6c`, `pnpm test` passed 278 tests and `pnpm build` passed; Vite's existing large-chunk warning remains. The new standalone simulation and its tests also passed a separate TypeScript check.
@@ -444,6 +450,11 @@ In Chrome local solo play, the level-zero objective pointed into SF, attempting 
 
 After merging main's sky currents and configurable controls, 191 tests and `pnpm build` passed. The local two-client room integration passed on protocol v17, including sky-lane speed and refill. Chrome desktop confirmed the combined level-zero HUD and the bridge rejection; checkpoint guides now indicate that the restriction also applies in the air. The final airborne guides were not manually approached in flight.
 
+## 2026-10-18 · Rocket Dome match achievements
+
+After integrating current main, `pnpm test` passed 205 tests and `pnpm build` passed, including client and Worker typechecks; Vite's existing large-chunk warning remains. Simulation tests cover real ball collisions, Roadster/retrofit/stock classification, goals at either end, tied winners, spectators, leaving, disconnects, car switches, match resets and all five award rules. The local Wrangler room and chat integrations passed.
+
+The two-client Wrangler test played five goals, replicated the winner and both Roadster awards, and confirmed that the observing nonparticipant received none. An earlier run timed out because the observer exceeded the server's 30-second inactivity limit; the test now sends neutral input to keep it connected. Before the main integration, a Chrome solo five-goal Roadster match displayed both earned awards. After integrating main, the dome scoreboard was inspected on desktop and in 390×844 portrait and 844×390 landscape touch emulation; an emulated landscape touch on Drive accelerated the car. No console errors were observed. These are local checks, not physical-device or multiplayer load evidence.
 ## 2026-10-18 · More Bay landmarks and billboards
 
 In an isolated release worktree, `pnpm test` passed 208 tests and `pnpm build` passed, including TypeScript checks. The local Wrangler two-client room integration passed on protocol v18, which versions the new collision and terrain data; this is not a load test. Tests cover the 100 new landmark identities, physical envelopes, highway clearance, billboard placement, and driving over the three authored hills. The room landing check was updated to accept a supported landing on terrain or a roof rather than requiring sea-level ground.
@@ -456,6 +467,23 @@ After integrating the Rocket Island, ferry and parking changes from main, 273 te
 
 In the isolated article worktree after integrating the Rocket Island and landmark changes, `pnpm test` passed 273 tests and `pnpm build` passed, including both TypeScript checks. In Chrome, the static article was inspected at desktop and emulated 390×844 portrait and 844×390 landscape widths; the delivery-loop graphic was resized for readable phone labels. Local solo play supplied the street, flight, citation and cockpit screenshots from the integrated build. These are browser captures, not physical-device or multiplayer load tests.
 
+## 2026-10-18 · Automatic multiplayer and room overflow
+
+In the isolated multiplayer worktree, `pnpm test` passed 275 tests and `pnpm build` passed. Local Wrangler with `MAX_PLAYERS=2` passed the protocol-v20 two-client room integration and a separate capacity test: the third connection received close code 4003, an independently named room accepted a player, and a freed seat accepted a replacement. One earlier room integration run timed out at the existing soccer-goal assertion while tests and build were running concurrently; a subsequent isolated run passed.
+
+Chrome automatically entered `bay`, and a third client saw the full-room prompt. Naming a different room connected successfully, and keyboard driving advanced the car. The game and overflow prompt were inspected at desktop, emulated 390×844 portrait and 844×390 landscape. Keyboard activation of the alternate-room button worked; emulated pointer activation was not verified at landscape size. No physical phone was tested.
+
+Short local synthetic load checks with all clients and Wrangler on the same machine are not Cloudflare capacity measurements. With the cached serializer, 64 clients sent 12,608 inputs over 10 seconds, received 6.6 snapshots per client per second and advanced the room 6.5 simulated seconds; aggregate received snapshots were about 600 MiB. A 128-client, 6-second run received 3.07 snapshots per client per second and advanced 1.8 simulated seconds, with about 570 MiB received. There were no observed socket closures during either measurement. These runs show substantial local slowdowns and bandwidth; the 64-player production cap remains provisional. `scripts/load-room.ts` can repeat the experiment against a local server or an authorized preview.
+
+The Cloudflare staging preview advertised protocol v20 and an experimental capacity of 128. Its two-client gameplay integration passed. In separate four-second synthetic tests from one client machine, 64 clients stayed connected, received 10.93 snapshots per client per second, advanced 4.2 simulated seconds and received about 397 MiB in aggregate; the p95 snapshot gap was 154 ms. At 128 clients, all stayed connected, but received 2.45 snapshots per client per second, advanced 1.1 simulated seconds and received about 302 MiB; the p95 snapshot gap was 1,585 ms. Client processing and network conditions also affect these measurements. These short runs are not a soak test, a measurement of input latency or evidence that 64 players is reliably playable.
+
+After integrating main's updated Rocket Island physics and bumping the protocol to v21, `pnpm test` passed 308 tests and `pnpm build` passed. Local Wrangler passed the two-client gameplay integration and the two-seat overflow integration. In Chrome, a newly connected player drove immediately without opening a menu; in a full two-seat room, choosing the same room retained the connection and active delivery time. The earlier Cloudflare load figures describe the prior v20 preview, not this combined v21 build.
+
+The combined v21 Cloudflare branch preview passed the two-client gameplay integration. Short synthetic tests from one client machine again show that connected sockets are not a capacity guarantee: 64 clients received 4.02 snapshots per client per second and observed 1.5 simulated seconds over 4.01 seconds; 128 clients received 0.24 snapshots per client per second over 4.13 seconds, and the sampled player received too few snapshots to measure simulation progress. No sockets closed during the measurement, although the 128-client process needed interruption while closing. A subsequent 32-client run observed 1.6 simulated seconds over four seconds, but may have been affected by residual load from the prior test. These are brief, synthetic observations, not a sustained or isolated capacity benchmark. Production's 64-player cap remains provisional, and performance may degrade well before the room is full.
+
+After incorporating the driving-feel and collision changes from main, protocol v22 passed 316 tests, the build, the local two-client room integration and the two-seat full-room/alternate-room integration. The v21 Cloudflare load results above do not measure this merged v22 build.
+
+After integrating the China Basin Dome and economy updates, protocol v23 passed 337 tests, the build, the local two-client gameplay integration and the two-seat full-room/alternate-room integration. Earlier Cloudflare load results do not measure this v23 build.
 ## 2026-10-18 · Driving feel, supplies and surfaces
 
 In the isolated worktree, `pnpm test` passed 281 tests and `pnpm build` passed, including both TypeScript checks; Vite retains its large-chunk warning. Simulation tests cover direction changes, controlled airborne momentum, repeated jump velocity, supply rewards, rocket-pad eligibility, the stunt loop and curved-roof landings. A local Wrangler two-client room integration passed on protocol v20; a separate run timed out at its existing flip-completion assertion, so that integration remains susceptible to intermittent failure. This was not a load test.
@@ -463,3 +491,11 @@ In the isolated worktree, `pnpm test` passed 281 tests and `pnpm build` passed, 
 In Chrome solo play, temporary spawn fixtures showed a supply pickup restoring air and awarding cash, and a thermal showing the refill message and increasing air. The thermal display was inspected at desktop and at emulated 390×844 portrait and 844×390 landscape; the final nearby-label adjustment was rechecked at desktop. Fixtures were removed. No physical device, full manual loop drive, or ferry landing was tested; further playtesting is needed to judge the handling. The collision surfaces remain stylized approximations, not exact collision meshes for every landmark.
 
 After integrating main's island, ferry and permanent Rocket kit changes, all 313 tests and the build passed. The local two-client Wrangler room integration passed on protocol v21; it is not a ferry-crossing or load test. Chrome showed the integrated solo game on desktop and in emulated portrait and landscape layouts, with landscape touch controls visible. No physical device was tested.
+
+## 2026-10-18 · China Basin Dome integrated with permanent kits
+
+After integrating main's flight, parking, island and permanent Rocket kit changes, `pnpm test` passed 328 tests and `pnpm build` passed both TypeScript checks; the existing Vite large-chunk warning remains. Rocket kits acquired by pickup or purchase both count as retrofits for Dome achievements. Regression tests cover the stadium approach, all vehicle gate sizes, clear ambient traffic routes and permanent-kit awards. A local Wrangler two-client room test passed on protocol v22, including a five-goal match, replicated awards, spectator exclusion and wall refill; local chat integration also passed. This is not a load test.
+
+Chrome solo play showed the integrated arena and score on desktop and emulated 390×844 portrait and 844×390 landscape. In landscape, the wall-refill hint remained visible and an emulated touch on Drive accelerated the car. No physical device was tested.
+
+After integrating the economy simulation proposal from main, all 334 tests passed; it does not change the playable simulation.

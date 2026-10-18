@@ -13,11 +13,11 @@ export const LEVELS = [
   { level:3, name:'San Jose', deliveries:8, earned:350 },
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
-// Vertical gates also apply to flyers; the northern Alcatraz approach remains open.
-export const ACCESS_BOUNDARIES = { oaklandX:110, alcatrazNorthZ:-650, alcatrazMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
+// Vertical gates also apply to flyers; the northern island approach remains open.
+export const ACCESS_BOUNDARIES = { oaklandX:110, islandNorthZ:-650, islandMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
 const sfPlayground = PARKING_LOTS.find(lot=>lot.id==='sf-playground')!;
 export function requiredLevelAt(x:number,z:number):Level {
-  // The island, Dome, and their connecting approach are open from the start.
+  // The island and its approach, and the China Basin Dome, are open from the start.
   if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
   if(z>ACCESS_BOUNDARIES.bayMaxZ){
@@ -26,11 +26,11 @@ export function requiredLevelAt(x:number,z:number):Level {
     if(Math.abs(x-area.x)<=area.width/2&&z<=area.z+area.length/2)return 0;
     return 2;
   }
-  // The island and adjacent air remain open; the narrower Alcatraz corridor
+  // The island and adjacent air remain open; the narrower northern corridor
   // still prevents flying south into locked Oakland.
   if(z<=FERRY_DOCKS.island.z)return 0;
-  const alcatrazApproach=z<ACCESS_BOUNDARIES.alcatrazNorthZ&&x<ACCESS_BOUNDARIES.alcatrazMaxX;
-  return x>ACCESS_BOUNDARIES.oaklandX&&!alcatrazApproach?1:0;
+  const islandApproach=z<ACCESS_BOUNDARIES.islandNorthZ&&x<ACCESS_BOUNDARIES.islandMaxX;
+  return x>ACCESS_BOUNDARIES.oaklandX&&!islandApproach?1:0;
 }
 
 // Real business identities; game positions are artistic, not surveyed locations.

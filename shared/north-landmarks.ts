@@ -44,7 +44,7 @@ export const NORTH_LANDMARKS: readonly NorthLandmark[] = [
  {id:'bill-graham',name:'Bill Graham Civic Auditorium',x:-150,z:30,w:16,d:14,h:15,district:'sf',shape:'opera'},
  {id:'orpheum',name:'Orpheum Theatre',x:-90,z:30,w:16,d:14,h:18,district:'sf',shape:'theatre'},
  {id:'sfmoma',name:'San Francisco Museum of Modern Art',x:-30,z:30,w:16,d:14,h:21,district:'sf',shape:'modern'},
- {id:'oracle-park',name:'Oracle Park',x:30,z:90,w:16,d:16,h:13,district:'sf',shape:'stadium'},
+ {id:'yerba-buena-arts',name:'Yerba Buena Center for the Arts',x:30,z:90,w:16,d:16,h:13,district:'sf',shape:'modern'},
  {id:'chase-center',name:'Chase Center',x:-30,z:90,w:16,d:16,h:14,district:'sf',shape:'stadium'},
  {id:'point-bonita',name:'Point Bonita Lighthouse',x:-380,z:-520,w:12,d:12,h:19,district:'sf',shape:'lighthouse'},
  {id:'battery-spencer',name:'Battery Spencer',x:-300,z:-480,w:16,d:14,h:8,district:'sf',shape:'battery'},

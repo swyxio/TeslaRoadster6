@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { DOME } from '../shared/dome';
+import { addDomeStadium } from './dome-stadium';
 
 export type DomeBallPose = { x:number; y:number; z:number };
 
@@ -9,6 +10,7 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
   group.name='rocket-dome';
   group.position.set(DOME.x,0,DOME.z);
   const {halfLength:L,flatHalfWidth:W,radius:R,goalHalfWidth:G,goalHeight:H}=DOME;
+  const gateAngle=Math.acos(1-DOME.gateHeight/R);
 
   // The flat playing surface occupies the level portion of the shared capsule.
   // Alternating panels share one draw call and never extend up the curved walls.
@@ -68,10 +70,17 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
   for(const side of [-1,1])for(let i=0;i<segments;i++){
     const a=i*Math.PI/segments,b=(i+1)*Math.PI/segments;
     const p=(x:number,t:number)=>[x,R-R*Math.cos(t),side*(W+R*Math.sin(t))];
-    quad(p(-L,a),p(L,a),p(L,b),p(-L,b));
+    // A street-level opening is cut into the north wall at the same width and
+    // height as the shared driving gate. All remaining panels trace physics.
+    if(side<0&&a<gateAngle){
+      const top=Math.min(b,gateAngle),gate=DOME.gateHalfWidth;
+      quad(p(-L,a),p(-gate,a),p(-gate,top),p(-L,top));
+      quad(p(gate,a),p(L,a),p(L,top),p(gate,top));
+      if(b>gateAngle)quad(p(-L,gateAngle),p(L,gateAngle),p(L,b),p(-L,b));
+    }else quad(p(-L,a),p(L,a),p(L,b),p(-L,b));
   }
   const shellGeometry=new T.BufferGeometry();shellGeometry.setAttribute('position',new T.Float32BufferAttribute(shellPositions,3));shellGeometry.setIndex(shellIndices);shellGeometry.computeVertexNormals();
-  const shellMaterial=new T.MeshBasicMaterial({color:0x9bd5dd,transparent:true,opacity:.095,depthWrite:false,side:T.DoubleSide});
+  const shellMaterial=new T.MeshBasicMaterial({color:0x73afbf,transparent:true,opacity:.17,depthWrite:false,side:T.DoubleSide});
   const shell=new T.Mesh(shellGeometry,shellMaterial);shell.name='dome-shell';group.add(shell);
 
   // Concave end caps leave true rectangular visual openings at floor level.
@@ -94,12 +103,16 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
     segment(x,2*R-inset,-W,x,2*R-inset,W);
     for(const side of [-1,1])for(let i=0;i<segments;i++){
       const a=i*Math.PI/segments,b=(i+1)*Math.PI/segments;
-      segment(x,R-gridR*Math.cos(a),side*(W+gridR*Math.sin(a)),x,R-gridR*Math.cos(b),side*(W+gridR*Math.sin(b)));
+      if(side<0&&Math.abs(x)<DOME.gateHalfWidth&&b<=gateAngle)continue;
+      const from=side<0&&Math.abs(x)<DOME.gateHalfWidth?Math.max(a,gateAngle):a;
+      segment(x,R-gridR*Math.cos(from),side*(W+gridR*Math.sin(from)),x,R-gridR*Math.cos(b),side*(W+gridR*Math.sin(b)));
     }
   }
   for(const z of [-W,-W/2,0,W/2,W])segment(-L,2*R-inset,z,L,2*R-inset,z);
   for(const side of [-1,1])for(let i=1;i<segments;i+=3){
-    const a=i*Math.PI/segments,y=R-gridR*Math.cos(a),z=side*(W+gridR*Math.sin(a));segment(-L,y,z,L,y,z);
+    const a=i*Math.PI/segments,y=R-gridR*Math.cos(a),z=side*(W+gridR*Math.sin(a));
+    if(side<0&&a<gateAngle){segment(-L,y,z,-DOME.gateHalfWidth,y,z);segment(DOME.gateHalfWidth,y,z,L,y,z);}
+    else segment(-L,y,z,L,y,z);
   }
   const gridGeometry=new T.BufferGeometry();gridGeometry.setAttribute('position',new T.Float32BufferAttribute(grid,3));
   const gridLines=new T.LineSegments(gridGeometry,new T.LineBasicMaterial({color:0xb5e9e5,transparent:true,opacity:.32,depthWrite:false}));gridLines.name='dome-grid';group.add(gridLines);
@@ -124,6 +137,8 @@ export function createRocketDome(): {group:T.Group; update:(ball:DomeBallPose)=>
     const netGeometry=new T.BufferGeometry();netGeometry.setAttribute('position',new T.Float32BufferAttribute(net,3));
     group.add(new T.LineSegments(netGeometry,new T.LineBasicMaterial({color,transparent:true,opacity:.65})));
   }
+
+  addDomeStadium(group);
 
   // A faceted, high-contrast ball is a single mesh. Its pose is only ever
   // assigned from shared simulation state; rendering does not advance it.
