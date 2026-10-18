@@ -24,9 +24,9 @@ test('both bridges traverse water and connect the correct shores',()=>{
 test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
  assert.ok(isRocketIsland(200,-1650));
  assert.ok(!isRocketIsland(0,-800));
- // The existing Alcatraz dome and new playground have separate safety boundaries.
+ // The connected dome shares the island's protected area.
  assert.ok(isLand(DOME.x,DOME.z));
- assert.ok(!isRocketIsland(DOME.x,DOME.z));
+ assert.ok(isRocketIsland(DOME.x,DOME.z));
  for(let i=0;i<ISLAND_TRACK.length;i++){
   const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
   for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){

@@ -1,0 +1,30 @@
+import type { Entity } from './game';
+import { VEHICLES } from './vehicles';
+
+// Fictional workshops beside streets and the compressed highway corridor; not real SpaceX sites.
+export const SHOPS = [
+  {id:'mission', name:'SF · Mission', x:-165, z:180},
+  {id:'richmond', name:'SF · Richmond', x:-285, z:-120},
+  {id:'oakland', name:'Oakland · Port', x:345, z:120},
+  {id:'san-mateo', name:'San Mateo', x:-1237, z:2007},
+  {id:'palo-alto', name:'Palo Alto', x:-792, z:4001},
+  {id:'mountain-view', name:'Mountain View', x:-67, z:6008},
+  {id:'san-jose', name:'San Jose', x:1526, z:8798},
+  {id:'fremont', name:'Fremont', x:1606, z:5987},
+  {id:'east-bay', name:'East Bay', x:1325, z:2990},
+] as const;
+export const SHOP_RADIUS=12;
+export const UPGRADES = {
+  rocket: {name:'Rocket kit', price:60, description:'Jump, hover, boost and flip in any vehicle.'},
+  economy: {name:'Efficient nozzles', price:45, description:'Flight uses 25% less air.'},
+  motor: {name:'Sport motor', price:45, description:'25% quicker acceleration and 10% higher road speed.'},
+  armor: {name:'Impact armor', price:35, description:'Halves crash and hard-landing damage.'},
+  service: {name:'Repair & refill', price:12, description:'Restore condition and fill your air tank.'},
+} as const;
+export type UpgradeId=keyof typeof UPGRADES;
+export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean};
+export function hasRockets(e:Entity):boolean{return e.kind!=='person'&&(VEHICLES[e.kind].airThrusters||e.upgrades.rocket);}
+export function shopFor(e:Entity){
+  if(e.kind==='person'||e.supportId!=='ground'||Math.abs(e.speed)>=1||Math.hypot(e.pushX,e.pushZ)>=1||Math.abs(e.vy)>=1)return undefined;
+  return SHOPS.find(s=>Math.hypot(e.x-s.x,e.z-s.z)<SHOP_RADIUS);
+}

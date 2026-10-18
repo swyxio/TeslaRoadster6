@@ -1,5 +1,6 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import type { UpgradeId } from '../shared/upgrades';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
   world: World = createWorld();
@@ -47,8 +48,9 @@ export class Session {
     }
   }
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
-  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')parkingAction(this.world,this.id,action);else this.send({type:'parking',action});}
+  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')return parkingAction(this.world,this.id,action);this.send({type:'parking',action});}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
+  buyUpgrade(upgrade:UpgradeId){if(this.status==='solo')buyUpgrade(this.world,this.id,upgrade);else this.send({type:'upgrade',upgrade});}
   action(type: 'interact' | 'reset' | 'autopilot' | 'dome') {
     if (this.status === 'solo') (type === 'interact' ? interact : type==='autopilot'?toggleAutopilot:type==='dome'?travelDome:resetPlayer)(this.world, this.id);
     else this.send({type});

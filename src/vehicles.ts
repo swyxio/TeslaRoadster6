@@ -82,6 +82,22 @@ export function setThrusterEffects(root:T.Object3D,mask:number,time:number,capab
   }
 }
 
+/** Add visible fictional retrofit hardware to a vehicle when its shared kit is installed. */
+export function addRocketKit(root:T.Group,kind:VehicleId){
+  if(root.getObjectByName('rocket-kit'))return;
+  const spec=VEHICLES[kind],w=spec.width,l=spec.length;
+  const kit=new T.Group();kit.name='rocket-kit';root.add(kit);
+  const jets=root.getObjectByName('jets') as T.Group;
+  for(const side of [-1,1]){
+    const label=side<0?'l':'r';
+    box(kit,side*w*.39,.34,l*.47,.32,.3,.35,0x9b7be8);
+    nozzle(kit,jets,`rear_${label}`,side*w*.39,.34,l*.52,new T.Vector3(0,0,1));
+    for(const [end,z] of [['f',-l*.33],['r',l*.33]] as const)
+      nozzle(kit,jets,`down_${label}_${end}`,side*w*.38,.2,z,new T.Vector3(0,-1,0));
+    nozzle(kit,jets,`side_${label}`,side*w*.5,.48,-l*.35,new T.Vector3(side,0,0));
+  }
+}
+
 /** A low-poly side silhouette extruded across X. Profile tuples are [Z,Y]. */
 function profile(parent: T.Object3D, width: number, points: [number, number][], color: number) {
   const key = JSON.stringify([width, points]);

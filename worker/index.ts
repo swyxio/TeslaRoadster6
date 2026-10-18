@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { snapshotFor } from './snapshot';
 
@@ -75,6 +75,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
+    if(message.type==='upgrade')buyUpgrade(this.world,session.id,message.upgrade);
   }
 
   private tick(): void {

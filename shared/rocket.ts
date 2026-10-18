@@ -14,12 +14,13 @@ type RocketEntity = {
   air: number;
   /** Absolute simulation time; zero means no temporary upgrade. */
   rocketUntil: number;
+  upgrades?: { rocket: boolean };
 };
 type RocketPad = { x: number; z: number; active: boolean; readyAt?: number };
 
 /** Capability belongs to the vehicle, never the driver or fleet registry. */
-export function hasRocket(entity: Pick<RocketEntity, 'kind' | 'rocketUntil'>, time: number): boolean {
-  return entity.kind !== 'person' && (VEHICLES[entity.kind].airThrusters || time < entity.rocketUntil);
+export function hasRocket(entity: Pick<RocketEntity, 'kind' | 'rocketUntil' | 'upgrades'>, time: number): boolean {
+  return entity.kind !== 'person' && (VEHICLES[entity.kind].airThrusters || entity.upgrades?.rocket === true || time < entity.rocketUntil);
 }
 
 /**
@@ -39,7 +40,7 @@ export function updateRocketPickup(pad: RocketPad, entities: RocketEntity[], tim
   if (!winner || winner.kind === 'person') return null;
   winner.air = 100;
   // Stock Rocket capability is permanent; pickups only refill its tank.
-  winner.rocketUntil = VEHICLES[winner.kind].airThrusters ? 0 : time + ROCKET_DURATION;
+  winner.rocketUntil = VEHICLES[winner.kind].airThrusters || winner.upgrades?.rocket ? 0 : time + ROCKET_DURATION;
   pad.active = false;
   pad.readyAt = time + ROCKET_PAD_COOLDOWN;
   return winner.id;

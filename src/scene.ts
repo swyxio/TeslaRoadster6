@@ -5,7 +5,7 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, FERRY_DOCKS, domeSurface, supportNormal } from '../shared/map';
+import { DISTRICTS, FERRY_DOCKS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { STATIONS } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
@@ -14,9 +14,10 @@ import { hasRocket } from '../shared/rocket';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, addRocketKit, setThrusterEffects } from './vehicles';
 import { addIslandStunts } from './island-stunts';
 import { cockpitPose } from './camera';
+import { SHOPS } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 
@@ -34,13 +35,14 @@ export class GameScene {
   private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
-  private pickups = new Map<string,T.Mesh>();
+  private pickups = new Map<string,T.Group>();
   private ferry = new T.Group();
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
+  private shopLabels:T.Sprite[]=[];
   private objective=new T.Group();
   private dome=createRocketDome();
   private ballPosition=new T.Vector3();
@@ -160,6 +162,16 @@ export class GameScene {
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
       const label=this.label('ϟ  '+s.name);label.position.set(s.x,6,s.z);scene.add(label);
     });
+    const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
+    const sign=signCanvas.getContext('2d')!;sign.fillStyle='#192332';sign.fillRect(0,0,512,128);sign.strokeStyle='#c997ff';sign.lineWidth=5;sign.strokeRect(3,3,506,122);sign.textAlign='center';sign.fillStyle='#fff0d2';sign.font='bold 37px system-ui';sign.fillText('SPACEX  /  SHOP',256,56);sign.fillStyle='#d5adff';sign.font='bold 22px system-ui';sign.fillText('ROCKETS · UPGRADES',256,95);
+    const signMaterial=new T.SpriteMaterial({map:new T.CanvasTexture(signCanvas),transparent:true});
+    SHOPS.forEach(s=>{
+      const y=terrainHeight(s.x,s.z)??0;
+      const ring=new T.Mesh(new T.RingGeometry(8.5,9.3,48),new T.MeshBasicMaterial({color:0xc48cff,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,y+.16,s.z);scene.add(ring);
+      for(const side of [-1,1])box(scene,s.x+side*8,y+3,s.z-8,.45,6,.45,0x6a5882);
+      box(scene,s.x,y+6,s.z-8,16,.45,.6,0x9e7bc5);
+      const label=new T.Sprite(signMaterial);label.position.set(s.x,y+8,s.z-8);label.scale.set(9,2.25,1);this.shopLabels.push(label);scene.add(label);
+    });
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
 
@@ -229,7 +241,10 @@ export class GameScene {
       mesh.visible=!(cockpit&&e.id===controlled?.id);
       const target=new T.Vector3(e.x,e.y,e.z);
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,alpha);
-      if(e.kind!=='person')setThrusterEffects(mesh,e.thrusters,world.time,hasRocket(e,world.time));
+      if(e.kind!=='person'){
+        if(e.upgrades.rocket&&!VEHICLES[e.kind].airThrusters)addRocketKit(mesh,e.kind);
+        setThrusterEffects(mesh,e.thrusters,world.time,hasRocket(e,world.time));
+      }
       const red=mesh.getObjectByName('police-red'),blue=mesh.getObjectByName('police-blue');if(red&&blue){red.visible=!e.police?.targetId||Math.floor(world.time*4)%2===0;blue.visible=!e.police?.targetId||Math.floor(world.time*4)%2===1;}
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
@@ -250,8 +265,17 @@ export class GameScene {
     }
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
-      if(!mesh){mesh=new T.Mesh(new T.OctahedronGeometry(pickup.kind==='rocket'?2:1,0),new T.MeshStandardMaterial({color:pickup.kind==='rocket'?0xdf8bff:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='rocket'?0x653180:pickup.kind==='repair'?0x3a6b45:0x735024}));mesh.position.set(pickup.x,1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);}
-      mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=1.7+Math.sin(performance.now()*.002)*.3;
+      if(!mesh){
+        mesh=new T.Group();
+        if(pickup.kind==='rocket'){
+          const glow=new T.Mesh(new T.TorusGeometry(1.65,.12,8,32),new T.MeshBasicMaterial({color:0xd89aff}));mesh.add(glow);
+          const body=new T.Mesh(new T.CylinderGeometry(.37,.48,1.6,8),new T.MeshStandardMaterial({color:0xf6eaff,emissive:0x56377a}));mesh.add(body);
+          const tip=new T.Mesh(new T.ConeGeometry(.37,.65,8),new T.MeshStandardMaterial({color:0xc47aff,emissive:0x43215d}));tip.position.y=1.1;mesh.add(tip);
+          for(const side of [-1,1])box(mesh,side*.52,-.55,0,.3,.5,.18,0xb96ff7);
+        }else mesh.add(new T.Mesh(new T.OctahedronGeometry(1,0),new T.MeshStandardMaterial({color:pickup.kind==='repair'?0x9ce5aa:0xffd577,emissive:pickup.kind==='repair'?0x3a6b45:0x735024})));
+        mesh.position.set(pickup.x,(terrainHeight(pickup.x,pickup.z)??0)+1.7,pickup.z);this.pickups.set(pickup.id,mesh);this.scene.add(mesh);
+      }
+      mesh.visible=pickup.active;mesh.rotation.y+=dt;mesh.position.y=(terrainHeight(pickup.x,pickup.z)??0)+1.7+Math.sin(performance.now()*.002)*.3;
     }
     const ball=world.soccer.ball,ballTarget=new T.Vector3(ball.x,ball.y,ball.z);
     if(!this.ballReady||this.ballPosition.distanceTo(ballTarget)>12){this.ballPosition.copy(ballTarget);this.ballReady=true;}
@@ -294,7 +318,7 @@ export class GameScene {
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }
-    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;this.renderer.render(this.scene,this.camera);
+    this.camera.updateMatrixWorld();for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>80;for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){let last=performance.now();this.renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.1);last=now;frame(dt);});}
 }

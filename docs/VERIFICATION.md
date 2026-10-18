@@ -1,5 +1,13 @@
 # Verification · 2026-10-17 Pacific
 
+## Ferry, parking, temporary rockets and connected dome · protocol v13 · local checks
+
+- `pnpm test` passed 216 tests and `pnpm build` passed browser and Worker typechecks and Vite. The existing chunk-size warning remains (743 kB main JavaScript, 210 kB gzip).
+- Local Wrangler two-client integration passed the ferry and activity snapshots, Rocket pads, dome ball and goals, movement, delivery and disconnect checks. This was not a full multiplayer ferry crossing or a load test.
+- Shared-simulation checks cover driving onto and across the ferry, parking rounds and queue overtakes, temporary upgrade expiry, purchased kits, and driving from the island into the dome. The direct dome action returns visitors to their original Bay or island side.
+- In local Chrome, a temporary spawn fixture placed the car in the island parking approach: Park It assigned a stall and Cut the queue joined with the correct position and countdown. Separate temporary spawn fixtures displayed a Model 3 with a 90-second Rocket and a car secured on the ferry after departure. The fixtures were removed before the final build. These do not prove a full manually driven route or multiplayer crossing.
+- Desktop and 390×844 portrait / 844×390 landscape emulation showed the driving HUD and activity controls. The dome, ball and scoreboard were visible in landscape. The parking action gave location guidance away from a lot. Browser emulation did not establish a successful touch drive on this final checkout; no physical device was tested.
+
 ## Rocket Island, cockpit and Rocket Dome · protocol v12, local checks · 2026-10-17 Pacific
 
 - `pnpm test` passed 204/204 and `pnpm build` passed both TypeScript checks and Vite. The main JavaScript is 734 kB (207 kB gzip); Vite retains its chunk-size warning.
@@ -18,6 +26,19 @@ The protocol v11 island and dome records below describe separate builds.
 - `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
 - In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
 - Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
+## Rocket shops integrated with Rocket Dome · protocol v12 · 2026-10-17 Pacific
+
+- After merging the dome implementation, `pnpm run ci` passed 156 tests, both typechecks and the build; Vite's chunk-size warning remains. A new regression drives an upgraded Zoox onto the dome walls and verifies the kit survives travel.
+- Local Wrangler's two-client room integration passed for dome entry, a shared ball impact and goal, exit, Tesla-only selection, upgrade snapshot fields and a rejected purchase. Successful purchases remain covered by the shared simulation and solo UI fixture, not a live room transaction. This is not a load test.
+- The staging preview of commit `976a204` returned protocol v12 and served the locally built browser assets. Its two-client integration passed the same room checks, including a rejected purchase. This is not a load test.
+- Chrome desktop showed both Rocket Dome and Shop in Actions, shop distance guidance, and a working trip to the dome. Chrome 390×844 portrait and 844×390 landscape emulation showed the combined driving layout; in portrait, an emulated touch opened Actions and Shop displayed its nearest-shop guidance. The shop purchase dialog was checked in both orientations before dome integration (below). No physical phone was tested.
+
+## Rocket pickups, Tesla fleet and workshops · pre-dome protocol v11 · 2026-10-17 Pacific
+
+- `pnpm run ci` passed 124 tests, both TypeScript checks and the production build. The existing JavaScript chunk-size warning remains. Tests cover all 26 families collecting a rocket kit and jumping, Tesla-only selection, shop eligibility and costs, installed upgrade effects, geometry and independent retrofit plumes.
+- Local Wrangler two-client room integration passed, including replicated upgrade fields, a rejected non-Tesla selection and a rejected purchase without funds/outside a workshop. Positive purchases were tested in the shared simulation and in the local solo UI, not over a live room. This is not a load test.
+- Chrome desktop solo: chose a Model 3, drove through a purple rocket pickup, saw retrofit hardware and the installation notice, and jumped with air consumption. The Tesla-only fleet displayed all 11 models. A temporary, local-only fixture placed a damaged Model 3 and test cash inside the Mission shop: buying all five items reduced $200 to $3, with installed/full states shown. The fixture was removed before building.
+- Chrome emulated 390×844 portrait and 844×390 landscape: inspected shop and driving layouts, purchased a kit, and opened/closed the shop with emulated touch after accounting for the browser emulation's input scaling. The landscape shop scrolls for its footer. These are emulation observations, not physical-device evidence.
 ## Rocket Dome production · 2026-10-17 Pacific
 
 - The production Cloudflare build for merge `884bab5` completed successfully, and `/api/health` returned protocol v11. The live two-client room integration passed for cockpit state, arena entry, shared ball impact, replicated goal, exit and existing room checks; it was not a load test.

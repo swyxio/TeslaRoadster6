@@ -43,6 +43,7 @@ try {
   one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
   await delay(450);
   assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
+  assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
   const initialTime=two.state.world!.time;
   await eventually(()=>!!two.state.world&&two.state.world.time>initialTime,'authoritative room clock advances');
   const id = one.state.id!;
@@ -78,8 +79,12 @@ try {
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
-  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));
-  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox')??false,'fleet change visible to remote player');
+  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));await delay(500);
+  assert.ok(!two.state.world?.entities.some(e=>e.driver===id&&e.kind==='zoox'),'non-Tesla selection rejected by room');
+  one.socket.send(JSON.stringify({type:'selectVehicle',kind:'model-3'}));
+  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.kind==='model-3')??false,'Tesla fleet change visible to remote player');
+  await delay(500);one.socket.send(JSON.stringify({type:'upgrade',upgrade:'rocket'}));await delay(500);
+  assert.equal(two.state.world?.entities.find(e=>e.driver===id)?.upgrades.rocket,false,'remote purchase without cash and outside a shop rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
   one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 900 } }));
