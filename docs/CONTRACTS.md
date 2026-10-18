@@ -1,4 +1,4 @@
-# Implementation contracts · v45 candidate
+# Implementation contracts · v46 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,11 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v45 candidate
+## Wire protocol v46 candidate
 
-Protocol v45 fences the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. Clients and rooms must share the same map and simulation for prediction and authoritative play; incompatible clients must reload before joining. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. The authoritative world continues at 20 Hz.
+Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. This v46 candidate adds sandbox and practice modes, sandbox teleporting, and vehicle collections. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:45,capacity:number}`. The provisional landmark combination also adds shared collision envelopes and changes building identities; its final release must use a new protocol after v45.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:46,capacity:number}`. The provisional landmark combination also adds shared collision envelopes and changes building identities; its final release must use a new protocol after v46.
 
 Client messages:
 
@@ -85,13 +85,15 @@ Client messages:
 {"type":"market","action":"status","requestId":15,"operationId":"<same-uuid>"}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
 {"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":10,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"teleport","x":-120,"z":60,"requestId":23,"actionSeq":11,"edgeBaseline":{"jump":1,"flip":0}}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:45, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:46, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
+{type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
@@ -103,7 +105,7 @@ Server messages:
 {type:"starshipNameResult", requestId:number, ok:boolean, publicName:string|null}
 {type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
-{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], achievementTiers:AchievementTierProgress, ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
+{type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], achievementTiers:AchievementTierProgress, vehicleCollections:VehicleCollections, ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
 {type:"reward", reward:{id:number, kind:"pickup"|"delivery"|"pickup-research"|"delivery-research"|"supply-repair"|"supply-air"|"research", amount:number}}
 {type:"cabResult", requestId:number, action:"buy"|"paint", ok:boolean, reason?:string, assetId?:string, paint?:PaintId}
 {type:"marketState", requestId:number, listings:MarketListingView[], owned:MarketAssetView[], shop:MarketShopView[], nextCursor?:string, nextOwnedCursor?:string}
@@ -123,7 +125,7 @@ Every potentially invalidating action carries a strictly increasing positive `ac
 
 The owner-only `control` field has `revision`, `actionSeq`, `edgeFloorRevision`, `receivedSeq`, `appliedSeq`, `held`, `heldUntilTick`, `queued` (at most eight `{seq,targetTick,input}` slots) and `jump`/`flip` (`seen`, `processed` and at most eight pending `{id,targetTick}` entries). `receivedSeq` means an ordered frame for this epoch was received, including rejected frames; `appliedSeq` identifies the most recent continuous slot actually run. It is not a duration. The snapshot's T makes all steps through T final; clients replay only later ticks. Reset attempts, accepted teleport/minigame/race placement, vehicle takeover or replacement, autopilot/destination changes, water recovery and forced ferry-apron relocation clear that driver's queue and increment `control.revision`. The separate top-level `poseRevision` increments when the controlled entity changes or its pose changes by more than 1 mm or 0.0001 radians, or on a reported water/ferry relocation. This prevents an autopilot change or floating-point noise during a no-op reset from forcing a camera cut. A revision change for one driver never resets another's. Socket closure clears only that driver's session.
 
-Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Command queues and edge metadata are sent only to their owner. The server alone owns collisions, position, pickups, races, cash and HUD state. Prediction is presentation only and must reconcile authoritative snapshots, including unknown contacts and special surfaces. The client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, a version bump and integration tests; do not add compatibility shims for this prototype.
+Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Shared fields and individual entities are serialized once per broadcast tick before assembling each recipient's complete filtered JSON. Each player is serialized at most once per owner and remote projection; collection awards are present only in the owner's projection. Command queues and edge metadata are sent only to their owner. The server alone owns collisions, position, pickups, races, cash and HUD state. Prediction is presentation only and must reconcile authoritative snapshots, including unknown contacts and special surfaces. The client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, a version bump and integration tests; do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The simulation decides membership and applies lift, speed and air. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
@@ -310,6 +312,22 @@ Perfect Park and Queue Cutter require the corresponding parking completion; Chec
 
 `shared/achievement-tiers.ts` defines fixed, capped 1 / 10 / 100 / 1,000 / 10,000 ladders for deliveries, order pickups, early pickups and dropoffs, rooftop deliveries and landings, Bay crossings, both parking modes, race finishes and contested wins, qualifying Dome matches and wins, and supply pickups. `selectAchievementTierLadder(id)` returns the five targets and additional tier bonuses for display. An early stop is strictly before that stage's estimate. A Dome match requires a recorded touch; a win also requires a credited goal. Race and parking events are captured at their completed transition, never from repeated results frames. Each accepted event advances each applicable family at most once. Discoveries, purchases, finite collections and Mars remain one-off goals.
 
+Vehicle collections record server-observed models in the owner-only wallet. For each of the 11 Tesla and six Vault models, 100 m of horizontal movement above 2 m/s must occur in one uninterrupted ride; switching or leaving the vehicle, ferry travel, wallet binding, a relocation or a gap over 12 m in one room tick resets the partial distance. Selecting a car is not a drive. Partial distance remains room-local and is lost on disconnect; the completed model is journaled. A theft records a catalog model only after a successful on-foot takeover of an ambient NPC or server-seeded parked fleet car, using its pre-entry state; police, occupied cars, player-owned or abandoned personal cars, and owned or retired Cybercabs do not count. NPC autonomy need not be active. Tesla milestones at 1/5/11 distinct models pay $100/$500/$2,000; theft milestones at 1/5/10/26 distinct ambient models pay $100/$500/$2,000/$5,000. Each Vault model also has a separate $1,000 driving award, independent of its purchase award. Individual models and rewards are credited once. All 26 ambient models can occur in traffic or the parked fleet, but a room only spawns a subset at a time.
+
+`vehicleCollections` is a bounded pair of validated unique model arrays in the driver profile and private wallet, never in world snapshots. Collection milestone and Vault-driving award IDs, and a `lastUnlock` referring to one, appear in the owner's player snapshot but are omitted from remote players' projections; existing other award IDs remain public. The owner's ordered award events are unchanged. A remote observer can infer that a hidden event occurred from a `lastUnlock` transition or a later event counter gap, though not its collection ID. Missing pre-feature progress starts empty without inferred history or back pay; malformed saved progress fails closed. The existing fenced achievement journal commits each observation, model set, unlock and cash atomically and replays it idempotently. Generic progress checkpoints cannot overwrite the collection. Sandbox and practice room hosts skip persistent collection evidence rather than relying on a client claim.
+
 The owner-only wallet includes committed counts and claimed ranks; private counters are not replicated to other players. Profile receipt, count, rank and cash commit atomically through the fenced room journal. Duplicated event IDs replay the existing receipt. A pre-tier profile seeds the known delivery total and one occurrence proven by each relevant saved badge, marks those ranks claimed without back pay, and leaves unknown history at zero; malformed stored tier data fails closed. A generic progress checkpoint cannot overwrite authoritative counts. Each newly reached tier pays once. The delivery ladder preserves its existing 1 / 10 / 100 awards, with $50,000 at 1,000 and $200,000 at 10,000. Other ladders pay $350 / $1,500 / $5,000 / $20,000 at 10 / 100 / 1,000 / 10,000; the first rank adds $100 for families without a guaranteed cash-bearing legacy award and $0 extra for roof landings, rooftop deliveries and crossings, whose existing first awards still apply. These amounts contribute to cash and eligible income, not delivery-only `earned`.
 
 `shared/research.ts` defines research visits and workshop discounts. Stop a car on the ground within 9 m of each landmark arrival at no more than 4 m/s: UCSF pays $250 and unlocks the Homes Lab badge; Berkeley pays $400 and unlocks 20% off efficient nozzles; Stanford pays $600 and unlocks 20% off sport motors; SFO pays $600 and unlocks 20% off air tanks. An SFO delivery adds a separate one-time $1,000 achievement. The profile records awarded IDs and adds awards to cash and eligible income, without changing delivery-only `earned`. Current cash can change region access. Clients cannot assert unlocks or prices. See [verification](VERIFICATION.md) for the tested wallet and replay paths.
+
+### Isolated playtest rooms
+
+Reserved `sandbox`/`sandbox-*` and `practice`/`practice-*` names create ephemeral
+multiplayer sessions with no persistent economy or identity binding. The welcome
+includes `playtestMode: 'sandbox' | 'practice' | null`; private recovery codes are
+withheld by the client and rejected by the server in both modes. Sandbox alone
+permits all-model fleet selection and fenced `{type:'teleport', x, z, requestId,
+actionSeq, edgeBaseline}` requests, answered with `teleportResult` and a normal
+pose/control revision update on success. Normal and practice rooms reject
+teleport. See [Playtest rooms](PLAYTEST_ROOMS.md) for persistence boundaries,
+finite unlimited-spending representation and the local isolation test.

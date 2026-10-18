@@ -6,6 +6,22 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A playground for every car',
+    intro: 'Try the fleet freely, or collect driving and takeover awards in your regular game.',
+    sections: [
+      { title: 'Try it out', items: [
+        'Join the sandbox for unlimited cash, vehicle upgrades and map teleporting. Start a fresh practice room to try the early game. Progress in both modes is temporary.'
+      ] },
+      { title: 'Collect your favorites', items: [
+        'In a regular room, drive Tesla and Vault models and take over different street vehicles to earn new collection awards.',
+        'Saved drivers keep their completed collections; earlier drives and takeovers do not count retroactively.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.30-alpha',
+    label: '0.0.30 Alpha',
+    date: '2026-10-18',
     title: 'The Bay opens up',
     intro: 'Explore more neighborhoods and take deliveries across the Bay.',
     sections: [

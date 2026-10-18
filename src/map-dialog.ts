@@ -12,7 +12,7 @@ import { drawLockedAreas } from './access-overlay';
 export type MapCab = { id: string; name: string; position: MapPoint | null };
 
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
-export function createMapDialog({ onDestination }: { onDestination: (point: MapPoint) => string | void }) {
+export function createMapDialog({ onDestination, onTeleport, canTeleport }: { onDestination: (point: MapPoint) => string | void; onTeleport?: (point: MapPoint) => string | void; canTeleport?: () => boolean }) {
   const dialog = document.createElement('dialog');
   dialog.className = 'map-lightbox';
   dialog.setAttribute('aria-labelledby', 'map-lightbox-title');
@@ -25,13 +25,14 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     </div>
     <div class="map-lightbox-cab" hidden><p class="map-cab-status" role="status" aria-live="polite"></p><button type="button" class="map-cab-follow" aria-pressed="false">Follow</button></div>
     <div class="map-drive-mode"></div>
-    <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
+    <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-teleport" hidden disabled>Teleport here ↗</button><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
   document.body.append(dialog);
   const canvas = dialog.querySelector('canvas')!;
   const ctx = canvas.getContext('2d')!;
   const base = document.createElement('canvas');
   const baseCtx = base.getContext('2d')!;
   const drive = dialog.querySelector<HTMLButtonElement>('.map-drive')!;
+  const teleport = dialog.querySelector<HTMLButtonElement>('.map-teleport')!;
   const status = dialog.querySelector<HTMLElement>('.map-lightbox-status')!;
   const cabPanel = dialog.querySelector<HTMLElement>('.map-lightbox-cab')!;
   const cabStatus = dialog.querySelector<HTMLElement>('.map-cab-status')!;
@@ -253,7 +254,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   }
   function choose(point: MapPoint) {
     stopFollowing();
-    selected = copy(point); drive.disabled = false;
+    selected = copy(point); drive.disabled = teleport.disabled = false;
     status.textContent = `Pin placed · X ${Math.round(point.x)}, Z ${Math.round(point.z)} (game meters).`;
     draw();
   }
@@ -271,6 +272,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     dialog.close();
   }
   drive.onclick = start;
+  teleport.onclick = () => {
+    if(!selected||!canTeleport?.()||!onTeleport)return;
+    const error=onTeleport(copy(selected));
+    if(error){status.textContent=error;return;}
+    dialog.close();
+  };
   dialog.querySelector<HTMLButtonElement>('.map-close')!.onclick = () => dialog.close();
   function zoomTarget() {
     if (followingCab || !selected) return undefined;
@@ -348,6 +355,8 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     cab = null; followingCab = false; renderCabControls();
     player = copy(position); center = copy(position); currentDestination = destination ? copy(destination) : null;
     selected = destination ? copy(destination) : null; level = nextLevel; scale = .6; dirty = true;
+    teleport.hidden=!canTeleport?.(); teleport.disabled=!selected;dialog.classList.toggle('map-playtest',!teleport.hidden);
+    dialog.querySelector('.map-lightbox-help')!.textContent=teleport.hidden?'Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. Shaded areas unlock as you play. The car stops at a connected road up to 100 m from your pin.':'Sandbox · tap to place a pin, then teleport to safe ground within 20 m. Water and occupied spots are rejected. Progress is not saved.';
     drive.disabled = !selected; status.textContent = selected ? 'Destination selected. Choose another place or start driving.' : 'Choose a destination on the map.';
     if (!dialog.open) dialog.showModal(); draw(); canvas.focus();
   }

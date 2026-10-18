@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { applyAchievementAwards, initialAchievements, type AchievementId } from '../shared/achievements';
 import { isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
+import { normalizeVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
 import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
 import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
 import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../shared/police';
@@ -34,6 +35,8 @@ export type DriverProgress = {
   cybercabs?:CybercabFleet;
   /** Missing only on profiles saved before repeatable tiers were introduced. */
   achievementTiers?:AchievementTierProgress;
+  /** Missing only on profiles saved before vehicle collections existed. */
+  vehicleCollections?:VehicleCollections;
 };
 export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:SettledDeliveryEarning[]} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order}
   | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
@@ -141,7 +144,8 @@ export class DriverProfile extends DurableObject<Env> {
         if(current?.fence!==previous?.fence || current?.roomId!==previous?.roomId)return null;
         const progress=current?.progress??initial;
         const normalized={...progress,cybercabs:progress.cybercabs??emptyCybercabFleet(),
-          achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked)};
+          achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked),
+          vehicleCollections:normalizeVehicleCollections(progress.vehicleCollections)};
         const record:DriverRecord=current?{...current,fence,roomId,sealed:current.fence===fence?current.sealed:false,progress:normalized}:{driverId,fence,roomId,revision:0,sequence:0,sealed:false,progress:normalized,incomeActivated:false};
         if(current&&(current.fence!==fence||current.roomId!==roomId)){
           // An abandoned search from the previous owner cannot be used by
@@ -235,7 +239,8 @@ export class DriverProfile extends DurableObject<Env> {
         return {ok:false,reason:'superseded'};
       }
       record.progress={...record.progress,cybercabs:record.progress.cybercabs??emptyCybercabFleet(),
-        achievementTiers:normalizeAchievementTiers(record.progress.achievementTiers,record.progress.completed,record.progress.unlocked)};
+        achievementTiers:normalizeAchievementTiers(record.progress.achievementTiers,record.progress.completed,record.progress.unlocked),
+        vehicleCollections:normalizeVehicleCollections(record.progress.vehicleCollections)};
       if(!Number.isSafeInteger(intent.sequence)||intent.sequence<=record.sequence){if(checkpoint)await txn.delete(assignmentKey);return {ok:false,reason:'revision'};}
       if(!Number.isSafeInteger(intent.revision)||intent.revision<0){if(checkpoint)await txn.delete(assignmentKey);return {ok:false,reason:'invalid'};}
       if(record.revision<intent.revision)return {ok:false,reason:'not-ready'};
@@ -261,7 +266,8 @@ export class DriverProfile extends DurableObject<Env> {
             const same=next.completed===progress.completed&&order.restaurant===progress.order.restaurant&&order.customer===progress.order.customer&&order.stage===progress.order.stage&&
               order.pickupEstimate===progress.order.pickupEstimate&&order.estimate===progress.order.estimate&&order.base===progress.order.base;
             Object.assign(next,structuredClone(progress));next.cybercabs=structuredClone(record.progress.cybercabs);
-            next.achievementTiers=structuredClone(record.progress.achievementTiers);next.deliveryClock=clock;
+            next.achievementTiers=structuredClone(record.progress.achievementTiers);
+            next.vehicleCollections=structuredClone(record.progress.vehicleCollections);next.deliveryClock=clock;
             if(intent.clock!==undefined&&same)next.order.elapsed=order.elapsed;
           }
         } else if(intent.action.kind==='cab-buy' || intent.action.kind==='cab-income' || intent.action.kind==='cab-paint'){
@@ -348,11 +354,11 @@ export class DriverProfile extends DurableObject<Env> {
             const delivery=initialDelivery({x:0,z:0});
             Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,level:levelForCash(next.cash)});
             const state=initialAchievements();state.unlocked=[...next.unlocked];
-            const tier=applyObservedAchievement(delivery,state,next.achievementTiers!,evidence);
+            const tier=applyObservedAchievement(delivery,state,next.achievementTiers!,evidence,next.vehicleCollections!);
             awards=tier.awards;
             if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
             else {
-              next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;next.achievementTiers=tier.progress;
+              next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;next.achievementTiers=tier.progress;next.vehicleCollections=tier.collections;
               achievementResult={lastReward:delivery.lastReward};
             }
           }

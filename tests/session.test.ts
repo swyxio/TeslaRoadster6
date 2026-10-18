@@ -5,6 +5,7 @@ import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
 import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
+import { emptyVehicleCollections } from '../shared/vehicle-collections';
 
 class Socket {
   static OPEN = 1;
@@ -19,7 +20,7 @@ class Socket {
   close() { this.readyState = 3; }
   message(value:unknown) {
     const message=value as Record<string,unknown>;
-    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[])}:
+    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[]),vehicleCollections:emptyVehicleCollections()}:
       message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
@@ -48,6 +49,16 @@ test('committed reward messages queue in order without crossing identity changes
   session.disconnect();
 });
 
+test('owner wallet rejects malformed vehicle collections',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'wallet',vehicleCollections:{driven:['roadster'],stolen:[]}});
+  assert.deepEqual(session.wallet?.vehicleCollections,{driven:['roadster'],stolen:[]});
+  const log=console.error;console.error=()=>{};
+  try{socket.message({type:'wallet',vehicleCollections:{driven:['bad-model'],stolen:[]}});}finally{console.error=log;}
+  assert.equal(socket.readyState,3);assert.equal(session.error,'Invalid server message. Please reconnect.');
+  session.disconnect();
+});
+
 test('owner wallet accepts valid tier progress and rejects malformed progress',()=>{
   const session=new Session();session.join('bay','Driver');const socket=Socket.last;
   const tiers=normalizeAchievementTiers(undefined,0,[]);
@@ -61,10 +72,10 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
   session.disconnect();
 });
 
-test('an incompatible flight-physics protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,45);
+test('an incompatible protocol closes before identity or driving',()=>{
+  assert.equal(PROTOCOL_VERSION,46);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:43,capacity:64});
+  socket.message({type:'welcome',id:'p',version:45,capacity:64});
   assert.equal(socket.readyState,3);
   assert.equal(session.error,'Game updated. Reload to reconnect.');
   assert.deepEqual(socket.sent,[]);
@@ -437,5 +448,26 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:3});
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
+  session.disconnect();
+});
+
+test('playtest rooms never send a remembered identity and returning to Bay restores it',()=>{
+  const session=new Session();session.setIdentity('private-saved-driver-code');
+  for(const room of ['sandbox','practice-fresh']){
+    session.join(room,'Driver');const socket=Socket.last;
+    socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+    assert.equal(session.walletStatus,'guest');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+    const identity=socket.sent.map(raw=>JSON.parse(raw)).find(m=>m.type==='identity');
+    assert.equal(identity.code,null);
+    socket.message({type:'identityResult',requestId:identity.requestId,ok:true,message:'Practice driver ready.'});
+    assert.equal(session.identityResult,null,'practice cannot confirm or overwrite a remembered driver');
+    session.setIdentity('private-saved-driver-code');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+  }
+  session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.equal(session.walletStatus,'connecting');
+  assert.ok(socket.sent.map(raw=>JSON.parse(raw)).some(m=>m.type==='identity'&&m.code==='private-saved-driver-code'));
   session.disconnect();
 });
