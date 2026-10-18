@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {addPlayer,createWorld,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {BRIDGES,BUILDINGS,isLand,isSurface,nearbyBuildings} from '../shared/map';
+import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
+import {BAY_CIRCUIT,BRIDGES,BUILDINGS,HIGHWAYS,isLand,isSurface,nearbyBuildings} from '../shared/map';
 import {STATIONS} from '../shared/stations';
 import {body,contact} from '../shared/physics';
 
@@ -24,7 +24,7 @@ test('shore blocks grounded cars while water landings recover to a safe surface'
  world.entities=[car];world.pickups=[];Object.assign(car,{x:80,z:0,yaw:-Math.PI/2,speed:10});
  for(let i=0;i<60;i++)step(world,new Map([['p',{...NEUTRAL,throttle:1}]]),.05);
  assert.ok(isLand(car.x,car.z));assert.ok(car.x<100);
- Object.assign(car,{x:130,z:-20,y:.1,vy:-5,speed:0});
+ Object.assign(car,{x:130,z:-20,y:.1,vy:-5,speed:0,supportId:null});
  step(world,new Map(),.05);assert.ok(isSurface(car.x,car.z));assert.equal(car.y,0);
 });
 test('parked vehicles and stations begin on land outside collision buildings',()=>{
@@ -35,6 +35,24 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  }
  for(const station of STATIONS)assert.ok(isLand(station.x,station.z),station.id);
  assert.ok(BUILDINGS.length>100);
+});
+
+test('Bay highway shoulders are supported and its lanes clear the largest truck',()=>{
+ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
+  const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+  assert.ok(length>0,`${highway.id} segment ${i}`);
+  const samples=Math.ceil(length/20);
+  for(let n=0;n<=samples;n++)for(const offset of [-20,-9,0,9,20]){
+   const x=a.x+dx*n/samples+dz/length*offset,z=a.z+dz*n/samples-dx/length*offset;
+   assert.ok(isLand(x,z),`${highway.id} segment ${i}: unsupported at ${x},${z}`);
+   if(Math.abs(offset)>9)continue;
+   const car=makeEntity('clearance','waymo-peterbilt',x,z);car.yaw=Math.atan2(-dx,-dz);
+   assert.ok(!nearbyBuildings(x,z,12).some(building=>contact(body(car),{...building,yaw:0})),`${highway.id} segment ${i}: blocked at ${x},${z}`);
+  }
+ }
+ const length=BAY_CIRCUIT.reduce((sum,a,i)=>{const b=BAY_CIRCUIT[(i+1)%BAY_CIRCUIT.length];return sum+Math.hypot(b.x-a.x,b.z-a.z);},0);
+ assert.ok(length>19_000&&length<21_000,`unexpected circuit length ${length}`);
+ assert.deepEqual(HIGHWAYS[0].points.at(-1),HIGHWAYS[1].points[0]);
 });
 
 test('autopilot can cross the Bay and return without teleporting',()=>{

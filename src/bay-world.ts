@@ -1,33 +1,96 @@
 import * as T from 'three';
-import { BRIDGES, BUILDINGS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, type Bridge } from '../shared/map';
+import { BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, MAP_BOUNDS, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
 import { material } from './vehicles';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
   const palettes=[0xd0c4b0,0xdecdb6,0xb5beb5,0xdac1a8,0xb7a898,0x9fada8,0xe1d1b9];
-  function batches(color:number,items:{x:number;y:number;z:number;w:number;h:number;d:number}[]){
+  type BoxItem={x:number;y:number;z:number;w:number;h:number;d:number;angle?:number};
+  function batches(color:number,items:BoxItem[]){
     if(!items.length)return;
-    const mesh=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(color),items.length),matrix=new T.Matrix4();
-    items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(p.w,p.h,p.d).setPosition(p.x,p.y,p.z)));mesh.computeBoundingSphere();scene.add(mesh);
+    const mesh=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
+    items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle??0),scale.set(p.w,p.h,p.d))));mesh.computeBoundingSphere();scene.add(mesh);
+  }
+  function localBatches(color:number,items:BoxItem[]){
+    const chunks=new Map<string,BoxItem[]>();
+    for(const item of items){
+      const key=`${Math.floor(item.x/700)},${Math.floor(item.z/700)}`;
+      const chunk=chunks.get(key)??[];chunk.push(item);chunks.set(key,chunk);
+    }
+    for(const chunk of chunks.values())batches(color,chunk);
   }
   function box(x:number,y:number,z:number,w:number,h:number,d:number,color:number){
     const m=new T.Mesh(new T.BoxGeometry(w,h,d),material(color));m.position.set(x,y,z);scene.add(m);return m;
   }
   // Water is physically below the flat, drivable bridge decks.
-  const water=new T.Mesh(new T.PlaneGeometry(2400,2000),new T.MeshStandardMaterial({color:0x478e9b,roughness:.45,metalness:.18}));
-  water.rotation.x=-Math.PI/2;water.position.set(50,-4,0);scene.add(water);
-  for(const region of REGIONS){
+  const water=new T.Mesh(new T.PlaneGeometry(MAP_BOUNDS.maxX-MAP_BOUNDS.minX+1600,MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ+1600),new T.MeshStandardMaterial({color:0x478e9b,roughness:.45,metalness:.18}));
+  water.rotation.x=-Math.PI/2;water.position.set((MAP_BOUNDS.minX+MAP_BOUNDS.maxX)/2,-4,(MAP_BOUNDS.minZ+MAP_BOUNDS.maxZ)/2);scene.add(water);
+  const shoreline:number[]=[];
+  REGIONS.forEach((region,index)=>{
     const shape=new T.Shape();region.points.forEach((p,i)=>i?shape.lineTo(p.x,-p.z):shape.moveTo(p.x,-p.z));shape.closePath();
-    const geometry=new T.ExtrudeGeometry(shape,{depth:4,bevelEnabled:false});geometry.rotateX(-Math.PI/2);geometry.translate(0,-4,0);
+    // Shared regions overlap near the South Bay. A tiny visual offset avoids
+    // coplanar flicker without changing the simulation's flat Y=0 surface.
+    const geometry=new T.ExtrudeGeometry(shape,{depth:4,bevelEnabled:false});geometry.rotateX(-Math.PI/2);geometry.translate(0,-4+index*.003,0);
     scene.add(new T.Mesh(geometry,material(region.color)));
-    // Thin shoreline trim follows the exact authoritative land polygon.
-    const pts=region.points.map(p=>new T.Vector3(p.x,.12,p.z));pts.push(pts[0].clone());
-    const coast=new T.Line(new T.BufferGeometry().setFromPoints(pts),new T.LineBasicMaterial({color:0xb7bea4}));scene.add(coast);
+    // Only exposed polygon edges are coast; overlapping region boundaries
+    // are inland and should not draw an artificial line through the city.
+    region.points.forEach((a,i)=>{
+      const b=region.points[(i+1)%region.points.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz),steps=Math.ceil(length/20);
+      if(!length)return;
+      for(let step=0;step<steps;step++){
+        const t0=step/steps,t1=(step+1)/steps,mid=(t0+t1)/2,mx=a.x+dx*mid,mz=a.z+dz*mid,nx=-dz/length*2,nz=dx/length*2;
+        if(isLand(mx+nx,mz+nz)&&isLand(mx-nx,mz-nz))continue;
+        shoreline.push(a.x+dx*t0,.12,a.z+dz*t0,a.x+dx*t1,.12,a.z+dz*t1);
+      }
+    });
+  });
+  const shorelineGeometry=new T.BufferGeometry();shorelineGeometry.setAttribute('position',new T.Float32BufferAttribute(shoreline,3));
+  scene.add(new T.LineSegments(shorelineGeometry,new T.LineBasicMaterial({color:0xb7bea4})));
+  // The hill triangles use the exact lattice and diagonals sampled by shared physics.
+  const hillVertices:number[]=[],hillIndices:number[]=[];
+  for(let z=0;z<=HILL.rows;z++)for(let x=0;x<=HILL.columns;x++){
+    const px=HILL.minX+(HILL.maxX-HILL.minX)*x/HILL.columns,pz=HILL.minZ+(HILL.maxZ-HILL.minZ)*z/HILL.rows;
+    hillVertices.push(px,terrainHeight(px,pz)??0,pz);
   }
+  for(let z=0;z<HILL.rows;z++)for(let x=0;x<HILL.columns;x++){
+    const a=z*(HILL.columns+1)+x,b=a+1,c=a+HILL.columns+1,d=c+1;
+    hillIndices.push(a,c,b,b,c,d);
+  }
+  const hillGeometry=new T.BufferGeometry();hillGeometry.setAttribute('position',new T.Float32BufferAttribute(hillVertices,3));hillGeometry.setIndex(hillIndices);hillGeometry.computeVertexNormals();
+  scene.add(new T.Mesh(hillGeometry,new T.MeshStandardMaterial({color:0xc3c9aa,roughness:1,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})));
+  // Flat, muted meadow and field patches give the long intercity corridors
+  // variety without introducing decorative collision or invented terrain.
+  const fields:{x:number;z:number;rx:number;rz:number;angle:number}[][]=[[],[],[]];
+  for(let z=450;z<MAP_BOUNDS.maxZ;z+=185)for(let x=MAP_BOUNDS.minX+120;x<MAP_BOUNDS.maxX;x+=185){
+    const seed=Math.abs(Math.floor(x*19+z*31));
+    const cx=x+(seed%57)-28,cz=z+(Math.floor(seed/7)%57)-28;
+    const rx=65+seed%36,rz=54+Math.floor(seed/13)%38,radius=Math.max(rx,rz);
+    if(![-radius,0,radius].every(dx=>[-radius,0,radius].every(dz=>isLand(cx+dx,cz+dz))))continue;
+    fields[seed%fields.length].push({x:cx,z:cz,rx,rz,angle:(seed%31)*.1});
+  }
+  const fieldGeometry=new T.CircleGeometry(1,14);fieldGeometry.rotateX(-Math.PI/2);
+  fields.forEach((items,i)=>{
+    if(!items.length)return;
+    const mesh=new T.InstancedMesh(fieldGeometry,material([0xc5caa8,0xc4caa2,0xd1cba9][i]),items.length);
+    const matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
+    items.forEach((p,j)=>mesh.setMatrixAt(j,matrix.compose(position.set(p.x,.02,p.z),rotation.setFromAxisAngle(up,p.angle),scale.set(p.rx,1,p.rz))));
+    mesh.computeBoundingSphere();scene.add(mesh);
+  });
   for(const p of PARKS)box(p.x,.025,p.z,p.w,.05,p.d,p.color);
   // The lake is an inset visual feature, not a separate traversable body of water.
   const lake=new T.Mesh(new T.CircleGeometry(1,40),material(0x589ca5));lake.rotation.x=-Math.PI/2;lake.scale.set(18,21,1);lake.position.set(480,.055,150);scene.add(lake);
-  const road=ROADS.map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d}));batches(0x505e60,road);
+  const road=ROADS.filter(r=>r.kind!=='highway').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));batches(0x505e60,road);
+  const highways=ROADS.filter(r=>r.kind==='highway');
+  batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
+  // Adjacent rotated rectangles leave outside wedges at bends. Round joins
+  // follow the shared highway vertices and sit just below the road surfaces.
+  const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points).map(p=>[`${p.x},${p.z}`,p])).values()];
+  if(joins.length){
+    const geometry=new T.CircleGeometry(1,32);geometry.rotateX(-Math.PI/2);
+    const mesh=new T.InstancedMesh(geometry,material(0x424e50),joins.length),matrix=new T.Matrix4();
+    joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(16,1,16).setPosition(p.x,.13,p.z)));
+    mesh.computeBoundingSphere();scene.add(mesh);
+  }
   const r=STUNT_RAMP,near=r.z-r.width/2,far=r.z+r.width/2;
   const rampGeometry=new T.BufferGeometry();rampGeometry.setAttribute('position',new T.Float32BufferAttribute([
     r.start,0,near,r.start,0,far,r.end,0,near,r.end,0,far,r.end,r.height,near,r.end,r.height,far
@@ -46,15 +109,80 @@ export function buildBay(scene:T.Scene) {
     const points=Array.from({length:97},(_,i)=>{const a=i/96*Math.PI*2;return new T.Vector3(STUNT_LOOP.x+STUNT_LOOP.radius*Math.sin(a),STUNT_LOOP.radius*(1-Math.cos(a)),STUNT_LOOP.z+side*STUNT_LOOP.width/2);});
     scene.add(new T.Line(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:0xffe2a7})));
   }
-  const stripes:typeof road=[];
-  for(const r of ROADS){
+  const stripes:BoxItem[]=[];
+  for(const r of ROADS.filter(r=>r.kind!=='highway')){
     if(r.w>30||r.d>30)continue;
     if(r.axis==='z'&&Math.abs(r.z%60)>14)stripes.push({x:r.x,y:.14,z:r.z,w:.16,h:.018,d:4});
     if(r.axis==='x'&&Math.abs(r.x%60)>14)stripes.push({x:r.x,y:.145,z:r.z,w:4,h:.018,d:.16});
   }
   batches(0xe7d8aa,stripes);
+  // Paint follows each authoritative road rectangle. No separate decorative
+  // asphalt, walls or ramps can suggest a surface the simulation lacks.
+  const highwayEdges:BoxItem[]=[],highwayCenter:BoxItem[]=[],highwayDashes:BoxItem[]=[];
+  for(const r of highways){
+    const angle=r.angle??0,s=Math.sin(angle),c=Math.cos(angle);
+    const line=(along:number,across:number,length:number,width:number):BoxItem=>({
+      x:r.x+s*along+c*across,y:.15,z:r.z+c*along-s*across,w:width,h:.018,d:length,angle,
+    });
+    for(const side of [-1,1]){
+      highwayEdges.push(line(0,side*(r.w/2-.5),r.d,.14));
+      highwayCenter.push(line(0,side*.22,r.d,.12));
+      for(let along=-r.d/2+4;along<r.d/2-4;along+=14){
+        highwayDashes.push(line(along,side*r.w/4,6,.14));
+      }
+    }
+  }
+  batches(0xd6d8ca,highwayEdges);batches(0xe9cd82,highwayCenter);batches(0xe4e6dd,highwayDashes);
+  // Sloped deck, sides and underside follow the same piecewise-linear heights
+  // as the authoritative overpass. The center crossing stays clear below.
+  for(const [a,b] of [[OVERPASS.start,OVERPASS.deckStart],[OVERPASS.deckStart,OVERPASS.deckEnd],[OVERPASS.deckEnd,OVERPASS.end]]){
+    const ya=overpassHeight(a,OVERPASS.z)!,yb=overpassHeight(b,OVERPASS.z)!,z0=OVERPASS.z-OVERPASS.width/2,z1=OVERPASS.z+OVERPASS.width/2,t=OVERPASS.thickness;
+    const vertices=[a,ya,z0, a,ya,z1, b,yb,z0, b,yb,z1, a,ya-t,z0, a,ya-t,z1, b,yb-t,z0, b,yb-t,z1];
+    const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+    geometry.setIndex([0,1,2,2,1,3, 4,6,5,6,7,5, 0,2,4,2,6,4, 1,5,3,3,5,7, 0,4,1,1,4,5, 2,3,6,3,7,6]);geometry.computeVertexNormals();
+    scene.add(new T.Mesh(geometry,material(0x424e50)));
+    for(const across of [-OVERPASS.width/2+.5,0,OVERPASS.width/2-.5]){
+      const marks=new T.BufferGeometry(),z=OVERPASS.z+across,w=across===0?.16:.12;
+      marks.setAttribute('position',new T.Float32BufferAttribute([a,ya+.025,z-w/2, a,ya+.025,z+w/2, b,yb+.025,z-w/2, b,yb+.025,z+w/2],3));
+      marks.setIndex([0,1,2,2,1,3]);marks.computeVertexNormals();scene.add(new T.Mesh(marks,material(across===0?0xe9cd82:0xd6d8ca)));
+    }
+  }
+  // Pavement labels use the nearest shared highway segment and stay entirely
+  // within one lane. They help players recognize districts without roadside
+  // signs that look solid but have no collision.
+  const labelGeometry=new T.PlaneGeometry(7,12);labelGeometry.rotateX(Math.PI/2);
+  for(const district of DISTRICTS){
+    let nearest:{x:number;z:number;angle:number;distance:number}|undefined;
+    for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
+      const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z,length2=dx*dx+dz*dz;
+      if(!length2)continue;
+      const t=Math.max(0,Math.min(1,((district.x-a.x)*dx+(district.z-a.z)*dz)/length2));
+      const x=a.x+dx*t,z=a.z+dz*t,distance=Math.hypot(district.x-x,district.z-z);
+      if(!nearest||distance<nearest.distance)nearest={x,z,angle:Math.atan2(dx,dz),distance};
+    }
+    if(!nearest||nearest.distance>100)continue;
+    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=256;
+    const ctx=canvas.getContext('2d')!;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(245,245,230,.8)';ctx.font='bold 70px system-ui';ctx.fillText('↑',64,65);
+    ctx.font='bold 27px system-ui';ctx.fillText(district.name.toUpperCase(),64,150,116);
+    const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+    const label=new T.Mesh(labelGeometry,new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:T.DoubleSide}));
+    label.position.set(nearest.x-Math.cos(nearest.angle)*4,.16,nearest.z+Math.sin(nearest.angle)*4);
+    label.rotation.y=nearest.angle;scene.add(label);
+  }
+  // Non-obstructive warning paint 350 m before the San Jose connector bends.
+  // The positions are on the right-hand approach lanes in each direction.
+  const warningCanvas=document.createElement('canvas');warningCanvas.width=128;warningCanvas.height=256;
+  const warningContext=warningCanvas.getContext('2d')!;warningContext.textAlign='center';warningContext.textBaseline='middle';warningContext.fillStyle='rgba(255,219,132,.95)';
+  warningContext.font='bold 68px system-ui';warningContext.fillText('⚠',64,70);
+  warningContext.font='bold 30px system-ui';warningContext.fillText('CURVE',64,145);warningContext.fillText('EASE OFF',64,185);
+  const warningTexture=new T.CanvasTexture(warningCanvas);warningTexture.colorSpace=T.SRGBColorSpace;
+  const warningMaterial=new T.MeshBasicMaterial({map:warningTexture,transparent:true,depthWrite:false,side:T.DoubleSide});
+  for(const {x,z,yaw} of [{x:981,z:8224,yaw:-2.522},{x:1938,z:7968,yaw:-2.862}]){
+    const paint=new T.Mesh(labelGeometry,warningMaterial);paint.position.set(x-Math.cos(yaw)*16,.17,z+Math.sin(yaw)*16);paint.rotation.y=yaw+Math.PI;scene.add(paint);
+  }
   // Distinct roofs and facade colors make districts less repetitive; windows share one draw call.
-  const buildings=palettes.map(()=>[] as {x:number;y:number;z:number;w:number;h:number;d:number}[]), windows:typeof road=[], roofs:typeof road=[];
+  const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     if(!['pyramid','coit','salesforce'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
@@ -78,13 +206,15 @@ export function buildBay(scene:T.Scene) {
       }
     }
   });
-  buildings.forEach((batch,i)=>batches(palettes[i],batch));batches(0xe5d9c5,roofs);batches(0x49676e,windows);
+  // Keep far-away district details in separate instanced meshes so frustum
+  // culling remains effective as the world grows to the South Bay.
+  buildings.forEach((batch,i)=>localBatches(palettes[i],batch));localBatches(0xe5d9c5,roofs);localBatches(0x49676e,windows);
   // Lower residential blocks have pitched roofs, while downtown retains flat roofs.
   const homes=BUILDINGS.filter(b=>b.style==='house');
   const gables=new T.InstancedMesh(new T.ConeGeometry(1,1,4),material(0x8b7770),homes.length),roofMatrix=new T.Matrix4();
   homes.forEach((b,i)=>{roofMatrix.compose(new T.Vector3(b.x,b.h+1.3,b.z),new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI/4),new T.Vector3(b.w*.72,2.6,b.d*.72));gables.setMatrixAt(i,roofMatrix);});gables.computeBoundingSphere();scene.add(gables);
   // Zebra crossings at street intersections are a visual cue, kept clear of the shared road surface.
-  const crosswalks:typeof road=[];
+  const crosswalks:BoxItem[]=[];
   for(const x of [-300,-240,-180,-120,-60,0,60,330,390,450,510,570])for(const z of [-180,-120,-60,0,60,120,180]){
     if(!ROADS.some(r=>r.axis==='z'&&r.x===x&&Math.abs(r.z-z)<10))continue;
     for(let stripe=-2;stripe<=2;stripe++){
@@ -102,8 +232,11 @@ export function buildBay(scene:T.Scene) {
     hill.position.set(-490+i*95,-10,-650-i%3*32);scene.add(hill);
   }
   for(let i=0;i<7;i++){
+    const x=750+i%2*40,z=-260+i*100;
+    // A formerly distant hill may now overlap newly supported East Bay land.
+    if([-80,0,80].some(dx=>[-80,0,80].some(dz=>isLand(x+dx,z+dz))))continue;
     const hill=new T.Mesh(new T.ConeGeometry(110,70+i%3*15,7),material(i%2?0x8ea18a:0x7f977e));
-    hill.position.set(750+i%2*40,-20,-260+i*100);scene.add(hill);
+    hill.position.set(x,-20,z);scene.add(hill);
   }
   // Ferry Building clock tower at the SF waterfront.
   box(45,17,-35,7,14,7,0xe7ddc7);box(45,24,-35,9,1,9,0xf3e7d1);
@@ -158,13 +291,19 @@ export function buildBay(scene:T.Scene) {
     }
     for(let t=b.start+12;t<b.end;t+=32)place(t,-2,0,2,4,4,0x97a09a);
   }
-  const wavelets:typeof road=[];
+  const wavelets:BoxItem[]=[];
   for(let i=0;i<260;i++){
     const x=-420+(i*139%1050),z=-520+(i*197%850);
     if(!isLand(x,z)&&!isBridge(x,z))wavelets.push({x,y:-3.97,z,w:4+i%5*2,h:.02,d:.12});
   }
+  // Scatter the same subtle water detail across the expanded shared bounds.
+  for(let i=0;i<1200;i++){
+    const x=MAP_BOUNDS.minX+((i*.61803398875)%1)*(MAP_BOUNDS.maxX-MAP_BOUNDS.minX);
+    const z=MAP_BOUNDS.minZ+((i*.754877666)%1)*(MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ);
+    if(!isLand(x,z)&&!isBridge(x,z))wavelets.push({x,y:-3.97,z,w:6+i%5*2,h:.02,d:.12});
+  }
   batches(0x82b5b9,wavelets);
   // A ferry and a few wakes provide scale and movement cues without collision obstacles.
   box(128,-.7,-95,28,2,8,0xd7e4df);box(128,1,-95,12,2,6,0xe7ece1);box(128,2.2,-95,6,.7,5,0x4e777b);
-  const wakes:typeof road=[];for(let i=0;i<7;i++)wakes.push({x:146+i*4,y:-3.96,z:-95,w:2,h:.02,d:8+i*1.7});batches(0x86b7b7,wakes);
+  const wakes:BoxItem[]=[];for(let i=0;i<7;i++)wakes.push({x:146+i*4,y:-3.96,z:-95,w:2,h:.02,d:8+i*1.7});batches(0x86b7b7,wakes);
 }
