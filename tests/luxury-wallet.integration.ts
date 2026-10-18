@@ -39,9 +39,9 @@ await writeFile(config,JSON.stringify({
   durable_objects:{bindings:[
     {name:'ROOMS',class_name:'GameRoom'},{name:'CHAT',class_name:'GlobalChat'},
     {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},
-    {name:'INCOME',class_name:'GlobalIncome'},
+    {name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'},
   ]},
-  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}],
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome','GlobalEarningsEvent']}],
 }));
 let child:ChildProcess|undefined;
 const sockets:WebSocket[]=[];
