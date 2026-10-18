@@ -1,5 +1,13 @@
 # Verification · 2026-10-18 Pacific
 
+## Charger signs and Oakland spacing · current-main integration candidate · 2026-10-18 Pacific
+
+- On the candidate merged with main `c1fb945`, all 895 tests and `pnpm build` passed. The build retained Vite's large-chunk warning. The Oakland station move changes shared map geometry, so this branch uses protocol v44 provisionally; the combined release must choose its version against its final base.
+- Isolated local Wrangler room and tick-prediction integrations passed with two clients and advertised capacity 8. These are functional checks, not a ferry crossing, load test or production verification.
+- A local staging fixture placed a guest near each Oakland lot without exercising normal progression. Chrome showed separate grounded pylons at Hegenberger and 2nd Street on desktop, including the Hegenberger pylon's reverse face. Keyboard driving moved the car into the Hegenberger lot, reaching 111 km/h; refill was covered by simulation tests, not observed in this drive.
+- Emulated 390×844 portrait and 844×390 landscape displayed the Hegenberger sign and controls. In portrait the mission panel obscured part of the sign from one close approach. A simulated touch and a held on-screen control did not produce observable movement on this candidate, so its touch driving remains unverified; the earlier successful touch check below was on a previous candidate. No physical device was tested.
+- The road planner ends about 35 game units from the Hegenberger lot, requiring a manual final approach. Charger auto-routing is separate. The final combined map needs its own station, routing, multiplayer and visual checks after integration.
+
 ## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
 
 - After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.
