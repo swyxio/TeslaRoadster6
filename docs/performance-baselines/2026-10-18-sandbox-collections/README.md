@@ -122,8 +122,8 @@ those are synthetic, not the live continuity gate.
 The GitHub run retained its full artifact; selected raw reports, browser
 trajectories, manifests, input events and synthetic motion traces are also
 preserved here as `hosted-39171065918-{base,candidate}-*.json.gz`. A route
-correction is being prepared for a later comparable hosted run. The same
-five-leg comparability guard and existing thresholds remain in force.
+correction is being prepared for a later comparable hosted run. The revised one-delivery scenario checks three legs with the same distance
+tolerances; earlier five-leg reports remain incompatible and held.
 
 ## Recipient snapshot microbenchmark
 
