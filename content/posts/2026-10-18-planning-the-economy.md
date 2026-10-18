@@ -107,7 +107,7 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 
 <figure>
 <img src="/blog/economy/bay-landmarks.svg" alt="Map of Tesland from North Bay Playground to San José, with labeled bridges, research campuses, the Rocket Dome, Fremont Spaceport and city landmarks." loading="lazy">
-<figcaption>The full Tesland map, drawn from the game's coastlines, roads and landmark positions.</figcaption>
+<figcaption>The full Tesland map, drawn from the game's coastlines, roads and landmark positions. Road traces © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.</figcaption>
 </figure>
 
 <ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>

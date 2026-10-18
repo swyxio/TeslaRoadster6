@@ -46,5 +46,5 @@ const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${he
 <rect width="${width}" height="${height}" rx="24" fill="#173b40"/><rect x="350" y="165" width="500" height="${f((MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ)*scale)}" rx="12" fill="#2d6670"/>
 <text x="44" y="58" class="eyebrow">EXPLORE THE BAY</text><text x="44" y="112" class="heading">A world full of destinations</text>
 ${regions}${lines}${bridges}${labels}
-<text x="44" y="1480" class="detail">Coastlines, roads and locations follow Tesland's compressed game map.</text></svg>`;
+<text x="44" y="1480" class="detail">Coastlines, roads and locations follow Tesland's compressed game map.</text><text x="44" y="1510" class="detail">Road traces © OpenStreetMap contributors · openstreetmap.org/copyright</text></svg>`;
 writeFileSync('public/blog/economy/bay-landmarks.svg',svg);
