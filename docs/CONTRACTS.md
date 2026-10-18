@@ -6,7 +6,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 
 | Lane | Owns | May depend on | Must not change incidentally |
 |---|---|---|---|
-| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
+| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `achievements.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
@@ -28,16 +28,16 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 Source of truth is exported TypeScript in `shared/game.ts`:
 
 - `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, stunt count, loop attachment and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
-- `Player`: id, display name, entityId, and `delivery` (session cash, active time, order, completed runs and ticket state). Each player controls exactly one entity; each vehicle has at most one driver.
+- `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), and `achievements` (unlocked session awards and server-owned flight tracking). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, time. Station/building definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake are booleans. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v7
+## Wire protocol v8
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:7,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:8,capacity:number}`.
 
 Client messages:
 
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:7, capacity:number}
+{type:"welcome", id:string, version:8, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -105,3 +105,12 @@ Geometry/materials in the renderer are shared static caches. Removing an entity 
 Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m or when the player is ticketed. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a $25 ticket, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 
 `L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; there is no persistent identity or global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
+
+
+## Citations, rooftops and achievements
+
+`shared/police.ts` measures airborne duration and peak height in the authoritative simulation. When a pursuit ends in a citation, `delivery.lastTicket` records the amount, offense number, flight duration, height and the duration, height and repeat components. The total is deducted immediately, once, with a grace period. Presentation must make a citation conspicuous and require an accessible acknowledgement; clearing controls does not stop server heartbeats. A room continues running while a dialog is open. Session-local UI may not create tickets or alter their amount.
+
+Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. The next order is eligible for a rooftop after every third completed run starting with the first, only when the current vehicle has flight capability. Other vehicles receive ground orders. The player may change cars later, so the interface must identify rooftop orders and the fleet remains available.
+
+`shared/achievements.ts` owns unlocked award IDs and flight tracking per player in snapshots. Bay Hopper requires leaving one mainland shore, crossing water, and arriving on the other without landing; a bridge, island, roof or stunt-loop contact ends the attempt, and recovery or vehicle switches cancel it. Flying above a bridge is allowed. Roof Rider requires a car on a building roof; Sky Delivery requires a completed rooftop delivery; Neighborhood Regular requires three deliveries. Awards are ephemeral and do not affect cash. Clients can render progress and sequence notifications but cannot assert unlocks.

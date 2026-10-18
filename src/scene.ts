@@ -89,7 +89,7 @@ export class GameScene {
     }
     const player=world.players.find(p=>p.id===playerId);
     const e=world.entities.find(e=>e.id===player?.entityId);
-    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,0,target.z);}
+    this.objective.visible=!!player&&!menu;if(player){const target=orderTarget(player.delivery.order);this.objective.position.set(target.x,target.y,target.z);}
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e){

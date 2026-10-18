@@ -14,7 +14,7 @@ The simulation prioritizes arcade legibility over realism. Ground friction slows
 
 Follow the gold marker to a notable restaurant, stop to collect an order, then deliver it to a fictional address. A fast pickup pays an immediate bonus. A separate estimate starts after pickup; beating it adds a delivery bonus and arriving late reduces the fare. The HUD shows current cash and active play time, and Scores compares the current room. Unattended time pauses after a short grace period. Driving and stunts remain available without completing orders.
 
-Roadster flight can shorten a run but nearby police may spot it, pursue and slow the car before issuing a ticket. Escaping their range or accepting a ticket ends a chase. All cash, timing and police behavior run in the shared simulation. Restaurants have no game affiliation, the geography and customers are fictionalized, and cash is not real money. See [DELIVERY.md](DELIVERY.md).
+Roadster flight can shorten a run but nearby police may spot it, pursue and slow the car before issuing a severity- and repeat-offense-based citation. Roadster orders sometimes target a physical rooftop, and four session achievements reward crossing the Bay without landing, rooftop play and deliveries. Escaping their range or accepting a ticket ends a chase. All cash, timing and police behavior run in the shared simulation. Restaurants have no game affiliation, the geography and customers are fictionalized, and cash is not real money. See [DELIVERY.md](DELIVERY.md).
 
 ## Current content
 

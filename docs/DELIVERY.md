@@ -4,15 +4,19 @@ A small optional arcade loop: pick up from a real restaurant identity, drive or 
 
 ## How to play
 
-The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; the Roadster can fly shortcuts.
+The next restaurant and fare appear at the top left; the gold ring on the minimap and a world beacon mark the pickup. Stop within 9 game meters, on the ground, under 4 m/s to collect automatically. Reaching the restaurant before its pickup estimate earns an immediate bonus, up to 40% of the delivery base fare; the bonus decreases with active time and expires at the estimate. The marker changes to a customer address and the estimate starts. Stop at the destination to collect the fare and get the next order. You can ignore an order and free-roam. Normal cars can deliver; the Roadster can fly shortcuts. When a Roadster finishes its first run and every third run thereafter, its next order goes to a flat rooftop: fly to the marked height, land, and stop near the center. The marker sits on the physical roof. Select the Roadster in Fleet if you changed to a non-flying car before finishing a rooftop order.
 
 A delivery pays its base fare at the estimate, up to 75% extra for earlier delivery, and progressively less for late delivery, down to zero. Distance and prices are arcade values, not real fares. The HUD shows what delivery would pay at the current time. Your wallet can become negative when a police ticket exceeds your earnings.
 
 The active clock counts input and three seconds after input, or a moving player AV. Both pickup and delivery clocks use the same rule. Standing idle eventually pauses both. An AV driving without input still counts; a parked AV does not. A browser or network stall can suspend simulation or disconnect the room; the clocks are not a competitive anti-cheat guarantee.
 
-Police patrol the city in marked vehicles. Flying 3–80 m above street level within 85 m of police starts a chase (a stationary car on a roof is not flying). Escape beyond 110 m for 10 seconds to shake a pursuer. Police within 12 m can slow a grounded driver; within 7 m at under 4 m/s they issue a $25 ticket. There is a 20-second grace period after a ticket. These are simple arcade rules, not real policing or legal advice. Police use approximate routing around the compressed city and cannot be taken by players.
+Police patrol the city in marked vehicles. Flying 3–80 m above street level within 85 m of police starts a chase (a stationary car on a roof is not flying). Escape beyond 110 m for 10 seconds to shake a pursuer. Police within 12 m slow a grounded driver; within 7 m at under 4 m/s they stop the vehicle and issue a citation. The fine is $60 plus $8 per full two seconds of airborne flight (up to $120), $10 per full 10 m of peak altitude (up to $80), and $35 per previous citation in the session. A prominent citation explains the fine and requires acknowledgement; the room simulation continues while the dialog is open. There is a 20-second grace period after a ticket. These are simple arcade rules, not real policing or legal advice. Police use approximate routing around the compressed city and cannot be taken by players.
 
 Open **L · Scores** to see the room's current drivers, ranked by cash, alongside active time and cash per active minute. It is not a persistent leaderboard: leaving removes your score, and a room resets when empty or restarted. Solo scores last until the solo session is reset. Cash and time are simulation-owned in multiplayer; no client sends a fare or delivery result.
+
+## Session achievements
+
+Open **T · Awards** to see progress. **Bay Hopper** rewards flying from San Francisco to Oakland or back without landing on the bridge or Yerba Buena Island; flying over the bridge is fine. **Roof Rider** is for landing on a building, **Sky Delivery** for completing a rooftop order, and **Neighborhood Regular** for three deliveries. These are session-only and shared simulation decides unlocks.
 
 ## Content and attribution
 
@@ -27,7 +31,7 @@ Restaurant names and street addresses are real business identities verified agai
 | Homeroom To Go, 4007 Webster St, Oakland | [Homeroom](https://www.homeroom510.com/locations) |
 | Comal Next Door, 550 Grand Ave, Oakland | [Comal](https://www.comalnextdoor.com/location/comal-next-door-oakland/) |
 
-`shared/delivery.ts` is the content source. Locations must be on supported ground, clear of shared building collision, and reachable without flight. `tests/delivery.test.ts` verifies ground clearance and the core payment, timing, and police rules. Designers can change UI and marker art without changing simulation state or trust boundaries. See [CONTRACTS.md](CONTRACTS.md) before changing shared state.
+`shared/delivery.ts` is the content source. Ground locations must be on supported ground and clear of shared building collision; rooftop targets use the height and center of a shared flat-roof building and are offered only after a flight-capable vehicle completes an order. `tests/delivery.test.ts` verifies ground clearance and the core payment, timing, and police rules. Designers can change UI and marker art without changing simulation state or trust boundaries. See [CONTRACTS.md](CONTRACTS.md) before changing shared state.
 
 ## Verification
 
