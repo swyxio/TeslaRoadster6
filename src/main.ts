@@ -181,7 +181,7 @@ const chat=new GlobalChat({
     else if(pendingSave){savingDriver=chat.save();if(!savingDriver)identityFeedback('Could not request a code. Try again.');}
     pendingSave=false;
     if(needsRename)requestName(desired);
-    else if(pendingName){pendingName=false;identityFeedback(`Now going by ${name}.`);}
+    else if(pendingName){pendingName=false;chatPanel.finishRename('',true);identityFeedback(`Now going by ${name}.`);}
   },
   onRenamed(id,name,requestId){
     chatPanel.setIdentity(id,name);session.setName(name);

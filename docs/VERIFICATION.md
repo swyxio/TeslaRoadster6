@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Persistent chat names with predictive driving · protocol v29 · 2026-10-18 Pacific
+
+- After integrating the predictive driving release, `pnpm test` passed 431 tests and `pnpm build` passed with Vite's existing large-chunk warning. Local two-client room and chat integrations and an isolated real Wrangler restart passed, including overlapping save and rename; these are functional checks, not load tests.
+- Chrome on the combined local build recovered the previous name and ID, renamed in chat without changing the ID, and showed the renamed driver on the solo leaderboard. The editor was inspected in 390×844 portrait and measured in 844×390 landscape emulation; no physical device was tested.
+
 ## Persistent chat names · protocol v28 · 2026-10-18 Pacific
 
 - On the integrated v28 build, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning.
