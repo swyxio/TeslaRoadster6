@@ -1104,17 +1104,18 @@ scene.start(dt=>{
     if(pendingLuxury?.source==='workshop')$('shop-feedback').textContent='Disconnected. Rejoin to collect your vehicle.';
     pendingLuxury=null;lastLuxuryKey='';updateLuxury();luxuryUi.close();
   }
-  let feedbackCar:Entity|undefined,flightChanged=false;
+  let feedbackCar:Entity|undefined,flightChanged=false,feedbackFerry=session.world.ferry;
   if(!marsUi.isViewing()){
     const renderWorld=session.renderWorld(),renderPlayer=renderWorld.players.find(p=>p.id===session.id);
     feedbackCar=renderWorld.entities.find(e=>e.id===renderPlayer?.entityId);
+    feedbackFerry=renderWorld.ferry;
     for(const event of soundEvents){
       if(event.cue==='jump'||event.cue==='land'){flightChanged=true;if(car)updateFlightLabel(car);}
       if(event.cue==='land')scene.landed(event.strength??1);
     }
     scene.render(renderWorld,session.id,dt,menu,session.localPresentationActive,session.takePresentationSnap(),session.takeCameraSnap(),session.remotePresentationActive,{animation:starship.animation(performance.now(),false),total:starship.total()});
   }
-  if(driveFeedback.update(feedbackCar,input,soundEvents,dt,driving&&!marsUi.isViewing()))audio.play('boost');
+  if(driveFeedback.update(feedbackCar,input,soundEvents,dt,driving&&!marsUi.isViewing(),feedbackFerry))audio.play('boost');
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
   if(navigationDriving&&observedCar?.navigation?.status==='failed')notice('Self-driving could not get past an obstacle. Take over or use Unstuck (K) and try again.');

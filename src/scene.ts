@@ -20,7 +20,7 @@ import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrust
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
-import { chaseLens, cockpitPose } from './camera';
+import { cockpitPose, viewLens, type CameraMode } from './camera';
 import { LandingPulse } from './landing-pulse';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
@@ -38,8 +38,6 @@ import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { RESEARCH_SITES, researchArrival } from '../shared/research';
 import { createPropertyScene } from './property-scene';
 import { marketPaintColor } from '../shared/market-catalog';
-
-export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
@@ -318,12 +316,10 @@ export class GameScene {
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     const landingScale=this.landingPulse.update(controlled?.id,!!controlled&&controlled.supportId!==null,menu||cockpit,snapLocal||snapCamera,this.reducedMotion.matches,dt);
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
-    if(!cockpit){
-      // Rear thrust includes boost and powered flight. Keep the cockpit lens and
-      // the menu stable; the chase lens returns smoothly when thrust ends.
-      const fov=chaseLens(this.camera.fov,!!controlled&&!menu&&!!(controlled.thrusters&THRUSTER_REAR),dt,this.reducedMotion.matches);
-      if(fov!==this.camera.fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
-    }
+    // Rear thrust includes boost and powered flight; Wide and cockpit keep
+    // their chosen lenses while chase eases back when thrust ends.
+    const fov=viewLens(this.camera.fov,this.cameraMode,cockpit,!!controlled&&!menu&&!!(controlled.thrusters&THRUSTER_REAR),dt,this.reducedMotion.matches);
+    if(fov!==this.camera.fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);

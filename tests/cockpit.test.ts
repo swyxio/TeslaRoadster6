@@ -4,7 +4,7 @@ import * as T from 'three';
 import { addPlayer, createWorld, NEUTRAL, step } from '../shared/game';
 import { orderTarget } from '../shared/delivery';
 import { terrainHeight } from '../shared/map';
-import { chaseLens, cockpitPose } from '../src/camera';
+import { chaseLens, cockpitPose, viewLens } from '../src/camera';
 import { parseMessage } from '../worker/protocol';
 
 test('chase lens eases toward thrust and recovers independently of frame rate',()=>{
@@ -24,6 +24,18 @@ test('reduced motion immediately restores the neutral chase lens',()=>{
   assert.equal(chaseLens(widened,true,0,true),55,'preference change does not animate back');
   assert.equal(chaseLens(55,true,.1,true),55,'thrust does not widen the lens');
   assert.ok(chaseLens(55,true,.1,false)>55,'animation resumes when the preference is removed');
+});
+
+test('wide view stays neutral across camera and reduced-motion changes',()=>{
+  const widened=viewLens(55,'chase',false,true,.1,false);
+  assert.ok(widened>55,'chase responds to thrust');
+  assert.equal(viewLens(widened,'wide',false,true,0,false),55,'switching to Wide restores its lens immediately');
+  assert.equal(viewLens(55,'wide',false,true,.1,false),55,'thrust does not animate Wide');
+  assert.equal(viewLens(55,'wide',false,false,.1,true),55,'reduced motion retains the neutral Wide lens');
+  assert.ok(viewLens(55,'chase',false,true,.1,false)>55,'returning to chase restores its response');
+  assert.equal(viewLens(widened,'chase',false,true,.1,true),55,'reduced motion restores the chase lens');
+  assert.equal(viewLens(widened,'cockpit',true,true,.1,false),75,'cockpit keeps its own lens');
+  assert.ok(viewLens(55,'cockpit',false,true,.1,false)>55,'on-foot cockpit fallback retains chase semantics');
 });
 
 test('cockpit follows car position, pitch and roll instead of keeping the horizon upright',()=>{

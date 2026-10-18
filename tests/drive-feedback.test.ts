@@ -12,7 +12,7 @@ function setup(){
   const observe=(input=NEUTRAL,dt=.05,active=true)=>{
     world.time+=dt;
     const events=audio.update(world,player.id,active);
-    return {events,boostStarted:feedback.update(car,input,events,dt,active)};
+    return {events,boostStarted:feedback.update(car,input,events,dt,active,world.ferry)};
   };
   observe();
   return {world,player,car,element,feedback,audio,observe};
@@ -75,6 +75,29 @@ test('vehicles without rockets have no boost input feedback',()=>{
   assert.equal(element.textContent,'BOOST HELD');
 });
 
+test('a secured ferry passenger has no boost cue while jump and landing feedback remain visible',()=>{
+  const {world,car,element,feedback,observe}=setup();
+  const boost={...NEUTRAL,boost:true,throttle:1};
+  car.supportId='ferry';
+  world.ferry.passengers=[{entityId:car.id,x:0,z:0}];
+  world.ferry.phase='to-island';
+  assert.equal(observe(boost).boostStarted,false);
+  assert.equal(element.hidden,true,'secured controls cannot trigger boost feedback');
+  assert.equal(feedback.update(car,boost,[{cue:'jump'}],.05,true,world.ferry),false);
+  assert.equal(element.textContent,'LIFT OFF');
+  assert.equal(feedback.update(car,boost,[{cue:'land'}],.05,true,world.ferry),false);
+  assert.equal(element.textContent,'TOUCHDOWN');
+  for(let i=0;i<4;i++)observe(boost,.25);
+  assert.equal(element.hidden,true,'the landing transient clears while still secured');
+  world.ferry.phase='island';
+  assert.equal(observe(boost).boostStarted,true,'a held input can cue once controls resume at dock');
+  assert.equal(element.textContent,'BOOST HELD');
+  assert.equal(observe(boost).boostStarted,false,'the continuing hold does not repeat the sound');
+  world.ferry.phase='to-sf';
+  assert.equal(observe(boost).boostStarted,false);
+  assert.equal(element.hidden,true,'securing the same passenger clears the held-input label');
+});
+
 test('liftoff and supported landing share the snapshot-derived audio events',()=>{
   const {car,element,observe}=setup();
   car.jumpBurstUntil=1;car.y=3;car.vy=8;car.supportId=null;
@@ -96,6 +119,6 @@ test('teleports, changing vehicles and pausing do not leave stale feedback',()=>
   observe(NEUTRAL,.05,false);assert.equal(element.hidden,true);
   const other=makeEntity('other','roadster',car.x,car.z,player.id);world.entities.push(other);player.entityId=other.id;
   const events=audio.update(world,player.id,true);
-  feedback.update(other,NEUTRAL,events,.05,true);
+  feedback.update(other,NEUTRAL,events,.05,true,world.ferry);
   assert.equal(element.hidden,true);
 });

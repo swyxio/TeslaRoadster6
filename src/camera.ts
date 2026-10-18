@@ -1,12 +1,20 @@
 import * as T from 'three';
 import type { VehicleSpec } from '../shared/vehicles';
 
+export type CameraMode = 'chase' | 'wide' | 'cockpit';
+
 /** A bounded, frame-rate independent lens response for powered chase views. */
 export function chaseLens(current:number, thrusting:boolean, dt:number, reducedMotion=false) {
   if(reducedMotion)return 55;
   const target=thrusting?60:55;
   const next=target+(current-target)*Math.exp(-4*Math.min(.1,Math.max(0,dt)));
   return Math.abs(next-target)<.01?target:next;
+}
+
+/** Wide keeps a stable lens; an on-foot cockpit selection uses the chase view. */
+export function viewLens(current:number,mode:CameraMode,cockpit:boolean,thrusting:boolean,dt:number,reducedMotion:boolean){
+  if(cockpit)return 75;
+  return mode==='wide'?55:chaseLens(current,thrusting,dt,reducedMotion);
 }
 
 /** Camera and car share an orientation: Three cameras look along local -Z. */

@@ -1,4 +1,5 @@
 import { THRUSTER_REAR, type Entity, type Input } from '../shared/game';
+import { ferrySecured, type Ferry } from '../shared/ferry';
 import { hasRockets } from '../shared/upgrades';
 import type { SoundEvent } from './audio-events';
 
@@ -14,7 +15,7 @@ export class DriveFeedback {
   constructor(private readonly element:HTMLElement) {}
 
   /** Return true when an available-looking boost input begins, for a local cue. */
-  update(entity:Entity|undefined,input:Input,events:readonly SoundEvent[],dt:number,active:boolean):boolean {
+  update(entity:Entity|undefined,input:Input,events:readonly SoundEvent[],dt:number,active:boolean,ferry:Ferry):boolean {
     if(!active||!entity){this.reset();return false;}
     if(this.entityId!==entity.id){this.entityId=entity.id;this.transient='';this.remaining=0;this.boostHeld=false;this.boostCooldown=0;}
     const elapsed=Math.max(0,Math.min(dt,.25));
@@ -29,7 +30,7 @@ export class DriveFeedback {
     // input cue visible, but may also be ordinary flight, so it is not proof.
     const rear=(entity.thrusters&THRUSTER_REAR)!==0;
     const airborne=entity.supportId===null||entity.supportId==='stunt-loop'||entity.supportId==='island-cliff';
-    const boostHeld=input.boost&&hasRockets(entity)&&(entity.air>0||rear)&&(input.throttle!==0||airborne||rear);
+    const boostHeld=input.boost&&!ferrySecured(ferry,entity)&&hasRockets(entity)&&(entity.air>0||rear)&&(input.throttle!==0||airborne||rear);
     const started=boostHeld&&!this.boostHeld&&this.boostCooldown===0;
     if(started)this.boostCooldown=.4;
     this.boostHeld=boostHeld;
