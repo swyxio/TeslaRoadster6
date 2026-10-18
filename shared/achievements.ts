@@ -87,8 +87,8 @@ function creditAwards(player:Player,amount:number,sameTickReward=false):void {
   player.delivery.lifetimeIncome+=amount;
   updateLevel(player.delivery);
   const reward=player.delivery.lastReward;
-  if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery')){
-    player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'?'pickup-research':'delivery-research',amount:reward.amount+amount};
+  if(sameTickReward&&reward&&(reward.kind==='pickup'||reward.kind==='delivery'||reward.kind==='pickup-research'||reward.kind==='delivery-research')){
+    player.delivery.lastReward={id:reward.id,kind:reward.kind==='pickup'||reward.kind==='pickup-research'?'pickup-research':'delivery-research',amount:reward.amount+amount};
   }else player.delivery.lastReward={id:(reward?.id??0)+1,kind:'research',amount};
 }
 export function awardMarsAchievement(player:Player):void { if(unlock(player.achievements,'to-mars'))creditAwards(player,10_000); }

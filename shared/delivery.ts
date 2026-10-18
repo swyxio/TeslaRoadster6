@@ -4,6 +4,7 @@ import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
 import { initialOta, type OtaSubscription } from './ota';
+import { dropoffPayouts, pickupPayout, resolveDeliveryPayout, type DeliveryPayoutResolver, type ResolvedDeliveryPayout } from './delivery-payout';
 
 // Current spendable cash determines level; ownership and awards survive a drop.
 export const LEVELS = [
@@ -134,8 +135,9 @@ export function payoutFor(order: Order): number {
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
   return Math.max(0, order.base + bonus - latePenalty);
 }
-export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false): void {
+export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false, resolvePayout?:DeliveryPayoutResolver): ResolvedDeliveryPayout[] | null | undefined {
   const delivery = player.delivery;
+  const elapsedBefore=delivery.order.elapsed;
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
@@ -153,18 +155,32 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     if(entity.supportId!=='ground'||targetHeight===null||Math.hypot(entity.x-target.x,entity.y-targetHeight,entity.z-target.z)>9)return;
   }
   if (delivery.order.stage === 'pickup') {
-    const bonus = pickupBonusFor(delivery.order);
+    const component=pickupPayout(delivery.completed+1,pickupBonusFor(delivery.order));
+    const bonus=resolveDeliveryPayout(component,resolvePayout);
+    if(bonus===null){delivery.order.elapsed=elapsedBefore;return null;}
     if (bonus > 0) reward(delivery, 'pickup', bonus);
     delivery.order.stage = 'dropoff';
     delivery.order.elapsed = 0;
     delivery.lastPayout = null;
+    return [{component,amount:bonus}];
   } else {
-    const payout = payoutFor(delivery.order);
+    const components=dropoffPayouts(delivery.completed+1,payoutFor(delivery.order));
+    const fare=resolveDeliveryPayout(components[0],resolvePayout);
+    if(fare===null){delivery.order.elapsed=elapsedBefore;return null;}
+    const parts:ResolvedDeliveryPayout[]=[{component:components[0],amount:fare}];
+    if(components[1])parts.push({component:components[1],amount:components[1].amount});
+    const payout=parts[0].amount,checkpoint=parts[1]?.amount??0;
     if (payout > 0) reward(delivery, 'delivery', payout);
+    if(checkpoint){
+      delivery.cash+=checkpoint;delivery.lifetimeIncome+=checkpoint;
+      const previous=delivery.lastReward;
+      delivery.lastReward={id:payout>0?previous!.id:(previous?.id??0)+1,kind:'delivery-research',amount:payout+checkpoint};
+    }
     delivery.lastPayout = payout;
     delivery.completed++;
     updateLevel(delivery);
     delivery.order = orderFor(delivery.completed, entity, delivery.level, hasRockets(entity));
+    return parts;
   }
 }
 
