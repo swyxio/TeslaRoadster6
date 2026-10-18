@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -95,6 +95,7 @@ export class GameRoom extends DurableObject<Env> {
     if (now - session.lastAction < 400) {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
+      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       return;
     }
     session.lastAction = now;
@@ -105,6 +106,12 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
+    if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);}
+    if(message.type==='destination'){
+      const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
+      if(ok)this.inputs.delete(session.id);
+      socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
+    }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
     if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:subscribeOta(this.world,session.id,message.enabled)}));
   }

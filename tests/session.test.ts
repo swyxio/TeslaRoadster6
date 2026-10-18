@@ -66,3 +66,16 @@ test('joining the current room keeps its seat and may select a car',()=>{
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.closed();
 });
+
+test('solo is explicit, advances locally and ignores an old room socket',()=>{
+  const session=new Session();session.join('bay','Alex');const old=Socket.last;
+  session.solo('model-3','Scout');
+  assert.equal(session.status,'solo');assert.equal(session.room,'');
+  assert.equal(session.world.players[0].name,'Scout');
+  assert.equal(session.world.entities.find(entity=>entity.driver==='local')?.kind,'model-3');
+  session.tick(.1,NEUTRAL);assert.ok(session.world.time>0);
+  old.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});old.closed();
+  assert.equal(session.status,'solo');assert.equal(session.id,'local');
+  const id=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
+});

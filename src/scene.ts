@@ -215,7 +215,13 @@ export class GameScene {
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='rgba(18,36,41,.82)';ctx.roundRect(0,0,512,64,14);ctx.fill();ctx.fillStyle='#f8eed9';ctx.font='600 24px system-ui';ctx.textAlign='center';ctx.fillText(text,256,41);
     const sprite=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(canvas),depthTest:false,transparent:true}));sprite.scale.set(24,3,1);this.labels.push(sprite);return sprite;
   }
+  private lastWorldTime=-1;
+  private worldUpdatedAt=0;
   render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false) {
+    const now=performance.now();
+    if(world.time!==this.lastWorldTime){this.lastWorldTime=world.time;this.worldUpdatedAt=now;}
+    // Remote vehicles extrapolate briefly. The controlled car uses its bounded prediction instead.
+    const elapsed=Math.min(.1,Math.max(0,(now-this.worldUpdatedAt)/1000));
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
@@ -278,7 +284,8 @@ export class GameScene {
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
       mesh.visible=!(cockpit&&e.id===controlled?.id);
-      const target=new T.Vector3(e.x,e.y,e.z);
+      const ahead=e.id===controlled?.id?0:elapsed;
+      const target=new T.Vector3(e.x+e.vx*ahead,e.y+e.vy*ahead,e.z+e.vz*ahead);
       // When a preview is suspended, return directly to authority rather than
       // interpolating the car through a newly reported obstacle or shoreline.
       const returningToAuthority=this.predictedEntity===e.id&&!localPredicted;
@@ -293,7 +300,8 @@ export class GameScene {
       const normal=e.supportId===null||e.supportId==='stunt-loop'||e.supportId==='island-cliff'||e.supportId==='dome'?null:supportNormal(e.supportId,e.x,e.z);
       this.surfaceUp.set(0,surface?.normalY??normal?.y??1,surface?.normalZ??normal?.z??0);
       if(!surface)this.surfaceUp.x=normal?.x??0;
-      this.surfaceBack.set(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
+      const visualYaw=e.yaw+e.yawRate*(e.id===controlled?.id?0:elapsed);
+      this.surfaceBack.set(Math.sin(visualYaw),surface?Math.cos(visualYaw)*surface.tangentY:0,surface?Math.cos(visualYaw)*surface.tangentZ:Math.cos(visualYaw));
       this.surfaceRight.crossVectors(this.surfaceUp,this.surfaceBack).normalize();
       this.surfaceBack.crossVectors(this.surfaceRight,this.surfaceUp).normalize();
       this.orientation.setFromRotationMatrix(this.basis.makeBasis(this.surfaceRight,this.surfaceUp,this.surfaceBack));
@@ -346,15 +354,18 @@ export class GameScene {
       const distance=this.cameraMode==='wide'?30:portrait?18:15;
       const lookAhead=portrait?-6:5;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
-      const back=new T.Vector3(Math.sin(e.yaw),surface?Math.cos(e.yaw)*surface.tangentY:0,surface?Math.cos(e.yaw)*surface.tangentZ:Math.cos(e.yaw));
-      const position=new T.Vector3(e.x,e.y,e.z),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
+      const mesh=this.entities.get(e.id)!;
+      const visualBack=new T.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
+      const yaw=Math.atan2(visualBack.x,visualBack.z);
+      const back=new T.Vector3(Math.sin(yaw),surface?Math.cos(yaw)*surface.tangentY:0,surface?Math.cos(yaw)*surface.tangentZ:Math.cos(yaw));
+      const position=mesh.position.clone(),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
       this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
       if(surface){
         // A tangent chase camera on the curved wall points out through the
         // shell. Move behind the car and look into the pitch as it climbs,
         // retaining world-up so the field remains legible on the ceiling.
         const wallView=T.MathUtils.clamp((1-surface.normalY)*2.5,0,1);
-        const field=new T.Vector3(T.MathUtils.clamp(e.x,DOME.x-DOME.halfLength*.45,DOME.x+DOME.halfLength*.45),0,DOME.z);
+        const field=new T.Vector3(T.MathUtils.clamp(position.x,DOME.x-DOME.halfLength*.45,DOME.x+DOME.halfLength*.45),0,DOME.z);
         const outward=position.clone().sub(field).normalize();
         const arenaCamera=position.clone().addScaledVector(outward,this.cameraMode==='wide'?22:15).add(new T.Vector3(back.x*6,10,0));
         const arenaFocus=position.clone().lerp(field,.35).add(new T.Vector3(0,1,0));

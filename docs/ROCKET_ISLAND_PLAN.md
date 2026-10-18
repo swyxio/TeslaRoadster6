@@ -1,6 +1,6 @@
 # Rocket Island and parking playgrounds · implementation status
 
-This protocol v24 checkout combines the Rocket Island playground and cockpit view with the China Basin Rocket Dome, Rocket pickups and fictional shops. These are fictional, compressed game locations and do not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
+This protocol v25 checkout combines the Rocket Island playground and cockpit view with the China Basin Rocket Dome, Rocket pickups and fictional shops. These are fictional, compressed game locations and do not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
 
 ## In the current checkout
 

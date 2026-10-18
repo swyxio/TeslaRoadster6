@@ -1,0 +1,116 @@
+import { isSurface } from './map';
+import { requiredLevelAt, type Level } from './delivery';
+import { ROUTES, type Point } from './traffic';
+import type { Entity } from './game';
+
+export type Navigation = { destination:Point; path:Point[]; index:number; status:'driving'|'arrived' };
+type Segment = {a:Point;b:Point;cuts:number[]};
+type Edge = {to:number;distance:number};
+const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
+const point=(s:Segment,t:number):Point=>({x:s.a.x+(s.b.x-s.a.x)*t,z:s.a.z+(s.b.z-s.a.z)*t});
+const cross=(ax:number,az:number,bx:number,bz:number)=>ax*bz-az*bx;
+const projection=(p:Point,s:Segment)=>{
+  const dx=s.b.x-s.a.x,dz=s.b.z-s.a.z;
+  const t=Math.max(0,Math.min(1,((p.x-s.a.x)*dx+(p.z-s.a.z)*dz)/(dx*dx+dz*dz||1)));
+  return {t,point:point(s,t)};
+};
+
+// Break the existing one-way traffic lanes at their shared intersections. The
+// resulting graph has no invented streets or player-supplied road geometry.
+const segments:Segment[]=ROUTES.flatMap(route=>route.map((a,i)=>({a,b:route[(i+1)%route.length],cuts:[0,1]})));
+for(let i=0;i<segments.length;i++)for(let j=i+1;j<segments.length;j++){
+  const a=segments[i],b=segments[j],ax=a.b.x-a.a.x,az=a.b.z-a.a.z,bx=b.b.x-b.a.x,bz=b.b.z-b.a.z;
+  const denominator=cross(ax,az,bx,bz),dx=b.a.x-a.a.x,dz=b.a.z-a.a.z;
+  if(Math.abs(denominator)>1e-6){
+    const t=cross(dx,dz,bx,bz)/denominator,u=cross(dx,dz,ax,az)/denominator;
+    if(t>=0&&t<=1&&u>=0&&u<=1){a.cuts.push(t);b.cuts.push(u);}
+  }else{
+    // Connect coincident parts of overlapping city loops at their endpoints.
+    for(const t of [0,1]){const p=point(a,t),q=projection(p,b);if(distance(p,q.point)<.01){a.cuts.push(t);b.cuts.push(q.t);}}
+    for(const t of [0,1]){const p=point(b,t),q=projection(p,a);if(distance(p,q.point)<.01){b.cuts.push(t);a.cuts.push(q.t);}}
+  }
+}
+const nodes:Point[]=[],edges:Edge[][]=[],nodeIds=new Map<string,number>();
+function node(p:Point):number{
+  const key=`${Math.round(p.x*100)},${Math.round(p.z*100)}`;
+  let id=nodeIds.get(key);if(id===undefined){id=nodes.length;nodeIds.set(key,id);nodes.push(p);edges.push([]);}return id;
+}
+const segmentNodes=segments.map(s=>{
+  const cuts=[...new Set(s.cuts.map(t=>Math.round(t*1e7)/1e7))].sort((a,b)=>a-b);
+  return cuts.map(t=>({t,id:node(point(s,t))}));
+});
+for(let i=0;i<segments.length;i++){
+  const cuts=segmentNodes[i];
+  for(let j=0;j<cuts.length-1;j++){
+    const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to])});
+  }
+}
+function allowed(a:Point,b:Point,level:Level):boolean{
+  const count=Math.max(1,Math.ceil(distance(a,b)/30));
+  for(let i=0;i<=count;i++){const t=i/count;if(requiredLevelAt(a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t)>level)return false;}
+  return true;
+}
+
+/** Find a directed route to the nearest connected lane, respecting progress. */
+export function planNavigation(car:Entity,destination:Point,level:Level):Navigation|null {
+  if(car.kind==='person'||car.supportId!=='ground'||car.inDome||!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return null;
+  const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);
+  const starts=candidates(car,30),ends=candidates(destination,100);
+  if(!starts.length||!ends.length)return null;
+  const closeStarts=starts.filter(c=>{
+    const s=segments[c.i],length=distance(s.a,s.b)||1;
+    const alignment=(-Math.sin(car.yaw)*(s.b.x-s.a.x)-Math.cos(car.yaw)*(s.b.z-s.a.z))/length;
+    return c.distance<=starts[0].distance+7&&alignment>.1;
+  }).slice(0,12);
+  if(!closeStarts.length)return null;
+  const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
+  const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,Point>(),used=new Set<number>();
+  for(const start of closeStarts){
+    const s=segments[start.i],length=distance(s.a,s.b),heading=(-Math.sin(car.yaw)*(s.b.x-s.a.x)-Math.cos(car.yaw)*(s.b.z-s.a.z))/(length||1);
+    const next=segmentNodes[start.i].find(c=>c.t>=start.t-1e-7);if(!next||!allowed(car,nodes[next.id],level))continue;
+    const cost=start.distance*2+(1-heading)*8+distance(start.point,nodes[next.id]);
+    if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start.point);}
+  }
+  let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
+  // Direct travel on a single segment need not pass through an intersection.
+  let direct:Point[]|undefined;
+  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&end.t>=start.t&&allowed(car,end.point,level)){
+    const cost=start.distance*2+distance(start.point,end.point)+end.distance*2;
+    if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[end.point];}
+  }
+  while(used.size<nodes.length){
+    let at=-1;for(let i=0;i<nodes.length;i++)if(!used.has(i)&&(at<0||dist[i]<dist[at]))at=i;
+    if(at<0||!Number.isFinite(dist[at])||dist[at]>bestCost)break;
+    used.add(at);
+    for(const end of closeEnds){
+      const cuts=segmentNodes[end.i],before=[...cuts].reverse().find(c=>c.t<=end.t+1e-7);
+      if(before?.id!==at||!allowed(nodes[at],end.point,level))continue;
+      const cost=dist[at]+distance(nodes[at],end.point)+end.distance*2;
+      if(cost<bestCost){bestCost=cost;bestNode=at;bestEnd=end.point;direct=undefined;}
+    }
+    for(const edge of edges[at])if(allowed(nodes[at],nodes[edge.to],level)){
+      const cost=dist[at]+edge.distance;
+      if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;}
+    }
+  }
+  if(!bestEnd)return null;
+  const path:Point[]=direct??[];
+  if(!direct){
+    for(let at=bestNode;at!==-1;at=previous[at])path.unshift(nodes[at]);
+    const origin=origins.get(path.length?nodeIds.get(`${Math.round(path[0].x*100)},${Math.round(path[0].z*100)}`)!:-1);
+    if(origin&&distance(car,origin)>3)path.unshift(origin);
+    path.push(bestEnd);
+  }
+  // Remove redundant collinear cuts, but retain actual turns and the destination.
+  const clean:Point[]=[];
+  for(const p of path){
+    if(clean.length&&distance(clean[clean.length-1],p)<.1)continue;
+    while(clean.length>=2){const a=clean[clean.length-2],b=clean[clean.length-1];
+      const ab={x:b.x-a.x,z:b.z-a.z},bc={x:p.x-b.x,z:p.z-b.z};
+      if(Math.abs(cross(ab.x,ab.z,bc.x,bc.z))>.01*(Math.hypot(ab.x,ab.z)*Math.hypot(bc.x,bc.z))||ab.x*bc.x+ab.z*bc.z<=0)break;
+      clean.pop();
+    }
+    clean.push(p);
+  }
+  return {destination:bestEnd,path:clean,index:0,status:'driving'};
+}
