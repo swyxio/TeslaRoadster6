@@ -7,10 +7,12 @@ import { currentAt } from '../shared/sky-currents';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 import { OTA_FEE } from '../shared/ota';
+import { orderTarget } from '../shared/delivery';
+import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
-// Protocol 37 retains tick-scheduled controls and adds the Starship and earnings-event messages.
-assert.equal(PROTOCOL_VERSION, 37);
+// Protocol 38 combines delivery destinations with Starship and earnings-event messages.
+assert.equal(PROTOCOL_VERSION, 38);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -233,6 +235,15 @@ try {
   await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9&&r.ok)??false,'destination is accepted by the room');
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
   assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
+  await delay(500);
+  const deliveryTarget=orderTarget(two.state.world!.players.find(player=>player.id===id)!.delivery.order);
+  one.input.action({type:'deliveryDestination',requestId:10});
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===10&&r.ok)??false,'current delivery route is accepted by the room');
+  await eventually(()=>{
+    const destination=two.state.world?.entities.find(e=>e.driver===id)?.navigation?.destination;
+    return !!destination&&Math.hypot(destination.x-deliveryTarget.x,destination.z-deliveryTarget.z)<=DELIVERY_DESTINATION_SNAP;
+  },'delivery route uses the authoritative order');
+  assert.equal(two.state.destinationResults?.length??0,0,'delivery response goes only to the requester');
   await delay(500);one.input.action({type:'minigame',game:'short'});
   one.socket.send(JSON.stringify({type:'race',action:'start',courseId:'short'}));
   await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.phase==='countdown'&&r.entrants.some(e=>e.playerId===id))??false,'race starts immediately after direct entry');

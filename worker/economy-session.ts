@@ -12,7 +12,8 @@ import type { SettledDeliveryEarning } from '../shared/earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
 type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[]};
-type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;onApplied?:(outcome:DriverOutcome)=>void};
+type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;onApplied?:(outcome:DriverOutcome)=>void;replayGameAward?:()=>void;awardRejections?:number};
+const MAX_GAME_AWARD_RETRIES=1;
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 // Compare only durable fields touched by simulation. Vehicle maps are copied on change.
 const durableFields=(d:Draft)=>[d.delivery.cash,d.delivery.lifetimeIncome,d.delivery.earned,d.delivery.completed,d.delivery.level,d.delivery.tickets,d.delivery.order.restaurant,d.delivery.order.customer,d.delivery.order.stage,d.delivery.order.pickupEstimate,d.delivery.order.estimate,d.delivery.order.base,d.delivery.ota.enabled,d.delivery.ota.active,d.achievements.unlocked.length,d.vehicles];
@@ -89,6 +90,8 @@ export class EconomySession {
   }
   barrier(token:number){this.barriers.push({token,after:this.submitted});}
   sync():number|undefined{
+    // Never acknowledge a barrier whose wallet could not be reconciled.
+    if(this.failed)return undefined;
     const done=this.barriers.filter(b=>b.after<=this.settled);this.barriers=this.barriers.filter(b=>b.after>this.settled);
     return done.length?Math.max(...done.map(b=>b.token)):undefined;
   }
@@ -101,7 +104,7 @@ export class EconomySession {
     this.rememberTimers();
     this.wallet();
   }
-  hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
+  hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),gameAward:(player,apply,capture)=>this.gameAward(player,apply,capture),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
   update(player:Player,apply:()=>EconomyUpdateResult,rate:{atMs:number;multiplier:1|1.5|2|3}|null=null){
     if(this.failed)return;
     // Bound memory during an extended backend outage. The pending events keep
@@ -129,14 +132,22 @@ export class EconomySession {
       if(!rate)throw new Error('A delivery payout requires an authoritative rate');
       return {sourceId:component.sourceId,kind:component.kind,base:component.amount,amount,atMs:rate.atMs,multiplier:component.kind==='checkpoint'?1:rate.multiplier};
     }):[];
-    if(changed(before,durableFields(this.draft)))this.enqueue({kind:'progress',progress:this.progress(),earnings});
-    else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
+    let item:Item|undefined;
+    if(changed(before,durableFields(this.draft)))item=this.enqueue({kind:'progress',progress:this.progress(),earnings});
+    else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())item=this.enqueue({kind:'progress',progress:this.progress()});
     // Timers and flight geometry can advance visually; money, awards and order stages remain committed.
     if(!this.pending){
       live.delivery.activeSeconds=this.draft.delivery.activeSeconds;live.delivery.activeUntil=this.draft.delivery.activeUntil;
       live.delivery.order.elapsed=this.draft.delivery.order.elapsed;Object.assign(live.cockpit,this.draft.cockpit);
     }
     Object.assign(live.achievements,{groundShore:this.draft.achievements.groundShore,crossing:this.draft.achievements.crossing,lastPosition:this.draft.achievements.lastPosition});
+    return item;
+  }
+  gameAward(player:Player,apply:()=>void,capture?:()=>()=>void){
+    const before=this.draft.achievements.unlocked.length;
+    const item=this.update(player,apply);
+    if(item&&this.draft.achievements.unlocked.length>before)item.replayGameAward=capture?capture():apply;
+    return item;
   }
   private enqueue(action:DriverAction,pickup?:{id:string;generation:number},onApplied?:(outcome:DriverOutcome)=>void){
     const ordinal=++this.submitted;
@@ -176,13 +187,29 @@ export class EconomySession {
           this.lastOrderElapsed=saved.elapsed;
           this.lastOtaRemaining=this.committed.ota.active?this.committed.ota.remaining:null;
           this.lastTimerCheckpoint=this.world.time;
-          if(outcome.reason==='superseded'||outcome.reason==='conflict'){
+          const rejectedAward=!!item.replayGameAward&&(outcome.reason==='invalid'||outcome.reason==='revision');
+          const awardRetryExhausted=rejectedAward&&(item.awardRejections??0)>=MAX_GAME_AWARD_RETRIES;
+          if(outcome.reason==='superseded'||outcome.reason==='conflict'||awardRetryExhausted){
             this.failed=true;
-            if(!this.closed)try{this.socket.close(1011,'Economy interrupted. Rejoin to recover.');}catch{}
+            if(!this.closed)try{this.socket.close(1011,awardRetryExhausted?'Award could not be saved. Rejoin.':'Economy interrupted. Rejoin to recover.');}catch{}
             this.closed=true;
           }
           item.onApplied?.(outcome);
           for(const discarded of abandoned)discarded.onApplied?.({ok:false,reason:'revision'});
+          // A completed game is independent of the rejected operation. Replay
+          // its captured evidence against the restored committed wallet,
+          // including when the award's own write was rejected. Retry that
+          // rejection once; a repeated invalid/revision fails closed above.
+          // Never replay surrounding speculative purchases or income.
+          if(!this.failed)for(const discarded of rejectedAward?[item,...abandoned]:abandoned){
+            if(!discarded.replayGameAward)continue;
+            const barriers=this.barriers.filter(barrier=>barrier.after>=discarded.ordinal);
+            const replayed=this.gameAward(this.player,discarded.replayGameAward);
+            if(replayed){
+              replayed.awardRejections=(discarded.awardRejections??0)+(discarded===item?1:0);
+              for(const barrier of barriers)barrier.after=Math.max(barrier.after,replayed.ordinal);
+            }
+          }
           // A disconnect may already have queued a final checkpoint behind
           // this rejected head; replace that discarded draft with the restored
           // committed order and its still-valid elapsed time.

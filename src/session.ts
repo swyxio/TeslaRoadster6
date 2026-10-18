@@ -180,7 +180,7 @@ export class Session {
         }
       } catch (error) { console.error('Room message processing failed:',error);this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else if(event.code===1011&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.'].includes(event.reason)){this.error=event.reason;} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   queueEdge(kind:'jump'|'flip',id:number) {
@@ -248,12 +248,21 @@ export class Session {
     if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
+  setDeliveryDestination(){
+    const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
+    if(this.status!=='online'||!this.actionWithBarrier({type:'deliveryDestination',requestId}))this.destinationResult={requestId,ok:false};
+    return requestId;
+  }
   setName(name:string) {
     this.name = name;
     if (this.id) this.send({type:'name',name});
   }
   /** Recovery codes are sent only to the room and never added to snapshots. */
   setIdentity(code?:string) {
+    // Chat can reconnect independently of the room. Rebinding the same
+    // in-flight or confirmed driver would suspend an active route for no
+    // reason; a new room still sends its own identity on welcome.
+    if(code&&code===this.identityCode&&this.id&&this.socket?.readyState===WebSocket.OPEN&&this.walletStatus!=='failed')return this.identityRequestId;
     const requestId=++this.nextUpgradeRequest;
     this.starshipContextVersion++;
     this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;

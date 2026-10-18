@@ -20,7 +20,9 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Global chat and saved drivers:** Pick a driver name and chat with players across rooms. Names in use get a suffix such as `#2`. By default, the game saves your driver and remembers its recovery code in this browser; you can turn off browser remembering. Copy the code to use the same driver on another device. Keep it private: anyone with it can use the identity. Recovery restores your cash, delivery progress, achievements, owned Vault vehicles and purchased vehicle configurations.
 
-**Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. The Mini-games picker offers quick entry to the Dome, parking games and island races.
+**Map and mini-games:** Open the map to choose an accessible destination and let your car drive toward its connected road; use the driving controls to take over. Double-tap Shift or tap **Self-drive to delivery** to head toward the current pickup or drop-off. Rooftop orders still require manual flight. The Mini-games picker offers quick entry to the Dome, parking games and island races.
+
+**Scores and awards:** Scores show delivery milestones, room standings and current or recently observed mini-game results. Results last for the drive. Awards show your progress and save status; confirmed awards follow a saved driver across drives and devices.
 
 **Tesland in 2050:** Cross the Golden Gate to the wooded Marin headlands, where the fictional First Delivery Monument celebrates the Bay’s most important cargo. Its base is solid and landable. See [the setting](content/lore.md).
 
@@ -83,8 +85,8 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - **WASD / arrows:** accelerate, reverse, steer. **Space:** brake; steer while braking to drift, then release to regain grip.
 - **E:** tap to jump (or fictional air jump), hold to hover; J also works. **Space** in the air or **X:** one-tap flip. **Shift:** boost. **Q/R:** manual airborne roll. W/S provide forward/reverse thrust in the air; A/D turn. Powered flight corrects sideways or opposing momentum to help aim. Air jumps restore upward speed without stacking it indefinitely.
 - **F:** exit a stopped car / take the nearest empty car within 7 world meters.
-- **V:** toggle autonomous cruise (manual input takes over). **G:** Tesla fleet catalog; select a new ride while stopped. **B:** enter a shop when stopped in its purple ring.
-- **L:** room leaderboard with cash and active play time. **T:** achievements.
+- **V:** toggle autonomous cruise (manual input takes over). Double-tap **Shift** or use **Self-drive to delivery** to route toward the current delivery goal. **G:** Tesla fleet catalog; select a new ride while stopped. **B:** enter a shop when stopped in its purple ring.
+- **L:** delivery standings and mini-game results. **T:** awards, progress and save status.
 - **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump / Hover to jump and hold it for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
