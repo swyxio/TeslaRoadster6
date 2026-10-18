@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ACHIEVEMENT_TIER_CAP, ACHIEVEMENT_TIER_IDS, ACHIEVEMENT_TIER_LADDER,
   applyAchievementTierEvent, isAchievementTierProgress, normalizeAchievementTiers,
-  selectAchievementTiers, type AchievementTierId, type AchievementTierProgress,
+  selectAchievementTierLadder, selectAchievementTiers, type AchievementTierId, type AchievementTierProgress,
 } from '../shared/achievement-tiers';
 
 const empty=()=>normalizeAchievementTiers(undefined,0,[]);
@@ -18,6 +18,7 @@ test('every family has the common thresholds and correct next tier',()=>{
     const expected=id==='deliveries'?[0,0,0,50_000,200_000]:
       ['pickups','early-pickups','early-deliveries','supply-pickups','parking-successes','queue-successes',
         'races-finished','races-won','dome-matches','dome-wins'].includes(id)?[100,350,1_500,5_000,20_000]:[0,350,1_500,5_000,20_000];
+    assert.deepEqual(selectAchievementTierLadder(id),ACHIEVEMENT_TIER_LADDER.map((target,index)=>({rank:index+1,target,cash:expected[index]})));
     for(const [index,target] of ACHIEVEMENT_TIER_LADDER.entries()){
       const before=at(id,target-1),row=selectAchievementTiers(before).find(item=>item.id===id)!;
       assert.equal(row.count,target-1);assert.equal(row.rank,index);
@@ -39,6 +40,13 @@ test('every family has the common thresholds and correct next tier',()=>{
     const result=applyAchievementTierEvent(capped,[id]);
     assert.deepEqual(result.progress,capped);assert.deepEqual(result.awards,[]);assert.equal(result.cash,0);
   }
+});
+
+test('ladder selectors reject unknown families and do not expose mutable reward tables',()=>{
+  assert.throws(()=>selectAchievementTierLadder('unknown' as AchievementTierId),TypeError);
+  const ladder=selectAchievementTierLadder('pickups');
+  (ladder[0] as {cash:number}).cash=999;
+  assert.equal(selectAchievementTierLadder('pickups')[0].cash,100);
 });
 
 test('legacy profiles use only proven counts, without paying attained ranks',()=>{

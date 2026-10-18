@@ -26,6 +26,7 @@ export const ACHIEVEMENT_TIER_IDS = Object.keys(ACHIEVEMENT_TIER_NAMES) as Achie
 export type AchievementTierRank = 0 | 1 | 2 | 3 | 4 | 5;
 export type AchievementTierProgress = Record<AchievementTierId, {count:number; claimed:AchievementTierRank}>;
 export type AchievementTierAward = {id:AchievementTierId; rank:AchievementTierRank; target:number; cash:number};
+export type AchievementTierStep = Readonly<{rank:Exclude<AchievementTierRank,0>;target:number;cash:number}>;
 export type AchievementTierRow = {
   id:AchievementTierId;
   name:string;
@@ -50,6 +51,13 @@ function rewards(id:AchievementTierId):readonly number[] {
 
 function rankAt(count:number):AchievementTierRank {
   return ACHIEVEMENT_TIER_LADDER.filter(target=>count>=target).length as AchievementTierRank;
+}
+
+/** Return the whole ladder for display. Cash is the additional tier bonus. */
+export function selectAchievementTierLadder(id:AchievementTierId):readonly AchievementTierStep[] {
+  if(!Object.hasOwn(ACHIEVEMENT_TIER_NAMES,id))throw new TypeError('Invalid achievement tier family');
+  const cash=rewards(id);
+  return ACHIEVEMENT_TIER_LADDER.map((target,index)=>({rank:(index+1) as Exclude<AchievementTierRank,0>,target,cash:cash[index]}));
 }
 
 /** Reject corrupted or partial saved state rather than resetting it to zero. */
