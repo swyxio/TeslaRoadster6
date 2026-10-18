@@ -2,6 +2,26 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Mars mission with Rocket Island · protocol v28 · 2026-10-18 Pacific
+
+- After integrating main at `f54964e`, `pnpm test` passed 399 tests and `pnpm build` passed with Vite's existing large-chunk warning. The game retains room-only play.
+- Local Wrangler passed the standard two-client room integration and the island jump fixture with two real WebSockets. The isolated Mars fixture again verified simultaneous contributions, both drivers boarding, per-room isolation and fund survival after the last disconnect and a full Worker restart. These are functional checks, not load measurements.
+- Cloudflare's v28 preview passed its build and the standard two-client room integration; preview capacity was 128, which is not a load measurement.
+- Chrome desktop joined a local v28 room and showed the mission fund and room-only menu. Earlier Mars-screen observations below included phone portrait and landscape emulation; no physical mobile device was tested.
+- After incorporating `cfc085a`'s compact-screen CSS and release notes, `pnpm test` again passed 399 tests and `pnpm build` passed. The v28 multiplayer and Mars logic did not change in that integration.
+
+## Fremont Mars mission with Bay charging lots · protocol v27 · 2026-10-18 Pacific
+
+- After integrating main at `5d454c9`, `pnpm test` passed 358 tests and `pnpm build` passed with Vite's existing large-chunk warning. Focused follow-up checks verified that all spaceport collision envelopes clear the expanded charging and parking lots, other buildings and roads.
+- The combined local Wrangler v27 two-client room integration passed. A separate isolated Wrangler test used endgame cash and Fremont positioning fixtures: simultaneous contributions debited each player's cash once, both players boarded, and the room fund survived last disconnect and a full local Worker restart while another room stayed empty. These are functional checks, not load measurements.
+- Cloudflare's preview of `65e23f1` passed its build and the two-client room integration. A subsequent review fix prevents repeat boarding or another driver from restarting an active launch; focused Mars tests, the isolated restart integration and the build passed after that fix.
+- Chrome displayed the factory and rocket/tower from a temporary Fremont test spawn on the combined map. The contribution, boarding and victory screens and emulated portrait/landscape controls were reviewed on the preceding Mars build; landscape requires scrolling. No physical mobile device was tested, and current delivery payouts are not sufficient to practically reach the final goal.
+
+## Fremont Mars mission · pre-integration protocol v26 · 2026-10-18 Pacific
+
+- On the branch based on `9ec81f0`, `pnpm test` passed 347 tests and `pnpm build` passed, with Vite's existing large-chunk warning. The local standard Wrangler two-client room integration passed, including rejected unfunded/remote Mars actions. An isolated Wrangler restart integration used a test-only endgame cash and position fixture to verify simultaneous contributions, exact debits, both players boarding, room isolation, and fund survival after the last disconnect and after a real local Worker restart. It did not measure load.
+- Local Chrome showed the Fremont factory, pad and lower rocket/tower from a temporary relocated test spawn. Desktop contribution and victory, and emulated 390×844 portrait and 844×390 landscape mission controls were inspected; landscape boarding is reachable by scrolling. This used a test-only funded fixture, not real progression. No physical mobile device was tested. These observations precede integration with the newer charging-location changes and do not verify the combined build.
+
 ## Combined Rocket Island and expanded charging lots · protocol v27 · 2026-10-18 Pacific
 
 - Cloudflare Workers Builds deployed merge `f54964ec558f521e5a1aae02fa4588f7de65f61b`; the live game returned protocol v27 and served the same JavaScript and stylesheet asset hashes as the local build. The production two-client room integration passed, including five-goal Dome soccer and parking controls. This was a functional check, not a load or end-to-end ferry-crossing test. Chrome joined a production room and entered the police-free island oval.
