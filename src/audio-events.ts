@@ -2,7 +2,7 @@ import { nearbyBuildings, terrainHeight } from '../shared/map';
 import { VEHICLES } from '../shared/vehicles';
 import type { Entity, World } from '../shared/game';
 
-export type SoundCue = 'jump' | 'land' | 'crash' | 'pickup' | 'delivery' | 'repair' | 'air' | 'rocket' | 'refill' | 'pursuit' | 'ticket' | 'achievement' | 'ferry';
+export type SoundCue = 'jump' | 'land' | 'boost' | 'crash' | 'pickup' | 'delivery' | 'repair' | 'air' | 'rocket' | 'refill' | 'pursuit' | 'ticket' | 'achievement' | 'ferry';
 export type SoundEvent = { cue: SoundCue; strength?: number };
 
 type Sample = {
