@@ -724,6 +724,8 @@ The rendered article was checked in Chrome at desktop width and requested 390×8
 
 ## 2026-10-18 · Mars boarding while sliding
 
-On a follow-up based on main at `6b85df1`, a regression test first reproduced boarding while sliding. After the fix, the focused Mars and session checks passed, as did all 432 tests and `pnpm build`. After rebasing onto main at `204207e`, all 438 tests and the build passed again with the existing Vite large-chunk warning. These were local checks; no production deployment or live playtest was performed.
+On a follow-up based on main at `6b85df1`, a regression test first reproduced boarding while sliding. After the fix, the focused Mars and session checks passed, as did all 432 tests and `pnpm build`. After rebasing onto main at `204207e`, all 438 tests and the build passed again with the existing Vite large-chunk warning.
 
 On the combined radio and boarding-fix build, Chrome joined a local live room and drove without console errors. A 6.56-second desktop capture at 1413×939 pixels averaged 105.2 FPS, with a 14.08 ms p95 frame interval and no frames over 50 ms. It used an Apple M5 Pro with WebGL2/Metal and rendered at DPR 1.0; host load was high. This is a short sample, not a sustained FPS guarantee or a controlled comparison.
+
+After deployment, both production endpoints advertised v29, and the deployed JavaScript and CSS matched that local build. A disposable production room passed a two-client movement and input-acknowledgement smoke test. In a separate brief production Chrome check, the room connected, driving and steering worked, and no console errors appeared. These checks do not establish production capacity.
