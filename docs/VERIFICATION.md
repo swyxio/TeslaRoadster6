@@ -1,5 +1,12 @@
 # Verification · 2026-10-17 Pacific
 
+## Roadster nozzle visuals · 2026-10-17 Pacific
+
+- `pnpm test` (37 tests) and `pnpm build` passed. Tests cover ten nozzle mounts, independent visual clones, actual boost/jump/flip/depleted-air signals and the existing fleet. The Vite chunk-size warning remains.
+- Local Wrangler two-client integration passed, including remote rear, corner and side effect flags. An earlier run timed out waiting for autonomous mode; the later run passed after the build and code changes completed. Neither run is a load test.
+- Local Chrome desktop playtest showed four rear nozzle rings, rear vapor during boost and downward vapor while hovering. Portrait 390×844 and touch-emulated landscape 844×390 layouts were inspected. Side plumes were checked through model/simulation tests and multiplayer state, not directly seen in a browser playtest. Real device and multi-touch testing remain unverified. A narrow landscape desktop viewport with a fine pointer showed existing HUD overlap; the touch-emulated landscape layout did not.
+- No new production deployment is implied by these local checks. The ten-port layout is based on event reporting; exact hardware geometry and firing sequences remain artistic approximations.
+
 ## Rocket stunt implementation · 2026-10-17 Pacific
 
 - Local simulation checks cover 0–60 mph arcade targets, three jump/flip/landing sequences (99% tank), two flips in one jump, depleted-air driving and falling, inverted thruster hover, the physical ramp, a complete suction loop and detachment. After integrating delivery and police from main, the full test suite and production build passed; Vite retains its existing >500 kB chunk warning.
