@@ -499,3 +499,17 @@ After integrating main's flight, parking, island and permanent Rocket kit change
 Chrome solo play showed the integrated arena and score on desktop and emulated 390×844 portrait and 844×390 landscape. In landscape, the wall-refill hint remained visible and an emulated touch on Drive accelerated the car. No physical device was tested.
 
 After integrating the economy simulation proposal from main, all 334 tests passed; it does not change the playable simulation.
+
+## 2026-10-18 · Self-driving, map and social play
+
+After integrating the concurrent driving and economy changes, `pnpm test` passed 323 tests and `pnpm build` passed, including both TypeScript checks; Vite reports its existing large-chunk warning. The local Wrangler two-client room and global-chat integrations passed on protocol v22. One room run timed out while the local server was reloading during the build; the subsequent run passed. These checks do not measure capacity or a ferry crossing.
+
+Shared-simulation tests drove every selectable Tesla through a connected city route to arrival without damage in an otherwise clear world, rejected water, locked and disconnected destinations, and checked manual takeover and direct entry into each parking and race game. This does not establish smoothness or safe routing for every traffic and road situation.
+
+In Chrome local solo play on the pre-integration build, the large map opened at desktop and emulated 390×844 portrait and 844×390 landscape sizes; zoom and destination selection worked, the map closed and self-driving started. Landscape had coarse-pointer emulation, but selection used automated mouse input; pinch and physical touch were not tested. A desktop parking-game shortcut joined Park It and showed an assigned stall and leave control. A local session before the Dome integration changed the driver name, sent a chat message under it, recovered a saved test identity, and showed that name on Scores and progress on Awards. Phone chat and identity were also inspected in emulated portrait and landscape, and the local 0.0.3 changelog was reviewed. No physical device or complete manual destination arrival was verified.
+
+After integrating the relocated China Basin Dome, `pnpm test` passed 338 tests and `pnpm build` passed. The local Wrangler global-chat integration passed on protocol v23. In Chrome desktop solo, the Mini-games shortcut entered the new Dome, showed the China Basin score and leave control, and returned to the Bay and delivery HUD when leaving.
+
+The local protocol v23 two-client room integration also passed, including destination-route replication, direct race entry and the relocated Dome's five-goal match and awards. It is not a load test.
+
+After integrating automatic shared-room entry, `pnpm test` passed 341 tests and `pnpm build` passed; an additional focused session test passed for explicit solo play and stale-socket isolation. Local Wrangler room and chat integrations passed on protocol v24, and a separate two-seat capacity test checked full-room handling and a freed slot. In Chrome desktop, the game automatically joined the Bay room, the menu switched explicitly to solo, and map-selected self-driving continued with phone chat open (the displayed speed and destination distance changed). These checks do not establish physical-device behavior or playable room capacity.
