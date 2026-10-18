@@ -60,6 +60,7 @@ export class Session {
   destinationResult: {requestId:number;ok:boolean}|null = null;
   marsResult: {requestId:number;action:'board'|'contribute';ok:boolean;amount:number;available?:number}|null = null;
   starshipStatus:StarshipRoomStatus|null = null;
+  starshipContextVersion=0;
   starshipNameResult:{requestId:number;ok:boolean;publicName:string|null}|null = null;
   earningsBonus:EarningsBonusView|null = null;
   private starshipStatusRequest=0;
@@ -254,6 +255,7 @@ export class Session {
   /** Recovery codes are sent only to the room and never added to snapshots. */
   setIdentity(code?:string) {
     const requestId=++this.nextUpgradeRequest;
+    this.starshipContextVersion++;
     this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
     if(this.id&&this.socket?.readyState===WebSocket.OPEN){
@@ -332,5 +334,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

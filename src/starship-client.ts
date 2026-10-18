@@ -15,6 +15,7 @@ export class StarshipClient {
   private lastRoomStatus:Session['starshipStatus']=null;
   private nextPublic=0;
   private nextRoom=0;
+  private contextVersion:number;
   private loading=false;
   private failed=false;
   private requestVersion=0;
@@ -23,7 +24,7 @@ export class StarshipClient {
   private replayStartedAt:number|null=null;
   private replayIsPreview=false;
   private page:StarshipContributorPage={status:'idle',group:'at-goal',cursor:null,entries:[],next:null};
-  constructor(private session:Session,private now:()=>number=()=>performance.now(),private fetcher:typeof fetch=fetch) {}
+  constructor(private session:Session,private now:()=>number=()=>performance.now(),private fetcher:typeof fetch=fetch) {this.contextVersion=session.starshipContextVersion;}
 
   private remember(status:StarshipViewStatus,serverTime:number,receivedAt:number):void {
     if(this.latest&&serverTime<this.latest.serverTime)return;
@@ -32,6 +33,10 @@ export class StarshipClient {
   }
   tick(privateWanted=false):void {
     const now=this.now(),room=this.session.starshipStatus;
+    if(this.contextVersion!==this.session.starshipContextVersion){
+      this.contextVersion=this.session.starshipContextVersion;this.nextRoom=0;this.lastRoomStatus=null;
+      this.pendingName=null;this.privacy={status:'loading',publicName:null};
+    }
     if(room&&room!==this.lastRoomStatus&&this.session.status==='online'){
       this.lastRoomStatus=room;this.remember(room.status,room.serverTime,room.receivedAt);
       if(!this.pendingName)this.privacy={status:'ready',publicName:room.publicName};

@@ -31,6 +31,12 @@ type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;
 type Receipt = {payload:string;outcome:DriverOutcome};
 type PrivacyPending = {revision:number;name:string|null};
 
+const OUTBOX_RPC_TIMEOUT_MS=3_000;
+async function boundedOutbox<T>(operation:Promise<T>):Promise<T>{
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{return await Promise.race([operation,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Outbox RPC timed out')),OUTBOX_RPC_TIMEOUT_MS);})]);}
+  finally{if(timer!==undefined)clearTimeout(timer);}
+}
 
 type Env = { INCOME:DurableObjectNamespace<GlobalIncome>; ROOMS:DurableObjectNamespace<GameRoom>; ECONOMIES:DurableObjectNamespace<RoomEconomy> };
 const validAmount=(amount:number)=>Number.isSafeInteger(amount) && Math.abs(amount)<=Number.MAX_SAFE_INTEGER;
@@ -254,10 +260,12 @@ export class DriverProfile extends DurableObject<Env> {
       });
       return;
     }
-    if(privacy)try{await this.flushPrivacy(record.driverId,privacy);}catch{}
-    if(pending!==undefined)try {
+    // A hung RPC must not keep this alarm open forever: future earnings or
+    // privacy changes still need the already-armed watchdog to run again.
+    const privacyFlush=privacy?boundedOutbox(this.flushPrivacy(record.driverId,privacy)).catch(()=>{}):Promise.resolve();
+    const incomeFlush=pending===undefined?Promise.resolve():(async()=>{try {
       const global=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
-      await global.credit(record.driverId,pending);
+      await boundedOutbox(global.credit(record.driverId,pending));
       await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<number>('income-pending');
         if(current!==undefined && current<=pending)await txn.delete('income-pending');
@@ -268,7 +276,8 @@ export class DriverProfile extends DurableObject<Env> {
         const alarm=await txn.getAlarm(),next=Date.now()+1000;
         if(alarm===null||alarm>next)await txn.setAlarm(next);
       });
-    }
+    }})();
+    await Promise.all([privacyFlush,incomeFlush]);
   }
 }
 

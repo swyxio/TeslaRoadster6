@@ -11,7 +11,7 @@ const status=(overrides:Partial<StarshipViewStatus>={}):StarshipViewStatus=>({
 });
 const response=(value:unknown)=>new Response(JSON.stringify(value),{status:200,headers:{'Content-Type':'application/json'}});
 function fakeSession(){
-  return {status:'disconnected',walletBlocked:false,wallet:null,starshipStatus:null,starshipNameResult:null,
+  return {status:'disconnected',walletBlocked:false,wallet:null,starshipStatus:null,starshipNameResult:null,starshipContextVersion:0,
     requestStarshipStatus:()=>true,setStarshipName:()=>1} as unknown as Session;
 }
 
@@ -35,6 +35,20 @@ test('public progress stays visible without identity; private pending is derived
   assert.equal(client.state().pendingContribution,null);
   now+=26_000;
   assert.equal(client.state().freshness,'stale');
+});
+
+test('a recovered driver is polled as soon as the new wallet is ready',()=>{
+  let now=1000,requests=0;const session=fakeSession();
+  session.status='online';session.requestStarshipStatus=()=>{requests++;return true;};
+  const client=new StarshipClient(session,()=>now,async()=>response({status:status(),serverTime:200_000}));
+  client.tick(true);assert.equal(requests,1);
+  session.starshipStatus={status:status({personal:5}),serverTime:200_000,receivedAt:now,publicName:'Old'};
+  client.tick(true);assert.equal(client.state().privacy.publicName,'Old');
+  now+=1000;session.starshipStatus=null;session.starshipContextVersion++;session.walletStatus='connecting';
+  Object.defineProperty(session,'walletBlocked',{value:true,writable:true,configurable:true});
+  client.tick(true);assert.equal(requests,1);assert.equal(client.state().privacy.status,'unavailable');
+  Object.defineProperty(session,'walletBlocked',{value:false,writable:true,configurable:true});
+  client.tick(true);assert.equal(requests,2,'the old driver polling deadline does not delay recovery');
 });
 
 test('server time drives the global launch and outranks local replay',async()=>{

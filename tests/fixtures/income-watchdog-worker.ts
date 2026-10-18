@@ -1,5 +1,5 @@
 // Local-only fault fixture: never deploy this worker.
-import { DriverProfile as ProductionDriver, GlobalIncome as ProductionIncome, progressFrom } from '../../worker/driver-profile';
+import { DriverProfile as ProductionDriver, GlobalIncome as ProductionIncome, progressFrom, type DriverProgress } from '../../worker/driver-profile';
 import { GameRoom, GlobalChat, RoomEconomy } from '../../worker/index';
 import { initialDelivery } from '../../shared/delivery';
 
@@ -11,6 +11,12 @@ export class DriverProfile extends ProductionDriver {
     await this.activateIncome('fixture-fence');
   }
   async fixtureState(){return {pending:await this.ctx.storage.get<number>('income-pending')??null,privacy:await this.ctx.storage.get('privacy-pending')??null,alarm:await this.ctx.storage.getAlarm()};}
+  async fixtureEarn(){
+    const record=await this.ctx.storage.get<{revision:number;sequence:number;progress:DriverProgress}>('driver');
+    if(!record)throw new Error('Missing test driver');
+    const progress=structuredClone(record.progress);progress.cash+=500;progress.eligibleIncome+=500;
+    return this.commit({eventId:'privacy-held-earning',driverId:'income-test',fence:'fixture-fence',roomId:'fixture-room',revision:record.revision,sequence:record.sequence+1,action:{kind:'progress',progress}});
+  }
   async fixturePurchase(){
     const id='luxury-income-test',fence='luxury-income-fence',roomId='luxury-income-room';
     const delivery=initialDelivery({x:0,z:0});delivery.cash=2_000_000;
@@ -43,6 +49,7 @@ export default {
     if(path==='/hold-privacy'){await income.fixtureHoldPrivacy();return Response.json({ok:true});}
     if(path==='/set-privacy')return Response.json(await driver.setStarshipName('income-test','fixture-fence','Test driver'));
     if(path==='/start'){await driver.fixtureStart('income-test');return Response.json({ok:true});}
+    if(path==='/earn')return Response.json(await driver.fixtureEarn());
     if(path==='/profile')return Response.json(await driver.fixtureState());
     if(path==='/income')return Response.json(await income.fixtureState());
     if(path==='/purchase')return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName('luxury-income-test')).fixturePurchase());
