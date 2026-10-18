@@ -1,6 +1,6 @@
 # Rocket pickups and fictional workshops
 
-Research detours add session-long workshop discounts. Stop at the blue rings at UCSF for 25% off repairs, Berkeley for 20% off sport motors, Stanford for 20% off efficient nozzles, or SFO for 20% off air tanks. Each visit also awards cash once. The shop shows and charges the discounted price; vehicle and shop prerequisites remain unchanged. See [the achievement contract](CONTRACTS.md#citations-rooftops-and-achievements).
+Research detours award cash once per drive. Stop at the blue rings at UCSF to earn a Homes Lab badge, Berkeley for 20% off efficient nozzles, Stanford for 20% off sport motors, and SFO for 20% off air tanks. Workshop discounts last for the drive; the shop shows and charges the discounted price, and vehicle and shop prerequisites remain unchanged. See [the achievement contract](CONTRACTS.md#citations-rooftops-and-achievements).
 
 Any of the 26 vehicles can become a rocket vehicle. Collect a purple `rocket` pickup in the city, on the island or at a parking playground for a free session-long kit and a full air tank, or buy the kit at a purple workshop. The next-generation Roadster starts with its own fictional thrusters. A retrofit adds visible hardware to the car and uses the same jump, hover, boost and flip controls. Repair and air pickups stay green and amber; all pickups respawn after 20 simulation seconds.
 

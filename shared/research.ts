@@ -5,9 +5,9 @@ import { UPGRADES, type UpgradeId } from './upgrades';
 
 // Short free-roam detours. Discounts apply only after the matching visit.
 export const RESEARCH_SITES = [
-  { landmark:'ucsf', achievement:'ucsf-research', cash:20, upgrade:'service', discount:.25 },
-  { landmark:'berkeley', achievement:'berkeley-research', cash:35, upgrade:'motor', discount:.2 },
-  { landmark:'stanford', achievement:'stanford-research', cash:50, upgrade:'economy', discount:.2 },
+  { landmark:'ucsf', achievement:'ucsf-research', cash:20, upgrade:null, discount:0 },
+  { landmark:'berkeley', achievement:'berkeley-research', cash:35, upgrade:'economy', discount:.2 },
+  { landmark:'stanford', achievement:'stanford-research', cash:50, upgrade:'motor', discount:.2 },
   { landmark:'sfo', achievement:'sfo-ground-crew', cash:40, upgrade:'tank', discount:.2 },
 ] as const;
 

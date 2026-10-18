@@ -9,7 +9,7 @@ export const RELEASES = [
     sections: [
       { title: 'Make it yours', items: [
         'Buy paint and decals at a workshop. Your finish stays on that car for the drive, and other drivers can see your name above your vehicle.',
-        'Stop at UCSF, Berkeley, Stanford and SFO for one-time cash and a matching upgrade discount. A first SFO delivery earns an extra reward.',
+        'Stop at UCSF, Berkeley, Stanford and SFO for one-time cash. Berkeley, Stanford and SFO also offer energy, speed and flight discounts; a first SFO delivery earns an extra reward.',
         'Explore our economy design and interactive simulations in the development blog.'
       ] }
     ]

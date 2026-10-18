@@ -83,13 +83,35 @@ A home comes with two garage spaces and a free teleport back home. Extra spaces 
 
 Bigger plots and builds come in $2m, $4m, $8m and $16m starting packages. You can own one ready-built home bought from the city or another player, plus homes you build yourself on additional plots. Starter plots should always be available; a limited number of special world locations give players something to hunt for. Players set their own resale prices. On a $2m sale, a 5% fee removes $100k and the seller receives $1.9m.
 
+For players who want to keep building, the property career can grow upward. Buy a development plot, put up the first floor, and add stories as your business earns the next construction payment. A home can become a taller building, and a large development can eventually become a skyline-defining tower. Each floor is a visible purchase and a new achievement; the building remains yours even when its cost drops your wallet level. We'll price this as a late-game path and test it against the same delivery and cab income as the rest of the economy.
+
+<figure>
+<img src="/blog/economy/developer-tower.webp" alt="A Bay Area residential tower rises above a small neighborhood, with a crane adding its upper floors." loading="lazy">
+<figcaption>Imagine a plot growing from its first foundation into a tower, one story at a time. Concept art for the developer path.</figcaption>
+</figure>
+
 That fee, a city-sold plot, a construction bill and a shop cosmetic are *money sinks*: cash leaves the economy when players buy them. Deliveries, cab earnings and achievement awards create cash. If more money chases a fixed supply of desirable plots, prices can rise; attractive things to buy give that money somewhere to go. We'll watch earnings, spending and actual sale prices as the market takes shape.
 
 ## A Bay worth exploring
 
-The next delivery can take you somewhere new, and the place should give you a reason to come back. Start with the blue research rings already in the game: stop at UCSF for $20 and a repair discount, Berkeley for $35 and a motor discount, Stanford for $50 and a nozzle discount, or SFO for $40 and a tank discount. Your first delivery to SFO earns an extra $80. These rewards and discounts last for the drive.
+<figure>
+<img src="/blog/economy/bay-landmarks.svg" alt="Map of Tesland from North Bay Playground to San José, with labeled bridges, research campuses, the Rocket Dome, Fremont Spaceport and city landmarks." loading="lazy">
+<figcaption>The full Tesland map, drawn from the game's coastlines, roads and landmark positions.</figcaption>
+</figure>
 
-We want to grow those stops into delivery-led programs. After 20 deliveries, a driver could carry energy equipment at Berkeley, medical supplies for UCSF, flight-research equipment at Stanford, or airport cargo at SFO. The university programs would award five degrees after 2, 6, 12, 20 and 30 qualifying program deliveries; SFO would use 1, 4, 8, 14 and 20. Each chain pays $15.5k across its five milestones and opens a related upgrade or livery along the way. At six minutes per job, the 30 program deliveries take about three active hours after the initial 20-delivery prerequisite. That's a reason to learn a part of the Bay while continuing the delivery career.
+<ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li></ol>
+
+The next delivery can take you somewhere new, and the place should give you a reason to come back. The blue research rings already pay for a visit: UCSF's Homes Lab gives $20 and a badge; Berkeley's Energy Lab gives $35 and a discount on efficient nozzles; Stanford's Speed Lab gives $50 and a motor discount; SFO's Flight Lab gives $40 and an air-tank discount. Your first delivery to SFO earns an extra $80. These rewards and discounts last for the drive.
+
+<div class="research-gallery">
+<figure><img src="/blog/economy/research-ucsf.webp" alt="Researchers study a model home at a UCSF hillside campus." loading="lazy"><figcaption><strong>UCSF · Homes</strong><br>Design a place of your own, then build it up.</figcaption></figure>
+<figure><img src="/blog/economy/research-berkeley.webp" alt="A car charges beside solar panels and batteries at Berkeley's Campanile." loading="lazy"><figcaption><strong>Berkeley · Energy</strong><br>Make cars and buildings use energy better.</figcaption></figure>
+<figure><img src="/blog/economy/research-stanford.webp" alt="A yellow electric car runs a speed test near Stanford's Hoover Tower." loading="lazy"><figcaption><strong>Stanford · Speed</strong><br>Try better motors and faster routes.</figcaption></figure>
+<figure><img src="/blog/economy/research-sfo.webp" alt="A yellow car tests its glider wings at the SFO runway." loading="lazy"><figcaption><strong>SFO · Flight</strong><br>Take the next upgrade into the air.</figcaption></figure>
+</div>
+<p class="research-gallery-note">Concept art for the four research programs.</p>
+
+We want to grow those stops into delivery-led programs. After 20 deliveries, a driver could carry clean-energy equipment at Berkeley, housing prototypes for UCSF, motor parts at Stanford, or flight equipment at SFO. The university programs would award five degrees after 2, 6, 12, 20 and 30 qualifying program deliveries; SFO would use 1, 4, 8, 14 and 20. Each chain pays $15.5k across its five milestones and opens a related upgrade or livery along the way. At six minutes per job, the 30 program deliveries take about three active hours after the initial 20-delivery prerequisite. That's a reason to learn a part of the Bay while continuing the delivery career.
 
 Airport runs deserve a fare that makes the extra drive worthwhile. In our level-four example, a $2k SFO supplement brings a seven-minute airport job to about $111k per active hour, just above the $110k rate for six-minute regular deliveries. The five airport awards make the first 20 jobs more rewarding still.
 

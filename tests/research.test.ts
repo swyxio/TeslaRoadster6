@@ -33,15 +33,25 @@ test('research visits require a stopped ground vehicle, pay once, and belong to 
 
 test('research discounts are applied by the authoritative workshop to real purchases',()=>{
   for(const site of RESEARCH_SITES){
+    const upgrade=site.upgrade;
+    if(!upgrade)continue;
     const {world,player,car}=setup(),at=researchArrival(site);
     Object.assign(car,{...at,y:terrainHeight(at.x,at.z),supportId:'ground',speed:0,vy:0});
     step(world,new Map([['p',NEUTRAL]]),.05);
     Object.assign(car,{x:SHOPS[0].x,z:SHOPS[0].z,y:0,speed:0,vy:0,pushX:0,pushZ:0,supportId:'ground',health:80});
-    const standard=site.upgrade==='tank'?30:UPGRADES[site.upgrade].price;
-    const price=upgradePrice(player,car,site.upgrade);assert.ok(price<standard);
-    player.delivery.cash=price;assert.equal(buyUpgrade(world,player.id,site.upgrade),true,site.landmark);
+    const standard=upgrade==='tank'?30:UPGRADES[upgrade].price;
+    const price=upgradePrice(player,car,upgrade);assert.ok(price<standard);
+    player.delivery.cash=price;assert.equal(buyUpgrade(world,player.id,upgrade),true,site.landmark);
     assert.equal(player.delivery.cash,0);
   }
+});
+
+test('research sites match homes, energy, speed and flight themes',()=>{
+  const sites=Object.fromEntries(RESEARCH_SITES.map(site=>[site.landmark,site.upgrade]));
+  assert.deepEqual(sites,{ucsf:null,berkeley:'economy',stanford:'motor',sfo:'tank'});
+  const {player,car}=setup();
+  player.achievements.unlocked.push('ucsf-research');
+  assert.equal(upgradePrice(player,car,'service'),UPGRADES.service.price);
 });
 
 test('an SFO drop-off earns its visit and express bonuses once alongside the fare',()=>{
