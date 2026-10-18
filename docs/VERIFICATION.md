@@ -2,6 +2,14 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Island, chat and flight · protocol v16, before charger-lot changes · 2026-10-18 Pacific
+
+- At commit `a5d89db`, `pnpm test` passed 247/247 and `pnpm build` passed both typechecks and Vite. The main JavaScript was 767 kB (218 kB gzip); Vite reported its large-chunk warning.
+- Local Wrangler room integration passed two-client ferry/activity snapshots, Rocket kits, dome scoring, cockpit, forward flight, shop/OTA replies and existing room behavior. Global chat and isolated chat-restart integrations passed. These were not load tests.
+- Two clients joined a fresh local room. Using ordinary input messages from spawn, one walked to SF and boarded; the other observed boarding at 164.9 s, secured departure at 194.6 s, the rider's fixed deck-relative position in transit at 197.4 s, arrival at 245.8 s and walk-off onto island ground at 249.1 s. Both sockets closed normally. This verifies a pedestrian crossing, not a car crossing or production behavior.
+- Chrome desktop opened the activities, connected chat, identity and OTA/tank shop. At 390×844 touch emulation, Drive accelerated to 97 km/h, Jump reached 3 m and Flip received input while airborne. At 844×390, Drive reached 84 km/h, Jump reached 3 m and Flip consumed air. Actions opened in both. A touch swipe timed out; browser scrolling reached the remaining controls. The claimed-stall marker and physical-device touch were not verified. No console errors were observed.
+- Automated review found that extreme upgraded flight could tunnel through cars; this observation preceded the subsequent flight-speed fix. Complete activities, multiplayer car crossings, sustained peak traffic and physical devices remain unverified.
+
 ## Island with global chat · protocol v14, before flight merge · 2026-10-18 Pacific
 
 - At commit `6ac1fca`, `pnpm test` passed 235/235 and `pnpm build` passed both typechecks and Vite. The main JavaScript was 763 kB (217 kB gzip); Vite reported its chunk-size warning.

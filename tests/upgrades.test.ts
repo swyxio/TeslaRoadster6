@@ -9,6 +9,7 @@ import {parseMessage} from '../worker/protocol';
 import {cliffPose} from '../shared/island-stunts';
 import type {TankLevel} from '../shared/air-tank';
 import {Session} from '../src/session';
+import {PARKING_LOTS} from '../shared/parking-lots';
 
 function setup(kind:typeof VEHICLE_IDS[number]='model-3'){
   const world=createWorld(),player=addPlayer(world,'p','P'),car=makeEntity('car',kind,SHOPS[0].x,SHOPS[0].z,'p');
@@ -52,12 +53,22 @@ test('solo shop reports authoritative purchase and rejection results',()=>{
 });
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
   const world=createWorld(), rockets=world.pickups.filter(p=>p.kind==='rocket');
-  assert.equal(rockets.length,11);
+  assert.equal(rockets.length,9+PARKING_LOTS.length);
+  for(const lot of PARKING_LOTS)assert.ok(rockets.some(p=>p.id===`rocket-${lot.id}`&&p.x===lot.pickup.x&&p.z===lot.pickup.z),lot.id);
   for(const pickup of rockets){
     assert.equal(terrainHeight(pickup.x,pickup.z),0,pickup.id);
     const car=makeEntity('test','tesla-semi' as typeof VEHICLE_IDS[number],pickup.x,pickup.z);
     assert.ok(!nearbyBuildings(car.x,car.z,12).some(b=>contact(body(car),{...b,yaw:0})),pickup.id);
     assert.ok(world.pickups.every(other=>other===pickup||Math.hypot(pickup.x-other.x,pickup.z-other.z)>8),pickup.id);
+  }
+});
+test('every charger lot pickup installs the session kit',()=>{
+  for(const lot of PARKING_LOTS.filter(l=>l.id.startsWith('charger-'))){
+    const {world,car}=setup(),pickup=createWorld().pickups.find(p=>p.id===`rocket-${lot.id}`)!;
+    Object.assign(car,{x:pickup.x,z:pickup.z,y:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0,air:20});
+    world.pickups=[pickup];step(world,new Map(),.05);
+    assert.equal(pickup.active,false,lot.id);assert.ok(hasRockets(car),lot.id);assert.equal(car.air,100,lot.id);
+    world.time+=100;step(world,new Map(),.05);assert.ok(hasRockets(car),`${lot.id}: kit persists`);
   }
 });
 test('each family can collect a rocket pickup and use jump',()=>{

@@ -4,6 +4,7 @@ import { SHORT_TRACK } from './race-courses';
 import { bankSurface } from './island-stunts';
 import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
 import { DOME } from './dome';
+import { CHARGER_LOT, STATIONS } from './stations';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -196,8 +197,11 @@ function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax
   const seed=Math.abs((x*71+z*31)%17), downtown=district==='sf'&&cx>-165&&cz<75&&cz>-190;
   const tall= downtown?28+seed*3 : district==='oakland'&&cx>375&&cx<525&&cz<65?20+seed*2:9+seed;
   const type:Building['style']=tall>38?'tower':tall>22?'midrise':'house';
-  BUILDINGS.push({x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type});
-  BUILDINGS.push({x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type});
+  const generated:Building[]=[
+   {x:cx-10,z:cz,w:18,d:24,h:tall,district,style:type},
+   {x:cx+12,z:cz,w:15,d:20,h:Math.max(8,tall*(.56+(seed%3)*.11)),district,style:type==='tower'?'midrise':type},
+  ];
+  for(const b of generated)if(!STATIONS.some(s=>Math.abs(b.x-s.x)<(b.w+CHARGER_LOT.width)/2&&Math.abs(b.z-s.z)<(b.d+CHARGER_LOT.length)/2))BUILDINGS.push(b);
  }
 }
 blocks('sf',-360,60,-240,240);blocks('oakland',330,570,-240,240);

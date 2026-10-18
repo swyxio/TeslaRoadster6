@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, interact, removePlayer, resetPlayer, step, NEUTRAL, BUILDINGS } from '../shared/game';
-import { STATIONS } from '../shared/stations';
+import { STATIONS, stationStalls } from '../shared/stations';
+import { refillStationFor } from '../shared/charging';
 import { HILL, terrainHeight } from '../shared/map';
 import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
@@ -41,6 +42,21 @@ test('stations refill only stopped cars; recovery does not manufacture air or he
   step(world, new Map(), 0.05); assert.ok(car.air > 10);
   car.air = 10; car.speed = 5; step(world, new Map(), 0.05); assert.equal(car.air, 10);
   car.health = 30; resetPlayer(world, 'one'); assert.equal(car.health, 30); assert.equal(car.air, 10); assert.equal(car.y, 0);
+});
+test('every charger bay and the original radius refill only stopped supported vehicles',()=>{
+  const {world,car}=setup();world.entities=[car];world.pickups=[];
+  for(const station of STATIONS){
+    for(const stall of stationStalls(station)){
+      Object.assign(car,{x:stall.x,z:stall.z,y:0,yaw:0,supportId:'ground',air:10,speed:0,vx:0,vy:0,vz:0});
+      assert.equal(refillStationFor(car)?.id,station.id,stall.id);
+      step(world,new Map(),.05);assert.ok(car.air>10,stall.id);
+    }
+    Object.assign(car,{x:station.x+8,z:station.z,y:0,supportId:'ground',air:10,speed:0,vx:0,vy:0,vz:0});
+    step(world,new Map(),.05);assert.ok(car.air>10,`${station.id}: radius`);
+    car.speed=5;car.air=10;assert.equal(refillStationFor(car),undefined);
+    step(world,new Map(),.05);assert.equal(car.air,10,`${station.id}: moving`);
+    Object.assign(car,{y:10,supportId:null,speed:0});assert.equal(refillStationFor(car),undefined);
+  }
 });
 test('64-player spawns do not overlap and simulation stays finite', () => {
   const world = createWorld(); for (let i = 0; i < 64; i++) addPlayer(world, `p${i}`, 'Driver');

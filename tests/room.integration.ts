@@ -4,7 +4,7 @@ import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_
 import { DOME } from '../shared/dome';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 16);
+assert.equal(PROTOCOL_VERSION, 17);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
@@ -28,7 +28,7 @@ function connect() {
 const one = connect(), two = connect();
 try {
   const health = await (await fetch(base + '/api/health')).json() as {version:number};
-  assert.equal(health.version, 16, 'server advertises the merged flight and island protocol');
+  assert.equal(health.version, 17, 'server advertises the merged charger and island protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));

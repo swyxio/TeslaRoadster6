@@ -7,7 +7,7 @@ import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
 import { DISTRICTS, FERRY_DOCKS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
-import { STATIONS } from '../shared/stations';
+import { STATIONS, stationStalls } from '../shared/stations';
 import { orderTarget } from '../shared/delivery';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -159,14 +159,15 @@ export class GameScene {
     const green=new T.Mesh(new T.SphereGeometry(.23,12,8),this.signalGreen);
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
-      box(scene,s.x,.1,s.z,9,.15,12,0x65776f);
-      for(const offset of [-3,0,3]) {
-        box(scene,s.x+offset,1.2,s.z-4,1.1,2.4,.6,0xf3e8d6);
-        box(scene,s.x+offset,1.3,s.z-4.33,.65,1.5,.04,0xd34537);
-        box(scene,s.x+offset,1.3,s.z-4.37,.32,1,.04,0x30494b);
+      for(const stall of stationStalls(s)) {
+        box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);
+        const z=stall.z-stall.length/2-.8;
+        box(scene,stall.x-.46,1.2,z,.24,2.4,.6,0xf3e8d6);
+        box(scene,stall.x+.46,1.2,z,.24,2.4,.6,0xf3e8d6);
+        box(scene,stall.x,2.28,z,1.16,.24,.6,0xf3e8d6);
+        box(scene,stall.x,1.2,z,.68,1.7,.14,0xd34537);
       }
       const ring=new T.Mesh(new T.RingGeometry(5,5.2,40),new T.MeshBasicMaterial({color:0x9ef7cb,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(s.x,.2,s.z);scene.add(ring);
-      const label=this.label('ϟ  '+s.name);label.position.set(s.x,6,s.z);scene.add(label);
     });
     const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128;
     const sign=signCanvas.getContext('2d')!;sign.fillStyle='#192332';sign.fillRect(0,0,512,128);sign.strokeStyle='#c997ff';sign.lineWidth=5;sign.strokeRect(3,3,506,122);sign.textAlign='center';sign.fillStyle='#fff0d2';sign.font='bold 37px system-ui';sign.fillText('SPACEX  /  SHOP',256,56);sign.fillStyle='#d5adff';sign.font='bold 22px system-ui';sign.fillText('ROCKETS · UPGRADES',256,95);

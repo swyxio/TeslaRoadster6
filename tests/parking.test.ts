@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEntity, removePlayer, type Entity, type World } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, NEUTRAL, parkingAction, removePlayer, step, type Entity, type World } from '../shared/game';
 import { initialDelivery } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { VEHICLE_IDS } from '../shared/vehicles';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { createFerry } from '../shared/ferry';
 import { createRace } from '../shared/race';
+import { body, contact } from '../shared/physics';
 import {
   createParking, fitsParkingStall, joinParking, leaveParking, startQueue, updateParking,
   PARKING_QUEUE_WAIT, PARKING_QUEUE_DURATION, PARKING_PARK_DURATION, PARKING_RESULTS_DURATION,
@@ -177,7 +178,7 @@ test('queue ties use player IDs, staging and active timeouts run on simulation t
 
 test('the entire painted approach at each authored lot can join and stay queued',()=>{
   const approachPoints=[{x:-300,z:307},{x:47,z:-1190}];
-  for(const [index,lot] of PARKING_LOTS.entries()){
+  for(const [index,lot] of PARKING_LOTS.slice(0,2).entries()){
     const w=world(),state=createParking(),point=approachPoints[index],car=add(w,'p','roadster',point.x,point.z);
     assert.equal(joinParking(createParking(),lot,w,'p','park'),false,'Park It begins inside the lot');
     assert.equal(joinParking(state,lot,w,'p','queue'),true,lot.id);
@@ -190,6 +191,39 @@ test('the entire painted approach at each authored lot can join and stay queued'
     assert.equal(state.rounds[0].entrants.length,1,'driving from the approach into the lot stays in the round');
     Object.assign(car,{x:lot.area.x+lot.area.width,z:lot.area.z});w.time+=.05;updateParking(state,[lot],w,.05);
     assert.equal(state.rounds.length,0,'leaving both areas withdraws the entrant');
+  }
+});
+
+test('each charger lot supports Park It and an eight-truck queue',()=>{
+  for(const lot of PARKING_LOTS.filter(lot=>lot.id.startsWith('charger-'))){
+    const w=createWorld();w.entities=[];w.players=[];w.pickups=[];
+    for(let i=0;i<8;i++){
+      const id=`p${i}`,player=addPlayer(w,id,id),car=w.entities.find(e=>e.id===player.entityId)!;
+      Object.assign(car,{kind:'waymo-peterbilt',x:lot.area.x+[-12,-4,4,12][i%4],z:lot.area.z+(i<4?-3.5:5.5),
+        y:0,yaw:0,supportId:'ground',speed:0,vx:0,vy:0,vz:0});
+      assert.equal(parkingAction(w,id,'queue'),true,`${lot.id}: ${id} joins`);
+    }
+    for(let i=0;i<w.entities.length;i++)for(let j=i+1;j<w.entities.length;j++)
+      assert.equal(contact(body(w.entities[i]),body(w.entities[j])),null,`${lot.id}: queue bodies overlap`);
+    assert.equal(parkingAction(w,'p0','start'),true);
+    for(let i=0;i<4;i++){
+      const id=`p${i}`,car=w.entities.find(e=>e.driver===id)!,stall=lot.stalls[i];
+      for(let n=0;n<200&&w.parking.rounds[0].entrants.find(e=>e.playerId===id)!.finishedAt===null;n++){
+        const gap=car.z-stall.z,brake=gap<=.5+car.speed**2/19;
+        step(w,new Map([[id,{...NEUTRAL,throttle:brake?0:1,brake}]]),.05);
+      }
+      assert.equal(w.parking.rounds[0].entrants.find(e=>e.playerId===id)!.targetId,stall.id,`${lot.id}: ${id} drove into its stall`);
+    }
+    assert.equal(w.parking.rounds[0].phase,'results',`${lot.id}: all stalls claimed`);
+    assert.equal(w.parking.rounds[0].entrants.filter(e=>e.finishedAt===null).length,4);
+
+    const solo=createWorld();solo.entities=[];solo.players=[];solo.pickups=[];
+    const player=addPlayer(solo,'park','park'),car=solo.entities.find(e=>e.id===player.entityId)!;
+    Object.assign(car,{kind:'waymo-peterbilt',x:lot.area.x,z:lot.area.z,y:0,yaw:0,supportId:'ground'});
+    assert.equal(parkingAction(solo,'park','park'),true,lot.id);
+    const round=solo.parking.rounds[0],stall=lot.stalls.find(s=>s.id===round.entrants[0].targetId)!;
+    place(car,stall);for(let i=0;i<40;i++)step(solo,new Map(),.05);
+    assert.equal(round.phase,'results',`${lot.id}: Park It completes`);
   }
 });
 

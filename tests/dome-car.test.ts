@@ -126,8 +126,13 @@ test('descent from above the roof enters and lands inside without resetting the 
   assert.equal(car.inDome,true);assert.equal(car.autopilot,false);assert.equal(car.supportId,null);
   assert.equal(car.x,DOME.x-15);assert.equal(car.air,42);assert.equal(car.health,83);
   for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
-  assert.equal(car.inDome,true);assert.equal(car.supportId,'ground');assert.equal(car.y,0);
+  // The landing substep selects ground; a later substep attaches the Rocket
+  // to the dome floor, possibly within the same public step.
+  assert.equal(car.inDome,true);assert.ok(car.supportId==='ground'||car.supportId==='dome');assert.equal(car.y,0);
   assert.equal(car.x,DOME.x-15,'landing remains inside the arena');
+  step(world,new Map(),.05);
+  assert.equal(car.supportId,'dome');assert.ok(Math.abs(car.domeS!-DOME.flatHalfWidth)<1e-9);
+  assert.equal(car.y,0);assert.equal(car.x,DOME.x-15);
 });
 
 test('passing above the roof or landing outside the capsule does not enter the dome',()=>{

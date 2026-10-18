@@ -1,4 +1,4 @@
-# Implementation contracts · v16
+# Implementation contracts · v17
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -20,7 +20,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 - Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, dome, ferry, roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
-- Shared simulation uses fixed 0.05-second outer steps, subdivided when needed for fast motion. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
+- Shared simulation uses fixed 0.05-second outer steps, subdivided for fast relative motion. Airborne speed is capped at 80 m/s (288 km/h) to keep collision sampling bounded; this is an arcade limit, not a general continuous-collision guarantee. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
 - `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt and dome geometry and `BUILDINGS`; `shared/island-stunts.ts` owns the separate bank and cliff geometry and contact functions, and `shared/oval-bank.ts` owns the banked oval surface. See [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a checked free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
 
 ## World schema
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade` and `subscribeOta`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v16
+## Wire protocol v17
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:16,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:17,capacity:number}`.
 
 Client messages:
 
@@ -63,7 +63,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:16, capacity:number}
+{type:"welcome", id:string, version:17, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -140,7 +140,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 `shared/oval-bank.ts` defines the speed oval's triangulated height and normals, shoulders and swept landing; banked support uses `supportId: 'island-oval'`, and the renderer follows those triangles. The race start/grid, short-course overlap and dock junction are flat and blend into the bank. The oval still uses the general arcade steering and traction model, not a realistic simulation of banking or a guarantee of high-speed grip.
 
-`shared/parking-lots.ts` defines the two registered playgrounds and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
+`shared/parking-lots.ts` defines two playgrounds and four Supercharger lots and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 
 ## Shops and upgrades contract
 
