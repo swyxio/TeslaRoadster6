@@ -10,6 +10,6 @@ Tests: pnpm test and pnpm build. Network changes: live room.integration.ts and c
 
 Contributors should open a pull request; maintainers integrate to main and operate the Cloudflare deployment. Do not alter a shared deployment without authorization. Keep docs/VERIFICATION.md current with dated observations.
 
-Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage. Protocol v17, the delivery/police and cockpit contracts in docs/DELIVERY.md, and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
+Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage. Protocol v18, the delivery/police and cockpit contracts in docs/DELIVERY.md, and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
 
 Map source of truth: shared/map.ts; read docs/MAP.md before changing terrain, coastlines, bridges or landmarks. Do not move visual streets or water independently of authoritative surfaces and collisions.
