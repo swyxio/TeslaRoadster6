@@ -5,7 +5,7 @@ import { type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
-import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, domeSurface, supportNormal, terrainHeight } from '../shared/map';
+import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS, stationStalls } from '../shared/stations';
@@ -26,6 +26,7 @@ import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
 import { buildBillboards } from './billboards';
+import { buildTeslandMonuments } from './tesland-monuments';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -104,6 +105,7 @@ export class GameScene {
     buildBay(scene);
     buildNorthLandmarks(scene);
     buildSouthLandmarks(scene);
+    buildTeslandMonuments(scene);
     buildBillboards(scene);
     addIslandStunts(scene);
     addIslandJumps(scene);
@@ -207,6 +209,7 @@ export class GameScene {
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.id==='colossus'?122:25,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
   }

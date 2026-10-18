@@ -1,4 +1,4 @@
-# Implementation contracts · v25
+# Implementation contracts · v26
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v25
+## Wire protocol v26
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:25,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:26,capacity:number}`.
 
 Client messages:
 
@@ -65,7 +65,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:25, capacity:number}
+{type:"welcome", id:string, version:26, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -76,7 +76,9 @@ Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Ea
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
-Protocol v25 combines the relocated China Basin Rocket Dome and soccer match state with island jump geometry, curved roof and loop collision changes, and supply reward kinds. The server and client must share the same world geometry, support queries and match schema; incompatible clients cannot connect. Room-full close signaling, snapshot serialization, navigation and direct minigame entry are also part of the combined release.
+Protocol v26 combines the relocated China Basin Rocket Dome and soccer match state with island jump geometry, curved roof and loop collision changes, and supply reward kinds. The server and client must share the same world geometry, support queries and match schema; incompatible clients cannot connect. Room-full close signaling, snapshot serialization, navigation and direct minigame entry are also part of the combined release.
+
+Protocol v26 also includes two static, collision-backed monument bases in the Marin headlands. Their footprints and landable roof heights come from `TESLAND_MONUMENTS` in `shared/map.ts`; the sculptures above them are decorative. Rendering and minimap markers use the same positions. These are entirely fictional game art and do not imply affiliation.
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403. A full room accepts the WebSocket then closes it with application code4003 and reason `Room full`; this lets browser clients distinguish capacity from a failed connection. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -86,7 +88,7 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Global chat and saved identities
 
-Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms and available during solo play while connected. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. An active saved identity is reported with `code:"identity_active"`; the client retries briefly before requiring action. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
+Same-origin WebSocket `GET /api/chat` connects to a single global chat Durable Object, independent of game rooms. The chat client sends `{type:"hello",name:string,code?:string}` first, then `{type:"message",text:string}`, `{type:"save"}`, or a `{type:"ping"}` heartbeat. The server answers `{type:"ready",playerId,name,messages}`, broadcasts `{type:"message",message:{id,playerId,name,text,time}}`, and privately returns `{type:"recovery",code}` for a successful save or `{type:"error",message}` when a request fails. An active saved identity is reported with `code:"identity_active"`; the client retries briefly before requiring action. Heartbeats receive no reply. It derives author IDs and names from the connection, not from message fields.
 
 Names are NFKC-normalized, stripped of control and invisible direction/format characters, whitespace-collapsed and capped at 20 Unicode code points; an empty name becomes `Driver`. Active names are compared case-insensitively. A conflict adds the first available ` #2`, ` #3`, and so on, trimming the base if needed. Names are not reserved when disconnected. Game rooms use the same rule independently, so a room display name can differ from the global chat name. Room labels are self-asserted: they are not proof of a saved chat identity. The full server-issued UUID identifies a chat sender; a short on-screen prefix is for convenience and is not guaranteed unique.
 
@@ -96,7 +98,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `room`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `solo(kind,name)`, `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue or automatic offline fallback; Drive solo is an explicit local option. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `room`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`, and `roomFull`; commands `solo(kind?,name?)`, `enterMinigame`, `setDestination`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `buyUpgrade(upgrade)`, `setOta(enabled)`, `parkingAction`, `raceAction`, `disconnect()`. The game automatically joins `bay`, or a valid room in the invite URL. Joining the current online room keeps the existing seat and ride; the starting-ride choice applies when entering a different room. If the room is full, offer retry or a user-named room; there is no queue. Solo runs locally only when explicitly selected, never as a connection-failure fallback. UI can replace presentation but must preserve visible connection/error/rejoin paths. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -171,7 +173,7 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v25 requires matching world geometry and soccer match state on both ends.
+`shared/dome.ts` defines the fictional China Basin waterfront arena and its north entrance; `shared/map.ts` supplies its land, plaza, street approach, capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the last supported Bay or island side (or the ferry destination). Cars can drive in from the street and out through the marked north gate without teleporting; vehicles can also enter through the sides once their upright bodies fit. Descents from above land on the exterior roof and overflights remain outside. Goal apertures contain cars. The arena has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact. Protocol v26 requires matching world geometry and soccer match state on both ends.
 
 Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the dome at least 8 m above its floor and moving at least 5 m/s refills air at 24 percentage points per simulation second, capped at 100. It also works on the ceiling and while boosting, including with a Rocket kit from a pickup; stationary, airborne, floor-level and non-Rocket vehicles cannot charge. The shared simulation owns the change and clients display replicated air and eligibility.
 

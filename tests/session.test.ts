@@ -103,6 +103,12 @@ test('solo is explicit, advances locally and ignores an old room socket',()=>{
   assert.deepEqual(session.destinationResult,{requestId:id,ok:true});
 });
 
+test('offline navigation requests fail without starting a local session',()=>{
+  const session=new Session(), requestId=session.setDestination(-180,60);
+  assert.deepEqual(session.destinationResult,{requestId,ok:false});
+  assert.equal(session.world.players.length,0);
+});
+
 test('solo mini-game requests use the local simulation',()=>{
   const session=new Session();session.solo('model-3','Scout');
   assert.equal(session.enterMinigame('park'),true);
