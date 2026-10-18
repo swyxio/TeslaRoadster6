@@ -1139,3 +1139,10 @@ The deployed Workers preview served the static MP4 with HTTP 200 to a Range requ
 After merging current main at `0aa7bcc` into the article branch, `pnpm test` passed 854 tests and `pnpm build` passed with the existing large-chunk warning.
 
 After also merging main at `5c3779d`, `pnpm test` passed 876 tests and `pnpm build` passed with the same warning.
+
+## Dev blog navigation and social cards · 2026-10-18 Pacific
+
+- On the local article build, Chrome showed the desktop index rail and on-page contents, and an emulated 390×844 article reached `#two-ways-to-see-the-drive` through the contents. Keyboard activation expanded the mobile contents and minimized/restored the desktop rail; its keyboard resize reached 380 px. Chrome's pointer automation did not activate the emulated mobile disclosure in this session, so genuine touch remains unverified. The economy article and its interactive investment controls rendered at emulated 320 px; the article was also inspected in 844×390 landscape. No physical device was tested.
+- The archive search found the driving post from body text and updated `?q=`. At emulated 320, 375, 390 and 430 CSS pixels, the economy article did not create page-wide horizontal overflow. The inspected body, metadata, link, panel and button foreground/background pairs all exceeded 4.5:1 contrast.
+- The game homepage, changelog, story, blog index and all three article pages had distinct 1200×630 PNG Open Graph cards, successful local image responses and matching Twitter card metadata. Every generated fragment link resolved to a unique page ID. Social-platform cache refresh and rendered previews were not verified.
+- After rebasing onto main, the candidate passed 879 tests, including heading, stable-ID and related-link checks, and a production build; Vite retained its existing large-chunk warning. A static local server showed the game shell, but has no multiplayer Worker and did not verify joining or driving.

@@ -1,8 +1,8 @@
-Your first Tesland delivery gets you moving. A few more get you thinking: keep saving for the next city, buy a Cybercab that earns alongside you, or spend some cash making your car your own? We modeled those choices in five-minute slices, then followed drivers all the way from San Francisco to their first home—and, eventually, a shared launch to Mars.
+Your first [Tesland delivery](/blog/building-poly-av/) gets you moving. A few more get you thinking: keep saving for the next city, buy a Cybercab that earns alongside you, or spend some cash making your car your own? We modeled those choices in five-minute slices, then followed drivers all the way from San Francisco to their first home—and, eventually, a shared launch to Mars.
 
 Deliveries, cash-based levels, saved vehicles, income-producing Cybercabs and a game-wide Mars goal give the career its foundation. The longer simulations below explore how fleet and proposed property investments could change the journey.
 
-## Rebalancing the opening
+## Rebalancing the opening {#rebalancing-the-opening}
 
 A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The new tuning brings the first delivery award to $500, makes every third delivery worth a $350 checkpoint, and prices the remote OTA shop at $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
 
@@ -15,7 +15,7 @@ The chart follows four opening paths through the actual delivery and award calcu
 
 The 40-hour and property simulations later in this post use the earlier design's fares and awards. They remain useful for comparing the choices in that design; the revised economy needs new long-run playtests before those home and Mars estimates can be applied to it.
 
-## The first big purchase
+## The first big purchase {#the-first-big-purchase}
 
 Suppose you start with $2,500 and earn $60,000 an hour delivering. After about 23 minutes you have enough for a $25,000 Cybercab. Buying it comes with a $5,000 achievement award, so your wallet drops by $20,000. Now your cab starts earning alongside you.
 
@@ -37,7 +37,7 @@ If that first cab earns for 75% of your active play, it brings in $11,250 per ac
 
 That dip in cash is the interesting part. Buying a cab makes you poorer for a while and gives you a chance to earn faster later. Buying paint gives you a different kind of return: you get to drive something you like. Both deserve a place in the game.
 
-## Your wallet is your level
+## Your wallet is your level {#your-wallet-is-your-level}
 
 We considered an XP system, then chose a simpler direction: **your current cash balance determines your level**. Earn enough and the Bay opens up. Spend enough and your level can fall until you earn it back. Achievements and purchases stay yours.
 
@@ -57,7 +57,7 @@ For the larger economy, we modeled these additional career goals:
 
 The model also proposes separate gates for Berkeley at $20k, San Mateo at $75k, Palo Alto at $100k and Mountain View at $150k. The current regional unlock achievements pay once, even if you drop a level and unlock the region again.
 
-## From one cab to a fleet
+## From one cab to a fleet {#from-one-cab-to-a-fleet}
 
 In the model, the first five Cybercabs cost **$25k, $50k, $100k, $200k and $400k**. Their ownership achievements return $5k, $10k, $20k, $40k and $80k respectively. Each active cab has the same $15k-per-hour base earning rate, so a bigger fleet pays more, while each successive purchase takes longer to earn back its price. The model pays cabs while their owner is playing.
 
@@ -84,7 +84,7 @@ The Vault near Stanford gives collectors an expensive destination today: two Lam
 
 For the expanded economy, we modeled wheels and trim at $15k, wraps and fleet branding at $50k, and premium effects at $150k. The older model also used different paint, decal and vehicle-kit prices. Ordinary cars remain available to drive. We also want to bring more EVs to the Bay: BYDs and Rivians, plus the Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning.
 
-## A place of your own
+## A place of your own {#a-place-of-your-own}
 
 Our proposed property market opens at a $2m wallet threshold, after a career of deliveries and fleet decisions. A ready-built starter home would cost $1m. Or buy a $400k plot and spend $600k building a home to your taste. An owner could always reach and build on their own plot, even if a purchase lowers their balance below the market threshold.
 
@@ -120,7 +120,7 @@ Across our seven paths, the median 20-story tower arrives after **101–163 acti
 
 That fee, a city-sold plot, a construction bill and a shop cosmetic are *money sinks*: cash leaves the economy when players buy them. Deliveries, cab earnings and achievement awards create cash. If more money chases a fixed supply of desirable plots, prices can rise; attractive things to buy give that money somewhere to go. We'll watch earnings, spending and actual sale prices as the market takes shape.
 
-## A Bay worth exploring
+## A Bay worth exploring {#a-bay-worth-exploring}
 
 <p class="map-scroll-hint">Swipe across the map to read all the labels.</p>
 <figure>
@@ -153,7 +153,7 @@ Airport runs deserve a fare that makes the extra drive worthwhile. In our level-
 
 Rocket Dome, racing and parking are for the occasional detour and achievement hunt. A Dome win could give everyone in the room 1.5× eligible earnings for ten minutes. A separate global event could give everyone 2× for 30 minutes; together the bonuses cap at 3×. They apply to deliveries, active cab income and eligible activity pay. Achievement awards keep their normal value.
 
-## What the journeys look like
+## What the journeys look like {#what-the-journeys-look-like}
 
 We ran 250 seeded versions of seven delivery-led strategies, each for 40 active hours. The first three share driving and travel assumptions to compare saving, buying one cab and reinvesting in a fleet; those choices can also change later jobs. The other paths vary spending and play style. Events are off in this comparison, and the hours are time spent playing.
 
@@ -183,7 +183,7 @@ If a 2× event runs for 30 minutes every four hours, the saver, first-cab and fl
 <figcaption>The dashed line marks the $2m property-market threshold. Each point is the median wallet at that time across a path's runs.</figcaption>
 </figure>
 
-## Give drivers reasons to keep going
+## Give drivers reasons to keep going {#give-drivers-reasons-to-keep-going}
 
 Achievements should point toward the next interesting thing: an on-time delivery, a new city, a new drop-off, a clean driving streak, or the first cab earning back its cost. Each pays once. Delivery milestones at 1, 10, 25, 50 and 100 jobs give the longer journey landmarks of its own, with smaller check-ins between them and at 250.
 
@@ -196,7 +196,7 @@ The redesigned milestones bring the longest achievement-free stretch in the firs
 
 We also tried rotating delivery contracts—two on-time jobs, three clean jobs, two distinct stops. They give visible progress between bigger milestones. In the model, they replace a $750 checkpoint paid every three deliveries with $650 per completed contract; completions arrived slightly less often. That's a useful next playtest, alongside airport and university goals that ask players to do something different.
 
-## The long road to Mars
+## The long road to Mars {#the-long-road-to-mars}
 
 <figure>
 <img src="/blog/economy/starship-concept.webp" alt="A Starship and Super Heavy rocket ready for launch at a Fremont spaceport as drivers gather nearby." loading="lazy">
