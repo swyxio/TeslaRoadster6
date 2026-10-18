@@ -710,6 +710,7 @@ export class EconomySession {
           if(outcome.roomFund!==undefined)this.world.mars.roomFund=Math.max(this.world.mars.roomFund,outcome.roomFund);
           if(item.intent.action.kind==='progress')this.committedOtaPeriodEnd=item.view.delivery.ota.renewAt;
           if(!this.closed){
+            const rewardId=this.player.delivery.lastReward?.id??0;
             this.install(outcome.progress);
             this.restoreCommittedOta();
             if(historical&&outcome.delivery?.lastReward){
@@ -725,6 +726,8 @@ export class EconomySession {
             this.player.achievements.lastUnlock=item.view.achievements.lastUnlock;
             Object.assign(this.player.cockpit,item.view.cockpit);
             this.wallet();
+            const reward=this.player.delivery.lastReward;
+            if(reward&&reward.id>rewardId)this.send({type:'reward',reward});
           }
           if(historical){this.uncertainDeliveries--;this.reprojectAfterHistoricalRate();}
           item.onApplied?.(outcome);

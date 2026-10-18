@@ -13,6 +13,7 @@ import { validStarshipStatus, validStarshipTime, type StarshipRoomStatus } from 
 import type { EarningsBonusView } from './earnings-bonus-ui';
 import type { MarketRequest, MarketResultView, MarketState } from '../shared/market-protocol';
 import type { DriveMode } from '../shared/drive-mode';
+import type { DeliveryReward } from '../shared/delivery';
 type MarketClientRequest<T=MarketRequest> = T extends MarketRequest ? Omit<T,'type'|'requestId'> : never;
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
@@ -40,6 +41,8 @@ export class Session {
   private name = 'Driver';
   private identityCode?: string;
   private identityRequestId = 0;
+  private rewardId=0;
+  private rewards:DeliveryReward[]=[];
   private nextUpgradeRequest = 0;
   private inputSeq = 0;
   private actionSeq = 0;
@@ -173,6 +176,12 @@ export class Session {
           if(!isAchievementTierProgress(message.achievementTiers))throw new Error('Invalid achievement tier progress');
           this.wallet = message;
         }
+        if(message.type==='reward'){
+          const reward=message.reward as DeliveryReward;
+          if(!reward||!Number.isSafeInteger(reward.id)||reward.id<1||!Number.isSafeInteger(reward.amount)||reward.amount<1||
+             !['pickup','delivery','pickup-research','delivery-research','supply-repair','supply-air','research'].includes(reward.kind))throw new Error('Invalid reward');
+          if(reward.id>this.rewardId){this.rewardId=reward.id;this.rewards.push(reward);}
+        }
         if (message.type === 'luxuryResult') this.luxuryResult = message;
         if (message.type === 'cabResult' && message.action === 'buy') this.cabBuyResult = message;
         if (message.type === 'cabResult' && message.action === 'paint') this.cabPaintResult = message;
@@ -208,6 +217,7 @@ export class Session {
     if(this.edgeQueue.length>=16){this.droppedInputEdges++;return;}
     this.edgeQueue.push({kind,id,at:this.now(),revision:this.controlRevision});
   }
+  takeRewards():DeliveryReward[] {return this.walletBlocked?[]:this.rewards.splice(0);}
   tick(dt: number, input: Input) {
     this.lastInput={...input};
     if (this.status === 'online') {
@@ -282,6 +292,7 @@ export class Session {
     // reason; a new room still sends its own identity on welcome.
     if(code&&code===this.identityCode&&this.id&&this.socket?.readyState===WebSocket.OPEN&&this.walletStatus!=='failed')return this.identityRequestId;
     const requestId=++this.nextUpgradeRequest;
+    this.rewards=[];
     this.starshipContextVersion++;
     this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
@@ -375,5 +386,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.rewardId=0;this.rewards=[];this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

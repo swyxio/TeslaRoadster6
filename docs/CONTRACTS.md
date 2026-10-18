@@ -102,6 +102,7 @@ Server messages:
 {type:"earningsStatus", events:EarningsEvents|null, serverTime:number, validForMs:number}
 {type:"identityResult", requestId:number, ok:boolean, message:string}
 {type:"wallet", cash:number, earned:number, eligibleIncome:number, level:number, unlocked:AchievementId[], achievementTiers:AchievementTierProgress, ownedLuxury:LuxuryVehicleId[], cybercabs:CybercabFleet}
+{type:"reward", reward:{id:number, kind:"pickup"|"delivery"|"pickup-research"|"delivery-research"|"supply-repair"|"supply-air"|"research", amount:number}}
 {type:"cabResult", requestId:number, action:"buy"|"paint", ok:boolean, reason?:string, assetId?:string, paint?:PaintId}
 {type:"marketState", requestId:number, listings:MarketListingView[], owned:MarketAssetView[], shop:MarketShopView[], nextCursor?:string, nextOwnedCursor?:string}
 {type:"marketResult", requestId:number, operationId:string, action:MarketOperationAction|null, status:"not-found"|"pending"|"completed"|"rejected", reason?:string}
@@ -109,6 +110,8 @@ Server messages:
 ```
 
 Welcome precedes the initial snapshot. The room simulates one fixed 50 ms outer step per completed tick and sends snapshots every two ticks. `tick=T` is the world *after* step T; it advances only when a step completes, independent of wall time. `roomEpoch` identifies one room incarnation: it changes after the room empties and resets, not when a single driver reconnects. The WebSocket is that driver's connection generation. `substeps` is the count used by the most recently completed step (1 at tick zero). The authoritative room retains the adaptive global maximum-speed substep policy. Presentation replay may override its local count, but a last-known count cannot predict unseen traffic, collisions or changing physics.
+
+`reward` is sent only to the owner after a wallet receipt commits. Each new reward has an increasing per-room-player ID; clients queue and display them in order so multiple commits between snapshots do not overwrite one another. The message is transient, not a durable inbox: a disconnected or identity-changing client may miss its celebration, while wallet settlement remains governed by the journal. `lastReward` in the world remains state for level tracking, not a second celebration source.
 
 Input frames carry a strictly increasing positive `seq`, the room epoch, the driver's current `controlRevision`, the latest sent `actionSeq` (initially zero), and the intended `targetTick`. The server accepts continuous controls only for T+1 through T+8. A newer sequence replaces the same slot and supersedes older slots at later ticks, preventing old acceleration from returning after a newer release. A missing slot holds the last controls for at most six completed ticks, then neutralizes. A 300 ms wall-clock watchdog also clears stale queued and held controls on the next callback; an edge-only frame cannot refresh the continuous-control watchdog. The rejected frame gets `inputRejected`; a sequence is receipt ordering, not elapsed time or an execution acknowledgement. `sync` tags a regular snapshot after that driver's preceding economy operations settle; requests are coalesced.
 

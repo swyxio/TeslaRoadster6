@@ -94,12 +94,14 @@ try {
   for(let count=1;count<=2;count++){await pickup();await dropoff(count);}
   await pickup();
   const before=(await inspect()).progress,observerCash=observer.last('wallet')!.cash as number;
+  const rewardStart=driver.messages.length,observerStart=observer.messages.length;
   const armed=await wallet<{started:number}>('arm',{driverId,fault:'hold-lost-reply'});
-  await rpc('/__checkpoint-test/dropoff',{room,playerId:id});
+  await rpc('/__checkpoint-test/dropoff',{room,playerId:id,atResearch:true});
   await until(async()=>(await wallet<{held:boolean}>('fault-state',{driverId})).held,'lost reply held');
   const committed=(await inspect()).progress;
   assert.equal(committed.completed,3,'drop-off is durable before the reply');
   assert.equal(player(driver).delivery.completed,2,'unacknowledged wallet stays private');
+  assert.equal(driver.messages.slice(rewardStart).filter(message=>message.type==='reward').length,0,'held receipts do not announce rewards');
   const observerTime=observer.last('state')!.world.time as number;
   await until(()=>observer.last('state')!.world.time>observerTime+.2,'other driver keeps receiving room ticks');
   assert.equal(observer.last('wallet')!.cash,observerCash,'the other wallet is unaffected');
@@ -108,14 +110,20 @@ try {
   const after=(await inspect()).progress;
   const added=after.unlocked.filter(id=>!before.unlocked.includes(id));
   assert.ok(added.includes('regular'),'the third-delivery milestone also commits');
-  const awards:Record<string,number>={regular:400,'region-oakland':500,'berkeley-research':400,'roof-rider':500,'sky-delivery':1_000};
+  const awards:Record<string,number>={regular:400,'region-oakland':500,'stanford-research':600,'berkeley-research':400,'roof-rider':500,'sky-delivery':1_000};
   for(const award of added)assert.ok(award in awards,`unexpected award ${award}`);
   const awardCash=added.reduce((total,id)=>total+awards[id],0),fare=after.earned-before.earned;
   assert.ok(fare>=0);
   assert.equal(after.cash-before.cash,fare+350+awardCash);
   assert.equal(after.eligibleIncome-before.eligibleIncome,fare+350+awardCash);
   assert.ok((await wallet<{started:number}>('fault-state',{driverId})).started>=armed.started+2,'commit was retried');
-  assert.equal(player(driver).delivery.lastReward.amount,fare+350+awardCash,'one grouped reward is shown');
+  assert.ok(added.includes('stanford-research'),`the same stop also earns the separate research award: before=${JSON.stringify(before.unlocked)} added=${JSON.stringify(added)}`);
+  const rewards=driver.messages.slice(rewardStart).filter(message=>message.type==='reward').map(message=>message.reward);
+  assert.equal(rewards.length,2,'one message per committed reward');
+  assert.deepEqual(rewards.map(reward=>reward.kind),['delivery-research','research']);
+  assert.deepEqual(rewards.map(reward=>reward.amount),[fare+350+awardCash-600,600]);
+  assert.equal(rewards[1].id,rewards[0].id+1,'messages retain receipt order');
+  assert.equal(observer.messages.slice(observerStart).filter(message=>message.type==='reward').length,0,'other players do not receive private reward messages');
 
   driver.socket.close();await until(()=>driver.socket.readyState===WebSocket.CLOSED,'driver disconnected');
   await until(()=>observer.last('state')?.world.players.every((item:Message)=>item.id!==id),'driver removed');
@@ -129,6 +137,7 @@ try {
   await until(async()=>await rpc<number>('/__checkpoint-test/income',{})===expectedIncome,'global income outbox catches up');
   await sleep(700);
   assert.equal(await rpc<number>('/__checkpoint-test/income',{}),expectedIncome,'retry does not duplicate global income');
+  assert.equal(driver.messages.slice(rewardStart).filter(message=>message.type==='reward').length,2,'lost reply does not duplicate notifications');
   console.log('PASS: completed checkpoint committed once through a lost reply, another driver remained live, and recovery preserved cash and income.');
 } finally {
   for(const socket of sockets)try{socket.close();}catch{}

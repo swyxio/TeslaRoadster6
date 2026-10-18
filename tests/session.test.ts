@@ -28,6 +28,26 @@ class Socket {
 }
 Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
 
+test('committed reward messages queue in order without crossing identity changes',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
+  const world=createWorld();addPlayer(world,'p','Driver');socket.message({type:'state',world});
+  const delivery={id:1,kind:'delivery-research' as const,amount:800},research={id:2,kind:'research' as const,amount:250};
+  socket.message({type:'reward',reward:delivery});socket.message({type:'reward',reward:research});
+  socket.message({type:'reward',reward:delivery});
+  world.players[0].delivery.lastReward=research;
+  socket.message({type:'state',world,tick:1});
+  assert.deepEqual(session.takeRewards(),[delivery,research]);assert.deepEqual(session.takeRewards(),[]);
+  socket.message({type:'reward',reward:{id:3,kind:'pickup',amount:100}});
+  const requestId=session.setIdentity('recovery-code');
+  socket.message({type:'reward',reward:{id:4,kind:'research',amount:250}});
+  assert.deepEqual(session.takeRewards(),[],'rewards wait until binding is resolved');
+  socket.message({type:'identityResult',requestId,ok:true,message:'Saved driver connected.'});
+  socket.message({type:'state',world,tick:2});
+  assert.deepEqual(session.takeRewards(),[{id:4,kind:'research',amount:250}], 'an in-flight reward for the same driver is preserved');
+  session.disconnect();
+});
+
 test('owner wallet accepts valid tier progress and rejects malformed progress',()=>{
   const session=new Session();session.join('bay','Driver');const socket=Socket.last;
   const tiers=normalizeAchievementTiers(undefined,0,[]);
