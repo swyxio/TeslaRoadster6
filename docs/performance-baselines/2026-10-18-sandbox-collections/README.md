@@ -53,6 +53,53 @@ respective SHA-256 hashes are `9861465eb4005eed7378438aad91cfd3f50c9d4c0b73dd736
 and `d217942722310a0b36eb87efdf8936fc05f2d7f3fd9a0f437cd9a2dd918ffbf8`.
 `stage-smoke.mjs` records a preparatory fixture probe, not the paired measurement.
 
+## Corrected sustained-moving room pair
+
+A later pair used the same 22 seed-0 traffic entities and five staged Roadsters,
+with the same initial traffic and car JSON and world time (12.40 s) on both
+sides. Four had saved profiles; per-client throttle feedback used the latest
+authoritative speed to stay near 10–12 m/s. There were no repositionings or
+collection resets during the run. A pure-simulation preflight on each revision
+recorded 114.9 m in the first block and 118.8 m in each subsequent block for
+all five cars; see `route-preflight-{base,candidate}.json.gz`. The active room
+run required at least 75 m, at least 50 snapshots, and speed above 5 m/s in at
+least 80% of snapshots, separately for each of five cars and each 10-second
+block. Its minimums were 103.27 m, 89 snapshots and 95.8%, respectively.
+
+The base was `372716699bbd48eb630beda161ac2fa1613a5948` with identical test
+fixtures copied into its otherwise unmodified runtime. The candidate was
+`0883a8a2e25ca739e4292b954340502242b688f9`, whose application runtime matched
+`a786147`. The benchmark, Worker and feedback fixture hashes were identical
+on both sides: `26ae4e7f41c234b753eca8567b6ba379fe24ebe2f76a444ae4c3c342867e4ae8`,
+`d217942722310a0b36eb87efdf8936fc05f2d7f3fd9a0f437cd9a2dd918ffbf8` and
+`2ecac12c65d47401ea8817ea353177e86751486815bd009dfa992d4ffd78ee61`.
+
+| Observation | Base | Candidate |
+| --- | ---: | ---: |
+| Simulated / wall seconds | 56.65 / 60.006 | 57.20 / 60.009 |
+| Sim / wall | 0.94407 | 0.95319 |
+| Ticks | 1,133 | 1,144 |
+| Tick work p95 / max | 1 / 40 ms | 1 / 8 ms |
+| Snapshot gap p95 | 109.048 ms | 107.528 ms |
+| Input acknowledgement p95 | 211.502 ms | 208.045 ms |
+| Decoded snapshot bytes | 45,868,610 | 46,398,121 |
+| One-minute host load before → after | 4.99 → 6.21 | 6.29 → 6.75 |
+| Load-generator event-loop p95 | 21.50 ms | 21.46 ms |
+
+The candidate met the existing 57-second / 0.95 throughput target in this
+observation; the base missed it. Both completed 48 paid actions, acknowledged
+all inputs, had no rejections or disconnects, drained queues (maximum one),
+and left no pending journals. All four candidate wallets recorded the Roadster
+collection. This single same-host pair does not establish a causal improvement
+or playable capacity. It does not erase the earlier candidate's failed sample.
+
+The local readiness probe initially reached a stale protocol-43 service on port
+8797, so the baseline benchmark aborted before warmup. The pair was then run
+once on a fresh port after validating each worker's protocol. Raw results and
+runner output are `corrected-throughput-{base,candidate}.json.gz` and
+`corrected-run-{base,candidate}.log.gz`; `run-corrected-wallet-pair.sh` retains
+the local orchestration. Its absolute `/private/tmp` paths require adaptation.
+
 ## Recipient snapshot microbenchmark
 
 A same-process synthetic world with 64 players each holding all 13 collection
