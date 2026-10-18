@@ -2,9 +2,15 @@
 
 ## Drift controls · 2026-10-17 Pacific
 
-- `pnpm test` passed 39 tests and `pnpm build` passed, including authoritative sliding, return to grip, straight braking and Ctrl/touch input release. The existing Vite chunk-size warning remains.
+- `pnpm test` passed 41 tests and `pnpm build` passed, including authoritative sliding, return to grip, straight braking and Ctrl/touch input release. The existing Vite chunk-size warning remains.
 - Local Wrangler two-client integration passed with drift lateral motion visible in the second client's snapshot. This is not a load test.
 - Local Chrome desktop solo: accelerated, then used Ctrl plus left steering and observed the car turn and slow. The control help was visible. Chrome touch-emulated 390×844 portrait and 844×390 landscape showed the Brake and steering buttons. Real-device multi-touch and subjective handling remain unverified.
+
+## Pickup rewards and minimap · 2026-10-17 Pacific
+
+- After integrating the Rocket stunt update, `pnpm run ci` passed 37 tests and both typechecks/build; the existing Vite chunk-size warning remains. Local Wrangler two-client integration passed with protocol v6, pickup-clock replication and the stunt checks. This is not a load test.
+- After also integrating nozzle effects, `pnpm run ci` passed 39 tests and the build; local and staging two-client integrations passed with protocol v7, pickup-clock replication and remote thruster effects.
+- Chrome desktop and emulated 390×844 portrait / 844×390 landscape showed the larger heading marker, pickup timer and available bonus alongside the updated stunt controls. A separate browser preview of the actual reward component showed the cash card and confetti; simulation tests cover awarding and preventing duplicate payments. A complete positive pickup and its animation were not manually observed together, and no physical device was tested.
 
 ## Roadster nozzle visuals · 2026-10-17 Pacific
 
