@@ -5,6 +5,14 @@ export const DRIVER_REMEMBER_KEY = 'poly-av-driver-remember';
 type RecoveryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 export type RecoverySnapshot = { remember: boolean; remembered?: string; pending?: string; available: boolean };
 
+// The room must follow the active chat identity even if this browser cannot
+// remember its code. The caller shows the player how to keep the code.
+export function connectDriverWallet(code: string | undefined, remember: (code: string | undefined) => boolean, connect: (code: string | undefined) => void): boolean {
+  const stored = remember(code);
+  connect(code);
+  return stored;
+}
+
 export function readDriverRecovery(storage: RecoveryStorage | null): RecoverySnapshot {
   try {
     if (!storage) throw new Error('Storage unavailable');
