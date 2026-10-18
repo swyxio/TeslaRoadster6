@@ -1,6 +1,6 @@
 # Rocket Island and parking playgrounds · implementation status
 
-This protocol v11 checkout implements the first Rocket Island playground in the shared simulation and renderer alongside cockpit view. It is a fictional, compressed game location; it does not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
+This protocol v12 checkout combines the Rocket Island playground and cockpit view with the separate Alcatraz Rocket Dome. These are fictional, compressed game locations and do not represent real vehicle capabilities. The public deployment may still run an earlier revision. See [VERIFICATION.md](VERIFICATION.md) for observed checks and [CONTRACTS.md](CONTRACTS.md) for protocol and implementation details.
 
 ## In the current checkout
 
@@ -10,6 +10,7 @@ This protocol v11 checkout implements the first Rocket Island playground in the 
 - **Bank and cliff:** A banked lane with tapered entry, exit and shoulders and a separate 24 m-wide inverted cliff use the same vertices for rendering and physical support. The cliff sweeps about 225° around a 20 m radius. Rocket fans can adhere beyond vertical; ordinary cars fall or bounce. The short circuit and speed oval are separate flat roads; the bank is not a banked oval.
 - **Racing:** The short circuit and speed oval have optional, server-owned lobbies for up to eight drivers, a 15-second lobby, three-second countdown and directional 3D checkpoints. Joining assigns a checked start position; a host can start early. Cars remain physical and can bump. Results and timers are session-only.
 - **Parking:** The shared registry currently contains two playgrounds, one in SF and one on the island. Both offer Park It and Cut the queue through the Actions drawer. Park It requires a complete car footprint, heading and speed to satisfy a stall for two seconds. Queue play records arrival order and awards eligible stalls. These games are opt-in and do not create persistent rewards.
+- **Rocket Dome:** The enclosed Alcatraz soccer arena sits on a separate land polygon and has direct, reversible travel from the Bay. One shared ball and blue/orange goals serve all players without assigned teams; either side reaching five wins, followed by an automatic reset. Rocket-capable cars can adhere to its curved walls and ceiling. Delivery order time pauses and police pursuit clears in the dome.
 
 The world clock accelerates the sky and traffic demand, not ferry travel, upgrades, physics or activity timers. A paused solo game and an empty/restarted room do not accumulate simulation time.
 
@@ -17,6 +18,6 @@ The world clock accelerates the sky and traffic demand, not ferry travel, upgrad
 
 - Walking lanes are marked but not separately allocated pedestrian bays. The ferry's six-car rule is a gameplay constraint, not a measured throughput guarantee; blocked/full-deck and all-vehicle boarding behavior need further end-to-end playtesting.
 - The two registered parking playgrounds share the same controller. Decorative or incidental parking spaces elsewhere have not been audited or converted, and queue play has no scripted NPC queue. Add future playable lots to the same shared registry.
-- The bank, cliff, race courses, ferry crossing and parking games need full desktop and touch playthroughs, including joining, leaving, congestion and recovery. End-to-end two-client ferry crossings and actual physical-device touch remain unverified unless a later dated entry records them.
+- The bank, cliff, race courses, ferry crossing and parking games need full desktop and touch playthroughs, including joining, leaving, congestion and recovery. Combined island, dome and upgrade interactions, end-to-end two-client ferry crossings and actual physical-device touch remain unverified unless a later dated entry records them.
 - Verify late-joining and disconnecting passengers, blocked destinations, all 26 vehicle footprints and temporary-upgrade expiry during a crossing or on the overhang with real play sessions. Tune heavy vehicles as arcade behavior, never as real-world performance.
 - Measure peak traffic, snapshots and rendering with occupied ferry and active games before making capacity or performance claims. Local tests and room smoke checks do not establish production, sustained or mobile capacity.

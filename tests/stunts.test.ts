@@ -1,16 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {makeEntity,NEUTRAL,step,THRUSTER_REAR,THRUSTER_DOWN_LEFT,THRUSTER_DOWN_RIGHT,THRUSTER_SIDE_RIGHT,type Input,type World} from '../shared/game';
+import {makeEntity,NEUTRAL,step,travelDome,THRUSTER_REAR,THRUSTER_DOWN_LEFT,THRUSTER_DOWN_RIGHT,THRUSTER_SIDE_RIGHT,type Input,type World} from '../shared/game';
 import {STUNT_LOOP,STUNT_RAMP,rampHeight} from '../shared/map';
 import {initialDelivery} from '../shared/delivery';
 import {initialAchievements} from '../shared/achievements';
 import {createFerry} from '../shared/ferry';
 import {createParking} from '../shared/parking';
 import {createRace} from '../shared/race';
+import {initialSoccer} from '../shared/soccer';
 
 function playground(x=0,z=0){
   const car=makeEntity('car','roadster',x,z,'driver');
-  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}}],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace()};
+  const world:World={entities:[car],players:[{id:'driver',name:'Driver',entityId:car.id,delivery:initialDelivery({x,z}),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}}],pickups:[],time:0,ferry:createFerry(),parking:createParking(),races:createRace(),soccer:initialSoccer()};
   const send=(input:Input=NEUTRAL)=>step(world,new Map([['driver',input]]),.05);
   return {car,world,send};
 }
@@ -25,6 +26,16 @@ test('island exploration pauses cockpit delivery eligibility while active cockpi
   Object.assign(car,{x:0,y:0,z:0,speed:0,supportId:'ground'});
   send({...NEUTRAL,throttle:1});
   assert.equal(player.cockpit.orderEligible,false);
+});
+test('arena play pauses first-person delivery eligibility while cockpit play time still counts',()=>{
+  const {world,send}=playground();
+  send({...NEUTRAL,steer:1,cockpit:true});
+  const cockpit=world.players[0].cockpit,active=cockpit.activeSeconds,order=cockpit.orderSeconds;
+  assert.ok(travelDome(world,'driver'));
+  send({...NEUTRAL,steer:1,cockpit:true});send({...NEUTRAL,steer:1,cockpit:false});
+  assert.ok(cockpit.activeSeconds>active);assert.equal(cockpit.orderSeconds,order);assert.equal(cockpit.orderEligible,true);
+  assert.ok(travelDome(world,'driver'));send({...NEUTRAL,steer:1,cockpit:true});
+  assert.ok(cockpit.orderSeconds>order);assert.equal(cockpit.orderEligible,true);
 });
 test('thruster signals track actual boosts, jumps, flips and depleted air',()=>{
   const {car,send}=playground();

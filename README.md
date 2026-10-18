@@ -4,13 +4,15 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **[Play Poly AV](https://bay-drive.swyxio.workers.dev)** · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
-This checkout contains the Rocket Island expansion; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
+This checkout contains the Rocket Island expansion and Rocket Dome; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
 
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and potentially a costly citation; repeat and more serious flights increase the fine. Some Roadster orders lead to rooftops. Earn session achievements for rooftop landings, deliveries, and flying across the Bay. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
+
+**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena, separate from Rocket Island. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. The Rocket Roadster can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay.
 
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
@@ -80,6 +82,8 @@ shared/stations.ts  Curated real station provenance + game placements
 shared/ferry.ts     Authoritative ferry and passenger attachment
 shared/rocket.ts    Vehicle-local temporary Rocket pickups
 shared/island-stunts.ts  Shared bank and cliff surfaces
+shared/dome*.ts     Rocket Dome geometry and surface collisions
+shared/soccer.ts    Authoritative ball, goals and match state
 shared/parking*.ts  Parking playground definitions and rounds
 shared/race*.ts     Island courses and race rounds
 worker/protocol.ts  Input parser and room capacity policy
@@ -92,6 +96,7 @@ src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/island-stunts.ts  Bank and cliff meshes from shared geometry
+src/rocket-dome.ts  Dome, goals and ball visuals
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment

@@ -1,4 +1,4 @@
-# Implementation contracts · v11
+# Implementation contracts · v12
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -6,7 +6,7 @@ These contracts are the handoff for other coding agents. The lead integrator own
 
 | Lane | Owns | May depend on | Must not change incidentally |
 |---|---|---|---|
-| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `achievements.ts`, `physics.ts`, `traffic.ts`, `ferry.ts`, `rocket.ts`, `island-stunts.ts`, `parking*.ts`, `race*.ts`, simulation tests | Shared map and registry | Renderer, DOM, transport |
+| Gameplay | `shared/game.ts`, `delivery.ts`, `police.ts`, `achievements.ts`, `physics.ts`, `traffic.ts`, `ferry.ts`, `rocket.ts`, `island-stunts.ts`, `dome*.ts`, `soccer.ts`, `parking*.ts`, `race*.ts`, simulation tests | Shared map and registry | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
 | Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
@@ -17,27 +17,27 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island cliff, ferry, roof or null while airborne. The loop and cliff require `loopAngle` because x/z alone cannot identify their heights; the ferry is a moving support.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island cliff, dome, ferry, roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided when needed for fast motion. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
-- `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt geometry and `BUILDINGS`; `shared/island-stunts.ts` owns the bank and cliff geometry and contact functions. See [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a checked free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
+- `shared/map.ts` owns bounds, land polygons, roads, bridge decks, surface heights/normals, Oakland stunt and dome geometry and `BUILDINGS`; `shared/island-stunts.ts` owns the bank and cliff geometry and contact functions. See [MAP.md](MAP.md). `isSurface()` identifies ground coverage; shared support data distinguishes stacked surfaces. Water is rendered at Y=−4; unsupported water landings return a car to a checked free spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative.
 
 ## World schema
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, `rocketUntil`, stunt count, arc attachment, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air, `rocketUntil`, stunt count, arc attachment, `inDome`, `domeS`, support identity and authoritative thruster-effect bitmask, driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, active time, order, completed runs and ticket state), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
-- `World`: entities, players, pickups, ferry, parking rounds, race rounds, time. Station/building, parking-lot, course and island surface definitions are static versioned data, not repeated in snapshots.
+- `World`: entities, players, pickups, ferry, parking rounds, race rounds, time and authoritative `soccer` (ball position/velocity, scores and goal/win phase). Station/building, parking-lot, course and island surface definitions are static versioned data, not repeated in snapshots.
 - `Input`: throttle/steer/roll are finite numbers in [−1,1]; boost/hover/brake/cockpit are booleans. `cockpit` is a client claim, never an authoritative proof of view. Jump and flip are bounded integer press counters; the simulation consumes changed counters once, including when a tap is shorter than an input frame. Complete input frames replace previous intent.
 
-Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
+Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v11
+## Wire protocol v12
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:11,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:12,capacity:number}`.
 
 Client messages:
 
@@ -46,6 +46,7 @@ Client messages:
 {"type":"interact"}
 {"type":"reset"}
 {"type":"autopilot"}
+{"type":"dome"}
 {"type":"selectVehicle","kind":"zoox"}
 {"type":"name","name":"Driver"}
 {"type":"parking","action":"park"}
@@ -60,7 +61,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:11, capacity:number}
+{type:"welcome", id:string, version:12, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -72,13 +73,13 @@ Capacity: `MAX_PLAYERS`, default64, clamped2–128. One named Durable Object per
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot')`, `selectVehicle(kind)`, `parkingAction`, `raceAction`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
+`Session` owns `world`, `id`, `status` (`solo|connecting|online|disconnected`), `capacity`, `error`; commands `solo(kind?)`, `join(room,name,kind?)`, `tick(dt,input)`, `action('interact'|'reset'|'autopilot'|'dome')`, `selectVehicle(kind)`, `parkingAction`, `raceAction`, `disconnect()`. UI can replace presentation but must preserve explicit connection/error/rejoin/solo paths. Never display stale multiplayer as live. Server stalls exceeding6seconds close the connection; initial connection times out after10seconds.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
 `GameScene.render(world,playerId,dt,menu)` reads snapshots. `start(callback)` runs render frames. `cycleCamera()` cycles chase, cockpit and wide views. Cockpit follows the interpolated vehicle orientation (including pitch and roll); the player's exterior mesh is hidden locally. On foot the selected cockpit mode renders as chase and is not counted as cockpit. The projected destination sign and dashboard are local to the player; the physical objective ring and authoritative target remain shared. Camera, smoothing, labels and effects are local presentation; never modify physical coordinates to make visuals easier.
 
-The client sets `Input.cockpit` only when cockpit is selected in a vehicle, gameplay is showing, and the tab is visible and focused; informational dialogs keep the selected view. The simulation ignores the claim on foot, tracks `Player.cockpit.active` and adds only delivery-active seconds to `activeSeconds`. A completed delivery increments `deliveries` only when all its active pickup and delivery time was reported in cockpit and at least one active cockpit step occurred for that order. Island and ferry time pauses the order and does not affect its cockpit eligibility or order seconds, while global cockpit active time still accrues when the player is active in cockpit. `orderEligible` and `orderSeconds` are per-order simulation bookkeeping; a new order resets them. Stale inputs become neutral, so missing input during an active interval can disqualify the run. The room validates the flag's type, not the camera: these are self-reported session stats, not anti-cheat proof or a cash multiplier. Other UI/asset agents must preserve the claim, these distinctions, and visible labels.
+The client sets `Input.cockpit` only when cockpit is selected in a vehicle, gameplay is showing, and the tab is visible and focused; informational dialogs keep the selected view. The simulation ignores the claim on foot, tracks `Player.cockpit.active` and adds only delivery-active seconds to `activeSeconds`. A completed delivery increments `deliveries` only when all its active pickup and delivery time was reported in cockpit and at least one active cockpit step occurred for that order. Island, ferry and dome time pauses the order and does not affect its cockpit eligibility or order seconds, while global cockpit active time still accrues when the player is active in cockpit. `orderEligible` and `orderSeconds` are per-order simulation bookkeeping; a new order resets them. Stale inputs become neutral, so missing input during an active interval can disqualify the run. The room validates the flag's type, not the camera: these are self-reported session stats, not anti-cheat proof or a cash multiplier. Other UI/asset agents must preserve the claim, these distinctions, and visible labels.
 
 ## Audio presentation
 
@@ -127,9 +128,15 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 `shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. Pickup has its own active-time estimate based on distance from where the order began; reaching the restaurant early pays up to 40% of base fare immediately. The delivery estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the pickup and delivery estimates and leaderboard clock pause. `lastReward` contains the most recent positive pickup or delivery award with a monotonically increasing per-player ID; a renderer may celebrate each new ID once, but cannot create payouts. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
 
-Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m, when the player is ticketed, or when the player enters the protected island/ferry area. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
+Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m, when the player is ticketed, or when the player enters the protected island/ferry area or dome. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 
 `L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; there is no persistent identity or global leaderboard. Local solo uses the same state. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
+
+## Rocket Dome soccer
+
+`shared/dome.ts` defines the fictional Alcatraz arena, separate from Rocket Island; `shared/map.ts` supplies its capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay spawn, preserving health and air. A vehicle arriving from the Alcatraz land or air joins in place once its upright body fits inside the capsule; the exterior shell is passable on entry, while the interior contains cars. Above-roof overflights remain outside. The arena is enclosed, has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact.
+
+`shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes the ball for three simulation seconds, then returns it to center. The first side to five wins; after a six-second winner display, both scores and the ball reset. Physics, scoring and timing are authoritative in solo and online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 
 
 ## Citations, rooftops and achievements

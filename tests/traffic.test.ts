@@ -6,6 +6,7 @@ import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
 import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
+import { initialSoccer } from '../shared/soccer';
 
 const timeAtHour = (hour:number) => (((hour * 60 - 360) + 1440) % 1440) * 2;
 
@@ -67,7 +68,7 @@ test('city and highway traffic can pass in opposite directions on the Bay Bridge
 });
 
 test('ambient fleet is deterministic, capped and retains occupied or stopped cars', () => {
-  const empty=()=>({entities:[],players:[],pickups:[],time:0} as ReturnType<typeof createWorld>);
+  const empty=()=>({entities:[],players:[],pickups:[],time:0,soccer:initialSoccer()} as ReturnType<typeof createWorld>);
   const first=empty(),second=empty();
   seedHighwayTraffic(first,makeEntity);seedHighwayTraffic(second,makeEntity);
   assert.equal(first.entities.length,11);

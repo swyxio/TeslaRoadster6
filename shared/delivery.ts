@@ -70,8 +70,9 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
   const active = world.time <= delivery.activeUntil;
   if (active) {
     delivery.activeSeconds += dt;
-    if(!orderPaused)delivery.order.elapsed += dt;
+    if(!orderPaused&&!entity.inDome)delivery.order.elapsed += dt;
   }
+  if(orderPaused||entity.inDome)return;
   const target = orderTarget(delivery.order);
   if(entity.vy>.1||Math.abs(entity.speed)>4)return;
   if(target.rooftop){

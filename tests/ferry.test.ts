@@ -20,6 +20,19 @@ test('cars drive from the SF pier onto the actual ferry deck',()=>{
   assert.equal(car.supportId,'ferry');assert.ok(car.z<-255&&car.z>-293);
 });
 
+test('a driver boards, waits for the scheduled crossing, and drives onto the island',()=>{
+  const {world,car}=setup();Object.assign(car,{x:0,z:-235,y:0,yaw:0,speed:0,supportId:'ground'});
+  for(let i=0;i<200&&car.z>-266;i++)advance(world,.05,{...NEUTRAL,throttle:.35});
+  for(let i=0;i<100&&Math.abs(car.speed)>.1;i++)advance(world,.05,{...NEUTRAL,brake:true});
+  assert.equal(car.supportId,'ferry');assert.ok(whollyOnFerry(world.ferry,car));
+  for(let i=0;i<800&&world.ferry.phase==='sf';i++)advance(world,.05);
+  assert.equal(world.ferry.phase,'to-island');assert.ok(world.ferry.passengers.some(p=>p.entityId===car.id));
+  for(let i=0;i<1100&&world.ferry.phase==='to-island';i++)advance(world,.05);
+  assert.equal(world.ferry.phase,'island');assert.equal(car.supportId,'ferry');
+  for(let i=0;i<180&&car.supportId==='ferry';i++)advance(world,.05,{...NEUTRAL,throttle:.35});
+  assert.equal(car.supportId,'ground');assert.ok(isRocketIsland(car.x,car.z));
+});
+
 test('every fleet footprint fits a ferry space without registry changes',()=>{
   const {world}=setup();
   for(const kind of VEHICLE_IDS){
