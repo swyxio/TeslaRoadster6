@@ -1,15 +1,14 @@
-/** Marketplace rules for use inside one authoritative durable transaction. */
+/** Property resale rules for use inside one authoritative durable transaction. */
 export const PROPERTY_MARKET_GATE = 2_000_000;
 
-type AssetBase = { id:string; ownerId:string; listingId:string|null; tradable:boolean; revision:number };
-export type MarketAsset = AssetBase & (
-  | { kind:'cosmetic'|'collectible' }
-  | { kind:'property'; completedHome:boolean }
-);
+export type MarketAsset = {
+  id:string; ownerId:string; listingId:string|null; tradable:boolean; revision:number;
+  kind:'property'; completedHome:boolean;
+};
 export type MarketAccount = { id:string; cash:number; earned:number; purchasedHomeAssetId:string|null };
 export type MarketListing = {
   id:string; assetId:string; sellerId:string; price:number; revision:number;
-  assetRevision:number; assetKind:MarketAsset['kind']; completedHome:boolean|null;
+  assetRevision:number; completedHome:boolean;
   status:'open'|'cancelled'|'sold'; buyerId:string|null;
 };
 
@@ -69,8 +68,8 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
   if((command.type==='create'||command.type==='reprice')&&!price(command.price))return reject('invalid');
   if(command.type!=='create'&&!revision(command.expectedRevision))return reject('invalid');
   const asset=records.asset, listing=records.listing;
-  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!revision(asset.revision)||typeof asset.tradable!=='boolean'||!['cosmetic','collectible','property'].includes(asset.kind)||
-    (asset.kind==='property'&&typeof asset.completedHome!=='boolean'))return reject('invalid');
+  if(!asset||asset.id!==command.assetId||!id(asset.ownerId)||!revision(asset.revision)||typeof asset.tradable!=='boolean'||
+    asset.kind!=='property'||typeof asset.completedHome!=='boolean')return reject('invalid');
 
   if(command.type==='create'){
     if(asset.ownerId!==command.actorId)return reject('not-owner');
@@ -78,7 +77,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
     if(asset.listingId!==null)return reject('asset-locked');
     if(listing!==null)return reject('listing-exists');
     const next:MarketListing={id:command.listingId,assetId:asset.id,sellerId:asset.ownerId,price:command.price,revision:1,
-      assetRevision:asset.revision,assetKind:asset.kind,completedHome:asset.kind==='property'?asset.completedHome:null,status:'open',buyerId:null};
+      assetRevision:asset.revision,completedHome:asset.completedHome,status:'open',buyerId:null};
     return finish({ok:true,type:'create',listingId:next.id},{asset:{...asset,listingId:next.id},listing:next});
   }
   if(!listing||listing.id!==command.listingId||listing.assetId!==asset.id||listing.status!=='open'||
@@ -88,8 +87,7 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
     if(command.actorId!==listing.sellerId)return reject('not-owner');
     if(command.type==='cancel')return finish({ok:true,type:'cancel',listingId:listing.id},
       {asset:{...asset,listingId:null},listing:{...listing,status:'cancelled',revision:listing.revision+1}});
-    if(asset.revision!==listing.assetRevision||asset.kind!==listing.assetKind||
-      (asset.kind==='property'?asset.completedHome:null)!==listing.completedHome)return reject('asset-changed');
+    if(asset.revision!==listing.assetRevision||asset.completedHome!==listing.completedHome)return reject('asset-changed');
     if(command.type==='reprice'){
       // Leave one safe revision available to cancel or sell the open listing.
       if(listing.revision===Number.MAX_SAFE_INTEGER-1)return reject('invalid');
@@ -98,20 +96,19 @@ export function decideMarket(command:MarketCommand,records:MarketRecords):Market
     }
   }
   if(command.type!=='buy')return reject('invalid');
-  if(asset.revision!==listing.assetRevision||asset.kind!==listing.assetKind||
-    (asset.kind==='property'?asset.completedHome:null)!==listing.completedHome)return reject('asset-changed');
+  if(asset.revision!==listing.assetRevision||asset.completedHome!==listing.completedHome)return reject('asset-changed');
   if(!asset.tradable)return reject('not-tradable');
   if(command.actorId===listing.sellerId)return reject('self-purchase');
   const buyer=records.buyer,seller=records.seller;
   if(!account(buyer)||!account(seller)||buyer.id!==command.actorId||seller.id!==listing.sellerId)return reject('invalid');
   if(buyer.cash<listing.price)return reject('insufficient-funds');
-  if(asset.kind==='property'&&buyer.cash<PROPERTY_MARKET_GATE)return reject('property-gate');
-  if(asset.kind==='property'&&asset.completedHome&&buyer.purchasedHomeAssetId!==null)return reject('home-slot-occupied');
+  if(buyer.cash<PROPERTY_MARKET_GATE)return reject('property-gate');
+  if(asset.completedHome&&buyer.purchasedHomeAssetId!==null)return reject('home-slot-occupied');
   // BigInt avoids precision loss when computing 95% near MAX_SAFE_INTEGER.
   const sellerCredit=Number(BigInt(listing.price)*95n/100n),fee=listing.price-sellerCredit;
   const sellerCash=seller.cash+sellerCredit;
   if(!Number.isSafeInteger(sellerCash))return reject('balance-overflow');
-  const completedHome=asset.kind==='property'&&asset.completedHome;
+  const completedHome=asset.completedHome;
   return finish({ok:true,type:'buy',listingId:listing.id,buyerId:buyer.id,sellerId:seller.id,price:listing.price,sellerCredit,fee},{
     asset:{...asset,ownerId:buyer.id,listingId:null},
     listing:{...listing,status:'sold',buyerId:buyer.id,revision:listing.revision+1},

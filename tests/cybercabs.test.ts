@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CYBERCAB_INCOME_DENOMINATOR, firstCabRevenueAward, quoteCybercabPurchase, settleCybercabIncome } from '../shared/cybercabs';
+import { CYBERCAB_INCOME_DENOMINATOR, cabRevenueAward, quoteCybercabPurchase, settleCybercabIncome } from '../shared/cybercabs';
 
 test('five ordinal purchases have fixed prices and one-time ownership awards', () => {
   const prices = [25_000, 50_000, 100_000, 200_000, 400_000];
@@ -21,11 +21,11 @@ test('quotes fail closed for the sixth cab or invalid saved state', () => {
     assert.equal(quoteCybercabPurchase(0, awards), null);
 });
 
-test('the first cab revenue milestone pays once at $20,000 gross', () => {
-  assert.equal(firstCabRevenueAward(19_999,false),0);
-  assert.equal(firstCabRevenueAward(20_000,false),2_000);
-  assert.equal(firstCabRevenueAward(20_001,true),0);
-  for(const gross of [-1,1.1,NaN,Infinity,Number.MAX_SAFE_INTEGER+1])assert.equal(firstCabRevenueAward(gross,false),null);
+test('each cab revenue milestone pays once at $20,000 gross', () => {
+  const cabs = [{ gross: 19_999, claimed: false }, { gross: 20_000, claimed: false }, { gross: 20_001, claimed: true }];
+  assert.deepEqual(cabs.map(cab => cabRevenueAward(cab.gross,cab.claimed)),[0,2_000,0]);
+  assert.equal(cabRevenueAward(20_000,false),2_000,'a different cab may earn its own award');
+  for(const gross of [-1,1.1,NaN,Infinity,Number.MAX_SAFE_INTEGER+1])assert.equal(cabRevenueAward(gross,false),null);
 });
 
 test('one operating hour pays the specified rate at every supported multiplier', () => {
@@ -35,16 +35,16 @@ test('one operating hour pays the specified rate at every supported multiplier',
 
 test('fractional dollars survive settlement and multiplier changes', () => {
   const first = settleCybercabIncome(100, 1, true, 0)!;
-  assert.deepEqual(first, { amount: 0, remainder: 200 });
+  assert.deepEqual(first, { amount: 0, remainder: 3_000_000 });
   const second = settleCybercabIncome(100, 1.5, true, first.remainder)!;
-  assert.deepEqual(second, { amount: 1, remainder: 20 });
+  assert.deepEqual(second, { amount: 1, remainder: 300_000 });
   const third = settleCybercabIncome(115, 2, true, second.remainder)!;
   assert.deepEqual(third, { amount: 1, remainder: 0 });
   const segments = [1, 1.5, 2, 3].reduce((result, multiplier) => {
     const next = settleCybercabIncome(240, multiplier, true, result.remainder)!;
     return { amount: result.amount + next.amount, remainder: next.remainder };
   }, { amount: 0, remainder: 0 });
-  assert.deepEqual(segments, { amount: 7, remainder: 240 });
+  assert.deepEqual(segments, { amount: 7, remainder: 3_600_000 });
 });
 
 test('splitting an interval into persisted settlements does not change pay', () => {
@@ -59,9 +59,10 @@ test('splitting an interval into persisted settlements does not change pay', () 
 });
 
 test('inactive and zero-length intervals preserve the unpaid remainder', () => {
-  assert.deepEqual(settleCybercabIncome(3_600_000, 3, false, 479), { amount: 0, remainder: 479 });
-  assert.deepEqual(settleCybercabIncome(0, 1, true, 479), { amount: 0, remainder: 479 });
-  assert.deepEqual(settleCybercabIncome(1, 1, true, 479), { amount: 1, remainder: 1 });
+  const remainder=CYBERCAB_INCOME_DENOMINATOR-1;
+  assert.deepEqual(settleCybercabIncome(3_600_000, 3, false, remainder), { amount: 0, remainder });
+  assert.deepEqual(settleCybercabIncome(0, 1, true, remainder), { amount: 0, remainder });
+  assert.deepEqual(settleCybercabIncome(1, 1, true, remainder), { amount: 1, remainder: 29_999 });
 });
 
 test('invalid input never produces income', () => {
@@ -77,8 +78,9 @@ test('invalid input never produces income', () => {
 
 test('safe integer duration cannot overflow intermediate arithmetic', () => {
   const duration = Number.MAX_SAFE_INTEGER;
-  const units = BigInt(duration) * 6n + 479n;
+  const units = 15_000n * BigInt(duration) * 6n + 479n;
+  const denominator=BigInt(CYBERCAB_INCOME_DENOMINATOR);
   assert.deepEqual(settleCybercabIncome(duration, 3, true, 479), {
-    amount: Number(units / 480n), remainder: Number(units % 480n),
+    amount: Number(units / denominator), remainder: Number(units % denominator),
   });
 });

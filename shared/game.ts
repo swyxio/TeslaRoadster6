@@ -182,8 +182,8 @@ export function addPlayer(world:World,id:string,name:string):Player {
   const spawn=spawnPosition(world),car=makeEntity(`ride-${id}`,'roadster',spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
   const player:Player={id,name:name.slice(0,24),entityId:car.id,delivery:initialDelivery(spawn),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}};world.entities.push(car);world.players.push(player);return player;
 }
-/** Limit additional simulated cabs per room. A full room leaves the asset undispatched. */
-export const MAX_DISPATCHED_CABS_PER_ROOM = 16;
+/** Provisional traffic budget; a full room leaves additional assets undispatched. */
+export const MAX_DISPATCHED_CABS_PER_ROOM = 8;
 /** Spawn only server-owned assets. The caller must verify durable ownership first. */
 export function dispatchCybercab(world:World,ownerId:string,assetId:string):Entity|null {
   if(!world.players.some(player=>player.id===ownerId)||!/^[-a-zA-Z0-9]{1,128}$/.test(assetId))return null;
