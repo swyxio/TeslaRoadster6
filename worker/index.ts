@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
@@ -12,6 +12,8 @@ import { initialDelivery } from '../shared/delivery';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
 import { RoomEconomy } from './room-economy';
+import { leaveParking } from '../shared/parking';
+import { resetAchievementFlight } from '../shared/achievements';
 
 export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
 
@@ -185,6 +187,23 @@ export class GameRoom extends DurableObject<Env> {
         send(false,'Driver connection changed. Rejoin to retry.');return;
       }
       if(!current())return;
+      // A match can finish while confirmation is in flight. Its result belongs
+      // to the original wallet, so recheck immediately before replacing it.
+      if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      // The room player ID is reused for the new wallet. Drop the previous
+      // driver's unfinished activity so it cannot become the new driver's win.
+      leaveParking(this.world.parking,session.id);
+      for(const round of this.world.races.rounds){
+        round.entrants=round.entrants.filter(entrant=>entrant.playerId!==session.id);
+        if(round.hostId===session.id&&round.entrants.length)round.hostId=round.entrants[0].playerId;
+      }
+      this.world.races.rounds=this.world.races.rounds.filter(round=>round.entrants.length>0);
+      const soccer=this.world.soccer;
+      soccer.participants=soccer.participants.filter(participant=>participant.playerId!==session.id);
+      soccer.winningPlayers=soccer.winningPlayers.filter(id=>id!==session.id);
+      if(soccer.lastTouch?.playerId===session.id)soccer.lastTouch=null;
+      const player=this.world.players.find(item=>item.id===session.id);
+      if(player)resetAchievementFlight(player);
       session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress);
       session.pendingBind=null;
       session.economy.restoreCurrentVehicle();
@@ -258,7 +277,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'unavailable'}));
       return;
@@ -272,7 +291,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'cooldown'}));
       return;
@@ -288,7 +307,11 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind)){session.economy.restoreCurrentVehicle();this.invalidate(socket,session,true,message.edgeBaseline);}
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
-    if(message.type==='destination'){const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});if(ok)this.invalidate(socket,session,false,message.edgeBaseline);socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));}
+    if(message.type==='destination'||message.type==='deliveryDestination'){
+      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z}):setDeliveryDestination(this.world,session.id);
+      if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
+      socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
+    }
     if(message.type==='upgrade')session.economy.workshop('upgrade',message.requestId,message.upgrade);
     if(message.type==='vehicleStyle')session.economy.workshop('vehicleStyle',message.requestId,message);
     if(message.type==='ota')session.economy.ota(message.enabled,message.requestId);
@@ -326,6 +349,10 @@ export class GameRoom extends DurableObject<Env> {
     },economy:{
       canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
       update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.update(player,apply);},
+      // A result can occur while binding (for example, a ball already in
+      // motion). Commit it to the current wallet; a different incoming wallet
+      // must then pass the unstarted check again before it can replace it.
+      gameAward:(player,apply,capture)=>{byId.get(player.id)?.economy.gameAward(player,apply,capture);},
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
     }});
     this.tickCount=nextTick;

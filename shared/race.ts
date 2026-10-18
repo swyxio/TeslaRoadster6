@@ -12,7 +12,7 @@ export type RaceEntrant = {
 };
 export type RaceRound = {
   courseId:string; phase:'lobby'|'countdown'|'active'|'results'; hostId:string;
-  openedAt:number; startedAt:number|null; endsAt:number; entrants:RaceEntrant[];
+  openedAt:number; startedAt:number|null; endsAt:number; starterCount:number; entrants:RaceEntrant[];
 };
 export type RaceState = {rounds:RaceRound[]};
 
@@ -62,7 +62,7 @@ export function joinRace(state:RaceState,course:RaceCourse,world:World,playerId:
   if(round&&(round.phase!=='lobby'||world.time>=round.endsAt||round.entrants.length>=RACE_MAX_ENTRANTS))return false;
   if(!round){
     round={courseId:course.id,phase:'lobby',hostId:playerId,openedAt:world.time,startedAt:null,
-      endsAt:world.time+RACE_LOBBY_WAIT,entrants:[]};
+      endsAt:world.time+RACE_LOBBY_WAIT,starterCount:0,entrants:[]};
     state.rounds.push(round);
   }
   round.entrants.push({playerId,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,
@@ -124,7 +124,7 @@ export function updateRace(state:RaceState,courses:readonly RaceCourse[],world:W
       if(!round.entrants.some(e=>e.playerId===round.hostId))round.hostId=round.entrants[0].playerId;
       if(round.phase==='lobby'&&world.time>=round.endsAt)countdown(round,round.endsAt);
       if(round.phase==='countdown'&&world.time>=round.endsAt){
-        round.phase='active';round.endsAt=round.startedAt!+RACE_DURATION;
+        round.phase='active';round.starterCount=round.entrants.length;round.endsAt=round.startedAt!+RACE_DURATION;
       }
       if(round.phase!=='active'){
         for(const entrant of round.entrants)entrant.previous=sample(playerCar(world,entrant.playerId)!,world.time);

@@ -32,6 +32,9 @@ export class Controls {
       if (target.matches('input,textarea,select,[contenteditable="true"]') || (e.code==='Space' && target.matches('button,a'))) return;
       if (!this.enabled || e.ctrlKey || e.metaKey || e.altKey) return;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      // A key held across clear() must be released and pressed again; repeat
+      // events must not resume driving after a menu or self-drive shortcut.
+      if(e.repeat&&!this.keys.has(e.code))return;
       this.keys.add(e.code);
       if (!e.repeat) {
         const is=(action:KeyAction)=>this.bindings[action].includes(e.code);

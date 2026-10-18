@@ -1,4 +1,4 @@
-# Implementation contracts · v36
+# Implementation contracts · v37
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v36
+## Wire protocol v37
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:36,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:37,capacity:number}`.
 
 Client messages:
 
@@ -62,18 +62,19 @@ Client messages:
 {"type":"race","action":"leave","courseId":"short"}
 {"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"destination","x":-120,"z":60,"requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"deliveryDestination","requestId":4,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"mars","action":"board","requestId":5}
 {"type":"mars","action":"contribute","amount":100,"requestId":10}
 {"type":"identity","code":"<recovery-code>","requestId":6}
 {"type":"identity","code":null,"requestId":9}
 {"type":"luxury","action":"buy","vehicle":"ducati-panigale-v4","requestId":7}
-{"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"luxury","action":"collect","vehicle":"ducati-panigale-v4","requestId":8,"actionSeq":10,"edgeBaseline":{"jump":1,"flip":0}}
 ```
 
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:36, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, version:37, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
 {type:"inputEdge", kind:"jump"|"flip", id:number, targetTick:number, status:"accepted"|"rescheduled"|"processed"|"expired"|"superseded"}
@@ -109,7 +110,9 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer request ID; corresponding results are sent only to the requester, including cooldown rejections where applicable. After a saved recovery is requested, a null identity choice leaves the driver paused until rejoin. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash; remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it.
 
-Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and preview limit is eight; higher settings require explicit load experiments. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. Per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object handle wallet and income accounting. Input and physics proceed without waiting on profile RPCs. See [dated isolation and performance checks](VERIFICATION.md) for the measured conditions and limits.
+Both destination requests have an action fence and a private `destinationResult`. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; rooftop or unsafe/unreachable destinations are rejected. Map pins retain their normal road snapping. The driver may take over with manual controls.
+
+Capacity: `MAX_PLAYERS`, default8, clamped2–128. The intended production and preview limit is eight; higher settings require explicit load experiments, and eight is not a validated capacity claim. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. Per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object handle wallet and income accounting. Input and physics proceed without waiting on profile RPCs. See [dated isolation and performance checks](VERIFICATION.md) for the measured conditions and limits.
 
 ## Wallet and ownership transaction boundary
 
@@ -172,7 +175,7 @@ Each room starts with eight parked cars and eight city NPCs sampled from the 26-
 
 Autonomy uses deterministic right-lane loops, including both directions around the Bay, speed-dependent following gaps and a timed eastbound Bay Bridge approach signal. Traffic demand follows the accelerated day, while the signal and driving behavior use real simulation seconds. Engage only on ground within 9 m of a supported street route. A player's throttle/steer/brake/jump/flip/boost/hover/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
 
-The expanded map can request a destination. `shared/navigation.ts` builds a directed graph from the existing traffic lanes, snaps to a nearby connected lane, and checks the player's unlocked regions along the route. A car already on a lane facing against its direction may continue in its current direction a short distance to an intersection before following directed streets. A destination requires a driven car near a supported ground route; water, disconnected island roads, locked areas, unreachable lanes and excessive detours are rejected. The server replies to the request ID, records the route and arrival state in the entity, and clears stale manual inputs on success. Manual input cancels the route. Obstructions can still hold a car; this is arcade navigation, not a real road planner. Choosing another destination replaces the route only on success.
+The expanded map can request a destination. `shared/navigation.ts` builds a directed graph from the existing traffic lanes, snaps to a nearby connected lane, and checks the player's unlocked regions along the route. A car already on a lane facing against its direction may continue in its current direction a short distance to an intersection before following directed streets. A destination requires a driven car near a supported ground route; water, disconnected island roads, locked areas, unreachable lanes and excessive detours are rejected. The server replies to the request ID, records the route and arrival state in the entity, and clears stale manual inputs on success. Manual input cancels the route. Obstructions can still hold a car; this is arcade navigation, not a real road planner. Choosing another destination replaces the route only on success. Double-tapping Shift or using the touch-accessible delivery button requests the current order target through the same fenced destination action; rooftop targets require manual flight. Player AV steering and following use gradual adjustments except for imminent hazards.
 
 Ambient demand targets two to four unattended autonomous highway cars alongside eight city NPCs and four police. Taken cars, off-route abandoned cars and cars reattached to city routes do not count toward that target; the optional ambient pool is capped at 12 in total, so replenishment can be delayed when its reserve is full. At most one ambient car is added or removed every five simulation seconds. Removal is beyond 1,600 m from every player and preserves occupied and stopped autonomous cars; hidden off-route abandoned cars and free-flowing city-route cars may be reclaimed when the pool blocks replenishment. Available hidden spawn sites and safe removal conditions also limit how quickly traffic follows demand.
 
@@ -194,7 +197,7 @@ Dock signs show the current status, countdown and vehicle occupancy from snapsho
 
 `shared/island-jumps.ts` defines two eastbound ramp tops, their normals and swept landing contacts. Cars enter from the level end, follow the shared slope and leave the lip with its upward velocity. The rendered wedges use the same coordinates; their bounded sides and high ends block grounded and airborne cars, including displacement from other cars.
 
-`shared/parking-lots.ts` defines two playgrounds, 24 charging lots and seven Caltrain-area lots, and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
+`shared/parking-lots.ts` defines two playgrounds, 24 charging lots and seven Caltrain-area lots, and `parking.ts` owns their bounded rounds. Park It checks the driven car's actual footprint, heading and speed in its assigned stall for two seconds. Cut the queue orders entrants, awards at most one claimant per stall, and tracks overtakes. Each round replicates bounded `claimedStallIds` until the round ends, including after a winner leaves or disconnects. A queue ends when all stalls are claimed; claimed stalls carry an X marker and the HUD shows the remaining count. `shared/race-courses.ts` and `race.ts` define the short course and oval, bounded lobbies, ordered directional swept gates and authoritative timing. Each race round replicates `starterCount`: zero before the start, then the number of drivers present at the green, retained even when a starter leaves or changes identity. Players remain physical and can collide. Actions are requests; clients cannot award a result or declare a checkpoint. All activity state is ephemeral, and simulation seconds govern timers.
 
 The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games use the current registered lot when the player is there, otherwise a collision-checked playground; race entries use a checked starting slot. Joining is one operation that preserves the previous location if entry fails; health, air and progression are unchanged. Rocket Dome retains its existing `dome` travel action. The client confirms entry, start and leave from snapshots and offers contextual controls and failure feedback.
 
@@ -218,7 +221,7 @@ A new guest starts with $2,500 at level 0. Current cash sets the level: Oakland/
 
 Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 m above ground within 85 m starts pursuing the player; a parked car on a roof is not flying. Pursuit ends after 10 simulated seconds outside 110 m, when the player is ticketed, or when the player enters the protected island/ferry area or dome. When grounded and within 12 m, the car is slowed; within 7 m and below 4 m/s it receives a severity- and repeat-offense-based citation, followed by 20 seconds without re-detection. Police are not stealable. All detection, movement and cash changes are authoritative in the shared fixed-step simulation. Police pathfinding uses the compressed street grid; it is deliberately approximate.
 
-`L` / Scores shows the current room's active players ranked by cash with active time and cash per active minute. Scores disappear on disconnect/reset; saved chat identities do not save scores and there is no global leaderboard. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
+`L` / Scores ranks current room players by completed deliveries and delivery earnings, shows cash-based level progress, and displays current and recently observed mini-game results. Delivery totals follow a saved driver; recent game results live only in the current drive. There is no global leaderboard. Neither clock nor leaderboard is a verified anti-cheat measure: room inputs are authoritative but anonymous clients can automate them.
 
 ## Rocket Dome soccer
 
@@ -236,5 +239,7 @@ Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the 
 Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. After Oakland unlocks, an eligible non-exploration order after every third completed run starting with the first may select a rooftop only when the current vehicle has flight capability. Level-zero deliveries remain on the ground. Other vehicles receive ground orders. The player may change cars later, so the interface must identify rooftop orders and the fleet remains available.
 
 `shared/achievements.ts` owns unlocked award IDs and flight tracking per player in snapshots. Bay Hopper requires leaving one mainland shore, crossing water, and arriving on the other without landing; a bridge, island, roof or stunt-loop contact ends the attempt, and recovery or vehicle switches cancel it. Flying above a bridge is allowed. Roof Rider requires a car on a building roof; Sky Delivery requires a completed rooftop delivery; Neighborhood Regular requires three deliveries. Dome awards require a real ball touch and the player to be in the dome at match completion. Rocket Rookie and Built to Fly require touches in Roadster · Rocket and a retrofit respectively; Roadster Champion and Garage Champion require a win and at least one goal credited in the corresponding class. No Rockets Needed requires a win with at least one stock-car goal and only stock-car touches. A tie counts as a win for each leader.
+
+Perfect Park and Queue Cutter require the corresponding parking completion; Checkered Flag requires finishing a race, and First Across requires finishing first in a race that started with at least two drivers, even if other starters do not finish. The ranked first finisher earns it immediately. These four add no cash. The authoritative simulation submits awards through the same per-driver wallet transaction as other achievements; only committed IDs are reported as saved. Guest progress can be attached when saving that driver. The awards screen hides a recovering wallet until its identity is ready.
 
 `shared/research.ts` defines research visits and workshop discounts. Stop a car on the ground within 9 m of each landmark arrival at no more than 4 m/s: UCSF pays $1,000 and unlocks the Homes Lab badge; Berkeley pays $1,500 and unlocks 20% off efficient nozzles; Stanford pays $2,000 and unlocks 20% off sport motors; SFO pays $2,000 and unlocks 20% off air tanks. An SFO delivery adds a separate one-time $2,500 achievement. The profile records awarded IDs and adds awards to cash and eligible income, without changing delivery-only `earned`. Current cash can change region access. Clients cannot assert unlocks or prices. See [verification](VERIFICATION.md) for the tested wallet and replay paths.
