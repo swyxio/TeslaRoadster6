@@ -419,8 +419,10 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     e.air=Math.max(0,e.air-14*airUse*dt*boostFraction);
     const hoverFraction=rocket&&input.hover&&!grounded&&e.loopAngle===null?Math.min(1,e.air/(18*airUse*dt)):0;
     e.air=Math.max(0,e.air-18*airUse*dt*hoverFraction);
+    const flightFraction=rocket&&!grounded&&e.loopAngle===null&&input.throttle!==0?Math.min(1,e.air/(4*airUse*dt)):0;
+    e.air=Math.max(0,e.air-4*airUse*dt*flightFraction);
     e.thrusters=0;
-    if(boostFraction)e.thrusters|=THRUSTER_REAR;
+    if(boostFraction||(flightFraction&&input.throttle>0))e.thrusters|=THRUSTER_REAR;
     if(rocket&&(world.time<e.jumpBurstUntil||hoverFraction))e.thrusters|=THRUSTER_DOWN_LEFT|THRUSTER_DOWN_RIGHT;
     if(rocket&&!grounded&&e.loopAngle===null){
       const turn=e.flipRemaining>0?1:(e.air>0?input.roll:0);
@@ -501,16 +503,16 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       // World velocity remains independent of where the car is pointing.
       if(rocket){
         e.yawRate+=(input.steer*1.6-e.yawRate)*Math.min(1,dt*4);e.yaw+=e.yawRate*dt;
-        e.pitchRate+=((-input.throttle*.9-e.pitch*2)-e.pitchRate*2)*dt;e.pitch=clamp(e.pitch+e.pitchRate*dt,-1.3,1.3);
+        e.pitchRate+=(-e.pitch*2-e.pitchRate*2)*dt;e.pitch=clamp(e.pitch+e.pitchRate*dt,-1.3,1.3);
         if(e.flipRemaining>0){const turn=Math.min(e.flipRemaining,Math.PI*2/.8*dt);e.roll+=turn;e.flipRemaining-=turn;e.rollRate=turn/dt;if(e.flipRemaining<1e-8){e.flipRemaining=0;e.stunts++;}}
         else if(input.roll&&e.air>0){const fraction=Math.min(1,e.air/(3*airUse*dt));e.air-=3*airUse*dt*fraction;e.rollRate=input.roll*3.6*fraction;e.roll+=e.rollRate*dt;}
         else if(!hoverFraction){const upright=Math.atan2(Math.sin(e.roll),Math.cos(e.roll)),bank=input.steer*.65;e.rollRate=(bank-upright)*3;e.roll+=(bank-upright)*Math.min(1,dt*3);}
         else e.rollRate=0;
-        const thrust=45.46*boostFraction;
+        const thrust=45.46*boostFraction+16*flightFraction*input.throttle;
         e.vx+=-Math.sin(e.yaw)*Math.cos(e.pitch)*thrust*dt;e.vy+=Math.sin(e.pitch)*thrust*dt;e.vz+=-Math.cos(e.yaw)*Math.cos(e.pitch)*thrust*dt;
       }
       // Fictional thruster hover holds any orientation; it is not suction.
-      if(hoverFraction){const damping=Math.exp(-3*dt*hoverFraction);e.vx*=damping;e.vy*=damping;e.vz*=damping;e.vy+=9.81*dt*hoverFraction;}
+      if(hoverFraction){const damping=Math.exp(-3*dt*hoverFraction);e.vy*=damping;e.vy+=9.81*dt*hoverFraction;}
       e.vy-=9.81*dt;e.x+=e.vx*dt;e.y+=e.vy*dt;e.z+=e.vz*dt;
       // Crossing the inside of the ribbon engages the underbody fans. Other
       // vehicles bounce from this physical surface instead of passing through.

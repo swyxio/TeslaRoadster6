@@ -78,7 +78,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
  .steering{grid-template-columns:repeat(2,62px);gap:7px}.steering button{min-width:62px}.steering button:nth-child(-n+2){font-size:19px}
  .pedals{grid-template-columns:repeat(2,67px);gap:7px}.pedals button{min-width:67px}.pedals .accelerate{background:#ef8c72eb;color:#263a38}
  .touch-flight{position:absolute;bottom:126px;left:0;margin:0;gap:7px}
- .touch-flight button{min-width:49px;height:45px;font-size:19px}.touch-flight .hover-control{min-width:60px;font-size:10px}
+ .touch-flight button{min-width:49px;height:45px;font-size:19px}.touch-flight .hover-control,.touch-flight .flip-control{min-width:55px;font-size:10px}
  .map-panel{left:12px;bottom:196px;width:132px;padding:7px}.map-panel #minimap{width:116px;height:116px}
  .map-title{letter-spacing:.6px}.map-key{font-size:6px;margin-top:6px}
  .telemetry{right:12px;bottom:196px;width:190px;padding:11px}.speed strong{font-size:42px}.speed{margin:0 0 4px}

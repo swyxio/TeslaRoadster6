@@ -71,6 +71,14 @@ test('fictional inverted hover uses tank thrust, then gravity resumes',()=>{
   assert.ok(Math.abs(car.y-10)<.01);assert.ok(Math.abs(car.roll-Math.PI)<.01);assert.ok(car.air<83);
   send();assert.ok(car.y<10);
 });
+test('forward and reverse thrust work while airborne, including while hovering',()=>{
+  const {car,send}=playground();car.y=20;car.supportId=null;
+  for(let i=0;i<20;i++)send({...NEUTRAL,throttle:1,hover:true});
+  assert.ok(car.z < -5,`forward distance ${car.z}`);assert.ok(car.vz < -10,`forward speed ${car.vz}`);
+  assert.ok(Math.abs(car.y-20)<.01);assert.ok(car.thrusters&THRUSTER_REAR);assert.ok(Math.abs(car.pitch)<.01);
+  car.vz=0;const z=car.z;for(let i=0;i<10;i++)send({...NEUTRAL,throttle:-1,hover:true});
+  assert.ok(car.z>z);car.air=0;car.vz=0;send({...NEUTRAL,throttle:1,hover:true});assert.equal(car.vz,0);assert.ok(car.vy<0);
+});
 test('Rocket reaches 60 mph near the requested arcade times',()=>{
   for(const [boost,target] of [[false,1.6],[true,.59]] as const){
     const {car,send}=playground();let previous=0,elapsed=0;
