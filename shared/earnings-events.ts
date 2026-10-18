@@ -91,6 +91,11 @@ function activeUntil(windows:readonly EarningsWindow[],atMs:number):number|null 
   return until;
 }
 export type EarningsMultiplier = { multiplier:1|1.5|2|3; roomEndsAtMs:number|null; globalEndsAtMs:number|null };
+/** A server-derived delivery component committed with the driver's progress. */
+export type SettledDeliveryEarning = {
+  sourceId:string; kind:'pickup'|'delivery'|'checkpoint'; base:number; amount:number;
+  atMs:number; multiplier:1|1.5|2|3;
+};
 /** The interval is inclusive at its start and exclusive at its end. */
 export function earningsMultiplier(events:EarningsEvents,atMs:number):EarningsMultiplier {
   timestamp(atMs);validateEvents(events);

@@ -27,7 +27,7 @@ function connect(url:string){
 }
 type Client=ReturnType<typeof connect>;
 const dir=await mkdtemp(join(tmpdir(),'tesland-mars-')),p=await port(),base=`http://127.0.0.1:${p}`,config=join(dir,'wrangler.json'),seedWorker=join(dir,'legacy-seed.js');
-const configFor=(main:string)=>({name:'tesland-mars-test',main,compatibility_date:'2026-10-17',assets:{directory:resolve('dist'),binding:'ASSETS',run_worker_first:['/api/*','/__mars-test/*']},durable_objects:{bindings:[{name:'ROOMS',class_name:'MarsTestRoom'},{name:'CHAT',class_name:'GlobalChat'},{name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'}]},migrations:[{tag:'v1',new_sqlite_classes:['MarsTestRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}]});
+const configFor=(main:string)=>({name:'tesland-mars-test',main,compatibility_date:'2026-10-17',assets:{directory:resolve('dist'),binding:'ASSETS',run_worker_first:['/api/*','/__mars-test/*']},durable_objects:{bindings:[{name:'ROOMS',class_name:'MarsTestRoom'},{name:'CHAT',class_name:'GlobalChat'},{name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'}]},migrations:[{tag:'v1',new_sqlite_classes:['MarsTestRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome','GlobalEarningsEvent']}]});
 await writeFile(seedWorker,`
 import { DurableObject } from 'cloudflare:workers';
 export class MarsTestRoom extends DurableObject {
@@ -37,6 +37,7 @@ export class GlobalChat extends DurableObject {}
 export class DriverProfile extends DurableObject {}
 export class RoomEconomy extends DurableObject {}
 export class GlobalIncome extends DurableObject {}
+export class GlobalEarningsEvent extends DurableObject {}
 export default { async fetch(request, env) {
   const {room, amount} = await request.json();
   await env.ROOMS.get(env.ROOMS.idFromName(room)).seed(amount);

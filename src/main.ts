@@ -43,6 +43,8 @@ import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS
 import { MARS_GOAL } from '../shared/mars';
 import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
+import { createEarningsBonusBadge } from './earnings-bonus-ui';
+import './earnings-bonus-ui.css';
 import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -586,6 +588,7 @@ const scoresDialog=$<HTMLDialogElement>('scores-dialog');
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
 const starship=new StarshipClient(session);
+const earningsBadge=createEarningsBonusBadge();$('mission-panel').append(earningsBadge.element);
 const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},starship);
 for(const id of ['mars-quick','mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
 function updateScores(){
@@ -971,6 +974,7 @@ scene.start(dt=>{
   }
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   marsUi.update(e);
+  earningsBadge.update(session.earningsBonus);
   if(session.walletBlocked)return;
   const mission=starship.state();
   $('mars-quick').textContent=mission.confirmed?(mission.freshness==='live'?'🚀 Mars mission':'🚀 Mars mission · last confirmed')+` · ${money(Math.min(mission.confirmed.total,MARS_GOAL))} / $1B`:'🚀 Mars mission · status unavailable';

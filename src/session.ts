@@ -8,6 +8,7 @@ import { TickPrediction } from './tick-prediction';
 import { MotionClock } from './motion-clock';
 import { RemotePresentation } from './remote-presentation';
 import { validStarshipStatus, validStarshipTime, type StarshipRoomStatus } from './starship-model';
+import type { EarningsBonusView } from './earnings-bonus-ui';
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
@@ -60,6 +61,7 @@ export class Session {
   marsResult: {requestId:number;action:'board'|'contribute';ok:boolean;amount:number;available?:number}|null = null;
   starshipStatus:StarshipRoomStatus|null = null;
   starshipNameResult:{requestId:number;ok:boolean;publicName:string|null}|null = null;
+  earningsBonus:EarningsBonusView|null = null;
   private starshipStatusRequest=0;
   identityResult: {requestId:number;ok:boolean;message:string;levelBaseline:{level:number;eligibleIncome:number;afterSnapshot:number}|null}|null = null;
   wallet: WalletView|null = null;
@@ -169,9 +171,15 @@ export class Session {
         }
         if(message.type==='starshipNameResult'&&Number.isSafeInteger(message.requestId)&&typeof message.ok==='boolean'&&
           (message.publicName===null||typeof message.publicName==='string'))this.starshipNameResult=message;
+        if(message.type==='earningsStatus'){
+          if(message.events&&Array.isArray(message.events.room)&&Array.isArray(message.events.global)&&
+             validStarshipTime(message.serverTime)&&Number.isSafeInteger(message.validForMs)&&message.validForMs>0)
+            this.earningsBonus={events:message.events,serverTime:message.serverTime,validForMs:message.validForMs,receivedAt:this.now()};
+          else this.earningsBonus=null;
+        }
       } catch (error) { console.error('Room message processing failed:',error);this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
+    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
     socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
   }
   queueEdge(kind:'jump'|'flip',id:number) {
@@ -246,7 +254,7 @@ export class Session {
   /** Recovery codes are sent only to the room and never added to snapshots. */
   setIdentity(code?:string) {
     const requestId=++this.nextUpgradeRequest;
-    this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;
+    this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
     if(this.id&&this.socket?.readyState===WebSocket.OPEN){
       if(code)this.waitForWallet(requestId);
@@ -324,5 +332,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

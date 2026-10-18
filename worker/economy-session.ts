@@ -8,6 +8,7 @@ import type { UpgradeId } from '../shared/upgrades';
 import type { StyleChoice } from '../shared/vehicle-style';
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
 import { RoomEconomy } from './room-economy';
+import type { SettledDeliveryEarning } from '../shared/earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
 type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[]};
@@ -101,7 +102,7 @@ export class EconomySession {
     this.wallet();
   }
   hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
-  update(player:Player,apply:()=>EconomyUpdateResult){
+  update(player:Player,apply:()=>EconomyUpdateResult,rate:{atMs:number;multiplier:1|1.5|2|3}|null=null){
     if(this.failed)return;
     // Bound memory during an extended backend outage. The pending events keep
     // retrying after this driver leaves; the rest of the room is unaffected.
@@ -114,8 +115,9 @@ export class EconomySession {
     const before=durableFields(this.draft);
     const previousLevel=this.draft.delivery.level;
     player.delivery=this.draft.delivery;player.achievements=this.draft.achievements;player.cockpit=this.draft.cockpit;
+    let payouts:EconomyUpdateResult;
     try{
-      apply();player.delivery.level=levelForCash(player.delivery.cash);
+      payouts=apply();player.delivery.level=levelForCash(player.delivery.cash);
       if(player.delivery.level<previousLevel){
         const car=this.world.entities.find(e=>e.id===player.entityId);
         if(car)rerouteInaccessibleOrder(player.delivery,car,hasRockets(car));
@@ -123,7 +125,11 @@ export class EconomySession {
     }finally{
       player.delivery=live.delivery;player.achievements=live.achievements;player.cockpit=live.cockpit;
     }
-    if(changed(before,durableFields(this.draft)))this.enqueue({kind:'progress',progress:this.progress()});
+    const earnings:SettledDeliveryEarning[]=Array.isArray(payouts)?payouts.map(({component,amount})=>{
+      if(!rate)throw new Error('A delivery payout requires an authoritative rate');
+      return {sourceId:component.sourceId,kind:component.kind,base:component.amount,amount,atMs:rate.atMs,multiplier:component.kind==='checkpoint'?1:rate.multiplier};
+    }):[];
+    if(changed(before,durableFields(this.draft)))this.enqueue({kind:'progress',progress:this.progress(),earnings});
     else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
     // Timers and flight geometry can advance visually; money, awards and order stages remain committed.
     if(!this.pending){

@@ -10,6 +10,7 @@ import type { RoomEconomy } from './room-economy';
 import { StarshipLedger } from './starship';
 import { normalizeName } from './global-chat-core';
 import type { StarshipContributorGroup } from '../shared/starship';
+import type { SettledDeliveryEarning } from '../shared/earnings-events';
 
 export type SavedVehicle = { upgrades:VehicleUpgrades; tankLevel:TankLevel; style:VehicleStyle };
 export type SavedVehicles = Record<string,SavedVehicle>;
@@ -21,7 +22,7 @@ export type DriverProgress = {
   /** Cumulative verified game-created income; player transfers never increase this. */
   eligibleIncome:number;
 };
-export type DriverAction = {kind:'progress';progress:DriverProgress} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order};
+export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:SettledDeliveryEarning[]} | {kind:'luxury';vehicle:LuxuryVehicleId;order?:Order} | {kind:'contribute';amount:number;order?:Order};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
   | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number}
@@ -42,6 +43,25 @@ function validProgress(progress:DriverProgress,previous:DriverProgress):boolean 
     previous.ownedLuxury.length===progress.ownedLuxury.length &&
     previous.ownedLuxury.every(id=>progress.ownedLuxury.includes(id)) &&
     progress.ownedLuxury.every(id=>!!luxuryVehicle(id));
+}
+
+function validDeliveryEarnings(parts:SettledDeliveryEarning[],previous:DriverProgress,next:DriverProgress):boolean {
+  if(!Array.isArray(parts)||parts.length>2)return false;
+  const seen=new Set<string>();let earned=0,total=0;
+  for(const part of parts){
+    if(!part||typeof part.sourceId!=='string'||seen.has(part.sourceId)||
+       !['pickup','delivery','checkpoint'].includes(part.kind)||!Number.isSafeInteger(part.base)||part.base<0||
+       !Number.isSafeInteger(part.amount)||part.amount<0||!Number.isSafeInteger(part.atMs)||part.atMs<0||
+       ![1,1.5,2,3].includes(part.multiplier))return false;
+    const suffix=part.kind==='delivery'?'dropoff':part.kind;
+    if(part.sourceId!==`delivery:${previous.completed+1}:${suffix}`)return false;
+    if((part.kind==='pickup')!==(previous.order.stage==='pickup'))return false;
+    if(part.kind==='checkpoint'&&part.multiplier!==1)return false;
+    const expected=(BigInt(part.base)*BigInt(part.multiplier*2)+1n)/2n;
+    if(expected!==BigInt(part.amount))return false;
+    seen.add(part.sourceId);total+=part.amount;if(part.kind!=='checkpoint')earned+=part.amount;
+  }
+  return Number.isSafeInteger(total)&&Number.isSafeInteger(earned)&&next.earned-previous.earned===earned&&next.eligibleIncome-previous.eligibleIncome>=total;
 }
 
 /** One authority per saved identity. Only trusted worker RPCs can reach it. */
@@ -91,8 +111,10 @@ export class DriverProfile extends DurableObject<Env> {
         let awards:AchievementId[]=[];
         let error:'invalid'|'owned'|'unaffordable'|undefined;
         if(intent.action.kind==='progress'){
-          if(!validProgress(intent.action.progress,record.progress))error='invalid';
-          else Object.assign(next,structuredClone(intent.action.progress));
+          const progress=intent.action.progress,earnings=intent.action.earnings;
+          if(!validProgress(progress,record.progress)||(earnings!==undefined&&!validDeliveryEarnings(earnings,record.progress,progress)))error='invalid';
+          else if(earnings?.length&&[...(await txn.get(earnings.map(part=>`earned-source:${part.sourceId}`))).values()].some(value=>value!==undefined))error='invalid';
+          else Object.assign(next,structuredClone(progress));
         } else if(intent.action.kind==='contribute'){
           const amount=intent.action.amount;
           if(!Number.isSafeInteger(amount)||amount<=0||amount>1_000_000_000)error='invalid';
@@ -123,6 +145,10 @@ export class DriverProfile extends DurableObject<Env> {
           const revision=record.revision+1;
           result={ok:true,revision,progress:next,awards};
           await txn.put('driver',{...record,revision,sequence:intent.sequence,progress:next,incomeActivated:true} satisfies DriverRecord);
+          if(intent.action.kind==='progress'&&intent.action.earnings?.length){
+            const rows=Object.fromEntries(intent.action.earnings.map(part=>[`earned-source:${part.sourceId}`,part]));
+            await txn.put(rows);
+          }
           if(next.eligibleIncome>record.progress.eligibleIncome || (!record.incomeActivated && next.eligibleIncome>0)){
             await txn.put('income-pending',next.eligibleIncome);
             const alarm=await txn.getAlarm();

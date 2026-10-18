@@ -33,7 +33,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
   win.querySelector<HTMLButtonElement>('.mars-win-close')!.onclick=()=>win.close();
   for(const d of [dialog,win])d.addEventListener('close',onClose);
   all.onclick=()=>{const player=session.world.players.find(p=>p.id===session.id);input.value=String(Math.min(player?.delivery.cash??0,Math.max(0,MARS_GOAL-session.world.mars.roomFund)));};
-  dialog.querySelector<HTMLFormElement>('form')!.onsubmit=event=>{
+  dialog.querySelector<HTMLFormElement>('.mars-form')!.onsubmit=event=>{
     event.preventDefault();
     const amount=Number(input.value),player=session.world.players.find(p=>p.id===session.id),remaining=MARS_GOAL-session.world.mars.roomFund;
     if(!Number.isSafeInteger(amount)||amount<=0||amount>(player?.delivery.cash??0)||amount>remaining){feedback.textContent=`Enter a whole-dollar amount within your cash and ${money(remaining)} remaining in this room.`;return;}

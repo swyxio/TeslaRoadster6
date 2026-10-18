@@ -66,6 +66,19 @@ test('failed public reads and out-of-order contributor pages are handled explici
   assert.equal(client.state().contributors.entries[0].name,'Driver');
 });
 
+test('public status and contributor requests preserve the browser fetch receiver',async()=>{
+  const fetcher:typeof fetch=async function(this:unknown,input){
+    assert.equal(this,globalThis);
+    return String(input).includes('contributors')
+      ?response({group:'at-goal',state:'ready',contributors:[{name:'Anonymous',amount:null}],next:null})
+      :response({status:status(),serverTime:200_000});
+  };
+  const client=new StarshipClient(fakeSession(),()=>100,fetcher);
+  await client.refresh();await client.loadContributors('at-goal',null);
+  assert.equal(client.state().confirmed?.total,100);
+  assert.deepEqual(client.state().contributors.entries,[{name:'Anonymous',amount:null}]);
+});
+
 class Socket {
   static OPEN=1;static last:Socket;readyState=1;sent:string[]=[];
   onmessage?: (event:{data:string})=>void;onclose?: (event:{code:number})=>void;

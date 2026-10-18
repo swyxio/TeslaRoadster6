@@ -55,7 +55,8 @@ export class StarshipClient {
   private async get(url:string):Promise<unknown> {
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
     try{
-      const response=await this.fetcher(url,{signal:controller.signal,cache:'no-store'});
+      // Native window.fetch requires its Window receiver in browsers.
+      const response=await this.fetcher.call(globalThis,url,{signal:controller.signal,cache:'no-store'});
       if(!response.ok)throw new Error('Starship unavailable');
       return await response.json();
     }finally{clearTimeout(timer);}
