@@ -243,7 +243,7 @@ export class GameScene {
   }
   private lastWorldTime=-1;
   private worldUpdatedAt=0;
-  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false,remoteSampled=false,starship?:{animation:StarshipAnimation|null;stage:number|null}) {
+  render(world: World, playerId: string, dt: number, menu: boolean, localPredicted=false, snapLocal=false, snapCamera=false,remoteSampled=false,starship?:{animation:StarshipAnimation|null;total:number|null}) {
     if(snapCamera)this.cameraReady=false;
     this.propertyScene.update(world.property);
     const now=performance.now();
@@ -252,8 +252,8 @@ export class GameScene {
     const elapsed=Math.min(.1,Math.max(0,(now-this.worldUpdatedAt)/1000));
     const global=starship?.animation;
     const legacy=world.mars.launchAt!==null&&world.time+elapsed>=world.mars.launchAt&&world.time+elapsed-world.mars.launchAt<MARS_LAUNCH_SECONDS;
-    if(global?.source==='global')this.spaceport?.update(global.elapsed,0,5);
-    else this.spaceport?.update(world.time+elapsed,world.mars.launchAt,legacy?5:starship?.stage??5);
+    if(global?.source==='global')this.spaceport?.update(global.elapsed,0,starship?.total??null,now/1000);
+    else this.spaceport?.update(world.time+elapsed,legacy?world.mars.launchAt:null,starship?.total??null,now/1000);
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);

@@ -3,12 +3,6 @@ export const STARSHIP_GOAL = 1_000_000_000;
 export const STARSHIP_LAUNCH_DELAY_MS = 30_000;
 export const STARSHIP_STAGE_PERCENTAGES = [10,25,50,75,90] as const;
 
-/** Construction stages are visual only and do not create rewards. */
-export function starshipStage(total:number):number {
-  if(!Number.isFinite(total)||total<0)return 0;
-  return STARSHIP_STAGE_PERCENTAGES.filter(percent=>total>=STARSHIP_GOAL*percent/100).length;
-}
-
 export type StarshipStatus = {
   total: number;
   /** Null when the caller has no authenticated room identity. */
