@@ -132,14 +132,24 @@ export function deliveryRoute(poses, initialOrder, stageRepeat) {
   const routePoses = poses.slice(indices[0]);
   if (!Number.isSafeInteger(routePoses[0]?.poseRevision) || routePoses.some((p, i) => !Number.isSafeInteger(p.tick) || ![p.atMs, p.x, p.y, p.z].every(number) || p.poseRevision !== routePoses[0].poseRevision || (i && (p.tick < routePoses[i - 1].tick || p.atMs < routePoses[i - 1].atMs))))
     return { status: 'unavailable', reason: 'route respawned or snapshots moved backwards' };
-  const jumpChanges = [];
+  const triggers = [];
   for (let i = 1; i < flight.length; i++) {
     const before = flight[i - 1], after = flight[i];
-    if (Number.isSafeInteger(before.lastJump) && after.lastJump > before.lastJump && after.tick > before.tick && number(before.jumpBurstUntil) && number(after.jumpBurstUntil) && after.jumpBurstUntil > before.jumpBurstUntil) {
-      const lift = flight.slice(i, i + 8).find(p => p.atMs - after.atMs <= 700 && p.supported === false && number(p.vy) && p.vy > .1 && number(p.thrusters) && (p.thrusters & 6) === 6);
-      if (lift) jumpChanges.push({ index: i, tick: after.tick, liftTick: lift.tick });
-    }
+    if (Number.isSafeInteger(before.lastJump) && Number.isSafeInteger(after.lastJump) && after.lastJump > before.lastJump)
+      triggers.push({ index: i, valid: after.tick > before.tick && number(before.jumpBurstUntil) && number(after.jumpBurstUntil) && after.jumpBurstUntil > before.jumpBurstUntil });
   }
+  // A later trigger bounds the search even if that trigger lacks a burst. An
+  // airborne snapshot must never be reused to prove two different jumps.
+  const jumps = triggers.flatMap((trigger, i) => {
+    if (!trigger.valid) return [];
+    const end = triggers[i + 1]?.index ?? flight.length;
+    const start = flight[trigger.index];
+    const liftOffset = flight.slice(trigger.index, Math.min(end, trigger.index + 8)).findIndex(p => p.atMs - start.atMs <= 700 && p.supported === false && number(p.vy) && p.vy > .1 && Number.isSafeInteger(p.thrusters) && (p.thrusters & 6) === 6);
+    if (liftOffset < 0) return [];
+    const liftIndex = trigger.index + liftOffset, lift = flight[liftIndex];
+    const landing = flight.slice(liftIndex + 1, end).find(p => p.supported === true && p.tick > lift.tick);
+    return landing ? [{ tick: start.tick, liftTick: lift.tick, landingTick: landing.tick }] : [];
+  });
   // Require a continuous stream, not two isolated powered snapshots separated
   // by a long gap. Bits 2 and 4 are the game's downward rocket thrusters.
   let run = [], longest = [];
@@ -148,18 +158,15 @@ export function deliveryRoute(poses, initialOrder, stageRepeat) {
     const previous = run.at(-1);
     if (!powered || (previous && (p.tick <= previous.tick || p.tick - previous.tick > 4 || p.atMs - previous.atMs > 500))) run = [];
     if (powered) run.push(p);
-    if (run.length > longest.length) longest = run.slice();
+    if (run.length >= 5 && run.at(-1).atMs - run[0].atMs >= 400 && run.some(sample => (sample.thrusters & 7) === 7) && run.length > longest.length) longest = run.slice();
   }
-  const sustainedFlight = longest.length >= 5 && longest.at(-1).atMs - longest[0].atMs >= 400;
-  const landedBetween = jumpChanges.some((jump, i) => jumpChanges.slice(i + 1).some(next => flight.slice(jump.index + 1, next.index).some(p => p.supported === true)));
-  const landedAfter = jumpChanges.length >= 2 && flight.some(p => p.supported === true && p.tick > jumpChanges.at(-1).liftTick);
-  const forwardThrust = flight.some(p => p.supported === false && Number.isSafeInteger(p.thrusters) && (p.thrusters & 7) === 7);
   const horizontalTravel = Math.max(...flight.map(p => Math.hypot(p.x - flight[0].x, p.z - flight[0].z)));
-  if (!landedBetween || !landedAfter || !sustainedFlight || !forwardThrust || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight were not observed', jumpCount: jumpChanges.length, flightSnapshots: longest.length };
+  if (jumps.length < 2 || !longest.length || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight were not observed', jumpCount: jumps.length, flightSnapshots: longest.length };
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
-  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
+  const flightEvidence = { startTick: longest[0].tick, endTick: longest.at(-1).tick, durationMs: round(longest.at(-1).atMs - longest[0].atMs), snapshots: longest.length, forwardThrustTick: longest.find(p => (p.thrusters & 7) === 7).tick };
+  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumps.length, jumps, flightSnapshots: longest.length, flight: flightEvidence, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
 }
 
 export function withStagingDuration(route, event) {
@@ -295,7 +302,7 @@ async function main() {
   const route = withStagingDuration(deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, stageRepeat?.sample), stageRepeat);
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
-    environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
+    environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: { ...manifest.viewport, deviceScaleFactor: manifest.viewport?.deviceScaleFactor ?? 1, isMobile: manifest.viewport?.isMobile ?? false, hasTouch: manifest.viewport?.hasTouch ?? false } },
     fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },

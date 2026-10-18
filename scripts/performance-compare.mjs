@@ -23,11 +23,24 @@ const speed = report => model(report)?.speedRatio;
 const steering = report => model(report)?.steeringResponseMs;
 const tuple = value => value ? `${fmt(value.p05)}–${fmt(value.p95)}×` : 'HOLD';
 const onset = value => value ? `${fmt(value.left)} / ${fmt(value.right)} ms` : 'HOLD';
-const hasTarget = report => typeof report?.target?.version === 'string' && !!report.target.version && typeof report.target.revision === 'string' && !!report.target.revision;
+const hasTarget = report => typeof report?.target?.version === 'string' && !!report.target.version.trim() && typeof report.target.revision === 'string' && !!report.target.revision.trim() && typeof report.target.dirty === 'boolean' && Number.isSafeInteger(report.target.protocol) && report.target.protocol >= 0;
 const targetsIdentified = hasTarget(base) && hasTarget(head);
-const browserKey = report => JSON.stringify([report?.environment?.platform, report?.environment?.release, report?.environment?.arch, report?.environment?.cpu, report?.environment?.logicalCpus, report?.environment?.runner?.nodeVersion, report?.environment?.runner?.playwrightVersion, report?.environment?.runner?.browserVersion, report?.environment?.runner?.gpuMode, report?.environment?.runner?.webgl?.renderer, report?.environment?.viewport, report?.fixture?.scenarioSha256, report?.fixture?.recorderSha256, report?.fixture?.reporterSha256, report?.fixture?.stageSha256, report?.fixture?.seed]);
-const browserComparable = !!(targetsIdentified && base.environment?.runner?.webgl?.renderer && base.fixture?.scenarioSha256 && base.fixture?.recorderSha256 && base.fixture?.reporterSha256 && base.fixture?.stageSha256 && base.fixture.captureVideo === false && head.fixture?.captureVideo === false && browserKey(base) === browserKey(head));
-const motionComparable = !!(targetsIdentified && base.fixture?.reporterSha256 && base.fixture.reporterSha256 === head.fixture?.reporterSha256 && base.fixture?.motionBenchmarkSha256 && base.fixture?.motionAdapterSha256 && base.fixture.motionBenchmarkSha256 === head.fixture?.motionBenchmarkSha256 && base.fixture.motionAdapterSha256 === head.fixture?.motionAdapterSha256);
+const nonempty = value => typeof value === 'string' && value.trim().length > 0;
+const hash = value => typeof value === 'string' && /^[a-f\d]{64}$/i.test(value);
+const loadAvailable = load => Array.isArray(load) && load.length === 3 && load.every(value => n(value) && value >= 0);
+const browserIdentity = report => {
+  const e = report?.environment, r = e?.runner, v = e?.viewport, f = report?.fixture, start = f?.start;
+  if (![e?.platform, e?.release, e?.arch, e?.cpu, r?.platform, r?.release, r?.architecture, r?.cpu, r?.nodeVersion, r?.playwrightVersion, r?.browserVersion, r?.browserChannel, r?.gpuMode, r?.webgl?.renderer, r?.webgl?.vendor].every(nonempty) ||
+      !Number.isSafeInteger(e?.logicalCpus) || e.logicalCpus <= 0 || typeof e.ci !== 'boolean' || typeof r?.headed !== 'boolean' ||
+      e.platform !== r.platform || e.release !== r.release || e.arch !== r.architecture || e.cpu !== r.cpu ||
+      !loadAvailable(e.loadAverageBefore) || !loadAvailable(e.loadAverageAfter) ||
+      !Number.isSafeInteger(v?.width) || v.width <= 0 || !Number.isSafeInteger(v?.height) || v.height <= 0 || !n(v?.deviceScaleFactor) || v.deviceScaleFactor <= 0 || typeof v.isMobile !== 'boolean' || typeof v.hasTouch !== 'boolean' ||
+      ![f?.scenarioSha256, f?.recorderSha256, f?.reporterSha256, f?.stageSha256].every(hash) || !Number.isSafeInteger(f?.seed) || ![start?.x, start?.z, start?.yaw].every(n)) return null;
+  return JSON.stringify([e.platform, e.release, e.arch, e.cpu, e.logicalCpus, e.ci, r.nodeVersion, r.playwrightVersion, r.browserVersion, r.browserChannel, r.gpuMode, r.headed, r.webgl.renderer, r.webgl.vendor, v.width, v.height, v.deviceScaleFactor, v.isMobile, v.hasTouch, f.scenarioSha256, f.recorderSha256, f.reporterSha256, f.stageSha256, f.seed, start.x, start.z, start.yaw]);
+};
+const baseIdentity = browserIdentity(base), headIdentity = browserIdentity(head);
+const browserComparable = !!(targetsIdentified && baseIdentity && headIdentity && base.fixture.captureVideo === false && head.fixture.captureVideo === false && baseIdentity === headIdentity);
+const motionComparable = !!(targetsIdentified && [base.fixture?.reporterSha256, base.fixture?.motionBenchmarkSha256, base.fixture?.motionAdapterSha256, head.fixture?.reporterSha256, head.fixture?.motionBenchmarkSha256, head.fixture?.motionAdapterSha256].every(hash) && base.fixture.reporterSha256 === head.fixture.reporterSha256 && base.fixture.motionBenchmarkSha256 === head.fixture.motionBenchmarkSha256 && base.fixture.motionAdapterSha256 === head.fixture.motionAdapterSha256);
 const steadyComparable = motionComparable && validModel(base, 'steady150') && validModel(head, 'steady150');
 function compareRoutes(before, after) {
   if (before?.status !== 'available' || after?.status !== 'available' || before.legs?.length !== 5 || after.legs?.length !== 5) return { comparable: false, reason: 'two-delivery route milestones, jumps, flight, or five leg traces unavailable; three-leg reports are incompatible with this scenario' };
@@ -52,6 +65,18 @@ function compareRoutes(before, after) {
       staging.stagedTick < staging.confirmedTick && staging.confirmedTick <= route.milestones[2].tick;
   };
   if (!validMilestones(before) || !validMilestones(after)) return { comparable: false, reason: 'five delivery milestones or second-order staging evidence unavailable' };
+  const validFlight = route => {
+    const jumps = route.jumps, flight = route.flight, finalDelivery = route.milestones.at(-1).tick;
+    if (!Array.isArray(jumps) || jumps.length < 2 || route.jumpCount !== jumps.length || jumps.some((jump, i) =>
+      ![jump?.tick, jump?.liftTick, jump?.landingTick].every(Number.isSafeInteger) || jump.tick < finalDelivery || jump.liftTick < jump.tick || jump.landingTick <= jump.liftTick || (i && jump.tick <= jumps[i - 1].landingTick))) return false;
+    return Number.isSafeInteger(flight?.startTick) && flight.startTick >= finalDelivery && Number.isSafeInteger(flight?.endTick) && flight.endTick > flight.startTick &&
+      Number.isSafeInteger(flight?.snapshots) && flight.snapshots >= 5 && route.flightSnapshots === flight.snapshots &&
+      flight.endTick - flight.startTick >= flight.snapshots - 1 && flight.endTick - flight.startTick <= 4 * (flight.snapshots - 1) &&
+      n(flight.durationMs) && flight.durationMs >= 400 && flight.durationMs <= 500 * (flight.snapshots - 1) &&
+      Number.isSafeInteger(flight.forwardThrustTick) && flight.forwardThrustTick >= flight.startTick && flight.forwardThrustTick <= flight.endTick &&
+      n(route.horizontalTravelM) && route.horizontalTravelM >= 5 && n(route.peakY);
+  };
+  if (!validFlight(before) || !validFlight(after)) return { comparable: false, reason: 'independent jump, landing or sustained forward-flight evidence unavailable or invalid' };
   const errors = [];
   const legs = [];
   for (let i = 0; i < 5; i++) {
@@ -81,6 +106,10 @@ const stagingDuration = report => {
   const duration = report?.route?.staging?.durationMs;
   return n(duration) && duration >= 0 ? `${fmt(duration)} ms` : 'unavailable';
 };
+const hostLoad = report => {
+  const before = report?.environment?.loadAverageBefore, after = report?.environment?.loadAverageAfter;
+  return loadAvailable(before) && loadAvailable(after) ? `${fmt(before[0])} → ${fmt(after[0])}` : 'unavailable';
+};
 const lines = [
   '## Tesland performance observation', '',
   `Base: ${mark(base)}  `, `Candidate: ${mark(head)}`, '',
@@ -93,9 +122,10 @@ const lines = [
   `Browser renderer: ${head?.environment?.runner?.webgl?.renderer ?? 'HOLD'}. Route: ${routeReason}; path difference p95 ${fmt(route.p95)} m, max ${fmt(route.max)} m.`, '',
   `Path difference by leg (p95 / max, m): ${route.legs?.map(leg => `${leg.leg}: ${fmt(leg.p95)} / ${fmt(leg.max)}`).join('; ') ?? 'HOLD'}.`, '',
   `Second-delivery staging duration: base ${stagingDuration(base)}, candidate ${stagingDuration(head)}.`, '',
+  `One-minute host load before → after: base ${hostLoad(base)}, candidate ${hostLoad(head)}. Complete matching host, runner, viewport and fixture identity: ${baseIdentity && headIdentity && baseIdentity === headIdentity ? 'available' : 'HOLD'}.`, '',
   `Required observations: ${metricsComplete(base) && metricsComplete(head) ? 'available' : 'HOLD (one or more metrics are missing or unavailable)'}.`, '',
   `Animation intervals are browser callback timing, not GPU completion or actual display presentation. The p95 includes the mostly stationary staging wait; distance-based path matching does not control elapsed time. Motion and steering are synthetic at 120 Hz with simulated latency. Room progress is observed from received ticks during two deliveries and flight in one local room. Video capture: base ${capture(base)}, candidate ${capture(head)}; video observations do not produce performance deltas.`,
-  'A single paired run is descriptive, not a regression verdict; repeat on the same quiet hardware before setting thresholds. Frame and room deltas are held if environments or either delivery target differ, video is enabled, milestones are missing, or any of the five sampled paths diverges beyond the documented tolerances. Three-leg reports are incompatible with this scenario. Raw traces and conditions are in the uploaded artifact.',
+  'Performance verdict: HOLD. A single paired run is descriptive, especially under differing host load; a timing difference is not a regression verdict. Repeat on the same quiet hardware before setting thresholds. Frame and room deltas are held if identity or either delivery target differs, video is enabled, required jump, landing, flight or delivery evidence is missing, or any of the five sampled paths diverges beyond the documented tolerances. Older reports without explicit evidence and three-leg reports are incompatible with this comparison. Raw traces and conditions are in the uploaded artifact.',
 ];
 const markdown = lines.join('\n') + '\n';
 if (outputPath) await writeFile(outputPath, markdown);

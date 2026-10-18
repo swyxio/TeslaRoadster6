@@ -98,10 +98,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: candidate/.nvmrc
-      - name: Install and build candidate
+      - name: Install candidate dependencies
+        working-directory: candidate
+        run: pnpm install --frozen-lockfile
+      - name: Test performance report and comparison
+        working-directory: candidate
+        run: pnpm exec tsx --test tests/performance-report.test.ts tests/performance-compare.test.ts
+      - name: Build candidate
         working-directory: candidate
         run: |
-          pnpm install --frozen-lockfile
           pnpm build
           pnpm exec playwright install chromium
       - name: Install and build base

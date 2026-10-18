@@ -32,11 +32,13 @@ fixture checks that the same guest and vehicle
 remain in the room, the two targets remain accessible, and no pose revision has
 changed; it never moves the car. The comparison requires both orders' restaurant and
 customer IDs and coordinates and holds if they differ or are unavailable.
-Two observed jump bursts, a landing between jumps, and
+Two observed jump bursts, a landing between jumps, a final landing and
 sustained airborne thrust with forward power follow. Keyboard presses are retried a bounded number
-of times if the room does not process them. The report requires the delivery
-milestones and target stops, two separate upward bursts and sustained flight; a keypress by
-itself does not prove a jump or delivery occurred. A respawn holds the route.
+of times if the room does not process them. Each reported jump needs its own upward
+lift before the next observed trigger, followed by ground contact before another
+trigger. The report retains trigger, lift and landing ticks and the continuous
+forward-powered flight interval; a keypress by itself does not prove a jump or
+delivery occurred. A respawn holds the route.
 
 The report saves four delivery legs and a flight leg from received room poses.
 Each three-dimensional path is sampled at 41 evenly spaced fractions of its own
@@ -52,6 +54,12 @@ not gameplay or performance targets; traffic, contacts, network scheduling and
 changed simulation may still make a run diverge. Artifacts retain the scenario,
 paths, browser, WebGL renderer, revisions and host load. A hosted runner's
 paravirtual renderer describes that VM, not a phone or physical desktop device.
+The comparator also requires explicit jump, landing and flight evidence and
+complete matching host, runner, viewport, seed, start and fixture identities.
+It reports the before/after load without imposing a load threshold. Missing
+identity or evidence holds the comparison even when both reports omit it.
+Older archived reports remain unchanged and may HOLD under these stricter
+checks; their raw manifests and trajectories can be inspected independently.
 
 ## When CI runs
 
@@ -83,7 +91,8 @@ shown as `HOLD`, never as zero. If video was requested, both recordings must
 complete and their routes must also be comparable to each other; their summary
 is separate from the no-video measurements. Timing differences are
 descriptive: one shared-host pair is noisy, and no automatic performance
-threshold is inferred from it. Hosted VM and named local machine results must
+threshold is inferred from it. A timing difference under differing load does
+not establish a regression or improvement. Hosted VM and named local machine results must
 not be compared directly.
 
 For local runs, install the

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { browserFrameMetrics, deliveryRoute, frameMetrics, motionMetrics, performanceRoomName, roomProgress, withStagingDuration } from '../scripts/performance-report.mjs';
 import { selectPerformance } from '../scripts/performance-select.mjs';
 
@@ -97,6 +98,8 @@ const routeEvidence = {
   initialOrder, secondOrder,
   firstCompletion: { tick: 15, x: 0, z: -180 }, staging: { stagedTick: 16, confirmedTick: 17 },
   milestones: [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']].map(([completed, stage], i) => ({ completed, stage, tick: i * 10, x: i, z: 0 })),
+  jumpCount: 2, jumps: [{ tick: 42, liftTick: 43, landingTick: 44 }, { tick: 46, liftTick: 47, landingTick: 60 }],
+  flightSnapshots: 5, flight: { startTick: 46, endTick: 54, durationMs: 500, snapshots: 5, forwardThrustTick: 50 }, horizontalTravelM: 6, peakY: 5,
 };
 
 test('performance scenario drives two deliveries before flight', () => {
@@ -137,6 +140,8 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   }
   assert.deepEqual(withStagingDuration({ status: 'unavailable' }, event).staging, { durationMs: 1200 });
   assert.equal(route.jumpCount, 2);
+  assert.deepEqual(route.jumps, [{ tick: 48, liftTick: 48, landingTick: 52 }, { tick: 54, liftTick: 54, landingTick: 64 }]);
+  assert.equal(route.flight.forwardThrustTick >= route.flight.startTick, true);
   assert.equal(route.legs.length, 5);
   const check = (samples: typeof poses, first = initialOrder, stage = stageRepeat) => deliveryRoute(samples, first, stage).status;
   assert.equal(deliveryRoute(poses, undefined, stageRepeat).status, 'unavailable');
@@ -158,6 +163,36 @@ test('delivery route requires both real deliveries, stable orders, jumps and pow
   assert.equal(check(poses.map(p => ({ ...p, thrusters: p.thrusters & 6 }))), 'unavailable');
   assert.equal(check(poses.map(p => p.tick === 52 ? { ...p, supported: false } : p)), 'unavailable');
   assert.equal(check(poses.map(p => p.tick === 64 ? { ...p, supported: false } : p)), 'unavailable');
+  // The second jump's lift must not be reused for the preceding trigger, even
+  // when a ground sample between them and sustained flight follow it.
+  assert.equal(check(poses.map(p => p.tick === 48 || p.tick === 50 ? { ...p, supported: true, thrusters: 0, vy: 0 } : p)), 'unavailable');
+  // A later trigger bounds the first jump even when that later burst is invalid.
+  assert.equal(check(poses.map(p => p.tick === 48 || p.tick === 50 ? { ...p, supported: true, thrusters: 0, vy: 0 } : p.tick === 54 ? { ...p, jumpBurstUntil: 2 } : p)), 'unavailable');
+  assert.equal(check(poses.map(p => p.tick === 64 ? { ...p, lastJump: 3, jumpBurstUntil: 4 } : p)), 'unavailable');
+});
+
+test('current reporter accepts the four archived cross-version trajectories with distinct lift and landing evidence', () => {
+  const root = new URL('../docs/performance-baselines/2026-10-18-two-delivery-cross-version/', import.meta.url);
+  const read = (name: string) => JSON.parse(gunzipSync(readFileSync(fileURLToPath(new URL(name, root)))).toString('utf8'));
+  for (const prefix of ['base', 'candidate', 'base-video', 'candidate-video']) {
+    const manifest = read(`${prefix}-manifest.json.gz`), poses = read(`${prefix}-trajectory.json.gz`);
+    const event = (type: string) => manifest.events.find((e: any) => e.type === type && e.status === 'ok');
+    const from = event('frameStart').commandStartedAtMs, to = event('frameStop').commandStartedAtMs;
+    const samples = poses.filter((p: any) => p.atMs >= from && p.atMs <= to);
+    const route = deliveryRoute(samples, event('waitForRoomReady').sample.initialOrder, event('stageRepeatDelivery').sample);
+    assert.equal(route.status, 'available', `${prefix}: ${route.reason}`);
+    assert.ok(route.jumps.length >= 2, prefix);
+    for (let i = 0; i < route.jumps.length; i++) {
+      const jump = route.jumps[i];
+      assert.ok(jump.liftTick >= jump.tick && jump.landingTick > jump.liftTick, prefix);
+      if (i) assert.ok(jump.tick > route.jumps[i - 1].landingTick, prefix);
+      assert.ok(samples.some((p: any) => p.tick === jump.liftTick && p.supported === false && p.vy > .1 && (p.thrusters & 6) === 6), prefix);
+      assert.ok(samples.some((p: any) => p.tick === jump.landingTick && p.supported === true), prefix);
+    }
+    assert.notEqual(route.jumps[0].liftTick, route.jumps[1].liftTick, prefix);
+    assert.ok(route.flight.snapshots >= 5 && route.flight.durationMs >= 400, prefix);
+    assert.ok(samples.some((p: any) => p.tick === route.flight.forwardThrustTick && p.supported === false && (p.thrusters & 7) === 7), prefix);
+  }
 });
 
 test('comparison holds when intermediate route legs diverge despite matching endpoints', () => {
