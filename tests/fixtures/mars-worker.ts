@@ -1,9 +1,9 @@
 // Local-only fixture: seed verified global income and place a player at Fremont.
-import worker, { GameRoom, GlobalChat, DriverProfile as ProductionDriverProfile, GlobalIncome, RoomEconomy as ProductionRoomEconomy } from '../../worker/index';
+import worker, { GameRoom, GlobalChat, GlobalEarningsEvent, DriverProfile as ProductionDriverProfile, GlobalIncome, RoomEconomy as ProductionRoomEconomy } from '../../worker/index';
 import type { EconomyIntent } from '../../worker/driver-profile';
 import { FREMONT_SPACEPORT, terrainHeight } from '../../shared/map';
 import type { World } from '../../shared/game';
-export { GlobalChat, GlobalIncome };
+export { GlobalChat, GlobalIncome, GlobalEarningsEvent };
 export class RoomEconomy extends ProductionRoomEconomy {
   private alarmCalls=0;
   override async alarm(){this.alarmCalls++;return super.alarm();}
@@ -17,11 +17,11 @@ export class DriverProfile extends ProductionDriverProfile {
   async fixtureHoldDonation(){this.holdNextDonation=true;}
   async fixtureFaultState(){return {held:!!this.heldReply,intent:this.heldIntent};}
   async fixtureCash(){const record=await this.ctx.storage.get<{progress:{cash:number}}>('driver');return record?.progress.cash;}
-  override async commit(intent:EconomyIntent){
+  override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents){
     // Duplicate attempts must also wait; otherwise an alarm could bypass the
     // simulated lost reply before the test terminates the local Worker.
     if(this.heldIntent?.eventId===intent.eventId && this.heldReply)await this.heldReply;
-    const outcome=await super.commit(intent);
+    const outcome=await super.commit(intent,cabEvents);
     if(this.holdNextDonation&&intent.action.kind==='contribute'){
       this.holdNextDonation=false;this.heldIntent=structuredClone(intent);
       this.heldReply=new Promise<void>(()=>{});

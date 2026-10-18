@@ -1,9 +1,9 @@
 // Local-only fixture for the production profile transaction and outbox.
 import { DriverProfile as ProductionDriver, progressFrom, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
-import { GameRoom, GlobalChat, RoomEconomy, GlobalIncome } from '../../worker/index';
+import { GameRoom, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from '../../worker/index';
 import { initialDelivery, levelForCash } from '../../shared/delivery';
 
-export { GameRoom, GlobalChat, RoomEconomy, GlobalIncome };
+export { GameRoom, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 export class DriverProfile extends ProductionDriver {
   async fixtureSeed(driverId:string,fence:string,roomId:string){
     const delivery=initialDelivery({x:0,z:0});delivery.cash=25_000;delivery.level=levelForCash(delivery.cash);
@@ -27,7 +27,7 @@ export default {
     const body=await request.json() as Body,profile=env.DRIVERS.get(env.DRIVERS.idFromName(body.driverId));
     if(path==='/seed'){await profile.fixtureSeed(body.driverId,body.fence,body.roomId);return Response.json({ok:true});}
     if(path==='/acquire')return Response.json(await profile.acquire(body.driverId,body.fence,progressFrom(initialDelivery({x:0,z:0}),[],{},[],0,0),body.roomId));
-    if(path==='/commit')return Response.json(await profile.commit(body.intent));
+    if(path==='/commit')return Response.json(await profile.commit(body.intent,body.intent.action.kind==='cab-income'?{room:[],global:[]}:undefined));
     if(path==='/read')return Response.json(await profile.fixtureRead());
     return new Response('not found',{status:404});
   }

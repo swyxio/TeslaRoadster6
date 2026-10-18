@@ -26,8 +26,8 @@ const dir=await mkdtemp(join(tmpdir(),'tesland-cab-wallet-')),p=await port(),bas
 await writeFile(config,JSON.stringify({
   name:'tesland-cab-wallet-test',main:resolve('tests/fixtures/cybercab-wallet-worker.ts'),compatibility_date:'2026-10-17',
   durable_objects:{bindings:[{name:'ROOMS',class_name:'GameRoom'},{name:'CHAT',class_name:'GlobalChat'},
-    {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'}]},
-  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}],
+    {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'}]},
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome','GlobalEarningsEvent']}],
 }));
 let child:ChildProcess|undefined,logs='';
 function start(){
@@ -61,13 +61,13 @@ try{
   const checkpoint=await commit(intent('checkpoint',1,2,{kind:'progress',progress:stale}));success(checkpoint);
   assert.deepEqual(checkpoint.progress.cybercabs,bought.progress.cybercabs,'a stale room checkpoint cannot erase the fleet');
 
-  const earning=intent('income-1',2,3,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000,multiplier:1}]});
+  const earning=intent('income-1',2,3,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000}]});
   const paid=await commit(earning);success(paid);
   assert.equal(paid.progress.cash,27_000);assert.equal(paid.progress.eligibleIncome,27_000);
   assert.deepEqual(paid.progress.cybercabs!.assets.map(a=>[a.gross,a.remainder,a.lastEndMs,a.revenueAwarded]),[[20_000,0,4_800_000,true]]);
   assert.deepEqual(await commit(earning),paid);
-  assert.deepEqual(await commit(intent('overlap',3,4,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000,multiplier:1}]})),{ok:false,reason:'invalid'});
-  const next=intent('income-2',3,5,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:4_800_000,endMs:4_800_240,multiplier:1}]});
+  assert.deepEqual(await commit(intent('overlap',3,4,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:0,endMs:4_800_000}]})),{ok:false,reason:'invalid'});
+  const next=intent('income-2',3,5,{kind:'cab-income',intervals:[{assetId:'cab-1',startMs:4_800_000,endMs:4_800_240}]});
   const paidAgain=await commit(next);success(paidAgain);assert.equal(paidAgain.progress.cash,27_001);assert.equal(paidAgain.progress.eligibleIncome,27_001);
   const paint=intent('paint-1',4,6,{kind:'cab-paint',assetId:'cab-1',paint:'ember'});
   const painted=await commit(paint);success(painted);

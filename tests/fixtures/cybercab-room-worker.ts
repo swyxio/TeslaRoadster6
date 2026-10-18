@@ -1,8 +1,8 @@
 // LOCAL TEST ONLY. Exposes authoritative room cabs for the focused test.
-import walletFixture, { GameRoom as WalletGameRoom, DriverProfile, GlobalChat, RoomEconomy, GlobalIncome } from './luxury-wallet-worker';
+import walletFixture, { GameRoom as WalletGameRoom, DriverProfile, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
 import type { World } from '../../shared/game';
 
-export { DriverProfile, GlobalChat, RoomEconomy, GlobalIncome };
+export { DriverProfile, GlobalChat, RoomEconomy, GlobalIncome, GlobalEarningsEvent };
 export class GameRoom extends WalletGameRoom {
   async fixtureCabs() {
     const world=Reflect.get(this,'world') as World;

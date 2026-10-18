@@ -184,3 +184,16 @@ test('tap jump then hold the same rebound key or touch button to hover',()=>{
   jump.dispatchEvent(pointer('pointercancel',3));assert.equal(controls.read().hover,false);
   jump.dispatchEvent(pointer('pointerdown',4));assert.equal(controls.read().hover,false);controls.clear();now=1000;assert.equal(controls.read().hover,false);
 });
+
+
+test('held driving keys stay cleared until released and pressed again',()=>{
+  const fakeWindow=new EventTarget() as EventTarget&{matches:(s:string)=>boolean},fakeDocument=new EventTarget() as EventTarget&{hidden:boolean;querySelectorAll:(s:string)=>FakeButton[]};
+  fakeWindow.matches=()=>false;fakeDocument.hidden=false;fakeDocument.querySelectorAll=()=>[];Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
+  const controls=new Controls();controls.enabled=true;
+  const key=(type:string,code:string,repeat=false)=>{const event=new Event(type);Object.defineProperties(event,{code:{value:code},repeat:{value:repeat}});fakeWindow.dispatchEvent(event);};
+  key('keydown','KeyW');assert.equal(controls.read().throttle,1);
+  key('keydown','KeyW',true);assert.equal(controls.read().throttle,1,'ordinary repeat preserves a held key');
+  controls.clear();assert.equal(controls.read().throttle,0);
+  key('keydown','KeyW',true);assert.equal(controls.read().throttle,0,'repeat cannot cancel a route after controls are cleared');
+  key('keyup','KeyW');key('keydown','KeyW');assert.equal(controls.read().throttle,1,'a fresh press resumes manual driving');
+});

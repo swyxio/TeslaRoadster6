@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { planCybercabDispatch } from '../shared/cybercabs';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug, type ClientMessage } from './protocol';
@@ -13,13 +13,22 @@ import { initialDelivery } from '../shared/delivery';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom } from './driver-profile';
 import { RoomEconomy } from './room-economy';
+import { GlobalEarningsEvent } from './global-earnings-event';
+import { scheduleGlobalEarnings } from './global-earnings-admin';
+import { activityPayout, earningsMultiplier, globalWindowsForInstant, ROOM_WIN_DURATION_MS, type EarningsEvents, type EarningsWindow, type GlobalEventLease } from '../shared/earnings-events';
+import type { RoomEventCursor } from './room-earnings-events';
+import { leaveParking } from '../shared/parking';
+import { resetAchievementFlight } from '../shared/achievements';
 
-export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy };
+export { GlobalChat, DriverProfile, GlobalIncome, RoomEconomy, GlobalEarningsEvent };
 
-type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; MAX_PLAYERS?: string };
+type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; DRIVERS: DurableObjectNamespace<DriverProfile>; ECONOMIES: DurableObjectNamespace<RoomEconomy>; INCOME: DurableObjectNamespace<GlobalIncome>; GLOBAL_EVENTS: DurableObjectNamespace<GlobalEarningsEvent>; STARSHIP_ADMIN_TOKEN?:string; MAX_PLAYERS?: string };
 type CabMessage=Extract<ClientMessage,{type:'cab'}>;
 type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null;cabHighWater:number;cabRequests:Map<number,{payload:string;reply:string|null}> };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
+type PendingRoomWin = {event_id:string;requested_at:number;room_id:string};
+type RoomEarningsSnapshot = {observedAt:number;events:EarningsEvents;lease:GlobalEventLease};
+const ROOM_EARNINGS_STALE_MS=5_000;
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -27,6 +36,21 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (url.pathname.startsWith('/api/radio/')) return radioFeed(request, ctx);
     if (url.pathname === '/api/health') return Response.json({ ok: true, version: PROTOCOL_VERSION, capacity: roomCapacity(env.MAX_PLAYERS) });
+    if (url.pathname === '/api/admin/earnings-events') return scheduleGlobalEarnings(request,env);
+    if (url.pathname === '/api/starship/status' || url.pathname === '/api/starship/contributors'){
+      if(request.method!=='GET')return reply('GET required',405);
+      const income=env.INCOME.get(env.INCOME.idFromName('global'));
+      try{
+        if(url.pathname.endsWith('/status'))return Response.json({status:await income.status(),serverTime:Date.now()},{headers:{'Cache-Control':'no-store'}});
+        const group=url.searchParams.get('group')??'at-goal',cursor=url.searchParams.get('cursor');
+        if(group!=='at-goal'&&group!=='later')return reply('Invalid contributor group',400);
+        const page=await income.contributors(group,cursor??undefined);
+        return Response.json(page,{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        if(error instanceof Error&&error.message==='Invalid contributor cursor')return reply('Invalid contributor cursor',400);
+        return reply('Starship service unavailable',503);
+      }
+    }
     const slug = roomSlug(url.pathname);
     const chat = url.pathname === '/api/chat';
     if (!slug && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
@@ -56,9 +80,125 @@ export class GameRoom extends DurableObject<Env> {
   private pendingPickups=new Set<string>();
   private nextRefresh=0;
   private refreshing=false;
+  private earningsSnapshot:RoomEarningsSnapshot|null=null;
+  private earningsGeneration=0;
+  private winFlight:Promise<void>|null=null;
+  private hasPendingWin=false;
+  private winJournalGeneration=0;
 
   private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
+  private initWinStorage(){
+    this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS game_room_pending_wins (event_id TEXT PRIMARY KEY, requested_at INTEGER NOT NULL, room_id TEXT NOT NULL)');
+    this.hasPendingWin=this.pendingWins().length>0;
+  }
+  private pendingWins():PendingRoomWin[]{
+    return this.ctx.storage.sql.exec<PendingRoomWin>('SELECT event_id,requested_at,room_id FROM game_room_pending_wins ORDER BY requested_at,event_id').toArray();
+  }
+  /**
+   * Resolve a cab interval only after the room's own win journal has drained.
+   * New wins invalidate an in-flight observation; the caller retries rather
+   * than consuming a history page which could precede a journalled win.
+   */
+  async cabEarningsHistory(roomId:string,fromMs:number,toMs:number):Promise<EarningsWindow[]>{
+    if(roomSlug(`/api/room/${roomId}`)!==roomId || !this.ctx.id.equals(this.env.ROOMS.idFromName(roomId)))
+      throw new Error('Room history identity mismatch');
+    if(!Number.isSafeInteger(fromMs)||!Number.isSafeInteger(toMs)||fromMs<0||toMs<fromMs||toMs>Date.now())
+      throw new RangeError('Room history must be a past interval');
+    this.initWinStorage();
+    if(this.pendingWins().length){
+      // The retry flight catches publish errors; the journal, not the flight's
+      // completion, is the evidence that a win really reached RoomEconomy.
+      this.ctx.waitUntil(this.resumeWins());
+      throw new Error('Room win is awaiting publication');
+    }
+    const generation=this.winJournalGeneration;
+    const economy=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(roomId));
+    const windows:EarningsWindow[]=[];
+    let cursor:RoomEventCursor|undefined;
+    do{
+      const page=await economy.earningsHistory(fromMs,toMs,cursor);
+      if(this.winJournalGeneration!==generation||this.pendingWins().length)
+        throw new Error('Room win changed during history observation');
+      windows.push(...page.windows);
+      cursor=page.next??undefined;
+    }while(cursor);
+    return windows;
+  }
+  private publishEarningsStatus(){
+    const now=Date.now(),snapshot=this.earningsSnapshot;
+    let payload:unknown={type:'earningsStatus',events:null,serverTime:now,validForMs:0};
+    if(snapshot&&now>=snapshot.observedAt&&now-snapshot.observedAt<ROOM_EARNINGS_STALE_MS&&now>=snapshot.lease.issuedAtMs&&now<snapshot.lease.validUntilMs){
+      payload={type:'earningsStatus',events:snapshot.events,serverTime:now,
+        validForMs:Math.min(ROOM_EARNINGS_STALE_MS-(now-snapshot.observedAt),snapshot.lease.validUntilMs-now)};
+    }
+    const encoded=JSON.stringify(payload);
+    for(const [socket] of this.sessions)try{socket.send(encoded);}catch{this.disconnect(socket);}
+  }
+  private rate(atMs:number):{events:EarningsEvents;multiplier:1|1.5|2|3;atMs:number}|null{
+    const snapshot=this.earningsSnapshot;
+    if(!snapshot||atMs<snapshot.observedAt||atMs-snapshot.observedAt>=ROOM_EARNINGS_STALE_MS||this.hasPendingWin)return null;
+    try{
+      const events={room:snapshot.events.room,global:globalWindowsForInstant(snapshot.lease,atMs)};
+      return {events,multiplier:earningsMultiplier(events,atMs).multiplier,atMs};
+    }catch{return null;}
+  }
+  private async refreshEarnings(){
+    if(!this.roomId||this.hasPendingWin){this.earningsSnapshot=null;this.publishEarningsStatus();return;}
+    const observedAt=Date.now(),generation=this.earningsGeneration,roomId=this.roomId;
+    try{
+      const [roomUntil,lease]=await Promise.all([
+        this.ledger().earningsAt(observedAt),this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global')).lease(),
+      ]);
+      if(generation!==this.earningsGeneration||roomId!==this.roomId||this.hasPendingWin)return;
+      const room=roomUntil===null?[]:[{startsAtMs:roomUntil-ROOM_WIN_DURATION_MS,endsAtMs:roomUntil}];
+      const now=Date.now();globalWindowsForInstant(lease,now);
+      this.earningsSnapshot={observedAt,lease,events:{room,global:lease.windows}};
+    }catch{if(generation===this.earningsGeneration)this.earningsSnapshot=null;}
+    this.publishEarningsStatus();
+  }
+  private resumeWins():Promise<void>{
+    if(this.winFlight)return this.winFlight;
+    const flight=(async()=>{
+      // Arm before remote work; a crash or lost reply leaves the local journal retryable.
+      await this.ctx.storage.setAlarm(Date.now()+1000);
+      do{
+        for(let win=this.pendingWins()[0];win;win=this.pendingWins()[0]){
+          const economy=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(win.room_id));
+          const published=await economy.recordEarningsWinWithoutPayout(win.event_id,win.requested_at);
+          // A same-millisecond observation can place the win one millisecond
+          // later. Do not resume payouts from a snapshot taken before it starts.
+          while(Date.now()<published.startsAtMs)await new Promise(resolve=>setTimeout(resolve,Math.min(50,published.startsAtMs-Date.now())));
+          this.ctx.storage.sql.exec('DELETE FROM game_room_pending_wins WHERE event_id=?',win.event_id);
+        }
+        this.hasPendingWin=false;
+        this.earningsGeneration++;this.earningsSnapshot=null;
+        if(this.sessions.size)await this.refreshEarnings();
+      }while(this.hasPendingWin);
+    })().catch(async()=>{
+      this.earningsSnapshot=null;this.publishEarningsStatus();
+      try{await this.ctx.storage.setAlarm(Date.now()+1000);}catch{}
+    });
+    this.winFlight=flight;
+    void flight.finally(()=>{if(this.winFlight===flight)this.winFlight=null;}).catch(()=>{});
+    return flight;
+  }
+  private recordWin(requestedAt=Date.now()){
+    const eventId=crypto.randomUUID();
+    this.winJournalGeneration++;
+    this.earningsGeneration++;this.earningsSnapshot=null;this.hasPendingWin=true;
+    this.ctx.storage.sql.exec('INSERT INTO game_room_pending_wins (event_id,requested_at,room_id) VALUES (?,?,?)',eventId,requestedAt,this.roomId);
+    // Queue the watchdog in the same synchronous write batch as the journal,
+    // before sending anything or awaiting remote work.
+    const watchdog=this.ctx.storage.setAlarm(Date.now()+1000);
+    this.publishEarningsStatus();this.ctx.waitUntil(watchdog.then(()=>this.resumeWins()));
+  }
+  async alarm():Promise<void>{
+    this.initWinStorage();
+    if(this.hasPendingWin){await this.ctx.storage.setAlarm(Date.now()+1000);await this.resumeWins();}
+  }
   private async initializeRoom(world=this.world){
+    this.initWinStorage();
+    if(this.pendingWins().length)this.ctx.waitUntil(this.resumeWins());
     // The pre-wallet room fund remains in its original object and is never
     // rewritten; the journal seeds its own balance once before accepting gifts.
     const stored=await this.ctx.storage.get<number>('mars-fund');
@@ -89,6 +229,7 @@ export class GameRoom extends DurableObject<Env> {
       this.refreshPickups(world),
       this.env.INCOME.get(this.env.INCOME.idFromName('global')).total().then(total=>{if(world===this.world)world.mars.fund=Math.min(MARS_GOAL,total);}),
       this.ledger().roomFund().then(balance=>{if(world===this.world)world.mars.roomFund=Math.max(world.mars.roomFund,balance);}),
+      this.refreshEarnings(),
     ]).finally(()=>{this.refreshing=false;});
   }
 
@@ -187,6 +328,23 @@ export class GameRoom extends DurableObject<Env> {
         send(false,'Driver connection changed. Rejoin to retry.');return;
       }
       if(!current())return;
+      // A match can finish while confirmation is in flight. Its result belongs
+      // to the original wallet, so recheck immediately before replacing it.
+      if(!session.economy.unstarted){send(false,'Rejoin before loading a different saved driver.');return;}
+      // The room player ID is reused for the new wallet. Drop the previous
+      // driver's unfinished activity so it cannot become the new driver's win.
+      leaveParking(this.world.parking,session.id);
+      for(const round of this.world.races.rounds){
+        round.entrants=round.entrants.filter(entrant=>entrant.playerId!==session.id);
+        if(round.hostId===session.id&&round.entrants.length)round.hostId=round.entrants[0].playerId;
+      }
+      this.world.races.rounds=this.world.races.rounds.filter(round=>round.entrants.length>0);
+      const soccer=this.world.soccer;
+      soccer.participants=soccer.participants.filter(participant=>participant.playerId!==session.id);
+      soccer.winningPlayers=soccer.winningPlayers.filter(id=>id!==session.id);
+      if(soccer.lastTouch?.playerId===session.id)soccer.lastTouch=null;
+      const player=this.world.players.find(item=>item.id===session.id);
+      if(player)resetAchievementFlight(player);
       session.economy.replace(identity.walletId,fence,result.revision,result.sequence,result.progress);
       session.pendingBind=null;
       session.economy.restoreCurrentVehicle();
@@ -253,6 +411,30 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='sync'){session.economy.barrier(message.token);return;}
     if(message.type==='name'){const player=this.world.players.find(p=>p.id===session.id);if(player)player.name=chooseAvailableName(message.name,this.world.players.filter(p=>p.id!==session.id).map(p=>p.name));return;}
     if(message.type==='cab'&&!this.beginCabRequest(socket,session,message))return;
+    if(message.type==='starship'){
+      const driverId=session.economy.walletId,fence=session.economy.currentFence,identitySequence=session.identitySequence;
+      const current=()=>this.sessions.get(socket)===session&&!session.attachPending&&session.identitySequence===identitySequence&&session.economy.walletId===driverId&&session.economy.currentFence===fence;
+      const send=(value:unknown)=>{if(current())try{socket.send(JSON.stringify(value));}catch{}};
+      const run=async()=>{
+        if(!current())return;
+        const driver=this.env.DRIVERS.get(this.env.DRIVERS.idFromName(driverId));
+        if(message.action==='name'){
+          try{const result=await driver.setStarshipName(driverId,fence,message.name);send({type:'starshipNameResult',requestId:message.requestId,...result});}
+          catch{send({type:'starshipNameResult',requestId:message.requestId,ok:false,publicName:null});}
+        }else try{
+          if(!await driver.checkFence(fence)||!current())return;
+          const before=await driver.starshipPrivacyState(driverId,fence);
+          if(!before||!current())return;
+          const income=this.env.INCOME.get(this.env.INCOME.idFromName('global'));
+          const [status,publicName]=await Promise.all([income.status(driverId),income.publicName(driverId)]);
+          const after=await driver.starshipPrivacyState(driverId,fence);
+          if(!after||!current())return;
+          const privacyPending=before.pending||after.pending||before.revision!==after.revision;
+          send({type:'starshipStatus',requestId:message.requestId,status,publicName,privacyPending,serverTime:Date.now()});
+        }catch{/* The client marks an unanswered status as stale. */}
+      };
+      const operation=run();this.ctx.waitUntil(operation);return;
+    }
     // Even rejected actions advance the action fence so later inputs remain ordered.
     if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
       this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
@@ -262,7 +444,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'unavailable'}));
       return;
@@ -277,7 +459,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'cooldown'}));
       return;
@@ -293,7 +475,11 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind)){session.economy.restoreCurrentVehicle();this.invalidate(socket,session,true,message.edgeBaseline);}
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
-    if(message.type==='destination'){const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});if(ok)this.invalidate(socket,session,false,message.edgeBaseline);socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));}
+    if(message.type==='destination'||message.type==='deliveryDestination'){
+      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z}):setDeliveryDestination(this.world,session.id);
+      if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
+      socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
+    }
     if(message.type==='upgrade')session.economy.workshop('upgrade',message.requestId,message.upgrade);
     if(message.type==='vehicleStyle')session.economy.workshop('vehicleStyle',message.requestId,message);
     if(message.type==='ota')session.economy.ota(message.enabled,message.requestId);
@@ -347,6 +533,7 @@ export class GameRoom extends DurableObject<Env> {
       if(result.outcomes.length)edgeResults.set(session.id,{socket,outcomes:result.outcomes});
     }
     const relocated=new Set<string>();
+    let settlement:ReturnType<GameRoom['rate']>=null;
     step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
       const player=this.world.players.find(item=>item.id===id);
       const entity=this.world.entities.find(item=>item.id===player?.entityId);
@@ -356,8 +543,14 @@ export class GameRoom extends DurableObject<Env> {
       this.inputs.delete(id);relocated.add(id);
     },economy:{
       canCollect:id=>{const session=byId.get(id);return !!session&&!session.attachPending;},
-      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.update(player,apply);},
+      update:(player,apply)=>{const session=byId.get(player.id);if(session&&!session.attachPending){settlement=this.rate(Date.now());try{session.economy.update(player,apply,settlement);}finally{settlement=null;}}},
+      // A result can occur while binding (for example, a ball already in
+      // motion). Commit it to the current wallet; a different incoming wallet
+      // must then pass the unstarted check again before it can replace it.
+      gameAward:(player,apply,capture)=>{byId.get(player.id)?.economy.gameAward(player,apply,capture);},
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy.pickup(player,car,pickup);},
+      resolveDeliveryPayout:(_player,component)=>settlement?activityPayout(component.amount,component.kind,settlement.atMs,settlement.events):null,
+      onDomeWin:result=>{if(result.winners.length)this.recordWin();},
     }});
     this.tickCount=nextTick;
     for(const session of this.sessions.values())if(!session.attachPending)session.economy.observeCabs(now);

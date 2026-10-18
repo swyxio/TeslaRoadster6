@@ -3,9 +3,12 @@ import { DriverProfile, type DriverOutcome, type EconomyIntent } from './driver-
 import type { GameRoom } from './index';
 import { MARS_GOAL } from '../shared/mars';
 import type { CybercabInterval } from '../shared/cybercabs';
+import { RoomEarningsEvents, type RoomEventCursor } from './room-earnings-events';
+import type { GlobalEarningsEvent } from './global-earnings-event';
+import type { EarningsEvents, EarningsWindow } from '../shared/earnings-events';
 
-type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>};
-type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null};
+type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>;GLOBAL_EVENTS:DurableObjectNamespace<GlobalEarningsEvent>};
+type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null;cabEvents?:EarningsEvents};
 type Acknowledged={fence:string;sequence:number};
 type PickupReservation={eventId:string|null;generation:number;readyAt:number};
 type RoomFund={balance:number;reserved:number};
@@ -23,10 +26,19 @@ export class RoomEconomy extends DurableObject<Env> {
   private flights=new Map<string,Promise<void>>();
   private freezes=new Map<string,Promise<void>>();
   private recoveries=new Map<string,Promise<void>>();
+  private earningsEvents=new RoomEarningsEvents(this.ctx.storage);
   private profile(id:string){return this.env.DRIVERS.get(this.env.DRIVERS.idFromName(id));}
   private async stages(driverId:string):Promise<CabIncomeStage[]>{
     return [...(await this.ctx.storage.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()];
   }
+
+  /** Trusted room RPCs; pending wins fence later payout and cab observations. */
+  prepareEarningsWin(eventId:string,atMs:number){return this.earningsEvents.prepareWin(eventId,atMs);}
+  recordEarningsWinWithoutPayout(eventId:string,atMs:number){return this.earningsEvents.recordWinWithoutPayout(eventId,atMs);}
+  commitEarningsWin(eventId:string){return this.earningsEvents.commitWin(eventId);}
+  pendingEarningsWin(){return this.earningsEvents.pendingWin();}
+  earningsAt(atMs:number){return this.earningsEvents.activeUntil(atMs);}
+  earningsHistory(fromMs:number,toMs:number,cursor?:RoomEventCursor){return this.earningsEvents.history(fromMs,toMs,cursor);}
 
   /** Seed once from the read-only legacy GameRoom key; later credits live here. */
   async initializeRoomFund(legacy:number):Promise<number>{
@@ -151,10 +163,42 @@ export class RoomEconomy extends DurableObject<Env> {
     }
   }
   private async resolveOnce(intent:EconomyIntent):Promise<DriverOutcome>{
-    const outcome=await this.profile(intent.driverId).commit(intent);
+    const key=`intent:${intent.eventId}`;
+    let record=await this.ctx.storage.get<IntentRecord>(key);
+    if(!record||JSON.stringify(record.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
+    if(record.outcome)return record.outcome;
+    if(intent.action.kind==='cab-income'&&!record.cabEvents){
+      const intervals=intent.action.intervals;
+      if(!Array.isArray(intervals)||!intervals.length||intervals.length>128||intervals.some(interval=>
+        !Number.isSafeInteger(interval.startMs)||!Number.isSafeInteger(interval.endMs)||interval.startMs<0||interval.endMs<=interval.startMs||interval.endMs>Date.now()))
+        throw new Error('Invalid cab history interval');
+      const from=Math.min(...intervals.map(interval=>interval.startMs)),to=Math.max(...intervals.map(interval=>interval.endMs));
+      // Do not hold this object's storage transaction across the room RPC: the
+      // room's publication barrier calls this object to read its own history.
+      const room=await this.env.ROOMS.get(this.env.ROOMS.idFromName(intent.roomId)).cabEarningsHistory(intent.roomId,from,to);
+      const global:EarningsWindow[]=[];
+      const service=this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global'));
+      let cursor:number|undefined;
+      for(;;){
+        const page=await service.history(from,to,cursor);
+        global.push(...page.windows);
+        if(page.next===null)break;
+        if(!Number.isSafeInteger(page.next)||(cursor!==undefined&&page.next<=cursor)||page.next>=to)throw new Error('Invalid global history cursor');
+        cursor=page.next;
+      }
+      record=await this.ctx.storage.transaction(async txn=>{
+        const current=await txn.get<IntentRecord>(key);
+        if(!current||JSON.stringify(current.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
+        if(current.cabEvents)return current;
+        const updated={...current,cabEvents:{room,global}} satisfies IntentRecord;
+        await txn.put(key,updated);
+        return updated;
+      });
+    }
+    const outcome=await this.profile(intent.driverId).commit(intent,record.cabEvents);
     if(!outcome.ok && outcome.reason==='not-ready')return outcome;
     return this.ctx.storage.transaction(async txn=>{
-      const key=`intent:${intent.eventId}`,record=await txn.get<IntentRecord>(key);
+      const record=await txn.get<IntentRecord>(key);
       if(!record)throw new Error('Missing economy intent');
       if(record.outcome)return record.outcome;
       let result=outcome;
@@ -165,7 +209,7 @@ export class RoomEconomy extends DurableObject<Env> {
         await txn.put('room-fund',{balance,reserved:fund.reserved-amount} satisfies RoomFund);
         if(outcome.ok)result={...outcome,roomFund:balance};
       }
-      await txn.put(key,{intent,outcome:result} satisfies IntentRecord);
+      await txn.put(key,{...record,outcome:result} satisfies IntentRecord);
       await txn.delete(`pending:${intent.driverId}:${intent.eventId}`);
       await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;

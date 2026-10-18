@@ -31,8 +31,8 @@ await writeFile(config,JSON.stringify({
   name:'tesland-cab-stage-test',main:resolve('tests/fixtures/cybercab-stage-worker.ts'),compatibility_date:'2026-10-17',
   assets:{directory:resolve('dist'),binding:'ASSETS',run_worker_first:['/api/*','/__wallet-test/*','/__cab-stage/*']},
   durable_objects:{bindings:[{name:'ROOMS',class_name:'GameRoom'},{name:'CHAT',class_name:'GlobalChat'},
-    {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'}]},
-  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome']}],
+    {name:'DRIVERS',class_name:'DriverProfile'},{name:'ECONOMIES',class_name:'RoomEconomy'},{name:'INCOME',class_name:'GlobalIncome'},{name:'GLOBAL_EVENTS',class_name:'GlobalEarningsEvent'}]},
+  migrations:[{tag:'v1',new_sqlite_classes:['GameRoom','GlobalChat','DriverProfile','RoomEconomy','GlobalIncome','GlobalEarningsEvent']}],
 }));
 let child:ChildProcess|undefined,logs='';
 const sockets:WebSocket[]=[];
@@ -59,7 +59,7 @@ async function seed(inRoom?:string){
   return {driverId,fence,room,progress:result.progress};
 }
 function batch(driverId:string,fence:string,roomId:string,sequence:number,startMs:number,endMs:number):CabIncomeStage{
-  return {eventId:randomUUID(),driverId,fence,roomId,sequence,intervals:[{assetId:'cab-a',startMs,endMs,multiplier:1}]};
+  return {eventId:randomUUID(),driverId,fence,roomId,sequence,intervals:[{assetId:'cab-a',startMs,endMs}]};
 }
 function cabIntent(stage:CabIncomeStage,revision:number):EconomyIntent{
   return {eventId:stage.eventId,driverId:stage.driverId,fence:stage.fence,roomId:stage.roomId,sequence:stage.sequence,revision,
@@ -79,11 +79,24 @@ function connect(path:string,guest=false){
 try{
   child=start();await ready();
   const simulation=await post<{initial:DriverProgress;persisted:DriverProgress;writes:EconomyIntent[];stages:CabIncomeStage[];barrier:number;failedDrained:boolean;failedQueue:number}>('/__cab-stage/rejected-head',{});
-  assert.equal(simulation.stages.length,1);assert.equal(simulation.writes.length,2);
+  assert.equal(simulation.stages.length,1);assert.equal(simulation.writes.length,3);
   assert.equal(simulation.writes[1].action.kind,'cab-income');assert.equal(simulation.writes[1].revision,0);
-  assert.equal(simulation.writes[1].sequence,2);assert.equal(simulation.persisted.cash,simulation.initial.cash+1);
+  assert.equal(simulation.writes[1].sequence,2);assert.equal(simulation.writes[2].action.kind,'progress');
+  assert.equal(simulation.persisted.cash,simulation.initial.cash+1+100);
+  assert.equal(simulation.persisted.eligibleIncome,simulation.initial.eligibleIncome+1+100);
   assert.equal(simulation.barrier,99,'discarded later drafts do not complete the barrier before the stage');
   assert.equal(simulation.failedDrained,true);assert.equal(simulation.failedQueue,0,'failed cab income leaves no abandoned in-memory queue');
+  const delayed=await post<{initial:DriverProgress;persisted:DriverProgress;writes:EconomyIntent[];barrier:number}>('/__cab-stage/delayed-income',{});
+  assert.equal(delayed.writes.length,3);assert.equal(delayed.writes[0].action.kind,'cab-income');
+  assert.equal(delayed.persisted.cash,delayed.initial.cash+6-7+100);
+  assert.equal(delayed.persisted.eligibleIncome,delayed.initial.eligibleIncome+6+100);
+  assert.equal(delayed.persisted.cybercabs!.assets[0].gross,6);
+  assert.equal(delayed.persisted.cybercabs!.assets[0].lastEndMs,480);
+  assert.equal(delayed.barrier,42,'later progress and independent awards retain the authoritative cab credit');
+  const ordering=await post<{beforeRelease:{attempted:number[];accepted:number[]};attempted:number[];accepted:number[];persisted:DriverProgress}>('/__cab-stage/stage-order',{});
+  assert.deepEqual(ordering.beforeRelease,{attempted:[1],accepted:[]},'an uncertain earlier stage holds back later stages');
+  assert.deepEqual(ordering.attempted,[1,2]);assert.deepEqual(ordering.accepted,[1,2]);
+  assert.equal(ordering.persisted.cybercabs!.assets[0].lastEndMs,480);
 
   // A lost stage reply is retried by ID. Process death after acceptance drains
   // the stage even though it was never submitted as a wallet intent.
@@ -164,7 +177,7 @@ try{
     assert.equal(result.queue,33+(closedCount?1:0),'the final intervals add at most two bounded batches');
     assert.equal(result.failed,true);assert.equal(result.closes,1);assert.equal(result.overloadApplied,false);assert.equal(result.open,0);
     const tail=result.final.at(-1)!;
-    assert.equal(tail.sequence,34+(closedCount?1:0));assert.deepEqual(tail.action,{kind:'cab-income',intervals:[{assetId:'cab-a',startMs:1000,endMs:1240,multiplier:1}]});
+    assert.equal(tail.sequence,34+(closedCount?1:0));assert.deepEqual(tail.action,{kind:'cab-income',intervals:[{assetId:'cab-a',startMs:1000,endMs:1240}]});
     if(closedCount){assert.equal(result.final[0].sequence,34);assert.equal(result.final[0].action.kind,'cab-income');
       if(result.final[0].action.kind==='cab-income')assert.equal(result.final[0].action.intervals.length,closedCount);}
     await until(async()=>(await rpc<{held:boolean}>('fault-state',{driverId:driver.driverId})).held,'overloaded predecessor held');
@@ -188,7 +201,7 @@ try{
   assert.equal(overloadRecovered.progress.cybercabs!.assets[0].lastEndMs,1240);
   assert.equal(overloadRecovered.progress.cybercabs!.assets[0].remainder,3_840_000);
   assert.equal(await stage({eventId:overloadTail.eventId,driverId:overloaded.driverId,fence:overloaded.fence,
-    roomId:overloaded.room,sequence:35,intervals:[{assetId:'cab-a',startMs:1000,endMs:1240,multiplier:1}]}),'superseded');
+    roomId:overloaded.room,sequence:35,intervals:[{assetId:'cab-a',startMs:1000,endMs:1240}]}),'superseded');
   const overloadAgain=await rpc<{progress:DriverProgress}>('acquire',
     {driverId:overloaded.driverId,fence:randomUUID(),room:`overload-again-${randomUUID().slice(0,8)}`},15_000);
   assert.equal(overloadAgain.progress.cash,overloadRecovered.progress.cash);assert.equal(overloadAgain.progress.cybercabs!.assets[0].gross,1);

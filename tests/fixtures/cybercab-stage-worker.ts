@@ -1,13 +1,13 @@
 // LOCAL TEST ONLY: exercise the production room journal and per-player queue.
 import cabFixture, { GameRoom as CabGameRoom } from './cybercab-room-worker';
-import { DriverProfile, GlobalChat, RoomEconomy as WalletRoomEconomy, GlobalIncome } from './luxury-wallet-worker';
+import { DriverProfile, GlobalChat, RoomEconomy as WalletRoomEconomy, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
 import { EconomySession } from '../../worker/economy-session';
 import { progressFrom, type DriverOutcome, type DriverProgress, type EconomyIntent } from '../../worker/driver-profile';
 import type { CabIncomeStage } from '../../worker/room-economy';
 import { addPlayer, createEmptyWorld, makeEntity } from '../../shared/game';
 import { emptyCybercabFleet, purchaseCybercab, settleCybercabIntervals } from '../../shared/cybercabs';
 
-export { DriverProfile, GlobalChat, GlobalIncome };
+export { DriverProfile, GlobalChat, GlobalIncome, GlobalEarningsEvent };
 export class GameRoom extends CabGameRoom {
   private overloadSession:EconomySession|null=null;
   async fixtureOverload(driverId:string,fence:string,roomId:string,progress:DriverProgress,invalidHead:boolean,closedCount:number){
@@ -21,7 +21,7 @@ export class GameRoom extends CabGameRoom {
     this.overloadSession=session;
     session.observeCabs(1000);session.observeCabs(1120);session.observeCabs(1240);
     const closed=Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals'];
-    for(let i=0;i<closedCount;i++)closed.push({assetId:'cab-a',startMs:i,endMs:i+1,multiplier:1});
+    for(let i=0;i<closedCount;i++)closed.push({assetId:'cab-a',startMs:i,endMs:i+1});
     for(let i=0;i<32;i++)session.update(player,()=>{
       if(invalidHead){player.delivery.cash=Number.MAX_SAFE_INTEGER;player.delivery.earned=-1;player.delivery.tickets++;}
       else player.delivery.cash--;
@@ -96,10 +96,13 @@ async function rejectedHeadSimulation(){
     async submit(intent:EconomyIntent):Promise<DriverOutcome>{
       writes.push(structuredClone(intent));
       if(writes.length===1){headStarted();await head;return {ok:false,reason:'invalid'};}
-      if(intent.action.kind!=='cab-income')throw new Error('Dependent progress was not discarded');
-      const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals);
-      if(!result.ok)throw new Error('Cab stage could not be rebased');
-      persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+      if(intent.action.kind==='cab-income'){
+        const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,{room:[],global:[]});
+        if(!result.ok)throw new Error('Cab stage could not be rebased');
+        persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+      }else if(intent.action.kind==='progress'){
+        persisted={...structuredClone(intent.action.progress),cybercabs:persisted.cybercabs};
+      }else throw new Error('Dependent action was not discarded');
       return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
     },
     async acknowledge(){return true;},
@@ -107,9 +110,11 @@ async function rejectedHeadSimulation(){
   const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
   session.update(player,()=>{player.delivery.cash-=1;});await started;
-  (Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals']).push({assetId:'cab-a',startMs:0,endMs:240,multiplier:1});
+  (Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals']).push({assetId:'cab-a',startMs:0,endMs:240});
   Reflect.apply(Reflect.get(session,'flushCabIncome') as ()=>void,session,[]);
-  session.update(player,()=>{player.delivery.cash-=7;});session.barrier(99);
+  session.update(player,()=>{player.delivery.cash-=7;});
+  session.gameAward(player,()=>{player.delivery.cash+=100;player.delivery.lifetimeIncome+=100;player.achievements.unlocked.push('first-parking' as never);});
+  session.barrier(99);
   releaseHead();
   for(let i=0;i<100&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
   if(Reflect.get(session,'processing'))throw new Error('Session failed to drain');
@@ -119,7 +124,7 @@ async function rejectedHeadSimulation(){
     async acknowledge(){throw new Error('Failed income must remain unacknowledged');}};
   const failed=new EconomySession({} as never,failedLedger as never,secondWorld,secondPlayer,{send(){},close(){}} as never,
     'driver','fence','room',0,0,initial,new Map(),new Set());
-  (Reflect.get(failed,'cabIntervals') as CabIncomeStage['intervals']).push({assetId:'cab-a',startMs:0,endMs:240,multiplier:1});
+  (Reflect.get(failed,'cabIntervals') as CabIncomeStage['intervals']).push({assetId:'cab-a',startMs:0,endMs:240});
   Reflect.apply(Reflect.get(failed,'flushCabIncome') as ()=>void,failed,[]);
   for(let i=0;i<100&&Reflect.get(failed,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
   failed.finish();
@@ -127,11 +132,91 @@ async function rejectedHeadSimulation(){
   return {initial,persisted,writes,stages,barrier:session.sync(),failedDrained,failedQueue:(Reflect.get(failed,'queue') as unknown[]).length};
 }
 
+// Hold an authoritative 3x cab settlement while later snapshots are drafted.
+async function delayedCabSimulation(){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const purchase=purchaseCybercab(emptyCybercabFleet(),35_000,0,'cab-a');
+  if(!purchase.ok)throw new Error('Could not seed cab');
+  player.delivery.cash=purchase.cash;player.delivery.lifetimeIncome=purchase.eligibleIncome;
+  const initial=progressFrom(player.delivery,[],{},[],0,purchase.eligibleIncome);initial.cybercabs=purchase.fleet;
+  let persisted=structuredClone(initial),release=()=>{},started=()=>{};
+  const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
+  const writes:EconomyIntent[]=[];
+  const ledger={
+    async stageCab(){return 'accepted' as const;},
+    async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+      writes.push(structuredClone(intent));
+      if(intent.action.kind==='cab-income'){
+        started();await held;
+        const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,
+          {room:[{startsAtMs:0,endsAtMs:600_000}],global:[{startsAtMs:0,endsAtMs:1_800_000}]});
+        if(!result.ok)throw new Error('Cab income failed');
+        persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+      }else if(intent.action.kind==='progress'){
+        persisted={...structuredClone(intent.action.progress),cybercabs:persisted.cybercabs};
+      }else throw new Error('Unexpected action');
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+    },
+    async acknowledge(){return true;},
+  };
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  (Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals']).push({assetId:'cab-a',startMs:0,endMs:480});
+  Reflect.apply(Reflect.get(session,'flushCabIncome') as ()=>void,session,[]);await began;
+  session.update(player,()=>{player.delivery.cash-=7;});
+  session.gameAward(player,()=>{player.delivery.cash+=100;player.delivery.lifetimeIncome+=100;player.achievements.unlocked.push('first-parking' as never);});
+  session.barrier(42);release();
+  for(let i=0;i<100&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(Reflect.get(session,'processing'))throw new Error('Session failed to drain');
+  return {initial,persisted,writes,barrier:session.sync()};
+}
+
+async function stageOrderSimulation(){
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const purchase=purchaseCybercab(emptyCybercabFleet(),35_000,0,'cab-a');
+  if(!purchase.ok)throw new Error('Could not seed cab');
+  player.delivery.cash=purchase.cash;player.delivery.lifetimeIncome=purchase.eligibleIncome;
+  const initial=progressFrom(player.delivery,[],{},[],0,purchase.eligibleIncome);initial.cybercabs=purchase.fleet;
+  let persisted=structuredClone(initial),release=()=>{},started=()=>{};
+  const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
+  const attempted:number[]=[],accepted:number[]=[];
+  const ledger={
+    async stageCab(stage:CabIncomeStage){
+      attempted.push(stage.sequence);
+      if(stage.sequence===1){started();await held;}
+      accepted.push(stage.sequence);return 'accepted' as const;
+    },
+    async submit(intent:EconomyIntent):Promise<DriverOutcome>{
+      if(intent.action.kind!=='cab-income')throw new Error('Unexpected action');
+      const result=settleCybercabIntervals(persisted.cybercabs!,persisted.cash,persisted.eligibleIncome,intent.action.intervals,{room:[],global:[]});
+      if(!result.ok)throw new Error('Cab stage could not settle');
+      persisted={...persisted,cash:result.cash,eligibleIncome:result.eligibleIncome,cybercabs:result.fleet};
+      return {ok:true,revision:intent.revision+1,progress:structuredClone(persisted),awards:[]};
+    },
+    async acknowledge(){return true;},
+  };
+  const session=new EconomySession({} as never,ledger as never,world,player,{send(){},close(){}} as never,
+    'driver','fence','room',0,0,initial,new Map(),new Set());
+  const intervals=Reflect.get(session,'cabIntervals') as CabIncomeStage['intervals'];
+  intervals.push({assetId:'cab-a',startMs:0,endMs:240});
+  Reflect.apply(Reflect.get(session,'flushCabIncome') as ()=>void,session,[]);await began;
+  intervals.push({assetId:'cab-a',startMs:240,endMs:480});
+  Reflect.apply(Reflect.get(session,'flushCabIncome') as ()=>void,session,[]);
+  await new Promise(resolve=>setTimeout(resolve,25));
+  const beforeRelease={attempted:[...attempted],accepted:[...accepted]};
+  release();
+  for(let i=0;i<100&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(Reflect.get(session,'processing'))throw new Error('Session failed to drain');
+  return {beforeRelease,attempted,accepted,persisted};
+}
+
 type Env={ECONOMIES:DurableObjectNamespace<RoomEconomy>;INCOME:DurableObjectNamespace<GlobalIncome>;ROOMS:DurableObjectNamespace<GameRoom>};
 export default {
   async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(request.url).pathname;
     if(path==='/__cab-stage/rejected-head')return Response.json(await rejectedHeadSimulation());
+    if(path==='/__cab-stage/delayed-income')return Response.json(await delayedCabSimulation());
+    if(path==='/__cab-stage/stage-order')return Response.json(await stageOrderSimulation());
     if(path==='/__cab-stage/total')return Response.json({total:await env.INCOME.get(env.INCOME.idFromName('global')).total()});
     if(path.startsWith('/__cab-stage/')){
       const body=await request.json() as {room:string;stage:CabIncomeStage;intent:EconomyIntent;driverId:string;fence:string;progress:DriverProgress;invalidHead:boolean;closedCount?:number};

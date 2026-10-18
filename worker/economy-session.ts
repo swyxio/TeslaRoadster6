@@ -6,13 +6,15 @@ import { awardMarsAchievement, type AchievementState } from '../shared/achieveme
 import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
 import type { PaintId, StyleChoice } from '../shared/vehicle-style';
-import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
+import { emptyCybercabFleet, paintCybercab, purchaseCybercab, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
 import { RoomEconomy, type CabIncomeStage } from './room-economy';
+import type { SettledDeliveryEarning } from '../shared/earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
 type Draft={delivery:DeliveryState;achievements:AchievementState;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
-type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;stage?:Promise<DriverOutcome|null>;onApplied?:(outcome:DriverOutcome)=>void};
+type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;stage?:Promise<DriverOutcome|null>;onApplied?:(outcome:DriverOutcome)=>void;replayGameAward?:()=>void;awardRejections?:number};
+const MAX_GAME_AWARD_RETRIES=1;
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 // Compare only durable fields touched by simulation. Vehicle maps are copied on change.
 const durableFields=(d:Draft)=>[d.delivery.cash,d.delivery.lifetimeIncome,d.delivery.earned,d.delivery.completed,d.delivery.level,d.delivery.tickets,d.delivery.order.restaurant,d.delivery.order.customer,d.delivery.order.stage,d.delivery.order.pickupEstimate,d.delivery.order.estimate,d.delivery.order.base,d.delivery.ota.enabled,d.delivery.ota.active,d.achievements.unlocked.length,d.vehicles];
@@ -29,6 +31,7 @@ export class EconomySession {
   private settled=0;
   private settledOutOfOrder=new Set<number>();
   private staging=new Set<Promise<DriverOutcome|null>>();
+  private stageTail:Promise<DriverOutcome|null>=Promise.resolve(null);
   private barriers:{token:number;after:number}[]=[];
   private lockedCar=false;
   private closed=false;
@@ -102,6 +105,8 @@ export class EconomySession {
   }
   barrier(token:number){this.barriers.push({token,after:this.submitted});}
   sync():number|undefined{
+    // Never acknowledge a barrier whose wallet could not be reconciled.
+    if(this.failed)return undefined;
     const done=this.barriers.filter(b=>b.after<=this.settled);this.barriers=this.barriers.filter(b=>b.after>this.settled);
     return done.length?Math.max(...done.map(b=>b.token)):undefined;
   }
@@ -168,7 +173,7 @@ export class EconomySession {
     for(const id of operating){
       const open=this.cabOpen.get(id);
       if(open&&open.endMs===previous)open.endMs=now;
-      else {this.closeCabInterval(id);this.cabOpen.set(id,{assetId:id,startMs:previous,endMs:now,multiplier:1});}
+      else {this.closeCabInterval(id);this.cabOpen.set(id,{assetId:id,startMs:previous,endMs:now});}
     }
     // Checkpoint at most every ten seconds of observed operation. A stalled
     // or interrupted room does not infer activity through the missing time.
@@ -182,17 +187,13 @@ export class EconomySession {
   private flushCabIncome(){
     if(this.failed||!this.cabIntervals.length)return;
     const intervals=this.cabIntervals.slice(0,128);
-    const result=settleCybercabIntervals(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,intervals);
-    if(!result.ok){this.failed=true;try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}return;}
     this.cabIntervals.splice(0,intervals.length);
-    this.draft.cybercabs=result.fleet;this.draft.delivery.cash=result.cash;this.draft.delivery.lifetimeIncome=result.eligibleIncome;
-    this.draft.delivery.level=levelForCash(result.cash);
     this.enqueue({kind:'cab-income',intervals},undefined,outcome=>{
       if(!outcome.ok){this.failed=true;if(!this.closed)try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}}
     });
   }
-  hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
-  update(player:Player,apply:()=>EconomyUpdateResult){
+  hooks():EconomyHooks {return {update:(player,apply)=>this.update(player,apply),gameAward:(player,apply,capture)=>this.gameAward(player,apply,capture),pickup:(player,car,pickup)=>this.pickup(player,car,pickup)};}
+  update(player:Player,apply:()=>EconomyUpdateResult,rate:{atMs:number;multiplier:1|1.5|2|3}|null=null){
     if(this.failed)return;
     // Bound memory during an extended backend outage. The pending events keep
     // retrying after this driver leaves; the rest of the room is unaffected.
@@ -213,8 +214,9 @@ export class EconomySession {
     const before=durableFields(this.draft);
     const previousLevel=this.draft.delivery.level;
     player.delivery=this.draft.delivery;player.achievements=this.draft.achievements;player.cockpit=this.draft.cockpit;
+    let payouts:EconomyUpdateResult;
     try{
-      apply();player.delivery.level=levelForCash(player.delivery.cash);
+      payouts=apply();player.delivery.level=levelForCash(player.delivery.cash);
       if(player.delivery.level<previousLevel){
         const car=this.world.entities.find(e=>e.id===player.entityId);
         if(car)rerouteInaccessibleOrder(player.delivery,car,hasRockets(car));
@@ -222,14 +224,26 @@ export class EconomySession {
     }finally{
       player.delivery=live.delivery;player.achievements=live.achievements;player.cockpit=live.cockpit;
     }
-    if(changed(before,durableFields(this.draft)))this.enqueue({kind:'progress',progress:this.progress()});
-    else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
+    const earnings:SettledDeliveryEarning[]=Array.isArray(payouts)?payouts.map(({component,amount})=>{
+      if(!rate)throw new Error('A delivery payout requires an authoritative rate');
+      return {sourceId:component.sourceId,kind:component.kind,base:component.amount,amount,atMs:rate.atMs,multiplier:component.kind==='checkpoint'?1:rate.multiplier};
+    }):[];
+    let item:Item|undefined;
+    if(changed(before,durableFields(this.draft)))item=this.enqueue({kind:'progress',progress:this.progress(),earnings});
+    else if(!this.pending && this.world.time-this.lastTimerCheckpoint>=10 && this.timersChanged())item=this.enqueue({kind:'progress',progress:this.progress()});
     // Timers and flight geometry can advance visually; money, awards and order stages remain committed.
     if(!this.pending){
       live.delivery.activeSeconds=this.draft.delivery.activeSeconds;live.delivery.activeUntil=this.draft.delivery.activeUntil;
       live.delivery.order.elapsed=this.draft.delivery.order.elapsed;Object.assign(live.cockpit,this.draft.cockpit);
     }
     Object.assign(live.achievements,{groundShore:this.draft.achievements.groundShore,crossing:this.draft.achievements.crossing,lastPosition:this.draft.achievements.lastPosition});
+    return item;
+  }
+  gameAward(player:Player,apply:()=>void,capture?:()=>()=>void){
+    const before=this.draft.achievements.unlocked.length;
+    const item=this.update(player,apply);
+    if(item&&this.draft.achievements.unlocked.length>before)item.replayGameAward=capture?capture():apply;
+    return item;
   }
   private enqueue(action:DriverAction,pickup?:{id:string;generation:number},onApplied?:(outcome:DriverOutcome)=>void){
     const ordinal=++this.submitted;
@@ -238,7 +252,11 @@ export class EconomySession {
     if(action.kind==='cab-income'){
       const stage:CabIncomeStage={eventId:intent.eventId,driverId:intent.driverId,fence:intent.fence,roomId:intent.roomId,
         sequence:intent.sequence,intervals:action.intervals};
-      const flight=this.persistCabStage(stage);item.stage=flight;this.staging.add(flight);
+      // Do not let a later interval become durable while an earlier stage is
+      // still uncertain. Otherwise a crash could advance its cab watermark
+      // past an interval that never reached the journal.
+      const flight=this.stageTail.then(previous=>previous??this.persistCabStage(stage));
+      this.stageTail=flight;item.stage=flight;this.staging.add(flight);
       void flight.finally(()=>this.staging.delete(flight)).catch(()=>{});
     }
     this.queue.push(item);
@@ -255,6 +273,25 @@ export class EconomySession {
       }catch{}
       await wait(500);
     }
+  }
+  /** Later snapshots were drafted before the authoritative event history arrived. */
+  private rebaseCabIncome(item:Item,progress:DriverProgress):boolean{
+    const cash=progress.cash-item.view.delivery.cash,income=progress.eligibleIncome-item.view.delivery.lifetimeIncome;
+    if(!Number.isSafeInteger(cash)||cash<0||cash!==income)return false;
+    const drafts=[this.draft,...this.queue.map(queued=>queued.view)];
+    const snapshots=this.queue.flatMap(queued=>queued.intent.action.kind==='progress'?[queued.intent.action.progress]:[]);
+    if(drafts.some(d=>!Number.isSafeInteger(d.delivery.cash+cash)||!Number.isSafeInteger(d.delivery.lifetimeIncome+income))||
+       snapshots.some(p=>!Number.isSafeInteger(p.cash+cash)||!Number.isSafeInteger(p.eligibleIncome+income)))return false;
+    const settled=new Map((progress.cybercabs??emptyCybercabFleet()).assets.map(asset=>[asset.id,asset]));
+    for(const draft of drafts){
+      draft.delivery.cash+=cash;draft.delivery.lifetimeIncome+=income;draft.delivery.level=levelForCash(draft.delivery.cash);
+      draft.cybercabs.assets=draft.cybercabs.assets.map(asset=>{
+        const saved=settled.get(asset.id);
+        return saved?{...asset,gross:saved.gross,remainder:saved.remainder,lastEndMs:saved.lastEndMs,revenueAwarded:saved.revenueAwarded}:asset;
+      });
+    }
+    for(const snapshot of snapshots){snapshot.cash+=cash;snapshot.eligibleIncome+=income;snapshot.level=levelForCash(snapshot.cash);}
+    return true;
   }
   private async process(){
     this.processing=true;
@@ -286,30 +323,43 @@ export class EconomySession {
           this.lastOrderElapsed=saved.elapsed;
           this.lastOtaRemaining=this.committed.ota.active?this.committed.ota.remaining:null;
           this.lastTimerCheckpoint=this.world.time;
-          if(outcome.reason==='superseded'||outcome.reason==='conflict'){
+          const rejectedAward=!!item.replayGameAward&&(outcome.reason==='invalid'||outcome.reason==='revision');
+          const awardRetryExhausted=rejectedAward&&(item.awardRejections??0)>=MAX_GAME_AWARD_RETRIES;
+          if(outcome.reason==='superseded'||outcome.reason==='conflict'||awardRetryExhausted){
             this.failed=true;
-            if(!this.closed)try{this.socket.close(1011,'Economy interrupted. Rejoin to recover.');}catch{}
+            if(!this.closed)try{this.socket.close(1011,awardRetryExhausted?'Award could not be saved. Rejoin.':'Economy interrupted. Rejoin to recover.');}catch{}
             this.closed=true;
           }
           item.onApplied?.(outcome);
+          // Retain already-staged cab work before replaying independent game
+          // awards. Stage sequence numbers are durable and cannot be moved.
           for(const discarded of abandoned){
             if(discarded.intent.action.kind==='cab-income'&&!this.failed&&item.intent.action.kind!=='cab-income'){
-              const restored=settleCybercabIntervals(this.draft.cybercabs,this.draft.delivery.cash,this.draft.delivery.lifetimeIncome,discarded.intent.action.intervals);
-              if(restored.ok){
-                this.draft.cybercabs=restored.fleet;this.draft.delivery.cash=restored.cash;this.draft.delivery.lifetimeIncome=restored.eligibleIncome;
-                this.draft.delivery.level=levelForCash(restored.cash);
-                discarded.intent.revision=this.nextRevision++;discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
-              }
-              this.failed=true;if(!this.closed)try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}
+              discarded.intent.revision=this.nextRevision++;discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
             }
             this.markSettled(discarded.ordinal);
             if(discarded.intent.action.kind!=='cab-income')discarded.onApplied?.({ok:false,reason:'revision'});
+          }
+          if(!this.failed)for(const discarded of rejectedAward?[item,...abandoned]:abandoned){
+            if(!discarded.replayGameAward)continue;
+            const barriers=this.barriers.filter(barrier=>barrier.after>=discarded.ordinal);
+            const replayed=this.gameAward(this.player,discarded.replayGameAward);
+            if(replayed){
+              replayed.awardRejections=(discarded.awardRejections??0)+(discarded===item?1:0);
+              for(const barrier of barriers)barrier.after=Math.max(barrier.after,replayed.ordinal);
+            }
           }
           // A disconnect may already have queued a final checkpoint behind
           // this rejected head; replace that discarded draft with the restored
           // committed order and its still-valid elapsed time.
           if(this.closed&&!this.failed&&this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
         }else{
+          if(item.intent.action.kind==='cab-income'&&!this.rebaseCabIncome(item,outcome.progress)){
+            // The committed receipt remains in the journal for fenced recovery.
+            this.failed=true;this.closed=true;try{this.socket.close(1011,'Cab income interrupted. Please rejoin.');}catch{}
+            for(const pending of this.queue.splice(0))if(pending.intent.action.kind!=='cab-income')pending.onApplied?.({ok:false,reason:'revision'});
+            break;
+          }
           this.committed=structuredClone(outcome.progress);this.committedRevision=outcome.revision;this.markSettled(item.ordinal);
           if(outcome.roomFund!==undefined)this.world.mars.roomFund=Math.max(this.world.mars.roomFund,outcome.roomFund);
           if(item.intent.action.kind==='progress')this.committedOtaPeriodEnd=item.view.delivery.ota.renewAt;

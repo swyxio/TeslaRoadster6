@@ -4,7 +4,7 @@ import { BUILDINGS, terrainHeight } from '../../shared/map';
 import { orderTarget } from '../../shared/delivery';
 import type { World } from '../../shared/game';
 
-export { DriverProfile, RoomEconomy, GlobalChat, GlobalIncome } from './luxury-wallet-worker';
+export { DriverProfile, RoomEconomy, GlobalChat, GlobalIncome, GlobalEarningsEvent } from './luxury-wallet-worker';
 
 export class GameRoom extends WalletGameRoom {
   async fixtureDeliveryDropoff(playerId:string) {

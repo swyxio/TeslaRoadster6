@@ -1,4 +1,5 @@
 import { PAINTS, initialVehicleStyle, isStyleChoice, type PaintId, type VehicleStyle } from './vehicle-style';
+import { CAB_REMAINDER_DENOMINATOR, cabAccrual, type EarningsEvents } from './earnings-events';
 
 /** The five proposed prices and one-time ownership milestones, in game dollars. */
 export const CYBERCAB_PRICES = [25_000, 50_000, 100_000, 200_000, 400_000] as const;
@@ -75,17 +76,13 @@ export function planCybercabDispatch(fleets:readonly CybercabDispatchFleet[], di
   };
 }
 
-// Keep the same numerator units as the shared event accrual contract: hourly
-// dollars times milliseconds times half-multiplier units. This remainder can
-// be carried into event-aware settlement once event history is authoritative.
 export const CYBERCAB_HOURLY_RATE = 15_000;
-export const CYBERCAB_INCOME_DENOMINATOR = 2 * 60 * 60 * 1000;
 export type CybercabIncome = { amount: number; remainder: number };
 
 /** Durable per-asset state; no room entity or client controls this record. */
 export type CybercabAsset = { id:string; gross:number; remainder:number; lastEndMs:number; revenueAwarded:boolean; style:VehicleStyle };
 export type CybercabFleet = { assets:CybercabAsset[]; claimedOwnershipAwards:number[] };
-export type CybercabInterval = { assetId:string; startMs:number; endMs:number; multiplier:1|1.5|2|3 };
+export type CybercabInterval = { assetId:string; startMs:number; endMs:number };
 export type CybercabMutation =
   | {ok:true;fleet:CybercabFleet;cash:number;eligibleIncome:number}
   | {ok:false;reason:'invalid'|'owned'|'unaffordable'};
@@ -100,7 +97,7 @@ function validFleet(fleet:CybercabFleet):boolean {
   for(const asset of fleet.assets){
     if(!asset || typeof asset.id!=='string' || !asset.id || ids.has(asset.id) ||
       !Number.isSafeInteger(asset.gross) || asset.gross<0 ||
-      !Number.isSafeInteger(asset.remainder) || asset.remainder<0 || asset.remainder>=CYBERCAB_INCOME_DENOMINATOR ||
+      !Number.isSafeInteger(asset.remainder) || asset.remainder<0 || asset.remainder>=CAB_REMAINDER_DENOMINATOR ||
       !Number.isSafeInteger(asset.lastEndMs) || asset.lastEndMs<0 || typeof asset.revenueAwarded!=='boolean' ||
       !asset.style || !isStyleChoice('paint',asset.style.paint) || !isStyleChoice('decal',asset.style.decal))return false;
     ids.add(asset.id);
@@ -147,7 +144,7 @@ export function paintCybercab(fleet:CybercabFleet,cash:number,eligibleIncome:num
  * reconciliation. Ordered segments for an asset may be adjacent, but can
  * never overlap its durable watermark or another segment in this batch.
  */
-export function settleCybercabIntervals(fleet:CybercabFleet,cash:number,eligibleIncome:number,intervals:readonly CybercabInterval[]):CybercabMutation {
+export function settleCybercabIntervals(fleet:CybercabFleet,cash:number,eligibleIncome:number,intervals:readonly CybercabInterval[],events:EarningsEvents):CybercabMutation {
   if(!validFleet(fleet)||!validWallet(cash,eligibleIncome)||!Array.isArray(intervals)||!intervals.length)return {ok:false,reason:'invalid'};
   const next:CybercabFleet={assets:fleet.assets.map(asset=>({...asset,style:{...asset.style}})),claimedOwnershipAwards:[...fleet.claimedOwnershipAwards]};
   const assets=new Map(next.assets.map(asset=>[asset.id,asset]));
@@ -157,8 +154,9 @@ export function settleCybercabIntervals(fleet:CybercabFleet,cash:number,eligible
       !Number.isSafeInteger(interval.endMs) || interval.startMs<0 || interval.endMs<=interval.startMs)return {ok:false,reason:'invalid'};
     const asset=assets.get(interval.assetId);
     if(!asset || interval.startMs<asset.lastEndMs)return {ok:false,reason:'invalid'};
-    const income=settleCybercabIncome(interval.endMs-interval.startMs,interval.multiplier,true,asset.remainder);
-    if(!income || !Number.isSafeInteger(asset.gross+income.amount))return {ok:false,reason:'invalid'};
+    let income:CybercabIncome;
+    try{income=cabAccrual(CYBERCAB_HOURLY_RATE,interval.startMs,interval.endMs,events,asset.remainder);}catch{return {ok:false,reason:'invalid'};}
+    if(!Number.isSafeInteger(asset.gross+income.amount))return {ok:false,reason:'invalid'};
     const gross=asset.gross+income.amount,award=cabRevenueAward(gross,asset.revenueAwarded);
     if(award===null || !validWallet(nextCash+income.amount+award,nextIncome+income.amount+award))return {ok:false,reason:'invalid'};
     nextCash+=income.amount+award;nextIncome+=income.amount+award;
@@ -166,26 +164,4 @@ export function settleCybercabIntervals(fleet:CybercabFleet,cash:number,eligible
     if(award)asset.revenueAwarded=true;
   }
   return {ok:true,fleet:next,cash:nextCash,eligibleIncome:nextIncome};
-}
-
-/**
- * Settle one server-measured interval for one operating cab. Persist remainder
- * alongside the credited amount so splitting intervals or reconnecting cannot
- * change the result. Eligibility and elapsed milliseconds must come from the
- * authoritative server, never a client; inactive intervals earn nothing.
- *
- * Inputs and outputs are safe integers. BigInt prevents intermediate overflow;
- * the wallet owner must separately check that adding amount remains safe.
- * Invalid state or unsupported rates return null and must not credit income.
- */
-export function settleCybercabIncome(elapsedMs: number, multiplier: number, operating: boolean, remainder: number): CybercabIncome | null {
-  const halfRate = multiplier === 1 ? 2 : multiplier === 1.5 ? 3 : multiplier === 2 ? 4 : multiplier === 3 ? 6 : 0;
-  if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0 || !halfRate || typeof operating !== 'boolean' ||
-      !Number.isSafeInteger(remainder) || remainder < 0 || remainder >= CYBERCAB_INCOME_DENOMINATOR) return null;
-  if (!operating) return { amount: 0, remainder };
-  const units = BigInt(CYBERCAB_HOURLY_RATE) * BigInt(elapsedMs) * BigInt(halfRate) + BigInt(remainder);
-  const denominator = BigInt(CYBERCAB_INCOME_DENOMINATOR);
-  const amount = units / denominator;
-  if (amount > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-  return { amount: Number(amount), remainder: Number(units % denominator) };
 }
