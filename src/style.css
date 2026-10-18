@@ -46,3 +46,9 @@
 @keyframes police-alarm{to{background:#e55645;box-shadow:0 0 12px #ff665688}}
 @media(max-height:550px){.ticket-dialog{padding:16px;max-height:94dvh}.ticket-icon{width:36px;height:36px;font-size:24px;margin-bottom:5px}.ticket-dialog h2{font-size:26px;margin:5px}.ticket-dialog p{margin:5px 0;font-size:12px}.ticket-amount{font-size:35px;margin:5px}.ticket-detail{padding:6px}.ticket-dialog .primary{margin-top:8px;min-height:40px}}
 @media(prefers-reduced-motion:reduce){.mission #police-status.chased{animation:none}}
+
+.sound-button{font-size:21px;line-height:1}.sound-dialog{width:min(460px,94vw)}
+.sound-sliders{display:grid;gap:16px;margin:20px 0}.sound-sliders label{display:grid;grid-template-columns:1fr auto;gap:6px;color:#e8ede3;font-size:13px;font-weight:600}.sound-sliders output{color:#ffcf85;font:11px ui-monospace,monospace}.sound-sliders input[type=range]{grid-column:1/-1;width:100%;margin:0;padding:0;min-height:24px;accent-color:#ffc77f;background:transparent;border:0;cursor:pointer}
+.sound-actions{display:flex;gap:10px}.sound-actions button{flex:1;min-height:44px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:13px}.sound-actions button[aria-pressed=true]{background:#ffc77f;color:#21373b}
+@media(pointer:coarse),(max-width:800px){.top-actions{gap:6px}.sound-button{width:44px;height:44px}}
+@media(max-height:550px){.sound-dialog{padding:16px;max-height:94dvh}.sound-sliders{gap:8px;margin:10px 0}.sound-dialog .fleet-intro{margin:6px 0}.sound-actions button{min-height:40px}}

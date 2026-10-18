@@ -8,6 +8,8 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Flying near police starts a chase and potentially a costly citation; repeat and more serious flights increase the fine. Some Roadster orders lead to rooftops. Earn session achievements for rooftop landings, deliveries, and flying across the Bay. The room leaderboard lasts only for the session. See [delivery design](docs/DELIVERY.md).
 
+**Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
+
 **Fleet:** 26 sourced Tesla/Waymo/Cruise/Zoox families, each parked, in NPC traffic, selectable, drivable and available for takeover. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
@@ -74,6 +76,8 @@ worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 src/session.ts     Solo/multiplayer transport adapter
 src/controls.ts    Keyboard and multitouch intent adapter
+src/audio.ts       Synthesized music, effects and volume buses
+src/audio-events.ts  Presentation cues derived from world snapshots
 src/scene.ts       Three.js world and camera
 src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/vehicles.ts    Replaceable procedural visual models
