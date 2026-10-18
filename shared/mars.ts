@@ -22,7 +22,7 @@ export function applyMarsContribution(world:World,playerId:string,amount:number)
 
 export function atMarsBoarding(e:Entity):boolean {
   const p=FREMONT_SPACEPORT.entrance;
-  return e.supportId==='ground' && Math.abs(e.speed)<1 && Math.hypot(e.x-p.x,e.z-p.z)<=BOARDING_RADIUS;
+  return e.supportId==='ground' && Math.abs(e.speed)<1 && Math.hypot(e.pushX,e.pushZ)<1 && Math.hypot(e.x-p.x,e.z-p.z)<=BOARDING_RADIUS;
 }
 
 export function boardMars(world:World,playerId:string):boolean {

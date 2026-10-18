@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld } from '../shared/game';
+import { addPlayer, createWorld, step } from '../shared/game';
 import { BUILDINGS, FREMONT_SPACEPORT, ROADS, isLand, terrainHeight } from '../shared/map';
 import { body, contact } from '../shared/physics';
 import { MARS_GOAL, MARS_LAUNCH_SECONDS, applyMarsContribution, atMarsBoarding, boardMars, marsContribution } from '../shared/mars';
@@ -34,6 +34,23 @@ test('each player must be stopped at the spaceport with a fully funded mission t
   assert.ok(boardMars(world,'b'));assert.deepEqual(b.achievements.unlocked,['to-mars']);assert.equal(world.mars.launchAt,123,'a second driver joins the launch without restarting it');
   const c=addPlayer(world,'c','C'),carC=world.entities.find(e=>e.id===c.entityId)!;Object.assign(carC,{...FREMONT_SPACEPORT.entrance,supportId:'ground',speed:0});
   world.time=123+MARS_LAUNCH_SECONDS;assert.ok(boardMars(world,'c'));assert.equal(world.mars.launchAt,world.time,'a later driver starts a new launch');
+});
+
+test('boarding rejects sideways movement until the car settles',()=>{
+  const world=createWorld(),player=addPlayer(world,'a','A');
+  const car=world.entities.find(e=>e.id===player.entityId)!;
+  world.mars.fund=MARS_GOAL;world.entities=[car];world.pickups=[];
+  Object.assign(car,FREMONT_SPACEPORT.entrance,{supportId:'ground',speed:0,pushX:3,pushZ:0});
+  step(world,new Map(),.05);
+  assert.ok(car.x>FREMONT_SPACEPORT.entrance.x,'the slide moves the car sideways');
+  assert.equal(atMarsBoarding(car),false,'a sideways slide is not stopped');
+  assert.equal(boardMars(world,'a'),false);
+  assert.equal(world.mars.launchAt,null);
+  assert.ok(!player.achievements.unlocked.includes('to-mars'));
+  car.pushX=0;car.pushZ=-1;
+  assert.equal(boardMars(world,'a'),false,'the threshold applies in either direction');
+  car.pushX=.6;car.pushZ=.6;
+  assert.equal(boardMars(world,'a'),true,'the same stopped threshold as the workshop permits small residual movement');
 });
 
 test('spaceport collision footprints and boarding ring occupy supported, clear Fremont ground',()=>{
