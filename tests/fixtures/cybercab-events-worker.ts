@@ -1,7 +1,7 @@
 // LOCAL TEST ONLY: fault injection around the production economy authorities.
 import { GameRoom as BaseRoom } from '../../worker/index';
 import { DriverProfile as BaseProfile, GlobalIncome as BaseIncome, progressFrom, type EconomyIntent } from '../../worker/driver-profile';
-import { RoomEconomy as BaseEconomy } from '../../worker/room-economy';
+import { RoomEconomy as BaseEconomy, type CabIncomeStage } from '../../worker/room-economy';
 import { GlobalEarningsEvent as BaseGlobalEvents } from '../../worker/global-earnings-event';
 import { initialDelivery, levelForCash } from '../../shared/delivery';
 import { GLOBAL_EVENT_DURATION_MS, type EarningsEvents } from '../../shared/earnings-events';
@@ -19,18 +19,47 @@ export class GlobalIncome extends BaseIncome {
 export class GameRoom extends BaseRoom {
   private producer=false;
   fixtureProducer(active:boolean){this.producer=active;}
-  override async hasWallet(driverId:string,fence:string){return this.producer || super.hasWallet(driverId,fence);}
+  fixturePersistentProducer(active:boolean){return this.ctx.storage.put('fixture-producer',active);}
+  override async hasWallet(driverId:string,fence:string){return this.producer || !!await this.ctx.storage.get('fixture-producer') || super.hasWallet(driverId,fence);}
 }
 export class RoomEconomy extends BaseEconomy {
+  private holdStage=false;
+  private stageHeld=false;
+  private releaseStage:(()=>void)|undefined;
   async fixtureKeys(){return [...(await this.ctx.storage.list()).keys()];}
   async fixtureRecord(eventId:string){return this.ctx.storage.get(`intent:${eventId}`);}
+  fixtureHoldStage(){this.holdStage=true;}
+  fixtureStageHeld(){return this.stageHeld;}
+  fixtureReleaseStage(){this.releaseStage?.();}
+  override async stageCab(stage:CabIncomeStage){
+    const result=await super.stageCab(stage);
+    if(this.holdStage){
+      this.holdStage=false;this.stageHeld=true;
+      try{await new Promise<void>(resolve=>{this.releaseStage=resolve;});}finally{this.stageHeld=false;}
+    }
+    return result;
+  }
 }
 export class DriverProfile extends BaseProfile {
   private holdNext=false;
   private held=false;
+  private holdFence=false;
+  private fenceHeld=false;
+  private releaseFence:(()=>void)|undefined;
   fixtureArm(){this.holdNext=true;}
   fixtureHeld(){return this.held;}
   fixtureInspect(){return this.ctx.storage.get('driver');}
+  fixtureHoldFence(){this.holdFence=true;}
+  fixtureFenceHeld(){return this.fenceHeld;}
+  fixtureReleaseFence(){this.releaseFence?.();}
+  override async checkFence(fence:string){
+    const result=await super.checkFence(fence);
+    if(this.holdFence){
+      this.holdFence=false;this.fenceHeld=true;
+      try{await new Promise<void>(resolve=>{this.releaseFence=resolve;});}finally{this.fenceHeld=false;}
+    }
+    return result;
+  }
   override async commit(intent:EconomyIntent,events?:EarningsEvents){
     const result=await super.commit(intent,events);
     if(intent.action.kind==='cab-income'&&this.holdNext){
@@ -75,6 +104,7 @@ export default {
         case 'global-stats':return Response.json(await global.fixtureStats());
         case 'room-win':return Response.json(await economy.recordEarningsWinWithoutPayout('fixture-win',body.at));
         case 'producer':await room.fixtureProducer(body.active);return Response.json({ok:true});
+        case 'persistent-producer':await room.fixturePersistentProducer(body.active);return Response.json({ok:true});
         case 'acquire':{
           const initial=progressFrom(initialDelivery({x:0,z:0}),[],{},[],0,0);
           initial.cash=35_000;initial.level=levelForCash(initial.cash);
@@ -82,11 +112,18 @@ export default {
         }
         case 'buy':return Response.json(await driver.commit(body.intent));
         case 'stage':return Response.json(await economy.stageCab(body.stage));
+        case 'hold-stage':await economy.fixtureHoldStage();return Response.json({ok:true});
+        case 'stage-held':return Response.json(await economy.fixtureStageHeld());
+        case 'release-stage':await economy.fixtureReleaseStage();return Response.json({ok:true});
+        case 'freeze':await economy.freeze(body.driverId,body.fence);return Response.json({ok:true});
         case 'submit':return Response.json(await economy.submit(body.intent));
         case 'keys':return Response.json(await economy.fixtureKeys());
         case 'record':return Response.json(await economy.fixtureRecord(body.eventId)??null);
         case 'arm':await driver.fixtureArm();return Response.json({ok:true});
         case 'held':return Response.json(await driver.fixtureHeld());
+        case 'hold-fence':await driver.fixtureHoldFence();return Response.json({ok:true});
+        case 'fence-held':return Response.json(await driver.fixtureFenceHeld());
+        case 'release-fence':await driver.fixtureReleaseFence();return Response.json({ok:true});
         case 'profile':return Response.json(await driver.fixtureInspect()??null);
         case 'total':return Response.json(await env.INCOME.get(env.INCOME.idFromName('global')).total());
         case 'income-block':await env.INCOME.get(env.INCOME.idFromName('global')).fixtureBlock(body.blocked);return Response.json({ok:true});

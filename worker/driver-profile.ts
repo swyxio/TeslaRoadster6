@@ -116,6 +116,12 @@ export class DriverProfile extends DurableObject<Env> {
     return record?.fence===fence?record.revision:null;
   }
 
+  /** Fenced recovery assigns new wallet sequences after all recorded writes. */
+  async currentCursor(fence:string):Promise<{revision:number;sequence:number}|null>{
+    const record=await this.ctx.storage.get<DriverRecord>('driver');
+    return record?.fence===fence&&!record.sealed?{revision:record.revision,sequence:record.sequence}:null;
+  }
+
   /** Receipt lookup precedes fencing, including for a reply lost before a room switch. */
   async commit(intent:EconomyIntent,cabEvents?:EarningsEvents):Promise<DriverOutcome> {
     const payload=JSON.stringify(intent);

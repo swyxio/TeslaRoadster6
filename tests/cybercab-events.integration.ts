@@ -60,7 +60,7 @@ try{
   assert.equal(bought.progress.eligibleIncome,5_000);
   await until(async()=>await rpc<number>('total')===5_000,'initial income outbox');
 
-  const stage:CabIncomeStage={eventId:randomUUID(),driverId,fence,roomId:room,sequence:2,intervals:[
+  const stage:CabIncomeStage={eventId:randomUUID(),driverId,fence,roomId:room,sequence:1,intervals:[
     {assetId:'cab-a',startMs,endMs:last},{assetId:'cab-a',startMs:last,endMs},
   ]};
   const intent:EconomyIntent={eventId:stage.eventId,driverId,fence,roomId:room,revision:1,sequence:2,action:{kind:'cab-income',intervals:stage.intervals}};
@@ -83,6 +83,8 @@ try{
   const afterCommit=await rpc<RecordState>('profile',common);
   const journal=await rpc<{outcome:unknown;cabEvents:{room:unknown[];global:unknown[]}}>('record',{...common,eventId:stage.eventId});
   assert.equal(journal.outcome,null);assert.equal(journal.cabEvents.room.length,1);assert.equal(journal.cabEvents.global.length,101);
+  assert.equal(await rpc('stage',{...common,stage}),'accepted','stage retry after atomic conversion finds the same journal entry');
+  assert.equal(await rpc('stage',{...common,stage:{...stage,sequence:2}}),'conflict','the converted stage retains its ordinal');
   assert.ok((await rpc<string[]>('keys',common)).includes(`pending:${driverId}:${stage.eventId}`));
   const weighted=2n*300_001n+3n*300_000n+6n*300_000n+4n*BigInt(101*duration-300_000)+2n*241n;
   const numerator=15_000n*weighted,gross=Number(numerator/7_200_000n),remainder=Number(numerator%7_200_000n);
@@ -106,5 +108,52 @@ try{
   await pause(1_200);
   assert.equal((await rpc<RecordState>('profile',common)).progress.cash,afterCommit.progress.cash);
   assert.equal(await rpc<number>('total'),5_000+gross+2_000,'retry does not double-credit global income');
+  // Stage order is independent of wallet sequence. A missing ordinal must not
+  // be skipped, even after the durable high watermark survives a restart.
+  const gapRoom=`cab-gap-${randomUUID().slice(0,8)}`,gapDriver=randomUUID(),gapFence=randomUUID(),gap={room:gapRoom,driverId:gapDriver};
+  await rpc('persistent-producer',{room:gapRoom,active:true});await rpc('acquire',{...gap,fence:gapFence});
+  const gapBuy:EconomyIntent={eventId:randomUUID(),driverId:gapDriver,fence:gapFence,roomId:gapRoom,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+  success(await rpc<DriverOutcome>('buy',{...gap,intent:gapBuy}));
+  const batch=(sequence:number,startMs:number,endMs:number):CabIncomeStage=>({eventId:randomUUID(),driverId:gapDriver,fence:gapFence,roomId:gapRoom,sequence,intervals:[{assetId:'cab-a',startMs,endMs}]});
+  const one=batch(1,0,240),two=batch(2,240,480),three=batch(3,480,720);
+  assert.equal(await rpc('stage',{...gap,stage:two}),'conflict');
+  assert.equal(await rpc('stage',{...gap,stage:one}),'accepted');
+  assert.equal(await rpc('stage',{...gap,stage:three}),'conflict');
+  await stop(child);child=undefined;child=start();await ready();
+  assert.equal(await rpc('stage',{...gap,stage:three}),'conflict','restart cannot skip a missing stage');
+  assert.equal((await rpc<RecordState>('profile',gap)).progress.cybercabs!.assets[0].lastEndMs,0);
+  assert.ok(!(await rpc<string[]>('keys',gap)).includes(`cab-stage:${gapDriver}:${three.eventId}`));
+  assert.equal(await rpc('stage',{...gap,stage:two}),'accepted');
+  await rpc('freeze',{...gap,fence:gapFence},15_000);
+  const gapResult=await rpc<RecordState>('profile',gap);
+  assert.equal(gapResult.progress.cybercabs!.assets[0].lastEndMs,480);
+  assert.equal(gapResult.progress.cybercabs!.assets[0].gross,2);
+  // A freeze racing a staged request must settle an acceptance even when its
+  // caller has not yet received the reply.
+  const raceRoom=`cab-race-${randomUUID().slice(0,8)}`,raceDriver=randomUUID(),raceFence=randomUUID(),race={room:raceRoom,driverId:raceDriver};
+  await rpc('persistent-producer',{room:raceRoom,active:true});await rpc('acquire',{...race,fence:raceFence});
+  const raceBuy:EconomyIntent={eventId:randomUUID(),driverId:raceDriver,fence:raceFence,roomId:raceRoom,revision:0,sequence:1,action:{kind:'cab-buy',assetId:'cab-a'}};
+  success(await rpc<DriverOutcome>('buy',{...race,intent:raceBuy}));
+  const raceStage:CabIncomeStage={eventId:randomUUID(),driverId:raceDriver,fence:raceFence,roomId:raceRoom,sequence:1,intervals:[{assetId:'cab-a',startMs:0,endMs:240}]};
+  await rpc('hold-stage',race);
+  const stageReply=rpc('stage',{...race,stage:raceStage},15_000);
+  await until(()=>rpc<boolean>('stage-held',race),'stage accepted before its reply');
+  await rpc('freeze',{...race,fence:raceFence},15_000);
+  await rpc('release-stage',race);assert.equal(await stageReply,'accepted');
+  const raceResult=await rpc<RecordState>('profile',race);
+  assert.equal(raceResult.progress.cybercabs!.assets[0].gross,1);
+  assert.equal(raceResult.progress.cybercabs!.assets[0].lastEndMs,240);
+  assert.equal(await rpc('stage',{...race,stage:raceStage}),'superseded');
+  const lateRoom=`cab-late-${randomUUID().slice(0,8)}`,lateDriver=randomUUID(),lateFence=randomUUID(),late={room:lateRoom,driverId:lateDriver};
+  await rpc('acquire',{...late,fence:lateFence});
+  const lateStage:CabIncomeStage={eventId:randomUUID(),driverId:lateDriver,fence:lateFence,roomId:lateRoom,sequence:1,intervals:[{assetId:'cab-a',startMs:0,endMs:240}]};
+  await rpc('hold-fence',late);
+  const lateReply=rpc('stage',{...late,stage:lateStage},15_000);
+  await until(()=>rpc<boolean>('fence-held',late),'pre-insertion fence check held');
+  await rpc('freeze',{...late,fence:lateFence},15_000);
+  await rpc('release-fence',late);assert.equal(await lateReply,'superseded');
+  const lateKeys=await rpc<string[]>('keys',late);
+  assert.ok(!lateKeys.includes(`cab-stage:${lateDriver}:${lateStage.eventId}`));
+  assert.ok(!lateKeys.includes(`cab-stage-high:${lateDriver}:${lateFence}`),'a late rejected stage cannot leak its high watermark');
   console.log('PASS: complete global history, room/global bonuses, exact remainder, milestone, lost reply and income outbox recovery.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

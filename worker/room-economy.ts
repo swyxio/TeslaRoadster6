@@ -8,15 +8,18 @@ import type { GlobalEarningsEvent } from './global-earnings-event';
 import type { EarningsEvents, EarningsWindow } from '../shared/earnings-events';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>;GLOBAL_EVENTS:DurableObjectNamespace<GlobalEarningsEvent>};
-type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null;cabEvents?:EarningsEvents};
+type IntentRecord={intent:EconomyIntent;outcome:DriverOutcome|null;cabEvents?:EarningsEvents;stageSequence?:number};
 type Acknowledged={fence:string;sequence:number};
 type PickupReservation={eventId:string|null;generation:number;readyAt:number};
 type RoomFund={balance:number;reserved:number};
+/** sequence orders stages within a fence; wallet sequence is assigned at settlement. */
 export type CabIncomeStage={eventId:string;driverId:string;fence:string;roomId:string;sequence:number;intervals:CybercabInterval[]};
 const stageKey=(stage:CabIncomeStage)=>`cab-stage:${stage.driverId}:${stage.eventId}`;
+const stageEventsKey=(stage:Pick<CabIncomeStage,'driverId'|'eventId'>)=>`cab-events:${stage.driverId}:${stage.eventId}`;
+const stageHighKey=(stage:Pick<CabIncomeStage,'driverId'|'fence'>)=>`cab-stage-high:${stage.driverId}:${stage.fence}`;
 const matchesStage=(stage:CabIncomeStage,intent:EconomyIntent)=>intent.action.kind==='cab-income' &&
   stage.eventId===intent.eventId&&stage.driverId===intent.driverId&&stage.fence===intent.fence&&stage.roomId===intent.roomId&&
-  stage.sequence===intent.sequence&&JSON.stringify(stage.intervals)===JSON.stringify(intent.action.intervals);
+  JSON.stringify(stage.intervals)===JSON.stringify(intent.action.intervals);
 const RETRY_MS=1000;
 const ALARM_WAIT_MS=250;
 const PICKUP_COOLDOWN_MS=20_000;
@@ -65,13 +68,11 @@ export class RoomEconomy extends DurableObject<Env> {
       const existing=await txn.get<CabIncomeStage>(stageKey(stage));
       if(existing)return JSON.stringify(existing)===JSON.stringify(stage)?'accepted':'conflict';
       const intent=await txn.get<IntentRecord>(`intent:${stage.eventId}`);
-      if(intent)return matchesStage(stage,intent.intent)?'accepted':'conflict';
-      const acknowledged=await txn.get<Acknowledged>(`ack:${stage.driverId}`);
-      if((acknowledged?.fence===stage.fence&&stage.sequence<=acknowledged.sequence)||
-         await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`))return 'superseded';
-      const later=await Promise.all(['pending:','unacked:','cleanup:'].map(prefix=>txn.list<EconomyIntent>({prefix:`${prefix}${stage.driverId}:`})));
-      if(later.some(entries=>[...entries.values()].some(intent=>intent.fence===stage.fence&&intent.sequence>stage.sequence)))return 'conflict';
-      await txn.put(stageKey(stage),stage);
+      if(intent)return matchesStage(stage,intent.intent)&&intent.stageSequence===stage.sequence?'accepted':'conflict';
+      if(await txn.get<boolean>(`frozen:${stage.driverId}:${stage.fence}`))return 'superseded';
+      const high=await txn.get<number>(stageHighKey(stage))??0;
+      if(stage.sequence!==high+1)return stage.sequence<=high?'superseded':'conflict';
+      await txn.put({[stageKey(stage)]:stage,[stageHighKey(stage)]:stage.sequence});
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
       if(alarm===null||alarm>next)await txn.setAlarm(next);
       return 'accepted';
@@ -83,9 +84,48 @@ export class RoomEconomy extends DurableObject<Env> {
     if(await this.profile(stage.driverId).checkFence(stage.fence))return result;
     await this.ctx.storage.transaction(async txn=>{
       const existing=await txn.get<CabIncomeStage>(stageKey(stage));
-      if(existing&&JSON.stringify(existing)===JSON.stringify(stage))await txn.delete(stageKey(stage));
+      if(existing&&JSON.stringify(existing)===JSON.stringify(stage)){
+        await txn.delete(stageKey(stage));
+        if(await txn.get<number>(stageHighKey(stage))===stage.sequence)await txn.delete(stageHighKey(stage));
+      }
     });
     return 'superseded';
+  }
+
+  private async cabHistory(roomId:string,intervals:CybercabInterval[]):Promise<EarningsEvents>{
+    if(!Array.isArray(intervals)||!intervals.length||intervals.length>128||intervals.some(interval=>
+      !Number.isSafeInteger(interval.startMs)||!Number.isSafeInteger(interval.endMs)||interval.startMs<0||interval.endMs<=interval.startMs||interval.endMs>Date.now()))
+      throw new Error('Invalid cab history interval');
+    const from=Math.min(...intervals.map(interval=>interval.startMs)),to=Math.max(...intervals.map(interval=>interval.endMs));
+    const room=await this.env.ROOMS.get(this.env.ROOMS.idFromName(roomId)).cabEarningsHistory(roomId,from,to);
+    const global:EarningsWindow[]=[];
+    const service=this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global'));
+    let cursor:number|undefined;
+    for(;;){
+      const page=await service.history(from,to,cursor);global.push(...page.windows);
+      if(page.next===null)break;
+      if(!Number.isSafeInteger(page.next)||(cursor!==undefined&&page.next<=cursor)||page.next>=to)throw new Error('Invalid global history cursor');
+      cursor=page.next;
+    }
+    return {room,global};
+  }
+
+  /** Complete and durably capture history before the producer projects a credit. */
+  async prepareCab(stage:CabIncomeStage):Promise<EarningsEvents>{
+    const key=stageKey(stage),eventsKey=stageEventsKey(stage);
+    const existing=await this.ctx.storage.get<CabIncomeStage>(key);
+    if(!existing||JSON.stringify(existing)!==JSON.stringify(stage))throw new Error('Missing cab stage');
+    const cached=await this.ctx.storage.get<EarningsEvents>(eventsKey);
+    if(cached)return cached;
+    // The room barrier calls back into this object: do not hold a transaction.
+    const events=await this.cabHistory(stage.roomId,stage.intervals);
+    return this.ctx.storage.transaction(async txn=>{
+      const current=await txn.get<CabIncomeStage>(key);
+      if(!current||JSON.stringify(current)!==JSON.stringify(stage))throw new Error('Missing cab stage');
+      const saved=await txn.get<EarningsEvents>(eventsKey);
+      if(saved)return saved;
+      await txn.put(eventsKey,events);return events;
+    });
   }
 
   async submit(intent:EconomyIntent):Promise<DriverOutcome|null>{
@@ -103,12 +143,16 @@ export class RoomEconomy extends DurableObject<Env> {
       if(await txn.get<boolean>(`frozen:${intent.driverId}:${intent.fence}`)){
         return {outcome:{ok:false,reason:'superseded'} as DriverOutcome};
       }
-      const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
-      if([...stages.values()].some(stage=>stage.fence===intent.fence&&stage.sequence<intent.sequence))return {outcome:null,blocked:true as const};
+      let cabEvents:EarningsEvents|undefined,stageSequence:number|undefined;
       if(intent.action.kind==='cab-income'){
         const stage=await txn.get<CabIncomeStage>(stageKey({eventId:intent.eventId,driverId:intent.driverId,fence:intent.fence,roomId:intent.roomId,sequence:intent.sequence,intervals:intent.action.intervals}));
         if(!stage||!matchesStage(stage,intent))return {outcome:{ok:false,reason:'conflict'} as DriverOutcome};
+        const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
+        if([...stages.values()].some(item=>item.fence===stage.fence&&item.sequence<stage.sequence))return {outcome:null,blocked:true as const};
+        stageSequence=stage.sequence;
+        cabEvents=await txn.get<EarningsEvents>(stageEventsKey(stage));
         await txn.delete(stageKey(stage));
+        await txn.delete(stageEventsKey(stage));
       }
       if(intent.action.kind==='contribute'){
         const fund=await txn.get<RoomFund>('room-fund'),amount=intent.action.amount;
@@ -136,7 +180,7 @@ export class RoomEconomy extends DurableObject<Env> {
         }
         await txn.put(pickupKey,{...pickup,eventId:intent.eventId} satisfies PickupReservation);
       }
-      const pending:IntentRecord={intent,outcome:null};
+      const pending:IntentRecord={intent,outcome:null,...(cabEvents?{cabEvents}:{}),...(stageSequence!==undefined?{stageSequence}:{})};
       await txn.put(key,pending);
       await txn.put(`pending:${intent.driverId}:${intent.eventId}`,intent);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
@@ -157,7 +201,6 @@ export class RoomEconomy extends DurableObject<Env> {
   private async resolveDriverOnce(driverId:string):Promise<void>{
     const pending=(await this.pending(driverId)).sort((a,b)=>a.sequence-b.sequence);
     for(const intent of pending){
-      if((await this.stages(driverId)).some(stage=>stage.fence===intent.fence&&stage.sequence<intent.sequence))break;
       const result=await this.resolveOnce(intent);
       if(!result.ok && result.reason==='not-ready')break;
     }
@@ -168,29 +211,12 @@ export class RoomEconomy extends DurableObject<Env> {
     if(!record||JSON.stringify(record.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
     if(record.outcome)return record.outcome;
     if(intent.action.kind==='cab-income'&&!record.cabEvents){
-      const intervals=intent.action.intervals;
-      if(!Array.isArray(intervals)||!intervals.length||intervals.length>128||intervals.some(interval=>
-        !Number.isSafeInteger(interval.startMs)||!Number.isSafeInteger(interval.endMs)||interval.startMs<0||interval.endMs<=interval.startMs||interval.endMs>Date.now()))
-        throw new Error('Invalid cab history interval');
-      const from=Math.min(...intervals.map(interval=>interval.startMs)),to=Math.max(...intervals.map(interval=>interval.endMs));
-      // Do not hold this object's storage transaction across the room RPC: the
-      // room's publication barrier calls this object to read its own history.
-      const room=await this.env.ROOMS.get(this.env.ROOMS.idFromName(intent.roomId)).cabEarningsHistory(intent.roomId,from,to);
-      const global:EarningsWindow[]=[];
-      const service=this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global'));
-      let cursor:number|undefined;
-      for(;;){
-        const page=await service.history(from,to,cursor);
-        global.push(...page.windows);
-        if(page.next===null)break;
-        if(!Number.isSafeInteger(page.next)||(cursor!==undefined&&page.next<=cursor)||page.next>=to)throw new Error('Invalid global history cursor');
-        cursor=page.next;
-      }
+      const events=await this.cabHistory(intent.roomId,intent.action.intervals);
       record=await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<IntentRecord>(key);
         if(!current||JSON.stringify(current.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
         if(current.cabEvents)return current;
-        const updated={...current,cabEvents:{room,global}} satisfies IntentRecord;
+        const updated={...current,cabEvents:events} satisfies IntentRecord;
         await txn.put(key,updated);
         return updated;
       });
@@ -227,8 +253,6 @@ export class RoomEconomy extends DurableObject<Env> {
   async acknowledge(intent:EconomyIntent):Promise<boolean>{
     const cleanupKey=`cleanup:${intent.driverId}:${intent.eventId}`;
     const accepted=await this.ctx.storage.transaction(async txn=>{
-      const stages=await txn.list<CabIncomeStage>({prefix:`cab-stage:${intent.driverId}:`});
-      if([...stages.values()].some(stage=>stage.fence===intent.fence&&stage.sequence<intent.sequence))return 'blocked' as const;
       const record=await txn.get<IntentRecord>(`intent:${intent.eventId}`);
       // A mismatched event ID must never delete another producer's result.
       if(!record || JSON.stringify(record.intent)!==JSON.stringify(intent))return 'done' as const;
@@ -252,8 +276,6 @@ export class RoomEconomy extends DurableObject<Env> {
     const cleanup=await this.ctx.storage.get<EconomyIntent>(cleanupKey);
     if(!cleanup)return;
     if(JSON.stringify(cleanup)!==JSON.stringify(intent))throw new Error('Economy cleanup mismatch');
-    if((await this.stages(intent.driverId)).some(stage=>stage.fence===intent.fence&&stage.sequence<intent.sequence))
-      throw new Error('Out-of-order cab stage requires recovery');
     await this.profile(intent.driverId).compact(intent);
     await this.ctx.storage.transaction(async txn=>{
       const current=await txn.get<EconomyIntent>(cleanupKey);
@@ -275,16 +297,6 @@ export class RoomEconomy extends DurableObject<Env> {
       await txn.put(`frozen:${driverId}:${fence}`,true);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
       if(alarm===null||alarm>next)await txn.setAlarm(next);
-    });
-    await this.ctx.storage.transaction(async txn=>{
-      const oldStages=[...(await txn.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()].filter(stage=>stage.fence===fence);
-      if(!oldStages.length)return;
-      const first=Math.min(...oldStages.map(stage=>stage.sequence));
-      const acknowledged=await txn.get<Acknowledged>(`ack:${driverId}`);
-      const outstanding=await Promise.all(['pending:','unacked:','cleanup:'].map(prefix=>txn.list<EconomyIntent>({prefix:`${prefix}${driverId}:`})));
-      if((acknowledged?.fence===fence&&acknowledged.sequence>=first)||
-         outstanding.some(entries=>[...entries.values()].some(intent=>intent.fence===fence&&intent.sequence>first)))
-        throw new Error('Out-of-order cab stage requires recovery');
     });
     await this.resolveDriver(driverId);
     const pending=(await this.pending(driverId)).filter(intent=>intent.fence===fence);
@@ -322,17 +334,19 @@ export class RoomEconomy extends DurableObject<Env> {
     const remainingStages=[...(await this.ctx.storage.list<CabIncomeStage>({prefix:`cab-stage:${driverId}:`})).values()]
       .filter(stage=>stage.fence===fence).sort((a,b)=>a.sequence-b.sequence);
     for(const stage of remainingStages){
-      const revision=await this.profile(driverId).currentRevision(fence);
-      if(revision===null||!await this.profile(driverId).checkFence(fence))throw new Error('Unable to settle fenced cab income');
-      const intent:EconomyIntent={eventId:stage.eventId,driverId,fence,roomId:stage.roomId,sequence:stage.sequence,revision,
+      const cursor=await this.profile(driverId).currentCursor(fence);
+      if(!cursor)throw new Error('Unable to settle fenced cab income');
+      const intent:EconomyIntent={eventId:stage.eventId,driverId,fence,roomId:stage.roomId,sequence:cursor.sequence+1,revision:cursor.revision,
         action:{kind:'cab-income',intervals:stage.intervals}};
       const converted=await this.ctx.storage.transaction(async txn=>{
         const current=await txn.get<CabIncomeStage>(stageKey(stage));
         if(!current)return false;
         if(JSON.stringify(current)!==JSON.stringify(stage)||await txn.get(`intent:${stage.eventId}`))throw new Error('Cab stage mismatch');
-        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null} satisfies IntentRecord);
+        const cabEvents=await txn.get<EarningsEvents>(stageEventsKey(stage));
+        await txn.put(`intent:${stage.eventId}`,{intent,outcome:null,stageSequence:stage.sequence,...(cabEvents?{cabEvents}:{})} satisfies IntentRecord);
         await txn.put(`pending:${driverId}:${stage.eventId}`,intent);
         await txn.delete(stageKey(stage));
+        await txn.delete(stageEventsKey(stage));
         const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;
         if(alarm===null||alarm>next)await txn.setAlarm(next);
         return true;
@@ -345,7 +359,7 @@ export class RoomEconomy extends DurableObject<Env> {
     }
     // The durable seal prevents stale requests after the room marker is gone.
     await this.profile(driverId).sealFence(driverId,fence);
-    await this.ctx.storage.delete(`frozen:${driverId}:${fence}`);
+    await this.ctx.storage.delete([`frozen:${driverId}:${fence}`,stageHighKey({driverId,fence})]);
   }
   async pickupStates(ids:string[]):Promise<Record<string,PickupReservation>>{
     const entries=await Promise.all(ids.map(async id=>[id,await this.ctx.storage.get<PickupReservation>(`pickup:${id}`)??{eventId:null,generation:0,readyAt:0}] as const));
