@@ -101,9 +101,9 @@ jobs:
       - name: Install candidate dependencies
         working-directory: candidate
         run: pnpm install --frozen-lockfile
-      - name: Test performance report and comparison
+      - name: Test candidate
         working-directory: candidate
-        run: pnpm exec tsx --test tests/performance-report.test.ts tests/performance-compare.test.ts
+        run: pnpm test
       - name: Build candidate
         working-directory: candidate
         run: |
