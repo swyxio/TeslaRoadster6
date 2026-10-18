@@ -1,0 +1,280 @@
+{
+  "at": "2026-10-18T11:42:37.355Z",
+  "base": "https://tesland.swyx.io",
+  "room": "perf-release-1792323752753",
+  "health": {
+    "ok": true,
+    "version": 32,
+    "capacity": 8
+  },
+  "displacement": [
+    89.48722890464083,
+    89.48722890464083
+  ],
+  "applied": [
+    65,
+    65
+  ],
+  "rejections": [
+    [
+      {
+        "seq": 5,
+        "targetTick": 9,
+        "reason": "late"
+      },
+      {
+        "seq": 6,
+        "targetTick": 10,
+        "reason": "late"
+      },
+      {
+        "seq": 16,
+        "targetTick": 20,
+        "reason": "late"
+      },
+      {
+        "seq": 17,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 18,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 19,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 25,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 26,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 27,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 28,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 29,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 36,
+        "targetTick": 40,
+        "reason": "late"
+      },
+      {
+        "seq": 37,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 38,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 39,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 45,
+        "targetTick": 49,
+        "reason": "late"
+      },
+      {
+        "seq": 46,
+        "targetTick": 50,
+        "reason": "late"
+      },
+      {
+        "seq": 47,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 48,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 49,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 50,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 57,
+        "targetTick": 61,
+        "reason": "late"
+      },
+      {
+        "seq": 58,
+        "targetTick": 62,
+        "reason": "late"
+      },
+      {
+        "seq": 66,
+        "targetTick": 70,
+        "reason": "late"
+      },
+      {
+        "seq": 67,
+        "targetTick": 71,
+        "reason": "late"
+      },
+      {
+        "seq": 68,
+        "targetTick": 71,
+        "reason": "late"
+      }
+    ],
+    [
+      {
+        "seq": 5,
+        "targetTick": 10,
+        "reason": "late"
+      },
+      {
+        "seq": 16,
+        "targetTick": 20,
+        "reason": "late"
+      },
+      {
+        "seq": 17,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 18,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 19,
+        "targetTick": 21,
+        "reason": "late"
+      },
+      {
+        "seq": 25,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 26,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 27,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 28,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 29,
+        "targetTick": 29,
+        "reason": "late"
+      },
+      {
+        "seq": 36,
+        "targetTick": 40,
+        "reason": "late"
+      },
+      {
+        "seq": 37,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 38,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 39,
+        "targetTick": 41,
+        "reason": "late"
+      },
+      {
+        "seq": 45,
+        "targetTick": 49,
+        "reason": "late"
+      },
+      {
+        "seq": 46,
+        "targetTick": 50,
+        "reason": "late"
+      },
+      {
+        "seq": 47,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 48,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 49,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 50,
+        "targetTick": 51,
+        "reason": "late"
+      },
+      {
+        "seq": 57,
+        "targetTick": 61,
+        "reason": "late"
+      },
+      {
+        "seq": 58,
+        "targetTick": 62,
+        "reason": "late"
+      },
+      {
+        "seq": 66,
+        "targetTick": 70,
+        "reason": "late"
+      },
+      {
+        "seq": 67,
+        "targetTick": 71,
+        "reason": "late"
+      },
+      {
+        "seq": 68,
+        "targetTick": 71,
+        "reason": "late"
+      }
+    ]
+  ],
+  "note": "Short production functional smoke using the synthetic RoomInputClient helper, not browser latency or capacity evidence. No persistent actions."
+}

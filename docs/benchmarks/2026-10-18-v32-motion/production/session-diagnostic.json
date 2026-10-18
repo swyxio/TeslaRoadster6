@@ -1,0 +1,125 @@
+{
+  "preview": "https://tesland.swyx.io",
+  "room": "diag-1792323831495",
+  "health": {
+    "ok": true,
+    "version": 32,
+    "capacity": 8
+  },
+  "startedUtc": "2026-10-18T11:43:53.986Z",
+  "endedUtc": "2026-10-18T11:44:13.987Z",
+  "elapsedSeconds": 20.001,
+  "clientModel": "Two real Session instances, MotionClock, frame-cadenced tick and clock sampling; no renderer or prediction render.",
+  "clients": 2,
+  "onlineAtEnd": 2,
+  "clientsSeeingAll": 2,
+  "clientsWithAppliedInput": 2,
+  "closeEventsBeforeEnd": [],
+  "inputsSent": {
+    "warmup": 83,
+    "measured": 801,
+    "drain": 0,
+    "unknown": 0
+  },
+  "rejectionsByReceiveWindow": {
+    "warmup": {},
+    "measured": {
+      "late": 5
+    },
+    "drain": {}
+  },
+  "rejectionsBySendWindow": {
+    "warmup": {},
+    "measured": {
+      "late": 5
+    },
+    "drain": {},
+    "unknown": {}
+  },
+  "rejections": [
+    {
+      "client": 1,
+      "reason": "late",
+      "seq": 194,
+      "targetTick": 196,
+      "targetTickAtSend": 196,
+      "lastSnapshotTickAtSend": 192,
+      "lastSnapshotTickAtReceive": 196,
+      "sentMonotonicMs": 10541.846167,
+      "receivedMonotonicMs": 10754.842792,
+      "sentUtc": "2026-10-18T11:44:01.625Z",
+      "receivedUtc": "2026-10-18T11:44:01.838Z",
+      "sendPhase": "measured",
+      "receivePhase": "measured"
+    },
+    {
+      "client": 1,
+      "reason": "late",
+      "seq": 195,
+      "targetTick": 197,
+      "targetTickAtSend": 197,
+      "lastSnapshotTickAtSend": 192,
+      "lastSnapshotTickAtReceive": 196,
+      "sentMonotonicMs": 10590.204,
+      "receivedMonotonicMs": 10755.161875,
+      "sentUtc": "2026-10-18T11:44:01.673Z",
+      "receivedUtc": "2026-10-18T11:44:01.838Z",
+      "sendPhase": "measured",
+      "receivePhase": "measured"
+    },
+    {
+      "client": 1,
+      "reason": "late",
+      "seq": 321,
+      "targetTick": 323,
+      "targetTickAtSend": 323,
+      "lastSnapshotTickAtSend": 318,
+      "lastSnapshotTickAtReceive": 322,
+      "sentMonotonicMs": 16842.542792,
+      "receivedMonotonicMs": 17044.68925,
+      "sentUtc": "2026-10-18T11:44:07.925Z",
+      "receivedUtc": "2026-10-18T11:44:08.128Z",
+      "sendPhase": "measured",
+      "receivePhase": "measured"
+    },
+    {
+      "client": 2,
+      "reason": "late",
+      "seq": 195,
+      "targetTick": 197,
+      "targetTickAtSend": 197,
+      "lastSnapshotTickAtSend": 192,
+      "lastSnapshotTickAtReceive": 196,
+      "sentMonotonicMs": 10558.038375,
+      "receivedMonotonicMs": 10754.496667,
+      "sentUtc": "2026-10-18T11:44:01.641Z",
+      "receivedUtc": "2026-10-18T11:44:01.837Z",
+      "sendPhase": "measured",
+      "receivePhase": "measured"
+    },
+    {
+      "client": 2,
+      "reason": "late",
+      "seq": 321,
+      "targetTick": 323,
+      "targetTickAtSend": 323,
+      "lastSnapshotTickAtSend": 318,
+      "lastSnapshotTickAtReceive": 322,
+      "sentMonotonicMs": 16859.135,
+      "receivedMonotonicMs": 17041.277125,
+      "sentUtc": "2026-10-18T11:44:07.942Z",
+      "receivedUtc": "2026-10-18T11:44:08.124Z",
+      "sendPhase": "measured",
+      "receivePhase": "measured"
+    }
+  ],
+  "snapshots": 400,
+  "minSnapshots": 200,
+  "minSimulatedSeconds": 19.9,
+  "medianSimulatedSeconds": 19.9,
+  "p95SnapshotGapMs": 229,
+  "maxSnapshotGapMs": 297,
+  "decodedJsonMiB": 8.82,
+  "clientEventLoopP95Ms": 21.5,
+  "note": "One production diagnostic room using actual input clock but no prediction replay or rendering. This is not sustained-capacity, browser-rendering or physical-device evidence."
+}
