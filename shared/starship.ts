@@ -5,6 +5,8 @@ export const STARSHIP_LAUNCH_DELAY_MS = 30_000;
 export type StarshipStatus = {
   total: number;
   personal: number;
+  /** The un-capped confirmed total at the threshold; lifetime total continues. */
+  launchTotal: number | null;
   completedAt: number | null;
   launchAt: number | null;
   launchId: string | null;

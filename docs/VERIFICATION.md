@@ -848,3 +848,7 @@ On a follow-up based on main at `6b85df1`, a regression test first reproduced bo
 On the combined radio and boarding-fix build, Chrome joined a local live room and drove without console errors. A 6.56-second desktop capture at 1413×939 pixels averaged 105.2 FPS, with a 14.08 ms p95 frame interval and no frames over 50 ms. It used an Apple M5 Pro with WebGL2/Metal and rendered at DPR 1.0; host load was high. This is a short sample, not a sustained FPS guarantee or a controlled comparison.
 
 After deployment, both production endpoints advertised v29, and the deployed JavaScript and CSS matched that local build. A disposable production room passed a two-client movement and input-acknowledgement smoke test. In a separate brief production Chrome check, the room connected, driving and steering worked, and no console errors appeared. These checks do not establish production capacity.
+## 2026-10-18 · Global Starship integration checkpoint
+
+The unbound Starship ledger extension was tested against isolated local Wrangler Durable Object storage using the wallet candidate's existing `income:<driverId>` and `total` keys. The focused test covered pre-existing balances, duplicate and out-of-order cumulative credits, a lost reply, concurrent threshold crossings, a frozen paginated launch roll, opt-out, post-launch credits and a Wrangler restart. It is not yet connected to the game's canonical `GlobalIncome` class. The new panel and launch playback are not yet integrated or visually verified; these checks do not establish production behavior or capacity.
+

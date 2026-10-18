@@ -1,103 +1,134 @@
-import { DurableObject } from 'cloudflare:workers';
 import { STARSHIP_GOAL, STARSHIP_LAUNCH_DELAY_MS, type StarshipContributors, type StarshipStatus } from '../shared/starship';
 import { normalizeName } from './global-chat-core';
 
-/** A durable identity sends its committed lifetime total, never a wallet delta. */
-export type StarshipReconciliation = { driverId:string; sequence:number; total:number; name:string };
-type MissionRow = { total:number; completed_at:number|null; launch_at:number|null; launch_id:string|null };
-type DriverRow = { sequence:number; total:number };
-type ContributorRow = { row_id:number; launch_total:number; launch_name:string };
+type Completion = { completedAt:number; launchAt:number; launchId:string; total:number };
+const incomeKey=(driverId:string)=>`income:${driverId}`;
+const launchKey=(driverId:string)=>`launch-income:${driverId}`;
+const nameKey=(driverId:string)=>`launch-name:${driverId}`;
+const PAGE_SIZE=20, SCAN_SIZE=50;
 
-function validId(id:unknown): id is string {
-  return typeof id==='string' && /^[a-zA-Z0-9-]{1,128}$/.test(id);
+function validId(driverId:string):void {
+  if(typeof driverId!=='string'||!/^[-a-zA-Z0-9]{1,128}$/.test(driverId))throw new Error('Invalid driver identity');
+}
+function validIncome(amount:number):void {
+  if(!Number.isSafeInteger(amount)||amount<0)throw new Error('Invalid income credit');
+}
+function complete(total:number):Completion {
+  const completedAt=Date.now();
+  return {completedAt,launchAt:completedAt+STARSHIP_LAUNCH_DELAY_MS,launchId:crypto.randomUUID(),total};
+}
+function status(total:number,personal:number,completion:Completion|undefined):StarshipStatus {
+  return {total,personal,launchTotal:completion?.total??null,completedAt:completion?.completedAt??null,launchAt:completion?.launchAt??null,launchId:completion?.launchId??null};
 }
 
 /**
- * One deliberately serialized object owns the global total and launch epoch.
- * Only internal Workers may address this object; clients cannot submit income.
- * Its input is an absolute, committed per-identity total, allowing the driver's
- * durable outbox to retry or coalesce updates after a lost response.
+ * Methods for the existing GlobalIncome object's storage. The `income:*` and
+ * `total` keys remain the canonical high-water marks; no second ledger is used.
+ * Call only from trusted worker RPCs. A client never chooses its driver ID.
  */
-export class Starship extends DurableObject {
-  constructor(ctx:DurableObjectState, env:Cloudflare.Env) {
-    super(ctx,env);
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS mission (
-      singleton INTEGER PRIMARY KEY CHECK (singleton=1),
-      total INTEGER NOT NULL, completed_at INTEGER, launch_at INTEGER, launch_id TEXT
-    );
-    INSERT OR IGNORE INTO mission (singleton,total) VALUES (1,0);
-    CREATE TABLE IF NOT EXISTS contributors (
-      row_id INTEGER PRIMARY KEY AUTOINCREMENT, driver_id TEXT NOT NULL UNIQUE,
-      sequence INTEGER NOT NULL, total INTEGER NOT NULL,
-      launch_total INTEGER NOT NULL, launch_name TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS launch_contributors ON contributors (launch_total DESC,row_id ASC);`);
-  }
+export class StarshipLedger {
+  constructor(private storage:DurableObjectStorage) {}
 
-  reconcile(input:StarshipReconciliation):StarshipStatus {
-    if(!input || !validId(input.driverId) || !Number.isSafeInteger(input.sequence) || input.sequence<1 ||
-       !Number.isSafeInteger(input.total) || input.total<=0 || typeof input.name!=='string' || input.name.length>256) {
-      throw new Error('Invalid Starship reconciliation');
-    }
-    const {driverId,sequence,total}=input;
-    const name=normalizeName(input.name);
-    return this.ctx.storage.transactionSync(()=>{
-      const sql=this.ctx.storage.sql;
-      const old=sql.exec<DriverRow>('SELECT sequence,total FROM contributors WHERE driver_id=?',driverId).toArray()[0];
-      const mission=sql.exec<MissionRow>('SELECT total,completed_at,launch_at,launch_id FROM mission WHERE singleton=1').one();
-      if(old && sequence===old.sequence && total!==old.total) throw new Error('Conflicting Starship sequence');
-      if(old && sequence<old.sequence) return this.statusFrom(mission,old.total);
-      if(old && sequence===old.sequence) return this.statusFrom(mission,old.total);
-      if(old && total<old.total) throw new Error('Starship lifetime total regressed');
-      const next=mission.total+total-(old?.total??0);
-      if(!Number.isSafeInteger(next)) throw new Error('Starship total exceeds safe integer range');
-      const beforeLaunch=mission.completed_at===null;
-      if(old){
-        sql.exec(`UPDATE contributors SET sequence=?,total=?,
-          launch_total=CASE WHEN ? THEN ? ELSE launch_total END,
-          launch_name=CASE WHEN ? THEN ? ELSE launch_name END WHERE driver_id=?`,
-          sequence,total,beforeLaunch?1:0,total,beforeLaunch?1:0,name,driverId);
-      }else{
-        sql.exec('INSERT INTO contributors (driver_id,sequence,total,launch_total,launch_name) VALUES (?,?,?,?,?)',
-          driverId,sequence,total,beforeLaunch?total:0,name);
+  async credit(driverId:string,cumulative:number):Promise<number> {
+    validId(driverId);validIncome(cumulative);
+    return this.storage.transaction(async txn=>{
+      const key=incomeKey(driverId),previous=await txn.get<number>(key)??0,total=await txn.get<number>('total')??0;
+      validIncome(previous);validIncome(total);
+      let completion=await txn.get<Completion>('launch-completion');
+      const next=total+Math.max(0,cumulative-previous);
+      validIncome(next);
+      if(cumulative>previous){
+        // Lazy copy-on-write freezes the entire existing income:* keyspace at
+        // crossing without an unbounded transaction or a migration. A zero
+        // snapshot excludes identities whose first credit arrives later.
+        if(completion && await txn.get<number>(launchKey(driverId))===undefined)
+          await txn.put(launchKey(driverId),previous);
+        await txn.put({[key]:cumulative,total:next});
       }
-      if(beforeLaunch && next>=STARSHIP_GOAL){
-        const completedAt=Date.now(),launchAt=completedAt+STARSHIP_LAUNCH_DELAY_MS,launchId=crypto.randomUUID();
-        sql.exec('UPDATE mission SET total=?,completed_at=?,launch_at=?,launch_id=? WHERE singleton=1',next,completedAt,launchAt,launchId);
-        return {total:next,personal:total,completedAt,launchAt,launchId};
+      if(!completion && next>=STARSHIP_GOAL){
+        completion=complete(next);
+        await txn.put('launch-completion',completion);
       }
-      sql.exec('UPDATE mission SET total=? WHERE singleton=1',next);
-      return this.statusFrom({...mission,total:next},total);
+      return next;
     });
   }
 
-  status(driverId?:string):StarshipStatus {
-    if(driverId!==undefined && !validId(driverId)) throw new Error('Invalid driver identity');
-    const mission=this.ctx.storage.sql.exec<MissionRow>('SELECT total,completed_at,launch_at,launch_id FROM mission WHERE singleton=1').one();
-    const driver=driverId===undefined?undefined:this.ctx.storage.sql.exec<DriverRow>('SELECT sequence,total FROM contributors WHERE driver_id=?',driverId).toArray()[0];
-    return this.statusFrom(mission,driver?.total??0);
+  async status(driverId?:string):Promise<StarshipStatus> {
+    if(driverId!==undefined)validId(driverId);
+    return this.storage.transaction(async txn=>{
+      const total=await txn.get<number>('total')??0;
+      const personal=driverId===undefined?0:await txn.get<number>(incomeKey(driverId))??0;
+      let completion=await txn.get<Completion>('launch-completion');
+      // If the pre-existing counter already reached the goal before this code
+      // was installed, record the launch once on first observation. The prior
+      // crossing time cannot be reconstructed from a cumulative counter.
+      if(!completion && total>=STARSHIP_GOAL){completion=complete(total);await txn.put('launch-completion',completion);}
+      return status(total,personal,completion);
+    });
   }
 
-  /** Keyset pagination keeps the frozen launch roll independent of later income. */
-  contributors(cursor?:string):StarshipContributors {
-    const mission=this.ctx.storage.sql.exec<MissionRow>('SELECT total,completed_at,launch_at,launch_id FROM mission WHERE singleton=1').one();
-    if(mission.completed_at===null) return {contributors:[],next:null};
-    let amount=Number.MAX_SAFE_INTEGER,rowId=0;
-    if(cursor!==undefined){
-      const match=/^(\d+):(\d+)$/.exec(cursor);
-      if(!match) throw new Error('Invalid contributor cursor');
-      amount=Number(match[1]);rowId=Number(match[2]);
-      if(!Number.isSafeInteger(amount)||!Number.isSafeInteger(rowId)||amount<1||rowId<1) throw new Error('Invalid contributor cursor');
-    }
-    const rows=this.ctx.storage.sql.exec<ContributorRow>(`SELECT row_id,launch_total,launch_name FROM contributors
-      WHERE launch_total>0 AND (launch_total<? OR (launch_total=? AND row_id>?))
-      ORDER BY launch_total DESC,row_id ASC LIMIT 21`,amount,amount,rowId).toArray();
-    const page=rows.slice(0,20),last=page.at(-1);
-    return {contributors:page.map(row=>({name:row.launch_name,amount:row.launch_total})),
-      next:rows.length>20&&last?`${last.launch_total}:${last.row_id}`:null};
+  /** Names are private by default and can be hidden again after the launch. */
+  async setPublicName(driverId:string,name:string|null):Promise<string|null> {
+    validId(driverId);
+    if(name!==null && (typeof name!=='string'||name.length>256))throw new Error('Invalid public name');
+    const normalized=name===null?null:normalizeName(name);
+    if(normalized===null)await this.storage.delete(nameKey(driverId));
+    else await this.storage.put(nameKey(driverId),normalized);
+    return normalized;
   }
 
-  private statusFrom(mission:MissionRow, personal:number):StarshipStatus {
-    return {total:mission.total,personal,completedAt:mission.completed_at,launchAt:mission.launch_at,launchId:mission.launch_id};
+  /** Bounded scan over the frozen launch amounts. Cursors contain no plain driver ID. */
+  async contributors(cursor?:string):Promise<StarshipContributors> {
+    const startAfter=cursor===undefined?undefined:await this.decodeCursor(cursor);
+    const page=await this.storage.transaction(async txn=>{
+      if(!await txn.get<Completion>('launch-completion'))return {contributors:[],after:undefined as string|undefined};
+      const rows=await txn.list<number>({prefix:'income:',...(startAfter?{startAfter}:{}),limit:SCAN_SIZE});
+      const ids=[...rows.keys()].map(key=>key.slice('income:'.length));
+      const details=ids.length?await txn.get<unknown>(ids.flatMap(id=>[launchKey(id),nameKey(id)])):new Map<string,unknown>();
+      const entries:StarshipContributors['contributors']=[];
+      let last:string|undefined,seen=0;
+      for(const [key,current] of rows){
+        seen++;last=key;
+        const id=key.slice('income:'.length),frozen=details.get(launchKey(id));
+        const amount=typeof frozen==='number'?frozen:current;
+        if(amount>0){
+          const publicName=details.get(nameKey(id));
+          entries.push({name:typeof publicName==='string'?publicName:'Anonymous driver',amount});
+        }
+        if(entries.length===PAGE_SIZE)break;
+      }
+      const more=seen<rows.size||rows.size===SCAN_SIZE;
+      return {contributors:entries,after:more?last:undefined};
+    });
+    return {contributors:page.contributors,next:page.after?await this.encodeCursor(page.after):null};
+  }
+
+  private async cursorKey():Promise<CryptoKey> {
+    const fresh=Array.from(crypto.getRandomValues(new Uint8Array(32)));
+    const stored=await this.storage.transaction(async txn=>{
+      const old=await txn.get<number[]>('launch-cursor-key');
+      if(old)return old;
+      await txn.put('launch-cursor-key',fresh);return fresh;
+    });
+    return crypto.subtle.importKey('raw',new Uint8Array(stored),'AES-GCM',false,['encrypt','decrypt']);
+  }
+  private async encodeCursor(key:string):Promise<string> {
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const encrypted=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await this.cursorKey(),new TextEncoder().encode(key)));
+    const bytes=new Uint8Array(iv.length+encrypted.length);bytes.set(iv);bytes.set(encrypted,iv.length);
+    return btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
+  }
+  private async decodeCursor(cursor:string):Promise<string> {
+    if(typeof cursor!=='string'||cursor.length>512||!/^[a-zA-Z0-9_-]+$/.test(cursor))throw new Error('Invalid contributor cursor');
+    try{
+      const raw=atob(cursor.replaceAll('-','+').replaceAll('_','/'));
+      const bytes=Uint8Array.from(raw,char=>char.charCodeAt(0));
+      if(bytes.length<29)throw new Error('Invalid cursor');
+      const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.slice(0,12)},await this.cursorKey(),bytes.slice(12));
+      const key=new TextDecoder().decode(plaintext);
+      if(!key.startsWith('income:'))throw new Error('Invalid cursor');
+      validId(key.slice('income:'.length));
+      return key;
+    }catch{throw new Error('Invalid contributor cursor');}
   }
 }

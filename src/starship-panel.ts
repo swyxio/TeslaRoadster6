@@ -1,7 +1,9 @@
-import type { StarshipContributor, StarshipStatus } from '../shared/starship';
+import './starship-panel.css';
+import { STARSHIP_GOAL, type StarshipContributor, type StarshipStatus } from '../shared/starship';
 import type { StarshipClock } from './starship-timeline';
 
-const GOAL=1_000_000_000, LAUNCH_DURATION_MS=12_000;
+const LAUNCH_DURATION_MS=12_000;
+const stages=[10,25,50,75,90];
 const dollars=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
 
 export type StarshipContributorPage = {
@@ -20,6 +22,7 @@ export type StarshipPanelState = {
   /** Server UTC at receipt and the local monotonic receipt time; never a browser wall clock. */
   clock:StarshipClock|null;
   contributors:StarshipContributorPage;
+  privacy:{status:'loading'|'ready'|'saving'|'error';publicName:string|null};
 };
 
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,className:string,text?:string):HTMLElementTagNameMap[K] {
@@ -36,40 +39,59 @@ function duration(ms:number):string {
 }
 
 /**
- * Unbound view: host imports ./starship-panel.css, mounts element inside its
- * closable Mars dialog, and calls update(state, performance.now()) as state or
+ * Host mounts this view inside its closable Mars dialog and calls update(state, performance.now()) as state or
  * the monotonic clock changes. The host owns all loading, pagination, stale
  * detection, replay, dialog and input-control behavior. onLoad must transition
  * the page to loading and return one page for the requested cursor.
  */
-export function createStarshipPanel(options:{onLoadContributors:(cursor:string|null)=>void;onReplay:()=>void}) {
+export function createStarshipPanel(options:{onLoadContributors:(cursor:string|null)=>void;onReplay:()=>void;onSetPublicName:(name:string|null)=>void}) {
   const root=element('section','starship-panel');root.setAttribute('aria-label','Game-wide Starship mission');
   const eyebrow=element('span','starship-eyebrow','ALL TESLAND / ONE MISSION');
   const heading=element('h3','starship-heading','Build the Starship together');
-  const intro=element('p','starship-intro','Verified earnings from every room count automatically. Your cash stays yours.');
+  const intro=element('p','starship-intro','Earnings from every room count automatically. Your cash stays yours.');
   const status=element('p','starship-freshness');status.setAttribute('role','status');
   const progressBox=element('div','starship-progress');
   const progressLabel=element('div','starship-progress-label');
   const progressTitle=element('span','starship-progress-title','GAME-WIDE EARNINGS');
   const total=element('strong','starship-total');progressLabel.append(progressTitle,total);
-  const progress=element('progress','starship-progress-bar');progress.max=GOAL;progress.setAttribute('aria-label','Confirmed game-wide Starship progress');
+  const progress=element('progress','starship-progress-bar');progress.max=STARSHIP_GOAL;progress.setAttribute('aria-label','Confirmed game-wide Starship progress');
   const personal=element('p','starship-personal');
   const pending=element('p','starship-pending');
+  const stage=element('p','starship-stage');
   const launch=element('p','starship-launch');launch.setAttribute('role','status');
   const replay=element('button','starship-replay','Replay the launch');replay.type='button';replay.onclick=()=>options.onReplay();
-  progressBox.append(progressLabel,progress,personal,pending,launch,replay);
+  progressBox.append(progressLabel,progress,personal,pending,stage,launch,replay);
+
+  const privacy=element('form','starship-privacy');
+  const privacyTitle=element('h4','starship-privacy-title','Your launch crew name');
+  const privacyCopy=element('p','starship-privacy-copy','You appear as Anonymous driver unless you choose a public name. You can change this later.');
+  const privacyLabel=element('label','starship-privacy-label');
+  const showName=element('input','starship-show-name');showName.type='checkbox';
+  privacyLabel.append(showName,document.createTextNode('Show my name on the crew list'));
+  const nameLabel=element('label','starship-name-label','Public name');nameLabel.htmlFor='starship-public-name';
+  const nameInput=element('input','starship-name');nameInput.id='starship-public-name';nameInput.maxLength=80;nameInput.autocomplete='off';
+  nameLabel.hidden=nameInput.hidden=true;
+  const privacySave=element('button','starship-privacy-save','Save choice');privacySave.type='submit';
+  const privacyStatus=element('p','starship-privacy-status');privacyStatus.setAttribute('role','status');
+  privacy.append(privacyTitle,privacyCopy,privacyLabel,nameLabel,nameInput,privacySave,privacyStatus);
+  showName.onchange=()=>{nameLabel.hidden=nameInput.hidden=!showName.checked;};
+  privacy.onsubmit=event=>{
+    event.preventDefault();
+    if(showName.checked&&!nameInput.value.trim()){privacyStatus.textContent='Enter a public name or choose to stay anonymous.';nameInput.focus();return;}
+    options.onSetPublicName(showName.checked?nameInput.value.trim():null);
+  };
 
   const contributors=element('section','starship-contributors');contributors.setAttribute('aria-label','Launch contributors');
   const contributorsTitle=element('h4','starship-contributors-title','The crew');
-  const contributorsCopy=element('p','starship-contributors-copy','Everyone with confirmed earnings when the goal was reached is part of the crew.');
+  const contributorsCopy=element('p','starship-contributors-copy','Confirmed earnings at the goal are shown here. Earnings still being reconciled may arrive later.');
   const contributorStatus=element('p','starship-contributor-status');contributorStatus.setAttribute('role','status');
   const list=element('ul','starship-contributor-list');
   const buttons=element('div','starship-contributor-actions');
   const first=element('button','starship-first','First page');first.type='button';
   const load=element('button','starship-load');load.type='button';
   buttons.append(first,load);contributors.append(contributorsTitle,contributorsCopy,contributorStatus,list,buttons);
-  root.append(eyebrow,heading,intro,status,progressBox,contributors);
-  let current:StarshipPanelState|null=null,lastEntries='';
+  root.append(eyebrow,heading,intro,status,progressBox,privacy,contributors);
+  let current:StarshipPanelState|null=null,lastEntries='',lastPrivacy:string|null|undefined=undefined;
   first.onclick=()=>{first.disabled=true;load.disabled=true;options.onLoadContributors(null);};
   load.onclick=()=>{
     if(!current)return;
@@ -87,12 +109,14 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
       freshness==='live'?'Live · confirmed game-wide':freshness==='loading'?'Last confirmed · refreshing…':'Last confirmed · updates unavailable');
     progress.hidden=!valid;
     if(valid){
-      const actual=confirmed!.total;
-      text(total,`${money(actual)} / ${money(GOAL)}`);progress.value=Math.min(actual,GOAL);
+      const actual=confirmed!.launchTotal??confirmed!.total;
+      text(total,`${money(actual)} / ${money(STARSHIP_GOAL)}`);progress.value=Math.min(actual,STARSHIP_GOAL);
       text(personal,`Your confirmed contribution: ${money(confirmed!.personal)}`);
       text(pending,amount(state.pendingContribution)?state.pendingContribution>0?`${money(state.pendingContribution)} earned, awaiting global confirmation.`:'All your reported earnings are confirmed.':'Pending contribution is unavailable.');
+      const next=stages.find(percent=>actual<STARSHIP_GOAL*percent/100);
+      text(stage,next?`Next construction milestone: ${next}% · ${money(STARSHIP_GOAL*next/100)}.`:'All construction milestones reached.');
     }else{
-      text(total,'Unavailable');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');
+      text(total,'Unavailable');text(personal,'Your confirmed contribution is unavailable.');text(pending,'');text(stage,'');
     }
     const completed=valid&&confirmed!.completedAt!==null;
     const launchAt=confirmed?.launchAt;
@@ -110,6 +134,15 @@ export function createStarshipPanel(options:{onLoadContributors:(cursor:string|n
     else if(estimatedServerTime!<launchAt!+LAUNCH_DURATION_MS)text(launch,'Launch in progress.');
     else {replayReady=true;text(launch,'Launch complete.');}
     replay.hidden=!replayReady;
+
+    const choice=state.privacy;
+    if((choice.status==='ready'||choice.status==='error')&&choice.publicName!==lastPrivacy){
+      lastPrivacy=choice.publicName;showName.checked=choice.publicName!==null;nameInput.value=choice.publicName??'';
+      nameLabel.hidden=nameInput.hidden=!showName.checked;
+    }
+    const privacyBusy=choice.status==='loading'||choice.status==='saving';
+    showName.disabled=nameInput.disabled=privacySave.disabled=privacyBusy;
+    text(privacyStatus,choice.status==='loading'?'Loading your choice…':choice.status==='saving'?'Saving your choice…':choice.status==='error'?'Could not save your choice. Try again.':'');
 
     contributors.hidden=!completed;
     const page=state.contributors;
