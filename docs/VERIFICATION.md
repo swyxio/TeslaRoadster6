@@ -942,4 +942,6 @@ On the protocol v37 cruise-and-awards candidate merged with the wallet retry fix
 
 After merging the delivery-checkpoint release into the candidate, `pnpm test` passed 711 tests and `pnpm build` passed. The isolated awards-wallet integration passed again, as did the checkpoint integration, including a lost reply, another active driver, and recovery of the committed cash and income. These checks do not establish production throughput.
 
+If an earlier queued wallet write is rejected, later unconfirmed delivery completions and checkpoints are discarded rather than replayed; a driver may have to return to the drop-off. The integrations separately cover award replay after rejection and checkpoint recovery after a lost reply, not that combined sequence.
+
 Code review identified a pre-existing browser-storage edge case: if staging a recovery code fails because storage is unavailable, the page reports that the code can be copied but does not request the corresponding wallet binding. Switching chat identities in that state can also leave the previous wallet attached. This path has not been verified in a browser and remains unresolved on this candidate.
