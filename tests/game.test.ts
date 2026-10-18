@@ -136,12 +136,12 @@ test('pickups refill resources once and return after twenty simulation seconds',
 });
 
 
-test('occupied autopilot brakes and turns without involuntary drift', () => {
+test('occupied autopilot slows and turns without involuntary drift', () => {
   const {world,car}=setup();world.entities=[car];
   Object.assign(car,{x:-20,z:-57,y:0,yaw:0,speed:20,autopilot:true,routeId:2,waypoint:1});
-  const input=trafficInput(car,world);assert.ok(input.brake);assert.ok(Math.abs(input.steer)>.1);
+  const input=trafficInput(car,world);assert.ok(Math.abs(input.steer)>.1);
   step(world,new Map(),.05);
-  assert.equal(car.autopilot,true);assert.ok(Math.hypot(car.pushX,car.pushZ)<1e-9);
+  assert.equal(car.autopilot,true);assert.ok(car.speed<20);assert.ok(Math.hypot(car.pushX,car.pushZ)<1e-9);
 });
 
 test('drift keeps a high-speed car on the shared hill surface', () => {

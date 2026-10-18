@@ -66,11 +66,14 @@ export function trafficInput(e:Entity,world:World):Input {
   if(e.kind==='person')return neutral;
   if(e.supportId===null)return neutral; // Resume the ground route after landing.
   if(e.supportId!=='ground'){e.autopilot=false;return neutral;}
-  const route=ROUTES[e.routeId];if(!route){e.autopilot=false;return neutral;}
-  if(e.waypoint<0||e.waypoint>=route.length)e.waypoint=0;
-  let target=route[e.waypoint];
-  const previous=route[(e.waypoint+route.length-1)%route.length];
-  const next=route[(e.waypoint+1)%route.length];
+  const navigation=e.navigation?.status==='driving'?e.navigation:null;
+  const route=navigation?navigation.path:ROUTES[e.routeId];if(!route?.length){e.autopilot=false;return neutral;}
+  let waypoint=navigation?navigation.index:e.waypoint;
+  if(waypoint<0||waypoint>=route.length)waypoint=0;
+  let target=route[waypoint];
+  const previous=navigation&&waypoint===0?{x:e.x+Math.sin(e.yaw)*10,z:e.z+Math.cos(e.yaw)*10}:route[(waypoint+route.length-1)%route.length];
+  const final=!!navigation&&waypoint===route.length-1;
+  const next=final?target:route[(waypoint+1)%route.length];
   const incoming={x:target.x-previous.x,z:target.z-previous.z};
   const outgoing={x:next.x-target.x,z:next.z-target.z};
   const cosine=(incoming.x*outgoing.x+incoming.z*outgoing.z)/(Math.hypot(incoming.x,incoming.z)*Math.hypot(outgoing.x,outgoing.z)||1);
@@ -78,27 +81,33 @@ export function trafficInput(e:Entity,world:World):Input {
   const progress=((e.x-previous.x)*incoming.x+(e.z-previous.z)*incoming.z)/(incoming.x*incoming.x+incoming.z*incoming.z||1);
   const lateral=Math.abs((e.x-previous.x)*incoming.z-(e.z-previous.z)*incoming.x)/(Math.hypot(incoming.x,incoming.z)||1);
   // On city corners, pause briefly; points along a straight road are not stops.
-  if(distance<7||(progress>=1&&lateral<10)){
-    e.waypoint=(e.waypoint+1)%route.length;
-    if(cosine<.75)e.pauseUntil=world.time+.7;
-    target=route[e.waypoint];
+  if(final&&distance<5&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
+  if(!final&&(distance<7||(progress>=1&&lateral<10))){
+    waypoint=(waypoint+1)%route.length;
+    if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;
+    if(!e.driver&&cosine<.75)e.pauseUntil=world.time+.7;
+    target=route[waypoint];
   }
   const angle=wrap(Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw);
   const spec=VEHICLES[e.kind];
   const steer=Math.max(-1,Math.min(1,angle*1.8));
-  const highway=HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
+  const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  let cruise=highway?Math.min(spec.maxSpeed*.92,26*variety):8;
+  let cruise=navigation?12:highway?Math.min(spec.maxSpeed*.92,26*variety):8;
+  if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
   // Start braking before bends; the approach length uses real-time speed.
-  if(cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
+  if(e.driver&&!final&&cosine<.95){
+    const turnSpeed=Math.max(4.5,6+8*Math.max(0,cosine));
+    cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,distance-7)));
+  }else if(!e.driver&&cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
   if(Math.abs(angle)>.5)cruise=Math.min(cruise,4.5);
   const forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
-  let safeSpeed=cruise;
+  let safeSpeed=cruise,hazardGap=Infinity;
   // The meter is a virtual stopped leader on the eastbound approach. Cars that
   // have already crossed the stop line continue, including on a phase change.
   if(bayBridgeSignal(world.time).state==='red'&&forward.x>.8&&Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth){
     const gap=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
-    if(gap>=0&&gap<150)safeSpeed=Math.min(safeSpeed,Math.max(0,(gap-2-Math.max(0,e.speed)*1.5)*.55));
+    if(gap>=0&&gap<150){hazardGap=Math.min(hazardGap,gap);safeSpeed=Math.min(safeSpeed,Math.max(0,(gap-2-Math.max(0,e.speed)*1.5)*.55));}
   }
   for(const other of world.entities){
     if(other===e)continue;
@@ -109,6 +118,7 @@ export function trafficInput(e:Entity,world:World):Input {
     const size=other.kind==='person'?{length:.7,width:.7}:VEHICLES[other.kind];
     if(along<=0||side>(spec.width+size.width)/2+.35)continue;
     const gap=along-(spec.length+size.length)/2;
+    hazardGap=Math.min(hazardGap,gap);
     const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
     const leaderSpeed=Math.max(0,other.speed*(forward.x*otherForward.x+forward.z*otherForward.z));
     // 2 m standstill gap and 1.5 seconds of headway, in real simulation time.
@@ -121,6 +131,15 @@ export function trafficInput(e:Entity,world:World):Input {
     // for the final crawl. Following cars see the same normal authoritative car.
     if(e.speed<=2)return {...neutral,brake:true,steer};
     const throttle=Math.max(.001,Math.min(1,(e.speed*.12-2.5)/spec.acceleration));
+    return {...neutral,throttle,steer};
+  }
+  if(e.driver){
+    // Let occupied cars roll through bends and slow progressively instead of
+    // applying full brakes at each snapshot-sized speed change.
+    if(hazardGap<Math.max(2,e.speed*e.speed/10+2))return {...neutral,brake:true,steer};
+    if(safeSpeed<.1&&Math.abs(e.speed)<.15)return {...neutral,brake:true,steer};
+    const acceleration=Math.max(-2.2,Math.min(2.2,(safeSpeed-e.speed)*.9));
+    const throttle=Math.max(-1,Math.min(1,(Math.max(0,e.speed)*.12+acceleration)/(spec.acceleration*(e.upgrades.motor?1.25:1))));
     return {...neutral,throttle,steer};
   }
   if(e.speed>safeSpeed+1||safeSpeed<.1)return {...neutral,brake:true,steer};

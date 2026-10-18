@@ -1,5 +1,5 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
 export type SessionStatus = 'solo' | 'connecting' | 'online' | 'disconnected';
 export class Session {
@@ -15,6 +15,7 @@ export class Session {
   private nextUpgradeRequest = 0;
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
+  destinationResult: {requestId:number;ok:boolean}|null = null;
   error = '';
   constructor() { addPlayer(this.world, this.id, 'You'); }
   solo(kind:VehicleId='roadster',name=this.name) {
@@ -40,6 +41,7 @@ export class Session {
         if (message.type === 'state' && this.id) { this.world = message.world; this.status = 'online'; this.lastState = performance.now(); clearTimeout(timeout); }
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
+        if (message.type === 'destinationResult') this.destinationResult = message;
       } catch { this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
     socket.onclose = () => { clearTimeout(timeout); if (this.socket === socket) { this.status = 'disconnected'; this.error ||= 'Room disconnected or full. Rejoin, choose a new room, or drive solo.'; } };
@@ -58,6 +60,13 @@ export class Session {
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
   parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')return parkingAction(this.world,this.id,action);this.send({type:'parking',action});}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
+  enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status==='solo')return enterMinigame(this.world,this.id,game);this.send({type:'minigame',game});}
+  setDestination(x:number,z:number){
+    const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
+    if(this.status==='solo')this.destinationResult={requestId,ok:setDestination(this.world,this.id,{x,z})};
+    else if(this.status!=='online'||!this.send({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
+    return requestId;
+  }
   setName(name:string) {
     this.name = name;
     if (this.status === 'solo') {

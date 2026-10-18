@@ -1,6 +1,23 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.3-alpha',
+    label: '0.0.3 Alpha',
+    date: '2026-10-18',
+    title: 'Take the scenic route',
+    intro: 'Pick a destination, settle in and enjoy the drive with friends.',
+    sections: [
+      { title: 'Settle in', items: [
+        'Open the map, zoom in and pick an accessible destination for your car to drive toward. Take over any time with the driving controls.',
+        'Choose your driver name in Driver identity, and chat from a phone-inspired panel while the car cruises.'
+      ] },
+      { title: 'Play together', items: [
+        'Choose Rocket Dome, parking games or a race from the mini-games picker and jump straight into a round.',
+        'Scores and awards now explain your session progress and what resets when you leave.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.2-alpha',
     label: '0.0.2 Alpha',
     date: '2026-10-18',
