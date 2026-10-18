@@ -1,6 +1,6 @@
 # Poly AV
 
-Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Drive a Roadster, hold lift to fly, roll over the skyline, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map.
+Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Drive a Roadster, hold lift to fly, roll over the skyline, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map. Cross the Bay Bridge from San Francisco to Oakland via Yerba Buena Island, or take the Golden Gate north to Marin.
 
 **Play:** https://bay-drive.swyxio.workers.dev
 
@@ -52,6 +52,7 @@ Capacity defaults to **64**, configurable through `MAX_PLAYERS` in Wrangler up t
 
 ```
 shared/game.ts      Pure authoritative simulation and world schema
+shared/map.ts       Shared land, bridges, road and collision geometry
 shared/vehicles.ts  26-model registry with provenance and tuning
 shared/physics.ts   Oriented bodies and mass-based collisions
 shared/traffic.ts   Deterministic autonomous street loops
@@ -61,6 +62,7 @@ worker/index.ts     HTTP routing and one Durable Object per room
 src/session.ts     Solo/multiplayer transport adapter
 src/controls.ts    Keyboard and multitouch intent adapter
 src/scene.ts       Three.js world and camera
+src/bay-world.ts   Compressed Bay Area environment and landmarks
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment

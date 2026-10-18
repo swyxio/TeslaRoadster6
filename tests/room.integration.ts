@@ -25,9 +25,10 @@ try {
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   const id = one.state.id!;
   const entityId = one.state.world!.players.find(p => p.id === id)!.entityId;
-  const initial = one.state.world!.entities.find(e => e.id === entityId)!.z;
+  const initial = one.state.world!.entities.find(e => e.id === entityId)!;
+  const origin={x:initial.x,z:initial.z,yaw:initial.yaw};
   for (let i = 0; i < 20; i++) { one.socket.send(JSON.stringify({ type: 'input', input: { ...NEUTRAL, throttle: 1 } })); await delay(50); }
-  await eventually(() => (two.state.world?.entities.find(e => e.id === entityId)?.z ?? initial) < initial - 4, 'remote player receives authoritative movement');
+  await eventually(() => {const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&((e.x-origin.x)*-Math.sin(origin.yaw)+(e.z-origin.z)*-Math.cos(origin.yaw)>4);}, 'remote player receives authoritative movement');
   one.socket.send(JSON.stringify({type:'input',input:NEUTRAL}));
   one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   one.socket.send(JSON.stringify({type:'selectVehicle',kind:'zoox'}));

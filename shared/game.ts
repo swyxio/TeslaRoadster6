@@ -1,51 +1,60 @@
+import { BUILDINGS, MAP_BOUNDS, isSurface, nearbyBuildings } from './map';
+export { BUILDINGS } from './map';
 import { STATIONS } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions } from './physics';
 import { engageAutopilot, routePose, trafficInput } from './traffic';
 
-export const PROTOCOL_VERSION=2;
+export const PROTOCOL_VERSION=3;
 export type Input = { throttle:number;steer:number;boost:boolean;lift:boolean;roll:number;brake:boolean };
 export type Entity = {id:string;kind:VehicleId|'person';x:number;y:number;z:number;yaw:number;roll:number;speed:number;health:number;air:number;driver:string|null;vy:number;pushX:number;pushZ:number;steering:number;owner:string|null;npc:boolean;autopilot:boolean;routeId:number;waypoint:number;pauseUntil:number};
 export type Player = {id:string;name:string;entityId:string};
 export type Pickup = {id:string;x:number;z:number;kind:'repair'|'air';active:boolean;readyAt?:number};
 export type World = {entities:Entity[];players:Player[];pickups:Pickup[];time:number};
-export const WORLD_LIMIT=240;
 export const NEUTRAL:Input={throttle:0,steer:0,boost:false,lift:false,roll:0,brake:false};
-export const BUILDINGS:{x:number;z:number;w:number;d:number;h:number}[]=[];
-for(let x=-180;x<180;x+=60)for(let z=-180;z<180;z+=60)BUILDINGS.push({x:x+30,z:z+30,w:24,d:24,h:9+((x+z+360)/60%5)*7});
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 export const makeEntity=(id:string,kind:Entity['kind'],x:number,z:number,driver:string|null=null):Entity=>({id,kind,x,y:0,z,yaw:0,roll:0,speed:0,health:100,air:100,driver,vy:0,pushX:0,pushZ:0,steering:0,owner:null,npc:false,autopilot:false,routeId:0,waypoint:0,pauseUntil:0});
 export function createWorld():World {
-  const entities:Entity[]=[];
+  const world:World={entities:[],players:[],time:0,pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-120+(i%5)*60,z:i<6?-60:120,kind:i%2?'air':'repair',active:true}))};
   VEHICLE_IDS.forEach((kind,i)=>{
-    // One parked and one autonomous example of every catalog model.
-    const parked=makeEntity(`parked-${i}`,kind,-180+(i%7)*60+10,-100+Math.floor(i/7)*66);
-    entities.push(parked);
     const pose=routePose(i,VEHICLE_IDS.length);
-    entities.push({...makeEntity(`traffic-${i}`,kind,pose.x,pose.z),...pose,npc:true,autopilot:true});
+    world.entities.push({...makeEntity(`traffic-${i}`,kind,pose.x,pose.z),...pose,npc:true,autopilot:true});
   });
-  return {entities,players:[],time:0,pickups:Array.from({length:12},(_,i)=>({id:`pickup-${i}`,x:-150+(i%6)*60,z:i<6?-60:60,kind:i%2?'air':'repair',active:true}))};
+  VEHICLE_IDS.forEach((kind,i)=>{
+    const roads=[-240,-180,-120,-60,0,60,330,390,450,510],zSlots=[-165,-135,-105,-75,-45,-15,15,45,75,105,135,165];
+    for(let n=0;n<roads.length*zSlots.length;n++){
+      const slot=(i*7+n)%(roads.length*zSlots.length),x=roads[Math.floor(slot/zSlots.length)]+10,z=zSlots[slot%zSlots.length];
+      const parked=makeEntity(`parked-${i}`,kind,x,z);
+      if(fits(world,parked)){world.entities.push(parked);return;}
+    }
+    throw new Error(`No parked space for ${kind}`);
+  });
+  return world;
 }
+
 function solid(e:Entity):boolean {
   const b=body(e),radius=Math.abs(Math.cos(e.yaw))*b.w/2+Math.abs(Math.sin(e.yaw))*b.d/2;
   const rz=Math.abs(Math.sin(e.yaw))*b.w/2+Math.abs(Math.cos(e.yaw))*b.d/2;
-  return Math.abs(e.x)+radius>WORLD_LIMIT||Math.abs(e.z)+rz>WORLD_LIMIT||BUILDINGS.some(building=>e.y<building.h-.001&&!!contact(b,{...building,yaw:0}));
+  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.y<.05&&!isSurface(e.x,e.z))||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>e.y<building.h-.001&&!!contact(b,{...building,yaw:0}));
 }
 function fits(world:World,e:Entity,ignore?:Entity):boolean{return !solid(e)&&!world.entities.some(other=>other!==ignore&&other!==e&&Math.abs(other.y-e.y)<2.5&&!!contact(body(e),body(other)));}
-function spawnPosition(world:World,kind:Entity['kind']='roadster'):{x:number;z:number} {
+function spawnPosition(world:World,kind:Entity['kind']='roadster'):{x:number;z:number;yaw:number} {
+  const bayApproach={x:40,z:60,yaw:-Math.PI/2};
+  const bayCandidate=makeEntity('candidate',kind,bayApproach.x,bayApproach.z);bayCandidate.yaw=bayApproach.yaw;
+  if(fits(world,bayCandidate))return bayApproach;
   for(let i=0;i<224;i++){
-    const road=[0,60,-60,120,-120,180,-180][Math.floor(i/32)];
-    const x=road+(i%2?3.5:-3.5),z=24-Math.floor(i/2)%16*14;
+    const road=[60,0,-60,-120,-180,-240,330][Math.floor(i/32)];
+    const x=road+(i%2?3.5:-3.5),z=120-Math.floor(i/2)%16*14;
     const candidate=makeEntity('candidate',kind,x,z);
-    if(fits(world,candidate))return {x,z};
+    if(fits(world,candidate))return {x,z,yaw:0};
   }
   // Sparse outer apron is also checked: never spawn on an occupied point.
-  for(let x=-220;x<=220;x+=20)for(let z of [210,-210])if(fits(world,makeEntity('candidate',kind,x,z)))return {x,z};
+  for(let x=-220;x<=220;x+=20)for(let z of [210,-210])if(fits(world,makeEntity('candidate',kind,x,z)))return {x,z,yaw:0};
   throw new Error('No free spawn position');
 }
 export function addPlayer(world:World,id:string,name:string):Player {
   const existing=world.players.find(p=>p.id===id);if(existing)return existing;
-  const spawn=spawnPosition(world),car=makeEntity(`ride-${id}`,'roadster',spawn.x,spawn.z,id);car.owner=id;
+  const spawn=spawnPosition(world),car=makeEntity(`ride-${id}`,'roadster',spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
   const player={id,name:name.slice(0,24),entityId:car.id};world.entities.push(car);world.players.push(player);return player;
 }
 function cleanupCars(world:World){world.entities=world.entities.filter(e=>!e.owner||e.driver!==null||world.players.some(p=>p.id===e.owner));}
@@ -75,7 +84,7 @@ export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
   if(!player||!old||old.y>.5||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind))return false;
   release(old,world);
   world.entities=world.entities.filter(e=>e.id!==`person-${id}`&&!(e.owner===id&&!e.driver));
-  const spawn=spawnPosition(world,kind),car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;
+  const spawn=spawnPosition(world,kind),car=makeEntity(`ride-${id}-${world.time.toFixed(2)}`,kind,spawn.x,spawn.z,id);car.owner=id;car.yaw=spawn.yaw;
   world.entities.push(car);player.entityId=car.id;return true;
 }
 export function toggleAutopilot(world:World,id:string):boolean {
@@ -85,7 +94,7 @@ export function toggleAutopilot(world:World,id:string):boolean {
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e)return;
-  Object.assign(e,spawnPosition(world,e.kind),{y:0,vy:0,yaw:0,roll:0,speed:0,pushX:0,pushZ:0,autopilot:false,steering:0});
+  Object.assign(e,spawnPosition(world,e.kind),{y:0,vy:0,roll:0,speed:0,pushX:0,pushZ:0,autopilot:false,steering:0});
 }
 function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;}
 export function step(world:World,inputs:Map<string,Input>,dt:number):void {
@@ -118,7 +127,9 @@ export function step(world:World,inputs:Map<string,Input>,dt:number):void {
     if(e.y<=0){e.y=0;e.vy=0;e.roll=0;}
     if(e.y>=100){e.y=100;e.vy=Math.min(e.vy,0);}
     e.air=clamp(e.air-(boosting?14:0)*dt-(lifting?22:0)*dt,0,100);
-    for(const b of BUILDINGS)if(e.vy<=0&&e.y<=b.h&&oldY>=b.h&&contact(body(e),{...b,yaw:0})){e.y=b.h;e.vy=0;e.roll=0;}
+    for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width)))if(e.vy<=0&&e.y<=b.h&&oldY>=b.h&&contact(body(e),{...b,yaw:0})){e.y=b.h;e.vy=0;e.roll=0;}
+    // Landing in the bay returns the driver to a safe street; grounded cars stop at shore.
+    if(e.y===0&&oldY>0&&!isSurface(e.x,e.z))Object.assign(e,spawnPosition(world,e.kind),{speed:0,pushX:0,pushZ:0,autopilot:false});
     if(solid(e)){e.x=oldX;e.z=oldZ;e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25);e.speed*=e.autopilot?0:-.25;e.pushX=0;e.pushZ=0;}
     if(!person&&e.y<1&&Math.abs(e.speed)<1&&STATIONS.some(s=>Math.hypot(e.x-s.x,e.z-s.z)<9))e.air=Math.min(100,e.air+28*dt);
   }

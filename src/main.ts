@@ -5,7 +5,8 @@ import { GameScene } from './scene';
 import { Session } from './session';
 import { Controls } from './controls';
 import { STATIONS } from '../shared/stations';
-import { BUILDINGS, type Entity } from '../shared/game';
+import { type Entity } from '../shared/game';
+import { BRIDGES, MAP_BOUNDS, REGIONS, ROADS } from '../shared/map';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 document.querySelector('#app')!.innerHTML = `
@@ -29,7 +30,7 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div class="mission"><span class="eyebrow">NO ROUTE REQUIRED</span><strong id="mission">Hold SPACE to leave the road.</strong><span id="hint">Stop at a mint ring to refill your air tanks.</span></div>
  <div class="drive-actions"><button id="invite">↗ Invite</button><button id="camera">◉ Camera</button><button id="interact">F · Exit car</button><button id="recover">R · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button></div>
- <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: mint dots are Superchargers, orange arrow is you"></canvas><div class="map-key"><i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
+ <div class="map-panel"><div class="map-title">THE BAY <span>N ↑</span></div><canvas id="minimap" width="240" height="240" aria-label="Map: San Francisco, Oakland, Marin and bridges; mint dots are Superchargers, orange arrow is you"></canvas><div class="map-key"><i></i> AIR STATIONS <span id="players">1 DRIVER</span></div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span>AIR TANK</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="keyboard-help"><kbd>W A S D</kbd> drive <kbd>SPACE</kbd> lift <kbd>SHIFT</kbd> boost <kbd>Q / E</kbd> roll <kbd>B</kbd> brake <kbd>V</kbd> autopilot <kbd>G</kbd> fleet</div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse">REV</button><button data-control="KeyB" aria-label="Brake">STOP</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyE" aria-label="Roll right">↷</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button data-control="Space">LIFT ↑</button><button class="accelerate" data-control="KeyW">DRIVE ↑</button></div></div>
@@ -76,18 +77,22 @@ $('invite').onclick=async()=>{
   try{await navigator.clipboard.writeText(location.href);notice('Invite link copied. Send it to your crew.');}catch{notice('Copy the address in your browser to invite a friend.');}
 };
 const map=$<HTMLCanvasElement>('minimap').getContext('2d')!;
+const mapBase=document.createElement('canvas');mapBase.width=240;mapBase.height=240;
+const base=mapBase.getContext('2d')!,scale=210/(MAP_BOUNDS.maxX-MAP_BOUNDS.minX);
+const px=(x:number)=>15+(x-MAP_BOUNDS.minX)*scale,pz=(z:number)=>25+(z-MAP_BOUNDS.minZ)*scale;
+base.fillStyle='#315965';base.fillRect(0,0,240,240);
+for(const r of REGIONS){base.beginPath();r.points.forEach((p,i)=>i?base.lineTo(px(p.x),pz(p.z)):base.moveTo(px(p.x),pz(p.z)));base.closePath();base.fillStyle=r.id==='marin'||r.id==='yerba'?'#819981':'#b5b4a3';base.fill();}
+base.fillStyle='#6e7b78';for(const road of ROADS)base.fillRect(px(road.x-road.w/2),pz(road.z-road.d/2),road.w*scale,road.d*scale);
+base.strokeStyle='#d6c7a6';base.lineWidth=2;for(const b of BRIDGES){base.beginPath();if(b.axis==='x'){base.moveTo(px(b.start),pz(b.center));base.lineTo(px(b.end),pz(b.center));}else{base.moveTo(px(b.center),pz(b.start));base.lineTo(px(b.center),pz(b.end));}base.stroke();}
+base.font='bold 7px system-ui';base.fillStyle='#eef0d9';base.fillText('MARIN',px(-300),pz(-460));base.fillText('SF',px(-120),pz(0));base.fillText('OAKLAND',px(385),pz(-150));
 function minimap(entity:Entity|undefined){
-  const scale=.46,offset=120;
-  map.fillStyle='#263c40';map.fillRect(0,0,240,240);
-  map.fillStyle='#64706a';map.fillRect(9,9,222,222);
-  map.strokeStyle='#34484b';map.lineWidth=6;
-  for(let a=-180;a<=180;a+=60){map.beginPath();map.moveTo(a*scale+offset,9);map.lineTo(a*scale+offset,231);map.moveTo(9,a*scale+offset);map.lineTo(231,a*scale+offset);map.stroke();}
-  map.fillStyle='#99a092';BUILDINGS.forEach(b=>map.fillRect((b.x-b.w/2)*scale+offset,(b.z-b.d/2)*scale+offset,b.w*scale,b.d*scale));
-  STATIONS.forEach(s=>{map.beginPath();map.arc(s.x*scale+offset,s.z*scale+offset,3,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
-  session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle='#71cdd5';map.fillRect(e.x*scale+offset-1,e.z*scale+offset-1,2,2);});
-  session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id)return;map.beginPath();map.arc(e.x*scale+offset,e.z*scale+offset,3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
-  if(entity){map.save();map.translate(entity.x*scale+offset,entity.z*scale+offset);map.rotate(-entity.yaw);map.beginPath();map.moveTo(0,-6);map.lineTo(-4,5);map.lineTo(0,3);map.lineTo(4,5);map.closePath();map.fillStyle='#ffbe66';map.fill();map.restore();}
+  map.drawImage(mapBase,0,0);
+  STATIONS.forEach(s=>{map.beginPath();map.arc(px(s.x),pz(s.z),2.8,0,Math.PI*2);map.fillStyle='#a8f1cb';map.fill();});
+  session.world.entities.filter(e=>e.npc&&!e.driver).forEach(e=>{map.fillStyle='#71cdd5';map.fillRect(px(e.x)-1,pz(e.z)-1,2,2);});
+  session.world.players.forEach(p=>{const e=session.world.entities.find(e=>e.id===p.entityId);if(!e||p.id===session.id)return;map.beginPath();map.arc(px(e.x),pz(e.z),3,0,Math.PI*2);map.fillStyle='#eee5ce';map.fill();});
+  if(entity){map.save();map.translate(px(entity.x),pz(entity.z));map.rotate(-entity.yaw);map.beginPath();map.moveTo(0,-6);map.lineTo(-4,5);map.lineTo(0,3);map.lineTo(4,5);map.closePath();map.fillStyle='#ffbe66';map.fill();map.restore();}
 }
+
 const fleetDialog=$<HTMLDialogElement>('fleet-dialog');
 let previewVehicle:VehicleId='roadster';
 let fleetPreview:FleetPreview|undefined;
@@ -125,6 +130,7 @@ scene.start(dt=>{
   const touch=matchMedia('(pointer: coarse), (max-width: 800px)').matches;
   $('mission').textContent=e.kind==='person'?'Your next situationship has four wheels.':e.autopilot?'Hands off. The AV has this block.':e.y>2?'The sky is part of the street.':!spec?.airThrusters?'Try autonomous cruise on a street.':e.air<20?'Low air. Find a mint Supercharger ring.':touch?'Hold LIFT to leave the road.':'Hold SPACE to leave the road.';
   $('hint').textContent=e.kind==='person'?'Get near a parked or NPC car. Tap Take nearby car.':e.autopilot?'Steer, accelerate, or brake to take over.':!spec?.airThrusters?(touch?'Tap AV to cruise. Fleet lets you try every model.':'Press V to cruise. Press G to try every model.'):'Stop inside a mint ring to refill your air tanks.';
+  if(e.kind!=='person'&&!e.autopilot&&e.y<2&&e.x>30&&e.x<80&&e.z>45&&e.z<75){$('mission').textContent='Cross the Bay Bridge to Oakland.';$('hint').textContent='Follow the road over the water.';}
   $('air').textContent=spec?.airThrusters?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=spec?.airThrusters?`${e.air}%`:'0%';
   $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e);
 });

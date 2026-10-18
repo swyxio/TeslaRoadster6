@@ -1,5 +1,16 @@
 # Verification · 2026-10-17 Pacific
 
+## Bay geography rebuild
+
+- Hand-authored SF, Oakland, Yerba Buena and Marin land polygons; navigable Bay Bridge and Golden Gate decks, water, waterfront/port, parks, skyline landmarks and corresponding minimap. Geometry is compressed and streets/decks remain flat. See MAP.md for provenance and limits.
+- `pnpm test`: 18 tests pass, including both shore-to-shore crossings, water recovery, safe parked cars and a cross-Bay AV round trip. `pnpm build`: browser and Worker typechecks and Vite build pass.
+- Local Worker two-client integration passed. Local 64-client same-host smoke passed (8 seconds; minimum 77 snapshots/client, p95 inter-snapshot gap 111 ms). This is not WAN latency, mobile rendering or a sustained load test.
+- Deployed Worker version `2a0c90bf-8759-4eac-b813-83c5cb62517c`: health returned protocol version 3 and capacity 64; two-client integration passed. The deployed 64-client same-host smoke passed (8 seconds; minimum 77 snapshots/client, p95 inter-snapshot gap 160 ms). Snapshot delivery gaps are not input latency.
+- Chrome desktop: drove from SF across the Bay Bridge to Oakland, observed the bridge above water, Yerba Buena Island and the Oakland charger. Chrome 390×844 and 844×390 with touch emulation: controls and route visible; portrait acceleration exercised. Physical devices and frame rate remain unverified.
+- Screenshot: `screenshots/bay-bridge-drive.png` from the deployed game. The Golden Gate crossing was tested in simulation, not manually driven in the browser.
+
+## Earlier baseline · historical evidence
+
 ## Observed
 
 - Production URL: https://bay-drive.swyxio.workers.dev
@@ -19,7 +30,7 @@
 
 No sustained load,128-player load, geographic multi-region latency, adversarial abuse soak or actual phone thermals/frame rates tested. Public room codes offer no privacy guarantee. Active rooms use billed DO duration and WebSocket messages; total public-room creation is not globally quota-limited by this app. Monitor usage before broadly promoting the sandbox.
 
-Multiplayer presentation interpolates server snapshots without client prediction; remote latency can be felt. Camera can clip scenery at awkward angles; collision geometry is simplified. Trees/charger posts/bridge furniture are decorative. No sound, NPC traffic, quests, persistent inventory, shooting or death/respawn. The map has flat playable streets and scenic hills; it is not an accurate road network.
+Multiplayer presentation interpolates server snapshots without client prediction; remote latency can be felt. Camera can clip scenery at awkward angles; collision geometry is simplified. Trees/charger posts/bridge furniture are decorative. At that baseline there was no sound, NPC traffic, quests, persistent inventory, shooting or death/respawn; NPC traffic has since been added. The map has flat playable streets and scenic hills; it is not an accurate road network.
 
 ## Station provenance
 

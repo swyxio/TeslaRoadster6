@@ -1,4 +1,4 @@
-# Implementation contracts · v2
+# Implementation contracts · v3
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -9,8 +9,8 @@ These contracts are the handoff for other coding agents. The lead integrator own
 | Gameplay | `shared/game.ts`, `physics.ts`, `traffic.ts`, simulation tests | `shared/stations.ts` | Renderer, DOM, transport |
 | Network | `worker/*`, integration tests, Wrangler | Shared schemas | Client-supplied authority or physics |
 | UI/input | `src/main.ts`, `style.css`, `controls.ts` | Session and read-only shared state | State fields or network shapes |
-| Visuals/assets | `src/scene.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
-| Data/map | `shared/stations.ts`, `vehicles.ts`, building definitions | Documented primary sources | Live fetching at render time |
+| Visuals/assets | `src/scene.ts`, `bay-world.ts`, `vehicles.ts`, future `public/assets/` | Shared world and asset contract | Hitboxes, station positions, simulation |
+| Data/map | `shared/map.ts`, `stations.ts`, `vehicles.ts` | Documented primary sources | Live fetching at render time |
 
 Dependency flow: UI/input → session → authoritative simulation; snapshots → presentation. Presentation never writes the authoritative world. Solo and server use exactly the same simulation; solo is an explicit menu choice, never a silent network-failure fallback.
 
@@ -21,7 +21,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 - `yaw` and `roll` are radians. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left. Roll rotates around local Z.
 - `speed` is signed meters/second; UI converts to km/h by multiplying 3.6. `vy` is vertical meters/second. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second steps. `World.time` is simulated seconds, not epoch time. Never use render delta directly for physics.
-- Arena is X/Z ±240; collision geometry in `BUILDINGS` is authoritative. Do not add visual obstacles in roads without corresponding shared collisions. Current charger posts/trees/bridge furniture are decorative.
+- `shared/map.ts` owns map bounds, land polygons, roads, bridge decks and `BUILDINGS`; see [MAP.md](MAP.md). `isSurface()` is the authoritative ground support: land or a bridge at Y=0. Water is rendered at Y=−4; a grounded car stops at the shoreline, while a landing in open water returns it to an unoccupied spawn. Avoid visual obstacles in roads without shared collision. Charger posts, trees, bridge furniture and distant hills are decorative. Bridge decks and roads are flat, with no elevated terrain physics.
 
 ## World schema
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v2
+## Wire protocol v3
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:2,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:3,capacity:number}`.
 
 Client messages:
 
@@ -53,7 +53,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:2, capacity:number}
+{type:"welcome", id:string, version:3, capacity:number}
 {type:"state", world:World}
 ```
 
@@ -84,7 +84,7 @@ Keep brand/menu access in menu, game, joining and error states. Fullscreen/point
 5. List assets, provenance/licenses, budgets and known gaps. No unlicensed GTA assets or unexplained remote dependencies.
 6. Provide a small concrete diff and verification result. Do not change deployment names, domains, accounts or shared contracts as part of an art/UI task.
 
-## Fleet and autonomy contract (v2)
+## Fleet and autonomy contract
 
 `shared/vehicles.ts` defines all model identities, dimensions, wheelbase, mass, steering, acceleration, braking, capabilities and provenance. Renderer consumes the same IDs and dimensions. Numbers marked estimates remain estimates; never silently promote them to manufacturer specifications. All handling is arcade tuning. Only `roadster` Air Edition has flight/boost.
 
@@ -92,7 +92,7 @@ Collision bodies are oriented rectangles using registry length/width; mass-weigh
 
 Every model has one parked entity and one NPC traffic entity. `npc` is identity; `autopilot` is current control mode. NPCs have null `driver`, so on-foot players may take them; taking one disables autonomy and stops it. Human-occupied vehicles cannot be taken. Exiting/disconnecting releases an NPC back to street autonomy after a pause when it can attach to a route. Other empty vehicles remain parked unless explicitly enabled.
 
-Autonomy uses deterministic clockwise right-lane loops and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/lift/boost/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
+Autonomy uses deterministic right-lane loops, including a cross-Bay route, and obstacle yielding. Engage only grounded within 9 m of a supported street route. A player's throttle/steer/brake/lift/boost/roll input immediately cancels AV mode. The server owns route state and motion; renderers never advance traffic. No real AV/vehicle API is used. Mode is available for every model as game fiction, including historical prototypes.
 
 Fleet selection requires grounded speed≤1 m/s. It releases the old vehicle, creates the requested player-owned model at a free spawn, and removes abandoned personal duplicates. IDs are strict allowlisted own registry properties (not `in` checks susceptible to prototype names). No client-supplied mass, coordinates or damage. Names bypass the action cooldown but remain rate-limited so startup selection isn't lost behind a name message. Protocol version constant is `PROTOCOL_VERSION` in shared/game.ts; incompatible clients explicitly reload.
 

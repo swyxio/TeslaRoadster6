@@ -21,7 +21,7 @@ Distinct cues include open original Roadster, new sports wedge, Cybertruck's ang
 
 ## Environment
 
-Read `BUILDINGS` for collision/roof positions. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. Terrain/elevated roads/ramps require a shared height/collision design before meshes are introduced. Bridge, hillside and water models are currently scenery; do not imply traversable surfaces that simulation cannot support.
+Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes or station rings. Station IDs, source URLs and positions belong in shared data. Terrain/elevated roads/ramps require a shared height/collision design before meshes are introduced. Bridge, hillside and water models are currently scenery; do not imply traversable surfaces that simulation cannot support.
 
 ## UI alternatives
 

@@ -12,4 +12,6 @@ Use Chrome for authenticated external sessions. If browser/desktop automation fa
 
 At completion, try to integrate to main and deploy within user-authorized scope; verify live paths and report limitations. Do not alter unrelated deployments. Keep docs/VERIFICATION.md current with dated observations.
 
-Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage. Protocol v2 and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
+Fleet source of truth: shared/vehicles.ts. Do not present estimated AV mass/geometry or arcade tuning as manufacturer specs. All 26 catalog IDs must retain parked/NPC/drivable/takeover coverage. Protocol v3 and new wheel assemblies are documented in CONTRACTS.md. Shared mesh geometry must not be disposed per entity.
+
+Map source of truth: shared/map.ts; read docs/MAP.md before changing terrain, coastlines, bridges or landmarks. Do not move visual streets or water independently of authoritative surfaces and collisions.

@@ -6,10 +6,10 @@ import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
 test('authoritative inputs move forward and airborne stunts consume air then land', () => {
-  const { world, car } = setup(); const start = car.z;
+  const { world, car } = setup(); const start = {x:car.x,z:car.z,yaw:car.yaw};
   const inputs = new Map([['one', { ...NEUTRAL, throttle: 1, lift: true, roll: 1 }]]);
   for (let i = 0; i < 20; i++) step(world, inputs, 0.05);
-  assert.ok(car.z < start); assert.ok(car.y > 1); assert.ok(car.roll > 0); assert.ok(car.air < 100);
+  assert.ok((car.x-start.x)*-Math.sin(start.yaw)+(car.z-start.z)*-Math.cos(start.yaw)>0); assert.ok(car.y > 1); assert.ok(car.roll > 0); assert.ok(car.air < 100);
   car.speed = 0;
   for (let i = 0; i < 100; i++) step(world, new Map(), 0.05);
   assert.equal(car.y, 0); assert.equal(car.roll, 0); assert.equal(car.vy, 0);
@@ -26,7 +26,7 @@ test('exit, take another car, disconnect keeps ownership consistent', () => {
 });
 test('collisions stop buildings and transfer motion between cars', () => {
   const { world, car } = setup(); const b = BUILDINGS[0];
-  car.x = b.x; car.z = b.z + b.d / 2 + 1.9; car.speed = 40;
+  car.x = b.x; car.z = b.z + b.d / 2 + 1.9; car.speed = 40; car.yaw = 0;
   const start = car.z; step(world, new Map(), 0.05); assert.equal(car.z, start); assert.ok(car.speed < 0); assert.ok(car.health < 100);
   const other = world.entities.find(e => e.id === 'parked-1')!;
   car.x = 0; car.z = 0; car.speed = 10; other.x = 0; other.z = -3.5;
@@ -57,7 +57,7 @@ test('protocol rejects malformed, non-finite, oversized and out-of-range input',
 });
 test('rooftop landing stays supported and can drive off; positive steer turns left', () => {
   const { world, car } = setup(); const roof = BUILDINGS[0];
-  car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5;
+  car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5; car.yaw = 0;
   for (let i = 0; i < 80; i++) step(world, new Map(), 0.05);
   assert.equal(car.y, roof.h); assert.equal(car.vy, 0);
   for (let i = 0; i < 30; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);

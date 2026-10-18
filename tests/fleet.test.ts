@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { MAP_BOUNDS } from '../shared/map';
 import { VEHICLES,VEHICLE_IDS } from '../shared/vehicles';
 import { addPlayer,chooseVehicle,createWorld,interact,makeEntity,NEUTRAL,step,toggleAutopilot } from '../shared/game';
 import { body,contact } from '../shared/physics';
@@ -51,5 +52,5 @@ test('two minutes of traffic remain finite and do not grow entity count',()=>{
   for(let i=0;i<2400;i++)step(world,new Map(),.05);
   assert.equal(world.entities.length,count);
   assert.ok(world.entities.every(e=>[e.x,e.z,e.yaw,e.speed,e.health].every(Number.isFinite)));
-  assert.ok(world.entities.every(e=>Math.abs(e.x)<240&&Math.abs(e.z)<240));
+  assert.ok(world.entities.every(e=>e.x>MAP_BOUNDS.minX&&e.x<MAP_BOUNDS.maxX&&e.z>MAP_BOUNDS.minZ&&e.z<MAP_BOUNDS.maxZ));
 });

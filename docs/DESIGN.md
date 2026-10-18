@@ -12,7 +12,7 @@ The simulation prioritizes arcade legibility over realism. Ground friction slows
 
 ## Current content
 
-480×480m grid with flat streets, collidable buildings/rooftops, Golden Gate-inspired bridge silhouette, water and distant hills; not a geographic reconstruction. SF, East Bay and Peninsula are compressed districts. Decorative bridge currently overlays the northern road, not a separate elevated or cross-water physics surface. Four primary-source station identities; all in-game placements are artistic coordinates. Air refilling is fictional, as is the flight handling. Chargers do not model electricity or real station service hours.
+A compressed Bay spans distinct San Francisco and Oakland shores, Yerba Buena Island and Marin. The Bay Bridge crosses water to Oakland; the Golden Gate crosses the strait to Marin. Street grids, waterfront, parks, port cranes and landmark silhouettes are hand-authored, not a surveyed map. Driveable decks and streets are flat at the same height; water is below and off-bridge water landings recover the car to a safe street. See [MAP.md](MAP.md). Four primary-source station identities use artistic coordinates; air refilling and flight are fictional.
 
 Controls: steering plus forward/reverse; separate brake. Person movement currently uses the same turn-and-move arcade controls. Exit requires grounded speed≤5m/s; entry selects closest empty car within7m. Unstuck recovery repositions the current entity while preserving condition/air and is not death/respawn.
 
@@ -26,7 +26,7 @@ Alternatives can change style, HUD organization and models. Preserve the same ga
 
 Target is a busy small playground, not a single giant universe. Default64 participants per room; configurable up to provisional128. Multiple independent rooms scale horizontally through Durable Objects. A platform connection limit is not a simulation capacity promise. Initial implementation uses full10Hz snapshots and all-pairs collisions. Increase room limits only after CPU, memory, outbound bytes, snapshot gaps, input-to-observed latency and mobile rendering have been measured.
 
-First scaling step, when measurements justify it: spatial grid for collisions and recipient interest neighborhoods. Next: compact delta snapshots and sequence numbers with prediction/reconciliation. Do not introduce these ahead of demonstrated need. A cross-room persistent world would require a new design rather than treating ephemeral state as durable storage.
+Building collision uses a spatial index. First networking scaling step, when measurements justify it: recipient interest neighborhoods. Next: compact delta snapshots and sequence numbers with prediction/reconciliation. Do not introduce these ahead of demonstrated need. A cross-room persistent world would require a new design rather than treating ephemeral state as durable storage.
 
 ## Deferred combat and respawning — design only
 
