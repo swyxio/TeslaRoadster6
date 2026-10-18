@@ -271,9 +271,10 @@ export function interact(world:World,playerId:string):void {
     person.lastJump=e.lastJump;person.lastFlip=e.lastFlip;release(e,world);player.entityId=person.id;world.entities.push(person);cleanupCars(world);resetAchievementFlight(player);
   }
 }
-export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
+/** allowAnyVehicle is reserved for an isolated sandbox authority. */
+export function chooseVehicle(world:World,id:string,kind:VehicleId,allowAnyVehicle=false):boolean {
   const player=world.players.find(p=>p.id===id),old=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!old||old.supportId===null||old.supportId==='ferry'||old.loopAngle!==null||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind)||VEHICLES[kind].brand!=='Tesla')return false;
+  if(!player||!old||old.supportId===null||old.supportId==='ferry'||old.loopAngle!==null||Math.abs(old.speed)>1||!Object.hasOwn(VEHICLES,kind)||(!allowAnyVehicle&&VEHICLES[kind].brand!=='Tesla'))return false;
   // Owned cars and the on-foot avatar are removed below; borrowed cars remain
   // in the world and must still block a replacement spawn.
   const removed=(old.owner===id&&!old.cab)||old.id===`person-${id}`;
@@ -390,6 +391,23 @@ export function resetPlayer(world:World,id:string):void {
     return;
   }
   if(baySpawn)placeEntity(e,baySpawn,false);
+}
+/** Caller authorizes sandbox access. Never accepts a height or bypasses collisions. */
+export function teleportPlayer(world:World,id:string,point:{x:number;z:number}):boolean {
+  const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car||!Number.isFinite(point.x)||!Number.isFinite(point.z))return false;
+  for(const radius of [0,5,10,20])for(let n=0;n<(radius?8:1);n++){
+    const angle=n*Math.PI/4,x=point.x+Math.cos(angle)*radius,z=point.z+Math.sin(angle)*radius;
+    const candidate=makeEntity('teleport',car.kind,x,z);candidate.yaw=car.yaw;
+    const deck=overpassHeight(x,z);
+    if(deck!==null&&deck>candidate.y){candidate.y=deck;candidate.supportId='overpass';}
+    if(!fits(world,candidate,car))continue;
+    leaveParking(world.parking,id);leaveRace(world.races,id);removeFerryPassenger(world.ferry,car.id);
+    placeEntity(car,{x,z,yaw:car.yaw},false);
+    car.y=candidate.y;car.supportId=candidate.supportId;
+    resetAchievementFlight(player);return true;
+  }
+  return false;
 }
 export function parkingAction(world:World,id:string,action:ParkingMode|'start'|'leave'):boolean {
   if(action==='leave'){leaveParking(world.parking,id);return true;}

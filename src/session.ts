@@ -1,3 +1,4 @@
+import { playtestMode } from '../shared/playtest';
 import type { VehicleId } from '../shared/vehicles';
 import { NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, createEmptyWorld, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
@@ -85,6 +86,9 @@ export class Session {
   room = '';
   roomFull = false;
   constructor(private now:()=>number=()=>performance.now(),private edgeCounters?:()=>Pick<Input,'jump'|'flip'>) {}
+  get playtest(){return playtestMode(this.room);}
+  get sandbox(){return this.playtest==='sandbox';}
+  teleportResult:{requestId:number;ok:boolean}|null=null;
   get walletBlocked():boolean {return this.walletStatus==='connecting'||this.walletStatus==='syncing'||this.walletStatus==='failed';}
   private waitForWallet(requestId:number):void {
     clearTimeout(this.walletTimeout);this.walletStatus='connecting';this.walletError='';this.prediction.reset();
@@ -106,7 +110,7 @@ export class Session {
     kind ??= 'roadster';
     this.connectionGeneration++;
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.cabBuyResult=null;this.cabPaintResult=null;this.world = createEmptyWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode&&!this.playtest?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.cabBuyResult=null;this.cabPaintResult=null;this.world = createEmptyWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, 10000);
@@ -121,8 +125,8 @@ export class Session {
           this.id = message.id; this.capacity = message.capacity; this.roomEpoch=message.roomEpoch;this.lastState = this.now();
           socket.send(JSON.stringify({type:'name',name:this.name}));
           if(!this.identityRequestId)this.identityRequestId=++this.nextUpgradeRequest;
-          if(this.identityCode)this.waitForWallet(this.identityRequestId);
-          socket.send(JSON.stringify({type:'identity',code:this.identityCode??null,requestId:this.identityRequestId}));
+          if(this.identityCode&&!this.playtest)this.waitForWallet(this.identityRequestId);
+          socket.send(JSON.stringify({type:'identity',code:this.playtest?null:this.identityCode??null,requestId:this.identityRequestId}));
           if(kind!=='roadster'){if(this.walletBlocked)this.startingVehicle=kind;else this.actionWithBarrier({type:'selectVehicle',kind});}
         }
         if (message.type === 'state' && this.id) {
@@ -166,7 +170,7 @@ export class Session {
         if(message.type==='inputEdge'&&(message.kind==='jump'||message.kind==='flip')&&Number.isSafeInteger(message.id)&&
           Number.isSafeInteger(message.targetTick)&&['accepted','rescheduled','processed','expired','superseded'].includes(message.status))
           this.prediction.edgeOutcome(message.kind,message.id,message.status,message.targetTick);
-        if (message.type === 'identityResult' && message.requestId===this.identityRequestId && this.walletStatus!=='failed') {
+        if (message.type === 'identityResult' && message.requestId===this.identityRequestId && this.walletStatus!=='failed' && !this.playtest) {
           const levelBaseline=message.ok&&this.identityCode&&this.wallet?{level:this.wallet.level,eligibleIncome:this.wallet.eligibleIncome,afterSnapshot:this.snapshotVersion}:null;
           this.identityResult={requestId:message.requestId,ok:message.ok,message:message.message,levelBaseline};
           if(this.identityCode){
@@ -192,6 +196,7 @@ export class Session {
         if (message.type === 'vehicleStyleResult') this.vehicleStyleResult = message;
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
+        if (message.type === 'teleportResult') this.teleportResult=message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
         if(message.type==='starshipStatus'&&message.requestId===this.starshipStatusRequest&&
@@ -298,7 +303,7 @@ export class Session {
     this.starshipContextVersion++;
     this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
-    if(this.id&&this.socket?.readyState===WebSocket.OPEN){
+    if(!this.playtest&&this.id&&this.socket?.readyState===WebSocket.OPEN){
       if(code)this.waitForWallet(requestId);
       else if(this.walletStatus!=='guest'){clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.walletStatus='failed';this.walletError='Rejoin to start a new guest driver.';}
       this.send({type:'identity',code:code??null,requestId});
@@ -324,6 +329,11 @@ export class Session {
     const requestId=++this.nextUpgradeRequest;
     if(this.status!=='online'||this.walletStatus!=='ready')return null;
     try{return this.send({type:'market',...request,requestId})?requestId:null;}catch{return null;}
+  }
+  teleport(x:number,z:number){
+    const requestId=++this.nextUpgradeRequest;this.teleportResult=null;
+    if(!this.sandbox||!this.actionWithBarrier({type:'teleport',x,z,requestId}))this.teleportResult={requestId,ok:false};
+    return requestId;
   }
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;

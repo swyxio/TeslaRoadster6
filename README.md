@@ -169,3 +169,9 @@ No framework is needed for this small HUD. Keep the simulation independent from 
 ## License and attribution
 
 First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). The highway source extract and generated traces are © OpenStreetMap contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); see [map provenance and the reproducible bake](docs/MAP.md). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Restaurant names identify real places, with fictional in-game locations and no affiliation. Tesla, Waymo, Cruise, Zoox and SpaceX names are used for fictional game content; they do not imply endorsement, and the MIT license does not grant trademark rights.
+
+For a fresh balance test, use **Room settings → Playtest → Fresh driver**. For
+maximum upgrades, all vehicles, unlimited spending and map teleport, join
+[`sandbox`](https://tesland.swyx.io/?room=sandbox) or share a `sandbox-*` code.
+These multiplayer rooms leave your saved driver untouched and do not save
+progress. [Playtest modes and boundaries](docs/PLAYTEST_ROOMS.md).

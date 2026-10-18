@@ -187,3 +187,5 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .style-options button[style*="--swatch"]::before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;background:var(--swatch);border:1px solid #ffffff90}
 
 #shop-collection{margin:0 0 14px}#shop-collection h3{margin:0 0 4px}#shop-collection p{margin:0 0 8px;color:#bdccc4;font-size:11px}#shop-collection .shop-item[hidden]{display:none}
+
+.playtest-menu{margin:16px 0;padding:12px;border:1px solid #ffffff25;border-radius:8px;font-size:12px;color:#b6cabc}.playtest-menu summary{cursor:pointer;min-height:32px;color:#ffd18d;line-height:1.6}.playtest-menu p{line-height:1.6}.playtest-options{display:flex;flex-wrap:wrap;gap:8px}.playtest-options button{min-height:44px;padding:10px 14px;border:1px solid #ffd18d70;border-radius:6px;background:#203e44;color:#ffd18d}.fleet-list button[hidden]{display:none}

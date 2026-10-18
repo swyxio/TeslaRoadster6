@@ -428,3 +428,24 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
   session.disconnect();
 });
+
+test('playtest rooms never send a remembered identity and returning to Bay restores it',()=>{
+  const session=new Session();session.setIdentity('private-saved-driver-code');
+  for(const room of ['sandbox','practice-fresh']){
+    session.join(room,'Driver');const socket=Socket.last;
+    socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+    assert.equal(session.walletStatus,'guest');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+    const identity=socket.sent.map(raw=>JSON.parse(raw)).find(m=>m.type==='identity');
+    assert.equal(identity.code,null);
+    socket.message({type:'identityResult',requestId:identity.requestId,ok:true,message:'Practice driver ready.'});
+    assert.equal(session.identityResult,null,'practice cannot confirm or overwrite a remembered driver');
+    session.setIdentity('private-saved-driver-code');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+  }
+  session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.equal(session.walletStatus,'connecting');
+  assert.ok(socket.sent.map(raw=>JSON.parse(raw)).some(m=>m.type==='identity'&&m.code==='private-saved-driver-code'));
+  session.disconnect();
+});

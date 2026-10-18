@@ -305,3 +305,15 @@ Perfect Park and Queue Cutter require the corresponding parking completion; Chec
 The owner-only wallet includes committed counts and claimed ranks; private counters are not replicated to other players. Profile receipt, count, rank and cash commit atomically through the fenced room journal. Duplicated event IDs replay the existing receipt. A pre-tier profile seeds the known delivery total and one occurrence proven by each relevant saved badge, marks those ranks claimed without back pay, and leaves unknown history at zero; malformed stored tier data fails closed. A generic progress checkpoint cannot overwrite authoritative counts. Each newly reached tier pays once. The delivery ladder preserves its existing 1 / 10 / 100 awards, with $50,000 at 1,000 and $200,000 at 10,000. Other ladders pay $350 / $1,500 / $5,000 / $20,000 at 10 / 100 / 1,000 / 10,000; the first rank adds $100 for families without a guaranteed cash-bearing legacy award and $0 extra for roof landings, rooftop deliveries and crossings, whose existing first awards still apply. These amounts contribute to cash and eligible income, not delivery-only `earned`.
 
 `shared/research.ts` defines research visits and workshop discounts. Stop a car on the ground within 9 m of each landmark arrival at no more than 4 m/s: UCSF pays $250 and unlocks the Homes Lab badge; Berkeley pays $400 and unlocks 20% off efficient nozzles; Stanford pays $600 and unlocks 20% off sport motors; SFO pays $600 and unlocks 20% off air tanks. An SFO delivery adds a separate one-time $1,000 achievement. The profile records awarded IDs and adds awards to cash and eligible income, without changing delivery-only `earned`. Current cash can change region access. Clients cannot assert unlocks or prices. See [verification](VERIFICATION.md) for the tested wallet and replay paths.
+
+### Isolated playtest rooms
+
+Reserved `sandbox`/`sandbox-*` and `practice`/`practice-*` names create ephemeral
+multiplayer sessions with no persistent economy or identity binding. The welcome
+includes `playtestMode: 'sandbox' | 'practice' | null`; private recovery codes are
+withheld by the client and rejected by the server in both modes. Sandbox alone
+permits all-model fleet selection and fenced `{type:'teleport', x, z, requestId,
+actionSeq, edgeBaseline}` requests, answered with `teleportResult` and a normal
+pose/control revision update on success. Normal and practice rooms reject
+teleport. See [Playtest rooms](PLAYTEST_ROOMS.md) for persistence boundaries,
+finite unlimited-spending representation and the local isolation test.
