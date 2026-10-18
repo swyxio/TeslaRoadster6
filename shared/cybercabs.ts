@@ -21,6 +21,58 @@ export function cabRevenueAward(gross:number, claimed:boolean):number|null {
   return !claimed&&gross>=20_000?2_000:0;
 }
 
+export type CybercabFleet = { ownerId:string; assetIds:readonly string[] };
+export type DispatchedCybercab = { ownerId:string; assetId:string; occupied:boolean };
+
+/**
+ * Allocate the room's provisional traffic budget in rounds across owners.
+ * Occupied cars stay until their driver releases them; other already-dispatched
+ * cars are preferred to avoid unnecessary churn. Retired occupied cars consume
+ * `reservedSlots` but have no fleet identity. The caller must settle a cab's
+ * final interval before retiring it, and wait for a real free slot before
+ * dispatching a replacement. A desired dispatch is not proof of operation.
+ *
+ * Fleets are in stable room-join order and contain only currently authorized
+ * owners and assets. Dispatched entries must refer to those same fleets.
+ */
+export function planCybercabDispatch(fleets:readonly CybercabFleet[], dispatched:readonly DispatchedCybercab[], budget:number, reservedSlots=0):{
+  retire:DispatchedCybercab[]; dispatch:{ownerId:string;assetId:string}[];
+}|null {
+  if(!Number.isSafeInteger(budget)||budget<0||!Number.isSafeInteger(reservedSlots)||reservedSlots<0||
+    dispatched.length+reservedSlots>budget)return null;
+  const owners=new Map<string,readonly string[]>(),assetOwners=new Map<string,string>();
+  for(const fleet of fleets){
+    if(!fleet.ownerId||owners.has(fleet.ownerId)||!Array.isArray(fleet.assetIds))return null;
+    owners.set(fleet.ownerId,fleet.assetIds);
+    for(const assetId of fleet.assetIds){
+      if(!assetId||assetOwners.has(assetId))return null;
+      assetOwners.set(assetId,fleet.ownerId);
+    }
+  }
+  const current=new Map<string,DispatchedCybercab>();
+  for(const cab of dispatched){
+    if(assetOwners.get(cab.assetId)!==cab.ownerId||current.has(cab.assetId)||typeof cab.occupied!=='boolean')return null;
+    current.set(cab.assetId,cab);
+  }
+  const selected=new Set(dispatched.filter(cab=>cab.occupied).map(cab=>cab.assetId));
+  const counts=new Map(fleets.map(fleet=>[fleet.ownerId,fleet.assetIds.filter(assetId=>selected.has(assetId)).length]));
+  while(selected.size<budget-reservedSlots){
+    let candidate:CybercabFleet|undefined;
+    for(const fleet of fleets){
+      if(fleet.assetIds.every(assetId=>selected.has(assetId)))continue;
+      if(!candidate||counts.get(fleet.ownerId)!<counts.get(candidate.ownerId)!)candidate=fleet;
+    }
+    if(!candidate)break;
+    const assetId=candidate.assetIds.find(id=>!selected.has(id)&&current.has(id))??candidate.assetIds.find(id=>!selected.has(id))!;
+    selected.add(assetId);counts.set(candidate.ownerId,counts.get(candidate.ownerId)!+1);
+  }
+  return {
+    retire:dispatched.filter(cab=>!selected.has(cab.assetId)),
+    dispatch:fleets.flatMap(fleet=>fleet.assetIds.filter(assetId=>selected.has(assetId)&&!current.has(assetId))
+      .map(assetId=>({ownerId:fleet.ownerId,assetId}))),
+  };
+}
+
 // Keep the same numerator units as the shared event accrual contract: hourly
 // dollars times milliseconds times half-multiplier units. This remainder can
 // be carried into event-aware settlement once event history is authoritative.
