@@ -2,6 +2,10 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Development resumed · 2026-10-18 Pacific
+
+After the production v32 checks below, the user lifted the global feature freeze and requested periodic performance checks. The paused progression, Cybercab/market, Starship, driving/chat UX and Bay landmarks article chats were resumed; the active wallet/showroom chat owns their shared persistence contract. This changes the release policy, not the measured results: known performance gaps remain documented. See [the current integration policy](PERFORMANCE_RELEASE_GATES.md#feature-integration-and-periodic-checks).
+
 ## Production driving release · 0.0.15 Alpha / protocol v32 · 2026-10-18 Pacific
 
 - PR #65 merged as `74c2255`; native Workers Build `daa8e1ff-a18a-410c-8377-dba70de4f09f` succeeded. Production advertised v32/capacity eight, served the 0.0.15 changelog, and its `index-DQSL1AOa.js` SHA-256 matched the final tested local build. All 609 tests and the build passed before merge; native CI ran them again.
