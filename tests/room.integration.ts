@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_RIGHT, type World } from '../shared/game';
 import { DOME } from '../shared/dome';
+import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -58,6 +59,15 @@ try {
   await eventually(()=>!!(two.state.world?.entities.find(e=>e.id===entityId)?.thrusters!&THRUSTER_SIDE_RIGHT),'remote flip exhaust replicated');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.stunts===1&&Math.abs(e.air-(remaining-9))<.01;},'one-tap flip completion replicated');
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y===0;},'assisted landing replicated');
+  // A double jump from the Bay approach reaches the low City Glide lane.
+  // Check its server-applied refill from the other client's snapshots.
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:2}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.y>2;},'first jump toward sky lane');
+  one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump:3}}));
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&currentAt(e)?.id==='market';},'remote car enters shared sky lane');
+  const streamAir=two.state.world!.entities.find(e=>e.id===entityId)!.air;
+  await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.air>streamAir+2&&e.vx>2;},'server applies sky-lane speed and air');
+  one.socket.send(JSON.stringify({type:'reset'}));await delay(500);
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'arena entry replicated');
   assert.equal(two.state.world!.soccer.blueScore,0);assert.equal(two.state.world!.soccer.orangeScore,0);
@@ -84,5 +94,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, arena entry, shared ball impact, replicated goal and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, shared sky-lane speed and refill, arena entry, shared ball impact, replicated goal and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
 } finally { one.socket.close(); two.socket.close(); }
