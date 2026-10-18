@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 550" role="img" aria-labelledby="title desc">
+<title id="title">Three clocks, one drive</title>
+<desc id="desc">An illustrative 200-millisecond timeline shows physics ticks every 50 milliseconds, snapshots every 100 milliseconds, and frames at 60 per second. If the browser draws only the latest snapshot, six frames show the same car position before the next snapshot makes the car jump.</desc>
+<rect width="320" height="550" rx="14" fill="#17383c"/>
+<g font-family="system-ui, -apple-system, sans-serif" fill="#f2f7ee">
+<text x="20" y="34" font-size="21" font-weight="700">Three clocks, one drive</text>
+<text x="20" y="57" font-size="13.5" fill="#bad0c5">An example over 200 milliseconds</text>
+<path d="M25 95 L25 418" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="25" y="88" font-size="13" fill="#bad0c5" text-anchor="middle">0 ms</text>
+<path d="M92.5 95 L92.5 418" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="92.5" y="88" font-size="13" fill="#bad0c5" text-anchor="middle">50</text>
+<path d="M160 95 L160 418" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="160" y="88" font-size="13" fill="#bad0c5" text-anchor="middle">100</text>
+<path d="M227.5 95 L227.5 418" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="227.5" y="88" font-size="13" fill="#bad0c5" text-anchor="middle">150</text>
+<path d="M295 95 L295 418" stroke="#47645f" stroke-width="1" stroke-dasharray="4 6"/>
+<text x="295" y="88" font-size="13" fill="#bad0c5" text-anchor="middle">200</text>
+<text x="20" y="122" font-size="16" font-weight="700">Room physics</text>
+<text x="300" y="122" font-size="13" fill="#bad0c5" text-anchor="end">20 ticks / sec</text>
+<path d="M25 148 L295 148" stroke="#53736e" stroke-width="1"/>
+<circle cx="25" cy="148" r="5.5" fill="#99c9f2"/>
+<circle cx="92.5" cy="148" r="5.5" fill="#99c9f2"/>
+<circle cx="160" cy="148" r="5.5" fill="#99c9f2"/>
+<circle cx="227.5" cy="148" r="5.5" fill="#99c9f2"/>
+<circle cx="295" cy="148" r="5.5" fill="#99c9f2"/>
+<text x="20" y="197" font-size="16" font-weight="700">Snapshots</text>
+<text x="300" y="197" font-size="13" fill="#bad0c5" text-anchor="end">about 10 / sec</text>
+<path d="M25 223 L295 223" stroke="#53736e" stroke-width="1"/>
+<rect x="19.5" y="217.5" width="11" height="11" rx="2" fill="#a4e6bb"/>
+<rect x="154.5" y="217.5" width="11" height="11" rx="2" fill="#a4e6bb"/>
+<rect x="289.5" y="217.5" width="11" height="11" rx="2" fill="#a4e6bb"/>
+<text x="20" y="268" font-size="16" font-weight="700">Browser frames</text>
+<text x="300" y="268" font-size="12.5" fill="#bad0c5" text-anchor="end">60 / sec in this example</text>
+<text x="20" y="292" font-size="12.8" fill="#bad0c5">If each frame draws only the latest snapshot:</text>
+<rect x="15.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M17.5 350 L32.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="18.5" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="38" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M40 350 L55 350" stroke="#79938a" stroke-width="1"/>
+<rect x="41" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="60.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M62.5 350 L77.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="63.5" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="83" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M85 350 L100 350" stroke="#79938a" stroke-width="1"/>
+<rect x="86" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="105.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M107.5 350 L122.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="108.5" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="128" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M130 350 L145 350" stroke="#79938a" stroke-width="1"/>
+<rect x="131" y="340" width="7" height="7" rx="2" fill="#ffc88f"/>
+<rect x="150.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M152.5 350 L167.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="159.5" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="173" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M175 350 L190 350" stroke="#79938a" stroke-width="1"/>
+<rect x="182" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="195.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M197.5 350 L212.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="204.5" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="218" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M220 350 L235 350" stroke="#79938a" stroke-width="1"/>
+<rect x="227" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="240.5" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M242.5 350 L257.5 350" stroke="#79938a" stroke-width="1"/>
+<rect x="249.5" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<rect x="263" y="315" width="19" height="42" rx="4" fill="#254b4a" stroke="#61827b"/>
+<path d="M265 350 L280 350" stroke="#79938a" stroke-width="1"/>
+<rect x="272" y="340" width="7" height="7" rx="2" fill="#a4e6bb"/>
+<path d="M148.75 307 L148.75 367" stroke="#ffc88f" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="83" y="388" font-size="13" fill="#bad0c5" text-anchor="middle">same position</text>
+<text x="227" y="388" font-size="13" fill="#bad0c5" text-anchor="middle">jump to next position</text>
+<rect x="16" y="432" width="288" height="96" rx="9" fill="#254b4a"/>
+<text x="28" y="455" font-size="14" font-weight="600">A fast frame can redraw</text>
+<text x="28" y="473" font-size="14" font-weight="600">an old position.</text>
+<text x="28" y="497" font-size="13.5" fill="#bad0c5">Smooth motion needs positions</text>
+<text x="28" y="516" font-size="13.5" fill="#bad0c5">between updates.</text>
+</g></svg>
