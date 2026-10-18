@@ -1,6 +1,6 @@
 Your first Tesland delivery gets you moving. A few more get you thinking: keep saving for the next city, buy a Cybercab that earns alongside you, or spend some cash making your car your own? We modeled those choices in five-minute slices, then followed drivers all the way from San Francisco to their first home—and, eventually, a shared launch to Mars.
 
-Today you can deliver around the Bay and contribute to a room's Mars mission. The persistent fleet, property market and game-wide milestone in this article are the economy we want to build next.
+Today you can deliver around the Bay and contribute to a room's Mars mission. We want to grow that into an economy of owned cabs, property and a game-wide launch. The simulations use a proposed pay scale: current delivery pay is lower, so reaching these property prices will take longer until fares, prices and progression are rebalanced together.
 
 ## The first big purchase
 
@@ -26,7 +26,7 @@ That dip in cash is the interesting part. Buying a cab makes you poorer for a wh
 
 ## Your wallet is your level
 
-We considered an XP system, then chose the simpler option: **your current cash balance determines your level**. Earn enough and the Bay opens up. Spend enough and your level can fall until you earn it back. Achievements and purchases stay yours.
+We considered an XP system, then chose a simpler direction: **your current cash balance determines your level**. Earn enough and the Bay opens up. Spend enough and your level can fall until you earn it back. Achievements and purchases stay yours.
 
 A driver who spends below a city threshold can finish a job already in progress and take local contracts. Re-entering later may require rebuilding the balance. We should show the level a purchase will leave you with before you buy it.
 
