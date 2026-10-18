@@ -52,8 +52,8 @@ async function rpc<T>(op:string,fields:Record<string,unknown>={},timeout=10_000)
   if(!response.ok)throw new Error(`${op}: ${response.status} ${body}\n${logs}`);
   return JSON.parse(body) as T;
 }
-async function seed(driverId:string,fields:Record<string,unknown>,clearTiers=false){
-  const response=await call('/__tier-test',{driverId,fields,clearTiers});
+async function seed(driverId:string,fields:Record<string,unknown>,clearTiers=false,clearCollections=false){
+  const response=await call('/__tier-test',{driverId,fields,clearTiers,clearCollections});
   if(!response.ok)throw new Error(`fixture seed: ${response.status} ${await response.text()}`);
 }
 type Profile={revision:number;sequence:number;progress:DriverProgress;fence:string};
@@ -70,11 +70,11 @@ function achievement(e:ReturnType<typeof entry>,sequence:number,evidence:Achieve
   return {eventId:randomUUID(),driverId:e.driverId,fence:e.fence,roomId:e.room,walletOrder:sequence,clock:0,action:{kind:'achievement',evidence}};
 }
 async function profile(e:ReturnType<typeof entry>){return rpc<Profile>('profile',e);}
-async function stageAndSubmit(e:ReturnType<typeof entry>,evidence:AchievementEvidence){
+async function stageAndSubmit(e:ReturnType<typeof entry>,evidence:AchievementEvidence,acknowledge=true){
   const before=await profile(e),stage=achievement(e,before.sequence+1,evidence),intent=makeIntent(e,stage,before);
   assert.equal(await rpc('stage-achievement',{...e,stage}),'accepted');
   const result=await rpc<DriverOutcome>('submit',{...e,intent});success(result);
-  assert.equal(await rpc('ack',{...e,intent}),true);
+  if(acknowledge)assert.equal(await rpc('ack',{...e,intent}),true);
   return {before,stage,intent,result};
 }
 
@@ -84,7 +84,7 @@ try{
   // A stored pre-tier profile normalizes once without retrospectively adding cash.
   const legacy=entry();await rpc('producer',{...legacy,active:true});await rpc('acquire',legacy);
   await seed(legacy.driverId,{cash:7_000,eligibleIncome:4_500,completed:25,
-    unlocked:['deliveries-1','deliveries-10','roof-rider','race-winner','garage-champion']},true);
+    unlocked:['deliveries-1','deliveries-10','roof-rider','race-winner','garage-champion']},true,true);
   const legacyAcquired=await rpc<Profile>('acquire',legacy);assertTiers(legacyAcquired.progress);
   const legacyTiers=legacyAcquired.progress.achievementTiers;
   assert.deepEqual(legacyTiers.deliveries,{count:25,claimed:2});
@@ -95,6 +95,7 @@ try{
   assert.deepEqual(legacyTiers['dome-wins'],{count:1,claimed:1});
   assert.equal(legacyTiers.pickups.count,0);assert.equal(legacyTiers['early-pickups'].count,0);
   assert.equal(legacyAcquired.progress.cash,7_000);assert.equal(legacyAcquired.progress.eligibleIncome,4_500);
+  assert.deepEqual(legacyAcquired.progress.vehicleCollections,{driven:[],stolen:[]},'old profiles do not invent vehicle history');
   const legacyAgain=await rpc<Profile>('acquire',legacy);
   assert.deepEqual(legacyAgain.progress,legacyAcquired.progress,'acquire is normalization-idempotent');
   const legacyRoof=await stageAndSubmit(legacy,{kind:'roof',roof:'ordinary'});
@@ -107,6 +108,29 @@ try{
   const deniedAcquire=await call('/',{op:'acquire',...corrupt});
   assert.equal(deniedAcquire.status,500);assert.match(await deniedAcquire.text(),/Invalid achievement tier progress/);
   assert.deepEqual((await profile(corrupt)).progress.achievementTiers,{bad:true});
+
+  const badCollection=entry();await rpc('acquire',badCollection);
+  await seed(badCollection.driverId,{vehicleCollections:{driven:['bad-model'],stolen:[]}});
+  const deniedCollection=await call('/',{op:'acquire',...badCollection});
+  assert.equal(deniedCollection.status,500);assert.match(await deniedCollection.text(),/Invalid vehicle collection progress/);
+
+  const collector=entry();await rpc('producer',{...collector,active:true});
+  const collectorStart=await rpc<Profile>('acquire',{...collector,progress:{cash:2_500,level:0}});
+  const firstDrive=await stageAndSubmit(collector,{kind:'vehicle-driven',vehicle:'roadster'},false);
+  assert.deepEqual(firstDrive.result.progress.vehicleCollections,{driven:['roadster'],stolen:[]});
+  assert.equal(firstDrive.result.progress.cash,collectorStart.progress.cash+100);
+  assert.deepEqual(await rpc('submit',{...collector,intent:firstDrive.intent}),firstDrive.result,'event receipt is idempotent');
+  assert.equal(await rpc('ack',{...collector,intent:firstDrive.intent}),true);
+  const duplicateDrive=await stageAndSubmit(collector,{kind:'vehicle-driven',vehicle:'roadster'});
+  assert.equal(duplicateDrive.result.progress.cash,firstDrive.result.progress.cash,'another event for the same model cannot pay twice');
+  const stolen=await stageAndSubmit(collector,{kind:'npc-stolen',vehicle:'waymo-ipace'});
+  assert.equal(stolen.result.progress.cash,collectorStart.progress.cash+200);
+  const collectionBeforeStale=await profile(collector);
+  const staleCollection=structuredClone(collectionBeforeStale.progress);staleCollection.vehicleCollections={driven:[],stolen:[]};
+  const staleCollectionIntent:EconomyIntent={eventId:randomUUID(),driverId:collector.driverId,fence:collector.fence,roomId:collector.room,
+    revision:collectionBeforeStale.revision,sequence:collectionBeforeStale.sequence+1,clock:0,action:{kind:'progress',progress:staleCollection}};
+  const collectionAfterStale=await rpc<DriverOutcome>('commit',{...collector,intent:staleCollectionIntent});success(collectionAfterStale);
+  assert.deepEqual(collectionAfterStale.progress.vehicleCollections,collectionBeforeStale.progress.vehicleCollections,'ordinary checkpoints cannot overwrite collected models');
 
   // A matched early pickup atomically commits both counters and both $100 tiers.
   const driver=entry();await rpc('producer',{...driver,active:true});
@@ -168,12 +192,15 @@ try{
   // then recover the same driver through a new fence with no duplicate credit.
   const beforeCrash=await profile(driver),pending=achievement(driver,beforeCrash.sequence+1,roof);
   assert.equal(await rpc('stage-achievement',{...driver,stage:pending}),'accepted');
+  const pendingCollection=achievement(driver,beforeCrash.sequence+2,{kind:'vehicle-driven',vehicle:'model-3'});
+  assert.equal(await rpc('stage-achievement',{...driver,stage:pendingCollection}),'accepted');
   assert.equal((await profile(driver)).progress.achievementTiers!['roof-landings'].count,10);
   await stop(child);child=start();await ready();
   const nextFence=randomUUID(),recovered=await rpc<Profile>('acquire',{...driver,fence:nextFence},20_000);
   assert.equal(recovered.progress.achievementTiers!['roof-landings'].count,11);
-  assert.equal(recovered.progress.cash,beforeCrash.progress.cash);
-  assert.equal(recovered.progress.eligibleIncome,beforeCrash.progress.eligibleIncome);
+  assert.deepEqual(recovered.progress.vehicleCollections,{driven:['model-3'],stolen:[]});
+  assert.equal(recovered.progress.cash,beforeCrash.progress.cash+100);
+  assert.equal(recovered.progress.eligibleIncome,beforeCrash.progress.eligibleIncome+100);
   assert.equal(await rpc('stage-achievement',{...driver,stage:pending}),'superseded');
   const newSession={...driver,fence:nextFence};
   assert.deepEqual((await profile(newSession)).progress,recovered.progress);

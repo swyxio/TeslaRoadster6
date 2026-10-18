@@ -14,6 +14,7 @@ test('cab map follows live positions, pauses for map interaction and handles a l
   const { createMapDialog } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 
   class Element extends EventTarget {
+    classList = {toggle() {}};
     className = ''; textContent = ''; hidden = false; disabled = false; open = false;
     width = 0; height = 0; attributes = new Map<string, string>();
     selectors = new Map<string, Element>(); children: Element[] = [];
@@ -23,7 +24,7 @@ test('cab map follows live positions, pauses for map interaction and handles a l
       fillText: (text: string, x: number, y: number) => this.paints.push({ text, x, y }) },
     { get: (target, key) => key in target ? Reflect.get(target, key) : () => {}, set: () => true });
     set innerHTML(_html: string) {
-      for (const key of ['canvas', '.map-drive', '.map-lightbox-status', '.map-lightbox-cab', '.map-cab-status', '.map-cab-follow', '.map-cab-legend', '.map-close', '[data-map-zoom="in"]', '[data-map-zoom="out"]', '[data-map-center]']) this.selectors.set(key, new Element());
+      for (const key of ['canvas', '.map-drive', '.map-teleport', '.map-lightbox-help', '.map-lightbox-status', '.map-lightbox-cab', '.map-cab-status', '.map-cab-follow', '.map-cab-legend', '.map-close', '[data-map-zoom="in"]', '[data-map-zoom="out"]', '[data-map-center]']) this.selectors.set(key, new Element());
     }
     append(...children: Element[]) { this.children.push(...children); }
     setAttribute(key: string, value: string) { this.attributes.set(key, value); }

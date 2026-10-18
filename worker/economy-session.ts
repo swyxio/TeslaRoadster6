@@ -6,6 +6,8 @@ import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribe
 import { applyAchievementAwards, awardMarsAchievement, type AchievementState } from '../shared/achievements';
 import { evaluateAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { ACHIEVEMENT_TIER_CAP, normalizeAchievementTiers, type AchievementTierProgress } from '../shared/achievement-tiers';
+import { isCollectionDriveVehicle, isVehicleCollectionEvidence, normalizeVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
+import { VehicleDriveObserver } from './vehicle-drive-observer';
 import { achievementTierFamilies, applyAcceptedDelivery, applyObservedAchievement, applyTierProgress, coalesceEventRewards, deliveryTierFamilies } from './achievement-progress';
 import { atMarsBoarding, marsGoalReached, MARS_GOAL, MARS_LAUNCH_SECONDS } from '../shared/mars';
 import type { UpgradeId } from '../shared/upgrades';
@@ -18,7 +20,7 @@ import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../s
 import type { MarketPaint } from '../shared/market-protocol';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ECONOMIES:DurableObjectNamespace<RoomEconomy>};
-type Draft={delivery:DeliveryState;achievements:AchievementState;achievementTiers:AchievementTierProgress;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
+type Draft={delivery:DeliveryState;achievements:AchievementState;achievementTiers:AchievementTierProgress;vehicleCollections:VehicleCollections;cockpit:CockpitStats;vehicles:SavedVehicles;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
 type DeliveryProbe={before:Draft;stop:DeliveryStop;signature:string;sample:boolean;newStop:boolean;elapsed:number;payouts:EconomyUpdateResult};
 type Item={ordinal:number;intent:EconomyIntent;view:Draft;result:DriverOutcome|null;cabEvents?:EarningsEvents;staged?:Promise<DriverOutcome|null>;onApplied?:(outcome:DriverOutcome)=>void;replayGameAward?:()=>void;awardRejections?:number};
 const MAX_GAME_AWARD_RETRIES=1;
@@ -73,6 +75,9 @@ export class EconomySession {
   private otherActionVersion=0;
   private stopActionVersion=0;
   private pendingAchievements=new Set<string>();
+  private driveObserver=new VehicleDriveObserver();
+  private drivenSnapshot:readonly string[]|null=null;
+  private drivenModels=new Set<string>();
   private replayClock:number|undefined;
   private uncertainDeliveries=0;
   constructor(private env:Env,private economy:DurableObjectStub<RoomEconomy>,private world:World,private player:Player,private socket:WebSocket,
@@ -80,7 +85,7 @@ export class EconomySession {
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);this.deliveryClock=progress.deliveryClock??0;
     this.pickupGenerations=pickupGenerations;
     this.install(progress);
-    this.draft={delivery:structuredClone(player.delivery),achievements:structuredClone(player.achievements),achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked),cockpit:structuredClone(player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
+    this.draft={delivery:structuredClone(player.delivery),achievements:structuredClone(player.achievements),achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked),vehicleCollections:normalizeVehicleCollections(progress.vehicleCollections),cockpit:structuredClone(player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=player.delivery.ota.renewAt;
     this.rememberTimers();
     this.setMarketPaint(marketPaint);
@@ -95,7 +100,7 @@ export class EconomySession {
     d.ota=restoreOta(progress.ota,this.world.time);
     this.player.achievements.unlocked=[...progress.unlocked];
   }
-  private progress():DriverProgress{return {...progressFrom(this.draft.delivery,this.draft.achievements.unlocked,this.draft.vehicles,this.draft.ownedLuxury,this.world.time,this.draft.delivery.lifetimeIncome),achievementTiers:structuredClone(this.draft.achievementTiers),deliveryClock:this.deliveryClock};}
+  private progress():DriverProgress{return {...progressFrom(this.draft.delivery,this.draft.achievements.unlocked,this.draft.vehicles,this.draft.ownedLuxury,this.world.time,this.draft.delivery.lifetimeIncome),achievementTiers:structuredClone(this.draft.achievementTiers),vehicleCollections:structuredClone(this.draft.vehicleCollections),deliveryClock:this.deliveryClock};}
   private otaRemaining():number|null{
     const ota=this.draft.delivery.ota;
     return ota.active&&ota.renewAt!==null?Math.max(0,ota.renewAt-this.world.time):null;
@@ -108,7 +113,7 @@ export class EconomySession {
     if(this.committedOtaPeriodEnd<=this.world.time){ota.active=false;ota.renewAt=null;}
     else ota.renewAt=this.committedOtaPeriodEnd;
   }
-  private wallet(){this.send({type:'wallet',cash:this.committed.cash,earned:this.committed.earned,eligibleIncome:this.committed.eligibleIncome,level:this.committed.level,unlocked:this.committed.unlocked,achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),ownedLuxury:this.committed.ownedLuxury,cybercabs:this.committed.cybercabs??emptyCybercabFleet()});}
+  private wallet(){this.send({type:'wallet',cash:this.committed.cash,earned:this.committed.earned,eligibleIncome:this.committed.eligibleIncome,level:this.committed.level,unlocked:this.committed.unlocked,achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),vehicleCollections:normalizeVehicleCollections(this.committed.vehicleCollections),ownedLuxury:this.committed.ownedLuxury,cybercabs:this.committed.cybercabs??emptyCybercabFleet()});}
   initialWallet(){this.wallet();}
   get pending(){return this.queue.length>0;}
   get vehicleLocked(){return this.lockedCar;}
@@ -200,6 +205,7 @@ export class EconomySession {
     this.wallet();
   }
   private installProfile(driverId:string,fence:string,revision:number,sequence:number,progress:DriverProgress,marketPaint:MarketPaint|null){
+    this.driveObserver.reset();
     this.cabClock=null;
     this.nextCabStage=1;this.stageTail=Promise.resolve(null);this.prepareTail=Promise.resolve(null);
     this.driverId=driverId;this.fence=fence;this.nextRevision=revision;this.committedRevision=revision;this.nextSequence=sequence+1;this.committed=structuredClone(progress);this.deliveryClock=progress.deliveryClock??0;
@@ -207,7 +213,7 @@ export class EconomySession {
     this.pendingAchievements.clear();
     this.uncertainDeliveries=0;
     this.install(progress);
-    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
+    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(progress.achievementTiers,progress.completed,progress.unlocked),vehicleCollections:normalizeVehicleCollections(progress.vehicleCollections),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(progress.vehicles),ownedLuxury:[...progress.ownedLuxury],cybercabs:structuredClone(progress.cybercabs??emptyCybercabFleet())};
     this.committedOtaPeriodEnd=this.player.delivery.ota.renewAt;
     this.rememberTimers();
     this.setMarketPaint(marketPaint);
@@ -395,12 +401,27 @@ export class EconomySession {
     if(item&&this.draft.achievements.unlocked.length>before)item.replayGameAward=capture?capture():apply;
     return item;
   }
+  resetVehicleDrive():void {this.driveObserver.reset();}
+  /** One room-owned sample per tick; unconfirmed partial distance stays local. */
+  observeVehicleDrive(entity:Entity|undefined,interrupted=false):void {
+    if(this.closed||this.failed||this.marketPaused||interrupted||!entity||entity.driver!==this.player.id||
+      entity.kind==='person'||entity.supportId==='ferry'||!isCollectionDriveVehicle(entity.kind)){
+      this.driveObserver.reset();return;
+    }
+    const ids=this.draft.vehicleCollections.driven;
+    if(ids!==this.drivenSnapshot){this.drivenSnapshot=ids;this.drivenModels=new Set(ids);}
+    if(this.drivenModels.has(entity.kind)){this.driveObserver.reset();return;}
+    const driven=this.driveObserver.observe({id:entity.id,kind:entity.kind,x:entity.x,z:entity.z,speed:entity.speed});
+    if(driven)this.achievement(this.player,{kind:'vehicle-driven',vehicle:driven});
+  }
   /** Capture a server-observed fact, independent of speculative unlocks. */
   achievement(_player:Player,evidence:AchievementEvidence){
     if(this.failed||this.marketPaused||this.closed)return;
     const key=JSON.stringify(evidence);
     const repeatable=achievementTierFamilies(evidence).some(id=>this.draft.achievementTiers[id].count<ACHIEVEMENT_TIER_CAP);
-    if(!repeatable&&(this.pendingAchievements.has(key)||!evaluateAchievementEvidence(this.committed.unlocked,evidence).length))return;
+    const collection=isVehicleCollectionEvidence(evidence);
+    const alreadyCollected=collection&&this.draft.vehicleCollections[evidence.kind==='vehicle-driven'?'driven':'stolen'].includes(evidence.vehicle);
+    if(!repeatable&&(this.pendingAchievements.has(key)||alreadyCollected||(!collection&&!evaluateAchievementEvidence(this.committed.unlocked,evidence).length)))return;
     if(this.queue.length>=32){
       this.closeCabIntervals();while(this.cabIntervals.length)this.stageCabIncome(this.cabIntervals.splice(0,128));
       this.failed=true;try{this.socket.close(1011,'Wallet delayed. Rejoin to recover.');}catch{}return;
@@ -538,7 +559,8 @@ export class EconomySession {
     return true;
   }
   private projectAchievement(evidence:AchievementEvidence){
-    this.draft.achievementTiers=applyObservedAchievement(this.draft.delivery,this.draft.achievements,this.draft.achievementTiers,evidence).progress;
+    const result=applyObservedAchievement(this.draft.delivery,this.draft.achievements,this.draft.achievementTiers,evidence,this.draft.vehicleCollections);
+    this.draft.achievementTiers=result.progress;this.draft.vehicleCollections=result.collections;
   }
   private projectSupply(type:'repair'|'air'){
     const delivery=this.draft.delivery;
@@ -551,11 +573,11 @@ export class EconomySession {
   }
   private rebaseSupply(item:Item,progress:DriverProgress):boolean{
     return progress.cash===item.view.delivery.cash&&progress.eligibleIncome===item.view.delivery.lifetimeIncome&&progress.level===item.view.delivery.level&&
-      JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers);
+      JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers)&&JSON.stringify(progress.vehicleCollections)===JSON.stringify(item.view.vehicleCollections);
   }
   private rebaseAchievement(item:Item,progress:DriverProgress):boolean{
     return progress.cash===item.view.delivery.cash&&progress.eligibleIncome===item.view.delivery.lifetimeIncome&&
-      progress.level===item.view.delivery.level&&JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers);
+      progress.level===item.view.delivery.level&&JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers)&&JSON.stringify(progress.vehicleCollections)===JSON.stringify(item.view.vehicleCollections);
   }
   private rebaseDelivery(item:Item,progress:DriverProgress):boolean{
     const expected=item.view.delivery,order=expected.order,actual=progress.order;
@@ -563,14 +585,14 @@ export class EconomySession {
       actual.pickupEstimate===order.pickupEstimate&&actual.estimate===order.estimate&&actual.base===order.base&&!actual.search&&Math.abs(actual.elapsed-order.elapsed)<1e-7;
     return progress.cash===expected.cash&&progress.earned===expected.earned&&progress.eligibleIncome===expected.lifetimeIncome&&
       progress.completed===expected.completed&&progress.level===expected.level&&sameOrder&&
-      JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers);
+      JSON.stringify(progress.unlocked)===JSON.stringify(item.view.achievements.unlocked)&&JSON.stringify(progress.achievementTiers)===JSON.stringify(item.view.achievementTiers)&&JSON.stringify(progress.vehicleCollections)===JSON.stringify(item.view.vehicleCollections);
   }
   /** Re-evaluate staged facts once a rate or assignment is authoritative. */
   private reprojectAfterAssignment(){
     const pending=this.queue.splice(0);
     this.nextRevision=this.committedRevision;
     this.install(this.committed);this.restoreCommittedOta();
-    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),cockpit:structuredClone(this.player.cockpit),
+    this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),vehicleCollections:normalizeVehicleCollections(this.committed.vehicleCollections),cockpit:structuredClone(this.player.cockpit),
       vehicles:structuredClone(this.committed.vehicles),ownedLuxury:[...this.committed.ownedLuxury],cybercabs:structuredClone(this.committed.cybercabs??emptyCybercabFleet())};
     let clock=this.committed.deliveryClock??0;
     const advance=(next:number|undefined)=>{
@@ -626,7 +648,7 @@ export class EconomySession {
           // The committed period keeps counting down even if a later draft
           // speculatively renewed or disabled the subscription.
           this.restoreCommittedOta();
-          this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(this.committed.vehicles),ownedLuxury:[...this.committed.ownedLuxury],cybercabs:structuredClone(this.committed.cybercabs??emptyCybercabFleet())};
+          this.draft={delivery:structuredClone(this.player.delivery),achievements:structuredClone(this.player.achievements),achievementTiers:normalizeAchievementTiers(this.committed.achievementTiers,this.committed.completed,this.committed.unlocked),vehicleCollections:normalizeVehicleCollections(this.committed.vehicleCollections),cockpit:structuredClone(this.player.cockpit),vehicles:structuredClone(this.committed.vehicles),ownedLuxury:[...this.committed.ownedLuxury],cybercabs:structuredClone(this.committed.cybercabs??emptyCybercabFleet())};
           let projectedClock=this.committed.deliveryClock??0;
           const advanceClock=(clock:number|undefined)=>{
             if(clock===undefined)return;
