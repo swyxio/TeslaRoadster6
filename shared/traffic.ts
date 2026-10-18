@@ -149,7 +149,8 @@ function routeDistancePose(routeId:number,fraction:number){
 }
 
 type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=34; // Together with 26 catalog NPCs and four police: at most 64.
+const AMBIENT_MAX=34; // Target for unattended traffic, in addition to catalog NPCs and police.
+const AMBIENT_POOL_MAX=68; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
 
@@ -187,15 +188,19 @@ export function updateHighwayTraffic(world:World,dt:number,make:EntityFactory):v
   const tick=Math.floor((world.time+1e-7)/AMBIENT_INTERVAL);
   if(tick<=0||tick===Math.floor((world.time-dt+1e-7)/AMBIENT_INTERVAL))return;
   const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
+  const onHighway=(entity:Entity)=>HIGHWAY_ROUTE_IDS.includes(entity.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
+  const unattended=ambient.filter(entity=>!entity.driver&&entity.autopilot&&onHighway(entity));
   const target=Math.min(AMBIENT_MAX,desiredAmbient(world.time));
-  if(ambient.length<target){
+  if(unattended.length<target&&ambient.length<AMBIENT_POOL_MAX){
     const demand=trafficDemand(world.time);
     const clockwiseChance=.5+.25*demand.morning-.25*demand.evening;
     addAmbient(world,`ambient-${tick}`,(hash(`direction-${tick}`)%10000)/10000<clockwiseChance,make);
-  }else if(ambient.length>target){
+  }else if(unattended.length>target||(unattended.length<target&&ambient.length>=AMBIENT_POOL_MAX)){
     const viewers=observers(world);
-    // Retain queues and blocked vehicles. Remove only a free-flowing, unobserved car.
-    const removable=ambient.find(entity=>entity.id!==TRAFFIC_INCIDENT.entityId&&!entity.driver&&entity.autopilot&&entity.speed>5&&hidden(entity.x,entity.z,viewers)&&
+    // Retain queues and blocked vehicles. Reclaim off-route or free-flowing city cars only when the pool blocks replenishment.
+    const excessTraffic=unattended.length>target;
+    const removable=ambient.find(entity=>entity.id!==TRAFFIC_INCIDENT.entityId&&!entity.driver&&
+      (excessTraffic?entity.autopilot&&onHighway(entity)&&entity.speed>5:!entity.autopilot||(!onHighway(entity)&&entity.speed>5))&&hidden(entity.x,entity.z,viewers)&&
       !world.entities.some(other=>other!==entity&&Math.hypot(other.x-entity.x,other.z-entity.z)<35));
     if(removable)world.entities=world.entities.filter(entity=>entity!==removable);
   }

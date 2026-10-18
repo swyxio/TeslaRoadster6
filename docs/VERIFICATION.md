@@ -1,11 +1,17 @@
 # Verification · 2026-10-17 Pacific
 
+## Ambient traffic reserve · local test, 2026-10-17 Pacific
+
+- A synthetic morning reconciliation test with one stationary observer and available hidden spawn sites reached the 34-car unattended target at 07:30; the largest shortfall was one car while demand rose from 14 at 06:30. The five-second interval is unchanged. This fixture does not establish actual rush-hour throughput or capacity when visibility, spacing or the reserve constrain placement.
+- Focused tests cover takeover replacement, off-route and city-route disconnect, the 68-car optional pool cap and preservation of occupied, visible or blocked cars during reclamation. These are simulation tests, not a new load or production measurement.
+- After this change, `pnpm test` passed 88/88 tests and `pnpm build` passed (648 kB / 179 kB gzip main JavaScript; the chunk-size warning remains). Local Wrangler two-client integration passed. An eight-second same-host 64-client smoke passed with at least 70 snapshots/client and a 120 ms p95 inter-snapshot gap; this is not a sustained, WAN or production capacity test. Browser playtests below preceded the reserve fix, which changed traffic reconciliation rather than controls or rendering.
+
 ## Keyboard controls · historical pre-Bay build, 2026-10-17 Pacific
 
 - `pnpm test` passed 41 tests and `pnpm build` passed; the input tests cover Space braking without jumping, J jumping, and touch brake and jump. The existing Vite chunk-size warning remains.
 - Local Chrome desktop solo: accelerated, used Space to stop, then pressed J and observed the Roadster airborne with air use. Touch-emulated 390×844 portrait and 844×390 landscape layouts showed the controls. Physical touch and multi-touch remain unverified.
 
-## Bay circuit with drift, Rocket and pickup rewards · protocol v8, local build
+## Bay circuit with drift, Rocket and pickup rewards · historical pre-reserve protocol v8 build
 
 - `pnpm test`: 84/84 pass, including Bay traffic, elevated support, drift, stunt inputs, all fleet models and delivery rewards. `pnpm build` passed; Vite still warns about the 647 kB JavaScript chunk (179 kB gzip).
 - Local Wrangler two-client integration passed, including remote drift, room clock, traffic, surfaces, delivery, police and stunts. An eight-second same-host 64-client smoke saw at least 69 snapshots per client and a 128 ms p95 inter-snapshot gap; this is not a sustained, WAN or production capacity test.
