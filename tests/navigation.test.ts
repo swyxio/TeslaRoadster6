@@ -29,6 +29,7 @@ test('a Tesla facing against its current lane can continue to an intersection an
   const {world,car}=drivingWorld();
   Object.assign(car,{x:-120,z:-177,yaw:Math.PI/2,speed:0});
   assert.equal(setDestination(world,'driver',{x:-120,z:-60}),true);
+  assert.ok(car.navigation!.path[0].x<=car.x+.5,'the first waypoint stays ahead of the car');
   simulate(world,()=>!car.autopilot,180);
   assert.equal(car.navigation?.status,'arrived');
   assert.equal(car.health,100);

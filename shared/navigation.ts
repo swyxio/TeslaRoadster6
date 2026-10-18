@@ -70,18 +70,19 @@ export function planNavigation(car:Entity,destination:Point,level:Level):Navigat
   if(!closeStarts.length)return null;
   const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
   const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,Point>(),used=new Set<number>();
+  const ahead=(p:Point)=>(p.x-car.x)*-Math.sin(car.yaw)+(p.z-car.z)*-Math.cos(car.yaw)>=-.5;
   for(const start of closeStarts){
     const heading=alignment(start)*(start.reverse?-1:1);
     const cuts=segmentNodes[start.i];
     const next=start.reverse?[...cuts].reverse().find(c=>c.t<=start.t+1e-7):cuts.find(c=>c.t>=start.t-1e-7);
-    if(!next||(start.reverse&&distance(start.point,nodes[next.id])>120)||!allowed(car,nodes[next.id],level))continue;
+    if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||!allowed(car,nodes[next.id],level))continue;
     const cost=start.distance*2+(1-heading)*8+distance(start.point,nodes[next.id]);
     if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start.point);}
   }
   let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
   // Direct travel on a single segment need not pass through an intersection.
   let direct:Point[]|undefined;
-  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120:end.t>=start.t)&&allowed(car,end.point,level)){
+  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)){
     const cost=start.distance*2+distance(start.point,end.point)+end.distance*2;
     if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[end.point];}
   }
