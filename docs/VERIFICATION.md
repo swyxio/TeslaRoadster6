@@ -4,6 +4,7 @@ These entries describe separate historical builds. Check the version and scope i
 
 ## Economy article Bay map · 2026-10-18 Pacific
 
+- After merging current main, `pnpm test` passed 734 tests and `pnpm build` passed. The regenerated SVG parsed, and the article retained the published research-reward text and OpenStreetMap attribution.
 - The landmark map was regenerated from the shared Bay, Caltrain and campus data. Its SVG parsed successfully, and the article legend was updated alongside it.
 - Chrome displayed the article and map at desktop size and at an emulated 390 × 844 phone viewport. At phone width the map scrolls horizontally to keep labels legible; both edges and the 20-item landmark list were inspected. No physical phone was tested.
 
