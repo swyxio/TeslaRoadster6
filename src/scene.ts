@@ -123,8 +123,9 @@ export class GameScene {
       const t=performance.now()*.000035;this.follow.set(105+Math.sin(t)*25,100,155);this.focus.set(0,7,-40);
     }else if(e){
       const distance=this.wideCamera?30:15;
+      const lookAhead=this.camera.aspect<.8?-6:5;
       this.follow.set(e.x+Math.sin(e.yaw)*distance,e.y+(this.wideCamera?23:8),e.z+Math.cos(e.yaw)*distance);
-      this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*5,e.y+1.3,e.z-Math.cos(e.yaw)*5),1-Math.exp(-8*dt));
+      this.focus.lerp(new T.Vector3(e.x-Math.sin(e.yaw)*lookAhead,e.y+1.3,e.z-Math.cos(e.yaw)*lookAhead),1-Math.exp(-8*dt));
     }
     if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
     this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));this.camera.lookAt(this.focus);this.renderer.render(this.scene,this.camera);

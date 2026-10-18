@@ -2,7 +2,9 @@
 
 A small, playable multiplayer driving sandbox inspired by the San Francisco Bay Area. Drive a Roadster, hold lift to fly, roll over the skyline, swap cars, bump your friends, and refill compressed air at real-world Tesla Supercharger identities placed on a deliberately compressed map.
 
-**Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [verification](docs/VERIFICATION.md).
+**Play:** https://bay-drive.swyxio.workers.dev
+
+**Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [verification](docs/VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
 ## Run
 

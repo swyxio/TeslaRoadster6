@@ -66,3 +66,16 @@ test('rooftop landing stays supported and can drive off; positive steer turns le
   step(world, new Map([['one', { ...NEUTRAL, steer: 1 }]]), 0.05);
   assert.ok(car.x < 0); assert.ok(car.yaw > 0);
 });
+
+test('pickups refill resources once and return after twenty simulation seconds', () => {
+  const world = createWorld();
+  const player = addPlayer(world, 'collector', 'Collector');
+  const car = world.entities.find(e => e.id === player.entityId)!;
+  const pickup = world.pickups.find(p => p.kind === 'repair')!;
+  car.x = pickup.x; car.z = pickup.z; car.health = 10;
+  step(world, new Map(), .05);
+  assert.equal(car.health, 100); assert.equal(pickup.active, false);
+  car.x = 0; car.z = 0;
+  for (let i = 0; i < 401; i++) step(world, new Map(), .05);
+  assert.equal(pickup.active, true);
+});

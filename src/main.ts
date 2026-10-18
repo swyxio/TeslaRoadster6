@@ -78,7 +78,7 @@ function minimap(entity:Entity|undefined){
 scene.start(dt=>{
   const input=controls.read();session.tick(dt,input);scene.render(session.world,session.id,dt,menu,input.lift);
   hudTime+=dt;if(hudTime<.1)return;hudTime=0;
-  $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVERS`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='disconnected'?'○ DISCONNECTED':'● SOLO PLAYGROUND';
+  $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='disconnected'?'○ DISCONNECTED':'● SOLO PLAYGROUND';
   if(session.status==='disconnected'){controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
   if(!e)return;
@@ -91,7 +91,7 @@ scene.start(dt=>{
   const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=distance<9&&e.y<1&&Math.abs(e.speed)<1&&e.kind!=='person';
   $('station-status').textContent=refilling?`ϟ REFILLING AIR · ${nearest.name}`:`ϟ ${nearest.name} · ${Math.round(distance)} m`;
   $('station-status').classList.toggle('refilling',refilling);
-  const touch=matchMedia('(pointer: coarse)').matches;
+  const touch=matchMedia('(pointer: coarse), (max-width: 800px)').matches;
   $('mission').textContent=e.kind==='person'?'A different ride is around the corner.':e.y>2?'The sky is part of the street.':e.air<20?'Low air. Find a mint Supercharger ring.':touch?'Hold LIFT to leave the road.':'Hold SPACE to leave the road.';
   $('hint').textContent=e.kind==='person'?'Stop beside an empty car and tap Take nearby car.':e.y>2?(touch?'Hold ↶ / ↷ to roll. Release LIFT to land.':'Hold Q / E to roll. Release SPACE to land.'):'Stop inside a mint ring to refill your air tanks.';
   $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e);
