@@ -15,7 +15,8 @@ These entries describe separate historical builds. Check the version and scope i
 ## Charger signs and Oakland placement candidate · 2026-10-18 Pacific
 
 - Against the protocol-v41 baseline at `fb65d4e`, `pnpm test` passed 839 tests and `pnpm build` passed with the existing Vite large-chunk warning. Focused checks cover sign placement, station identity and lot clearances. This is local functional evidence, not a production or capacity result.
-- The Hegenberger road route currently ends about 35 m from the station. A separate charger-routing change must reach an actual refill bay; this candidate does not prove automatic refill. The changed shared station position needs coordinated protocol versioning and room integration before release. Desktop, portrait and landscape visual checks remain outstanding while the current recording has desktop focus.
+- In a dedicated local Chrome tab against an isolated protocol-v41 Wrangler room, the SF 16th Street pylon appeared grounded and readable from the starting road in a 1413×939 desktop view. Keyboard driving moved the car. Emulated 390×844 portrait and 844×390 coarse-pointer landscape showed the game and controls; the pylon was visible in landscape, while the portrait framing did not show it. No console warnings or errors were captured. The emulated touch pedal attempts did not produce observable movement, so touch driving is not verified by this run. Oakland, the reverse face, and physical-device behavior remain unchecked.
+- The Hegenberger road route currently ends about 35 m from the station. A separate charger-routing change must reach an actual refill bay; this candidate does not prove automatic refill. The changed shared station position needs coordinated protocol versioning, room integration and a fresh visual playtest on the integrated head before release.
 
 ## Repeatable achievement tiers · protocol v43 candidate · 2026-10-18 Pacific
 
