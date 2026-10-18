@@ -78,6 +78,28 @@ test('ordinary and Rocket cars drive each ramp, launch upward, and land on suppo
   }
 });
 
+test('reversing off either low ramp corner stays grounded',()=>{
+  for(const jump of ISLAND_JUMPS)for(const side of [-1,1]){
+    const {world,car}=setup('model-3');
+    const x=jump.start+.05,z=jump.z+side*(jump.width/2-.05);
+    Object.assign(car,{x,z,y:islandJumpHeight(x,z),yaw:side>0?-Math.PI/4:-3*Math.PI/4,speed:-10,supportId:'island-jump'});
+    step(world,new Map([['p',NEUTRAL]]),.05);
+    assert.ok(car.x<jump.start&&Math.abs(car.z-jump.z)>jump.width/2,`${jump.id}: crossed the corner`);
+    assert.equal(car.supportId,'ground');assert.equal(car.y,0);assert.equal(car.vy,0);
+  }
+});
+
+test('crossing a high ramp corner still launches with upward momentum',()=>{
+  for(const jump of ISLAND_JUMPS)for(const side of [-1,1]){
+    const {world,car}=setup('model-3');
+    const x=jump.end-.05,z=jump.z+side*(jump.width/2-.05);
+    Object.assign(car,{x,z,y:islandJumpHeight(x,z),yaw:side>0?-3*Math.PI/4:-Math.PI/4,speed:10,supportId:'island-jump'});
+    step(world,new Map([['p',NEUTRAL]]),.05);
+    assert.ok(car.x>jump.end&&Math.abs(car.z-jump.z)>jump.width/2,`${jump.id}: crossed the corner`);
+    assert.equal(car.supportId,null);assert.ok(car.vy>0);
+  }
+});
+
 test('airborne cars land on the ramp surface and a Rocket jump uses its normal',()=>{
   const {world,car}=setup('roadster');
   const jump=ISLAND_JUMPS[0],x=(jump.start+jump.end)/2;
