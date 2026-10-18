@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 923" role="img" aria-labelledby="title desc">
+  <title id="title">One more delivery</title>
+  <desc id="desc">Pick up a meal, deliver it for cash, then spend on your ride and take another run. Flying is an optional shortcut that uses air and can attract police.</desc>
+  <rect width="640" height="923" rx="24" fill="#16373d"/>
+  <text x="36" y="61" fill="#a9c9bd" font-family="system-ui,sans-serif" font-size="19" font-weight="700" letter-spacing="3">THE POLY AV LOOP</text>
+  <text x="36" y="111" fill="#fff3df" font-family="system-ui,sans-serif" font-size="39" font-weight="700">One more delivery.</text>
+  <g font-family="system-ui,sans-serif">
+    <rect x="36" y="145" width="568" height="148" rx="17" fill="#284b4d"/>
+    <circle cx="92" cy="218" r="33" fill="#ffcb83"/>
+    <path d="M76 207h32l-3 21H79z M85 207c0-13 14-13 14 0" fill="none" stroke="#18393b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="146" y="196" fill="#fff4e2" font-size="30" font-weight="700">1. Pick up a meal</text>
+    <text x="146" y="235" fill="#c7ddd0" font-size="24">Reach the restaurant quickly</text>
+    <text x="146" y="267" fill="#c7ddd0" font-size="24">for a pickup bonus.</text>
+    <path d="M320 305v30m-12-11 12 12 12-12" fill="none" stroke="#ffcb83" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="36" y="349" width="568" height="148" rx="17" fill="#284b4d"/>
+    <circle cx="92" cy="422" r="33" fill="#a9dfc3"/>
+    <path d="M78 433v-16l14-10 14 10v16H96v-9h-8v9z" fill="none" stroke="#18393b" stroke-width="4" stroke-linejoin="round"/>
+    <text x="146" y="400" fill="#fff4e2" font-size="30" font-weight="700">2. Deliver for cash</text>
+    <text x="146" y="439" fill="#c7ddd0" font-size="24">Arrive early for extra cash;</text>
+    <text x="146" y="471" fill="#c7ddd0" font-size="24">arrive late and earn less.</text>
+    <path d="M320 509v30m-12-11 12 12 12-12" fill="none" stroke="#ffcb83" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="36" y="553" width="568" height="148" rx="17" fill="#284b4d"/>
+    <circle cx="92" cy="626" r="33" fill="#d7b3f3"/>
+    <path d="M82 635l15-15m-3-8a9 9 0 0 0-10 12l-7 7a4 4 0 0 0 6 6l7-7a9 9 0 0 0 12-10l-5 5-6-2-2-6z" fill="none" stroke="#18393b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="146" y="604" fill="#fff4e2" font-size="30" font-weight="700">3. Upgrade your ride</text>
+    <text x="146" y="643" fill="#c7ddd0" font-size="24">Repair, improve your ride,</text>
+    <text x="146" y="675" fill="#c7ddd0" font-size="24">and take another run.</text>
+    <rect x="36" y="739" width="568" height="140" rx="15" fill="#efbb79"/>
+    <text x="62" y="780" fill="#18393b" font-size="24" font-weight="700">ON ANY RUN: FLY ↑</text>
+    <text x="62" y="820" fill="#18393b" font-size="24">Flight uses air and may</text>
+    <text x="62" y="852" fill="#18393b" font-size="24">attract police.</text>
+  </g>
+</svg>
