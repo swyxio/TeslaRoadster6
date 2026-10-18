@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Boost and landing feedback candidate · 2026-10-18 Pacific
+
+- After integrating flight balance main `0b27e97`, all 927 tests and `pnpm build` passed; the existing large-chunk warning remains. These are functional checks, not a performance verdict.
+- The [short staged visual pair](benchmarks/2026-10-18-boost-landing/) compared desktop keyboard boost, jump and touchdown at base `009af53` and candidate `68e62aa`; the same candidate also passed emulated portrait and landscape touch checks. The three checks passed again on integrated candidate `a53ca5c`. All observed sustained grounded thrust, a jump and landing with no browser errors or pose relocation. The captures are not physical-device evidence and do not exercise two deliveries. A pickup marker can briefly obscure the car on the baseline as well.
+- A [hosted no-video pair](performance-baselines/2026-10-18-boost-landing-ci/) on `009af53` and `68e62aa` completed the two-delivery route, two jumps and flight; all five sampled legs aligned. Frame callback p95 was 116.7 ms in both, modeled steady speed was 0.983–1.052× with 8.333 / 16.667 ms modeled steering onset, and room simulation/wall ratios were 0.914× and 0.912×. The shared Apple M1 virtual runner was busy and host load differed across the runs, so this single pair is descriptive rather than a regression verdict. It measures neither GPU completion nor a physical device, and predates the flight merge. Video includes encoding overhead and is separate from these measurements.
+
 ## Flight balance release candidate · 0.0.29 / protocol v44 · 2026-10-18 Pacific
 
 - After integrating main `009af53`, 921 tests, the build, and the authenticated staged-playtest integration passed. The hosted pair completed both observations and aligned all five route legs (p95 separation 1.822 m, max 2.67 m), but its comparability gate failed because the motion fixture hashes differed. Its timing figures are descriptive under hosted load; this is not a regression or physical-device verdict. The Level 4 research fixture is retained separately so the standard comparison can use the same script on both revisions.
