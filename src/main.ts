@@ -1,7 +1,10 @@
 import './style.css';
 import './identity.css';
+import './mobile-hud.css';
+import { setupMobileHud } from './mobile-hud';
 import { setupMinigames } from './minigames';
 import { createProgressPanels } from './progress-panels';
+import { confirmedGoalOwner, nextDeliveryAward, nextReachableTier, tierGoalLabel } from './next-goal';
 import { listenForDoubleShift } from './double-shift';
 import { createMapDialog } from './map-dialog';
 import { createDriveModes } from './self-drive-mode';
@@ -22,7 +25,7 @@ import { quoteCybercabPurchase } from '../shared/cybercabs';
 import { LUXURY_CATALOG, LUXURY_SHOWROOM, atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
-import { DEFAULT_ROOM, Session, validRoom } from './session';
+import { DEFAULT_ROOM, Session, validRoom, type WalletView } from './session';
 import { Controls } from './controls';
 import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
@@ -45,13 +48,13 @@ import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUnt
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { selectAchievementTiers, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import { AchievementEventTracker } from './achievement-events';
 import { LevelEventTracker } from './level-events';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
-import { MARS_GOAL } from '../shared/mars';
 import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
 import { createEarningsBonusBadge } from './earnings-bonus-ui';
@@ -88,15 +91,15 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><div class="mission-head"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><button type="button" id="mission-panel-toggle" class="mobile-panel-toggle" aria-controls="mission-panel" aria-expanded="true">Details −</button></div><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><span id="route-advice" class="mission-advice" hidden></span><button type="button" id="next-award" class="mission-link" hidden></button><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
- <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, orange bars are island ramps, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, a gold diamond marks the Vault showroom, coral squares mark Caltrain stops, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
- <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
+ <div class="map-panel" id="map-panel"><button type="button" id="map-panel-toggle" class="mobile-panel-toggle" aria-controls="map-toggle" aria-expanded="true">Map −</button><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, orange bars are island ramps, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, a gold diamond marks the Vault showroom, coral squares mark Caltrain stops, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
+ <div class="telemetry" id="instrument-panel"><button type="button" id="instrument-panel-toggle" class="mobile-panel-toggle" aria-controls="instrument-panel" aria-expanded="true">Stats −</button><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
  <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost · double-tap to self-drive to your delivery &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for North Bay Playground.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
@@ -112,6 +115,7 @@ document.querySelector('#app')!.innerHTML = `
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
 <div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="mars-error" class="text-button" type="button">Starship mission &amp; launch view</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
+const mobileHud=setupMobileHud(browserStorage());
 let selectedVehicle:VehicleId='roadster';
 let startingRideChanged=false;
 const startingSelect=$<HTMLSelectElement>('starting-ride');
@@ -514,6 +518,7 @@ function driveToDelivery(){
   notice('Finding a route to your delivery…');
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
+$('route-goal').onclick=()=>{setDrawer(null);driveToDelivery();};
 listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer&&session.status==='online'&&!session.walletBlocked,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery});
 mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');});
 $('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
@@ -630,7 +635,7 @@ const starship=new StarshipClient(session);
 const earningsBadge=createEarningsBonusBadge();$('mission-panel').append(earningsBadge.element);
 const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
 const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},starship);
-for(const id of ['mars-quick','mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
+for(const id of ['mars-action','mars-menu','mars-error'])$(id).onclick=()=>marsUi.open();
 const progressPanels=createProgressPanels({
   session,
   driverId:()=>chat.playerId,
@@ -639,6 +644,9 @@ const progressPanels=createProgressPanels({
 });
 const {scoresDialog,awardsDialog}=progressPanels;
 const openScores=progressPanels.openScores,openAwards=progressPanels.openAwards;
+let nextAwardTarget:AchievementId|AchievementTierId|undefined;
+let goalOwner:string|null=null,goalGeneration=-1,goalWallet:WalletView|null=null,goalTier:AchievementTierRow|null=null;
+$('next-award').onclick=()=>{setDrawer(null);openAwards(nextAwardTarget);};
 function announceAchievements(){
   const id=achievementQueue.shift();if(!id){achievementTimer=0;$('achievement-toast').classList.add('hidden');return;}
   $('achievement-toast').textContent=`★ ACHIEVEMENT UNLOCKED · ${ACHIEVEMENTS[id].name}`;$('achievement-toast').classList.remove('hidden');
@@ -700,6 +708,7 @@ function updateActivities(e:Entity){
     parkingText='PARKING PLAYGROUND · Choose a game in Actions → Mini-games';
   }
   $('parking-status').textContent=parkingText;
+  $('parking-status').classList.toggle('activity-active',!!round);
   const racing=playerRace(world.races,session.id);
   const race=racing?.round,racer=racing?.entrant;
   const course=RACE_COURSES.find(course=>course.id===race?.courseId);
@@ -717,6 +726,7 @@ function updateActivities(e:Entity){
     }
   }else if(RACE_COURSES.some(course=>Math.hypot(e.x-course.start.x,e.z-course.start.z)<course.start.radius+20))raceText='RACE START · Choose a game in Actions → Mini-games. Cars can bump.';
   $('race-status').textContent=raceText;
+  $('race-status').classList.toggle('activity-active',!!racing);
 }
 const shopDialog=$<HTMLDialogElement>('shop-dialog');
 let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false,lastSkyCurrent='';
@@ -1091,8 +1101,6 @@ scene.start(dt=>{
   marsUi.update(e);
   earningsBadge.update(session.earningsBonus);
   if(session.walletBlocked)return;
-  const mission=starship.state();
-  $('mars-quick').textContent=mission.confirmed?(mission.freshness==='live'?'🚀 Mars mission':'🚀 Mars mission · last confirmed')+` · ${money(Math.min(mission.confirmed.total,MARS_GOAL))} / $1B`:'🚀 Mars mission · status unavailable';
   minigames.update();
   if(!e)return;
   cameraLabel(e.kind==='person');
@@ -1163,6 +1171,22 @@ scene.start(dt=>{
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
+    const routeButton=$<HTMLButtonElement>('route-goal'),routeAdvice=$('route-advice');
+    const advice=session.status!=='online'||session.walletBlocked?'Connect your driver to self-drive.':e.kind==='person'?'Get in a car to self-drive.':target.rooftop?'Rooftop delivery · fly manually.':e.supportId!=='ground'||e.inDome?'Land on the ground outside the Dome to self-drive.':requiredLevelAt(target.x,target.z)>d.level?'This delivery is in a locked area.':'';
+    const routeLabel=`↗ Self-drive to ${order.stage==='pickup'?'pickup':'dropoff'}`;
+    routeButton.hidden=!!advice;routeAdvice.hidden=!advice;
+    if(routeButton.textContent!==routeLabel)routeButton.textContent=routeLabel;
+    if(routeAdvice.textContent!==advice)routeAdvice.textContent=advice;
+    const awardButton=$<HTMLButtonElement>('next-award');
+    const owner=confirmedGoalOwner({currentCode,boundCode:walletBoundCode,chatCode:chat.code,chatPlayerId:chat.playerId,pendingRecovery,roomOnline:session.status==='online',walletReady:session.walletStatus==='ready'});
+    const wallet=owner&&session.walletStatus==='ready'?session.wallet:null;
+    if(owner!==goalOwner||session.connectionGeneration!==goalGeneration){goalOwner=owner;goalGeneration=session.connectionGeneration;goalWallet=null;goalTier=null;}
+    if(wallet!==goalWallet){goalWallet=wallet;goalTier=wallet?nextReachableTier(selectAchievementTiers(wallet.achievementTiers),goalTier):null;}
+    const guestAward=session.walletStatus==='guest'?nextDeliveryAward(player.achievements.unlocked):null;
+    nextAwardTarget=goalTier?.id??guestAward??undefined;
+    const awardLabel=goalTier?tierGoalLabel(goalTier):guestAward?`★ Next award · ${ACHIEVEMENTS[guestAward].description.split(' Reward:')[0]}`:'';
+    awardButton.hidden=!nextAwardTarget;if(awardButton.textContent!==awardLabel)awardButton.textContent=awardLabel;
+    awardButton.title=guestAward?ACHIEVEMENTS[guestAward].description:'View this award';
     $('mission-label').textContent=order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
     const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
@@ -1194,7 +1218,7 @@ scene.start(dt=>{
   }
   $('air').textContent=rocket?`${Math.round(e.air)}%`:'—';$('air-bar').style.width=rocket?`${e.air}%`:'0%';
   updateActivities(e);
-  $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;minimap(e,player?.delivery.level??0);
+  $('players').textContent=`${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`;if(mobileHud.expanded('map'))minimap(e,player?.delivery.level??0);
 });
 
 // A malformed invite must not silently place friends in a different room.

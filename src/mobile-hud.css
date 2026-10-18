@@ -1,0 +1,38 @@
+.mobile-panel-toggle{display:none}
+.mission-head{display:contents}
+@media(pointer:coarse),(max-width:800px){
+ .mobile-panel-toggle{display:flex;align-items:center;justify-content:center;min-width:68px;min-height:44px;padding:0 8px;border:1px solid #b5d2c780;border-radius:7px;background:#23464cf2;color:#ffe0ae;font:700 10px system-ui,sans-serif;white-space:nowrap}
+ .mission.mobile-hud-enabled{max-height:calc(100dvh - 285px);overflow-y:auto;overscroll-behavior:contain;padding:8px 10px;gap:3px}
+ .mission.mobile-hud-enabled>.mission-head{position:sticky;top:-8px;z-index:2;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:2px 8px;background:#162e36f5}
+ .mission-head>#mission-label{grid-column:1;grid-row:1}
+ .mission-head>#mission{grid-column:1;grid-row:2;line-height:1.25}
+ .mission-head>.mobile-panel-toggle{grid-column:2;grid-row:1/3}
+ .mission.mobile-compact>*:not(.mission-head):not(#police-status):not(#ferry-status):not(#parking-status):not(#race-status):not(.minigames-context){display:none}
+ .mission.mobile-compact>#police-status:not(.chased),.mission.mobile-compact>#parking-status:not(.activity-active),.mission.mobile-compact>#race-status:not(.activity-active){display:none}
+ .mission.mobile-compact #mission-label{display:none}
+ .mission.mobile-compact #mission{grid-row:1/3}
+ .cockpit-active .mission.mobile-hud-enabled{background:#162e36e8;border-left:2px solid #f7cb88;backdrop-filter:blur(12px);padding:8px 10px}
+ .cockpit-active .mission.mobile-hud-enabled{max-height:calc(100dvh - 367px)}
+ .map-panel.mobile-hud-enabled>.mobile-panel-toggle{width:100%;margin-bottom:4px}
+ .map-panel.mobile-compact{width:auto;padding:0}
+ .map-panel.mobile-compact>.mobile-panel-toggle{margin:0}
+ .map-panel.mobile-compact>*:not(.mobile-panel-toggle){display:none}
+ .telemetry.mobile-hud-enabled>.mobile-panel-toggle{margin-left:auto;margin-bottom:4px}
+ .telemetry.mobile-compact{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;width:auto;max-width:220px;padding:0 3px 0 8px}
+ .telemetry.mobile-compact>.mobile-panel-toggle{order:3;margin:0}
+ .telemetry.mobile-compact>.vehicle-title,.telemetry.mobile-compact>#handling,.telemetry.mobile-compact>.health{display:none}
+ .telemetry.mobile-compact>.speed{order:1;gap:3px;margin:0}
+ .telemetry.mobile-compact>.speed strong{font-size:20px;letter-spacing:-1px}
+ .telemetry.mobile-compact>.speed span{font-size:8px;line-height:1}
+ .telemetry.mobile-compact>.speed b{display:none}
+ .telemetry.mobile-compact>.meter-row:not(.health){order:2;gap:3px;margin:0;font-size:9px}
+ .telemetry.mobile-compact>.meter-row:not(.health)>span,.telemetry.mobile-compact>.meter-row:not(.health)>b{width:auto}
+ .telemetry.mobile-compact>.meter-row .meter{display:none}
+ .telemetry.mobile-compact>#station-status{order:4;flex-basis:100%;margin:0;padding:4px;font-size:9px}
+ .telemetry.mobile-compact>#station-status:not(.air-warning):not(.sky-active):not(.dome-active){display:none}
+ .telemetry.mobile-compact>#station-status.air-warning,.telemetry.mobile-compact>#station-status.sky-active,.telemetry.mobile-compact>#station-status.dome-active{display:block}
+}
+@media(max-height:550px) and (pointer:coarse),(max-height:550px) and (max-width:600px) and (orientation:portrait){
+ .mission.mobile-hud-enabled{max-height:calc(100dvh - 180px)}
+ .cockpit-active .mission.mobile-hud-enabled{max-height:calc(100dvh - 230px)}
+}
