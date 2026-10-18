@@ -65,9 +65,9 @@ export function trafficInput(e:Entity,world:World):Input {
   const neutral:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
   if(e.kind==='person')return neutral;
   if(e.supportId===null)return neutral; // Resume the ground route after landing.
-  if(e.supportId!=='ground'){e.autopilot=false;return neutral;}
+  if(e.supportId!=='ground'){e.autopilot=false;e.navigation=null;return neutral;}
   const navigation=e.navigation?.status==='driving'?e.navigation:null;
-  const route=navigation?navigation.path:ROUTES[e.routeId];if(!route?.length){e.autopilot=false;return neutral;}
+  const route=navigation?navigation.path:ROUTES[e.routeId];if(!route?.length){e.autopilot=false;e.navigation=null;return neutral;}
   let waypoint=navigation?navigation.index:e.waypoint;
   if(waypoint<0||waypoint>=route.length)waypoint=0;
   let target=route[waypoint];

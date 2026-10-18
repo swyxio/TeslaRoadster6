@@ -97,7 +97,7 @@ function sideSpawn(world:World,kind:Entity['kind'],side:FerrySide,ignore?:Entity
 }
 function moveToSide(world:World,e:Entity,side:FerrySide):boolean {
   const spawn=sideSpawn(world,e.kind,side,e);if(!spawn)return false;
-  Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,steering:0,thrusters:0,jumpBurstUntil:0});
+  Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null,steering:0,thrusters:0,jumpBurstUntil:0});
   if(e.npc&&!e.driver&&engageAutopilot(e))e.pauseUntil=world.time+2;
   return true;
 }
@@ -164,7 +164,7 @@ export function addPlayer(world:World,id:string,name:string):Player {
   const player:Player={id,name:name.slice(0,24),entityId:car.id,delivery:initialDelivery(spawn),achievements:initialAchievements(),cockpit:{active:false,activeSeconds:0,deliveries:0,orderEligible:true,orderSeconds:0}};world.entities.push(car);world.players.push(player);return player;
 }
 function cleanupCars(world:World){world.entities=world.entities.filter(e=>!e.owner||e.driver!==null||world.players.some(p=>p.id===e.owner));}
-function release(e:Entity,world:World){e.driver=null;e.speed=0;e.autopilot=false;if(e.npc&&e.supportId!=='ferry'){engageAutopilot(e);e.pauseUntil=world.time+2;}}
+function release(e:Entity,world:World){e.driver=null;e.speed=0;e.autopilot=false;e.navigation=null;if(e.npc&&e.supportId!=='ferry'){engageAutopilot(e);e.pauseUntil=world.time+2;}}
 export function removePlayer(world:World,id:string):void {
   leaveParking(world.parking,id);
   leaveRace(world.races,id);
@@ -184,7 +184,7 @@ export function interact(world:World,playerId:string):void {
     leaveParking(world.parking,playerId);
     leaveRace(world.races,playerId);
     if(world.ferry.arrivals.includes(e.id))world.ferry.arrivals=[...new Set(world.ferry.arrivals.filter(id=>id!==e.id).concat(car.id))];
-    car.driver=playerId;car.autopilot=false;car.speed=0;car.pushX=0;car.pushZ=0;car.lastJump=e.lastJump;car.lastFlip=e.lastFlip;car.domeReturn=e.domeReturn;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);resetAchievementFlight(player);
+    car.driver=playerId;car.autopilot=false;car.navigation=null;car.speed=0;car.pushX=0;car.pushZ=0;car.lastJump=e.lastJump;car.lastFlip=e.lastFlip;car.domeReturn=e.domeReturn;player.entityId=car.id;world.entities=world.entities.filter(other=>other!==e);resetAchievementFlight(player);
   }else{
     const width=dimensions(e.kind).width/2+1.3,length=dimensions(e.kind).length/2+1.3;
     const exits=[{angle:Math.PI/2,distance:width},{angle:-Math.PI/2,distance:width},{angle:Math.PI,distance:length},{angle:0,distance:length}];
@@ -291,7 +291,7 @@ export function raceAction(world:World,id:string,action:'join'|'start'|'leave',c
   }
   if(!slot||!joinRace(world.races,course,world,id))return false;
   leaveParking(world.parking,id);
-  Object.assign(car,slot,{y:terrainHeight(slot.x,slot.z)??0,supportId:'ground',vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0,autopilot:false});
+  Object.assign(car,slot,{y:terrainHeight(slot.x,slot.z)??0,supportId:'ground',vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
   const entrant=world.races.rounds.find(r=>r.courseId===course.id)!.entrants.find(e=>e.playerId===id)!;
   entrant.previous={x:car.x,y:car.y,z:car.z,time:world.time};
   return true;
@@ -528,7 +528,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
       const player=world.players.find(p=>p.id===e.driver);if(player)resetAchievementFlight(player);
     }
     const spawn=(nearRocketIsland(e.x,e.z)?sideSpawn(world,e.kind,'island',e):null)??spawnPosition(world,e.kind);
-    Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false});
+    Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
     const bottom=deckTopAt(e.x)-OVERPASS.thickness,height=dimensions(e.kind).height;
@@ -549,7 +549,7 @@ function enterDomeIfInside(e:Entity):void {
   if(curved>DOME.radius)return;
   const height=Math.sqrt(Math.max(0,DOME.radius**2-curved**2));
   if(e.y<DOME.radius-height||e.y+size.height>DOME.radius+height)return;
-  e.inDome=true;e.autopilot=false;
+  e.inDome=true;e.autopilot=false;e.navigation=null;
 }
 
 /** Clamp to the closed capsule. Only the ball may use the goal apertures. */
@@ -814,7 +814,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
     constrainDome(e,rocket);
     if(blocksProgression(world,e,old)){
       e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;
-      e.speed=0;e.pushX=0;e.pushZ=0;e.vx=0;e.vz=0;e.autopilot=false;
+      e.speed=0;e.pushX=0;e.pushZ=0;e.vx=0;e.vz=0;e.autopilot=false;e.navigation=null;
     }
     if(solid(e)){
       e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;

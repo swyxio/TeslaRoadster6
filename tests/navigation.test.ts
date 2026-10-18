@@ -40,7 +40,9 @@ test('invalid, locked and disconnected destinations are rejected; manual input t
 test('mini-game entry is immediate, safe and preserves the existing game on failure',()=>{
   for(const game of ['park','queue','short','oval'] as const){
     const {world,player,car}=drivingWorld();car.health=72;car.air=41;
+    assert.equal(setDestination(world,'driver',{x:-180,z:60}),true);
     assert.equal(enterMinigame(world,'driver',game),true,game);
+    assert.equal(car.navigation,null,'entering a game cancels navigation');
     assert.equal(car.health,72);assert.equal(car.air,41);assert.equal(car.supportId,'ground');
     assert.equal(player.delivery.level,0);
     if(game==='park'||game==='queue')assert.ok(world.parking.rounds.some(r=>r.mode===game&&r.entrants.some(e=>e.playerId==='driver')));
