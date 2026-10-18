@@ -4,7 +4,7 @@
 
 - `pnpm test` passed 160/160 and `pnpm build` passed both typechecks and the production build after rebasing onto the shop fixes. Vite still warns about the 710 kB main JavaScript chunk (199 kB gzip). Shared-simulation tests cover both walls, charge eligibility, retrofit rockets, the ceiling, boost and the tank cap.
 - Local Wrangler two-client room integration passed, including driving from the floor onto a wall and observing the air increase in both clients' snapshots. This is not a load test.
-- Chrome desktop solo showed the stadium and drove a Rocket up a wall to 27 m with the field and ball visible before the shop-fix rebase. After rebasing, Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the stadium, car, controls, score and wall-charge guidance. Simulated touch and mouse presses on Drive did not register in this browser session; touch driving, physical devices, frame rate and motion comfort remain unverified. No deployment was performed for this change.
+- Chrome desktop solo showed the stadium and drove a Rocket up a wall to 27 m with the field and ball visible before the shop-fix rebase. After rebasing, Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the stadium, car, controls, score and wall-charge guidance. Simulated touch and mouse presses on Drive did not register in this browser session; touch driving, physical devices, frame rate and motion comfort remain unverified. No deployment was performed for this change. Screenshots: [desktop](screenshots/rocket-dome/desktop.png), [portrait](screenshots/rocket-dome/portrait.png), [landscape](screenshots/rocket-dome/landscape.png).
 
 ## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
 
