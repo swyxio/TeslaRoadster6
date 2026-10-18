@@ -6,6 +6,8 @@ import {FERRY_DOCKS,ISLAND_TRACK,ROCKET_ISLAND} from '../shared/map';
 import {ovalBankSurface} from '../shared/oval-bank';
 import {PARKING_LOTS} from '../shared/parking-lots';
 import {SHOPS} from '../shared/upgrades';
+import {RACE_COURSES} from '../shared/race-courses';
+import {ISLAND_CLIFF} from '../shared/island-stunts';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -168,4 +170,12 @@ test('the default Roadster starts with two ground deliveries',()=>{
   const s=setup();
   for(let i=0;i<2;i++)completeGroundOrder(s);
   assert.equal(s.player.delivery.level,1);
+});
+
+
+test('the entire Rocket Island and SF parking playground are open before progression unlocks',()=>{
+  for(const point of [{x:800,z:-1700},{x:ISLAND_CLIFF.x,z:ISLAND_CLIFF.z},...RACE_COURSES.flatMap(c=>c.gates)])assert.equal(requiredLevelAt(point.x,point.z),0,`${point.x},${point.z}`);
+  const lot=PARKING_LOTS.find(l=>l.id==='sf-playground')!;
+  for(const point of [lot.area,lot.approach,...lot.stalls,{x:lot.approach.x,z:300}])assert.equal(requiredLevelAt(point.x,point.z),0,`${point.x},${point.z}`);
+  assert.equal(requiredLevelAt(-200,340),2,'other Peninsula areas remain locked');
 });

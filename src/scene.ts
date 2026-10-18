@@ -174,6 +174,7 @@ export class GameScene {
     green.position.set(signal.lightX-.44,4.1,signal.lightZ);scene.add(green);
     STATIONS.forEach(s=>{
       for(const stall of stationStalls(s)) {
+        // Charger posts and mint stop bars identify the fictional air-refill bays.
         box(scene,stall.x,.21,stall.z-stall.length/2+.7,3.4,.04,.25,0x9ef7cb);
         const z=stall.z-stall.length/2-.8;
         box(scene,stall.x-.46,1.2,z,.24,2.4,.6,0xf3e8d6);

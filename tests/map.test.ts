@@ -10,6 +10,7 @@ import {ROUTES} from '../shared/traffic';
 import {body,contact} from '../shared/physics';
 import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
 import {DOME} from '../shared/dome';
+import {ovalBankSurface} from '../shared/oval-bank';
 
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
@@ -29,9 +30,9 @@ test('both bridges traverse water and connect the correct shores',()=>{
 test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
  assert.ok(isRocketIsland(200,-1650));
  assert.ok(!isRocketIsland(0,-800));
- // The existing Alcatraz dome and new playground have separate safety boundaries.
+ // The connected dome shares the island's protected area.
  assert.ok(isLand(DOME.x,DOME.z));
- assert.ok(!isRocketIsland(DOME.x,DOME.z));
+ assert.ok(isRocketIsland(DOME.x,DOME.z));
  for(let i=0;i<ISLAND_TRACK.length;i++){
   const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
   for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){
@@ -54,6 +55,23 @@ test('Rocket Island loop and ferry approaches are clear, supported and separated
  }
  drive(0,-180,0,(_,z)=>z< -240);
  drive(0,-1250,Math.PI,(_,z)=>z> -1090);
+});
+test('the island-to-Dome road is supported, protected and clear of the bank and parking',()=>{
+ const road=ROADS.find(r=>r.kind==='island'&&r.x===300&&r.z===-1090);
+ assert.ok(road,'the shared approach is also rendered as a road');
+ for(let z=-1246;z<=-934;z+=4)for(let x=road.x-12;x<=road.x+12;x+=4){
+  assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
+  assert.ok(isRocketIsland(x,z),`approach not protected at ${x},${z}`);
+  assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).length,`building near the approach at ${x},${z}`);
+ }
+ const approach={...road,yaw:road.angle??0};
+ for(const lot of PARKING_LOTS){
+  const area={x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw};
+  assert.equal(contact(approach,area),null,`${lot.id} overlaps the Dome approach`);
+ }
+ for(const other of ROADS.filter(r=>r.kind==='island'&&r!==road))
+  assert.equal(contact(approach,{...other,yaw:other.angle??0}),null,'the approach does not overlay a race course');
 });
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;

@@ -58,6 +58,14 @@ test('all fleet models get entity-local capabilities while the stock Rocket rema
   assert.equal(JSON.stringify(VEHICLES), registry);
 });
 
+test('a purchased rocket kit remains installed when its vehicle collects a pickup', () => {
+  const upgraded = { ...car('purchased'), upgrades: { rocket: true } };
+  assert.equal(updateRocketPickup(pad(), [upgraded], 5), 'purchased');
+  assert.equal(upgraded.air, 100);
+  assert.equal(hasRockets(upgraded), true);
+  assert.equal(upgraded.upgrades.rocket, true);
+});
+
 test('all fleet meshes show independent upgrade hardware and replicated exhaust flags', () => {
   for (const kind of VEHICLE_IDS) {
     const upgraded = createVehicle(kind), other = createVehicle(kind);

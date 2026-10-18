@@ -1,4 +1,4 @@
-# Implementation contracts · v18
+# Implementation contracts · v19
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -27,7 +27,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 
 Source of truth is exported TypeScript in `shared/game.ts`:
 
-- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
+- `Entity`: id, kind (`VehicleId | person`, 26 vehicle families in `shared/vehicles.ts`), x/y/z, yaw/pitch/roll, vx/vy/vz, angular rates, speed, health/air (percentage), tankLevel (1–5), stunt count, loop attachment, support identity, dome membership, return destination (`domeReturn`) and surface position, authoritative thruster-effect bitmask and per-vehicle `upgrades` (`rocket`, `economy`, `motor`, `armor` booleans), driver (player ID or null), owner, pushX/pushZ (lateral velocity), steering, npc/autopilot, routeId/waypoint/pauseUntil; police cars additionally have `police` pursuit state.
 - `Player`: id, display name, entityId, `delivery` (session cash, lifetime session delivery earnings, level, last blocked access attempt, active time, order, completed runs, ticket state and OTA subscription), `achievements` (unlocked session awards and server-owned flight tracking), and `cockpit` (self-reported camera selection and accumulated run statistics). Each player controls exactly one entity; each vehicle has at most one driver.
 - `Pickup`: id, x/z, kind (`repair|air|rocket`), active, optional readyAt (simulation seconds).
 - `World`: entities, players, pickups, ferry, parking rounds, race rounds, time and authoritative `soccer` (ball position/velocity, scores and goal/win phase). Station/building, parking-lot, course, shop and island surface definitions are static versioned data, not repeated in snapshots.
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade` and `subscribeOta`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v18
+## Wire protocol v19
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:18,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:19,capacity:number}`.
 
 Client messages:
 
@@ -63,7 +63,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:18, capacity:number}
+{type:"welcome", id:string, version:19, capacity:number}
 {type:"state", world:World}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
@@ -71,7 +71,7 @@ Server messages:
 
 Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Each snapshot retains all players, occupied vehicles and ferry-supported entities plus ambient entities within 1,400 m of the recipient; distant ambient entities may appear/disappear as the recipient moves. Ferry, parking and race state are authoritative. Static map and simulation are shared. Input sends at20Hz. Client interpolates rendering only; no prediction/reconciliation yet. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
-Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v18 prevents older clients from connecting without the current markers and progression state. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
+Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. The HUD and visuals derive from the same definitions and must not claim effects or move a volume independently. Protocol v19 prevents older clients from connecting without the current markers and progression state. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
 
 Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, action cooldown400ms. Names follow the normalization and active-name collision policy described below. Invalid input closes1008; oversized/binary closes1009; inactive30seconds closes1001. Movement intent expires300ms after last input. Missing/malformed room route404, missing upgrade426, cross-origin browser upgrade403, room full503. Missing Origin is permitted for public nonbrowser clients; Origin checks are not authentication.
 
@@ -160,7 +160,7 @@ Four police NPCs patrol the shared world. A cop seeing a car between 3 m and 80 
 
 ## Rocket Dome soccer
 
-`shared/dome.ts` defines the fictional Alcatraz arena, separate from Rocket Island; `shared/map.ts` supplies its capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay spawn, preserving health and air. A vehicle arriving from the Alcatraz land or air joins in place once its upright body fits inside the capsule; the exterior shell is passable on entry, while the interior contains cars. Above-roof overflights remain outside. The arena is enclosed, has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact.
+`shared/dome.ts` defines the fictional Alcatraz arena connected to Rocket Island by a drivable approach; `shared/map.ts` supplies its capsule surface and support basis. `travelDome` moves one player and current vehicle or person between the arena and a checked Bay or island spawn, preserving health and air and returning them to the side where they entered. A vehicle arriving from the Alcatraz land or air joins in place once its upright body fits inside the capsule; the exterior shell is passable on entry, while the interior contains cars. Above-roof overflights remain outside. The arena is enclosed, has no police detection or citations, and pauses the current delivery order clock while leaving the active-play clock intact.
 
 `shared/soccer.ts` owns the one room-wide ball and colored scores. Any car can hit either goal; there are no player teams. Crossing a colored goal awards that color a point, freezes the ball for three simulation seconds, then returns it to center. The first side to five wins; after a six-second winner display, both scores and the ball reset. Physics, scoring and timing are authoritative in solo and online rooms; clients render snapshots and never send ball positions, goals or score claims. A new or empty room starts a new match.
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, makeEntity, NEUTRAL, parkingAction, raceAction, step, travelDome } from '../shared/game';
+import { addPlayer, chooseVehicle, createWorld, interact, makeEntity, NEUTRAL, parkingAction, raceAction, step, travelDome } from '../shared/game';
 import { DOME } from '../shared/dome';
 import { FERRY_TRAVEL_SECONDS } from '../shared/ferry';
 import { domeSurface } from '../shared/map';
@@ -91,4 +91,51 @@ test('dome travel withdraws parking and marks an active race DNF before relocati
   step(racing.world, new Map(), .05);
   assert.equal(entrant.status, 'dnf');
   assert.equal(entrant.nextGate, gate);
+});
+
+test('the island and dome are connected by drivable protected land', async () => {
+  const { isRocketIsland, terrainHeight } = await import('../shared/map');
+  const { world, car } = setup(); world.pickups=[];
+  for(let z=-1120;z<=-940;z+=5){
+    assert.equal(terrainHeight(300,z),0,`continuous surface at ${z}`);
+    assert.ok(isRocketIsland(300,z),`police-free island at ${z}`);
+  }
+  Object.assign(car,{x:300,z:-1115,y:0,yaw:Math.PI,speed:0,supportId:'ground'});
+  for(let i=0;i<1200&&!car.inDome;i++)step(world,new Map([['p',{...NEUTRAL,throttle:.35}]]),.05);
+  assert.ok(car.inDome,'a car can drive from the island into the dome');
+  assert.equal(car.domeReturn,'island');
+  assert.ok(travelDome(world,'p'));
+  assert.equal(car.inDome,false);
+  assert.ok(isRocketIsland(car.x,car.z),'leaving returns an island visitor to the island');
+});
+
+test('a dome shortcut from the Bay returns to the Bay while an island shortcut returns to the island', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  for(const island of [false,true]){
+    const {world,car}=setup();
+    if(island)Object.assign(car,{x:0,z:-1150,y:0,supportId:'ground'});
+    assert.ok(travelDome(world,'p'));assert.equal(car.domeReturn,island?'island':'sf');
+    assert.ok(travelDome(world,'p'));assert.equal(isRocketIsland(car.x,car.z),island);
+  }
+});
+
+
+test('an island Dome visitor keeps their return side when walking or changing cars', async () => {
+  const { isRocketIsland } = await import('../shared/map');
+  const { world, player, car } = setup();
+  Object.assign(car, { x: 0, z: -1150, y: 0, supportId: 'ground' });
+  assert.ok(travelDome(world, player.id));
+  assert.equal(car.domeReturn, 'island');
+  interact(world, player.id);
+  const person = world.entities.find(e => e.id === player.entityId)!;
+  assert.equal(person.kind, 'person');
+  assert.equal(person.domeReturn, 'island');
+  interact(world, player.id);
+  assert.equal(player.entityId, car.id);
+  assert.equal(car.domeReturn, 'island');
+  assert.ok(chooseVehicle(world, player.id, 'model-3'));
+  const replacement = world.entities.find(e => e.id === player.entityId)!;
+  assert.equal(replacement.domeReturn, 'island');
+  assert.ok(travelDome(world, player.id));
+  assert.ok(isRocketIsland(replacement.x, replacement.z));
 });

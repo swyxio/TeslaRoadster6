@@ -5,7 +5,7 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 18);
+assert.equal(PROTOCOL_VERSION, 19);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function eventually(check: () => boolean, label: string, timeout = 4000) {
@@ -29,7 +29,7 @@ function connect() {
 const one = connect(), two = connect();
 try {
   const health = await (await fetch(base + '/api/health')).json() as {version:number};
-  assert.equal(health.version, 18, 'server advertises the combined world protocol');
+  assert.equal(health.version, 19, 'server advertises the combined world protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
@@ -38,6 +38,7 @@ try {
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
+  assert.ok(two.state.world!.entities.every(e=>e.domeReturn==='sf'||e.domeReturn==='island'),'Dome return side is replicated');
   for(const state of [one.state,two.state]){
     assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
     assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);

@@ -56,7 +56,7 @@ export class Session {
     }
   }
   selectVehicle(kind:VehicleId){if(this.status==='solo')chooseVehicle(this.world,this.id,kind);else this.send({type:'selectVehicle',kind});}
-  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')parkingAction(this.world,this.id,action);else this.send({type:'parking',action});}
+  parkingAction(action:'park'|'queue'|'start'|'leave'){if(this.status==='solo')return parkingAction(this.world,this.id,action);this.send({type:'parking',action});}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){if(this.status==='solo')raceAction(this.world,this.id,action,courseId);else this.send({type:'race',action,courseId});}
   setName(name:string) {
     this.name = name;

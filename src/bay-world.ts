@@ -363,9 +363,6 @@ export function buildBay(scene:T.Scene) {
     if(!isLand(x,z)&&!isBridge(x,z))wavelets.push({x,y:-3.97,z,w:6+i%5*2,h:.02,d:.12});
   }
   batches(0x82b5b9,wavelets);
-  // A ferry and a few wakes provide scale and movement cues without collision obstacles.
-  box(128,-.7,-95,28,2,8,0xd7e4df);box(128,1,-95,12,2,6,0xe7ece1);box(128,2.2,-95,6,.7,5,0x4e777b);
-  const wakes:BoxItem[]=[];for(let i=0;i<7;i++)wakes.push({x:146+i*4,y:-3.96,z:-95,w:2,h:.02,d:8+i*1.7});batches(0x86b7b7,wakes);
   // A fictional billionaire-sized yacht, safely offshore and decorative.
   const yacht=MYSTERY_YACHT;
   box(yacht.x,-2.3,yacht.z,42,3.4,12,0xe8e8de);

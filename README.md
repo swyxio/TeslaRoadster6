@@ -12,7 +12,7 @@ This checkout contains the Rocket Island expansion and Rocket Dome; the public l
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
-**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena, separate from Rocket Island. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-capable cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay.
+**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena connected to Rocket Island by a drivable approach. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-capable cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay or island where you entered.
 
 **Global chat:** Pick a driver name and chat with players across rooms, including from solo play. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 

@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, FERRY_DOCKS, LANDMARKS, terrainHeight } from './map';
+import { BUILDINGS, FERRY_DOCKS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
 import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
@@ -17,6 +17,8 @@ export type Level = typeof LEVELS[number]['level'];
 export const ACCESS_BOUNDARIES = { oaklandX:110, alcatrazNorthZ:-650, alcatrazMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
 const sfPlayground = PARKING_LOTS.find(lot=>lot.id==='sf-playground')!;
 export function requiredLevelAt(x:number,z:number):Level {
+  // The island, Dome, and their connecting approach are open from the start.
+  if(isRocketIsland(x,z))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
   if(z>ACCESS_BOUNDARIES.bayMaxZ){
     // Connect the SF playground to the city without opening a route onward.
