@@ -119,6 +119,11 @@ function duration(action: Action, field: string, fallback: number, max: number):
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > max) throw new Error(`Invalid ${field}.`);
   return value;
 }
+function timeout(action: Action, fallback: number, max: number): number {
+  const value = duration(action, 'timeoutMs', fallback, max);
+  if (value === 0) throw new Error('Timeout must be greater than zero.');
+  return value;
+}
 function appendReplayIdle(until: number) {
   // Scenario waits have a 60-second per-step limit.
   let idleMs = replayLastActionEnd === undefined ? 0 : Math.round(until - replayLastActionEnd);
@@ -166,14 +171,14 @@ async function act(action: Action): Promise<unknown> {
       case 'waitFor': {
         const state = action.state ?? 'visible';
         if (!['attached', 'detached', 'visible', 'hidden'].includes(String(state))) throw new Error('Invalid locator state.');
-        await page!.locator(textField(action, 'selector')).first().waitFor({ state: state as 'attached' | 'detached' | 'visible' | 'hidden', timeout: duration(action, 'timeoutMs', 30000, 120000) });
+        await page!.locator(textField(action, 'selector')).first().waitFor({ state: state as 'attached' | 'detached' | 'visible' | 'hidden', timeout: timeout(action, 30000, 120000) });
         break;
       }
       case 'waitForPoseRevision': {
         if (!values.trajectory) throw new Error('waitForPoseRevision requires --trajectory.');
         const revision = action.value;
         if (!Number.isSafeInteger(revision) || (revision as number) < 0) throw new Error('Invalid pose revision.');
-        const deadline = performance.now() + duration(action, 'timeoutMs', 30000, 120000);
+        const deadline = performance.now() + timeout(action, 30000, 120000);
         while (!activeRoom || !latestPose || latestPose.poseRevision === null || latestPose.poseRevision < (revision as number)) {
           if (performance.now() >= deadline) throw new Error('Timed out waiting for the authoritative pose revision.');
           await page!.waitForTimeout(50);
@@ -223,7 +228,7 @@ async function act(action: Action): Promise<unknown> {
       case 'assertNumberAbove': {
         const text = await page!.locator(textField(action, 'selector')).first().textContent();
         const threshold = action.value;
-        if (typeof threshold !== 'number' || !Number.isFinite(threshold) || !Number.isFinite(Number(text?.trim())) || Number(text?.trim()) <= threshold) throw new Error('Numeric assertion failed.');
+        if (typeof threshold !== 'number' || !Number.isFinite(threshold) || !text?.trim() || !Number.isFinite(Number(text.trim())) || Number(text.trim()) <= threshold) throw new Error('Numeric assertion failed.');
         result = { value: Number(text?.trim()), greaterThan: threshold };
         break;
       }
@@ -324,7 +329,7 @@ try {
           incoming = await body(req);
           if (!incoming || typeof incoming !== 'object' || typeof incoming.type !== 'string') throw new Error('Invalid action');
           if (incoming.type === 'wait' && duration(incoming, 'ms', 0, 60000) > 1000) throw new Error('Interactive wait too long');
-          if ((incoming.type === 'waitFor' || incoming.type === 'waitForPoseRevision') && duration(incoming, 'timeoutMs', 30000, 120000) > 1000) throw new Error('Interactive wait too long');
+          if ((incoming.type === 'waitFor' || incoming.type === 'waitForPoseRevision') && timeout(incoming, 30000, 120000) > 1000) throw new Error('Interactive wait too long');
         } catch { if (!res.destroyed) json(res, 400, { error: 'Invalid request or interactive wait over 1000 ms' }); return; }
       }
       if (!accepting) { json(res, 409, { error: 'Run is finishing' }); return; }

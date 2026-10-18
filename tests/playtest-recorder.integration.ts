@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -41,6 +41,8 @@ try {
   };
   const tooLong = await fetch(`${endpoint}/actions`, { method: 'POST', headers, body: JSON.stringify({ type: 'wait', ms: 1001 }) });
   assert.equal(tooLong.status, 400);
+  const zeroTimeout = await fetch(`${endpoint}/actions`, { method: 'POST', headers, body: JSON.stringify({ type: 'waitFor', selector: '#never-exists', timeoutMs: 0 }) });
+  assert.equal(zeroTimeout.status, 400, 'A zero timeout must not block the control queue.');
   let live = false;
   for (let attempt = 0; attempt < 80; attempt++) {
     const status = await fetch(endpoint, { headers }).then(result => result.json()) as { state: { connection: string | null } };
@@ -93,7 +95,7 @@ try {
   const fixture = createServer((_request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html' });
     response.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-      <button id="a" style="width:140px;height:140px">A</button><button id="b" style="width:140px;height:140px">B</button>
+      <button id="a" style="width:140px;height:140px">A</button><button id="b" style="width:140px;height:140px">B</button><div id="empty"></div>
       <script>for (const type of ['touchstart','touchend','touchcancel']) document.body.addEventListener(type, event => {
         event.preventDefault(); document.body.dataset.teslandPerf = JSON.stringify({touches: [...event.touches].map(t => t.identifier).sort(), changed: [...event.changedTouches].map(t => t.identifier).sort()});
       }, {passive:false});</script>`);
@@ -136,6 +138,14 @@ try {
     const lastDown = touchReplay.steps.findLastIndex((step: { type: string }) => step.type === 'touchDown');
     assert.ok(touchReplay.steps.slice(lastDown + 1).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve a hold through finish.');
     assert.equal(touchReplay.steps.at(-1).type, 'releaseAll');
+
+    const invalidScenario = join(dirname(output), 'empty-number.json');
+    await writeFile(invalidScenario, JSON.stringify({ steps: [{ type: 'assertNumberAbove', selector: '#empty', value: -1 }] }));
+    const invalidChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', `http://127.0.0.1:${fixtureAddress.port}/`, '--target-ref', 'numeric-test', '--scenario', invalidScenario, '--no-video', '--gpu', gpu, '--out', join(dirname(output), 'invalid-number')], { stdio: 'ignore' });
+    assert.equal(await new Promise<number | null>(resolve => invalidChild.once('exit', resolve)), 1, 'An empty numeric checkpoint must fail.');
+    const invalidManifest = JSON.parse(await readFile(join(dirname(output), 'invalid-number', 'manifest.json'), 'utf8'));
+    assert.equal(invalidManifest.target.httpStatus, 200);
+    assert.ok(invalidManifest.events.some((event: { type: string; status: string }) => event.type === 'assertNumberAbove' && event.status === 'failed'));
   } finally {
     touchChild.kill('SIGTERM');
     fixture.close();

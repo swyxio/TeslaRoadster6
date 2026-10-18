@@ -94,7 +94,8 @@ export class GameRoom extends ProductionGameRoom {
 
 export default {
   async fetch(request: Request, env: Parameters<typeof worker.fetch>[1], ctx: ExecutionContext): Promise<Response> {
-    // The hostname check is defense in depth; bind Wrangler to 127.0.0.1 too.
+    // Host is request-controlled, not peer authentication. The actual local
+    // boundary is Wrangler's required --ip 127.0.0.1 binding.
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(request.url).hostname))
       return new Response('Playtest fixture is local only', { status: 403 });
     try { stagePose(env as unknown as StageVars); }

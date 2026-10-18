@@ -16,7 +16,8 @@ pnpm build
 ```
 
 Start an isolated local game. Use a fresh persistence directory for a new run;
-the game automatically joins its room **and global chat** when opened.
+the game automatically joins its room **and global chat** when opened. A remote
+target can include other players and their chat in the captured artifacts.
 
 ```sh
 pnpm exec wrangler dev --local --ip 127.0.0.1 --port 8787 --persist-to /tmp/tesland-playtest-state
@@ -84,6 +85,8 @@ pnpm exec wrangler dev --config tests/fixtures/wrangler.playtest-stage.jsonc \
   --var PLAYTEST_Z:0 --var PLAYTEST_YAW:1.2 --persist-to /tmp/tesland-stage-state
 ```
 
+The loopback bind is required: the fixture's hostname check is not peer
+authentication and cannot prevent access if the server is exposed on a network.
 The coordinates must be finite, on supported terrain and clear of solid map
 geometry. The fixture checks the game's spawn rules and waits up to five
 seconds for moving traffic to clear the position; it fails if it remains
