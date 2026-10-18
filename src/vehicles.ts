@@ -2,6 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coachwork, loft } from './coachwork';
 import { VEHICLES, type VehicleId, type VehicleSpec } from '../shared/vehicles';
+import { PAINTS, type VehicleStyle } from '../shared/vehicle-style';
 import { THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_LEFT, THRUSTER_SIDE_RIGHT } from '../shared/game';
 
 // Geometry and materials belong to the fleet, not individual entities: never dispose
@@ -170,6 +171,33 @@ export function createVehicle(kind:VehicleId|'person'):T.Group {
     batch(template);templates.set(kind,template);
   }
   return templates.get(kind)!.clone(true);
+}
+/** Materials and decal geometry are shared; styles change only the individual mesh references. */
+export function setVehicleStyle(root:T.Group,kind:VehicleId,style:VehicleStyle){
+  const key=`${style.paint}:${style.decal}`;
+  if(root.userData.vehicleStyle===key)return;
+  const spec=VEHICLES[kind],color=PAINTS[style.paint].color;
+  root.traverse(node=>{
+    if(!(node instanceof T.Mesh)||Array.isArray(node.material)||node.name==='vehicle-decal')return;
+    const current=node.material;
+    if(node.userData.originalVehiclePaint===undefined&&current instanceof T.MeshStandardMaterial&&current.color.getHex()===spec.color)
+      node.userData.originalVehiclePaint=current;
+    const original=node.userData.originalVehiclePaint as T.Material|undefined;
+    if(original)node.material=color===null?original:paint(color);
+  });
+  let decal=root.getObjectByName('vehicle-decal') as T.Group|undefined;
+  if(decal)root.remove(decal);
+  if(style.decal!=='none'){
+    decal=new T.Group();decal.name='vehicle-decal';
+    for(const side of [-1,1]){
+      const x=side*(spec.width*.5+.025),y=Math.max(.52,spec.height*.43);
+      if(style.decal==='stripe')box(decal,x,y,0,.035,.16,spec.length*.56,0xffe9b9);
+      else for(let i=0;i<8;i++)for(let row=0;row<2;row++)if((i+row)%2===0)
+        box(decal,x,y+(row-.5)*.105,(i-3.5)*spec.length*.065,.035,.10,spec.length*.064,0xffe9b9);
+    }
+    root.add(decal);
+  }
+  root.userData.vehicleStyle=key;
 }
 function buildVehicle(kind: VehicleId | 'person'): T.Group {
   const root = new T.Group(); root.name = kind;

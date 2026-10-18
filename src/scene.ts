@@ -15,7 +15,8 @@ import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
-import { box, material, createVehicle, setRocketKit, setThrusterEffects } from './vehicles';
+import { box, material, createVehicle, setRocketKit, setThrusterEffects, setVehicleStyle } from './vehicles';
+import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
 import { cockpitPose } from './camera';
@@ -28,6 +29,7 @@ import { buildSouthLandmarks } from './south-landmarks';
 import { buildBillboards } from './billboards';
 import { buildTeslandMonuments } from './tesland-monuments';
 import { buildFremontSpaceport } from './fremont-spaceport';
+import { RESEARCH_SITES, researchArrival } from '../shared/research';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
@@ -43,12 +45,14 @@ export class GameScene {
   private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
   private entities = new Map<string,T.Group>();
+  private driverLabels = new DriverLabels(this.scene);
   private pickups = new Map<string,T.Group>();
   private pickupLabels = new Map<string,T.SpriteMaterial>();
   private ferry = new T.Group();
   private ferryGates = {sf:new T.Group(),island:new T.Group()};
   private dockSigns: {side:FerrySide; canvas:HTMLCanvasElement; texture:T.CanvasTexture; text:string}[]=[];
   private parkingTargets = new Map<string,T.Mesh>();
+  private researchMarkers = new Map<string,T.Group>();
   private parkingClaims = new Map<string,T.Group>();
   private raceGate = new T.Mesh(new T.RingGeometry(24.2,25,64),new T.MeshBasicMaterial({color:0xffdc80,side:T.DoubleSide,transparent:true,opacity:.8}));
   private labels:T.Sprite[]=[];
@@ -207,6 +211,12 @@ export class GameScene {
     const labels:[string,number,number][]=[['SAN FRANCISCO',-105,110],['GOLDEN GATE',-240,-330],['OAKLAND',440,-80],['YERBA BUENA',198,38],['MARIN',-270,-445],['BAY BRIDGE',245,60],['ROCKET ISLAND FERRY',0,-230],['ROCKET ISLAND',200,-1450],...DISTRICTS.map(d=>[d.name.toUpperCase(),d.x,d.z] as [string,number,number])];
     labels.forEach(([text,x,z])=>{const label=this.label(text);label.position.set(x,32,z);label.scale.multiplyScalar(.8);scene.add(label);});
     for(const place of LANDMARKS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.h+8,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
+    for(const site of RESEARCH_SITES){
+      const point=researchArrival(site),marker=new T.Group();marker.position.set(point.x,(terrainHeight(point.x,point.z)??0)+.2,point.z);
+      const ring=new T.Mesh(new T.RingGeometry(8.5,9,48),new T.MeshBasicMaterial({color:0x83d9f7,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;marker.add(ring);
+      const label=this.label('RESEARCH · STOP HERE');label.position.y=8;marker.add(label);
+      scene.add(marker);this.researchMarkers.set(site.achievement,marker);
+    }
     for(const place of TESLAND_MONUMENTS){const label=this.label(place.name.toUpperCase());label.position.set(place.x,place.id==='colossus'?122:25,place.z);label.scale.multiplyScalar(1.2);label.userData.hideWithin=18;scene.add(label);}
     const yachtLabel=this.label(MYSTERY_YACHT.name.toUpperCase());yachtLabel.position.set(MYSTERY_YACHT.x,10,MYSTERY_YACHT.z);yachtLabel.userData.hideWithin=18;scene.add(yachtLabel);
 
@@ -267,6 +277,7 @@ export class GameScene {
     const gate=entrant&&course?.gates[entrant.nextGate];this.raceGate.visible=!!gate&&entrant?.status==='entered'&&race?.phase==='active';
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
+    for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
     for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
@@ -295,6 +306,7 @@ export class GameScene {
       const blend=returningToAuthority?1:localPredicted&&e.id===controlled?.id?1-Math.exp(-30*dt):alpha;
       if(mesh.position.distanceTo(target)>35)mesh.position.copy(target);else mesh.position.lerp(target,blend);
       if(e.kind!=='person'){
+        setVehicleStyle(mesh,e.kind,e.style);
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
         setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
       }
@@ -317,6 +329,7 @@ export class GameScene {
       if(hazard)hazard.visible=incident&&Math.floor(world.time*3)%2===0;
       if(e.kind!=='person'){const spec=VEHICLES[e.kind];for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}}
     }
+    this.driverLabels.update(world,this.entities,menu,controlled?.id);
     for(const pickup of world.pickups){
       let mesh=this.pickups.get(pickup.id);
       if(!mesh){

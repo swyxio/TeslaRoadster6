@@ -25,8 +25,10 @@ import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { playerRace } from '../shared/race';
+import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { LEVELS, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
 import { celebrateReward, resetCelebration } from './rewards';
+import { upgradePrice } from '../shared/research';
 import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
@@ -78,9 +80,9 @@ document.querySelector('#app')!.innerHTML = `
 </section>
 <dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump / hold to hover · X / □ flip · B / ○ boost · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">TESLAND / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
-<dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
+<dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><section class="style-shop" aria-labelledby="style-title"><h3 id="style-title">Paint &amp; decals</h3><p>Choose a finish for this car. Your changes last for this drive.</p><canvas id="style-preview" aria-label="Current car paint and decal preview"></canvas><strong>PAINT</strong><div id="paint-options" class="style-options"></div><strong>DECALS</strong><div id="decal-options" class="style-options"></div></section><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores reset with your drive and aren’t saved with your driver. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
-<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these during this drive. Awards reset with your session and don’t affect cash.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
+<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, deliver, and play. Stop in the blue research rings to earn cash and workshop discounts. Awards reset with your drive.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">Choose a soundtrack for your drive. Sound effects stay on their own channel.</p><div class="radio-panel"><label for="radio-station">RADIO STATION</label><select id="radio-station"><option value="chiptune">Tesland 8-bit</option><option value="latent-space">Latent Space podcast</option><option value="thursdai">ThursdAI podcast</option></select><div id="radio-episode" class="radio-episode" hidden><span id="radio-label">UP NEXT</span><a id="radio-title" target="_blank" rel="noopener noreferrer"></a></div><div id="radio-controls" class="radio-controls" hidden><button id="radio-play" type="button">Play</button><button id="radio-next" type="button">Next random episode ↗</button></div><p id="radio-status" role="status"></p></div><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music / radio <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music and radio volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
 <dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Changing your name starts a new chat driver. A saved driver can still be recovered with its code.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>Create a recovery code to use this name and ID again. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Remembering a new driver replaces any driver previously saved in this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Use a new guest</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
@@ -610,8 +612,10 @@ const shopDialog=$<HTMLDialogElement>('shop-dialog');
 let shopBusyUntil=0,lastRocketEntity='',lastRocketInstalled=false,lastSkyCurrent='';
 let pendingShop:{requestId:number;upgrade:UpgradeId;sentAt:number}|null=null;
 let pendingOta:{requestId:number;enabled:boolean;sentAt:number}|null=null;
+let pendingStyle:({requestId:number;sentAt:number}&StyleChoice)|null=null;
+let stylePreview:FleetPreview|undefined,stylePreviewKey='';
 $('ota-toggle').onclick=()=>{
-  const player=session.world.players.find(p=>p.id===session.id);if(!player||pendingOta)return;
+  const player=session.world.players.find(p=>p.id===session.id);if(!player||pendingOta||pendingStyle)return;
   const enabled=!player.delivery.ota.enabled,now=performance.now();shopBusyUntil=now+800;
   pendingOta={requestId:session.setOta(enabled),enabled,sentAt:now};updateShop();
 };
@@ -626,7 +630,33 @@ for(const id of Object.keys(UPGRADES) as UpgradeId[]){
   };
   row.append(copy,button);$('shop-items').append(row);
 }
+for(const category of ['paint','decal'] as const){
+  const options=category==='paint'?PAINTS:DECALS;
+  for(const choice of Object.keys(options)){
+    const selection=(category==='paint'?{category,choice:choice as PaintId}:{category,choice:choice as DecalId}) as StyleChoice;
+    const item=category==='paint'?PAINTS[choice as PaintId]:DECALS[choice as DecalId],button=document.createElement('button');
+    button.dataset.styleCategory=category;button.dataset.styleChoice=choice;
+    if(category==='paint'&&choice!=='stock')button.style.setProperty('--swatch',`#${PAINTS[choice as PaintId].color!.toString(16).padStart(6,'0')}`);
+    button.onclick=()=>{
+      const now=performance.now();shopBusyUntil=now+800;
+      pendingStyle={...selection,requestId:session.buyVehicleStyle(selection),sentAt:now};
+      $('shop-feedback').textContent='Checking purchase…';updateShop();
+    };
+    button.textContent=item.name;$(category==='paint'?'paint-options':'decal-options').append(button);
+  }
+}
 function updateShop(){
+  if(pendingStyle){
+    const result=session.vehicleStyleResult;
+    if(result?.requestId===pendingStyle.requestId){
+      const item=pendingStyle.category==='paint'?PAINTS[pendingStyle.choice]:DECALS[pendingStyle.choice];
+      $('shop-feedback').textContent=result.ok?`${item.name} applied to this car.`:'Purchase declined. Check your cash, car and workshop access.';
+      pendingStyle=null;session.vehicleStyleResult=null;
+    }else if(performance.now()-pendingStyle.sentAt>5000){
+      $('shop-feedback').textContent='No reply yet. Check your cash and car before trying again.';pendingStyle=null;
+    }
+  }
+
   if(pendingShop){
     const result=session.upgradeResult;
     if(result?.requestId===pendingShop.requestId){
@@ -650,18 +680,29 @@ function updateShop(){
   $('shop-car').textContent=car.kind==='person'?'ON FOOT':VEHICLES[car.kind].name;
   $('shop-cash').textContent=`${money(player.delivery.cash)} available`;
   $('ota-status').textContent=!ota.enabled?'OFF · Subscribe to activate':ota.active?'ACTIVE · Next charge in '+Math.ceil(Math.max(0,(ota.renewAt??0)-session.world.time))+' seconds':'PAUSED · Waiting for $5';
+  const previewKey=car.kind==='person'?'person':`${car.kind}:${car.style.paint}:${car.style.decal}`;
+  $<HTMLCanvasElement>('style-preview').hidden=car.kind==='person';
+  if(car.kind!=='person'&&previewKey!==stylePreviewKey){stylePreview??=new FleetPreview($<HTMLCanvasElement>('style-preview'));stylePreview.show(car.kind,car.style);stylePreviewKey=previewKey;}
+  for(const button of document.querySelectorAll<HTMLButtonElement>('[data-style-category]')){
+    const category=button.dataset.styleCategory as 'paint'|'decal',choice=button.dataset.styleChoice!;
+    const item=category==='paint'?PAINTS[choice as PaintId]:DECALS[choice as DecalId];
+    const installed=car.style[category]===choice;
+    button.textContent=`${item.name} · ${installed?'APPLIED':item.price?money(item.price):'FREE'}`;button.setAttribute('aria-pressed',String(installed));
+    button.disabled=!available||installed||player.delivery.cash<item.price||!!pendingShop||!!pendingOta||!!pendingStyle||performance.now()<shopBusyUntil;
+  }
   const otaButton=$<HTMLButtonElement>('ota-toggle');otaButton.textContent=pendingOta?'CHECKING…':ota.enabled?'CANCEL':'SUBSCRIBE';
-  otaButton.disabled=!!pendingOta||!!pendingShop||performance.now()<shopBusyUntil;
+  otaButton.disabled=!!pendingOta||!!pendingShop||!!pendingStyle||performance.now()<shopBusyUntil;
   for(const id of Object.keys(UPGRADES) as UpgradeId[]){
     const button=document.querySelector<HTMLButtonElement>(`[data-upgrade="${id}"]`)!;
     const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:car.upgrades[id];
     const needsRocket=(id==='economy'||id==='tank')&&!rocket;
-    const price=id==='tank'?tankUpgradePrice(car.tankLevel):UPGRADES[id].price;
+    const price=upgradePrice(player,car,id);
     const name=id==='tank'?`Air tank · Level ${car.tankLevel}${installed?' (max)':` → ${car.tankLevel+1}`}`:UPGRADES[id].name;
     document.querySelector<HTMLElement>(`[data-upgrade-title="${id}"]`)!.textContent=name;
-    button.textContent=installed?(id==='service'?'FULL':id==='tank'?'MAX':'INSTALLED'):needsRocket?'NEEDS ROCKET':money(price);
+    const fullPrice=id==='tank'?tankUpgradePrice(car.tankLevel):UPGRADES[id].price;
+    button.textContent=installed?(id==='service'?'FULL':id==='tank'?'MAX':'INSTALLED'):needsRocket?'NEEDS ROCKET':`${money(price)}${price<fullPrice?' · RESEARCH':''}`;
     button.setAttribute('aria-label',`${name}: ${button.textContent}`);
-    button.disabled=!available||installed||needsRocket||player.delivery.cash<price||!!pendingShop||!!pendingOta||performance.now()<shopBusyUntil;
+    button.disabled=!available||installed||needsRocket||player.delivery.cash<price||!!pendingShop||!!pendingOta||!!pendingStyle||performance.now()<shopBusyUntil;
   }
 }
 function openShop(){

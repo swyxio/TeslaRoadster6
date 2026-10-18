@@ -263,6 +263,7 @@ export const LANDMARKS=[
  {id:'stanford',name:'Stanford · Hoover Tower',x:-940,z:4000,w:16,d:16,h:60,district:'peninsula',style:'hoover',arrival:{x:-940,z:4030}},
  {id:'mission-san-jose',name:'Fremont · Mission San José',x:1770,z:6000,w:26,d:18,h:20,district:'east-bay',style:'mission',arrival:{x:1770,z:6035}},
  {id:'san-jose-city-hall',name:'San José · City Hall',x:1680,z:8700,w:22,d:22,h:23,district:'south-bay',style:'rotunda',arrival:{x:1705,z:8730}},
+ {id:'ucsf',name:'UCSF · Parnassus',x:-330,z:90,w:22,d:22,h:21,district:'sf',style:'hospital',arrival:{x:-330,z:120}},
 ] as const;
 // Runway paint sits on the same supported land as the cars; no aircraft simulation.
 export const AIRPORT_RUNWAY={x:-660,z:1200,w:20,d:110} as const;
@@ -271,7 +272,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'landmark'|'station-venue'|'monument'|'spaceport';stationId?:string};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport';stationId?:string};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -334,7 +335,7 @@ const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mis
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
- const overlapsLandmark=landmarkBuildings.some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
+ const overlapsLandmark=[...landmarkBuildings,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
  const overlapsHill=NATURAL_HILLS.some(h=>b.x+b.w/2>h.minX&&b.x-b.w/2<h.maxX&&b.z+b.d/2>h.minZ&&b.z-b.d/2<h.maxZ);
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }

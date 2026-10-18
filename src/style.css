@@ -172,3 +172,12 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .radio-controls{display:flex;gap:8px;margin-top:12px}.radio-controls button{min-height:44px;padding:8px 12px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:12px}.radio-controls button:first-child{min-width:88px;background:#ffc77f;color:#21373b}.radio-controls button:disabled{opacity:.5}
 .radio-panel p{min-height:1em;margin:9px 0 0;color:#b4cabc;font-size:11px;line-height:1.4}.radio-panel [hidden]{display:none}
 @media(max-height:550px){.radio-panel{padding:9px}.radio-episode{margin-top:7px}.radio-controls{margin-top:7px}.radio-controls button{min-height:40px}}
+
+/* Workshop cosmetics remain keyboard and touch accessible alongside upgrades. */
+.style-shop{margin:14px 0;padding:14px;border:1px solid #d9b7ff35;border-radius:8px;background:#ffffff08}
+.style-shop h3{margin:0;color:#fff3db;font-size:17px}.style-shop p{margin:5px 0;color:#bdccc4;font-size:11px;line-height:1.4}
+.style-shop>strong{display:block;margin:10px 0 6px;color:#d7c1ed;font-size:10px;letter-spacing:.08em}
+#style-preview{width:100%;max-height:170px;aspect-ratio:2;object-fit:contain;background:radial-gradient(ellipse,#53736c55,transparent 70%)}
+.style-options{display:flex;flex-wrap:wrap;gap:7px}.style-options button{min-height:44px;padding:8px 12px;border:1px solid #d7b7ff80;border-radius:7px;background:#d5a7ff;color:#242036;font-size:11px;font-weight:750}
+.style-options button[aria-pressed=true]{border-color:#91e9c6;background:#173e3a;color:#d6fff0}.style-options button:disabled:not([aria-pressed=true]){background:#ffffff0c;border-color:#ffffff22;color:#a6b5ad}
+.style-options button[style*="--swatch"]::before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;background:var(--swatch);border:1px solid #ffffff90}

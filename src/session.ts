@@ -1,6 +1,7 @@
 import type { VehicleId } from '../shared/vehicles';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, buyUpgrade, buyVehicleStyle, subscribeOta, chooseVehicle, toggleAutopilot, createWorld, addPlayer, step, interact, parkingAction, raceAction, enterMinigame, setDestination, resetPlayer, travelDome, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
+import type { StyleChoice } from '../shared/vehicle-style';
 import { applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
 import { LocalPrediction } from './local-prediction';
 export const DEFAULT_ROOM = 'bay';
@@ -23,6 +24,7 @@ export class Session {
   private pendingVehicle?: {kind:VehicleId;previousId:string|undefined;token:number};
   private prediction = new LocalPrediction();
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
+  vehicleStyleResult: ({requestId:number;ok:boolean}&StyleChoice)|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
   marsResult: {requestId:number;action:'contribute'|'board';ok:boolean;amount:number}|null = null;
@@ -33,7 +35,7 @@ export class Session {
   solo(kind:VehicleId='roadster',name=this.name) {
     this.name = name;
     this.disconnect(); this.status = 'solo'; this.id = 'local'; this.capacity = 1; this.error = ''; this.room = ''; this.roomFull = false; this.accumulator = 0;
-    this.upgradeResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createWorld(); addPlayer(this.world, this.id, this.name); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
+    this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createWorld(); addPlayer(this.world, this.id, this.name); if(kind!=='roadster')chooseVehicle(this.world,this.id,kind);
   }
   join(room: string, name: string,kind?:VehicleId) {
     if (this.status === 'online' && this.room === room) {
@@ -45,7 +47,7 @@ export class Session {
     }
     kind ??= 'roadster';
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createWorld();
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.world = createWorld();
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
     this.socket = socket;
     const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or drive solo.'; socket.close(); } }, 10000);
@@ -73,6 +75,7 @@ export class Session {
           }
         }
         if (message.type === 'upgradeResult') this.upgradeResult = message;
+        if (message.type === 'vehicleStyleResult') this.vehicleStyleResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
@@ -125,6 +128,12 @@ export class Session {
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
     if(this.status==='solo')this.upgradeResult={requestId,upgrade,ok:buyUpgrade(this.world,this.id,upgrade)};
     else if(this.status!=='online'||!this.actionWithBarrier({type:'upgrade',upgrade,requestId}))this.upgradeResult={requestId,upgrade,ok:false};
+    return requestId;
+  }
+  buyVehicleStyle(selection:StyleChoice){
+    const requestId=++this.nextUpgradeRequest;this.vehicleStyleResult=null;
+    if(this.status==='solo')this.vehicleStyleResult={requestId,...selection,ok:buyVehicleStyle(this.world,this.id,selection)};
+    else if(this.status!=='online'||!this.actionWithBarrier({type:'vehicleStyle',...selection,requestId}))this.vehicleStyleResult={requestId,...selection,ok:false};
     return requestId;
   }
   mars(action:'contribute'|'board',amount=0){

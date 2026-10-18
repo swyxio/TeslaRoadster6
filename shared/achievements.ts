@@ -1,5 +1,6 @@
 import type { Entity, Player } from './game';
-import { REGIONS, insidePolygon, isLand } from './map';
+import { REGIONS, insidePolygon, isLand, terrainHeight } from './map';
+import { RESEARCH_SITES, researchArrival } from './research';
 import type { DomeParticipant } from './soccer';
 
 export const ACHIEVEMENTS = {
@@ -7,6 +8,11 @@ export const ACHIEVEMENTS = {
   'roof-rider': { name:'Roof Rider', description:'Land a car on a building rooftop.' },
   'sky-delivery': { name:'Sky Delivery', description:'Complete a rooftop delivery.' },
   'regular': { name:'Neighborhood Regular', description:'Complete three deliveries.' },
+  'ucsf-research': { name:'UCSF · Pit Stop', description:'Stop at UCSF Parnassus. Earn $20 and 25% off repairs this drive.' },
+  'berkeley-research': { name:'Berkeley · Mobility Lab', description:'Stop at the Campanile. Earn $35 and 20% off sport motors this drive.' },
+  'stanford-research': { name:'Stanford · Air Lab', description:'Stop at Hoover Tower. Earn $50 and 20% off efficient nozzles this drive.' },
+  'sfo-ground-crew': { name:'SFO · Ground Crew', description:'Stop at the SFO tower. Earn $40 and 20% off air tank upgrades this drive.' },
+  'sfo-express': { name:'SFO Express', description:'Complete a delivery to SFO for an extra $80.' },
   'rocket-rookie': { name:'Rocket Rookie', description:'Touch the ball in Roadster · Rocket and finish a Rocket Dome match.' },
   'roadster-champion': { name:'Roadster Champion', description:'Win a Rocket Dome match with a goal credited to your Roadster · Rocket.' },
   'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match.' },
@@ -47,7 +53,7 @@ function shore(e:Entity):Shore|null {
 export function onRoof(e:Entity):boolean {
   return e.kind!=='person' && e.supportId?.startsWith('roof:')===true;
 }
-export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean):void {
+export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean,deliveredCustomerId?:string):void {
   const state=player.achievements, region=shore(e), roof=onRoof(e);
   const grounded=e.supportId!==null;
   // A recovery or a vehicle switch is not a flight across the Bay.
@@ -67,5 +73,22 @@ export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boole
   }
   if(rooftopDelivered)unlock(state,'sky-delivery');
   if(player.delivery.completed>=3)unlock(state,'regular');
+  let researchCash=0;
+  if(e.kind!=='person'&&!e.inDome&&e.supportId==='ground'&&Math.abs(e.speed)<=4&&Math.abs(e.vy)<.1){
+    for(const site of RESEARCH_SITES){
+      const target=researchArrival(site),height=terrainHeight(target.x,target.z);
+      if(height!==null&&Math.hypot(e.x-target.x,e.y-height,e.z-target.z)<=9&&!state.unlocked.includes(site.achievement)){
+        unlock(state,site.achievement);researchCash+=site.cash;
+      }
+    }
+  }
+  if(deliveredCustomerId==='landmark-sfo'&&!state.unlocked.includes('sfo-express')){
+    unlock(state,'sfo-express');researchCash+=80;
+  }
+  if(researchCash){
+    // Research cash is a one-off award; session delivery earnings remain delivery-only.
+    player.delivery.cash+=researchCash;
+    player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:'research',amount:researchCash};
+  }
   state.lastPosition={x:e.x,z:e.z};
 }

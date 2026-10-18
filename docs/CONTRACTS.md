@@ -1,4 +1,4 @@
-# Implementation contracts · v29
+# Implementation contracts · v31
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. They describe the current implementation, not speculative infrastructure.
 
@@ -35,9 +35,9 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v29
+## Wire protocol v31
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:29,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:31,capacity:number}`.
 
 Client messages:
 
@@ -50,6 +50,7 @@ Client messages:
 {"type":"dome"}
 {"type":"selectVehicle","kind":"model-3"}
 {"type":"upgrade","upgrade":"rocket","requestId":1}
+{"type":"vehicleStyle","category":"paint","choice":"mint","requestId":2}
 {"type":"ota","enabled":true,"requestId":2}
 {"type":"name","name":"Driver"}
 {"type":"parking","action":"park"}
@@ -68,9 +69,10 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, version:29, capacity:number}
+{type:"welcome", id:string, version:31, capacity:number}
 {type:"state", world:World, inputAck:number, sync?:number}
 {type:"upgradeResult", requestId:number, upgrade:UpgradeId, ok:boolean}
+{type:"vehicleStyleResult", requestId:number, category:"paint"|"decal", choice:string, ok:boolean}
 {type:"otaResult", requestId:number, enabled:boolean, ok:boolean}
 {type:"destinationResult", requestId:number, ok:boolean}
 {type:"marsResult", requestId:number, action:"contribute"|"board", ok:boolean, amount:number}
@@ -81,6 +83,8 @@ Welcome precedes the initial snapshot. Physics runs at20Hz, snapshots at10Hz. Ea
 For local presentation only, the client replays at most three unacknowledged inputs with shared physics from each snapshot. It stops prediction when snapshots are stale, input backlog is excessive, another body is close, the vehicle is airborne or on a special surface, or an action is waiting for its `sync` barrier. A new vehicle or discontinuity clears pending preview. The server alone owns collisions, position, pickups, races, cash and HUD state; this short preview can be corrected when the next snapshot arrives, particularly when inputs are batched or reused. Client closes/reports incompatible protocol versions. Wire changes require coordinated client/server updates, version bump when incompatible, and integration tests. Do not add compatibility shims for this prototype.
 
 Sky-current volumes are static versioned world data in `shared/sky-currents.ts`; they are not sent in snapshots. The server decides membership and applies lift, speed and air during simulation. Protocol v27 combined the charging lots and island geometry. Two independently developed v28 builds added, respectively, sequenced driving acknowledgements and session-long Rocket pickups, or the Fremont spaceport and Mars mission. Protocol v29 combines both changes so incompatible clients cannot connect. See [SKY_CURRENTS.md](SKY_CURRENTS.md).
+
+Protocol v30 adds a shared UCSF landmark and research achievement/reward IDs. The server checks visits and computes shop discounts; clients cannot claim visits or set prices. Protocol v31 adds vehicle finish choices to entity snapshots and a validated workshop action; client and server must update together.
 
 Two static, collision-backed monument bases in the Marin headlands use `TESLAND_MONUMENTS` in `shared/map.ts` for their footprints and landable roofs. The sculptures above are decorative; rendering and map markers use the same positions. They are fictional game art and do not imply affiliation.
 
@@ -175,7 +179,9 @@ The mini-game picker uses `minigame` with `park|queue|short|oval`. Parking games
 
 ## Delivery and police contract
 
-`shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. Pickup has its own active-time estimate based on distance from where the order began; reaching the restaurant early pays up to 40% of base fare immediately. The delivery estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the pickup and delivery estimates and leaderboard clock pause. `lastReward` contains the most recent positive pickup or delivery award with a monotonically increasing per-player ID; a renderer may celebrate each new ID once, but cannot create payouts. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
+`shared/vehicle-style.ts` defines three $18 paints and two decals ($12 and $18), plus free original paint and decal removal. The `vehicleStyle` message carries a bounded category and choice with a request ID; the server validates driver, shop or active OTA access, cash and the current finish, then deducts once and sends the result only to the buyer. The vehicle's paint and decal are replicated in snapshots and stay on that car for its session lifetime; replacing it creates a fresh finish. No ownership or cosmetics persist across sessions. The workshop includes a live preview and keyboard/touch buttons. Other drivers’ cars show their current driver's room name above them; labels follow the occupant and use the server-resolved name. Your own label is hidden in your view to keep the road clear. Local rendering assigns cached materials per mesh and does not mutate or dispose shared fleet resources.
+
+`shared/delivery.ts` owns restaurant and fictional customer identities, artistic coordinates, order selection, active time and payment. Each player has an independent `delivery` state in snapshots. A grounded player within 9 m moving no faster than 4 m/s automatically picks up or delivers; no client message claims a payment. Pickup has its own active-time estimate based on distance from where the order began; reaching the restaurant early pays up to 40% of base fare immediately. The delivery estimate begins at pickup and counts active play. Active time includes control input plus a 3-second grace period, and a moving player AV. When idle, the pickup and delivery estimates and leaderboard clock pause. `lastReward` contains the most recent positive pickup, delivery or research award with a monotonically increasing per-player ID; a renderer may celebrate each new ID once, but cannot create payouts. Base fare depends on straight-line distance; completing early adds up to 75% of base, and lateness reduces fare to a floor of zero. See [DELIVERY.md](DELIVERY.md) for details and provenance.
 
 Each session starts at level 0 with SF orders. `earned` accumulates positive pickup and delivery rewards, independent of the spendable `cash` wallet; tickets and purchases never subtract from it. Unlocks require both completed deliveries and earned: Oakland/Berkeley at 2/$50, Peninsula/East Bay at 5/$140, San Jose at 8/$350. `LEVELS`, `ACCESS_BOUNDARIES` and `requiredLevelAt(x,z)` in `shared/delivery.ts` define this contract. Each order selects only unlocked pickups and destinations; exploration jobs reach unlocked landmark regions, while other jobs may be local or eligible rooftops. The authoritative simulation blocks controlled cars or pedestrians from crossing into a locked region, including flight, collision displacement and vehicle takeover. NPCs are unaffected. `lastBlocked:{level,at}|null` records the required level and world time of the most recent blocked attempt; clients show requirements from `LEVELS`, and may not grant access. Rocket Dome and Rocket Island remain open at all levels; the SF parking playground has a bounded level-zero access pocket. Progress is per player and per room session; saved chat identity does not restore it.
 
@@ -198,4 +204,6 @@ Gold arrows mark the air-charge zone: a Rocket-equipped vehicle attached to the 
 
 Rooftop customers in `shared/delivery.ts` select actual flat `BUILDINGS` from `shared/map.ts`; the objective marker uses their shared height. A rooftop dropoff requires the car to land and stop within 6 m of the roof center. After Oakland unlocks, an eligible non-exploration order after every third completed run starting with the first may select a rooftop only when the current vehicle has flight capability. Level-zero deliveries remain on the ground. Other vehicles receive ground orders. The player may change cars later, so the interface must identify rooftop orders and the fleet remains available.
 
-`shared/achievements.ts` owns unlocked award IDs and flight tracking per player in snapshots. Bay Hopper requires leaving one mainland shore, crossing water, and arriving on the other without landing; a bridge, island, roof or stunt-loop contact ends the attempt, and recovery or vehicle switches cancel it. Flying above a bridge is allowed. Roof Rider requires a car on a building roof; Sky Delivery requires a completed rooftop delivery; Neighborhood Regular requires three deliveries. Dome awards require a real ball touch and the player to be in the dome at match completion. Rocket Rookie and Built to Fly require touches in Roadster · Rocket and a retrofit respectively; Roadster Champion and Garage Champion require a win and at least one goal credited in the corresponding class. No Rockets Needed requires a win with at least one stock-car goal and only stock-car touches. A tie counts as a win for each leader. Awards are ephemeral and do not affect cash. Clients can render progress and sequence notifications but cannot assert unlocks.
+`shared/achievements.ts` owns unlocked award IDs and flight tracking per player in snapshots. Bay Hopper requires leaving one mainland shore, crossing water, and arriving on the other without landing; a bridge, island, roof or stunt-loop contact ends the attempt, and recovery or vehicle switches cancel it. Flying above a bridge is allowed. Roof Rider requires a car on a building roof; Sky Delivery requires a completed rooftop delivery; Neighborhood Regular requires three deliveries. Dome awards require a real ball touch and the player to be in the dome at match completion. Rocket Rookie and Built to Fly require touches in Roadster · Rocket and a retrofit respectively; Roadster Champion and Garage Champion require a win and at least one goal credited in the corresponding class. No Rockets Needed requires a win with at least one stock-car goal and only stock-car touches. A tie counts as a win for each leader.
+
+`shared/research.ts` defines research visits and workshop discounts. Stop a car on the ground within 9 m of each landmark arrival at no more than 4 m/s: UCSF pays $20 and unlocks 25% off repairs; Berkeley pays $35 and unlocks 20% off sport motors; Stanford pays $50 and unlocks 20% off efficient nozzles; SFO pays $40 and unlocks 20% off air tanks. A completed SFO delivery adds a separate one-time $80 achievement. Each visit pays once per player per session; awards and discounts reset with the drive. Awards add cash but do not change delivery-only `earned` or bypass region gates. The shared shop calculates the same rounded price presented in the UI, including each tank level; all normal shop and rocket prerequisites still apply. Clients render blue rings and awarded state but cannot assert unlocks. If an SFO delivery and first visit coincide, their achievement awards are combined in the research reward notification; the separate fare remains in cash and `lastPayout`.

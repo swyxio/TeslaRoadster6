@@ -8,7 +8,7 @@ import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
 // The combined protocol includes sequenced inputs and the Fremont Mars mission.
-assert.equal(PROTOCOL_VERSION, 29);
+assert.equal(PROTOCOL_VERSION, 31);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -24,12 +24,13 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
     if (data.type === 'state') state.world = data.world;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
+    if (data.type === 'vehicleStyleResult') (state.vehicleStyleResults??=[]).push(data);
     if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
     if (data.type === 'destinationResult') (state.destinationResults??=[]).push(data);
     if (data.type === 'marsResult') (state.marsResults??=[]).push(data);
@@ -56,9 +57,23 @@ try {
     assert.ok(state.world!.pickups.some(p=>p.id==='rocket-island'&&p.kind==='rocket'),'island Rocket kit is replicated');
     assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
     assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
+    assert.ok(state.world!.entities.every(e=>e.style.paint==='stock'&&e.style.decal==='none'),'initial finishes are replicated');
     assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
     assert.deepEqual(state.world!.mars,{fund:0,launchAt:null});
   }
+  const forger=connect();
+  await eventually(()=>!!forger.state.id,'research forger joins');
+  forger.socket.send(JSON.stringify({type:'research',site:'ucsf'}));
+  await eventually(()=>forger.state.closed===1008&&two.state.world?.players.length===2,'a forged research claim is rejected and isolated');
+  assert.equal(two.state.world!.players.find(p=>p.id===one.state.id)!.delivery.cash,0);
+  assert.ok(!two.state.world!.players.find(p=>p.id===one.state.id)!.achievements.unlocked.includes('ucsf-research'));
+  one.socket.send(JSON.stringify({type:'vehicleStyle',category:'paint',choice:'mint',requestId:80}));
+  one.socket.send(JSON.stringify({type:'vehicleStyle',category:'decal',choice:'stripe',requestId:81}));
+  await eventually(()=>one.state.vehicleStyleResults?.some(r=>r.requestId===80&&!r.ok)??false,'unfunded finish rejected');
+  await eventually(()=>one.state.vehicleStyleResults?.some(r=>r.requestId===81&&!r.ok)??false,'rate-limited finish rejected');
+  assert.equal(two.state.vehicleStyleResults?.length??0,0,'finish purchase results are private');
+  assert.deepEqual(two.state.world!.entities.find(e=>e.driver===one.state.id)!.style,{paint:'stock',decal:'none'},'rejected finish leaves remote car unchanged');
+  await delay(500);
   one.socket.send(JSON.stringify({type:'mars',action:'contribute',amount:1,requestId:90}));
   await eventually(()=>one.state.marsResults?.some(r=>r.requestId===90&&!r.ok)??false,'unfunded contribution is rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'mars',action:'board',requestId:91}));
@@ -221,5 +236,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, ferry and activity snapshots, shared sky-lane speed and refill, arena entry, shared ball impact, five goals, authoritative match winner and Roadster awards, spectator exclusion, wall refill and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, destination navigation, direct mini-game entry, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
+  console.log(`PASS: two-client join, ferry and activity snapshots, shared sky-lane speed and refill, arena entry, shared ball impact, five goals, authoritative match winner and Roadster awards, spectator exclusion, wall refill and exit, traffic, room clock, surface, upgrade and vehicle finish snapshots, rejected finish purchases, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, destination navigation, direct mini-game entry, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
 } finally { clearInterval(keepObserverAlive); one.socket.close(); two.socket.close(); }

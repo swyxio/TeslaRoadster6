@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, buyVehicleStyle, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
@@ -111,6 +111,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if (now - session.lastAction < 400) {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
+      if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
       if(message.type==='destination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
@@ -129,6 +130,7 @@ export class GameRoom extends DurableObject<Env> {
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
+    if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:buyVehicleStyle(this.world,session.id,message)}));
     if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:subscribeOta(this.world,session.id,message.enabled)}));
     if(message.type==='mars'){
       if(message.action==='board'){

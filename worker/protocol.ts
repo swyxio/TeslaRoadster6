@@ -2,7 +2,8 @@ import { VEHICLES, type VehicleId } from '../shared/vehicles';
 import type { Input } from '../shared/game';
 import { normalizeName } from './global-chat-core';
 import { UPGRADES, type UpgradeId } from '../shared/upgrades';
-export type ClientMessage = { type: 'input'; seq:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number} | {type:'mars';action:'board';requestId:number};
+import { isStyleChoice, type StyleChoice } from '../shared/vehicle-style';
+export type ClientMessage = ({type:'vehicleStyle';requestId:number} & StyleChoice) | { type: 'input'; seq:number; input: Input } | {type:'sync';token:number} | { type: 'interact' | 'reset' | 'autopilot' | 'dome' } | { type: 'name'; name: string } | {type:'selectVehicle';kind:VehicleId} | {type:'parking';action:'park'|'queue'|'start'|'leave'} | {type:'race';action:'join'|'start'|'leave';courseId:'short'|'oval'} | {type:'minigame';game:'park'|'queue'|'short'|'oval'} | {type:'destination';x:number;z:number;requestId:number} | {type:'upgrade';upgrade:UpgradeId;requestId:number} | {type:'ota';enabled:boolean;requestId:number} | {type:'mars';action:'contribute';amount:number;requestId:number} | {type:'mars';action:'board';requestId:number};
 export function parseMessage(raw: string): ClientMessage | null {
   if (raw.length > 1024) return null;
   let data: unknown;
@@ -25,6 +26,7 @@ export function parseMessage(raw: string): ClientMessage | null {
   if(value.type==='minigame'&&(value.game==='park'||value.game==='queue'||value.game==='short'||value.game==='oval'))return {type:'minigame',game:value.game};
   if(value.type==='destination'&&typeof value.x==='number'&&Number.isFinite(value.x)&&Math.abs(value.x)<=10000&&typeof value.z==='number'&&Number.isFinite(value.z)&&Math.abs(value.z)<=10000&&Number.isSafeInteger(value.requestId)&&(value.requestId as number)>0)return {type:'destination',x:value.x,z:value.z,requestId:value.requestId as number};
   if(value.type==='upgrade' && typeof value.upgrade==='string' && Object.hasOwn(UPGRADES,value.upgrade) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'upgrade',upgrade:value.upgrade as UpgradeId,requestId:value.requestId as number};
+  if(value.type==='vehicleStyle' && isStyleChoice(value.category,value.choice) && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'vehicleStyle',category:value.category,choice:value.choice,requestId:value.requestId} as ClientMessage;
   if(value.type==='ota' && typeof value.enabled==='boolean' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0)return {type:'ota',enabled:value.enabled,requestId:value.requestId as number};
   if(value.type==='mars' && Number.isSafeInteger(value.requestId) && (value.requestId as number)>0){
     if(value.action==='board')return {type:'mars',action:'board',requestId:value.requestId as number};

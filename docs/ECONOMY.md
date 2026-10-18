@@ -1,8 +1,8 @@
 # Economy and property design
 
-**Planning proposal, 2026-10-18.** Values below are fictional game money and untested design assumptions, not current game prices or a promise of future implementation. The [player simulations](ECONOMY_SIMULATIONS.md) compare an earlier candidate with the original proposal. The newer [five-minute branch experiment](ECONOMY_FIVE_MINUTE.md) tests the activity-payout and achievement changes recommended below; both reports explain their limitations. This document does not change the playable game or its contracts.
+**Economy design, 2026-10-18.** Deliveries build a wallet, a fleet puts money to work, and homes give players a place to show what they have built. This document sets out the proposed progression and prices. The [player simulations](ECONOMY_SIMULATIONS.md) and [five-minute experiment](ECONOMY_FIVE_MINUTE.md) compare the choices and their pacing.
 
-In this checkout, [delivery](DELIVERY.md) money, regional unlocks and personal achievements are session-only. Current regions require both completed deliveries and session lifetime delivery earnings; spending does not relock them. A separate room-local Mars fund persists and accepts voluntary contributions of session cash. There is no XP, persistent wallet, persistent property or owned income-producing Cybercab. Saved chat identity does not restore game progress. The world has the fictional China Basin Rocket Dome, Rocket Island and a ferry, plus Yerba Buena Island; Treasure Island is not currently a separate playable island. See [README](../README.md), [MAP](MAP.md), and the shared simulation for actual behavior. This proposal deliberately changes progression and requires a separate persistence and multiplayer design.
+Today, [delivery](DELIVERY.md) cash, regional unlocks and personal achievements last for the driving session. Regions open through completed deliveries and delivery earnings; spending does not close them again. A room-local Mars fund persists and accepts voluntary contributions. This design adds a persistent wallet, income-producing Cybercabs and property, and makes the current wallet balance the level. See [README](../README.md) and [MAP](MAP.md) for the playable world.
 
 ## Goals
 
@@ -81,6 +81,27 @@ Keep five ranked levels per chain, with small early milestones and repeatable ch
 
 A provisional early-playtest target is 2–4 unique one-off achievements per 30 minutes in the first two hours, with no-achievement gaps of at most 25 minutes for 90% of simulated players. The [redesigned five-minute experiment](ECONOMY_FIVE_MINUTE.md) meets that early gap target on its seven delivery-led paths but frequently exceeds four achievements per block, and it has much longer gaps in hours 2–8. The 2–4 target is **not met**. Batch notifications earned by the same action without delaying the cash; pin visible progress toward the next meaningful goal. A simulated rotating-contract alternative shows partial progress more often but completes a little less frequently than the current checkpoint; it is a repeatable goal, not an achievement, and needs playtesting. Do not promise a new achievement in every five-minute window or add arbitrary badges forever. Measure five-minute cash, achievement count and zero-award windows separately from 30-minute averages; maintain meaningful choices as individual chains run out. Income is allowed to rise between tiers so exponential prices remain attainable.
 
+## Research and airport deliveries
+
+The session research tour gives players a reason to visit four landmarks. Stopping at UCSF pays $20 and gives 25% off workshop repairs; Berkeley pays $35 and gives 20% off sport motors; Stanford pays $50 and gives 20% off efficient nozzles; SFO pays $40 and gives 20% off air tanks. An SFO delivery earns an additional one-time $80. The awards and discounts last for the current drive. Berkeley has the Campanile, Sather Gate and Doe Library; Stanford has Hoover Tower, the Main Quad and Dish; SFO has an airport, runway and Aviation Museum; the map also includes UCSF Parnassus.
+
+The delivery-linked certifications below are the proposed persistent expansion of this tour. Their rewards and upgrades are separate from the current session rewards. New lab and clinic destinations need map and collision design.
+
+After **20 lifetime deliveries**, offer research work at each eligible campus. Berkeley opens with its $20k city gate, Stanford with Palo Alto's $100k gate, and UCSF in San Francisco. SFO's airport line uses its $50k gate. Access uses the current wallet, while progress and earned certification survive a balance drop. The work itself remains delivery play: select a lab or terminal job, pick up a named item, and bring it safely to its destination. A job advances the one program named on the offer; it can also advance ordinary city and total-delivery achievements. Program ranks track achievement progress; ordinary jobs and existing flight remain open to everyone.
+
+| Program | Jobs and character | Level-two unlock |
+| --- | --- | --- |
+| UC Berkeley · Energy Systems | Take equipment between the Campanile and nearby energy labs. | $10k efficient-flight tune: use 10% less air while flying. |
+| UCSF · Care Logistics | Carry sensitive supplies between UCSF and proposed local clinics; protect cargo on the way. | $20k protective kit: reduce collision damage by 10%. |
+| Stanford · Flight Research | Deliver equipment between Hoover Tower, the Quad and Dish; try a controlled glide. | $40k glider kit: add an air-saving glide mode; tune handling in playtests. |
+| SFO · Airport Dispatch | Move cargo between the terminal, Aviation Museum and city; some routes ask for a careful, timed arrival. | Airport-themed livery and a visible dispatcher badge. |
+
+The suggested university tiers unlock at **2 / 6 / 12 / 20 / 30** qualifying deliveries each, with the level-two unlock at six. They award **$500 / $1,000 / $2,000 / $4,000 / $8,000** once per tier. SFO uses **1 / 4 / 8 / 14 / 20**, with the level-two unlock at four, and the same cash awards. A finished university program can award its matching livery; the three research lines plus SFO issue at most $62k of one-off awards per player. SFO pays the ordinary delivery fare plus a $1k airport supplement; eligible fare and supplement receive the same event multiplier, and the achievement awards do not. Qualifying jobs must be completed, distinct validated job IDs; repeating a job or reconnecting must not repay a tier. Award underlying ordinary milestones as normal, but present awards from one job in a grouped notification.
+
+The research unlocks expand a proposed vehicle-kit catalog rather than granting automatic income. The Berkeley tune composes multiplicatively with an efficient-nozzle upgrade if both are fitted: 25% then 10% less air leaves 67.5% of baseline use. The UCSF kit's 10% applies to the remaining damage after other protection. Do not silently accumulate multiple copies. Keep tuned, upgraded vehicles eligible for ordinary jobs; test vehicle handling, races and flight before deciding whether competitive modes use these effects.
+
+At the example level-four delivery rate ($11k per six minutes), a 30-job research line takes three active hours and pays $330k in fares plus $15.5k in program awards, before ordinary milestones and other income. At seven minutes per $11k job plus the $1k supplement, SFO's 20 jobs take 2h20 and return $255.5k including its $15.5k awards, or $109.5k/hour. A regular job at the same tier earns $110k/hour before other awards. SFO's repeatable rate is about $102.9k/hour after its one-offs, so revisit the supplement if players abandon the airport after completion. The research chain's last two milestones are an hour apart at the assumed pace; it adds a meaningful branch but does not erase the late achievement gap. Run `pnpm exec tsx scripts/economy-research.ts` to reproduce these comparisons. These calculations are separate from the seven-path progression runs: their travel model does not visit SFO or Stanford, and their charts, home times and achievement gaps do not include research or airport quests.
+
 ## Cybercabs and events
 
 Proposed ordinal Cybercab prices: $25,000 / $50,000 / $100,000 / $200,000 / $400,000. Each active, dispatched cab earns $15,000 per real active hour before any multiplier; paid amounts arrive in the wallet as they accrue. The new simulations assume 65–80% average utilization while the owner is actively playing, no operating cost and no offline income. Offline income and prices beyond the fifth cab remain undecided. Owned cabs are persistent, visible in the world, locatable on the map and branded with the owner's name; a human driver and owner should be distinguishable when different.
@@ -141,9 +162,20 @@ Keep ordinary available passenger vehicles free to drive and select; do not intr
 
 Two garage spaces are included per home; the next five spaces cost $50k / $100k / $200k / $400k / $800k. Cosmetic starting prices: paint $2k, decals and lettering $5k, wheels/trim $15k, wraps and fleet branding $50k, and premium lights/effects $150k. Account-owned cosmetics can be reapplied to compatible cars; earned special designs can celebrate achievements. Show driver names and Cybercab owner names. Prices and compatibility need playtesting.
 
-Optional early vehicle or flight kits at $10k / $20k / $40k give players goals before property. Their abilities and balance are not specified; the simulation counts purchases but gives them no speed or income benefit. Keep the Roadster's existing flight and public launch pads available without buying a kit.
+Optional early vehicle or flight kits at $10k / $20k / $40k give players goals before property. The research kits above sketch possible abilities; the seven-path simulation counts kit purchases without a speed or income benefit. Keep the Roadster's existing flight and public launch pads available without buying a kit.
 
-Optional home chargers cost $25k / $50k / $100k; launch/thermal upgrades cost $50k / $100k / $200k. Home teleport is free after ownership. The effects and whether they change competitive balance remain to be designed.
+A starter home includes two garage spaces and free home teleport. Its owner can give it a distinct look and choose which amenities to add first:
+
+| Upgrade | First cost | What the player gets |
+| --- | ---: | --- |
+| Furnishing set | $20k | Furniture and interior decoration for the owner's chosen rooms. |
+| Home charger | $25k | Refill the vehicle's air tank at home; public charging stays available. |
+| Third garage space | $50k | Store and display one more personalized vehicle configuration. |
+| Thermal launch pad | $50k | A visible home launch point that helps lift a vehicle into the air. |
+
+Further charger upgrades cost $50k then $100k; further launch upgrades cost $100k then $200k. These are successive payments, not replacement totals. The remaining garage slots cost $100k / $200k / $400k / $800k. Garages hold configurations, not a requirement to buy a passenger EV, and a dispatched cab need not occupy a bay. Keep permissions simple initially: the owner edits and retrieves; visitors can look around. Specify guest access, collision safety and exact charging or launch performance when implementing them.
+
+At exactly the $2m market gate, buying the $400k plot and $600k build leaves $1.02m after the $5k plot and $15k first-build/home awards. Buying all four improvements costs $145k and leaves $875k: current level falls from 5 to 4, but the home, its improvements and the free teleport remain. This example excludes any future first-use rewards. On resale, the listing identifies which installed improvements transfer; portable cars and account-owned cosmetics stay with the seller.
 
 ## Historical first-home napkin math
 

@@ -213,7 +213,7 @@ export function buildBay(scene:T.Scene) {
     // The landmark renderers use these same shared collision envelopes.
     if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
-    const landmark=['campanile','hoover','airport','mission','rotunda'].includes(b.style);
+    const landmark=['campanile','hoover','airport','mission','rotunda','hospital'].includes(b.style);
     if(!landmark&&!['pyramid','coit','salesforce','station-venue'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
     if(b.style==='station-venue'){
       const station=STATIONS.find(s=>s.id===b.stationId)!;
@@ -242,6 +242,11 @@ export function buildBay(scene:T.Scene) {
         }
       }
       const roof=new T.Mesh(new T.ConeGeometry(b.w*.55,5,4),material(berkeley?0xa8aaa0:0xa85243));roof.rotation.y=Math.PI/4;roof.position.set(b.x,b.h-2.5,b.z);scene.add(roof);
+    }else if(b.style==='hospital'){
+      box(b.x,b.h/2,b.z,b.w,b.h,b.d,0xdde7df);
+      for(const side of [-1,1])box(b.x+side*6,9,b.z+b.d/2+.04,5,12,.1,0x7da5aa);
+      box(b.x,16,b.z+b.d/2+.08,7,1.6,.15,0x4f918d);
+      box(b.x,16,b.z+b.d/2+.09,1.6,7,.16,0x4f918d);
     }else if(b.style==='airport'){
       box(b.x,5,b.z,b.w,10,b.d,0xd8dfd8);
       const shaft=new T.Mesh(new T.CylinderGeometry(5,3.5,29,10),material(0xe3e9e2));shaft.position.set(b.x,24.5,b.z);scene.add(shaft);

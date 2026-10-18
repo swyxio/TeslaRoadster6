@@ -1,6 +1,6 @@
 # Five-minute economy simulations
 
-**Design experiment, 2026-10-18.** These rules and trajectories are proposals, not gameplay telemetry. The game currently has session delivery, exploration and optional minigames; the persistent wallet, income-producing owned cabs, persistent achievements, player property and rotating contracts here are not implemented. See [ECONOMY.md](ECONOMY.md) for the wider design and current-game distinctions.
+**Design experiment, 2026-10-18.** Seven delivery-led strategies explore the proposed persistent wallet, Cybercabs and property market. See [ECONOMY.md](ECONOMY.md) for the wider design and the current game.
 
 The core loop is **deliver → spend or save → earn faster → eventually buy land and build**. The model tests seven delivery-led strategies rather than treating Dome, racing or parking as professions. It asks two different pacing questions: how often people get cash and one-off achievements, and whether visible repeatable goals can provide feedback between achievements. A provisional test target is a P90 longest one-off-achievement gap of at most 25 active minutes in the first two hours, and 2–4 one-off achievements in each 30-minute block. It is a diagnostic, not a promise or a validated measure of fun.
 
@@ -33,7 +33,7 @@ Gross includes delivery/side-task pay, active cab income, repeatable payments, o
 
 The first three share the same speed, travel and task assumptions; their purchase policy is the intended difference. Changing finances can still change subsequent tasks, payouts and RNG consumption. The other profiles vary independently; for example the casual player takes 35% longer per delivery. Sessions are **active play**, so 21.7 active hours is not 21.7 calendar hours. The hypothetical $15k/hour cab earns only while its owner is active and is prorated by utilization. There is no cab operating cost and no offline earning.
 
-At activity boundaries, scripted players take an available job or travel after a set number of local tasks. The travel model visits SF, Oakland, Berkeley, Fremont and San Jose; San Mateo, Palo Alto and Mountain View are named unlocks only and have no modeled route. Most jobs are deliveries. A small modeled fraction of the casual and mixed paths is spent on side games; optional paid scenic tours are not used by these paths.
+At activity boundaries, scripted players take an available job or travel after a set number of local tasks. The travel model visits SF, Oakland, Berkeley, Fremont and San Jose; San Mateo, Palo Alto and Mountain View are named unlocks only and have no modeled route. Most jobs are deliveries. A small modeled fraction of the casual and mixed paths is spent on side games; optional paid scenic tours are not used by these paths. The proposed Berkeley, UCSF and Stanford research certifications and SFO quest line are calculated separately in [the economy design](ECONOMY.md#research-and-airport-deliveries); they are not included in these seven paths or their achievement-gap results.
 
 ## Earnings, investing and home
 

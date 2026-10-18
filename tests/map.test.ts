@@ -170,7 +170,7 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
 });
 
 test('landmarks and their delivery arrivals share supported, collision-clear geography',()=>{
- assert.equal(LANDMARKS.length,5);
+ assert.equal(LANDMARKS.length,6);
  for(const landmark of LANDMARKS){
   assert.ok(BUILDINGS.some(b=>b.x===landmark.x&&b.z===landmark.z&&b.style===landmark.style),landmark.id);
   for(const sx of [-1,1])for(const sz of [-1,1])assert.ok(isLand(landmark.x+sx*landmark.w/2,landmark.z+sz*landmark.d/2),landmark.id);
@@ -186,7 +186,7 @@ test('landmarks and their delivery arrivals share supported, collision-clear geo
 
 test('new building landmarks share collision identities and remain distinct from the prior landmarks',()=>{
  assert.equal(EXTRA_LANDMARKS.length,100);
- assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,105);
+ assert.equal(new Set([...LANDMARKS,...EXTRA_LANDMARKS].map(place=>place.id)).size,106);
  for(const place of EXTRA_LANDMARKS){
   const matching=BUILDINGS.filter(b=>b.style==='landmark'&&b.x===place.x&&b.z===place.z);
   if(place.id==='mission-peak')assert.equal(matching.length,0);
