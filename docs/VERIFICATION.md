@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Gamepad and keyboard bindings · 2026-10-18 Pacific
+
+- After integrating sky currents, `pnpm test` passed 182 tests and `pnpm build` passed; the controls and network protocol were unchanged by this integration.
+
+- `pnpm test` passed 177 tests on rerun and `pnpm build` passed; one prior run failed an unrelated timing-sensitive global-chat test while the build was running concurrently. Vite's existing chunk-size warning remains. Unit tests cover simulated standard-controller analog steering, braking/reverse, flight, button edges, disconnect and safe resume, keyboard remapping, storage errors and touch independence. No physical controller was tested.
+- Chrome desktop: rebound forward from W to I, confirmed focus returned to its binding, and drove a solo Roadster to 82 km/h with I. Chrome emulation at 390×844 portrait and 844×390 landscape showed the scrollable settings dialog. Mobile interaction through the emulated browser targeted a different button, so touch activation and physical devices remain unverified.
+
 ## Sky currents with flight controls and global chat · protocol v16 · 2026-10-18 Pacific
 
 - After integrating flight-control and tank upgrades, `pnpm test` passed 178 tests and `pnpm build` passed both TypeScript checks and the production build. Vite's existing large-chunk warning remains. The sky tests additionally verify that the same air units refill tanks of different capacities.

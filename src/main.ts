@@ -12,6 +12,7 @@ import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
 import { Session } from './session';
 import { Controls } from './controls';
+import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
 import { STATIONS } from '../shared/stations';
 import { type Entity } from '../shared/game';
@@ -33,14 +34,14 @@ document.querySelector('#app')!.innerHTML = `
 <header class="topbar"><a class="brand" href="/" aria-label="Poly AV home"><span class="brand-icon">↗</span> POLY<span class="brand-light">AV</span><span class="alpha">POLY AVENUE / 02</span></a><div class="top-actions"><span id="connection" class="pill"><i></i> SOLO PLAYGROUND</span><button id="chat-button" class="icon-button chat-button" aria-label="Open global chat" aria-haspopup="dialog">💬<span id="chat-unread" class="chat-unread" hidden></span></button><button id="sound-button" class="icon-button sound-button" aria-label="Sound settings" aria-haspopup="dialog">♫</button><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
 <section id="menu" class="menu">
  <div class="intro"><div class="eyebrow"><span class="line"></span> SAN FRANCISCO BAY AREA</div><h1>Many rides.<br>Zero <em>commitment.</em></h1><p class="intro-copy">A low-poly love letter to San Francisco.<br>Deliver food. Catch air. Make your own shortcuts.</p>
- <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / DELIVER</span></div><p class="cockpit-invitation">Find a purple rocket to fly any car. Catch blue sky lanes for speed and air, or ride golden thermals upward. Try cockpit view with C or Actions → Camera.</p>
+ <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / DELIVER</span></div><p class="cockpit-invitation">Find a purple rocket to fly any car. Catch blue sky lanes for speed and air, or ride golden thermals upward. Try cockpit view with Actions → Camera.</p>
  <div class="launch-card"><div class="card-heading"><span class="eyebrow">YOUR NEXT DETOUR</span><span class="online-dot">● FREE ROAM</span></div>
  <label class="ride-select">STARTING RIDE<select id="starting-ride" aria-label="Starting vehicle"></select></label><p class="ride-note" id="starting-spec"></p>
  <div class="room-form"><label>DRIVER NAME<input id="name" maxlength="${MAX_NAME_LENGTH * 2}" placeholder="Your callsign" value="Driver" autocomplete="nickname"></label><label>ROOM CODE<input id="room" maxlength="32" placeholder="sunset-crew" pattern="[a-z0-9-]+" value="sunset-crew" autocapitalize="none" spellcheck="false"></label></div>
  <p class="driver-name-note">Names in use get a number. <button id="identity-button" type="button" aria-haspopup="dialog">Save or recover a driver</button></p>
  <button id="solo" class="primary">Take a solo drive <span>↗</span></button>
  <button id="join" class="secondary">Drive with friends <span>→</span></button><p class="form-note" id="form-note" role="status">Same room code, same playground. No account needed.</p>
- <button id="resume" class="text-button hidden">← Back to your drive</button>
+ <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <p class="fine-print">An independent arcade prototype. Fictional flight & air service.<br>Real Supercharger sites. A deliberately remixed Bay Area.<br>Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> (ODbL) · <a href="${mapSourceUrl}" download="bay-route-source.json">Source</a> · <a href="${mapTraceUrl}" download="bay-highway-traces.ts">Map data</a> · <a href="${mapBakeUrl}" download="bake-bay-highways.py">Bake</a>.</p>
  </div>
@@ -51,7 +52,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="police-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">ALCATRAZ / ROCKET DOME · FIRST TO 5</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Hit the ball into either goal · no teams</span><small>Delivery paused · no police</small></div>
- <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="dome">⚽ Rocket Dome</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
+ <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="dome">⚽ Rocket Dome</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
  <div id="cockpit-dashboard" class="cockpit-dashboard" hidden><div class="cockpit-route"><span id="cockpit-phase">PICK UP</span><strong id="cockpit-target"></strong><small id="cockpit-estimate"></small></div><div class="cockpit-speed"><strong id="cockpit-speed">0</strong><span>KM/H</span></div></div>
@@ -61,6 +62,7 @@ document.querySelector('#app')!.innerHTML = `
  <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump &nbsp; <kbd>X</kbd> flip &nbsp; <kbd>H</kbd> hold to hover</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Find a purple rocket kit to fly. Blue lanes add speed and air; golden thermals lift and refill you.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; steer while moving forward to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="hover-control" data-control="KeyH" aria-label="Hold to hover">HOVER</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
+<dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump · X / □ flip · B / ○ boost · Y / △ hover · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">THE POLYCULE / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
 <dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
 <dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR ROOM / ACTIVE DRIVERS</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by cash and active play. First-person time and deliveries are self-reported; a first-person delivery requires the whole active run in cockpit view. Scores last only for this session.</p><div class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
@@ -117,6 +119,7 @@ function setDrawer(drawer: 'actions' | 'controls' | null) {
 $('actions-toggle').onclick=event=>{setDrawer(openDrawer==='actions'?null:'actions');if(event.detail&&!openDrawer)$('actions-toggle').blur();};
 $('controls-toggle').onclick=event=>{setDrawer(openDrawer==='controls'?null:'controls');if(event.detail&&!openDrawer)$('controls-toggle').blur();};
 $('drive-actions').addEventListener('click',event=>{if((event.target as HTMLElement).closest('button'))setDrawer(null);},{capture:true});
+const controlSettings=setupControlSettings(controls,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
 document.addEventListener('pointerdown',event=>{if(openDrawer&&!(event.target as HTMLElement).closest('.action-drawer, .control-guide'))setDrawer(null);},{capture:true});
 window.addEventListener('keydown',event=>{if(openDrawer&&event.key==='Escape'){event.preventDefault();const toggle=$(openDrawer+'-toggle');setDrawer(null);toggle.focus();}});
 const nameInput=$<HTMLInputElement>('name');
@@ -231,7 +234,7 @@ $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').oncli
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');lastRewardId=0;resetCelebration();pendingShop=null;pendingOta=null;shopBusyUntil=0;session.solo();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
   const label=scene.cameraMode==='cockpit'?'Cockpit':scene.cameraMode==='wide'?'Wide':'Chase';
-  $('camera').textContent=`C · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;
+  $('camera').textContent=`${controlSettings.label('camera')} · ${onFoot&&scene.cameraMode==='cockpit'?'Walk':label}`;
   $('camera').setAttribute('aria-label',onFoot&&scene.cameraMode==='cockpit'?'Camera: cockpit selected, chase view on foot. Switch view':`Camera: ${label}. Switch view`);
 }
 function action(type:'interact'|'reset'|'camera'|'menu'|'autopilot'|'fleet'|'scores'|'awards'|'shop'){
@@ -460,12 +463,12 @@ scene.start(dt=>{
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
   session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));scene.render(session.world,session.id,dt,menu);
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
-  if(observedCar)controls.observeFlight(hasRockets(observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump);
+  if(observedCar)controls.observeFlight(hasRockets(observedCar)&&observedCar.loopAngle===null&&observedCar.supportId===null,observedCar.lastJump,observedCar.speed);
   document.body.classList.toggle('cockpit-active',cockpit);
   $('cockpit-trim').hidden=!cockpit;$('cockpit-dashboard').hidden=!cockpit||!!car?.inDome;
   const marker=scene.objectiveScreen(),sign=$('objective-sign');sign.hidden=!cockpit||!!car?.inDome||!marker.visible;
   if(!sign.hidden){sign.style.left=`${Math.max(12,Math.min(88,marker.x*100))}%`;sign.style.top=`${Math.max(22,Math.min(75,marker.y*100))}%`;}
-  hudTime+=dt;if(hudTime<.1)return;hudTime=0;
+  hudTime+=dt;if(hudTime<.1)return;hudTime=0;controlSettings.refreshStatus();
   $('connection').textContent=session.status==='online'?`● LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`:session.status==='connecting'?'◌ JOINING ROOM…':session.status==='disconnected'?'○ DISCONNECTED':'● SOLO PLAYGROUND';
   if(session.status==='disconnected'){if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');$('error-copy').textContent=session.error;}
   const player=session.world.players.find(p=>p.id===session.id),e=session.world.entities.find(e=>e.id===player?.entityId);
@@ -493,7 +496,7 @@ scene.start(dt=>{
   if(lastRocketEntity===e.id&&!lastRocketInstalled&&rocket)notice('Rocket kit installed! Jump, hover, boost and flip are ready.');
   lastRocketEntity=e.id;lastRocketInstalled=rocket;
   $('handling').textContent=spec?`${Math.round(spec.massKg).toLocaleString()} kg · ${spec.fourWheelSteering?'4-wheel steer':'Front steer'}${rocket?' · ROCKET':''}${e.autopilot?' · AUTONOMOUS':''}`:'';
-  $('autopilot').textContent=e.autopilot?'V · AV on':'V · AV off';$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
+  $('autopilot').textContent=`${controlSettings.label('autopilot')} · AV ${e.autopilot?'on':'off'}`;$('autopilot').setAttribute('aria-pressed',String(e.autopilot));$<HTMLButtonElement>('autopilot').disabled=e.kind==='person';
   const airborne=e.loopAngle===null&&e.supportId===null;
   for(const control of ['KeyQ','KeyR','KeyH','KeyX','ShiftLeft','KeyE']){
     const button=document.querySelector<HTMLButtonElement>(`[data-control="${control}"]`);if(button)button.disabled=!rocket;
@@ -503,7 +506,7 @@ scene.start(dt=>{
   $('drive-control').textContent=controls.airborne?'FLY ↑':'DRIVE ↑';$('drive-control').setAttribute('aria-label',controls.airborne?'Fly forward':'Drive');
   document.querySelector('[data-control="KeyA"]')?.setAttribute('aria-label',airborne?'Bank left':'Steer left');document.querySelector('[data-control="KeyD"]')?.setAttribute('aria-label',airborne?'Bank right':'Steer right');
   $('air-label').textContent=`AIR LV ${e.tankLevel}`;$('air').textContent=`${Math.round(e.air)}%`;$('air-bar').style.width=`${e.air}%`;$('health').textContent=`${Math.round(e.health)}%`;$('health-bar').style.width=`${e.health}%`;
-  $('interact').textContent=e.kind==='person'?'F · Take nearby car':'F · Exit car';
+  $('interact').textContent=`${controlSettings.label('interact')} · ${e.kind==='person'?'Take nearby car':'Exit car'}`;
   const nearest=STATIONS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const distance=Math.hypot(e.x-nearest.x,e.z-nearest.z),refilling=distance<9&&e.supportId==='ground'&&e.loopAngle===null&&Math.abs(e.y-(terrainHeight(nearest.x,nearest.z)??0))<1&&Math.abs(e.speed)<1&&e.kind!=='person';
   const skyCurrent=currentAt(e);
@@ -513,7 +516,7 @@ scene.start(dt=>{
   const nearbyShop=SHOPS.reduce((a,b)=>Math.hypot(e.x-a.x,e.z-a.z)<Math.hypot(e.x-b.x,e.z-b.z)?a:b);
   const shopDistance=Math.hypot(e.x-nearbyShop.x,e.z-nearbyShop.z),shopReady=!!shopFor(e);
   $('shop-prompt').hidden=menu||!started||e.kind==='person'||shopDistance>30||shopDialog.open;
-  $('shop-prompt').textContent=shopReady?`✦ B · Enter shop · ${nearbyShop.name}`:shopDistance<SHOP_RADIUS?'✦ Stop to enter the shop':'✦ Purple ring · upgrade shop';
+  $('shop-prompt').textContent=shopReady?`✦ ${controlSettings.label('shop')} · Enter shop · ${nearbyShop.name}`:shopDistance<SHOP_RADIUS?'✦ Stop to enter the shop':'✦ Purple ring · upgrade shop';
   if(shopDialog.open)updateShop();
   if(player){
     const d=player.delivery,order=d.order,target=orderTarget(order),distance=Math.round(Math.hypot(e.x-target.x,e.z-target.z));
