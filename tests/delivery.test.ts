@@ -97,6 +97,7 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
   Object.assign(car,{x:target.x,z:target.z,y:0,speed:0,vy:0});
   // Direct update proves a car below the roof cannot collect the delivery.
   updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
+  Object.assign(car,{y:target.y+.03,vy:-5});updateDelivery(world,player,car,NEUTRAL,.05);assert.equal(player.delivery.completed,0);
   Object.assign(car,{x:target.x,z:target.z,y:target.y+2,speed:0,vy:-4});
   tick(world,NEUTRAL,20);
   assert.equal(car.y,target.y);assert.equal(player.delivery.completed,1);

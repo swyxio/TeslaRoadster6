@@ -34,7 +34,7 @@ export function newPolice():PoliceState{return {targetId:null,lastSeen:0,nextPla
 function airborne(e:Entity){
   if(e.y<=3||e.y>80||e.kind==='person')return false;
   // A car sitting on a roof is not flying.
-  return e.vy>.1||!nearbyBuildings(e.x,e.z,4).some(b=>Math.abs(e.y-b.h)<.2&&Math.abs(e.x-b.x)<b.w/2+1&&Math.abs(e.z-b.z)<b.d/2+1);
+  return Math.abs(e.vy)>.1||!nearbyBuildings(e.x,e.z,4).some(b=>Math.abs(e.y-b.h)<.2&&Math.abs(e.x-b.x)<b.w/2+1&&Math.abs(e.z-b.z)<b.d/2+1);
 }
 export function updatePolice(world:World,dt:number):void {
   for (const player of world.players) {

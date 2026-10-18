@@ -21,7 +21,7 @@ function shore(e:Entity):Shore|null {
   return null;
 }
 export function onRoof(e:Entity):boolean {
-  return e.kind!=='person' && e.loopAngle===null && e.vy<=.1 && nearbyBuildings(e.x,e.z,4).some(b=>
+  return e.kind!=='person' && e.loopAngle===null && Math.abs(e.vy)<=.1 && nearbyBuildings(e.x,e.z,4).some(b=>
     Math.abs(e.y-b.h)<.05 && Math.abs(e.x-b.x)<b.w/2 && Math.abs(e.z-b.z)<b.d/2);
 }
 export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boolean):void {

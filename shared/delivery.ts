@@ -1,6 +1,7 @@
 import type { Entity, Input, Player, World } from './game';
 import { BUILDINGS } from './map';
 import { VEHICLES } from './vehicles';
+import { onRoof } from './achievements';
 
 // Real business identities; game positions are artistic, not surveyed locations.
 export const RESTAURANTS = [
@@ -72,7 +73,7 @@ export function updateDelivery(world: World, player: Player, entity: Entity, inp
     delivery.order.elapsed += dt;
   }
   const target = orderTarget(delivery.order);
-  if (Math.abs(entity.y - target.y) > (target.rooftop ? .05 : 1) || entity.vy > .1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > (target.rooftop ? 6 : 9)) return;
+  if (Math.abs(entity.y - target.y) > (target.rooftop ? .05 : 1) || (target.rooftop && !onRoof(entity)) || entity.vy > .1 || Math.abs(entity.speed) > 4 || Math.hypot(entity.x - target.x, entity.z - target.z) > (target.rooftop ? 6 : 9)) return;
   if (delivery.order.stage === 'pickup') {
     const bonus = pickupBonusFor(delivery.order);
     if (bonus > 0) reward(delivery, 'pickup', bonus);
