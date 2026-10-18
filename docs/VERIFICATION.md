@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Delivery catalog and Marin streets candidate · 2026-10-18 Pacific
+
+- On the local protocol-v41 baseline, `pnpm test` passed 846 tests and `pnpm build` passed with the existing Vite large-chunk warning. The catalog preserves historical numeric prefixes and stages new locations; it is not yet connected to delivery scheduling. Its coverage and remaining gaps are in [DELIVERY_LOCATIONS.md](DELIVERY_LOCATIONS.md).
+- The new Marin streets put 20 separated arrivals in each town. The route planner accepted all 1,560 ordered pairs from one sampled lane-aligned heading, plus SF entry and exit. Eighteen simulated Model 3 trips, including twelve to and from the six new arrivals, reached their markers without collision damage in an otherwise empty world. This does not establish performance with traffic, other vehicles or all starting headings.
+- An initial full-suite run exposed a lane too close to the fictional Mill Valley charger; shifting it cleared the existing largest-vehicle parking safety test and the suite above. Shared world geometry requires a coordinated protocol bump and live-room checks. Desktop and portrait/landscape visual playtests remain outstanding during the current gameplay recording.
+
 ## Self-driving upgrades and recovery candidate · protocol v41 · 2026-10-18 Pacific
 
 - `pnpm test` passed 837 tests and `pnpm build` passed, with the existing Vite large-chunk warning. Focused shared-physics tests cover off-road joins, wall and traffic recovery, red-light waiting, bounded failure, purchased flight tiers, close-traffic braking for large vehicles, obstacle hops, a thermal, a low jet, landing and manual takeover. These are representative cases, not a guarantee for all traffic or terrain.

@@ -2,6 +2,7 @@ import type { Entity, Input, World } from './game';
 import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { CALTRAIN_ACCESS_ROUTES } from './caltrain';
+import { MARIN_ROUTES } from './marin-roads';
 import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
@@ -60,6 +61,7 @@ for(const cross of PENINSULA_CROSS_STREETS)ROUTES.push([
 ]);
 // Local two-way streets extend the same directed graph to the station lots.
 ROUTES.push(...CALTRAIN_ACCESS_ROUTES);
+ROUTES.push(...MARIN_ROUTES);
 
 /** A fictional disabled-car vignette; timing uses real room seconds. */
 export const TRAFFIC_INCIDENT={entityId:'ambient-seed-0',cycleSeconds:360,startSeconds:180,endSeconds:240} as const;
