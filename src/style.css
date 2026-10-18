@@ -163,3 +163,12 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 
 /* Keep the landscape map beside activity controls instead of covering them. */
 @media(max-height:550px) and (pointer:coarse) and (orientation:landscape){.map-panel{top:62px;bottom:auto;left:min(304px,calc(100vw - 110px))}}
+
+/* Personal radio stays separate from shared game audio and effects. */
+.radio-panel{padding:13px;border:1px solid #a5ccba38;border-radius:9px;background:#0e292f88}
+.radio-panel>label,.radio-episode>span{display:block;color:#a8c7b9;font:700 9px ui-monospace,monospace;letter-spacing:1px}
+.radio-panel select{width:100%;min-height:44px;margin-top:7px;padding:9px 10px;border:1px solid #a9cbbb55;border-radius:6px;background:#203e42;color:#f9e9d1;font:13px system-ui}
+.radio-episode{display:grid;gap:5px;margin-top:12px;min-width:0}.radio-episode a{color:#ffcf85;font-size:12px;line-height:1.35;overflow-wrap:anywhere}.radio-episode a:not([href]){color:#f7ecd6}
+.radio-controls{display:flex;gap:8px;margin-top:12px}.radio-controls button{min-height:44px;padding:8px 12px;border:1px solid #ffffff45;border-radius:6px;background:#ffffff0c;font-size:12px}.radio-controls button:first-child{min-width:88px;background:#ffc77f;color:#21373b}.radio-controls button:disabled{opacity:.5}
+.radio-panel p{min-height:1em;margin:9px 0 0;color:#b4cabc;font-size:11px;line-height:1.4}.radio-panel [hidden]{display:none}
+@media(max-height:550px){.radio-panel{padding:9px}.radio-episode{margin-top:7px}.radio-controls{margin-top:7px}.radio-controls button{min-height:40px}}

@@ -1,6 +1,19 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.10-alpha',
+    label: '0.0.10 Alpha',
+    date: '2026-10-18',
+    title: 'Radio for the ride',
+    intro: 'Take a podcast along as you explore the Bay.',
+    sections: [
+      { title: 'Choose your station', items: [
+        'Switch between the original 8-bit soundtrack and random public episodes of Latent Space or ThursdAI in the sound panel.',
+        'Play, pause and skip episodes; sound effects keep their own volume, and podcast audio streams directly from its publisher.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.9-alpha',
     label: '0.0.9 Alpha',
     date: '2026-10-18',
