@@ -43,5 +43,17 @@ try{
     assert.equal(result.saved.completed,result.initial.completed);assert.equal(result.saved.cash,result.initial.cash);
     assert.deepEqual(result.visible,result.saved.order);
   }
-  console.log('PASS: rooftop repairs persist after restore and a less capable vehicle switch.');
+  for(const mode of ['ticket','replay','locked']){
+    const response=await fetch(`${base}/roof-foot-${mode}`,{signal:AbortSignal.timeout(10_000)});
+    if(!response.ok)throw new Error(`on-foot ${mode} fixture failed: ${await response.text()}\n${logs}`);
+    const result=await response.json() as {initial:DriverProgress;saved:DriverProgress;writes:EconomyIntent[];visible:Order};
+    const ticket=result.writes.find(write=>write.action.kind==='ticket');
+    assert.ok(ticket&&ticket.action.kind==='ticket');assert.equal(ticket.action.evidence.onFoot,true);
+    assert.equal(result.saved.tickets,1);assert.equal(result.saved.cash,result.initial.cash-60);
+    assert.equal(result.saved.order.stage,'dropoff');assert.equal(result.saved.order.elapsed,37);
+    if(mode==='locked')assert.equal(CUSTOMERS[result.saved.order.customer].rooftop,false);
+    else assert.equal(result.saved.order.customer,result.initial.order.customer);
+    assert.deepEqual(result.visible,result.saved.order);
+  }
+  console.log('PASS: rooftop repairs persist after restore and vehicle switch; on-foot tickets preserve accessible roofs, including replay, and reroute locked regions.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

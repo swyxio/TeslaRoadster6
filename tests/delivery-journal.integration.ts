@@ -119,6 +119,23 @@ try{
     assert.equal(result.progress.order.stage,'dropoff');
   }
 
+  // On-foot evidence survives durable replay: preserve accessible roofs, but
+  // still reroute a destination that the balance drop locks geographically.
+  for(const locked of [false,true]){
+    const driver=entry();await rpc('producer',{...driver,active:true});
+    const roof=CUSTOMERS.findIndex(customer=>customer.rooftop&&customer.id.includes(locked?'oakland':'sf'));
+    const progress={cash:locked?10_020:50_020,level:locked?1:2,completed:7,order:{...order(),customer:roof},deliveryClock:0,unlocked:['region-oakland']};
+    const acquired=await rpc<{progress:DriverProgress}>('acquire',{...driver,progress});
+    const ticket:TicketStage={eventId:randomUUID(),driverId:driver.driverId,fence:driver.fence,roomId:driver.room,walletOrder:1,clock:0,
+      action:{kind:'ticket',evidence:{seconds:0,peakHeight:0,at:1,x:0,z:0,canFly:false,roofEligible:false,onFoot:true},orderBefore:acquired.progress.order,completedBefore:7}};
+    assert.equal(await rpc('stage-ticket',{...driver,stage:ticket}),'accepted');
+    await rpc('freeze',driver,15_000);
+    const result=await rpc<Profile>('profile',driver);
+    assert.equal(result.progress.cash,progress.cash-60);assert.equal(result.progress.order.stage,'dropoff');
+    if(locked)assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,false);
+    else assert.equal(result.progress.order.customer,roof);
+  }
+
   // Every ordinary submission waits behind an accepted physical stage. Freeze
   // resolves the observation and a later ticket in order with the same clock.
   const ordered=entry(),saved=await acquire(ordered),candidate=stage(ordered,1,5,pose(0));

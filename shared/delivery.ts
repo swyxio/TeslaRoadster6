@@ -89,6 +89,10 @@ export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubsc
 export function canAssignDeliveryRoof(entity:Entity):boolean {
   return hasRockets(entity)&&entity.tankLevel>=3;
 }
+/** On foot, defer checking vehicle capability until the driver enters one. */
+export function deliveryRoofAccess(entity:Entity):boolean|null {
+  return entity.kind==='person'?null:canAssignDeliveryRoof(entity);
+}
 /** Immutable physical facts needed to evaluate a delivery stop against an order. */
 type DeliveryPose = Pick<Entity,'x'|'y'|'z'|'vy'|'speed'|'supportId'|'kind'>;
 // Older journaled stops may lack roofEligible; replay treats them as ineligible.
@@ -187,19 +191,19 @@ export function updateLevel(delivery:DeliveryState):void { delivery.level=levelF
 export function orderTarget(order: Order): {x:number; z:number; y:number; name:string; rooftop:boolean} {
   return order.stage === 'pickup' ? {...RESTAURANTS[order.restaurant], y:0, rooftop:false} : CUSTOMERS[order.customer];
 }
-export function isOrderAccessible(order:Order,level:Level,roofEligible:boolean):boolean {
+export function isOrderAccessible(order:Order,level:Level,roofEligible:boolean|null):boolean {
   const pickup=RESTAURANTS[order.restaurant],customer=CUSTOMERS[order.customer];
-  return (order.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=level) && requiredLevelAt(customer.x,customer.z)<=level && (!customer.rooftop||roofEligible);
+  return (order.stage!=='pickup'||requiredLevelAt(pickup.x,pickup.z)<=level) && requiredLevelAt(customer.x,customer.z)<=level && (!customer.rooftop||roofEligible!==false);
 }
 /** Move an active job back into regions available at the new balance.
  * Returns true if the order or its availability notice changed. */
-export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},roofEligible=false):boolean {
+export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number;z:number;supportId?:Entity['supportId']},roofEligible:boolean|null=false):boolean {
   const old=delivery.order;
   if(isOrderAccessible(old,delivery.level,roofEligible))return false;
   if(old.search&&old.search.level===delivery.level)return false;
   if(delivery.lastReroute?.reason==='unavailable'&&delivery.lastReroute.level===delivery.level&&
     delivery.lastReroute.origin?.x===origin.x&&delivery.lastReroute.origin.z===origin.z)return false;
-  beginDeliverySearch(delivery,'reroute',origin,roofEligible);
+  beginDeliverySearch(delivery,'reroute',origin,roofEligible===true);
   return true;
 }
 export function pickupBonusFor(order: Order): number {
