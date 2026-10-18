@@ -53,6 +53,16 @@ test('an inaccessible saved rooftop order reroutes without a second pickup payme
   }
 });
 
+test('on foot, a geographically locked roof is rerouted without requiring a vehicle',()=>{
+  const world=createWorld(),player=addPlayer(world,'p','Driver'),person=world.entities.find(entity=>entity.id===player.entityId)!;
+  world.entities=[person];world.pickups=[];player.delivery.cash=9_960;player.delivery.level=0;
+  const oaklandRoof=CUSTOMERS.findIndex(customer=>customer.rooftop&&customer.id.includes('oakland'));
+  player.delivery.order={...player.delivery.order,stage:'dropoff',customer:oaklandRoof,elapsed:37,base:900};
+  person.kind='person';step(world,new Map([['p',NEUTRAL]]),.05);
+  assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,false);
+  assert.equal(player.delivery.order.stage,'dropoff');assert.equal(player.delivery.order.elapsed,37);
+});
+
 test('roof repair waits for an unresolved delivery decision',()=>{
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(entity=>entity.id===player.entityId)!;
   world.entities=[car];world.pickups=[];player.delivery.cash=10_000;player.delivery.level=1;

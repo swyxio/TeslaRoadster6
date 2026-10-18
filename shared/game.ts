@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
-import { canAssignDeliveryRoof, CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
+import { deliveryRoofAccess, CUSTOMERS, initialDelivery, levelForCash, orderTarget, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState } from './delivery';
 import type { DeliveryPayoutComponent, ResolvedDeliveryPayout } from './delivery-payout';
 import type { PropertyView } from './property';
 import { upgradePrice } from './research';
@@ -1195,9 +1195,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       const evidence:AchievementEvidence[]=[];
       update(player,()=>{
       // Repair a saved or switched-vehicle job before accepting any new stop.
-      // Leave it alone on foot and while an earlier delivery is unresolved.
-      if(entity.kind!=='person'&&economy?.decisionsAvailable?.(player)!==false&&
-        rerouteInaccessibleOrder(player.delivery,entity,canAssignDeliveryRoof(entity)))return;
+      // On foot, retain an accessible roof but still repair a locked region.
+      if(economy?.decisionsAvailable?.(player)!==false&&
+        rerouteInaccessibleOrder(player.delivery,entity,deliveryRoofAccess(entity)))return;
       const before=player.delivery.completed, rewardBefore=player.delivery.lastReward?.id??0, activeBefore=player.delivery.activeSeconds, rooftop=player.delivery.order.stage==='dropoff'&&orderTarget(player.delivery.order).rooftop, customer=CUSTOMERS[player.delivery.order.customer].id;
       const input=inputs.get(player.id)??NEUTRAL;
       const orderPaused=islandProtected(entity)||entity.inDome;
