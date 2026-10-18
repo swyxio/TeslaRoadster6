@@ -34,6 +34,18 @@ try {
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'supportId')),'surface identity is present in every replicated entity');
+  for(const state of [one.state,two.state]){
+    assert.equal(state.world!.ferry.phase,'sf');assert.equal(state.world!.ferry.passengers.length,0);
+    assert.equal(state.world!.parking.rounds.length,0);assert.equal(state.world!.races.rounds.length,0);
+    assert.ok(state.world!.pickups.some(p=>p.kind==='rocket'),'Rocket pads are replicated');
+    assert.ok(state.world!.entities.every(e=>Number.isFinite(e.rocketUntil)),'vehicle capability expiry is replicated');
+  }
+  one.socket.send(JSON.stringify({type:'parking',action:'park'}));
+  await delay(450);
+  assert.equal(two.state.world!.parking.rounds.length,0,'remote parking intent cannot join from outside a lot');
+  one.socket.send(JSON.stringify({type:'race',action:'join',courseId:'short'}));
+  await delay(450);
+  assert.equal(two.state.world!.races.rounds.length,0,'remote race intent cannot join from outside the start');
   assert.ok(two.state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
   assert.ok(two.state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
   const initialTime=two.state.world!.time;
@@ -132,5 +144,5 @@ try {
   await eventually(() => one.state.closed === 1008 && two.state.world?.players.length === 1, 'invalid input closes only offending player and removes entity');
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
-  console.log(`PASS: two-client join, shared sky-lane speed and refill, arena entry, shared ball impact, replicated goal and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a load test.`);
+  console.log(`PASS: two-client join, ferry and activity snapshots, Rocket pads, shared sky lane, dome, soccer, flight, movement, delivery, upgrades, fleet, invalid-input isolation and disconnect cleanup; advertised capacity ${two.state.capacity}. This is not a load test.`);
 } finally { one.socket.close(); two.socket.close(); }

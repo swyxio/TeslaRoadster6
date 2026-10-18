@@ -1,9 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,NEUTRAL,step,toggleAutopilot} from '../shared/game';
-import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,HIGHWAYS,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,isLand,isSurface,nearbyBuildings} from '../shared/map';
-import {STATIONS} from '../shared/stations';
+import {AIRPORT_RUNWAY,BAY_CIRCUIT,BRIDGES,BUILDINGS,FERRY_DOCKS,HIGHWAYS,ISLAND_TRACK,LAKE_MERRITT,LANDMARKS,MYSTERY_YACHT,ROADS,isLand,isRocketIsland,isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
+import {CHARGER_LOT,STATIONS,stationStalls} from '../shared/stations';
+import {PARKING_LOTS} from '../shared/parking-lots';
 import {body,contact} from '../shared/physics';
+import {VEHICLE_IDS,VEHICLES} from '../shared/vehicles';
+import {DOME} from '../shared/dome';
 
 function drive(x:number,z:number,yaw:number,goal:(x:number,z:number)=>boolean){
  const world=createWorld(),player=addPlayer(world,'crossing','Crossing');
@@ -19,6 +22,35 @@ test('both bridges traverse water and connect the correct shores',()=>{
  assert.ok(isLand(-240,-250)&&isLand(-240,-430)&&!isLand(-240,-345)&&isSurface(-240,-345));
  drive(45,60,-Math.PI/2,(x)=>x>340);
  drive(-240,-220,0,(_,z)=>z< -430);
+});
+test('Rocket Island loop and ferry approaches are clear, supported and separated by water',()=>{
+ assert.ok(isRocketIsland(200,-1650));
+ assert.ok(!isRocketIsland(0,-800));
+ // The connected dome shares the island's protected area.
+ assert.ok(isLand(DOME.x,DOME.z));
+ assert.ok(isRocketIsland(DOME.x,DOME.z));
+ for(let i=0;i<ISLAND_TRACK.length;i++){
+  const a=ISLAND_TRACK[i],b=ISLAND_TRACK[(i+1)%ISLAND_TRACK.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+  for(let n=0;n<=10;n++)for(const offset of [-16,0,16]){
+   const x=a.x+dx*n/10+dz/length*offset,z=a.z+dz*n/10-dx/length*offset;
+   assert.ok(isRocketIsland(x,z),`track shoulder unsupported at ${x},${z}`);
+   assert.ok(!nearbyBuildings(x,z,12).length);
+  }
+ }
+ // The entire swept deck corridor between its two docked positions is water.
+ for(let z=FERRY_DOCKS.island.deckZ+20;z<FERRY_DOCKS.sf.deckZ-20;z+=5)
+  for(const x of [-7,0,7])assert.ok(!isSurface(x,z),`ferry corridor blocked at ${x},${z}`);
+ for(const id of VEHICLE_IDS){
+  const {width,length}=VEHICLES[id];
+  for(const z of [-245,-225,-1070,-1090,-1110]){
+   const e=makeEntity('clearance',id,0,z);
+   for(const x of [-width/2,width/2])for(const dz of [-length/2,length/2])
+    assert.ok(isLand(x,z+dz),`${id} is unsupported on dock at ${x},${z+dz}`);
+   assert.ok(!nearbyBuildings(e.x,e.z,12).some(building=>contact(body(e),{...building,yaw:0})),`${id} hits a dock obstacle`);
+  }
+ }
+ drive(0,-180,0,(_,z)=>z< -240);
+ drive(0,-1250,Math.PI,(_,z)=>z> -1090);
 });
 test('shore blocks grounded cars while water landings recover to a safe surface',()=>{
  const world=createWorld(),player=addPlayer(world,'p','P'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -36,6 +68,21 @@ test('parked vehicles and stations begin on land outside collision buildings',()
  }
  for(const station of STATIONS)assert.ok(isLand(station.x,station.z),station.id);
  assert.ok(BUILDINGS.length>100);
+});
+
+test('Supercharger lots are on flat land, clear of buildings and roads, with usable stalls',()=>{
+ for(const station of STATIONS){
+  const lot=PARKING_LOTS.find(l=>l.id===`charger-${station.id}`)!;
+  assert.ok(lot,station.id);
+  const footprint={x:station.x,z:station.z,w:CHARGER_LOT.width,d:CHARGER_LOT.length,yaw:0};
+  for(const dx of [-12,0,12])for(const dz of [-12,0,12])assert.equal(terrainHeight(station.x+dx,station.z+dz),0,station.id);
+  assert.ok(!nearbyBuildings(station.x,station.z,30).some(b=>contact(footprint,{...b,yaw:0})),`${station.id} building`);
+  assert.ok(!ROADS.some(r=>contact(footprint,{...r,yaw:r.angle??0})),`${station.id} road`);
+  assert.equal(lot.stalls.length,4);
+  for(const stall of stationStalls(station))for(const kind of VEHICLE_IDS){
+   assert.ok(VEHICLES[kind].width<=stall.width&&VEHICLES[kind].length<=stall.length,`${stall.id}: ${kind}`);
+  }
+ }
 });
 
 test('Bay highway shoulders are supported and its lanes clear the largest truck',()=>{

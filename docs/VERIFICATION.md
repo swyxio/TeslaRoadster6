@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Rocket Island integration · protocol v18 · 2026-10-18 Pacific
+
+- After integrating main's flight controls, tank levels, progression and chat, `pnpm test` passed 261 tests and `pnpm build` passed. The build retains Vite's existing large-chunk warning. Tests cover the ferry crossing, temporary Rocket expiry, parking and races, island surfaces, and level-zero access to the island and SF playground.
+- Local Wrangler two-client room integration passed protocol v18, shared flight/sky currents, activity snapshots, soccer scoring, OTA, fleet and disconnect checks. An initial room run timed out at dome entry while the build was running; a subsequent run after the build passed. Local chat and an isolated real Wrangler restart test passed. These are functional checks, not load tests.
+- Chrome desktop solo: opened the combined activity menu, entered the dome, drove into the ball and observed Blue score. At emulated 390×844 portrait and 844×390 landscape, inspected touch controls and the scrollable activity menu. This is browser emulation, not a physical-device test; the ferry crossing was verified in simulation rather than the browser.
+
 ## Flight and steering feel · 2026-10-18 Pacific
 
 - `pnpm test` passed 198 tests after integrating the latest main branch, and `pnpm build` passed. Vite retains its existing large-chunk warning. Tests cover held jump/hover across keyboard, touch and simulated gamepad, rebound controls, proportional low-air launches, forward thrust while hovering, steering at road speeds and in reverse, and existing drift/autopilot behavior. No physical controller or phone was tested.
@@ -44,6 +50,45 @@
 - Local Wrangler room and chat integrations passed, including requester-only shop rejection results, global chat and saved-driver recovery. An isolated Wrangler restart again preserved the saved ID and name and cleared history. These are not load tests.
 - Chrome desktop solo showed the combined game and connected chat with a chosen name. Earlier portrait and landscape layout checks and touch limitations are documented below.
 
+## Supercharger parking lots · protocol v14 · 2026-10-18 Pacific
+
+- `pnpm test` passed 219 tests and `pnpm build` passed both typechecks and Vite. The existing chunk warning remains (744 kB main JavaScript, 211 kB gzip). Shared-simulation checks cover every charging bay, all fleet footprints, clear lots and both parking modes.
+- Local Wrangler two-client integration passed ferry/activity snapshots, Rocket pads, shop responses, dome ball and goals, movement and disconnect checks. An earlier run timed out at the ball impact while files were changing; the settled rerun passed. This was not a multiplayer ferry crossing or load test.
+- In Chrome desktop solo, a temporary spawn fixture placed the car near the SF 16th Street lot. The lot, marked stalls and posts were visible; driving into a bay and stopping refilled the air tank, and Park It assigned a stall. The fixture was removed before the final build. Portrait 390×844 and landscape 844×390 emulation showed the lot, HUD and controls; no physical device or full touch drive was tested.
+- These checks describe this branch against its v14 base. Main advanced separately; integration and deployment remain outstanding.
+
+## Ferry playground with shop feedback · protocol v14 · 2026-10-18 Pacific
+
+- After integrating main's shop purchase acknowledgements, `pnpm test` passed 217 tests and `pnpm build` passed both typechecks and Vite. The existing chunk warning remains (744 kB main JavaScript, 210 kB gzip).
+- Local Wrangler two-client integration passed the ferry and activity snapshots, Rocket pads, requester-only shop results, dome ball and goals, movement and disconnect checks. This did not exercise a full multiplayer ferry crossing or a load test.
+- Chrome desktop and 390×844 portrait / 844×390 landscape emulation showed the final game's driving HUD and activity actions. The fixture-based island observations below were from the preceding v13 build, not this final merge. Touch driving, physical devices and a complete manual route remain unverified.
+
+## Ferry, parking, temporary rockets and connected dome · protocol v13 before the shop follow-up · local checks
+
+- `pnpm test` passed 216 tests and `pnpm build` passed browser and Worker typechecks and Vite. The existing chunk-size warning remains (743 kB main JavaScript, 210 kB gzip).
+- Local Wrangler two-client integration passed the ferry and activity snapshots, Rocket pads, dome ball and goals, movement, delivery and disconnect checks. This was not a full multiplayer ferry crossing or a load test.
+- Shared-simulation checks cover driving onto and across the ferry, parking rounds and queue overtakes, temporary upgrade expiry, purchased kits, and driving from the island into the dome. The direct dome action returns visitors to their original Bay or island side.
+- In local Chrome, a temporary spawn fixture placed the car in the island parking approach: Park It assigned a stall and Cut the queue joined with the correct position and countdown. Separate temporary spawn fixtures displayed a Model 3 with a 90-second Rocket and a car secured on the ferry after departure. The fixtures were removed before the final build. These do not prove a full manually driven route or multiplayer crossing.
+- Desktop and 390×844 portrait / 844×390 landscape emulation showed the driving HUD and activity controls. The dome, ball and scoreboard were visible in landscape. The parking action gave location guidance away from a lot. Browser emulation did not establish a successful touch drive on this final checkout; no physical device was tested.
+
+## Rocket Island, cockpit and Rocket Dome · protocol v12, local checks · 2026-10-17 Pacific
+
+- `pnpm test` passed 204/204 and `pnpm build` passed both TypeScript checks and Vite. The main JavaScript is 734 kB (207 kB gzip); Vite retains its chunk-size warning.
+- Local Wrangler protocol-v12 two-client integration passed ferry/activity snapshots, Rocket pads, cockpit, dome entry, a shared ball impact and goal, arena exit, movement and disconnect cleanup. The first run overlapped a build-triggered worker reload and timed out; the settled rerun passed. It did not test a multiplayer ferry crossing.
+- A same-host eight-second 64-client smoke passed with at least 69 snapshots per client, a 123 ms p95 snapshot gap and 123,476-byte maximum recipient snapshot. It began at dawn without an occupied ferry or peak traffic; it is not a WAN, sustained or production test.
+- A five-second same-process synthetic mixed-activity run included 64 players, six ferry passengers, four parking entrants, four racers and four dome players. Across 3,200 serialized snapshots, p95 simulation step was 12.45 ms, p95 batch of 64 snapshots was 35.35 ms and the largest recipient snapshot was 108,595 bytes. The run was not a network, peak-traffic, mobile, sustained or production test.
+- A continuous shared-simulation test drove onto the ferry from the SF pier, waited for its normal crossing and drove onto Rocket Island. Actual multiplayer ferry crossing, physical-device touch and full island activity playthroughs remain unverified.
+
+The protocol v11 island and dome records below describe separate builds.
+
+## Rocket Island and cockpit · protocol v11, local checks · 2026-10-17 Pacific
+
+- `pnpm test` passed 168 tests and `pnpm build` passed, including both TypeScript checks. Vite reports a 710 kB main chunk (199 kB gzip) and its existing chunk-size warning.
+- Local Wrangler two-client integration passed with protocol 11, including cockpit and island state replication and rejection of remote activity intents. It did not exercise an end-to-end ferry crossing.
+- A same-host, eight-second 64-client WebSocket smoke passed with at least 63 snapshots per client and a 139 ms p95 snapshot gap; maximum recipient snapshot was 119,828 bytes. This new room did not exercise occupied ferry/activities or peak traffic. It is not a WAN, sustained or production test.
+- `pnpm exec tsx tests/island-load.bench.ts` passed five simulation seconds with 64 players, six ferry passengers, four parking entrants and four race entrants. Across 3,200 serialized snapshots, p95 simulation step was 3.90 ms, p95 batch of 64 recipient snapshots was 19.45 ms, and the largest recipient snapshot was 104,788 bytes. This same-process synthetic run is not network, peak-traffic, mobile, sustained or production evidence.
+- In local Chrome on the combined checkout, C switched to cockpit view and showed the pickup target and timer; Actions exposed the parking/race controls and keyboard guidance. Clicking Park It away from a lot displayed the location guidance. This did not verify a game join.
+- Independent review found and led to fixes for race re-entry, parking approach bounds, ferry rider transfer, cliff collisions and cockpit order eligibility during a paused delivery. Regression tests cover each. Real-device touch, full island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified.
 ## Rocket shop feedback and restart fix · protocol v13 · 2026-10-17 Pacific
 
 - `pnpm run ci` passed 157 tests, both typechecks and the build; Vite's existing chunk-size warning remains. Regression checks cover reused retrofit meshes, solo purchase results and validated request IDs.
@@ -88,6 +133,16 @@
 - After integrating the cockpit update and correcting natural arena entry and long-vehicle wall clearance, `pnpm test` passed 147/147 and `pnpm build` passed; the main JavaScript is 697 kB (195 kB gzip) and Vite still reports its chunk-size warning. Simulation regressions cover first-person order eligibility, grounded and airborne entry, overflight, police/delivery policy and yaw-projected wall clearance.
 - Local Wrangler two-client integration passed for cockpit state, arena entry, ball impact, a goal observed by both clients, arena exit and existing room checks. An earlier run overlapped a Wrangler reload and timed out; the stable rerun passed. This is not a load test.
 - Chrome desktop showed the arena and switched to cockpit view. In 390×844 touch emulation, driving in cockpit scored a blue goal and climbed to 22 m; switching camera showed the field again. In 844×390 landscape emulation, score and controls remained visible. A subsequent 390×844 touch-emulated drive brought a Tesla Semi to a side wall and stopped it. The browser reported no console errors. No physical device, multi-touch reliability, frame rate or motion-comfort test was performed.
+
+The protocol v10 records below describe separate earlier builds; they do not verify the combined v12 checkout.
+
+## Rocket Island · protocol v10, local checkout · 2026-10-17 Pacific
+
+- Local Wrangler two-client room integration passed, including ferry/activity snapshots, Rocket pads and rejection of activity requests from outside their locations. It did not exercise a two-client ferry crossing or a load test.
+- Shared simulation tests exercise ferry boarding, crossing and return, passenger safety and recovery, island protection, temporary Rocket capability, bank support, cliff attachment and detachment. These are simulation checks rather than completed browser routes.
+- Local Chrome desktop and 390×844 portrait emulation exercised driving and Jump; the portrait run accelerated from 0 to 72 km/h and reached 4 m during Jump. The portrait Actions drawer eventually scrolled to `scrollTop` 194.
+- After same-tab Chrome recovery, 844×390 coarse-pointer emulation opened and closed Actions, held Drive from 0 to 66 km/h, and jumped to 5 m. Park It was tapped away from a lot, so joining a parking game was not verified.
+- The first local 64-client smoke was interrupted by a Wrangler reload while source files changed; it produced no capacity result. Real-device touch, complete island/activity playthroughs and end-to-end multiplayer ferry crossings remain unverified. These local observations do not establish a production deployment or performance budget.
 
 ## Cockpit view · protocol v10 · 2026-10-17 Pacific
 

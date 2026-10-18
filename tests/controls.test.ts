@@ -1,8 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Controls} from '../src/controls';
-import {makeEntity,step,type World} from '../shared/game';
-import {initialSoccer} from '../shared/soccer';
+import {makeEntity,createWorld,step,type World} from '../shared/game';
 
 class FakeButton extends EventTarget {
   dataset:{control:string};
@@ -53,7 +52,7 @@ test('a Space tap immediately after jump flips even before the HUD updates',()=>
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
   const car=makeEntity('car','roadster',0,0,'driver');
-  const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
+  const world:World={...createWorld(),entities:[car],players:[],pickups:[],time:0};
   for(const code of ['KeyE','Space']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   assert.equal(controls.airborne,false);
   step(world,new Map([['driver',controls.read()]]),.05);
@@ -66,7 +65,7 @@ test('braking before a jump in the same tick does not trigger a flip',()=>{
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
   const car=makeEntity('car','roadster',0,0,'driver');
-  const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
+  const world:World={...createWorld(),entities:[car],players:[],pickups:[],time:0};
   for(const code of ['Space','KeyE']){const event=new Event('keydown');Object.defineProperty(event,'code',{value:code});fakeWindow.dispatchEvent(event);}
   step(world,new Map([['driver',controls.read()]]),.05);
   assert.equal(car.supportId,null);assert.equal(car.flipRemaining,0);assert.equal(car.air,94);
@@ -94,7 +93,7 @@ test('touch jump after keyboard jump and touch brake reach the simulation',()=>{
   Object.assign(globalThis,{window:fakeWindow,document:fakeDocument});
   const controls=new Controls();controls.enabled=true;
   const car=makeEntity('car','roadster',0,0,'driver');
-  const world:World={entities:[car],players:[],pickups:[],time:0,soccer:initialSoccer()};
+  const world:World={...createWorld(),entities:[car],players:[],pickups:[],time:0};
   const key=new Event('keydown');Object.defineProperty(key,'code',{value:'KeyE'});fakeWindow.dispatchEvent(key);
   step(world,new Map([['driver',controls.read()]]),.05);assert.equal(car.air,94);assert.equal(car.lastJump,1);
   jump.dispatchEvent(pointer('pointerdown',1));jump.dispatchEvent(pointer('pointerup',1));jump.dispatchEvent(click(1));

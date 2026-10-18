@@ -1,5 +1,6 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, LANDMARKS, terrainHeight } from './map';
+import { BUILDINGS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
+import { PARKING_LOTS } from './parking-lots';
 import { hasRockets } from './upgrades';
 import { onRoof } from './achievements';
 import { initialOta, type OtaSubscription } from './ota';
@@ -13,8 +14,12 @@ export const LEVELS = [
 ] as const;
 export type Level = typeof LEVELS[number]['level'];
 // Vertical gates also apply to flyers; the northern Alcatraz approach remains open.
+const SF_PARKING = PARKING_LOTS.find(l=>l.id==='sf-playground')!;
 export const ACCESS_BOUNDARIES = { oaklandX:110, alcatrazNorthZ:-650, alcatrazMaxX:430, bayMaxZ:300, sanJoseMinZ:7600 } as const;
 export function requiredLevelAt(x:number,z:number):Level {
+  // The whole fictional island and its SF parking playground are available
+  // from the start, including the short approach across the Peninsula gate.
+  if(isRocketIsland(x,z)||(Math.abs(x-SF_PARKING.area.x)<=SF_PARKING.area.width/2+6&&z>=ACCESS_BOUNDARIES.bayMaxZ&&z<=SF_PARKING.area.z+SF_PARKING.area.length/2+6))return 0;
   if(z>ACCESS_BOUNDARIES.sanJoseMinZ)return 3;
   if(z>ACCESS_BOUNDARIES.bayMaxZ)return 2;
   const alcatrazApproach=z<ACCESS_BOUNDARIES.alcatrazNorthZ&&x<ACCESS_BOUNDARIES.alcatrazMaxX;
@@ -100,16 +105,16 @@ export function payoutFor(order: Order): number {
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
   return Math.max(0, order.base + bonus - latePenalty);
 }
-export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false): void {
+export function updateDelivery(world: World, player: Player, entity: Entity, input: Input, dt: number, stuntInput = false, orderPaused = false): void {
   const delivery = player.delivery;
   const activeInput = !!(input.throttle || input.steer || input.roll || input.brake || input.hover || input.boost || stuntInput);
   if (activeInput || (entity.autopilot && Math.abs(entity.speed) > .5)) delivery.activeUntil = world.time + 3;
   const active = world.time <= delivery.activeUntil;
   if (active) {
     delivery.activeSeconds += dt;
-    if(!entity.inDome)delivery.order.elapsed += dt;
+    if(!orderPaused&&!entity.inDome)delivery.order.elapsed += dt;
   }
-  if(entity.inDome)return;
+  if(orderPaused||entity.inDome)return;
   const target = orderTarget(delivery.order);
   if(entity.vy>.1||Math.abs(entity.speed)>4)return;
   if(target.rooftop){

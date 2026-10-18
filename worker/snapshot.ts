@@ -12,7 +12,7 @@ export function snapshotFor(world: World, playerId: string): World {
   const rangeSquared = AMBIENT_INTEREST_METERS ** 2;
   return {
     ...world,
-    entities: world.entities.filter(e => playerEntities.has(e.id) || e.driver !== null || e.owner === playerId ||
+    entities: world.entities.filter(e => e.supportId==='ferry' || playerEntities.has(e.id) || e.driver !== null || e.owner === playerId ||
       (e.x - current.x) ** 2 + (e.z - current.z) ** 2 <= rangeSquared),
   };
 }

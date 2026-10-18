@@ -19,7 +19,7 @@ The always-visible **♫** button opens Sound settings from the menu or drive. M
 | Citation | Descending warning | Increase in local player's authoritative ticket count |
 | Restaurant pickup / customer delivery | Different ascending chimes | Order stage and completed-delivery count, including zero-bonus pickups |
 | Repair / compressed-air / rocket pickup | Distinct chime / hiss / rising rocket chime | A nearby pickup disappearing from the shared world; attribution is approximate when drivers overlap |
-| Station refill | Brief soft confirmation | Local car on ground and stopped in a station ring while refilling |
+| Station refill | Brief soft confirmation | Local car on ground and stopped in a charging stall while refilling |
 | Achievement | Short four-note flourish | Increase in locally observed unlocked achievements |
 
 ## Architecture for future contributors

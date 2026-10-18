@@ -4,19 +4,21 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **[Play Poly AV](https://polyav.swyx.io)** · [Changelog](https://polyav.swyx.io/changelog/) · [Dev blog](https://polyav.swyx.io/blog/) · [Staging preview](https://staging-bay-drive.swyxio.workers.dev) · [Contribute](CONTRIBUTING.md) · [Deploy your own](docs/DEPLOYMENT.md)
 
+This checkout contains the Rocket Island expansion and Rocket Dome; the public link may still serve an earlier version. See [verification](docs/VERIFICATION.md) for observed checks.
+
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Deliveries and total earnings unlock more of the map for your session, with longer runs as it opens. Spending money or paying a ticket does not undo an unlock. The HUD shows the next milestone. Flying near police can lead to a citation; some rocket-equipped orders lead to rooftops. See [delivery design](docs/DELIVERY.md).
 
 **Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
 
-**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay. The ferry and the rest of Rocket Island remain a proposal.
+**Rocket Dome:** Open Actions and choose ⚽ Rocket Dome to travel to a fictional Alcatraz soccer arena connected to Rocket Island. Anyone can hit the shared ball into either colored goal; the first side to five wins and a new match starts automatically. Rocket-equipped cars can drive up the curved walls and across the ceiling. Use Leave Dome to return to the Bay or island where you entered.
 
 **Global chat:** Pick a driver name and chat with players across rooms, including from solo play. Names in use are distinguished with a suffix such as `#2`; a player ID also distinguishes chat senders. You can optionally save your chat identity with a generated recovery code. Keep that code private: anyone with it can use the identity. Recovering restores your chat ID and saved name, not your car, money, or game progress.
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
-**Rocket shops:** Collect a purple rocket pickup to equip any car for flight, or spend delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
+**Rocket shops:** Collect a purple rocket pickup for 90 seconds of flight in any car, or buy a lasting kit with delivery cash at a fictional SpaceX shop. An optional fictional OTA subscription costs $5 per game hour (two real minutes) and opens the shop remotely; it pauses when renewal cannot be paid and resumes when funded. Buy efficient nozzles, a sport motor, impact armor, or repairs and air. Upgrades belong to the car while it remains in the session; choosing another Tesla replaces your personal car. See [upgrades and locations](docs/UPGRADES.md).
 
 **Sky currents:** Fly into blue lanes for free speed and air, or ride golden thermals beside Coit Tower, the Transamerica Pyramid and Salesforce Tower for lift and air. Jump into a thermal or double-jump into the low lane over the Bay approach; higher lanes reward exploration. The minimap marks their footprints and lane direction. These are fictional arcade currents, not live weather. See [sky currents](docs/SKY_CURRENTS.md).
 
@@ -24,7 +26,7 @@ Formerly Bay Drive. A small, playable multiplayer driving sandbox inspired by th
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Proposal:** The [larger Rocket Island and parking playgrounds](docs/ROCKET_ISLAND_PLAN.md) are planned; the Rocket Dome is playable now.
+**Rocket Island:** Take the autonomous ferry from the north SF dock to a fictional island with a separate banked lane, an inverted cliff, a short circuit and speed oval. Purple Rocket pads temporarily give any vehicle the Roadster's fictional air moves. The two parking playgrounds and four Supercharger lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 
 ## Run
 
@@ -68,7 +70,10 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - **C / Actions → Camera:** cycle chase, first-person cockpit, and wide view. The cockpit follows the car through flips; on foot it falls back to chase. First-person time and whole first-person deliveries appear on the session leaderboard as self-reported. **K:** unstuck recovery, preserving air and condition.
 - Touch: steering and pedals; hold Brake or Rev while steering to drift. Drive also thrusts forward in the air; Flip has its own button. Tap Jump / Hover to jump and hold it for fictional thruster hover. Boost, manual roll, brake and toolbar actions support portrait and landscape.
 - Each rocket-equipped car starts with a Level 1 tank twice the original capacity. Buy Levels 2–5 at fictional SpaceX shops; each doubles capacity and refills the tank.
-- Stop inside a mint station ring to refill air. Green pickups repair; amber pickups refill air; purple rocket pickups equip flight and refill air. Pickups return after 20 seconds.
+- Stop in a marked Supercharger stall to refill air. Green pickups repair; amber pickups refill air. Both return after 20 seconds.
+- At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
+- Drive over a purple Rocket pickup in a car to refill air and grant that vehicle 90 simulation seconds of fictional Rocket moves. Pads return after 20 seconds; the stock Rocket Roadster remains capable permanently.
+- At a marked parking playground or Supercharger lot, open **Actions** for Park It or Cut the queue. At an island race start, choose a course and join/start through Actions. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
 - Enter the same room code on multiple devices, or use **Invite** to copy its URL. Invite links open the menu; joining is explicit.
 
 ## Boundaries
@@ -95,6 +100,13 @@ shared/achievements.ts  Session awards and flight tracking
 shared/day.ts       Accelerated day clock and demand profiles
 shared/bridge-signal.ts  Shared Bay Bridge approach meter
 shared/stations.ts  Curated real station provenance + game placements
+shared/ferry.ts     Authoritative ferry and passenger attachment
+shared/rocket.ts    Vehicle-local temporary Rocket pickups
+shared/island-stunts.ts  Shared bank and cliff surfaces
+shared/dome*.ts     Rocket Dome geometry and surface collisions
+shared/soccer.ts    Authoritative ball, goals and match state
+shared/parking*.ts  Parking playground definitions and rounds
+shared/race*.ts     Island courses and race rounds
 worker/protocol.ts  Input parser and room capacity policy
 worker/index.ts     HTTP routing and one Durable Object per room
 worker/global-chat.ts  Global chat and optional saved identities
@@ -102,9 +114,12 @@ src/session.ts     Solo/multiplayer transport adapter
 src/controls.ts    Keyboard, gamepad and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
 src/audio-events.ts  Presentation cues derived from world snapshots
+src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera
 src/sky-currents.ts  Animated sky-lane and thermal markers
 src/bay-world.ts   Compressed Bay Area environment and landmarks
+src/island-stunts.ts  Bank and cliff meshes from shared geometry
+src/rocket-dome.ts  Dome, goals and ball visuals
 src/vehicles.ts    Replaceable procedural visual models
 src/main.ts        Menu, instruments, action wiring, minimap
 src/style.css      Tailwind entry and responsive visual treatment

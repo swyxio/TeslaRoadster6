@@ -1,5 +1,5 @@
 import type { Entity, World } from '../shared/game';
-import { STATIONS } from '../shared/stations';
+import { chargingStationAt } from '../shared/stations';
 import { terrainHeight } from '../shared/map';
 import { SoundEventTracker, type SoundCue } from './audio-events';
 
@@ -135,6 +135,7 @@ export class GameAudio {
       case 'pursuit':tone(740,560,.18,.13,'square');tone(740,560,.18,.13,'square',.22);break;
       case 'ticket':tone(440,330,.28,.16,'triangle');tone(330,220,.36,.14,'triangle',.16);break;
       case 'achievement':for(const [i,n] of [76,79,84,88].entries())tone(midi(n),midi(n),.24,.1,'triangle',i*.1);break;
+      case 'ferry':tone(115,105,.65,.12,'sine');tone(172,158,.55,.045,'sine');break;
     }
   }
   private scheduleMusic():void {
@@ -153,7 +154,8 @@ export class GameAudio {
     if(active!==this.active){this.active=active;this.applyVolumes();if(active&&this.ctx)this.nextNote=this.ctx.currentTime+.05;}
     const player=world.players.find(p=>p.id===playerId),entity=world.entities.find(e=>e.id===player?.entityId);
     if(!active||!entity){this.tracker.reset();this.environment(undefined,world);return;}
-    const atStation=entity.kind!=='person'&&entity.supportId==='ground'&&Math.abs(entity.speed)<1&&STATIONS.some(s=>Math.hypot(entity.x-s.x,entity.z-s.z)<9&&Math.abs(entity.y-(terrainHeight(s.x,s.z)??0))<1);
+    const station=chargingStationAt(entity.x,entity.z);
+    const atStation=entity.kind!=='person'&&!!station&&entity.supportId==='ground'&&Math.abs(entity.speed)<1&&Math.abs(entity.y-(terrainHeight(station.x,station.z)??0))<1;
     for(const event of this.tracker.update(world,playerId,atStation))this.play(event.cue,event.strength);
     this.environment(entity,world);this.scheduleMusic();
   }

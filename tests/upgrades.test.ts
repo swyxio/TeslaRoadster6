@@ -5,6 +5,7 @@ import {nearbyBuildings, terrainHeight} from '../shared/map';
 import {contact,body} from '../shared/physics';
 import {VEHICLE_IDS, VEHICLES} from '../shared/vehicles';
 import {SHOPS, UPGRADES, hasRockets} from '../shared/upgrades';
+import {hasRocket} from '../shared/rocket';
 import {parseMessage} from '../worker/protocol';
 import {Session} from '../src/session';
 
@@ -50,7 +51,7 @@ test('solo shop reports authoritative purchase and rejection results',()=>{
 });
 test('rocket pickups sit on clear ground without overlapping other pickups',()=>{
   const world=createWorld(), rockets=world.pickups.filter(p=>p.kind==='rocket');
-  assert.equal(rockets.length,8);
+  assert.ok(rockets.length>=8);
   for(const pickup of rockets){
     assert.equal(terrainHeight(pickup.x,pickup.z),0,pickup.id);
     const car=makeEntity('test','tesla-semi' as typeof VEHICLE_IDS[number],pickup.x,pickup.z);
@@ -61,7 +62,7 @@ test('rocket pickups sit on clear ground without overlapping other pickups',()=>
 test('each family can collect a rocket pickup and use jump',()=>{
   for(const kind of VEHICLE_IDS){
     const {world,player,car}=setup(kind);car.x=0;car.z=60;car.y=0;world.pickups=[{id:'rocket',x:0,z:60,kind:'rocket',active:true}];
-    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRockets(car),kind);
+    step(world,new Map(),.05);assert.equal(world.pickups[0].active,false,kind);assert.ok(hasRocket(car,world.time),kind);
     step(world,new Map([[player.id,{...NEUTRAL,jump:1}]]),.05);assert.equal(car.supportId,null,kind);assert.ok(car.y>0,kind);assert.ok(car.air<100,kind);
   }
 });
