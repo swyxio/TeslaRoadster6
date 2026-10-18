@@ -434,6 +434,26 @@ test('a pitched car hits the carousel canopy with its body when rising and landi
  assert.ok(Math.abs(landing.car.y-roofTop)<.12,`landed at ${landing.car.y}`);
 });
 
+test('an ascending car lands when a curved landmark roof rises faster beneath it',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-oakland-arena')!;
+ const index=BUILDINGS.findIndex(building=>building.landmarkId===place.id);
+ assert.ok(index>=0);
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ // At +.2w, the rendered arena dome is 15.275m high. Moving toward its
+ // center climbs the dome faster than the car's small upward velocity.
+ Object.assign(car,{x:place.x+place.w*.2,z:place.z,y:15.325,yaw:0,pitch:0,roll:0,vy:2,vx:-12,vz:0,speed:0,supportId:null});
+ let approachingUpward=false;
+ for(let i=0;i<20&&car.supportId===null;i++){
+  const priorVy=car.vy,priorY=car.y,priorX=car.x;
+  step(world,new Map(),.01);
+  if(car.supportId!==null){
+   approachingUpward=priorVy>.1&&car.y>priorY&&car.x<priorX;
+  }
+ }
+ assert.ok(approachingUpward,`roof failed to catch an ascending crossing: y=${car.y}, vy=${car.vy}, support=${car.supportId}`);
+ assert.ok(car.supportId?.startsWith(`roof:${index}:`),`unexpected support ${car.supportId}`);
+});
+
 test('supply diamonds are separate and never sit on the initial player spawns',()=>{
  const world=createWorld();world.entities=[];
  const supplies=world.pickups.filter(p=>p.kind!=='rocket');

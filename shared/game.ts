@@ -716,9 +716,12 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
-  const landmarkVertical=verticalBounds(e),oldLandmarkVertical=verticalBounds({...e,x:old.x,y:old.y,z:old.z,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
-  for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
+  const nearby=nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width));
+  let landmarkVertical:ReturnType<typeof verticalBounds>|undefined,oldLandmarkVertical:ReturnType<typeof verticalBounds>|undefined;
+  for(const b of nearby){
     if(b.landmarkId){
+      landmarkVertical??=verticalBounds(e);
+      oldLandmarkVertical??=verticalBounds({...e,x:old.x,y:old.y,z:old.z,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
       const base=b.landmarkBase??0,parts=newLandmarkPrimitives(b.landmarkId);
       for(let i=0;i<parts.length;i++){
         const part=parts[i],surface=sampleLandmarkPrimitive(part,e.x-b.x,e.z-b.z);
@@ -727,7 +730,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
         if(!surface&&!edge)continue;
         const height=surface?base+surface.top:edge!.top,previous=sampleLandmarkPrimitive(part,old.x-b.x,old.z-b.z);
         const oldHeight=previous?base+previous.top:height;
-        if(e.vy<=0&&oldLandmarkVertical.min>=oldHeight-.001&&landmarkVertical.min<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
+        if(oldLandmarkVertical.min>=oldHeight-.001&&landmarkVertical.min<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
       }
     }else{
       const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
@@ -752,7 +755,7 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   // without filling the air below it with an invisible building.
   if(e.supportId===null&&e.vy>0){
     const previousVertical=verticalBounds({...e,x:old.x,z:old.z,y:old.y,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
-    for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
+    for(const b of nearby){
       if(!b.landmarkId)continue;
       for(const part of newLandmarkPrimitives(b.landmarkId)){
         const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
