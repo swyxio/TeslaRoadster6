@@ -12,7 +12,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Mars mission:** Open 🚀 Mars mission and contribute session cash toward your room’s shared $1 billion fund. It persists when everyone leaves or the Worker restarts; named rooms have separate funds. Once funded, reach level 2, stop in the gold ring at the fictional Fremont spaceport and board for the To Mars achievement and victory. You can keep exploring afterwards. Current payouts make this a long-term target; higher-paying levels are planned, not yet implemented. Cash and personal achievements remain session-only.
 
-**Sound:** An original synthesized 8-bit soundtrack and driving effects accompany the game. Use **♫** for master, music and effects levels or to mute; settings stay on this browser. See [audio design](docs/AUDIO.md).
+**Sound and radio:** Use **♫** to choose the original 8-bit soundtrack or a random episode from Latent Space or ThursdAI. Play, pause and skip episodes while driving; master, music/radio and effects levels are separate. The station and sound preferences stay on this browser. Podcast audio streams from the publisher. See [audio design](docs/AUDIO.md).
 
 **Rocket Dome:** Drive through the entrance on the China Basin waterfront or choose Rocket Dome in the Mini-games picker. Hit the ball into either colored goal; the first color to five ends the match. The last driver to touch the ball gets the goal, and the driver with the most goals wins (ties share the win). Finish a match after touching the ball to earn session achievements for the Roadster · Rocket or a rocket-retrofitted car; winning with credited goals can unlock more, including a stock-car challenge. Rocket-equipped cars can drive up the curved walls and across the ceiling; keep moving above the gold wall line to refill air. Drive out to SF, or use Leave Dome to return to a checked SF or island spawn based on where you entered.
 
@@ -54,6 +54,7 @@ For frontend hot reload, leave Wrangler running and start `pnpm dev` in another 
 
 ```sh
 pnpm run ci # tests, TypeScript checks and production build
+pnpm exec tsx tests/radio.integration.ts http://localhost:8787
 pnpm exec tsx tests/room.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat.integration.ts http://localhost:8787
 pnpm exec tsx tests/chat-restart.integration.ts # starts an isolated local Worker
@@ -133,6 +134,8 @@ src/map-dialog.ts  Destination selection and autonomous driving controls
 src/minigames.ts   Quick entry to shared mini-games
 src/controls.ts    Keyboard, gamepad and multitouch intent adapter
 src/audio.ts       Synthesized music, effects and volume buses
+src/radio.ts       Local podcast selection and playback
+worker/radio.ts    Cached public-podcast episode metadata
 src/audio-events.ts  Presentation cues derived from world snapshots
 src/camera.ts      Cockpit and chase camera poses
 src/scene.ts       Three.js world and camera

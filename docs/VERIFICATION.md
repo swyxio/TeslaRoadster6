@@ -2,6 +2,11 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Persistent chat names with radio · protocol v29 · 2026-10-18 Pacific
+
+- After integrating the radio release, `pnpm test` passed 437 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler chat and radio integrations passed, as did an isolated Wrangler restart with overlapping save and rename. A held-write test verified that queued messages are delivered in order after disconnect, timestamps reflect broadcast, and recovery waits for the rename to drain. These are functional checks, not load tests.
+- In Chrome on the combined local build, a chat rename retained the same displayed ID. Earlier desktop, portrait and landscape checks are recorded below; no physical device was tested.
+
 ## Persistent chat names with predictive driving · protocol v29 · 2026-10-18 Pacific
 
 - After integrating the predictive driving release, `pnpm test` passed 431 tests and `pnpm build` passed with Vite's existing large-chunk warning. Local two-client room and chat integrations and an isolated real Wrangler restart passed, including overlapping save and rename; these are functional checks, not load tests.
@@ -13,11 +18,24 @@ These entries describe separate historical builds. Check the version and scope i
 - Local two-client Wrangler chat integration verified repeated guest and saved-driver renames, collision handling, message attribution and recovery with the same ID and code. An isolated Wrangler restart test submitted save and rename together, restarted the Worker, and recovered the same ID with the updated name. A delayed storage-write test and a two-client chat run checked message order across renames; request IDs correlate confirmations with their requests. The standard two-client room integration passed on rerun after one Rocket Dome kickoff timeout. These are functional checks, not load tests.
 - Chrome on the local game changed the name twice in chat and once in Driver identity while retaining the same ID; after reload the saved name and ID returned. The recovery code remained hidden until requested. The chat editor was inspected in emulated 390×844 portrait and 844×390 landscape. No physical device was tested.
 
+## Podcast radio with predictive driving · protocol v29 · 2026-10-18 Pacific
+
+- After integrating main at `6b85df1`, `pnpm test` passed 435 tests and `pnpm build` passed, with Vite's existing large-chunk warning. Local Wrangler passed the two-client room, global chat, prediction/barrier and radio integrations. The Cloudflare preview passed its build, radio and prediction integrations. These are functional checks, not load measurements.
+- A subsequent focused radio test verified episode-end playback and refreshing a long-lived tab's catalog. Earlier v28 Chrome playback and emulated layout observations are recorded below; no physical mobile device was tested.
+
+## Podcast radio · protocol v28 · 2026-10-18 Pacific
+
+- After merging main at `a34248b`, the combined `pnpm run ci` output reported 412 passing tests and a successful build, with Vite's existing large-chunk warning. The local two-client room integration passed when run without concurrent test load, and global chat integration passed. Two earlier room runs under simultaneous CPU-heavy tests timed out at different gameplay assertions; these are functional checks, not load measurements.
+- Cloudflare's `bed55d3` preview passed its build and radio integration for both live feeds. Chrome in that preview selected and played one random episode from each show; this does not establish availability of every episode or every device.
+- Local Wrangler returned 235 Latent Space and 180 ThursdAI public episodes, with HTTPS stream and episode links; its radio integration checked unsupported stations and methods. Counts reflect the feeds at test time. Range requests to one stream per show returned audio bytes from the publisher CDN.
+- Chrome played a randomly selected episode from each station and displayed the playback state. The sound dialog was inspected at desktop and emulated 390 × 844 portrait and 844 × 390 landscape; landscape uses scrolling to reach volume and mute. No physical mobile device or subjective audio-quality test was performed.
+
 ## Mars and predictive shared driving · protocol v29 · 2026-10-18 Pacific
 
 - The combined build passed 422 tests and `pnpm build`, including both TypeScript checks. Local Wrangler two-client room, prediction/acknowledgement/barrier, chat, room-full and blocked-spawn integrations passed. An isolated Mars fixture verified simultaneous contributions, ordered post-action snapshots, boarding, room isolation and fund persistence after the last disconnect and a Worker restart; it used test-only funded players and positions.
 - On the pre-launch-animation-smoothing build, Chrome on an Apple M5 Pro drove online and steered in explicit solo, with no console errors. The Mars dialog showed the room fund online and correctly explained that the solo fund and awards last only for that drive. A 6.65-second online driving capture at 1413×939 CSS pixels, rendered at DPR 1.0 on WebGL2/Metal, averaged 58.7 FPS with 33.6 ms p95 frame intervals and no frames over 50 ms. Host load was high; this is one short local sample, not a sustained FPS guarantee or a controlled before/after comparison.
 - The final launch-smoothing build drove and steered in a live local room without console errors. A 6.58-second Chrome capture at 1413×939 CSS pixels averaged 80.1 FPS, with a 16.5 ms p95 frame interval and no frames over 50 ms. The same M5 Pro, WebGL2/Metal and DPR 1.0 applied; host load remained high. This is another short sample, not proof of sustained performance or a controlled comparison.
+- After integrating the economy research update, all 431 tests and the build passed. The game assets matched the final launch-smoothing build. Production at `tesland.swyx.io` and `bay-drive.swyxio.workers.dev` advertised v29 after deployment; the deployed JavaScript and CSS matched the local build. A disposable production room passed a two-client movement and input-acknowledgement smoke test. In a separate short production Chrome playtest, the room connected, driving and steering worked, and no console errors appeared. These checks do not establish sustained performance or production capacity.
 
 ## Predictive shared driving · protocol v28 · 2026-10-18 Pacific
 

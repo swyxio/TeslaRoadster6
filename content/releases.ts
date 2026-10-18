@@ -1,8 +1,8 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
-    version: '0.0.10-alpha',
-    label: '0.0.10 Alpha',
+    version: '0.0.11-alpha',
+    label: '0.0.11 Alpha',
     date: '2026-10-18',
     title: 'A name that moves with you',
     intro: 'Change your driver name whenever you like and keep the same chat identity.',
@@ -10,6 +10,19 @@ export const RELEASES = [
       { title: 'Make it yours', items: [
         'Edit your name right in the phone chat or from Driver identity. Your ID stays the same.',
         'Your browser remembers your driver by default. Copy the private recovery code to use the same driver on another device.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.10-alpha',
+    label: '0.0.10 Alpha',
+    date: '2026-10-18',
+    title: 'Radio for the ride',
+    intro: 'Take a podcast along as you explore the Bay.',
+    sections: [
+      { title: 'Choose your station', items: [
+        'Switch between the original 8-bit soundtrack and random public episodes of Latent Space or ThursdAI in the sound panel.',
+        'Play, pause and skip episodes; sound effects keep their own volume, and podcast audio streams directly from its publisher.'
       ] }
     ]
   },

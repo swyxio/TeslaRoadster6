@@ -42,6 +42,7 @@ export class GameAudio {
   private sirenPan?:StereoPannerNode;
   private noise?:AudioBuffer;
   private active=false;
+  private musicEnabled=true;
   private nextNote=0;
   private beat=0;
   private tracker=new SoundEventTracker();
@@ -53,6 +54,10 @@ export class GameAudio {
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(this.settings));}catch{/* Preferences are optional. */}
     this.applyVolumes();
   }
+  setMusicEnabled(enabled:boolean):void {
+    this.musicEnabled=enabled; this.applyVolumes();
+    if(enabled&&this.ctx)this.nextNote=this.ctx.currentTime+.05;
+  }
   private target(param:AudioParam,value:number,seconds=.08):void {
     if(this.ctx)param.setTargetAtTime(value,this.ctx.currentTime,seconds);
   }
@@ -60,7 +65,7 @@ export class GameAudio {
     if(!this.ctx||!this.master||!this.music||!this.effects)return;
     const volume=this.settings.muted?0:this.settings.master/100;
     this.target(this.master.gain,volume);
-    this.target(this.music.gain,this.active?this.settings.music/100:0);
+    this.target(this.music.gain,this.active&&this.musicEnabled?this.settings.music/100:0);
     this.target(this.effects.gain,this.settings.effects/100);
   }
   async unlock():Promise<boolean> {
@@ -138,7 +143,7 @@ export class GameAudio {
     }
   }
   private scheduleMusic():void {
-    const ctx=this.ctx,dest=this.musicFilter;if(!ctx||!dest||!this.active||this.settings.muted||!this.settings.music)return;
+    const ctx=this.ctx,dest=this.musicFilter;if(!ctx||!dest||!this.active||!this.musicEnabled||this.settings.muted||!this.settings.music)return;
     const now=ctx.currentTime;
     if(this.nextNote<now-.25)this.nextNote=now+.05;
     while(this.nextNote<now+.16){
