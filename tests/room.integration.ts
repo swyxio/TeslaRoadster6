@@ -5,7 +5,7 @@ import { DOME } from '../shared/dome';
 import { currentAt } from '../shared/sky-currents';
 const base = process.argv[2] ?? 'http://localhost:8787';
 // This build combines the island world with flight and OTA protocol changes.
-assert.equal(PROTOCOL_VERSION, 20);
+assert.equal(PROTOCOL_VERSION, 21);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -34,7 +34,7 @@ function connect() {
 const one = connect(), two = connect();
 try {
   const health = await (await fetch(base + '/api/health')).json() as {version:number};
-  assert.equal(health.version, 20, 'server advertises the combined world protocol');
+  assert.equal(health.version, 21, 'server advertises the combined world protocol');
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));

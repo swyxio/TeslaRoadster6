@@ -242,6 +242,10 @@ function begin(){
   const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
   if(!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
+  if(session.status==='online'&&session.room===room){
+    session.join(room,chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver',selectedVehicle);
+    $('error').classList.add('hidden');toggleMenu(false);return;
+  }
   lastRewardId=0;lastTicketCount=0;lastLevel=undefined;lastBlockedAt=-1;lastBlockedNoticeAt=-10;clearTimeout(noticeTimer);$('notice').classList.add('hidden');resetCelebration();audio.reset();
   pendingShop=null;pendingOta=null;shopBusyUntil=0;
   seenAchievements.clear();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
