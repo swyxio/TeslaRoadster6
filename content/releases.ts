@@ -11,7 +11,8 @@ export const RELEASES = [
     sections: [
       { title: 'Your next move', items: [
         'The mission card offers a route to your pickup or dropoff and a steady next award to work toward.',
-        'Look for a floating food bag at your pickup and a distinct marker at ground and rooftop dropoffs.'
+        'Look for a floating food bag at your pickup and a distinct marker at ground and rooftop dropoffs.',
+        'On mobile, expand or minimize the mission, map and driving stats independently. Your choices stay on this device.'
       ] },
       { title: 'Your awards', items: [
         'Explore grouped awards for delivery, flight, exploration, games and collection.',
