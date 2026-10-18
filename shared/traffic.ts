@@ -6,6 +6,7 @@ import { body, contact } from './physics';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
+import { requiredLevelAt } from './delivery';
 export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
 // large district loops let NPCs tour more than a single block.
@@ -71,6 +72,35 @@ export function isTrafficIncident(e:Entity,time:number):boolean {
 }
 
 const wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v));
+// Reverse only through currently supported, unlocked space with clearance for
+// the whole car. Recovery is local and does not relocate or phase through cars.
+function clearBehind(e:Entity,world:World):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  const player=world.players.find(p=>p.id===e.driver),ceiling=Math.max(player?.delivery.level??0,requiredLevelAt(e.x,e.z));
+  for(let d=1;d<=5;d+=1){
+    const x=e.x-forward.x*d,z=e.z-forward.z*d;
+    if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
+    const pose=body({...e,x,z});
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return false;
+    for(const other of world.entities){
+      if(other===e)continue;
+      const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
+      if(e.y>=other.y+height||other.y>=e.y+spec.height)continue;
+      if(contact(pose,body(other)))return false;
+    }
+  }
+  return true;
+}
+function wallAhead(e:Entity):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  for(let d=1;d<=3;d++){
+    const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return true;
+  }
+  return false;
+}
 export function routePose(index:number,count:number) {
   const routeId=index%6,route=ROUTES[routeId],side=(index*4/count)%4,segment=Math.floor(side),t=side-segment;
   const a=route[segment],b=route[(segment+1)%4];
@@ -134,9 +164,53 @@ export function trafficInput(e:Entity,world:World):Input {
   const angle=wrap(Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw);
   const spec=VEHICLES[e.kind];
   const steer=Math.max(-1,Math.min(1,angle*1.8));
+  if(navigation&&e.driver){
+    // Keep the reduced joining speed through the first lane turn. Leaving the
+    // approach as soon as we touch it can swing wide into the next building.
+    if(navigation.join){
+      const joinDistance=Math.hypot(e.x-navigation.join.x,e.z-navigation.join.z);
+      if(joinDistance<10)navigation.joinReached=true;
+      if((joinDistance<15&&Math.abs(angle)<.35)||(navigation.joinReached&&joinDistance>15)){
+        delete navigation.join;delete navigation.joinReached;
+      }
+    }
+    let recovery=navigation.recovery;
+    if(!recovery||recovery.index!==waypoint){
+      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
+    }else if(distance<recovery.distance-2){
+      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
+    }
+    const wall=!!navigation.join&&e.speed>=0&&wallAhead(e);
+    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
+    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
+      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
+    // A red light can last longer than the recovery timeout; waiting in its
+    // queue is expected and should never trigger a reverse manoeuvre.
+    if(waitingAtSignal&&!wall)recovery.at=world.time;
+    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
+      // Three bounded attempts, then return control and expose a failure to
+      // the driver instead of sitting indefinitely against a wall or queue.
+      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
+      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
+    }
+    const reversing=world.time<recovery.reverseUntil||(!!navigation.join&&Math.abs(angle)>2.1);
+    if(reversing&&clearBehind(e,world)){
+      if(e.speed>1)return {...neutral,brake:true,steer};
+      const recovering=world.time<recovery.reverseUntil;
+      // Clear the nose from a wall before rotating, or the physics correctly
+      // rejects the turn even though the straight line behind is open.
+      const straight=recovering&&world.time-recovery.at<2;
+      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
+      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
+      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
+      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
+      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
+      return {...neutral,throttle,steer:reverseSteer};
+    }
+  }
   const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  let cruise=navigation?12:highway?Math.min(spec.maxSpeed*.92,26*variety):8;
+  let cruise=navigation?(navigation.join?4.5:12):highway?Math.min(spec.maxSpeed*.92,26*variety):8;
   if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
   // Start braking before bends; the approach length uses real-time speed.
   if(e.driver&&!final&&cosine<.95){

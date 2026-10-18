@@ -350,13 +350,13 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  const requestId=session.setDestination(-180,60);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId,actionSeq:1,edgeBaseline:{jump:0,flip:0}});
+  const requestId=session.setDestination(-180,60,'jump');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,mode:'jump',requestId,actionSeq:1,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'destinationResult',requestId,ok:true});
   assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
-  const deliveryRequest=session.setDeliveryDestination();
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'deliveryDestination',requestId:deliveryRequest,actionSeq:2,edgeBaseline:{jump:0,flip:0}});
+  const deliveryRequest=session.setDeliveryDestination('sky');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'deliveryDestination',mode:'sky',requestId:deliveryRequest,actionSeq:2,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
   socket.message({type:'destinationResult',requestId:deliveryRequest,ok:true});
   assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId:deliveryRequest,ok:true});

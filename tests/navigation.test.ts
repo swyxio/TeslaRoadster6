@@ -290,11 +290,11 @@ test('securing a ferry passenger and issuing a ticket cancel chosen navigation',
 
 test('destination and mini-game protocol accepts only finite bounded requests',()=>{
   const fence={actionSeq:1,edgeBaseline:{jump:0,flip:0}};
-  const valid={type:'destination',x:12,z:-100,requestId:2,...fence};
+  const valid={type:'destination',x:12,z:-100,requestId:2,mode:'road',...fence};
   assert.deepEqual(parseMessage(JSON.stringify(valid)),valid);
   assert.equal(parseMessage(JSON.stringify({...valid,x:10001})),null);
   assert.equal(parseMessage(JSON.stringify({...valid,requestId:0})),null);
-  const delivery={type:'deliveryDestination',requestId:3,...fence};
+  const delivery={type:'deliveryDestination',requestId:3,mode:'road',...fence};
   assert.deepEqual(parseMessage(JSON.stringify(delivery)),delivery);
   assert.equal(parseMessage(JSON.stringify({...delivery,requestId:0})),null);
   assert.equal(parseMessage(JSON.stringify({type:'deliveryDestination',requestId:3})),null);
@@ -332,4 +332,117 @@ test('self-driving follows a stopped car progressively and resumes when the lane
   assert.ok(minSeparation>5,'the vehicles did not overlap');
   assert.ok(maxDeceleration<4,`largest deceleration: ${maxDeceleration}`);
   assert.equal(car.health,100);assert.equal(car.navigation?.status,'arrived');
+});
+
+test('an off-road delivery starts beside buildings and reverses to recover before rejoining the street',()=>{
+  // A supported, clear pose on the building side of a block, facing away from
+  // the street, reproduces the off-road start without relocating the player.
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-225,z:40,yaw:0,speed:0});
+  const start={x:car.x,z:car.z};
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  assert.deepEqual({x:car.x,z:car.z},start,'engagement does not teleport');
+  assert.ok(car.navigation?.join,'a checked approach to the lane is planned');
+  let reversed=false,maxStep=0,previous={...start};
+  for(let i=0;i<1800&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    reversed ||= car.speed<-.1;
+    maxStep=Math.max(maxStep,Math.hypot(car.x-previous.x,car.z-previous.z));
+    previous={x:car.x,z:car.z};
+  }
+  assert.ok(reversed,'the car backs away from the wall and turns');
+  assert.ok(maxStep<1,'all travel uses continuous vehicle physics');
+  assert.equal(car.health,100,'recovery avoids damaging the building');
+  assert.equal(car.navigation?.status,'arrived');
+  assert.ok(Math.hypot(car.x+180,car.z-120)<9,'the pickup is reached');
+});
+
+test('off-road join routes around a block before reaching the delivery',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-215,z:20,yaw:0,speed:0});
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  assert.ok(car.navigation!.path.length>=4,'the approach has a detour around the building');
+  simulate(world,()=>!car.autopilot,100);
+  assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.health,100);
+  assert.ok(Math.hypot(car.x+180,car.z-120)<9);
+});
+
+test('an awkward off-road approach resumes normal road speed after passing the join',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-225,z:40,yaw:Math.PI/2,speed:0});
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  let fastestOnRoad=0;
+  for(let i=0;i<1200&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    if(!car.navigation?.join)fastestOnRoad=Math.max(fastestOnRoad,car.speed);
+  }
+  assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.navigation?.join,undefined,'slow joining mode ends after the lane is reached');
+  assert.ok(fastestOnRoad>6,'the car accelerates beyond joining speed');
+  assert.equal(car.health,100);
+});
+
+test('a permanent traffic obstruction produces bounded, visible failure without collision',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-180,z:-177,yaw:-Math.PI/2,speed:0});
+  const leader=makeEntity('stopped-leader','model-3',-140,-177);leader.yaw=-Math.PI/2;world.entities.push(leader);
+  assert.equal(setDestination(world,'driver',{x:-60,z:-177}),true);
+  let clearance=Infinity,reversed=false;
+  for(let i=0;i<1500&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    clearance=Math.min(clearance,leader.x-car.x);
+    reversed ||= car.speed<-.1;
+  }
+  assert.ok(reversed,'recovery attempts to back away');
+  assert.ok(clearance>5,'the cars do not overlap');
+  assert.equal(car.health,100);
+  assert.equal(car.autopilot,false);
+  assert.equal(car.navigation?.status,'failed','the driver is told when recovery cannot complete');
+  assert.ok(world.time<75);
+});
+
+test('a red bridge signal does not trigger stuck recovery while a driver waits',()=>{
+  const {world,player,car}=drivingWorld();
+  player.delivery.level=1;player.delivery.cash=LEVELS[1].cash;
+  Object.assign(car,{x:40,z:63,yaw:-Math.PI/2,speed:0});
+  assert.equal(setDestination(world,'driver',{x:120,z:63}),true);
+  world.time=30;
+  let reversed=false,waited=false;
+  for(let i=0;i<400&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    if(world.time<48){reversed ||= car.speed<-.1;waited ||= Math.abs(car.speed)<.2;}
+  }
+  assert.ok(waited,'the car waits for the signal');
+  assert.equal(reversed,false,'a red light is not an obstacle to reverse from');
+  assert.ok(car.x>45,'the car proceeds after the signal turns green');
+});
+
+test('manual input takes over while off-road recovery is reversing',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-225,z:40,yaw:0,speed:0});
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  simulate(world,()=>car.speed<-.1,30);
+  assert.ok(car.speed<-.1,'recovery engaged');
+  step(world,new Map([['driver',{...NEUTRAL,steer:1}]]),.05);
+  assert.equal(car.autopilot,false);
+  assert.equal(car.navigation,null);
+});
+
+test('a blocked turn restores the last safe heading and can reverse clear',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-220.7,z:30,yaw:-Math.PI/2,speed:3});
+  let collided=false;
+  for(let i=0;i<40;i++){
+    const before={x:car.x,z:car.z,yaw:car.yaw};
+    step(world,new Map([['driver',{...NEUTRAL,throttle:1,steer:1}]]),.05);
+    if(Math.hypot(car.x-before.x,car.z-before.z)<.001){
+      assert.equal(car.yaw,before.yaw,'the rejected turn restores the safe heading');
+      collided=true;break;
+    }
+  }
+  assert.ok(collided,'the pose reached the building');
+  const blockedX=car.x;
+  for(let i=0;i<40;i++)step(world,new Map([['driver',{...NEUTRAL,throttle:-.3}]]),.05);
+  assert.ok(car.x<blockedX-3,'the car can back away after the rejected turn');
 });

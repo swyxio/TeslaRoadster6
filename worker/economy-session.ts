@@ -1,5 +1,5 @@
 import { applyDeliveryStop, captureDeliveryStop, CUSTOMERS, deliveryStopSignature, levelForCash, matchesDeliveryStop, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop } from '../shared/delivery';
-import { hasRockets } from '../shared/upgrades';
+import { hasRockets, initialVehicleUpgrades } from '../shared/upgrades';
 import { atLuxuryShowroom, luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { buyUpgrade, buyVehicleStyle, canCollectLuxury, collectLuxury, subscribeOta, type CockpitStats, type EconomyHooks, type EconomyUpdateResult, type Entity, type Pickup, type Player, type World } from '../shared/game';
 import { applyAchievementAwards, applyDeliveryAwards, awardMarsAchievement, type AchievementState } from '../shared/achievements';
@@ -779,7 +779,7 @@ export class EconomySession {
     const saved=car && this.committed.vehicles[car.kind];
     if(car && car.owner===this.player.id && !car.cab&&!car.retiredCab){
       this.paintPersonalVehicle(car);
-      if(saved){car.upgrades=structuredClone(saved.upgrades);car.tankLevel=saved.tankLevel;car.style=structuredClone(saved.style);}
+      if(saved){car.upgrades={...initialVehicleUpgrades(),...structuredClone(saved.upgrades)};car.tankLevel=saved.tankLevel;car.style=structuredClone(saved.style);}
     }
   }
   boardMars(requestId:number){

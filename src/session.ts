@@ -11,6 +11,7 @@ import { RemotePresentation } from './remote-presentation';
 import { validStarshipStatus, validStarshipTime, type StarshipRoomStatus } from './starship-model';
 import type { EarningsBonusView } from './earnings-bonus-ui';
 import type { MarketRequest, MarketResultView, MarketState } from '../shared/market-protocol';
+import type { DriveMode } from '../shared/drive-mode';
 type MarketClientRequest<T=MarketRequest> = T extends MarketRequest ? Omit<T,'type'|'requestId'> : never;
 export const DEFAULT_ROOM = 'bay';
 export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
@@ -256,14 +257,14 @@ export class Session {
   parkingAction(action:'park'|'queue'|'start'|'leave'){this.actionWithBarrier({type:'parking',action},false);}
   raceAction(action:'join'|'start'|'leave',courseId:'short'|'oval'){this.actionWithBarrier({type:'race',action,courseId},action==='join');}
   enterMinigame(game:'park'|'queue'|'short'|'oval'){if(this.status!=='online'||!this.actionWithBarrier({type:'minigame',game}))return false;}
-  setDestination(x:number,z:number){
+  setDestination(x:number,z:number,mode:DriveMode='road'){
     const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
-    if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
+    if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,mode,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
-  setDeliveryDestination(){
+  setDeliveryDestination(mode:DriveMode='road'){
     const requestId=++this.nextUpgradeRequest;this.destinationResult=null;
-    if(this.status!=='online'||!this.actionWithBarrier({type:'deliveryDestination',requestId}))this.destinationResult={requestId,ok:false};
+    if(this.status!=='online'||!this.actionWithBarrier({type:'deliveryDestination',mode,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
   }
   setName(name:string) {

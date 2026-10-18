@@ -11,8 +11,8 @@ import { orderTarget } from '../shared/delivery';
 import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
-// Protocol 39 combines persistent Cybercabs with the v38 Starship and driving contracts.
-assert.equal(PROTOCOL_VERSION, 40);
+// Both clients must agree on self-drive modes and the tick/action contract.
+assert.equal(PROTOCOL_VERSION, 41);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -231,17 +231,19 @@ try {
   await delay(500);one.input.action({type:'autopilot'});
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
   await delay(500);one.input.action({type:'reset'});await delay(700);
-  one.input.action({type:'destination',x:-120,z:60,requestId:9});
+  one.input.action({type:'destination',x:-120,z:60,mode:'road',requestId:9});
   await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9&&r.ok)??false,'destination is accepted by the room');
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
   assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
   await delay(500);
   const deliveryTarget=orderTarget(two.state.world!.players.find(player=>player.id===id)!.delivery.order);
-  one.input.action({type:'deliveryDestination',requestId:10});
-  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===10&&r.ok)??false,'current delivery route is accepted by the room');
+  one.input.action({type:'deliveryDestination',mode:'sky',requestId:10});
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===10&&!r.ok)??false,'sky mode is rejected without a rocket');
+  await delay(500);one.input.action({type:'deliveryDestination',mode:'road',requestId:11});
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===11&&r.ok)??false,'current delivery route is accepted by the room');
   await eventually(()=>{
     const destination=two.state.world?.entities.find(e=>e.driver===id)?.navigation?.destination;
-    return !!destination&&Math.hypot(destination.x-deliveryTarget.x,destination.z-deliveryTarget.z)<=DELIVERY_DESTINATION_SNAP;
+    return !!destination&&Math.hypot(destination.x-deliveryTarget.x,destination.z-deliveryTarget.z)<=DELIVERY_DESTINATION_SNAP&&two.state.world?.entities.find(e=>e.driver===id)?.navigation?.mode==='road';
   },'delivery route uses the authoritative order');
   assert.equal(two.state.destinationResults?.length??0,0,'delivery response goes only to the requester');
   await delay(500);one.input.action({type:'minigame',game:'short'});

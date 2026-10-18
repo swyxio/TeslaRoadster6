@@ -8,6 +8,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join as joinPath, resolve } from 'node:path';
 import { LUXURY_CATALOG, luxuryPurchaseAwards, type LuxuryVehicleId } from '../shared/luxury';
+import { UPGRADES } from '../shared/upgrades';
 import { NEUTRAL } from '../shared/game';
 import { RoomInputClient } from './room-input-client';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
@@ -70,7 +71,7 @@ type FaultState={started:number;held:boolean;heldAction?:EconomyIntent['action']
 const driver=()=>randomUUID();
 const acquire=(driverId:string,fence:string,room='fixture')=>rpc<Acquisition>('acquire',{driverId,fence,room});
 const inspect=(driverId:string)=>rpc<RecordState>('inspect',{driverId});
-const arm=(driverId:string,fault:'hold-before'|'fail-before'|'lost-reply'|'hold-lost-reply')=>rpc<FaultState>('arm',{driverId,fault});
+const arm=(driverId:string,fault:'hold-before'|'hold-reject'|'fail-before'|'lost-reply'|'hold-lost-reply')=>rpc<FaultState>('arm',{driverId,fault});
 const faultState=(driverId:string)=>rpc<FaultState>('fault-state',{driverId});
 const release=(driverId:string)=>rpc('release',{driverId});
 const intent=(driverId:string,fence:string,revision:number,vehicle:LuxuryVehicleId,sequence=revision+1):EconomyIntent=>({eventId:randomUUID(),driverId,fence,roomId:'fixture',revision,sequence,action:{kind:'luxury',vehicle}});
@@ -179,6 +180,48 @@ async function luxury(client:ReturnType<typeof connect>,action:'buy'|'collect',v
   return client.messages.find(message=>message.type==='luxuryResult'&&message.requestId===requestId)!;
 }
 
+async function verifyAutonomyWallet(){
+  const owner=await savedDriver(`Pilot${randomUUID().slice(0,6)}`),room=`autonomy-${randomUUID().slice(0,8)}`;
+  let client=await join(room,owner.code);
+  const playerId=client.last('welcome')!.id as string;
+  await rpc('workshop',{room,playerId});await pause(450);await barrier(client,700);
+  const before=await inspect(owner.id);
+  await arm(owner.id,'hold-reject');
+  send(client,{type:'upgrade',upgrade:'autonomyJump',requestId:699});
+  await until(async()=>(await faultState(owner.id)).held,'rejected upgrade waits for the wallet');
+  await release(owner.id);
+  await until(()=>client.messages.some(m=>m.type==='upgradeResult'&&m.requestId===699),'rejected upgrade result');
+  assert.equal(client.messages.find(m=>m.type==='upgradeResult'&&m.requestId===699)!.ok,false);
+  assert.equal((await inspect(owner.id)).progress.cash,before.progress.cash,'rejected purchase does not charge');
+  await pause(450);
+  await arm(owner.id,'hold-before');
+  send(client,{type:'upgrade',upgrade:'autonomyJump',requestId:701});
+  await until(async()=>(await faultState(owner.id)).held,'Leap wallet commit held');
+  const current=()=>client.last('state')!.world.entities.find((item:Message)=>item.driver===playerId);
+  assert.equal(current().upgrades.autonomyJump,false,'pending upgrade is not usable');
+  assert.equal((await inspect(owner.id)).progress.cash,before.progress.cash,'pending upgrade is not charged');
+  await release(owner.id);
+  await until(()=>client.messages.some(m=>m.type==='upgradeResult'&&m.requestId===701),'Leap purchase result');
+  assert.equal(client.messages.find(m=>m.type==='upgradeResult'&&m.requestId===701)!.ok,true);
+  await pause(450);
+  send(client,{type:'upgrade',upgrade:'autonomySky',requestId:702});
+  await until(()=>client.messages.some(m=>m.type==='upgradeResult'&&m.requestId===702),'Plaid purchase result');
+  assert.equal(client.messages.find(m=>m.type==='upgradeResult'&&m.requestId===702)!.ok,true);
+  await barrier(client,703);
+  const after=await inspect(owner.id);
+  assert.equal(after.progress.cash,before.progress.cash-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
+  assert.equal(after.progress.vehicles.roadster.upgrades.autonomyJump,true);
+  assert.equal(after.progress.vehicles.roadster.upgrades.autonomySky,true);
+  client.socket.close();await until(()=>client.socket.readyState===WebSocket.CLOSED,'owner disconnects');
+  client=await join(`autonomy-rejoin-${randomUUID().slice(0,8)}`,owner.code);
+  const restoredPlayer=client.last('welcome')!.id;
+  await until(()=>{
+    const car=client.last('state')?.world.entities.find((item:Message)=>item.driver===restoredPlayer);
+    return car?.upgrades.autonomyJump===true&&car.upgrades.autonomySky===true;
+  },'both self-driving upgrades restore after reconnect');
+  console.log('PASS: self-driving upgrades wait for wallet commit, charge once, and restore to the saved vehicle');
+}
+
 async function verifyRolloutRetry(){
   // A previous chat version cannot accept either RPC. A failed dispatch made
   // no claim and must not leave identity retries waiting for release forever.
@@ -203,7 +246,8 @@ async function verifyRolloutRetry(){
 
 try {
   child=start();await ready();
-  if(process.argv.includes('--rollout-only'))await verifyRolloutRetry();
+  if(process.argv.includes('--autonomy-only'))await verifyAutonomyWallet();
+  else if(process.argv.includes('--rollout-only'))await verifyRolloutRetry();
   else {
 
   // Simulated world time crosses three checkpoint windows without a wall-clock
@@ -1039,6 +1083,29 @@ try {
   await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===31),'motor purchase result');
   assert.equal(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===31)!.ok,true);
   await barrier(aliceRoom,104);
+  await pause(450);
+  send(aliceRoom,{type:'upgrade',upgrade:'rocket',requestId:32});
+  await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===32),'rocket purchase result');
+  assert.equal(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===32)!.ok,true);
+  await barrier(aliceRoom,105);
+  const beforeAutonomy=await inspect(alice.id);
+  await arm(alice.id,'hold-before');
+  send(aliceRoom,{type:'upgrade',upgrade:'autonomyJump',requestId:33});
+  await until(async()=>(await faultState(alice.id)).held,'self-driving upgrade waits for wallet commit');
+  assert.equal(aliceRoom.last('state')!.world.entities.find((entity:Message)=>entity.id===collectedId).upgrades.autonomyJump,false,'uncommitted upgrade is unavailable');
+  assert.equal((await inspect(alice.id)).progress.cash,beforeAutonomy.progress.cash,'pending purchase has not debited the wallet');
+  await release(alice.id);
+  await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===33),'Leap purchase result');
+  assert.equal(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===33)!.ok,true);
+  await pause(450);
+  send(aliceRoom,{type:'upgrade',upgrade:'autonomySky',requestId:34});
+  await until(()=>aliceRoom.messages.some(message=>message.type==='upgradeResult'&&message.requestId===34),'Plaid purchase result');
+  assert.equal(aliceRoom.messages.find(message=>message.type==='upgradeResult'&&message.requestId===34)!.ok,true);
+  await barrier(aliceRoom,107);
+  const afterAutonomy=await inspect(alice.id);
+  assert.equal(afterAutonomy.progress.cash,beforeAutonomy.progress.cash-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
+  assert.equal(afterAutonomy.progress.vehicles['ducati-panigale-v4'].upgrades.autonomyJump,true);
+  assert.equal(afterAutonomy.progress.vehicles['ducati-panigale-v4'].upgrades.autonomySky,true);
 
   // The server commits, loses the reply, and the player disconnects during retry.
   // Recovery must drain the old event before changing the wallet fence.
@@ -1071,8 +1138,8 @@ try {
   await until(()=>{
     const world=aliceRoom.last('state')?.world,player=world?.players.find((item:Message)=>item.id===rejoinedId);
     const car=world?.entities.find((entity:Message)=>entity.id===player?.entityId);
-    return car?.kind==='ducati-panigale-v4'&&car.style.paint==='mint'&&car.upgrades.motor===true;
-  },'purchased paint and motor restored on the owned car');
+    return car?.kind==='ducati-panigale-v4'&&car.style.paint==='mint'&&car.upgrades.motor===true&&car.upgrades.autonomyJump===true&&car.upgrades.autonomySky===true;
+  },'purchased paint, motor, and self-driving tiers restored on the owned car');
   assert.ok(!JSON.stringify(bobRoom.messages).includes(alice.code),'other player never receives the recovery code');
   assert.ok(!bobRoom.messages.some(message=>message.type==='wallet'&&message.ownedLuxury?.includes('lamborghini-temerario')),'other player never receives the owner wallet');
 
