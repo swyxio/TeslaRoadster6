@@ -14,7 +14,7 @@ export const RELEASES = [
         'Saved drivers begin with the progress supported by their existing records; earlier milestones do not pay out again.'
       ] },
       { title: 'Celebrate your rewards', items: [
-        'Consecutive rewards now appear one after another, so each committed payout gets its own celebration.'
+        'Consecutive reward celebrations now appear one after another, even when they arrive between game updates.'
       ] }
     ]
   },
