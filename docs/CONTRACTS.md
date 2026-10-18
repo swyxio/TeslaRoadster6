@@ -1,4 +1,4 @@
-# Implementation contracts · v46 candidate
+# Implementation contracts · v47 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,11 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v46 candidate
+## Wire protocol v47 candidate
 
-Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. This v46 candidate adds sandbox and practice modes, sandbox teleporting, and vehicle collections. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
+Protocol v47 fences the new shared landmark collision envelopes and building identities from v46 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:46,capacity:number}`. The provisional landmark combination also adds shared collision envelopes and changes building identities; its final release must use a new protocol after v46.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:47,capacity:number}`.
 
 Client messages:
 
@@ -91,7 +91,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:46, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:47, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
