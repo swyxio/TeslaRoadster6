@@ -122,6 +122,10 @@ function spawnPosition(world:World,kind:Entity['kind']='roadster',ignore?:Entity
   for(let x=-220;x<=220;x+=20)for(let z of [210,-210])if(fits(world,makeEntity('candidate',kind,x,z),ignore,cleanupOwner))return {x,z,yaw:0};
   throw new NoSpawnError();
 }
+function availableSpawnPosition(world:World,kind:Entity['kind'],ignore?:Entity,cleanupOwner?:string):{x:number;z:number;yaw:number}|null {
+  try{return spawnPosition(world,kind,ignore,cleanupOwner);}
+  catch(error){if(error instanceof NoSpawnError)return null;throw error;}
+}
 // Safe, deterministic floor slots accommodate even the longest catalog tractor.
 function domeSpawn(world:World,kind:Entity['kind'],ignore?:Entity,cleanupOwner?:string):{x:number;z:number;yaw:number}|null {
   const size=dimensions(kind);
@@ -156,7 +160,7 @@ export function travelDome(world:World,id:string):boolean {
   let pose:{x:number;z:number;yaw:number}|null;
   if(e.inDome){
     if(e.domeReturn==='island')pose=sideSpawn(world,e.kind,'island',e);
-    else {try{pose=spawnPosition(world,e.kind);}catch{return false;}}
+    else pose=availableSpawnPosition(world,e.kind);
   }else pose=domeSpawn(world,e.kind);
   if(!pose)return false;
   const inDome=!e.inDome;
@@ -216,7 +220,7 @@ export function chooseVehicle(world:World,id:string,kind:VehicleId):boolean {
   // in the world and must still block a replacement spawn.
   const removed=old.owner===id||old.id===`person-${id}`;
   const ignored=removed?old:undefined;
-  const spawn=old.inDome?domeSpawn(world,kind,ignored,id):isRocketIsland(old.x,old.z)?sideSpawn(world,kind,'island',ignored,id):spawnPosition(world,kind,ignored,id);
+  const spawn=old.inDome?domeSpawn(world,kind,ignored,id):isRocketIsland(old.x,old.z)?sideSpawn(world,kind,'island',ignored,id):availableSpawnPosition(world,kind,ignored,id);
   if(!spawn)return false;
   leaveParking(world.parking,id);leaveRace(world.races,id);
   release(old,world);
@@ -258,6 +262,8 @@ export function toggleAutopilot(world:World,id:string):boolean {
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e||!player)return;
+  const baySpawn=!e.inDome&&e.supportId!=='ferry'&&!isRocketIsland(e.x,e.z)?availableSpawnPosition(world,e.kind):undefined;
+  if(baySpawn===null)return;
   leaveParking(world.parking,id);leaveRace(world.races,id);resetAchievementFlight(player);
   if(e.inDome){const spawn=domeSpawn(world,e.kind,e);if(spawn)placeEntity(e,spawn,true);return;}
   if(e.supportId==='ferry'||isRocketIsland(e.x,e.z)){
@@ -265,7 +271,7 @@ export function resetPlayer(world:World,id:string):void {
     if(moveToSide(world,e,side))removeFerryPassenger(world.ferry,e.id);
     return;
   }
-  const spawn=spawnPosition(world,e.kind);placeEntity(e,spawn,false);
+  if(baySpawn)placeEntity(e,baySpawn,false);
 }
 export function parkingAction(world:World,id:string,action:ParkingMode|'start'|'leave'):boolean {
   if(action==='leave'){leaveParking(world.parking,id);return true;}
@@ -533,7 +539,8 @@ function landAirborne(world:World,e:Entity,old:PreviousPose):void {
       leaveParking(world.parking,e.driver);leaveRace(world.races,e.driver);
       const player=world.players.find(p=>p.id===e.driver);if(player)resetAchievementFlight(player);
     }
-    const spawn=(nearRocketIsland(e.x,e.z)?sideSpawn(world,e.kind,'island',e):null)??spawnPosition(world,e.kind);
+    const spawn=(nearRocketIsland(e.x,e.z)?sideSpawn(world,e.kind,'island',e):null)??availableSpawnPosition(world,e.kind);
+    if(!spawn){Object.assign(e,{x:old.x,y:old.y,z:old.z,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0});return;}
     Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false});
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
