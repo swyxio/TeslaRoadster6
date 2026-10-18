@@ -17,6 +17,10 @@ export const RELEASES = [
       { title: 'Your awards', items: [
         'Explore grouped awards for delivery, flight, exploration, games and collection.',
         'Open repeatable awards to see all five ranks, progress, bonuses and save status.'
+      ] },
+      { title: 'Fairer fares', items: [
+        'Completed deliveries pay at least half the quoted base fare, even if they take longer than expected.',
+        'The shop warns you when a purchase will lower your cash-based level.'
       ] }
     ]
   },

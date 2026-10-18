@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Mobile HUD and delivery goals · 0.0.25 candidate / protocol v43 · 2026-10-18 Pacific
+
+- After integrating the independently verified slow-delivery fare floor and shop warning from PR #84, all 893 tests and the build passed. In a quick local Chrome check of the combined build, compact panels left the driving controls clear at emulated 390 × 844 and 844 × 390. The mobile disclosure source was unchanged by that merge; its earlier local and independent emulated-device checks are recorded below. No physical device was tested.
+
 ## Earnings lease timing · 0.0.24 candidate / protocol v43 · 2026-10-18 Pacific
 
 - Fresh disposable sockets reproduced intermittent unavailable earnings status on production and an isolated Cloudflare preview. They sent no identity, controls, purchases or delivery actions. In the 14-second diagnostic preview sample, the first status was valid and six subsequent refreshes were unavailable, while 127 snapshots advanced through tick 252. This does not establish that historical payout settlement was blocked.
