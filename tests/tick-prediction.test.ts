@@ -65,10 +65,100 @@ test('a newer release takes effect locally before its future target tick',()=>{
   const {world,control}=setup(),prediction=new TickPrediction();
   prediction.snapshot(world,'p',34,control,0,1,0);
   prediction.input({seq:32,targetTick:40,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1}});
-  prediction.input({seq:33,targetTick:45,controlRevision:0,actionSeq:0,input:{...NEUTRAL}});
+  prediction.input({seq:33,targetTick:45,controlRevision:0,actionSeq:0,input:{...NEUTRAL}},41);
   prediction.snapshot(world,'p',40,control,0,1,100);
   const released=prediction.renderWorld(100,42,41,.5)!.entities[0];
   assert.equal(released.speed,0,'the newer release overrides the older held level immediately');
+});
+
+for(const retimed of [false,true])test(`a ${retimed?'retimed':'normal'} queued acknowledgement preserves the earlier local press`,()=>{
+  const {world,control}=setup(),prediction=new TickPrediction();
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  const pressed={...NEUTRAL,throttle:1};
+  prediction.input({seq:1,targetTick:107,controlRevision:0,actionSeq:0,input:pressed},101);
+  prediction.input({seq:2,targetTick:108,controlRevision:0,actionSeq:0,input:pressed},102);
+  const acknowledged={...control,receivedSeq:2,queued:[{seq:2,targetTick:108,input:pressed,...(retimed?{retimed:true as const}:{})}]};
+  prediction.snapshot(world,'p',100,acknowledged,0,1,10);
+  const shown=prediction.renderWorld(10,101,100,1)!.entities[0];
+  assert.ok(shown.speed>0,'the superseded first heartbeat still establishes the local press time');
+});
+
+test('an expired local release cannot revive an older authoritative throttle',()=>{
+  const {world,car,control}=setup(),prediction=new TickPrediction();
+  Object.assign(car,{x:-300,z:-2050,y:0,yaw:-Math.PI/2,speed:20,vx:20,vz:0,supportId:'ground'});
+  control.held={...NEUTRAL,throttle:1};control.heldUntilTick=120;
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  prediction.input({seq:1,targetTick:108,controlRevision:0,actionSeq:0,input:{...NEUTRAL}},101);
+  const released=prediction.renderWorld(100,107,106,1)!.entities[0];
+  assert.ok(released.speed<20,'after the local hold expires, neutral persists until the queued release');
+});
+
+test('a locally earlier input invalidates a cached future replay',()=>{
+  const {world,control}=setup(),prediction=new TickPrediction(),fresh=new TickPrediction();
+  prediction.snapshot(world,'p',100,control,0,1,0);fresh.snapshot(world,'p',100,control,0,1,0);
+  prediction.renderWorld(0,102,101,1);
+  const command={seq:1,targetTick:108,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1}};
+  prediction.input(command,102);fresh.input(command,102);
+  const cached=prediction.renderWorld(10,103,102,1)!.entities[0];
+  const expected=fresh.renderWorld(10,103,102,1)!.entities[0];
+  assert.equal(cached.speed,expected.speed,'replay includes the input from its local tick, not only its wire tick');
+  assert.ok(cached.speed>0);
+});
+
+for(const kind of ['jump','flip'] as const)test(`a local ${kind} survives a queued acknowledgement and is not fired twice`,()=>{
+  const {world,car,control}=setup(),prediction=new TickPrediction();
+  car.upgrades.rocket=true;
+  if(kind==='flip')Object.assign(car,{x:-300,z:-2050,y:30,supportId:null});
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  const input={...NEUTRAL,[kind]:1};
+  prediction.input({seq:1,targetTick:108,controlRevision:0,actionSeq:0,input},101);
+  const early=prediction.renderWorld(0,102,101,1)!.entities[0];
+  assert.equal(kind==='jump'?early.lastJump:early.lastFlip,1,'edge appears before the wire target');
+  const queued={...control,receivedSeq:1,queued:[{seq:1,targetTick:108,input}],
+    [kind]:{seen:1,processed:0,pending:[{id:1,targetTick:108}]}};
+  prediction.snapshot(world,'p',100,queued,0,1,10);
+  prediction.renderWorld(10,112,111,1);
+  const replay=Reflect.get(prediction,'cache') as {simulation:World};
+  const actual=replay.simulation.entities[0],expected=structuredClone(world);
+  for(let tick=101;tick<=112;tick++)step(expected,new Map([['p',input]]),.05);
+  const reference=expected.entities[0];
+  assert.equal(actual.lastJump,reference.lastJump);assert.equal(actual.lastFlip,reference.lastFlip);
+  assert.ok(Math.abs(actual.y-reference.y)<1e-7,'the edge counter does not fall back and fire again');
+  assert.ok(Math.abs(actual.air-reference.air)<1e-7,'repeated heartbeats do not spend air twice');
+});
+
+test('a wire edge cannot precede the locally recorded press',()=>{
+  const {world,control}=setup(),prediction=new TickPrediction();
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  prediction.input({seq:1,targetTick:103,controlRevision:0,actionSeq:0,input:{...NEUTRAL,jump:1}},106);
+  const before=prediction.renderWorld(0,105,104,1)!.entities[0];
+  const after=prediction.renderWorld(50,106,105,1)!.entities[0];
+  assert.equal(before.lastJump,0);assert.equal(after.lastJump,1);
+});
+
+for(const status of ['expired','superseded'] as const)test(`a previously ${status} acknowledged edge cannot reappear from an older control snapshot`,()=>{
+  const {world,control}=setup(),prediction=new TickPrediction(),input={...NEUTRAL,jump:1};
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  prediction.input({seq:1,targetTick:108,controlRevision:0,actionSeq:0,input},101);
+  const queued={...control,receivedSeq:1,queued:[{seq:1,targetTick:108,input}],
+    jump:{seen:1,processed:0,pending:[{id:1,targetTick:108}]}};
+  prediction.snapshot(world,'p',100,queued,0,1,10);
+  prediction.edgeOutcome('jump',1,status,108);
+  const shown=prediction.renderWorld(10,109,108,1)!.entities[0];
+  assert.equal(shown.lastJump,0);
+});
+
+for(const fence of ['action','revision','relocation','identity'] as const)test(`the ${fence} fence does not replay an unaccepted early input`,()=>{
+  const {world,control}=setup(),prediction=new TickPrediction();
+  prediction.snapshot(world,'p',100,control,0,1,0);
+  prediction.input({seq:1,targetTick:108,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1,jump:1}},101);
+  const next=structuredClone(world);
+  if(fence==='identity'){next.entities[0].id='replacement';next.players[0].entityId='replacement';}
+  const revised={...control,revision:fence==='revision'?1:0,actionSeq:fence==='action'?1:0,
+    edgeFloorRevision:fence==='revision'?1:0};
+  prediction.snapshot(next,'p',100,revised,fence==='relocation'?1:0,1,10);
+  const shown=prediction.renderWorld(10,102,101,1)!.entities[0];
+  assert.equal(shown.speed,0);assert.equal(shown.lastJump,0);
 });
 
 for(const rejectBeforeRender of [false,true])test(`a future release stays effective when an older level is rejected ${rejectBeforeRender?'before':'after'} rendering`,()=>{
@@ -77,7 +167,7 @@ for(const rejectBeforeRender of [false,true])test(`a future release stays effect
   control.held={...NEUTRAL,throttle:1};control.heldUntilTick=1000;
   prediction.snapshot(world,'p',34,control,0,2,0);
   prediction.input({seq:32,targetTick:40,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1}});
-  prediction.input({seq:33,targetTick:45,controlRevision:0,actionSeq:0,input:{...NEUTRAL}});
+  prediction.input({seq:33,targetTick:45,controlRevision:0,actionSeq:0,input:{...NEUTRAL}},41);
   prediction.snapshot(world,'p',40,control,0,2,100);
   if(rejectBeforeRender)prediction.reject(32,'late');
   const released=prediction.renderWorld(100,42,41,.5)!.entities[0];
@@ -94,12 +184,12 @@ for(const rejectBeforeRender of [false,true])test(`a future release stays effect
 test('a late rejection before its snapshot keeps the latest level until it expires',()=>{
   const {world,control}=setup(),prediction=new TickPrediction();
   prediction.snapshot(world,'p',34,control,0,1,0);
-  prediction.input({seq:32,targetTick:40,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1,jump:1}});
+  prediction.input({seq:32,targetTick:40,controlRevision:0,actionSeq:0,input:{...NEUTRAL,throttle:1,jump:1}},35);
   prediction.reject(32,'late');
   const moving=prediction.renderWorld(0,36,35,1)!.entities[0];
   assert.ok(moving.speed>0,'late rejection keeps the held level visible');
   assert.equal(moving.y,0,'the rejected level cannot invent a jump');
-  prediction.input({seq:33,targetTick:42,controlRevision:0,actionSeq:0,input:{...NEUTRAL,jump:1}});
+  prediction.input({seq:33,targetTick:42,controlRevision:0,actionSeq:0,input:{...NEUTRAL,jump:1}},41);
   prediction.reject(33,'late');
   prediction.snapshot(world,'p',40,{...control,receivedSeq:33},0,1,100);
   const released=prediction.renderWorld(100,42,41,1)!.entities[0];

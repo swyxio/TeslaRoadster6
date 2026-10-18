@@ -97,6 +97,8 @@ function correctionClear(from:Entity,to:Entity):boolean {
 
 type Offset={x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 type RescheduledEdge={kind:'jump'|'flip';id:number;targetTick:number;actionSeq:number;controlRevision:number};
+type LocalCommand=InputCommand&{localTick:number};
+type LocalEdge={kind:'jump'|'flip';id:number;localTick:number;actionSeq:number;controlRevision:number};
 type Segment={target:number;previous:Entity;next:Entity;peersBefore:Map<string,Entity>;peersAfter:Map<string,Entity>;unsafePeers:Set<string>};
 type PeerObservation={tick:number;kind:Entity['kind'];driver:string|null;supportId:Entity['supportId'];health:number;speed:number};
 
@@ -143,9 +145,9 @@ export class TickPrediction {
   private poseRevision=0;
   private substeps=1;
   private snapshotAt=0;
-  private pending:InputCommand[]=[];
-  private levelBridge=false;
-  private rejectedLevel:InputCommand|null=null;
+  private pending:LocalCommand[]=[];
+  private rejectedLevel:LocalCommand|null=null;
+  private localEdges:LocalEdge[]=[];
   private suppressed={jump:new Set<number>(),flip:new Set<number>()};
   private rescheduled:RescheduledEdge[]=[];
   private peerObservations=new Map<string,PeerObservation>();
@@ -169,7 +171,7 @@ export class TickPrediction {
 
   reset():void {
     this.world=null;this.playerId='';this.tick=0;this.control=null;this.substeps=1;this.snapshotAt=0;
-    this.pending=[];this.levelBridge=false;this.rejectedLevel=null;this.suppressed={jump:new Set(),flip:new Set()};this.rescheduled=[];this.peerObservations.clear();this.peerInputs.clear();this.poseRevision=0;this.overflow=false;this.unsafeReplay=false;this.snap=false;this.cameraSnap=false;this.invalidated=true;
+    this.pending=[];this.rejectedLevel=null;this.localEdges=[];this.suppressed={jump:new Set(),flip:new Set()};this.rescheduled=[];this.peerObservations.clear();this.peerInputs.clear();this.poseRevision=0;this.overflow=false;this.unsafeReplay=false;this.snap=false;this.cameraSnap=false;this.invalidated=true;
     this.segment=null;this.cache=null;this.rebase=false;this.presented=null;this.presentedWorld=null;this.presentedAt=0;this.presentedTick=null;this.presentationHeld=false;this.peerOffsets.clear();this.peerRebase=false;
     this.offset={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};
   }
@@ -190,13 +192,22 @@ export class TickPrediction {
     // A control revision invalidates old queued input. It may also represent
     // an autopilot change, so it is not by itself proof of a teleport.
     if(revisionChanged)this.invalidated=true;
-    if(revisionChanged||actionChanged||identityChanged||relocated){this.levelBridge=false;this.rejectedLevel=null;}
-    this.pending=this.pending.filter(command=>command.seq>control.receivedSeq&&
+    if(revisionChanged||actionChanged||identityChanged||relocated)this.rejectedLevel=null;
+    if(identityChanged||relocated){this.pending=[];this.localEdges=[];this.rescheduled=[];}
+    const queuedThrough=Math.max(0,...control.queued.map(slot=>slot.seq));
+    this.pending=this.pending.filter(command=>command.seq>control.appliedSeq&&
+      (command.seq>control.receivedSeq||command.seq<=queuedThrough)&&
       command.actionSeq>=control.actionSeq&&command.controlRevision>=control.edgeFloorRevision);
-    if(this.rejectedLevel&&(control.appliedSeq>=this.rejectedLevel.seq||tick>=this.rejectedLevel.targetTick+HOLD_TICKS))this.rejectedLevel=null;
-    const sameGeneration=(command:InputCommand)=>command.controlRevision===control.revision&&command.actionSeq===control.actionSeq;
-    if(this.pending.some(command=>sameGeneration(command)&&command.targetTick<=tick&&tick-command.targetTick<HOLD_TICKS))this.levelBridge=true;
-    if(!this.pending.some(sameGeneration)&&!control.queued.length&&!this.rejectedLevel)this.levelBridge=false;
+    this.localEdges=this.localEdges.filter(edge=>{
+      const valid=edge.actionSeq>=control.actionSeq&&edge.controlRevision>=control.edgeFloorRevision&&
+        newer(edge.id,control[edge.kind].processed);
+      const accepted=control[edge.kind].pending.some(item=>item.id===edge.id)||
+        this.rescheduled.some(item=>item.kind===edge.kind&&item.id===edge.id);
+      const fenced=edge.actionSeq===control.actionSeq&&edge.controlRevision!==control.revision&&!accepted;
+      if(valid&&fenced)this.suppressed[edge.kind].add(edge.id);
+      return valid&&!fenced;
+    });
+    if(this.rejectedLevel&&control.appliedSeq>=this.rejectedLevel.seq)this.rejectedLevel=null;
     for(const kind of ['jump','flip'] as const)for(const id of this.suppressed[kind]){
       const delta=(control[kind].seen-id+2**31)%2**31;
       if(delta<2**30)this.suppressed[kind].delete(id);
@@ -216,11 +227,18 @@ export class TickPrediction {
     this.segment=null;this.cache=null;this.rebase=!!this.presented&&!identityChanged&&!relocated;this.peerRebase=true;
   }
 
-  input(command:InputCommand):void {
+  input(command:InputCommand,localTick=command.targetTick):void {
     if(!this.control||command.controlRevision<this.control.edgeFloorRevision||
-      command.actionSeq<this.control.actionSeq||this.overflow)return;
-    this.pending.push({...command,input:{...command.input}});
-    if(this.pending.length>MAX_HISTORY){this.pending=[];this.levelBridge=false;this.rejectedLevel=null;this.segment=null;this.overflow=true;return;}
+      command.actionSeq<this.control.actionSeq||this.overflow||!Number.isSafeInteger(localTick))return;
+    this.pending.push({...command,input:{...command.input},localTick});
+    for(const kind of ['jump','flip'] as const){
+      const id=command.input[kind],last=[...this.localEdges].reverse().find(edge=>edge.kind===kind);
+      if(!this.suppressed[kind].has(id)&&newer(id,last?.id??this.control[kind].seen)){
+        this.localEdges.push({kind,id,localTick:Math.max(localTick,(last?.localTick??localTick-1)+1),
+          actionSeq:command.actionSeq,controlRevision:command.controlRevision});
+      }
+    }
+    if(this.pending.length>MAX_HISTORY||this.localEdges.length>MAX_HISTORY){this.pending=[];this.localEdges=[];this.rejectedLevel=null;this.segment=null;this.overflow=true;return;}
     this.invalidated=true;
   }
 
@@ -230,15 +248,18 @@ export class TickPrediction {
     // A late level is still the driver's latest intent until superseded or
     // its normal hold expires. Keep only its continuous fields for replay.
     if(reason==='late'&&command.controlRevision===this.control.revision&&command.actionSeq===this.control.actionSeq&&
-      this.tick<command.targetTick+HOLD_TICKS){
-      this.levelBridge=true;
+      this.tick<command.localTick+HOLD_TICKS){
       if(!this.rejectedLevel||command.seq>this.rejectedLevel.seq)this.rejectedLevel=command;
     }else if(reason==='revision'||reason==='action'){
-      this.levelBridge=false;this.rejectedLevel=null;
+      this.rejectedLevel=null;
     }
     for(const kind of ['jump','flip'] as const){
       const id=command.input[kind];
-      if(id!==this.control[kind].seen&&!this.pending.some(item=>item.seq<seq&&item.input[kind]===id))this.suppressed[kind].add(id);
+      if(id!==this.control[kind].seen&&!this.pending.some(item=>item.seq<seq&&item.input[kind]===id)){
+        this.suppressed[kind].add(id);
+        if(!this.rescheduled.some(edge=>edge.kind===kind&&edge.id===id))
+          this.localEdges=this.localEdges.filter(edge=>edge.kind!==kind||edge.id!==id);
+      }
     }
     this.pending=this.pending.filter(item=>item.seq!==seq);this.cache=null;this.invalidated=true;
   }
@@ -252,8 +273,9 @@ export class TickPrediction {
       this.rescheduled.push({kind,id,targetTick,actionSeq:command?.actionSeq??this.control.actionSeq,
         controlRevision:command?.controlRevision??this.control.revision});
     }else if(status==='expired'||status==='superseded'){
-      if(newer(id,this.control[kind].seen))this.suppressed[kind].add(id);
+      if(newer(id,this.control[kind].processed))this.suppressed[kind].add(id);
       this.rescheduled=this.rescheduled.filter(edge=>edge.kind!==kind||edge.id!==id);
+      this.localEdges=this.localEdges.filter(edge=>edge.kind!==kind||edge.id!==id);
     }
     this.cache=null;this.invalidated=true;
   }
@@ -419,8 +441,7 @@ export class TickPrediction {
     if(!world||!control||!car||!player||!Number.isSafeInteger(target)||target<=this.tick||target>this.tick+12){this.cache=null;return;}
     const cached=this.cache;
     const reusable=cached&&target>cached.target&&this.pending.length>=cached.pendingCount&&
-      (!this.levelBridge||this.pending.length===cached.pendingCount)&&
-      this.pending.slice(cached.pendingCount).every(command=>command.targetTick>cached.target);
+      this.pending.slice(cached.pendingCount).every(command=>command.localTick>cached.target&&command.targetTick>cached.target);
     let simulation:World,scheduler:ScheduledInput,previous:Entity,next:Entity,start:number,commands:InputCommand[],unsafePeers:Set<string>;
     if(reusable){
       simulation=cached.simulation;scheduler=ScheduledInput.fromSnapshot(cached.scheduler.snapshot(),now);
@@ -440,25 +461,36 @@ export class TickPrediction {
       for(const kind of ['jump','flip'] as const)if(this.suppressed[kind].has(input[kind]))input[kind]=control[kind].seen;
       scheduler.receive({...command,input},this.tick,now);
     }
-    // A late level can be rejected before the next heartbeat or snapshot.
-    // Bridge the newest known level, including an accepted queued release;
-    // jump/flip still follow the scheduler and explicit server outcomes.
-    const pendingLevel=[...this.pending].reverse().find(command=>command.seq>control.receivedSeq&&
-      command.controlRevision===control.revision&&command.actionSeq===control.actionSeq);
-    const levels=[this.rejectedLevel,...control.queued,pendingLevel].filter(level=>level!=null);
-    const localLevel=this.levelBridge?levels.reduce<typeof levels[number]|undefined>(
-      (latest,level)=>!latest||level.seq>latest.seq?level:latest,undefined):undefined;
+    // Input is sent at the wire clock's target, but shown from the tick when
+    // the driver acted. Keep accepted queued commands until application so an
+    // acknowledgement cannot briefly erase an early press or release.
+    const levels=[...(this.rejectedLevel?[this.rejectedLevel]:[]),...this.pending]
+      .filter(command=>command.controlRevision===control.revision&&command.actionSeq===control.actionSeq);
     let peersBefore=new Map<string,Entity>(),peersAfter=new Map<string,Entity>();
     for(let t=start;t<=target;t++){
       const input:Input=scheduler.advance(t,now).input;
-      if(localLevel&&t<localLevel.targetTick+HOLD_TICKS){
-        const level=localLevel.input;
+      const localLevel=levels.reduce<LocalCommand|undefined>((latest,level)=>
+        level.localTick<=t&&(!latest||level.seq>latest.seq)?level:latest,undefined);
+      if(localLevel){
+        const level=t<localLevel.localTick+HOLD_TICKS?localLevel.input:NEUTRAL;
         Object.assign(input,{throttle:level.throttle,steer:level.steer,brake:level.brake,boost:level.boost,
           hover:level.hover,roll:level.roll,cockpit:level.cockpit});
       }
+      const current=driven(simulation,this.playerId);
+      for(const kind of ['jump','flip'] as const){
+        const previous=current?(kind==='jump'?current.lastJump:current.lastFlip):control[kind].processed;
+        const premature=this.localEdges.some(edge=>edge.kind===kind&&edge.id===input[kind]&&t<edge.localTick);
+        const rejected=this.suppressed[kind].has(input[kind])&&
+          !this.rescheduled.some(edge=>edge.kind===kind&&edge.id===input[kind]);
+        if(premature||rejected||newer(previous,input[kind]))input[kind]=previous;
+      }
+      for(const edge of this.localEdges)if(edge.actionSeq===control.actionSeq&&edge.controlRevision>=control.edgeFloorRevision&&
+        t>=edge.localTick&&t<edge.localTick+HOLD_TICKS&&newer(edge.id,input[edge.kind]))input[edge.kind]=edge.id;
       // A late level can be rejected while its one-shot edge is accepted for
       // a later tick. Replay that explicit outcome without inventing a level.
-      for(const edge of this.rescheduled)if(t>=edge.targetTick&&newer(edge.id,input[edge.kind]))input[edge.kind]=edge.id;
+      for(const edge of this.rescheduled)if(edge.actionSeq===control.actionSeq&&edge.controlRevision>=control.edgeFloorRevision&&
+        t>=edge.targetTick&&newer(edge.id,input[edge.kind])&&
+        !this.localEdges.some(local=>local.kind===edge.kind&&local.id===edge.id&&t<local.localTick))input[edge.kind]=edge.id;
       const count=Math.max(this.substeps,simulationSubsteps(simulation,TICK));
       let relocated=false;
       const before=new Map(simulation.entities.map(entity=>[entity.id,{...entity}]));

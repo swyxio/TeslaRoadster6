@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createEmptyWorld, NEUTRAL, PROTOCOL_VERSION, step, type Entity, type World } from '../shared/game';
 import { body, contact } from '../shared/physics';
-import { ScheduledInput } from '../shared/tick-input';
+import { ScheduledInput, type InputCommand } from '../shared/tick-input';
 import { ovalBankSurface } from '../shared/oval-bank';
 import { Session } from '../src/session';
+import { MotionClock } from '../src/motion-clock';
 
 class Socket {
   static OPEN=1;static last:Socket;readyState=Socket.OPEN;sent:string[]=[];
@@ -33,6 +34,61 @@ function setup(lane=0){
   state(10);now=0;local.x=-300;peer.x=-290;state(14);
   return {session,world,local,peer,state,setTime:(value:number)=>{now=value;}};
 }
+
+test('bunched delayed controls reach the room and start local motion promptly',()=>{
+  let now=0,tick=0,read=0,lastDown=0,firstMoved:number|undefined,start=0,speedBeforeRelease=0,firstSlowed:number|undefined;
+  const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:0,poseRevision:0});
+  const world=createEmptyWorld(),player=addPlayer(world,'p','Player');
+  const car=world.entities.find(entity=>entity.id===player.entityId)!;
+  world.entities=[car];world.pickups=[];
+  Object.assign(car,{x:-300,z:-2050,y:0,yaw:-Math.PI/2,speed:0,vx:0,vz:0,supportId:'ground'});
+  const scheduler=new ScheduledInput(NEUTRAL);
+  const state=()=>({type:'state',world:structuredClone(world),roomEpoch:'room',tick,control:scheduler.snapshot(),poseRevision:0,substeps:1});
+  socket.message(state());
+  const up:{at:number;command:InputCommand}[]=[],down:{at:number;message:unknown}[]=[];
+  let rejected=0;
+  for(now=10;now<=5000;now+=10){
+    for(const arrival of up.filter(item=>item.at<=now)){
+      const result=scheduler.receive(arrival.command,tick,now);
+      if(result.rejection){
+        if(now>=2000)rejected++;
+        down.push({at:now+80,message:{type:'inputRejected',seq:arrival.command.seq,reason:result.rejection}});
+      }
+    }
+    for(let i=up.length-1;i>=0;i--)if(up[i].at<=now)up.splice(i,1);
+    if(now%50===0){
+      tick++;
+      const input=scheduler.advance(tick,now).input;
+      step(world,new Map([['p',input]]),.05);
+      if(tick%2===0){
+        // A delayed snapshot holds its successors so they arrive in a burst.
+        const delay=(tick/2)%3===0?200:60;
+        lastDown=Math.max(lastDown,now+delay);
+        down.push({at:lastDown,message:state()});
+      }
+    }
+    for(const item of down.filter(item=>item.at<=now))socket.message(item.message);
+    for(let i=down.length-1;i>=0;i--)if(down[i].at<=now)down.splice(i,1);
+    session.tick(.01,{...NEUTRAL,throttle:now>=2000&&now<4000?1:0});
+    for(;read<socket.sent.length;read++){
+      const sent=JSON.parse(socket.sent[read]);
+      if(sent.type==='input')up.push({at:now+80,command:sent});
+    }
+    if(now%20===0){
+      const shown=session.renderWorld().entities.find(entity=>entity.driver==='p')!;
+      if(now===1980)start=shown.x;
+      if(now>=2000&&firstMoved===undefined&&Math.abs(shown.x-start)>.001)firstMoved=now;
+      if(now===3980)speedBeforeRelease=shown.speed;
+      if(now>=4000&&firstSlowed===undefined&&shown.speed<speedBeforeRelease)firstSlowed=now;
+    }
+  }
+  assert.ok(firstMoved!==undefined&&firstMoved<=2060,`visible response at ${firstMoved} ms`);
+  assert.ok(firstSlowed!==undefined&&firstSlowed<=4060,`visible release at ${firstSlowed} ms`);
+  assert.ok(car.x-start>10,'the authoritative car actually drives through the delayed relay');
+  assert.equal(rejected,0,'bunched snapshots do not turn presentation slew into late wire targets');
+  session.disconnect();
+});
 for(const lane of [0,3.5])test(`Session keeps a 50 m/s ${lane?'adjacent-lane':'convoy'} pair smooth and separate`,()=>{
   const {session,local,peer,state,setTime}=setup(lane),authority=[] as number[];
   let last: {local:Entity;peer:Entity}|null=null,start:number|undefined;
@@ -261,6 +317,38 @@ test('head-on contact reconciles against authoritative shared physics',()=>{
   assert.ok(maxStep<1,`maximum visual step ${maxStep} m`);
   assert.equal(snaps,0,'contact does not repeatedly snap');
   assert.ok(Math.hypot(previous!.x-local.x,previous!.z-local.z)<12,'display returns near confirmed authority');
+  session.disconnect();
+});
+
+test('a distant oncoming car transitions onto the contact timeline before impact',()=>{
+  let now=-200;const session=new Session(()=>now);session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64,roomEpoch:'room',tick:10,poseRevision:0});
+  const world=createEmptyWorld();addPlayer(world,'p','Player');addPlayer(world,'q','Other');
+  const {local,peer}=pair(world);world.entities=[local,peer];world.pickups=[];
+  Object.assign(local,{x:-500,z:-2050,y:0,yaw:-Math.PI/2,speed:50,vx:50,vz:0,supportId:'ground'});
+  Object.assign(peer,{x:-280,z:-2050,y:0,yaw:Math.PI/2,speed:50,vx:-50,vz:0,supportId:'ground'});
+  const input={...NEUTRAL,throttle:1},control=new ScheduledInput(input).snapshot();control.heldUntilTick=1000;
+  const packet=(n:number)=>{
+    const sent=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
+    control.receivedSeq=sent.at(-1)?.seq??0;
+    return {type:'state',world:structuredClone(world),roomEpoch:'room',tick:n,control:structuredClone(control),poseRevision:0,substeps:5};
+  };
+  const drive=new Map([['p',input],['q',input]]);
+  socket.message(packet(10));now=0;for(let i=0;i<4;i++)step(world,drive,.05,{substeps:5});socket.message(packet(14));
+  (Reflect.get(session,'clock') as MotionClock).observeTurnaround(300);
+  const queue:{when:number;packet:unknown}[]=[];let previous:Entity|undefined,longest=0,consecutive=0,depth=0;
+  for(let frame=0;frame<=480;frame++){
+    now=frame*1000/120;if(frame&&frame%6===0)step(world,drive,.05,{substeps:5});
+    if(frame&&frame%12===0)queue.push({when:now+(frame%36===0?200:75),packet:packet(14+frame/6)});
+    while(queue.length&&queue[0].when<=now+1e-6)socket.message(queue.shift()!.packet);
+    session.tick(1/120,input);const shown=pair(session.renderWorld()),hit=contact(body(shown.local),body(shown.peer));
+    consecutive=hit?consecutive+1:0;longest=Math.max(longest,consecutive);depth=Math.max(depth,hit?.depth??0);
+    if(previous)assert.ok(Math.hypot(shown.local.x-previous.x,shown.local.y-previous.y,shown.local.z-previous.z)<1,`frame ${frame}`);
+    previous=shown.local;
+  }
+  assert.ok(local.health<100,'authority registers the approaching impact');
+  assert.ok(longest<=3,`displayed overlap lasted ${longest} consecutive frames`);
+  assert.ok(depth<.05,`displayed penetration reached ${depth} m`);
   session.disconnect();
 });
 

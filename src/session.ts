@@ -147,6 +147,11 @@ export class Session {
           this.droppedInputEdges+=queued-this.edgeQueue.length;
           if(message.control.revision!==this.controlRevision){this.controlRevision=message.control.revision;this.lastTargetTick=0;this.lastSentInput=null;}
           this.world = message.world;this.snapshotVersion++; this.status = 'online'; this.lastState = now; clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
+          // This is also the radius used for peer physics in local replay.
+          // Keep one fast timeline when a body may enter that contact region.
+          const controlled=this.world.entities.find(entity=>entity.driver===this.id);
+          this.clock.prioritizeContacts(!controlled||this.world.entities.some(entity=>entity.id!==controlled.id&&
+            Math.hypot(entity.x-controlled.x,entity.z-controlled.z)<160));
           if(this.walletStatus==='syncing'&&this.snapshotVersion>this.walletSnapshot){
             this.walletStatus='ready';clearTimeout(this.walletTimeout);this.walletTimeout=undefined;
             // Discard presses from before/during recovery; start at the server's
@@ -397,7 +402,7 @@ export class Session {
     if(!this.send({type:'input',...command,roomEpoch:this.roomEpoch}))return false;
     this.inputSeq=seq;this.lastTargetTick=targetTick;this.lastSentInput={...input};this.lastSentAt=now;
     this.sentAt.set(seq,now);if(this.sentAt.size>64)this.sentAt.delete(this.sentAt.keys().next().value!);
-    this.prediction.input(command);return true;
+    this.prediction.input(command,this.clock.target(now)??targetTick);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
   disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.rewardId=0;this.rewards=[];this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }

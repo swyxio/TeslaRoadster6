@@ -3,14 +3,14 @@
 export class MotionClock {
   private observations:{tick:number;at:number}[]=[];
   private turnaround:number[]=[];
-  private presentedTick:number|null=null;
-  private presentedAt=0;
-  private presentedRate=1/50;
+  private wire={tick:null as number|null,at:0,rate:1/50};
+  private visual={tick:null as number|null,at:0,rate:1/50};
+  private contactPriority=false;
   private remoteTick:number|null=null;
   private remoteAt=0;
   private remoteRate=1/50;
 
-  reset():void {this.observations=[];this.turnaround=[];this.presentedTick=null;this.presentedAt=0;this.presentedRate=1/50;this.remoteTick=null;this.remoteAt=0;this.remoteRate=1/50;}
+  reset():void {this.observations=[];this.turnaround=[];this.wire={tick:null,at:0,rate:1/50};this.visual={tick:null,at:0,rate:1/50};this.contactPriority=false;this.remoteTick=null;this.remoteAt=0;this.remoteRate=1/50;}
 
   observe(tick:number,at:number):boolean {
     if(!Number.isSafeInteger(tick)||tick<0||!Number.isFinite(at))return false;
@@ -28,6 +28,8 @@ export class MotionClock {
     if(!Number.isFinite(ms)||ms<0)return;
     this.turnaround.push(ms);if(this.turnaround.length>20)this.turnaround.shift();
   }
+
+  prioritizeContacts(nearby:boolean):void {this.contactPriority=nearby;}
 
   stale(now:number):boolean {const last=this.observations.at(-1);return !last||now-last.at>500;}
 
@@ -53,7 +55,7 @@ export class MotionClock {
     return Math.max(2,Math.min(6,Math.ceil((high+50)/50)));
   }
 
-  private sample(now:number):{target:number;alpha:number}|null {
+  private sample(now:number,clock:{tick:number|null;at:number;rate:number},visual:boolean):{target:number;alpha:number}|null {
     const last=this.observations.at(-1),estimate=this.estimate(now);
     if(!last||estimate===null||this.stale(now))return null;
     // Steer a continuous presentation clock toward the observed clock instead
@@ -63,23 +65,24 @@ export class MotionClock {
     // sent over the wire remain bounded separately below.
     const limit=last.tick+12;
     const candidate=Math.min(limit,Math.max(last.tick,estimate+this.lead()-1));
-    if(this.presentedTick===null){this.presentedTick=candidate;this.presentedAt=now;this.presentedRate=this.rate();}
-    else if(now>this.presentedAt){
-      const elapsed=Math.min(100,now-this.presentedAt),rate=this.rate();
-      const error=candidate-this.presentedTick;
-      const desired=rate*Math.max(.5,Math.min(1.5,1+error*.3));
-      this.presentedRate+=(desired-this.presentedRate)*(1-Math.exp(-elapsed/200));
-      this.presentedTick+=this.presentedRate*elapsed;this.presentedAt=now;
+    if(clock.tick===null){clock.tick=candidate;clock.at=now;clock.rate=this.rate();}
+    else if(now>clock.at){
+      const elapsed=Math.min(100,now-clock.at),rate=this.rate();
+      const error=candidate-clock.tick;
+      const slow=visual&&!this.contactPriority,low=slow ? .98 : .5,high=slow ? 1.02 : 1.5;
+      const desired=rate*Math.max(low,Math.min(high,1+error*.3));
+      clock.rate+=(desired-clock.rate)*(1-Math.exp(-elapsed/200));
+      clock.tick+=clock.rate*elapsed;clock.at=now;
     }
-    this.presentedTick=Math.min(limit,Math.max(last.tick,this.presentedTick));
-    if(this.presentedTick>=limit)return {target:limit,alpha:1};
-    return {target:Math.floor(this.presentedTick)+1,alpha:this.presentedTick-Math.floor(this.presentedTick)};
+    clock.tick=Math.min(limit,Math.max(last.tick,clock.tick));
+    if(clock.tick>=limit)return {target:limit,alpha:1};
+    return {target:Math.floor(clock.tick)+1,alpha:clock.tick-Math.floor(clock.tick)};
   }
 
-  target(now:number):number|null {return this.sample(now)?.target??null;}
-  alpha(now:number):number|null {return this.sample(now)?.alpha??null;}
+  target(now:number):number|null {this.sample(now,this.wire,false);return this.sample(now,this.visual,true)?.target??null;}
+  alpha(now:number):number|null {return this.sample(now,this.visual,true)?.alpha??null;}
   inputTarget(now:number):number|null {
-    const last=this.observations.at(-1),sample=this.sample(now);
+    const last=this.observations.at(-1),sample=this.sample(now,this.wire,false);
     return last&&sample?Math.min(last.tick+8,sample.target):null;
   }
   remote(now:number):number|null {
