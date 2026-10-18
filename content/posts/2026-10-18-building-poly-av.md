@@ -1,6 +1,6 @@
 I’ve never made a car game, and I’m not particularly a car-game person. I just wanted to drive a rocket-powered Tesla Roadster around San Francisco, jump out of traffic, and see what happened.
 
-That idea became [Poly AV](/): an open-source Bay Area driving game where you deliver food, earn fictional cash, upgrade your car, and occasionally get chased by the police for flying it. You can play alone or share a room with friends in your browser.
+That idea became [Poly AV](/): an open-source Bay Area driving game where you deliver food, earn fictional cash, upgrade your car, and occasionally get chased by the police for flying it. You join a shared room in your browser, and can invite friends into it.
 
 ![A red Roadster waits on a San Francisco street, with a Tartine Bakery pickup marked on the dashboard.](/blog/building-poly-av/street.jpg)
 
@@ -61,7 +61,7 @@ Those tradeoffs gave the game a direction. Around them, we added cars, places an
 
 ## A small multiplayer game on Cloudflare
 
-I also wanted to see whether we could make the shared driving part work with Cloudflare and WebSockets. In solo mode, the simulation runs locally. In a multiplayer room, a Cloudflare Durable Object runs the shared simulation: players send controls over WebSockets, and the room sends the resulting world state back. That means the room, rather than each browser independently, decides where cars are and what happens when they collide or complete a delivery. Cloudflare documents the [Durable Object WebSocket model](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) behind this setup.
+I also wanted to see whether we could make the shared driving part work with Cloudflare and WebSockets. A Cloudflare Durable Object runs each room's shared simulation: players send controls over WebSockets, and the room sends the resulting world state back. That means the room, rather than each browser independently, decides where cars are and what happens when they collide or complete a delivery. Cloudflare documents the [Durable Object WebSocket model](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) behind this setup.
 
 I’ve been building this in layers with coding agents: get a drive working, try it, then add the next mechanic. After trying the controls, I asked for sharper steering and a simpler way to fly. Now a tap of E jumps and holding the same key hovers. The code and [contributor contracts](https://github.com/swyxio/TeslaRoadster6) are public under MIT, so other coding agents and contributors can change the visuals or build on the gameplay without each inventing a different simulation.
 

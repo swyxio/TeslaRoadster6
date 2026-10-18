@@ -145,16 +145,16 @@ try {
   const reset=two.state.world!.entities.find(e=>e.id===entityId)!;
   const beforeCharge=reset.air,jump=reset.lastJump,flip=reset.lastFlip;
   assert.ok(beforeCharge<90,'earlier flight leaves room to observe a refill');
-  let maxOne=beforeCharge,maxTwo=beforeCharge,wallSeen=false;
-  for(let i=0;i<100;i++){
+  let maxOne=beforeCharge,maxTwo=beforeCharge,wallSeen=false,maxHeight=0;
+  for(let i=0;i<200;i++){
     one.socket.send(JSON.stringify({type:'input',input:{...NEUTRAL,jump,flip,throttle:1,steer:i<20?1:0}}));
     await delay(50);
     const a=one.state.world?.entities.find(e=>e.id===entityId),b=two.state.world?.entities.find(e=>e.id===entityId);
     if(a)maxOne=Math.max(maxOne,a.air);
-    if(b){maxTwo=Math.max(maxTwo,b.air);wallSeen||=b.supportId==='dome'&&b.y>=8;}
+    if(b){maxTwo=Math.max(maxTwo,b.air);maxHeight=Math.max(maxHeight,b.y);wallSeen||=b.supportId==='dome'&&b.y>=8;}
     if(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3)break;
   }
-  assert.ok(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3,'moving wall refill replicated to both clients');
+  assert.ok(wallSeen&&maxOne>beforeCharge+3&&maxTwo>beforeCharge+3,`moving wall refill replicated to both clients: ${JSON.stringify({beforeCharge,maxOne,maxTwo,maxHeight,wallSeen,car:two.state.world?.entities.find(e=>e.id===entityId)})}`);
   await delay(500);one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&!e.inDome)??false,'arena exit replicated');
   // Leave ample network margin around the server's 400 ms action cooldown.

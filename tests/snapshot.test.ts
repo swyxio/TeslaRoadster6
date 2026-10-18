@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity } from '../shared/game';
 import { supportNormal } from '../shared/map';
 import { ovalBankSurface } from '../shared/oval-bank';
-import { AMBIENT_INTEREST_METERS, snapshotFor } from '../worker/snapshot';
+import { AMBIENT_INTEREST_METERS, prepareSnapshots, snapshotFor } from '../worker/snapshot';
 
 test('snapshots retain players and owned cars, while ambient traffic follows the viewer', () => {
   const world = createWorld();
@@ -42,4 +42,23 @@ test('a remote snapshot preserves the banked oval support needed to orient a car
   assert.equal(remote.supportId, 'island-oval');
   assert.equal(remote.y, surface.height);
   assert.deepEqual(supportNormal(remote.supportId, remote.x, remote.z), surface.normal);
+});
+
+test('cached snapshot serialization matches the recipient-specific world',()=>{
+  const world=createWorld();const one=addPlayer(world,'one','One');const two=addPlayer(world,'two','Two');
+  const distant=makeEntity('distant','model-3',AMBIENT_INTEREST_METERS*4,0);world.entities.push(distant);
+  const other=world.entities.find(entity=>entity.id===two.entityId)!;other.x=AMBIENT_INTEREST_METERS*3;
+  const prepare=prepareSnapshots(world);
+  for(const id of [one.id,two.id,'missing'])assert.deepEqual(JSON.parse(prepare(id)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id)})));
+});
+
+test('cached snapshots retain a distant dome player and ferry passenger',()=>{
+  const world=createWorld(),viewer=addPlayer(world,'viewer','Viewer'),visitor=addPlayer(world,'visitor','Visitor');
+  const person=world.entities.find(entity=>entity.id===visitor.entityId)!;
+  Object.assign(person,{kind:'person',x:AMBIENT_INTEREST_METERS*3,inDome:true});
+  const ferryCar=makeEntity('ferry-car','model-3',-AMBIENT_INTEREST_METERS*3,0);
+  ferryCar.supportId='ferry';world.entities.push(ferryCar);
+  const wire=JSON.parse(prepareSnapshots(world)(viewer.id));
+  assert.ok(wire.world.entities.some((entity:{id:string;inDome:boolean})=>entity.id===person.id&&entity.inDome));
+  assert.ok(wire.world.entities.some((entity:{id:string;supportId:string})=>entity.id===ferryCar.id&&entity.supportId==='ferry'));
 });
