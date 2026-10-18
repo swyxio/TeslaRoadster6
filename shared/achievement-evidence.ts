@@ -2,6 +2,7 @@ import type { AchievementId } from './achievements';
 import { LUXURY_DISCOVERY } from './luxury';
 import { RESEARCH_SITES } from './research';
 import type { DomeParticipant } from './soccer';
+import { isVehicleCollectionEvidence, type VehicleCollectionEvidence } from './vehicle-collections';
 
 /**
  * Facts captured by the authoritative room when the event occurs. These are
@@ -14,7 +15,8 @@ export type AchievementEvidence =
   | {kind:'crossing';origin:'sf'|'oakland';destination:'sf'|'oakland';crossedWater:boolean}
   | {kind:'parking';mode:'park'|'queue';finished:boolean}
   | {kind:'race';status:'entered'|'finished'|'dnf';phase:'lobby'|'countdown'|'active'|'results';rank:number|null;starterCount:number}
-  | {kind:'dome';touches:DomeParticipant['touches'];goals:DomeParticipant['goals'];won:boolean};
+  | {kind:'dome';touches:DomeParticipant['touches'];goals:DomeParticipant['goals'];won:boolean}
+  | VehicleCollectionEvidence;
 
 export type AchievementAward = {id:AchievementId;reward:number};
 const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -34,6 +36,7 @@ export function isAchievementEvidence(value:unknown):value is AchievementEvidenc
       (value.rank===null||(count(value.rank)&&value.rank!==0))&&count(value.starterCount);
     case 'dome':return record(value.touches)&&record(value.goals)&&typeof value.won==='boolean'&&
       carClasses.every(key=>typeof (value.touches as Record<string,unknown>)[key]==='boolean'&&count((value.goals as Record<string,unknown>)[key]));
+    case 'vehicle-driven':case 'npc-stolen':return isVehicleCollectionEvidence({kind:value.kind,vehicle:value.vehicle});
     default:return false;
   }
 }

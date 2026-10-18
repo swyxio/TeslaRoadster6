@@ -9,7 +9,7 @@ import { material } from './vehicles';
 /** Decorative groves and vineyards use the existing playable terrain. */
 type Plant={x:number;z:number;y:number;size:number;shade:number};
 const zones=[
-  {id:'marin',minX:-410,maxX:-120,minZ:-550,maxZ:-380,spacing:13},
+  {id:'marin',minX:-410,maxX:-120,minZ:-550,maxZ:-380,spacing:6},
   {id:'rocket-island',minX:-500,maxX:900,minZ:-2180,maxZ:-1100,spacing:27},
 ] as const;
 const vineyardPlots=[

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { requiredLevelAt } from '../shared/delivery';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { FREMONT_SPACEPORT as site } from '../shared/map';
 import { constructionFraction, constructionNoseRadius } from './starship-construction';
@@ -64,7 +65,7 @@ export function buildFremontSpaceport(scene:T.Scene) {
     c.fillStyle='#435d60';c.fillRect(54,257,916,15);
     c.fillStyle='#efb65e';c.fillRect(54,257,916*(constructionFraction(total)??0),15);
     c.fillStyle='#dce8df';c.font='29px system-ui';
-    c.fillText('Reach level 2 and find Fremont on the Bay map.',54,325);
+    c.fillText(`Reach level ${requiredLevelAt(site.entrance.x,site.entrance.z)} and find Fremont on the Bay map.`,54,325);
     c.fillText('At $1B, stop in the gold ring to board for Mars.',54,370);
     c.fillText('Open Actions → Mars mission for details.',54,415);
     boardTexture.needsUpdate=true;

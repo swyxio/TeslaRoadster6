@@ -6,6 +6,52 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A little more lift',
+    intro: 'Boosts and landings bring more of the drive to life.',
+    sections: [
+      { title: 'Feel the ride', items: [
+        'Boosting brings a responsive chase view, fresh rocket vapor and a new sound. Look for lift-off and touchdown cues as you jump and land.',
+        'The Bay warms at sunrise and sunset. Reduced-motion settings keep the trail still and the camera steady.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.31-alpha',
+    label: '0.0.31 Alpha',
+    date: '2026-10-18',
+    title: 'A playground for every car',
+    intro: 'Try the fleet freely, or collect driving and takeover awards in your regular game.',
+    sections: [
+      { title: 'Try it out', items: [
+        'Join the sandbox for unlimited cash, vehicle upgrades and map teleporting. Start a fresh practice room to try the early game. Progress in both modes is temporary.'
+      ] },
+      { title: 'Collect your favorites', items: [
+        'In a regular room, drive Tesla and Vault models and take over different street vehicles to earn new collection awards.',
+        'Saved drivers keep their completed collections; earlier drives and takeovers do not count retroactively.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.30-alpha',
+    label: '0.0.30 Alpha',
+    date: '2026-10-18',
+    title: 'The Bay opens up',
+    intro: 'Explore more neighborhoods and take deliveries across the Bay.',
+    sections: [
+      { title: 'More places to drive', items: [
+        'Unlock service areas with your current cash balance and find new fictional customers in 17 Bay towns.',
+        'Oakland traffic and navigation work around the stunt ramp and loop. Look for the new Hegenberger station signs.'
+      ] },
+      { title: 'Deliveries that keep moving', items: [
+        'Job searches run in small batches. If spending locks a destination, a replacement keeps your pickup progress.',
+        'Rooftop jobs require rockets and a Level 3 air tank. Leaving your car on foot keeps an accessible rooftop job.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.29-alpha',
+    label: '0.0.29 Alpha',
+    date: '2026-10-18',
     title: 'A little more gravity',
     intro: 'Flight takes more planning, especially in heavier vehicles.',
     sections: [

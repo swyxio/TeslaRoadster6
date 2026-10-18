@@ -18,14 +18,16 @@ The local fixture seeds the traffic cohort and pauses the room until the guest
 and recorder are ready, then resumes the normal room clock. A generated per-run
 secret protects its local status and start endpoints. The scenario opts
 out of automatically saving the disposable driver using `freshGuest`. The player uses
-Street Pilot to reach four authoritative milestones: pickup and drop-off for
-each of two deliveries. Two observed jump bursts, a landing between jumps, and
+Street Pilot to reach the first pickup and complete its drop-off. The fixture
+records the initial restaurant and customer IDs and coordinates; a comparison
+holds if they differ or are unavailable. It does not drive the next assignment,
+which may differ when the delivery catalog changes. Two observed jump bursts, a landing between jumps, and
 sustained airborne thrust with forward power follow. Keyboard presses are retried a bounded number
 of times if the room does not process them. The report requires the delivery
 milestones, two separate upward bursts and sustained flight; a keypress by
 itself does not prove a jump or delivery occurred. A respawn holds the route.
 
-The report saves four delivery legs and a flight leg from received room poses.
+The report saves two delivery legs and a flight leg from received room poses.
 Each three-dimensional path is sampled at 41 evenly spaced fractions of its own
 traveled distance, including flight altitude.
 The pair must have every leg, differ in leg length by at most the greater of
@@ -106,9 +108,12 @@ separate rows. Repeated, comparable paired runs are needed before treating a
 change as a regression or proposing a numerical budget. Existing aspirational
 targets and additional coverage remain in [performance release gates](PERFORMANCE_RELEASE_GATES.md).
 
-The earlier local M5 Pro rows below used the short drive and idle room scenario,
-not the two-delivery route. Compare new observations by rerunning both versions
-with the same current harness rather than treating these rows as matched pairs.
+The earlier local M5 Pro rows below used the short drive and idle room scenario.
+The archived paired observations used the prior two-delivery, five-leg route;
+they do not establish comparability for the current three-leg route. The earlier
+five-leg comparison for the expanded catalog remains HOLD because its later
+assignment diverged. Compare new observations by rerunning both versions with
+the same current harness rather than treating historical rows as matched pairs.
 
 The [0.0.25/0.0.28 paired video proof](performance-baselines/2026-10-18-paired-video-route/)
 confirms delivery, jump and flight coverage with closely aligned paths. Video
@@ -121,6 +126,12 @@ pair is a first observation to repeat, not a regression verdict or budget.
 
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 2026-10-18 · 0.0.30-alpha · `c691730ed04841bfda0a702e3eda93b321df680c` | One delivery and flight; CI Apple M1 virtual / paravirtual Metal | 116.6 | 0.983–1.052 | 8.333 / 16.667 | 0.922 | [Service-area boost pair](performance-baselines/2026-10-18-boost-hosted-530/); one loaded virtual runner. |
+| 2026-10-18 · 0.0.31-alpha · `530f2f707f7ad41abd9f356ac21b141ff870e53a` | Same paired one-delivery scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.925 | [Service-area boost pair](performance-baselines/2026-10-18-boost-hosted-530/); predates sandbox integration. |
+| 2026-10-18 · 0.0.29-alpha · `0b27e97cfd4bab8f1b66b286f139e0d85e3a47bb` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.926 | [Boost hosted pair](performance-baselines/2026-10-18-boost-hosted-ff2/); one loaded virtual runner. |
+| 2026-10-18 · 0.0.30-alpha · `ff2e7a34570f7fa7ab9473cc307be1ffcb0f355c` | Same paired scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.929 | [Boost hosted pair](performance-baselines/2026-10-18-boost-hosted-ff2/); differing load; predates final fixes and service areas. |
+| 2026-10-18 · 0.0.28-alpha · `009af539404082d5d5da4c3947bd013a6c2e3209` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.914 | [Boost and landing CI pair](performance-baselines/2026-10-18-boost-landing-ci/); single run, high host load. |
+| 2026-10-18 · 0.0.28-alpha · `68e62aa6c24029e22e0686744cdc860a567fc388` | Same paired scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.912 | [Boost and landing CI pair](performance-baselines/2026-10-18-boost-landing-ci/); single run, differing host load. |
 | 2026-10-18 · 0.0.25-alpha · `15b0a500bad046a95e87abd01e7c07090386d684` | Two deliveries and flight; CI Apple M1 virtual / paravirtual Metal | 66.7 | 0.983–1.052 | 8.333 / 16.667 | 0.937 | [Paired CI evidence](performance-baselines/2026-10-18-paired-ci-route/); single contended run. |
 | 2026-10-18 · 0.0.28-alpha · `5c1a7c61b6d19ca9168c2327fa889326507b9b7c` | Same paired scenario and runner | 116.7 | 0.983–1.052 | 8.333 / 16.667 | 0.934 | [Paired CI evidence](performance-baselines/2026-10-18-paired-ci-route/); single contended run. |
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |

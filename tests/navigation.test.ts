@@ -45,6 +45,34 @@ function cityPavementEdge(point:{x:number;z:number}):number{
   return edge;
 }
 
+test('Oakland delivery navigation turns before the stunt loop and ramp',()=>{
+  for(const kind of ['model-3','roadster'] as const){
+    const {world,player,car}=drivingWorld();
+    player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
+    player.delivery.order.restaurant=RESTAURANTS.findIndex(place=>place.id==='oakland-saints');
+    player.delivery.order.customer=CUSTOMERS.findIndex(place=>place.id==='customer-oakland-07');
+    player.delivery.order.stage='dropoff';
+    Object.assign(car,{kind,x:507,z:139,yaw:Math.PI,speed:0,vx:0,vz:0});
+    assert.equal(setDeliveryDestination(world,'driver'),true,`${kind}: destination planned`);
+    for(let i=0;i<6000&&car.autopilot;i++){
+      step(world,new Map(),.05);
+      assert.notEqual(car.supportId,'stunt-loop',`${kind}: does not enter the stunt loop`);
+      assert.notEqual(car.supportId,'stunt-ramp',`${kind}: does not enter the stunt ramp`);
+    }
+    assert.equal(car.navigation?.status,'arrived',`${kind}: destination reached`);
+    assert.ok(Math.hypot(car.x-487,car.z-117)<9,`${kind}: within delivery marker`);
+    assert.equal(player.delivery.completed,1,`${kind}: actual dropoff completed`);
+    assert.equal(car.health,100,`${kind}: no collision damage`);
+  }
+});
+
+test('delivery navigation does not promise a direct route through either ramp end',()=>{
+  const west=makeEntity('west','model-3',410,177);west.yaw=Math.PI/2;
+  const east=makeEntity('east','model-3',350,177);east.yaw=-Math.PI/2;
+  assert.equal(planNavigation(west,{x:360,z:177},1,DELIVERY_DESTINATION_SNAP),null);
+  assert.equal(planNavigation(east,{x:410,z:177},1,DELIVERY_DESTINATION_SNAP),null);
+});
+
 test('delivery navigation reaches western and central SF markers on the mapped streets',()=>{
   const targets=[...RESTAURANTS.filter(place=>['burma','tartine','tonys','nanking'].includes(place.id)),
     CUSTOMERS.find(place=>place.id==='coast')!];
@@ -97,7 +125,7 @@ test('map pins can snap farther than delivery destinations and point turnarounds
   assert.equal(car.autopilot,false);
 });
 
-test('map pins reach either Peninsula alternative in both directions after the level two unlock',()=>{
+test('map pins reach either Peninsula alternative in both directions after the level four unlock',()=>{
   for(const road of ALTERNATE_ROADS)for(const direction of [0,1] as const){
     const {world,player,car}=drivingWorld();
     const route=ROUTES[HIGHWAY_ROUTE_IDS[direction]];
@@ -109,7 +137,7 @@ test('map pins reach either Peninsula alternative in both directions after the l
     const target=road.points.find(point=>point.z>4500)!;
     player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
     assert.equal(setDestination(world,'driver',target),false,`${road.id}: locked at level one`);
-    player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
+    player.delivery.level=4;player.delivery.cash=LEVELS[4].cash+2_500;
     assert.equal(setDestination(world,'driver',target),true,`${road.id}: route from ${direction===0?'north':'south'}`);
     for(let i=0;i<6000&&car.autopilot;i++){
       step(world,new Map(),.05);
@@ -129,10 +157,10 @@ test('after spending lowers a level, navigation can leave a locked region but ca
   const a=route[index],b=route[(index+1)%route.length];
   Object.assign(car,{x:a.x+(b.x-a.x)*.25,z:a.z+(b.z-a.z)*.25,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z))});
   player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
-  assert.equal(requiredLevelAt(car.x,car.z),2);
+  assert.equal(requiredLevelAt(car.x,car.z),3);
   assert.equal(setDestination(world,'driver',{x:1705,z:8730}),false,'a locked destination stays locked');
   assert.equal(setDestination(world,'driver',{x:-180,z:60}),true,'the route can leave the Peninsula');
-  let previous={x:car.x,z:car.z},ceiling=2;
+  let previous={x:car.x,z:car.z},ceiling=3;
   for(const next of car.navigation!.path){
     const count=Math.max(1,Math.ceil(Math.hypot(next.x-previous.x,next.z-previous.z)/20));
     for(let i=1;i<=count;i++){
@@ -148,7 +176,7 @@ test('nearby route changes use a shared cross street in either heading',()=>{
   const main={x:-734,z:4503},alternatives=[{x:-1023,z:4553},{x:-850,z:4553}];
   for(const yaw of [0,Math.PI])for(const alternative of alternatives)for(const back of [false,true]){
     const {world,player,car}=drivingWorld(),start=back?alternative:main,target=back?main:alternative;
-    Object.assign(car,{...start,yaw});player.delivery.level=2;player.delivery.cash=LEVELS[2].cash+2_500;
+    Object.assign(car,{...start,yaw});player.delivery.level=4;player.delivery.cash=LEVELS[4].cash+2_500;
     assert.equal(setDestination(world,'driver',target),true,`${yaw}: ${JSON.stringify(start)} to ${JSON.stringify(target)}`);
     assert.ok(car.navigation!.path.some(point=>PENINSULA_CROSS_STREETS.some(street=>Math.abs(point.z-street.z)<4)),
       'the route uses a local junction');
@@ -232,7 +260,7 @@ test('mini-game entry from the dome preserves the rocket kit and resources',()=>
 
 test('both parking games join and finish at every registered local lot',()=>{
   for(const lot of PARKING_LOTS)for(const game of ['park','queue'] as const){
-    const {world,player,car}=drivingWorld();player.delivery.level=3;player.delivery.cash=LEVELS[3].cash+2_500;
+    const {world,player,car}=drivingWorld();player.delivery.level=6;player.delivery.cash=LEVELS[6].cash+2_500;
     const region=game==='park'?lot.area:lot.approach;
     Object.assign(car,{x:region.x,z:region.z,y:terrainHeight(region.x,region.z),yaw:region.yaw,supportId:'ground',speed:0});
     const before={x:car.x,z:car.z};

@@ -4,6 +4,8 @@ Checked against Tesla's own listings on 2026-10-18. The registry in `shared/stat
 
 All game coordinates, approach roads, four playable bays per lot, shop facades and surrounding scenery are compressed stylized interpretations, not surveyed replicas. They do not assert the real number of stalls, exact appearance, hours, live availability or service. Refilling compressed air is fictional. No affiliation or endorsement is implied.
 
+The Hegenberger lot sits southeast of the 2nd Street lot in the compressed Oakland grid. Navigation reaches a nearby street; drivers make the final approach into the lot. Original two-sided pylon signs mark Superchargers and fictional air refills; the four fictional stations have their own arcade-air signs.
+
 | In-game name | Listed venue | Listed address | Identity source |
 | --- | --- | --- | --- |
 | SF · 16th Street | Potrero Center · Target | 2300 16th St, San Francisco, CA 94103 | [Tesla listing](https://www.tesla.com/findus/location/supercharger/8739) |
