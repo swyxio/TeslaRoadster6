@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
 import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { newPolice, updatePolice } from '../shared/police';
-import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
+import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, rampHeight, terrainHeight } from '../shared/map';
+import { DOME } from '../shared/dome';
 
 function setup(){
   const world=createWorld(),player=addPlayer(world,'p','Driver'),car=world.entities.find(e=>e.id===player.entityId)!;
@@ -72,6 +73,54 @@ test('police do not see grounded, distant or rooftop cars; an escaped chase expi
   Object.assign(cop,{x:0,z:0});
   Object.assign(car,{x:0,z:10,y:10,supportId:null});updatePolice(world,.05);assert.equal(cop.police.targetId,'p');
   Object.assign(car,{x:0,z:200});world.time+=11;updatePolice(world,.05);assert.equal(cop.police.targetId,null);
+});
+test('police measure flight above curved landmark roofs at the current position',()=>{
+  for(const shape of ['rotunda','coit'] as const){
+    const roof=BUILDINGS.find(b=>b.style===shape)!;
+    const x=roof.x+(shape==='rotunda'?roof.w*.45:0),z=roof.z;
+    const height=buildingRoofHeight(roof,x,z);
+    assert.ok(shape==='rotunda'?height<roof.h:height>roof.h,`${shape} exercises the curved roof`);
+    const {world,player,car}=setup(),cop=makeEntity('cop','model-3',x,z);
+    cop.police=newPolice();world.entities.push(cop);
+    Object.assign(car,{x,z,y:height+2,supportId:null});
+    world.time=.05;updatePolice(world,.05);
+    assert.equal(cop.police.targetId,null,`${shape}: two meters above the roof is not detectable`);
+    assert.ok(Math.abs(player.delivery.flight.peakHeight-2)<1e-8,`${shape}: flight height uses the visible roof`);
+    car.y=height+4;world.time+=.05;updatePolice(world,.05);
+    assert.equal(cop.police.targetId,player.id,`${shape}: four meters above the roof is detectable`);
+  }
+});
+test('police do not use a landmark roof outside its footprint',()=>{
+  const roof=BUILDINGS.find(b=>b.style==='rotunda')!;
+  const x=roof.x+roof.w/2+1,z=roof.z;
+  assert.ok(!nearbyBuildings(x,z,0).some(b=>Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2));
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',x,z);
+  cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x,z,y:roof.h+2,supportId:null});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id);
+  assert.equal(player.delivery.flight.peakHeight,roof.h+2);
+});
+test('police measure exterior flight above the stadium roof without protecting it as arena interior',()=>{
+  const {world,player,car}=setup(),x=DOME.x,z=DOME.z,height=domeRoofHeight(x,z)!;
+  const cop=makeEntity('cop','model-3',x,z);cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x,z,y:height+2,supportId:null,inDome:false});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,null);
+  assert.ok(Math.abs(player.delivery.flight.peakHeight-2)<1e-8);
+  car.y=height+4;world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id,'outside flight is still detectable');
+  car.inDome=true;world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,null,'arena protection still ends a chase');
+  assert.equal(player.delivery.flight.seconds,0);
+});
+test('a roof above the car does not count as the surface beneath it',()=>{
+  const {world,player,car}=setup(),cop=makeEntity('cop','model-3',DOME.x,DOME.z);
+  cop.police=newPolice();world.entities.push(cop);
+  Object.assign(car,{x:DOME.x,z:DOME.z,y:10,supportId:null,inDome:false});
+  world.time=.05;updatePolice(world,.05);
+  assert.equal(cop.police.targetId,player.id);
+  assert.equal(player.delivery.flight.peakHeight,10);
 });
 test('a chasing police car drives toward a target on an unobstructed street',()=>{
   const {world,car}=setup(),cop=makeEntity('police-test','model-3',0,60);cop.police=newPolice();cop.npc=true;cop.autopilot=true;world.entities.push(cop);
