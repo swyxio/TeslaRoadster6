@@ -40,16 +40,13 @@ export function awardDomeMatchAchievements(player:Player,participant:DomePartici
 }
 
 /** Mini-game achievements use only the simulation's completed results. */
-export function updateGameAchievements(world:World):void {
+export function updateGameAchievements(world:World,player:Player):void {
   for(const round of world.parking.rounds)for(const entrant of round.entrants){
-    if(entrant.finishedAt===null)continue;
-    const player=world.players.find(p=>p.id===entrant.playerId);
-    if(player)unlock(player.achievements,round.mode==='park'?'park-it':'queue-cutter');
+    if(entrant.playerId===player.id&&entrant.finishedAt!==null)
+      unlock(player.achievements,round.mode==='park'?'park-it':'queue-cutter');
   }
   for(const round of world.races.rounds)for(const entrant of round.entrants){
-    if(entrant.status!=='finished')continue;
-    const player=world.players.find(p=>p.id===entrant.playerId);
-    if(!player)continue;
+    if(entrant.playerId!==player.id||entrant.status!=='finished')continue;
     unlock(player.achievements,'race-finisher');
     if(round.phase==='results'&&entrant.rank===1&&round.entrants.filter(other=>other.status==='finished').length>=2)
       unlock(player.achievements,'race-winner');

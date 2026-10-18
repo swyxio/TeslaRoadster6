@@ -6,16 +6,23 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
-    title: 'Take the scenic ride',
-    intro: 'Settle in for smoother self-driving and keep your little victories.',
+    title: 'Keep the wheels moving',
+    intro: 'A performance pass for fast turns, flying deliveries and shared drives.',
     sections: [
-      { title: 'Cruise to your delivery', items: [
-        'Double-tap Shift or tap Self-drive to delivery to head toward the next pickup or drop-off. Use the controls any time to take over.',
-        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.'
+      { title: 'More consistent motion', items: [
+        'Your car keeps moving between network updates, with more immediate steering and flight controls.',
+        'The chase camera stays with you through ordinary takeoffs and landings.',
+        'Nearby cars share the driving timeline so bumping and close passes remain part of the game.'
       ] },
-      { title: 'Keep your victories', items: [
-        'Scores show delivery progress and current or recent mini-game results for this drive.',
-        'Earn new parking and racing awards. Confirmed awards stay with your saved driver across drives and devices.'
+      { title: 'Less work around you', items: [
+        'Fewer ambient cars share the roads. Police remain, and different vehicle models appear across rooms.',
+        'Your car keeps its detail; distant cars use simpler models, and rocket hardware takes fewer drawing calls.',
+        'The Bay keeps its geography and landmarks, with more efficient scenery rendering. The 3D view uses a lower resolution on high-density displays while the interface stays sharp.',
+        'Rooms now default to eight players. If one is full, retry or create another named room.'
+      ] },
+      { title: 'Still in alpha', items: [
+        'Long network interruptions can still cause a visible position correction when the connection recovers.',
+        'The smaller room limit is a precaution while testing continues; it is not a performance guarantee for every device or connection.'
       ] }
     ]
   },
@@ -42,7 +49,7 @@ export const RELEASES = [
     intro: 'Less work per simulation tick and more consistent input in shared rooms.',
     sections: [
       { title: 'Drive together', items: [
-        'At this release, the game always joined a shared room. If a room was full or unavailable, players could retry or choose another room.',
+        'The game now always joins a shared room. If a room is full or unavailable, retry or choose another room.',
         'Driving controls are sent more consistently, and traffic, police and pickup checks do less repeated work.',
         'The changelog stays on its own page instead of downloading with the game.'
       ] }
@@ -114,7 +121,7 @@ export const RELEASES = [
         'Visit the fictional Tesla × SpaceX gigafactory and Starship/Super Heavy launch complex in Fremont, unlocked with the South Bay at level 2.',
         'Contribute earned session cash to your room’s permanent $1 billion Mars fund. Other drivers in the same room can contribute too; every dollar counts once.',
         'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
-        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. At this release, room funds persisted while personal cash, cars and achievements were session-only.',
+        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.',
         'Play always joins a shared room; if the Bay is full, retry or name another room.'
       ] }
     ]

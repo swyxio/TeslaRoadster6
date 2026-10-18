@@ -1,0 +1,223 @@
+{
+  "version": 32,
+  "players": 1,
+  "mode": "turn",
+  "staged": "Roadster x=-300 z=1500, ground, speed 56 m/s, heading +z; full throttle after join",
+  "inputSchedule": "schedule target ticks 3–4 after each snapshot; steer 0.35 on ticks 50–89, 0 otherwise",
+  "fixtureWallSeconds": 10.006,
+  "simulatedSeconds": 9.05,
+  "simToWall": 0.904,
+  "ticks": 181,
+  "tickRate": 18.09,
+  "substeps": {
+    "6": 181
+  },
+  "entitiesMin": 68,
+  "entitiesMax": 68,
+  "driverSpeedMin": 56,
+  "driverSpeedMax": 56,
+  "maxOtherSpeed": 27.81,
+  "ticksWithOtherAbove50": 0,
+  "elapsedCallbackWall": {
+    "all": {
+      "count": 181,
+      "p50Ms": 3,
+      "p95Ms": 6,
+      "maxMs": 11
+    },
+    "simulationOnly": {
+      "count": 91,
+      "p50Ms": 3,
+      "p95Ms": 6,
+      "maxMs": 11
+    },
+    "snapshot": {
+      "count": 90,
+      "p50Ms": 3,
+      "p95Ms": 6,
+      "maxMs": 10
+    }
+  },
+  "finalObserved": {
+    "x": -2.6,
+    "z": 1991.14,
+    "speed": 56,
+    "support": "ground"
+  },
+  "appliedSeq": 216,
+  "inputRejections": 0,
+  "trajectory": [
+    {
+      "tick": 20,
+      "x": -300,
+      "z": 1555.4514,
+      "speed": 56,
+      "yaw": 3.14159,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 40,
+      "x": -300,
+      "z": 1611.4514,
+      "speed": 56,
+      "yaw": 3.14159,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 48,
+      "x": -300,
+      "z": 1633.8514,
+      "speed": 56,
+      "yaw": 3.14159,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 50,
+      "x": -299.9708,
+      "z": 1639.4512,
+      "speed": 56,
+      "yaw": 3.15945,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 52,
+      "x": -299.7626,
+      "z": 1645.047,
+      "speed": 56,
+      "yaw": 3.19516,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 60,
+      "x": -296.9392,
+      "z": 1667.2492,
+      "speed": 56,
+      "yaw": 3.33802,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 70,
+      "x": -289.0181,
+      "z": 1694.0666,
+      "speed": 56,
+      "yaw": 3.51659,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 80,
+      "x": -276.4596,
+      "z": 1719.0507,
+      "speed": 56,
+      "yaw": 3.69516,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 88,
+      "x": -263.3376,
+      "z": 1737.1813,
+      "speed": 56,
+      "yaw": 3.83802,
+      "heldSteer": 0.35,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 90,
+      "x": -259.6631,
+      "z": 1741.4068,
+      "speed": 56,
+      "yaw": 3.87374,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 92,
+      "x": -255.84,
+      "z": 1745.4983,
+      "speed": 56,
+      "yaw": 3.90945,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 100,
+      "x": -239.8424,
+      "z": 1761.1766,
+      "speed": 56,
+      "yaw": 3.94248,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 120,
+      "x": -199.6326,
+      "z": 1800.1531,
+      "speed": 56,
+      "yaw": 3.94257,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 140,
+      "x": -159.4225,
+      "z": 1839.1294,
+      "speed": 56,
+      "yaw": 3.94257,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 160,
+      "x": -119.2124,
+      "z": 1878.1056,
+      "speed": 56,
+      "yaw": 3.94257,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 180,
+      "x": -79.0023,
+      "z": 1917.0819,
+      "speed": 56,
+      "yaw": 3.94257,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    },
+    {
+      "tick": 200,
+      "x": -38.7922,
+      "z": 1956.0582,
+      "speed": 56,
+      "yaw": 3.94257,
+      "heldSteer": 0,
+      "heldThrottle": 1
+    }
+  ],
+  "workerdProcessCpu": {
+    "pid": 68282,
+    "seconds": 0.83,
+    "observationWallSeconds": 10.262
+  },
+  "host": {
+    "logicalCpus": 18,
+    "loadBefore": [
+      13.57421875,
+      14.9716796875,
+      18.791015625
+    ],
+    "loadAfter": [
+      13.41796875,
+      14.89013671875,
+      18.71728515625
+    ]
+  },
+  "note": "Local fixture, one driver and normal ambient entities. Initial pose and speed are staged; later motion, input scheduling, substeps and snapshots are production logic. Callback numbers are integer-ms local elapsed wall time, not CPU; instrumentation and contention affect them. workerd process CPU, when supplied, covers the entire local process and slightly wider interval, not just room ticks. No production, WAN, device, multiplayer-capacity or sustained claim."
+}

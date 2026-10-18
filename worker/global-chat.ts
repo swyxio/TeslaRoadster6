@@ -1,27 +1,22 @@
 import { DurableObject } from 'cloudflare:workers';
-import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { chooseAvailableName, createRecoveryCode, hashRecoverySecret, normalizeChatText, parseRecoveryCode } from './global-chat-core';
 
 /**
  * One global object, shared across rooms. WebSocket client sends:
  *   {type:'hello',name:string,code?:string}, {type:'message',text:string},
- *   {type:'rename',name:string,requestId:number}, {type:'save'}, {type:'awardTicket',requestId:number},
- *   {type:'getAwards'}, or {type:'ping'}.
+ *   {type:'rename',name:string,requestId:number}, {type:'save'}, or {type:'ping'}.
  * Server sends:
  *   {type:'ready',playerId,name,messages}, {type:'message',message},
  *   {type:'renamed',playerId,name,requestId}, {type:'recovery',code}, or {type:'error',message}.
  * Recovery codes are bearer credentials: never broadcast or include in history.
  */
 export type ChatMessage = { id: string; playerId: string; name: string; text: string; time: number };
-export type AwardProgress = AchievementId[];
 export type ChatServerMessage =
-  | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[]; awards: AwardProgress | null }
+  | { type: 'ready'; playerId: string; name: string; messages: ChatMessage[] }
   | { type: 'message'; message: ChatMessage }
   | { type: 'renamed'; playerId: string; name: string; requestId: number }
   | { type: 'recovery'; code: string }
-  | { type: 'awardTicket'; ticket: string; expiresAt: number; requestId: number }
-  | { type: 'awards'; awards: AwardProgress }
-  | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed' | 'awards_failed'; requestId?: number };
+  | { type: 'error'; message: string; code?: 'identity_active' | 'rename_failed' | 'save_failed'; requestId?: number };
 
 type StoredIdentity = { hash: string; name: string };
 type Session = {
@@ -30,12 +25,10 @@ type Session = {
   ip: string;
   lastActivity: number;
   authenticating: boolean;
-  ready: boolean;
   saving: boolean;
   updates: Promise<void>;
   pendingName?: string;
   issuedCode?: string;
-  awardTicket?: string;
   authFailures: number;
   inboundStart: number;
   inboundCount: number;
@@ -60,18 +53,12 @@ const CHAT_LIMIT = 5;
 const IP_WINDOW = 60_000;
 const IP_LIMIT = 60;
 const IP_BUCKET_LIMIT = 1000;
-const AWARD_TICKET_LIFETIME = 30_000;
-const AWARD_IDS = Object.keys(ACHIEVEMENTS) as AchievementId[];
-const validAwards = (value: unknown): value is AchievementId[] => Array.isArray(value) &&
-  value.length <= AWARD_IDS.length && value.every(id => typeof id === 'string' && Object.hasOwn(ACHIEVEMENTS, id));
 
 // Messages and session state stay in memory only. Sockets use the standard
 // non-hibernating API, so an instance must remain awake while players are connected.
 // A restart forgets chat history; explicitly saved identity digests survive.
 export class GlobalChat extends DurableObject {
   private sessions = new Map<WebSocket, Session>();
-  private awardTickets = new Map<string, { socket: WebSocket; session: Session; expiresAt: number }>();
-  private awardUpdates = new Map<string, Promise<void>>();
   private drainingIds = new Set<string>();
   private history: ChatMessage[] = [];
   private ipBuckets = new Map<string, Bucket>();
@@ -90,7 +77,7 @@ export class GlobalChat extends DurableObject {
     const [client, server] = Object.values(pair);
     server.accept();
     const session: Session = {
-      ip, lastActivity: Date.now(), authenticating: false, ready: false, saving: false, updates: Promise.resolve(), authFailures: 0,
+      ip, lastActivity: Date.now(), authenticating: false, saving: false, updates: Promise.resolve(), authFailures: 0,
       inboundStart: Date.now(), inboundCount: 0, warnedRate: false, messageTimes: [], handshakeTimer: null,
     };
     this.sessions.set(server, session);
@@ -171,24 +158,10 @@ export class GlobalChat extends DurableObject {
       void this.hello(socket, session, data.name, data.code as string | undefined);
       return;
     }
-    if (!session.playerId || !session.name || !session.ready) { this.error(socket, 'Choose a name before using chat.'); return; }
+    if (!session.playerId || !session.name) { this.error(socket, 'Choose a name before using chat.'); return; }
     if (data.type === 'ping') return;
-    if (data.type === 'awardTicket') {
-      if (!Number.isSafeInteger(data.requestId) || (data.requestId as number) < 1) { this.error(socket, 'Invalid award ticket request.'); return; }
-      const requestId = data.requestId as number;
-      session.updates = session.updates.then(() => this.issueAwardTicket(socket, session, requestId));
-      return;
-    }
-    if (data.type === 'getAwards') {
-      session.updates = session.updates.then(() => this.sendAwards(socket, session));
-      return;
-    }
     if (data.type === 'save') {
-      if (session.issuedCode) {
-        this.send(socket, { type: 'recovery', code: session.issuedCode });
-        session.updates = session.updates.then(() => this.sendAwards(socket, session));
-        return;
-      }
+      if (session.issuedCode) { this.send(socket, { type: 'recovery', code: session.issuedCode }); return; }
       if (session.saving) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Generating your code; please wait.' }); return; }
       if (!this.allowIdentityCreation(session.ip)) { this.send(socket, { type: 'error', code: 'save_failed', message: 'Saved drivers are temporarily limited. Try again later.' }); return; }
       session.saving = true;
@@ -222,82 +195,6 @@ export class GlobalChat extends DurableObject {
     this.error(socket, 'Unknown chat request.');
   }
 
-  // Each profile has its own queue: room RPCs and reads cannot
-  // overwrite or overtake one another. Rename writes use a different key.
-  private withAwardLock<T>(playerId: string, operation: () => Promise<T>): Promise<T> {
-    const result = (this.awardUpdates.get(playerId) ?? Promise.resolve()).then(operation);
-    const settled = result.then(() => {}, () => {});
-    this.awardUpdates.set(playerId, settled);
-    void settled.then(() => { if (this.awardUpdates.get(playerId) === settled) this.awardUpdates.delete(playerId); });
-    return result;
-  }
-
-  private async readAwards(playerId: string): Promise<AwardProgress> {
-    const saved = await this.ctx.storage.get<AwardProgress>(`awards:${playerId}`);
-    if (saved === undefined) return [];
-    if (!validAwards(saved)) throw new Error('Invalid saved award profile');
-    const unlocked = new Set(saved);
-    return AWARD_IDS.filter(id => unlocked.has(id));
-  }
-
-  private async sendAwards(socket: WebSocket, session: Session): Promise<void> {
-    if (!session.playerId || !this.sessions.has(socket)) return;
-    try {
-      await this.withAwardLock(session.playerId, async () => {
-        const awards = session.issuedCode ? await this.readAwards(session.playerId!) : [];
-        if (this.sessions.has(socket)) this.send(socket, { type: 'awards', awards });
-      });
-    } catch {
-      if (this.sessions.has(socket)) this.send(socket, { type: 'error', code: 'awards_failed', message: 'Could not load your awards. Please try again.' });
-    }
-  }
-
-  private issueAwardTicket(socket: WebSocket, session: Session, requestId: number): void {
-    if (!this.sessions.has(socket)) return;
-    if (!session.playerId || !session.issuedCode) {
-      this.send(socket, { type: 'error', code: 'awards_failed', requestId, message: 'Save your driver before saving awards.' });
-      return;
-    }
-    if (session.awardTicket) this.awardTickets.delete(session.awardTicket);
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    const ticket = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    const expiresAt = Date.now() + AWARD_TICKET_LIFETIME;
-    this.awardTickets.set(ticket, { socket, session, expiresAt });
-    session.awardTicket = ticket;
-    this.send(socket, { type: 'awardTicket', ticket, expiresAt, requestId });
-  }
-
-  /** Internal room-to-chat RPC; the HTTP router never exposes this method. */
-  consumeAwardTicket(ticket: string): string | null {
-    if (typeof ticket !== 'string' || !/^[0-9a-f]{64}$/.test(ticket)) return null;
-    const entry = this.awardTickets.get(ticket);
-    if (!entry) return null;
-    this.awardTickets.delete(ticket);
-    if (entry.session.awardTicket === ticket) entry.session.awardTicket = undefined;
-    if (Date.now() >= entry.expiresAt || this.sessions.get(entry.socket) !== entry.session || !entry.session.issuedCode) return null;
-    return entry.session.playerId ?? null;
-  }
-
-  /** Internal room-to-chat RPC. Only the authoritative room calls this. */
-  async recordRoomAwards(playerId: string, achievements: AchievementId[]): Promise<AwardProgress> {
-    if (typeof playerId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(playerId) || !validAwards(achievements)) {
-      throw new Error('Invalid award request');
-    }
-    return this.withAwardLock(playerId, async () => {
-      if (!await this.ctx.storage.get<StoredIdentity>(`identity:${playerId}`)) throw new Error('Saved driver unavailable');
-      const before = await this.readAwards(playerId);
-      const unlocked = new Set([...before, ...achievements]);
-      const awards = AWARD_IDS.filter(id => unlocked.has(id));
-      if (awards.length !== before.length) {
-        await this.ctx.storage.put(`awards:${playerId}`, awards);
-      }
-      for (const [socket, session] of this.sessions) {
-        if (session.ready && session.playerId === playerId) this.send(socket, { type: 'awards', awards });
-      }
-      return awards;
-    });
-  }
-
   private async hello(socket: WebSocket, session: Session, desiredName: string, code?: string): Promise<void> {
     try {
       let playerId: string;
@@ -329,19 +226,7 @@ export class GlobalChat extends DurableObject {
       session.issuedCode = knownCode;
       if (session.handshakeTimer) clearTimeout(session.handshakeTimer);
       session.handshakeTimer = null;
-      const ready = (awards: AwardProgress | null) => {
-        if (!this.sessions.has(socket)) return;
-        session.ready = true;
-        this.send(socket, { type: 'ready', playerId, name: session.name!, messages: this.history, awards });
-      };
-      if (!knownCode) ready([]);
-      else {
-        try { await this.withAwardLock(playerId, async () => ready(await this.readAwards(playerId))); }
-        catch {
-          ready(null);
-          if (this.sessions.has(socket)) this.send(socket, { type: 'error', code: 'awards_failed', message: 'Could not load your awards. Please try again.' });
-        }
-      }
+      this.send(socket, { type: 'ready', playerId, name: session.name, messages: this.history });
     } catch {
       this.error(socket, 'Could not connect to chat. Please try again.');
     } finally {
@@ -361,7 +246,6 @@ export class GlobalChat extends DurableObject {
       .flatMap(active => [active.name, active.pendingName].filter((value): value is string => !!value));
     const name = chooseAvailableName(desiredName, used);
     session.pendingName = name;
-    let renamed = false;
     try {
       if (session.issuedCode) {
         const key = `identity:${session.playerId}`;
@@ -370,14 +254,12 @@ export class GlobalChat extends DurableObject {
         await this.ctx.storage.put(key, { ...saved, name } satisfies StoredIdentity);
       }
       session.name = name;
-      renamed = true;
       if (this.sessions.has(socket)) this.send(socket, { type: 'renamed', playerId: session.playerId, name, requestId });
     } catch {
       this.send(socket, { type: 'error', code: 'rename_failed', requestId, message: 'Could not change your name. Please try again.' });
     } finally {
       session.pendingName = undefined;
     }
-    if (renamed) await this.sendAwards(socket, session);
   }
 
   private async save(socket: WebSocket, session: Session): Promise<void> {
@@ -399,7 +281,6 @@ export class GlobalChat extends DurableObject {
     } finally {
       session.saving = false;
     }
-    if (session.issuedCode) await this.sendAwards(socket, session);
   }
 
   private error(socket: WebSocket, message: string): void { this.send(socket, { type: 'error', message }); }
@@ -410,7 +291,6 @@ export class GlobalChat extends DurableObject {
     const session = this.sessions.get(socket);
     if (!session) return;
     this.sessions.delete(socket);
-    if (session.awardTicket) this.awardTickets.delete(session.awardTicket);
     if (session.playerId) {
       const id = session.playerId;
       this.drainingIds.add(id);

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, chooseVehicle, createWorld, NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE } from '../shared/game';
 import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
+import { ScheduledInput } from '../shared/tick-input';
 
 class Socket {
   static OPEN = 1;
@@ -14,7 +15,12 @@ class Socket {
   constructor(public url:string) { Socket.last = this; }
   send(value:string) { this.sent.push(value); }
   close() { this.readyState = 3; }
-  message(value:unknown) { this.onmessage?.({data:JSON.stringify(value)}); }
+  message(value:unknown) {
+    const message=value as Record<string,unknown>;
+    const defaults=message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
+      message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
+    this.onmessage?.({data:JSON.stringify({...defaults,...message})});
+  }
   closed(code=1000) { this.readyState = 3; this.onclose?.({code}); }
 }
 Object.assign(globalThis, { WebSocket:Socket, window:globalThis, location:{protocol:'https:',host:'example.com'} });
@@ -32,15 +38,36 @@ test('a shared room connects and a disconnect never starts a solo simulation',()
 });
 
 test('input cadence keeps fractional frame time without catching up in a burst',()=>{
-  const session=new Session();session.join('bay','Alex');const socket=Socket.last;
+  let now=0;
+  const session=new Session(()=>now);session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
-  for(let frame=0;frame<120;frame++)session.tick(1/60,NEUTRAL);
+  for(let frame=0;frame<120;frame++){
+    now=frame*1000/60;
+    if(frame%6===0)socket.message({type:'state',world,tick:frame/3});
+    session.tick(1/60,NEUTRAL);
+  }
   const inputs=socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input');
-  assert.ok(inputs.length>=39&&inputs.length<=40,`expected approximately 40 sends, got ${inputs.length}`);
+  assert.ok(inputs.length>=39&&inputs.length<=41,`expected approximately 40 sends plus an initial sample, got ${inputs.length}`);
   assert.deepEqual(inputs.map(value=>value.seq),inputs.map((_,index)=>index+1));
-  session.tick(1,NEUTRAL);
+  now+=1000;socket.message({type:'state',world,tick:60});session.tick(1,NEUTRAL);
   assert.equal(socket.sent.map(value=>JSON.parse(value)).filter(value=>value.type==='input').length,inputs.length+1);
+  session.disconnect();
+});
+
+test('the first snapshot holds remote poses until interpolation has a second sample',()=>{
+  let now=0;
+  const session=new Session(()=>now);session.join('bay','Alex');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  const world=createWorld(),player=addPlayer(world,'p','Alex'),other=addPlayer(world,'q','Other');
+  const car=world.entities.find(entity=>entity.id===player.entityId)!,peer=world.entities.find(entity=>entity.id===other.entityId)!;
+  world.entities=[car,peer];world.pickups=[];
+  Object.assign(car,{x:-130,z:60,y:0,yaw:0,speed:0,vx:0,vz:0,supportId:'ground'});
+  Object.assign(peer,{x:-130,z:66,y:0,yaw:0,speed:30,vx:0,vz:-30,supportId:'ground'});
+  socket.message({type:'state',world,tick:100});now=75;
+  const displayed=session.renderWorld();
+  assert.equal(session.remotePresentationActive,true,'the scene must not extrapolate a one-snapshot peer');
+  assert.equal(displayed.entities.find(entity=>entity.id===peer.id)!.z,66);
   session.disconnect();
 });
 
@@ -73,7 +100,7 @@ test('joining the current room keeps its seat and may select a car',()=>{
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'name',name:'Alex'});
   session.join('bay','Alex','model-3');
   assert.equal(Socket.last,socket);assert.equal(socket.readyState,Socket.OPEN);assert.equal(session.world,existingWorld);assert.equal(session.id,'p');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.closed();
 });
@@ -84,6 +111,14 @@ test('offline navigation requests fail without starting a local session',()=>{
   assert.equal(session.world.players.length,0);
 });
 
+test('a non-default starting vehicle has the same action fence while connecting',()=>{
+  const session=new Session();session.join('bay','Alex','model-3');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
+  session.disconnect();
+});
+
 test('a displayed Tesla can be requested again after taking a same-kind street car',()=>{
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
@@ -92,7 +127,7 @@ test('a displayed Tesla can be requested again after taking a same-kind street c
   borrowed.owner=null;world.entities=[borrowed];world.pickups=[];
   socket.message({type:'state',world,inputAck:0});
   session.join('bay','Alex','roadster');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'roadster'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'roadster',actionSeq:1,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'state',world,inputAck:0});assert.equal(session.vehicleResult,null);
   const accepted=structuredClone(world);assert.equal(chooseVehicle(accepted,'p','roadster'),true);
@@ -111,7 +146,7 @@ test('a rejected vehicle change stays unconfirmed until its ordered state and re
     if(condition==='moving')car.speed=4;else car.supportId='ferry';
     socket.message({type:'state',world,inputAck:0});
     session.selectVehicle('model-3');
-    assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3'});
+    assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'selectVehicle',kind:'model-3',actionSeq:1,edgeBaseline:{jump:0,flip:0}});
     assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
     assert.equal(chooseVehicle(world,'p','model-3'),false);
     socket.message({type:'state',world,inputAck:0,sync:0});assert.equal(session.vehicleResult,null);
@@ -141,37 +176,14 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
   const world=createWorld();addPlayer(world,'p','Alex');socket.message({type:'state',world,inputAck:0});
   const requestId=session.setDestination(-180,60);
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'destination',x:-180,z:60,requestId,actionSeq:1,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:1});
   socket.message({type:'destinationResult',requestId,ok:true});
   assert.equal(session.destinationResult?.requestId,requestId);assert.equal(session.destinationResult?.ok,true);
   session.enterMinigame('park');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park'});
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:2,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
-  session.disconnect();
-});
-
-test('award binding is private to the current online room and clears on reconnect',()=>{
-  const session=new Session();
-  assert.equal(session.bindAwards('ticket',1),false);
-  assert.equal(session.unbindAwards(2),false);
-  session.join('bay','Alex');const old=Socket.last;
-  old.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
-  const world=createWorld();addPlayer(world,'p','Alex');old.message({type:'state',world,inputAck:0});
-  assert.equal(session.bindAwards('ticket',3),true);
-  assert.deepEqual(JSON.parse(old.sent.at(-1)!),{type:'bindAwards',ticket:'ticket',requestId:3});
-  old.message({type:'awardsBound',requestId:3,ok:true});
-  old.message({type:'awardsSync',ok:true});
-  assert.deepEqual(session.awardsBound,{requestId:3,ok:true});assert.equal(session.awardsSync,true);
-  assert.equal(session.unbindAwards(4),true);
-  assert.deepEqual(JSON.parse(old.sent.at(-1)!),{type:'unbindAwards',requestId:4});
-  old.message({type:'awardsUnbound',requestId:4,ok:true});
-  assert.deepEqual(session.awardsUnbound,{requestId:4,ok:true});
-  session.join('another','Alex');assert.equal(session.awardsBound,null);assert.equal(session.awardsUnbound,null);assert.equal(session.awardsSync,null);
-  old.message({type:'awardsBound',requestId:3,ok:true});
-  old.message({type:'awardsSync',ok:true});
-  assert.equal(session.awardsBound,null);assert.equal(session.awardsSync,null);
   session.disconnect();
 });

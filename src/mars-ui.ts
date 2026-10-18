@@ -10,7 +10,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     <p class="mars-intro"></p>
     <div class="mars-progress"><span>MISSION FUND <b class="mars-total"></b></span><progress max="1000000000" value="0" aria-label="Mars fund progress"></progress><small class="mars-remaining"></small></div>
     <form class="mars-form"><label for="mars-amount">Contribute from your cash <small class="mars-cash"></small></label><div class="mars-contribute"><input id="mars-amount" type="number" min="1" max="1000000000" step="1" inputmode="numeric" value="5" required><button type="button" class="mars-all">All</button><button type="submit" class="primary mars-submit">Contribute →</button></div></form>
-    <p class="mars-note">Contributions are permanent and reduce your session cash. The room fund survives restarts; confirmed awards can be saved to your driver. Today’s deliveries are small: future levels will add higher earnings.</p>
+    <p class="mars-note">Contributions are permanent and reduce your session cash. The fund survives restarts; your cash and individual awards do not. Today’s deliveries are small: future levels will add higher earnings.</p>
     <div class="mars-boarding"><strong>BOARDING / FREMONT SPACEPORT</strong><p class="mars-location"></p><button type="button" class="primary mars-board">Board for Mars →</button></div><p class="mars-feedback" role="status" aria-live="polite"></p>`;
   const win=document.createElement('dialog');win.className='mars-win';win.setAttribute('aria-labelledby','mars-win-title');
   win.innerHTML=`<div class="mars-stars" aria-hidden="true"><span class="mars-rocket">🚀</span><span class="mars-planet"></span></div><span class="eyebrow">MISSION COMPLETE / 2050</span><h2 id="mars-win-title">You made it to Mars.</h2><p class="mars-win-copy"></p><strong>★ ACHIEVEMENT UNLOCKED · TO MARS</strong><button class="primary mars-win-close" type="button">Keep exploring Tesland →</button>`;
@@ -49,7 +49,7 @@ export function createMarsUI(session:Session,money:(amount:number)=>string,onOpe
     if(!dialog.open)return;
     $('.mars-eyebrow').textContent='TESLAND 2050 / A ROOM-WIDE MISSION';
     $('.mars-intro').textContent='Fund a Starship together, then board at the fictional Fremont spaceport. Each room has its own lasting fund.';
-    $('.mars-note').textContent='Contributions are permanent and reduce your session cash. The room fund survives restarts; confirmed awards can be saved to your driver. Today’s deliveries are small: future levels will add higher earnings.';
+    $('.mars-note').textContent='Contributions are permanent and reduce your session cash. The fund survives restarts; your cash and individual awards do not. Today’s deliveries are small: future levels will add higher earnings.';
     const fund=session.world.mars.fund,remaining=MARS_GOAL-fund,player=session.world.players.find(p=>p.id===session.id),cash=player?.delivery.cash??0;
     $('.mars-total').textContent=`${money(fund)} / ${money(MARS_GOAL)}`;
     $<HTMLProgressElement>('progress').value=fund;

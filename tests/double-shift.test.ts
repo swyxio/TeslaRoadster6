@@ -86,3 +86,20 @@ test('editing, menus, modal dialogs, modifier chords and lost focus cancel a pen
     shortcut.dispose(); tap(); tap(); assert.equal(triggered, 1);
   } finally { env.restore(); }
 });
+
+test('double Shift clears held driving input until the driver makes a new press', () => {
+  const env = environment();
+  try {
+    const controls = new Controls(() => []); controls.enabled = true;
+    let triggered = 0;
+    const shortcut = listenForDoubleShift({ enabled: () => controls.enabled, allowed: () => true, now: env.now,
+      onDoubleTap: () => { triggered++; controls.clear(); } });
+    env.key('keydown', 'KeyW'); assert.equal(controls.read().throttle, 1);
+    env.key('keydown'); env.at(50); env.key('keyup');
+    env.at(100); env.key('keydown'); env.at(150); env.key('keyup');
+    assert.equal(triggered, 1); assert.equal(controls.read().throttle, 0);
+    env.key('keydown', 'KeyW', { repeat: true }); assert.equal(controls.read().throttle, 0);
+    env.key('keyup', 'KeyW'); env.key('keydown', 'KeyW'); assert.equal(controls.read().throttle, 1);
+    shortcut.dispose();
+  } finally { env.restore(); }
+});

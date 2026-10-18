@@ -1,26 +1,20 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, buyUpgrade, subscribeOta, chooseVehicle, toggleAutopilot, addPlayer, createWorld, interact, parkingAction, raceAction, enterMinigame, setDestination, removePlayer, resetPlayer, step, travelDome, type Input } from '../shared/game';
+import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug } from './protocol';
 import { prepareSnapshots, snapshotFor } from './snapshot';
 import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 import { radioFeed } from './radio';
 import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
-import type { AchievementId } from '../shared/achievements';
-import { RoomAwardOutbox } from './room-awards';
+import { VEHICLE_IDS } from '../shared/vehicles';
 
 export { GlobalChat };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type BoundAwards = { playerId:string; seen:Set<AchievementId>; saving:Promise<boolean>|null; retryAt:number; failed:boolean };
-type RetiringAwards = { playerId:string; ids:AchievementId[]; saving:Promise<boolean>|null; retryAt:number; failed:boolean };
-type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number; awards:BoundAwards|null; retiringAwards:RetiringAwards|null; binding:boolean; bindEpoch:number };
+type Session = { id: string; lastMessage: number; windowStart: number; count: number; lastAction: number; control:ScheduledInput; poseRevision:number; pendingSync:number };
+type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
-async function withTimeout<T>(task:Promise<T>,ms:number):Promise<T> {
-  let timer:ReturnType<typeof setTimeout>|undefined;
-  try{return await Promise.race([task,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Timed out')),ms);})]);}
-  finally{if(timer)clearTimeout(timer);}
-}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -40,33 +34,23 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Physics and player cash are session-only. The Mars fund and award outbox are durable.
+// Physics and player cash are session-only. The room's Mars fund is durable.
 export class GameRoom extends DurableObject<Env> {
-  private world = createWorld();
+  private world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
   private sessions = new Map<WebSocket, Session>();
   private inputs = new Map<string, Input>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCount = 0;
-  private ticking = false;
-  private awardOutbox:RoomAwardOutbox;
+  private roomEpoch = crypto.randomUUID();
+  private lastSubsteps = 1;
 
   constructor(ctx:DurableObjectState,env:Env) {
     super(ctx,env);
-    this.awardOutbox=new RoomAwardOutbox(ctx.storage,()=>this.awardBridge(),promise=>ctx.waitUntil(promise));
     ctx.blockConcurrencyWhile(async()=>{
       const fund=await ctx.storage.get<number>('mars-fund');
       if(Number.isSafeInteger(fund) && fund!>=0 && fund!<=MARS_GOAL)this.world.mars.fund=fund!;
-      await this.awardOutbox.load();
     });
   }
-
-  private awardBridge() {
-    return this.env.CHAT.get(this.env.CHAT.idFromName('global')) as unknown as {
-      consumeAwardTicket(ticket:string):Promise<string|null>;
-      recordRoomAwards(playerId:string,ids:AchievementId[]):Promise<unknown>;
-    };
-  }
-  async alarm() { await this.awardOutbox.alarm(); }
 
   fetch(): Response {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
@@ -88,12 +72,13 @@ export class GameRoom extends DurableObject<Env> {
       server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
       return new Response(null, { status: 101, webSocket: client });
     }
-    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0, awards:null, retiringAwards:null, binding:false, bindEpoch:0 });
+    const control=new ScheduledInput({...NEUTRAL});
+    this.sessions.set(server, { id, lastMessage: now, windowStart: now, count: 0, lastAction: 0, control, poseRevision:0, pendingSync:0 });
     server.addEventListener('message', event => { void this.onMessage(server, event.data); });
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
-    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity }));
-    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), inputAck:0 }));
+    server.send(JSON.stringify({ type: 'welcome', id, version: PROTOCOL_VERSION, capacity, tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0 }));
+    server.send(JSON.stringify({ type: 'state', world: snapshotFor(this.world, id), tick:this.tickCount, roomEpoch:this.roomEpoch, substeps:this.lastSubsteps, poseRevision:0, control:control.snapshot() }));
     if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -109,18 +94,10 @@ export class GameRoom extends DurableObject<Env> {
     if (!message) { this.disconnect(socket, 1008, 'Invalid message'); return; }
     session.lastMessage = now;
     if (message.type === 'input') {
-      if(message.seq>session.inputSeq){this.inputs.set(session.id, message.input);session.lastInput=now;session.inputSeq=message.seq;}
-      return;
-    }
-    const awardBind=message as {type:string;ticket:string;requestId:number};
-    if(awardBind.type==='unbindAwards'){
-      void this.unbindAwards(socket,session,awardBind.requestId);
-      return;
-    }
-    if(awardBind.type==='bindAwards'){
-      if(session.binding){socket.send(JSON.stringify({type:'awardsBound',requestId:awardBind.requestId,ok:false,reason:'busy'}));return;}
-      session.binding=true;
-      void this.bindAwards(socket,session,awardBind.ticket,awardBind.requestId,session.bindEpoch).finally(()=>{session.binding=false;});
+      if(message.roomEpoch!==this.roomEpoch){this.rejectInput(socket,message,'epoch');return;}
+      const result=session.control.receive(message,this.tickCount,now);
+      this.sendEdges(socket,result.outcomes);
+      if(result.rejection&&this.sessions.has(socket))this.rejectInput(socket,message,result.rejection);
       return;
     }
     // Coalesce barriers into the next regular snapshot. WebSocket ordering
@@ -134,11 +111,16 @@ export class GameRoom extends DurableObject<Env> {
       if (player) player.name = chooseAvailableName(message.name, this.world.players.filter(p => p.id !== session.id).map(p => p.name));
       return;
     }
+    // Fence every potentially invalidating action, including cooldown and
+    // simulation rejections. Only accepted actions consume its baseline.
+    if('edgeBaseline' in message&&!session.control.beginAction(message.actionSeq,message.edgeBaseline)){
+      this.disconnect(socket,1008,'Invalid action sequence or edge baseline');return;
+    }
     // Joining and controlling a mini-game are often consecutive clicks. The
     // simulation checks membership, host and position; the socket rate limit
     // still applies, but the unrelated action cooldown must not drop them.
-    if(message.type==='dome'){travelDome(this.world,session.id);this.inputs.delete(session.id);return;}
-    if(message.type==='minigame'){if(enterMinigame(this.world,session.id,message.game))this.inputs.delete(session.id);return;}
+    if(message.type==='dome'){if(travelDome(this.world,session.id))this.invalidate(socket,session,true,message.edgeBaseline);return;}
+    if(message.type==='minigame'){const before=this.pose(session);if(enterMinigame(this.world,session.id,message.game))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);return;}
     if(message.type==='parking'&&(message.action==='start'||message.action==='leave')){parkingAction(this.world,session.id,message.action);return;}
     if(message.type==='race'&&(message.action==='start'||message.action==='leave')){raceAction(this.world,session.id,message.action,message.courseId);return;}
     if (now - session.lastAction < 400) {
@@ -149,15 +131,19 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     session.lastAction = now;
-    if (message.type === 'interact') interact(this.world, session.id);
-    if (message.type === 'reset') resetPlayer(this.world, session.id);
-    if(message.type==='autopilot')toggleAutopilot(this.world,session.id);
-    if(message.type==='selectVehicle')chooseVehicle(this.world,session.id,message.kind);
+    if (message.type === 'interact') {
+      const before=this.world.players.find(player=>player.id===session.id)?.entityId;
+      interact(this.world,session.id);
+      if(before!==this.world.players.find(player=>player.id===session.id)?.entityId)this.invalidate(socket,session,true,message.edgeBaseline);
+    }
+    if (message.type === 'reset') {const before=this.pose(session);resetPlayer(this.world, session.id);this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
+    if(message.type==='autopilot'&&toggleAutopilot(this.world,session.id))this.invalidate(socket,session,false,message.edgeBaseline);
+    if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind))this.invalidate(socket,session,true,message.edgeBaseline);
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
-    if(message.type==='race')raceAction(this.world,session.id,message.action,message.courseId);
+    if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
     if(message.type==='destination'){
       const ok=setDestination(this.world,session.id,{x:message.x,z:message.z});
-      if(ok)this.inputs.delete(session.id);
+      if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }
     if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:buyUpgrade(this.world,session.id,message.upgrade)}));
@@ -165,8 +151,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='mars'){
       if(message.action==='board'){
         const ok=boardMars(this.world,session.id);
-        if(ok)await this.saveSessionAwards(socket,session,true);
-        try { socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0})); } catch { /* Disconnected while saving. */ }
+        socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0}));
       }else{
         const amount=marsContribution(this.world,session.id,message.amount);
         let ok=false;
@@ -186,137 +171,83 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private tick(): void {
-    if(this.ticking)return;
-    this.ticking=true;
-    void this.runTick().finally(()=>{this.ticking=false;});
-  }
-
-  private async runTick(): Promise<void> {
     const now = Date.now();
     for (const [socket, session] of this.sessions) {
-      if (now - session.lastInput > 300) this.inputs.delete(session.id);
       if (now - session.lastMessage > 30_000) this.disconnect(socket, 1001, 'Connection inactive');
     }
     if (!this.sessions.size) return;
-    for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
-    step(this.world, this.inputs, 0.05);
-    await Promise.all([...this.sessions].flatMap(([socket,session])=>[this.saveSessionAwards(socket,session),this.saveRetiringAwards(socket,session)]));
-    if (++this.tickCount % 2) return;
-    const snapshot = prepareSnapshots(this.world);
+    const nextTick=this.tickCount+1;
+    const edgeResults=new Map<string,{socket:WebSocket;outcomes:EdgeOutcome[]}>();
+    for(const [socket,session] of this.sessions){
+      const result=session.control.advance(nextTick,now);
+      this.inputs.set(session.id,result.input);
+      if(result.outcomes.length)edgeResults.set(session.id,{socket,outcomes:result.outcomes});
+    }
+    const relocated=new Set<string>();
+    step(this.world, this.inputs, 0.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
+      // Ferry apron moves happen before that substep consumes controls; water
+      // recovery happens after. Stop both from carrying old input forward.
+      const player=this.world.players.find(item=>item.id===id);
+      const entity=this.world.entities.find(item=>item.id===player?.entityId);
+      for(const outcome of edgeResults.get(id)?.outcomes??[]){
+        if(outcome.status==='processed'&&entity&&(outcome.kind==='jump'?entity.lastJump:entity.lastFlip)!==outcome.id)outcome.status='superseded';
+      }
+      this.inputs.delete(id);
+      relocated.add(id);
+    }});
+    this.tickCount=nextTick;
+    for(const {socket,outcomes} of edgeResults.values())this.sendEdges(socket,outcomes);
+    for(const [socket,session] of this.sessions)if(relocated.has(session.id))this.invalidate(socket,session,true);
+    if(!this.sessions.size)return;
+    if (this.tickCount % 2) return;
+    const snapshot = prepareSnapshots(this.world,this.tickCount,this.roomEpoch,this.lastSubsteps);
     for (const [socket, session] of this.sessions) {
       try {
-        socket.send(snapshot(session.id,session.appliedSeq,session.pendingSync||undefined));
+        socket.send(snapshot(session.id,session.control.snapshot(),session.poseRevision,session.pendingSync||undefined));
         session.pendingSync=0;
       } catch { this.disconnect(socket); }
     }
   }
 
-  private unsavedAwards(session:Session, bound:BoundAwards):AchievementId[] {
-    const player=this.world.players.find(player=>player.id===session.id);
-    return player?.achievements.unlocked.filter(id=>!bound.seen.has(id))??[];
+  private sendEdges(socket:WebSocket,outcomes:EdgeOutcome[]):void {
+    try {for(const outcome of outcomes)socket.send(JSON.stringify({type:'inputEdge',...outcome}));}
+    catch {this.disconnect(socket);}
   }
 
-  private saveSessionAwards(socket:WebSocket,session:Session,force=false):Promise<boolean> {
-    const bound=session.awards;
-    if(!bound)return Promise.resolve(true);
-    if(bound.saving)return bound.saving;
-    const ids=this.unsavedAwards(session,bound);
-    if(!ids.length)return Promise.resolve(true);
-    if(!force&&Date.now()<bound.retryAt)return Promise.resolve(false);
-    const task=this.awardOutbox.enqueue(bound.playerId,ids).then(()=>{
-      for(const id of ids)bound.seen.add(id);
-      bound.retryAt=0;
-      if(bound.failed){bound.failed=false;if(session.awards===bound)try{socket.send(JSON.stringify({type:'awardsSync',ok:true}));}catch{}}
-      return true;
-    },()=>{
-      bound.retryAt=Date.now()+1_000;
-      if(!bound.failed){bound.failed=true;if(session.awards===bound)try{socket.send(JSON.stringify({type:'awardsSync',ok:false}));}catch{}}
-      return false;
-    }).finally(()=>{bound.saving=null;});
-    bound.saving=task;
-    return task;
+  private rejectInput(socket:WebSocket,message:{seq:number;targetTick:number},reason:string):void {
+    try {socket.send(JSON.stringify({type:'inputRejected',seq:message.seq,targetTick:message.targetTick,reason}));}
+    catch {this.disconnect(socket);}
   }
 
-  private saveRetiringAwards(socket:WebSocket,session:Session,force=false):Promise<boolean> {
-    const retiring=session.retiringAwards;
-    if(!retiring)return Promise.resolve(true);
-    if(retiring.saving)return retiring.saving;
-    if(!force&&Date.now()<retiring.retryAt)return Promise.resolve(false);
-    const task=this.awardOutbox.enqueue(retiring.playerId,retiring.ids).then(()=>{
-      if(session.retiringAwards===retiring){session.retiringAwards=null;this.awardOutbox.release(retiring.playerId);}
-      if(retiring.failed)try{socket.send(JSON.stringify({type:'awardsSync',ok:true}));}catch{}
-      return true;
-    },()=>{
-      retiring.retryAt=Date.now()+1_000;
-      if(!retiring.failed){retiring.failed=true;try{socket.send(JSON.stringify({type:'awardsSync',ok:false}));}catch{}}
-      return false;
-    }).finally(()=>{retiring.saving=null;});
-    retiring.saving=task;
-    return task;
+  private pose(session:Session):ControlledPose|null {
+    const player=this.world.players.find(item=>item.id===session.id);
+    const e=this.world.entities.find(item=>item.id===player?.entityId);
+    return e?{id:e.id,x:e.x,y:e.y,z:e.z,yaw:e.yaw,pitch:e.pitch,roll:e.roll}:null;
   }
 
-  private async unbindAwards(socket:WebSocket,session:Session,requestId:number):Promise<void> {
-    // Freeze attribution before any asynchronous storage or ticket RPC.
-    session.bindEpoch++;
-    const bound=session.awards;
-    if(bound){
-      const ids=this.unsavedAwards(session,bound);
-      session.awards=null;
-      if(ids.length)session.retiringAwards={playerId:bound.playerId,ids,saving:null,retryAt:0,failed:false};
-      else this.awardOutbox.release(bound.playerId);
-    }
-    const ok=await this.saveRetiringAwards(socket,session,true);
-    try { socket.send(JSON.stringify({type:'awardsUnbound',requestId,ok})); } catch { /* Disconnected while saving. */ }
+  private poseChanged(before:ControlledPose|null,after:ControlledPose|null):boolean {
+    if(!before||!after)return before!==after;
+    if(before.id!==after.id||Math.hypot(before.x-after.x,before.y-after.y,before.z-after.z)>.001)return true;
+    return (['yaw','pitch','roll'] as const).some(key=>Math.abs(Math.atan2(Math.sin(before[key]-after[key]),Math.cos(before[key]-after[key])))>.0001);
   }
 
-  private async bindAwards(socket:WebSocket,session:Session,ticket:string,requestId:number,epoch=session.bindEpoch):Promise<void> {
-    let ok=false,reason:'invalid'|'capacity'|'storage'|'unavailable'='invalid';
-    try {
-      const playerId=await withTimeout(this.awardBridge().consumeAwardTicket(ticket),5_000);
-      if(playerId&&this.sessions.get(socket)===session&&session.bindEpoch===epoch){
-        if(session.retiringAwards&&!await this.saveRetiringAwards(socket,session,true))reason='storage';
-        if(this.sessions.get(socket)!==session||session.bindEpoch!==epoch)return;
-        // The old owner's newly earned awards must be queued before switching.
-        while(reason!=='storage'&&session.awards&&this.unsavedAwards(session,session.awards).length){
-          if(!await this.saveSessionAwards(socket,session,true)){reason='storage';break;}
-          if(this.sessions.get(socket)!==session||session.bindEpoch!==epoch)return;
-        }
-        const previous=session.awards;
-        if(reason==='storage') { /* Keep the old identity until its awards are queued. */ }
-        else if(previous?.playerId===playerId)ok=true;
-        else if(this.awardOutbox.reserve(playerId)){
-          const player=this.world.players.find(p=>p.id===session.id);
-          if(player){
-            session.awards={playerId,seen:new Set(player.achievements.unlocked),saving:null,retryAt:0,failed:false};
-            if(previous)this.awardOutbox.release(previous.playerId);
-            ok=true;
-          }else this.awardOutbox.release(playerId);
-        } else reason='capacity';
-      }
-    } catch { reason='unavailable'; }
-    try { socket.send(JSON.stringify(ok?{type:'awardsBound',requestId,ok}:{type:'awardsBound',requestId,ok,reason})); } catch { /* Disconnected while binding. */ }
+  private invalidate(socket:WebSocket,session:Session,relocated=false,edgeBaseline?:EdgeBaseline):void {
+    const player=this.world.players.find(item=>item.id===session.id);
+    const entity=this.world.entities.find(item=>item.id===player?.entityId);
+    this.inputs.delete(session.id);
+    if(relocated)session.poseRevision++;
+    this.sendEdges(socket,session.control.invalidate({...NEUTRAL,jump:entity?.lastJump??0,flip:entity?.lastFlip??0},edgeBaseline?{type:'action',edgeBaseline}:{type:'relocation'}));
   }
 
   private disconnect(socket: WebSocket, code = 1000, reason = 'Session ended'): void {
     const session = this.sessions.get(socket);
     if (!session) return;
-    // Capture before removing the player; an in-flight durable write continues
-    // after the socket closes. Once queued, alarms retry delivery across restarts.
-    const pending=this.saveSessionAwards(socket,session,true);
-    this.ctx.waitUntil(pending);
-    this.ctx.waitUntil(this.saveRetiringAwards(socket,session,true));
-    if(session.awards){
-      const {playerId}=session.awards,ids=this.unsavedAwards(session,session.awards);
-      // Include awards earned while a previous write was still in flight.
-      if(ids.length)this.ctx.waitUntil(this.awardOutbox.enqueue(playerId,ids).catch(()=>{}));
-      this.awardOutbox.release(playerId);
-    }
     this.sessions.delete(socket); this.inputs.delete(session.id); removePlayer(this.world, session.id);
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }
     if (!this.sessions.size) {
       if (this.timer) clearInterval(this.timer);
       const fund=this.world.mars.fund;
-      this.timer = null; this.tickCount = 0; this.world = createWorld(); this.world.mars.fund=fund;
+      this.timer = null; this.tickCount = 0; this.lastSubsteps=1;this.roomEpoch=crypto.randomUUID();this.world = createWorld(Math.floor(Math.random()*VEHICLE_IDS.length)); this.world.mars.fund=fund;
     }
   }
 }
