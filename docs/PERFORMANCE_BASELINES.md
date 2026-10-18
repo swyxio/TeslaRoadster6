@@ -109,6 +109,11 @@ The historical rows below used the earlier short drive and idle room scenario,
 not the two-delivery route. Compare new observations by rerunning both versions
 with the same current harness rather than treating these rows as matched pairs.
 
+The [0.0.25/0.0.28 paired video proof](performance-baselines/2026-10-18-paired-video-route/)
+confirms delivery, jump and flight coverage with closely aligned paths. Video
+encoding and concurrent host work make its timings unsuitable as a no-video
+baseline; its raw evidence is retained separately.
+
 | Date · version · commit | Scenario · environment | Frame p95 (ms) | Modeled speed p05–p95 (×) | Modeled steer L/R (ms) | Room sim/wall (×) | Evidence / limitations |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | 2026-10-18 · 0.0.24-alpha · `aeb5704c62edde147ff3441b9f82d35ec3d3a63f` | Steady 150 ms model; staged desktop drive, Apple M5 Pro / ANGLE Metal | 16.8 | 0.983–1.052 | 8.333 / 16.667 | 0.956 | [Report and compressed raw traces](performance-baselines/2026-10-18-v0.0.24-aeb5704/); one busy-host observation, before the later economy merge. |
