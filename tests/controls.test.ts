@@ -38,6 +38,9 @@ test('Space brakes on the road and flips in the air, E jumps, and touch brake co
   fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().brake,false);
   fakeWindow.dispatchEvent(key('keydown','KeyE'));fakeWindow.dispatchEvent(key('keyup','KeyE'));assert.equal(controls.read().jump,1);assert.equal(controls.read().brake,false);
   controls.airborne=true;fakeWindow.dispatchEvent(key('keydown','Space'));fakeWindow.dispatchEvent(key('keyup','Space'));assert.equal(controls.read().flip,1);
+  fakeWindow.dispatchEvent(key('keydown','KeyX'));fakeWindow.dispatchEvent(key('keyup','KeyX'));assert.equal(controls.read().flip,2);
+  fakeWindow.dispatchEvent(key('keydown','KeyH'));fakeWindow.dispatchEvent(key('keydown','KeyW'));assert.equal(controls.read().hover,true);assert.equal(controls.read().throttle,1);
+  fakeWindow.dispatchEvent(key('keyup','KeyH'));fakeWindow.dispatchEvent(key('keyup','KeyW'));assert.equal(controls.read().hover,false);
   steering.dispatchEvent(pointer('pointerdown',1));brake.dispatchEvent(pointer('pointerdown',2));
   assert.equal(controls.read().steer,1);assert.equal(controls.read().brake,true);
   brake.dispatchEvent(pointer('pointercancel',2));assert.equal(controls.read().brake,false);assert.equal(controls.read().steer,1);

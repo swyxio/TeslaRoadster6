@@ -432,8 +432,8 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       const turn=e.flipRemaining>0?1:(e.air>0?input.roll:0);
       if(turn>0)e.thrusters|=THRUSTER_DOWN_RIGHT|THRUSTER_SIDE_RIGHT;
       if(turn<0)e.thrusters|=THRUSTER_DOWN_LEFT|THRUSTER_SIDE_LEFT;
-      if((boostFraction||hoverFraction)&&input.steer>0)e.thrusters|=THRUSTER_SIDE_RIGHT;
-      if((boostFraction||hoverFraction)&&input.steer<0)e.thrusters|=THRUSTER_SIDE_LEFT;
+      if((boostFraction||hoverFraction||flightFraction)&&input.steer>0)e.thrusters|=THRUSTER_SIDE_RIGHT;
+      if((boostFraction||hoverFraction||flightFraction)&&input.steer<0)e.thrusters|=THRUSTER_SIDE_LEFT;
     }
     e.steering+=(input.steer-e.steering)*Math.min(1,dt*8);
     if(e.supportId==='dome'&&e.domeS!==null){
