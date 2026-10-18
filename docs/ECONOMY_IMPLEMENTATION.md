@@ -14,6 +14,7 @@ These are the product decisions to preserve:
 - A game-wide $1 billion Starship goal advances automatically from players' lifetime earnings. Players keep the money. The goal ends in a launch, a celebration, recognition of contributors and retirement of that game season or room.
 - Achievements pay one-off cash, guide players toward features, and help unlock levels through the resulting wallet balance. City, delivery and landmark goals matter throughout the driving career.
 - SFO research explores flight, Stanford explores speed, UCSF explores homes and property, and Berkeley explores energy efficiency.
+- A dedicated luxury showroom sells exclusive, house-priced supercars and motorcycles in person; list individual models as achievement goals.
 
 The exact level thresholds, fares, award sizes, cab rates, property tiers, floor prices, event duration and research rewards below are **design candidates**. They give teams a consistent starting point and must be playtested together. A simulation result is not a commitment to a particular playtime. Offline cab earnings, a market for collectibles and skins, and details of the next season remain open.
 
@@ -81,6 +82,8 @@ The first five proposed Cybercab prices are $25k / $50k / $100k / $200k / $400k.
 The current simulations pay only while the owner is actively playing and assume partial utilization. They do not settle the offline-income policy, prices after cab five, or whether a fleet size cap is needed. Cab earnings need server-controlled, non-overlapping settlement intervals and durable ownership; never let the client choose an income amount.
 
 The garage stores and displays personalized vehicle configurations. Two spaces come with a home; a dispatched cab can remain out earning. Ordinary passenger cars should remain available to drive without requiring an ownership purchase. Preserve access to the existing fleet while considering additional BYD and Rivian vehicles, Lucid Air, Hyundai IONIQ, Kia EV9, Chevrolet Silverado EV and Ford F-150 Lightning as separate content work.
+
+The proposed [Vault showroom](LUXURY_SHOWROOM.md) is a separate late-game collection: Lamborghini and Bugatti models plus Ducati and Kawasaki motorcycles. Its six vehicles require an in-person purchase, cost $1.5m–$12m, and remain owned after a balance drop. The existing free fleet is unchanged. The showroom, model prices and awards depend on the persistent economy and are not yet playable.
 
 Candidate cosmetics start at $2k for paint, $5k for decals and lettering, $15k for wheels and trim, $50k for wraps and fleet branding, and $150k for premium effects. Account-owned cosmetics can be reapplied to compatible cars. Offer early vehicle or flight kits around $10k / $20k / $40k; keep the starter Roadster's flight and public launch facilities available. Player trading of collectibles or skins needs separate rules for availability, transfers, fees and fraud; do not assume the property-sale rules already cover it.
 

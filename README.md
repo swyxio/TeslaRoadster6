@@ -36,7 +36,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Start here:** [agent contracts](docs/CONTRACTS.md), [game design](docs/DESIGN.md), [asset brief](docs/ASSETS.md), [fleet verification](docs/FLEET_VERIFICATION.md), [ready-to-use agent tasks](docs/AGENT_TASKS.md).
 
-**Planning:** [economy implementation guide](docs/ECONOMY_IMPLEMENTATION.md), [economy, achievements and property proposal](docs/ECONOMY.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md).
+**Planning:** [economy implementation guide](docs/ECONOMY_IMPLEMENTATION.md), [economy and property proposal](docs/ECONOMY.md), [luxury showroom](docs/LUXURY_SHOWROOM.md), [player progression simulations](docs/ECONOMY_SIMULATIONS.md), and [five-minute earnings and branching paths](docs/ECONOMY_FIVE_MINUTE.md).
 
 **North Bay Playground:** Take the autonomous ferry from the north SF dock to a fictional island with redwood groves, vineyard rows, a banked speed oval, a separate banked lane, an inverted cliff, two eastbound jump ramps and a short circuit. Purple Rocket pickups equip any vehicle with the Roadster's fictional air moves for the rest of its session. Parking playgrounds, charging lots and Caltrain-area lots offer Park It and Cut the queue. These are session-only arcade activities; see [implementation status and remaining checks](docs/ROCKET_ISLAND_PLAN.md).
 

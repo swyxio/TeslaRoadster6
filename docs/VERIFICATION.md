@@ -781,3 +781,7 @@ After deployment, both production endpoints advertised v29, and the deployed Jav
 ## 2026-10-18 · Economy implementation guide
 
 The contributor guide was checked against the held economy design, the main baseline at `3307584`, the current session contracts and the tower pricing formula. Local document links and the $1.02m starter-home and five-, ten- and twenty-story cost examples passed a lightweight check. This change updates documentation only; no gameplay tests, build or deployment were run during the performance measurement window.
+
+## 2026-10-18 · Luxury showroom research and prototypes
+
+A lightweight Node check constructed all six detached [vehicle prototypes](../experiments/luxury-models.ts), verified finite bounds, four wheels per car and two per motorcycle, independent wheel groups, a driver-seat anchor and shared clone geometry. Approximate overall bounds were checked against the sourced dimensions; motorcycle height includes the rider. The showroom documents' local links, $30m collection total and $251,250/hour comparison also passed. These checks did not render the models or verify their resemblance, handling, performance or placement. The showroom, achievements and purchase flow are not integrated; the full test suite, build and game playtest remain pending during the performance measurement window.
