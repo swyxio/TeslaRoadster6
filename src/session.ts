@@ -25,6 +25,9 @@ export class Session {
   upgradeResult: {requestId:number;upgrade:UpgradeId;ok:boolean}|null = null;
   otaResult: {requestId:number;enabled:boolean;ok:boolean}|null = null;
   destinationResult: {requestId:number;ok:boolean}|null = null;
+  awardsBound: {requestId:number;ok:boolean}|null = null;
+  awardsUnbound: {requestId:number;ok:boolean}|null = null;
+  awardsSync: boolean|null = null;
   marsResult: {requestId:number;action:'contribute'|'board';ok:boolean;amount:number}|null = null;
   vehicleResult: {kind:VehicleId;ok:boolean}|null = null;
   error = '';
@@ -72,6 +75,9 @@ export class Session {
             this.pendingVehicle=undefined;
           }
         }
+        if (message.type === 'awardsUnbound' && Number.isSafeInteger(message.requestId) && typeof message.ok === 'boolean') this.awardsUnbound = {requestId:message.requestId,ok:message.ok};
+        if (message.type === 'awardsBound' && Number.isSafeInteger(message.requestId) && typeof message.ok === 'boolean') this.awardsBound = {requestId:message.requestId,ok:message.ok};
+        if (message.type === 'awardsSync' && typeof message.ok === 'boolean') this.awardsSync = message.ok;
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
         if (message.type === 'destinationResult') this.destinationResult = message;
@@ -113,6 +119,14 @@ export class Session {
     if(this.status==='solo')this.destinationResult={requestId,ok:setDestination(this.world,this.id,{x,z})};
     else if(this.status!=='online'||!this.actionWithBarrier({type:'destination',x,z,requestId}))this.destinationResult={requestId,ok:false};
     return requestId;
+  }
+  unbindAwards(requestId:number):boolean {
+    this.awardsUnbound=null;
+    return this.status==='online'&&this.send({type:'unbindAwards',requestId});
+  }
+  bindAwards(ticket:string,requestId:number):boolean {
+    this.awardsBound=null;this.awardsSync=null;
+    return this.status==='online'&&this.send({type:'bindAwards',ticket,requestId});
   }
   setName(name:string) {
     this.name = name;
@@ -156,5 +170,5 @@ export class Session {
     const token=++this.syncToken;this.waitingSync=token;return this.send({type:'sync',token});
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { const socket = this.socket; this.socket = undefined; socket?.close(); this.prediction.reset();this.inputSeq=0;this.syncToken=0;this.waitingSync=0;this.pendingVehicle=undefined;this.vehicleResult=null;this.awardsBound=null;this.awardsUnbound=null;this.awardsSync=null;this.sendTime=0;this.status='disconnected'; }
 }

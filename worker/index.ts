@@ -6,12 +6,21 @@ import { GlobalChat } from './global-chat';
 import { chooseAvailableName } from './global-chat-core';
 import { radioFeed } from './radio';
 import { MARS_GOAL, applyMarsContribution, boardMars, marsContribution } from '../shared/mars';
+import type { AchievementId } from '../shared/achievements';
+import { RoomAwardOutbox } from './room-awards';
 
 export { GlobalChat };
 
 type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: DurableObjectNamespace<GlobalChat>; MAX_PLAYERS?: string };
-type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number };
+type BoundAwards = { playerId:string; seen:Set<AchievementId>; saving:Promise<boolean>|null; retryAt:number; failed:boolean };
+type RetiringAwards = { playerId:string; ids:AchievementId[]; saving:Promise<boolean>|null; retryAt:number; failed:boolean };
+type Session = { id: string; lastInput: number; lastMessage: number; windowStart: number; count: number; lastAction: number; inputSeq:number; appliedSeq:number; pendingSync:number; awards:BoundAwards|null; retiringAwards:RetiringAwards|null; binding:boolean; bindEpoch:number };
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
+async function withTimeout<T>(task:Promise<T>,ms:number):Promise<T> {
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{return await Promise.race([task,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Timed out')),ms);})]);}
+  finally{if(timer)clearTimeout(timer);}
+}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -31,21 +40,33 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Physics and player cash are session-only. The room's Mars fund is durable.
+// Physics and player cash are session-only. The Mars fund and award outbox are durable.
 export class GameRoom extends DurableObject<Env> {
   private world = createWorld();
   private sessions = new Map<WebSocket, Session>();
   private inputs = new Map<string, Input>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCount = 0;
+  private ticking = false;
+  private awardOutbox:RoomAwardOutbox;
 
   constructor(ctx:DurableObjectState,env:Env) {
     super(ctx,env);
+    this.awardOutbox=new RoomAwardOutbox(ctx.storage,()=>this.awardBridge(),promise=>ctx.waitUntil(promise));
     ctx.blockConcurrencyWhile(async()=>{
       const fund=await ctx.storage.get<number>('mars-fund');
       if(Number.isSafeInteger(fund) && fund!>=0 && fund!<=MARS_GOAL)this.world.mars.fund=fund!;
+      await this.awardOutbox.load();
     });
   }
+
+  private awardBridge() {
+    return this.env.CHAT.get(this.env.CHAT.idFromName('global')) as unknown as {
+      consumeAwardTicket(ticket:string):Promise<string|null>;
+      recordRoomAwards(playerId:string,ids:AchievementId[]):Promise<unknown>;
+    };
+  }
+  async alarm() { await this.awardOutbox.alarm(); }
 
   fetch(): Response {
     const capacity = roomCapacity(this.env.MAX_PLAYERS);
@@ -67,7 +88,7 @@ export class GameRoom extends DurableObject<Env> {
       server.close(ROOM_NO_SPAWN_CODE, 'No safe starting space');
       return new Response(null, { status: 101, webSocket: client });
     }
-    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0 });
+    this.sessions.set(server, { id, lastInput: now, lastMessage: now, windowStart: now, count: 0, lastAction: 0, inputSeq:0, appliedSeq:0, pendingSync:0, awards:null, retiringAwards:null, binding:false, bindEpoch:0 });
     server.addEventListener('message', event => { void this.onMessage(server, event.data); });
     server.addEventListener('close', () => this.disconnect(server));
     server.addEventListener('error', () => this.disconnect(server));
@@ -89,6 +110,17 @@ export class GameRoom extends DurableObject<Env> {
     session.lastMessage = now;
     if (message.type === 'input') {
       if(message.seq>session.inputSeq){this.inputs.set(session.id, message.input);session.lastInput=now;session.inputSeq=message.seq;}
+      return;
+    }
+    const awardBind=message as {type:string;ticket:string;requestId:number};
+    if(awardBind.type==='unbindAwards'){
+      void this.unbindAwards(socket,session,awardBind.requestId);
+      return;
+    }
+    if(awardBind.type==='bindAwards'){
+      if(session.binding){socket.send(JSON.stringify({type:'awardsBound',requestId:awardBind.requestId,ok:false,reason:'busy'}));return;}
+      session.binding=true;
+      void this.bindAwards(socket,session,awardBind.ticket,awardBind.requestId,session.bindEpoch).finally(()=>{session.binding=false;});
       return;
     }
     // Coalesce barriers into the next regular snapshot. WebSocket ordering
@@ -133,7 +165,8 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='mars'){
       if(message.action==='board'){
         const ok=boardMars(this.world,session.id);
-        socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0}));
+        if(ok)await this.saveSessionAwards(socket,session,true);
+        try { socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok,amount:0})); } catch { /* Disconnected while saving. */ }
       }else{
         const amount=marsContribution(this.world,session.id,message.amount);
         let ok=false;
@@ -153,6 +186,12 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private tick(): void {
+    if(this.ticking)return;
+    this.ticking=true;
+    void this.runTick().finally(()=>{this.ticking=false;});
+  }
+
+  private async runTick(): Promise<void> {
     const now = Date.now();
     for (const [socket, session] of this.sessions) {
       if (now - session.lastInput > 300) this.inputs.delete(session.id);
@@ -161,6 +200,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.sessions.size) return;
     for(const session of this.sessions.values())if(this.inputs.has(session.id))session.appliedSeq=session.inputSeq;
     step(this.world, this.inputs, 0.05);
+    await Promise.all([...this.sessions].flatMap(([socket,session])=>[this.saveSessionAwards(socket,session),this.saveRetiringAwards(socket,session)]));
     if (++this.tickCount % 2) return;
     const snapshot = prepareSnapshots(this.world);
     for (const [socket, session] of this.sessions) {
@@ -171,9 +211,106 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
+  private unsavedAwards(session:Session, bound:BoundAwards):AchievementId[] {
+    const player=this.world.players.find(player=>player.id===session.id);
+    return player?.achievements.unlocked.filter(id=>!bound.seen.has(id))??[];
+  }
+
+  private saveSessionAwards(socket:WebSocket,session:Session,force=false):Promise<boolean> {
+    const bound=session.awards;
+    if(!bound)return Promise.resolve(true);
+    if(bound.saving)return bound.saving;
+    const ids=this.unsavedAwards(session,bound);
+    if(!ids.length)return Promise.resolve(true);
+    if(!force&&Date.now()<bound.retryAt)return Promise.resolve(false);
+    const task=this.awardOutbox.enqueue(bound.playerId,ids).then(()=>{
+      for(const id of ids)bound.seen.add(id);
+      bound.retryAt=0;
+      if(bound.failed){bound.failed=false;if(session.awards===bound)try{socket.send(JSON.stringify({type:'awardsSync',ok:true}));}catch{}}
+      return true;
+    },()=>{
+      bound.retryAt=Date.now()+1_000;
+      if(!bound.failed){bound.failed=true;if(session.awards===bound)try{socket.send(JSON.stringify({type:'awardsSync',ok:false}));}catch{}}
+      return false;
+    }).finally(()=>{bound.saving=null;});
+    bound.saving=task;
+    return task;
+  }
+
+  private saveRetiringAwards(socket:WebSocket,session:Session,force=false):Promise<boolean> {
+    const retiring=session.retiringAwards;
+    if(!retiring)return Promise.resolve(true);
+    if(retiring.saving)return retiring.saving;
+    if(!force&&Date.now()<retiring.retryAt)return Promise.resolve(false);
+    const task=this.awardOutbox.enqueue(retiring.playerId,retiring.ids).then(()=>{
+      if(session.retiringAwards===retiring){session.retiringAwards=null;this.awardOutbox.release(retiring.playerId);}
+      if(retiring.failed)try{socket.send(JSON.stringify({type:'awardsSync',ok:true}));}catch{}
+      return true;
+    },()=>{
+      retiring.retryAt=Date.now()+1_000;
+      if(!retiring.failed){retiring.failed=true;try{socket.send(JSON.stringify({type:'awardsSync',ok:false}));}catch{}}
+      return false;
+    }).finally(()=>{retiring.saving=null;});
+    retiring.saving=task;
+    return task;
+  }
+
+  private async unbindAwards(socket:WebSocket,session:Session,requestId:number):Promise<void> {
+    // Freeze attribution before any asynchronous storage or ticket RPC.
+    session.bindEpoch++;
+    const bound=session.awards;
+    if(bound){
+      const ids=this.unsavedAwards(session,bound);
+      session.awards=null;
+      if(ids.length)session.retiringAwards={playerId:bound.playerId,ids,saving:null,retryAt:0,failed:false};
+      else this.awardOutbox.release(bound.playerId);
+    }
+    const ok=await this.saveRetiringAwards(socket,session,true);
+    try { socket.send(JSON.stringify({type:'awardsUnbound',requestId,ok})); } catch { /* Disconnected while saving. */ }
+  }
+
+  private async bindAwards(socket:WebSocket,session:Session,ticket:string,requestId:number,epoch=session.bindEpoch):Promise<void> {
+    let ok=false,reason:'invalid'|'capacity'|'storage'|'unavailable'='invalid';
+    try {
+      const playerId=await withTimeout(this.awardBridge().consumeAwardTicket(ticket),5_000);
+      if(playerId&&this.sessions.get(socket)===session&&session.bindEpoch===epoch){
+        if(session.retiringAwards&&!await this.saveRetiringAwards(socket,session,true))reason='storage';
+        if(this.sessions.get(socket)!==session||session.bindEpoch!==epoch)return;
+        // The old owner's newly earned awards must be queued before switching.
+        while(reason!=='storage'&&session.awards&&this.unsavedAwards(session,session.awards).length){
+          if(!await this.saveSessionAwards(socket,session,true)){reason='storage';break;}
+          if(this.sessions.get(socket)!==session||session.bindEpoch!==epoch)return;
+        }
+        const previous=session.awards;
+        if(reason==='storage') { /* Keep the old identity until its awards are queued. */ }
+        else if(previous?.playerId===playerId)ok=true;
+        else if(this.awardOutbox.reserve(playerId)){
+          const player=this.world.players.find(p=>p.id===session.id);
+          if(player){
+            session.awards={playerId,seen:new Set(player.achievements.unlocked),saving:null,retryAt:0,failed:false};
+            if(previous)this.awardOutbox.release(previous.playerId);
+            ok=true;
+          }else this.awardOutbox.release(playerId);
+        } else reason='capacity';
+      }
+    } catch { reason='unavailable'; }
+    try { socket.send(JSON.stringify(ok?{type:'awardsBound',requestId,ok}:{type:'awardsBound',requestId,ok,reason})); } catch { /* Disconnected while binding. */ }
+  }
+
   private disconnect(socket: WebSocket, code = 1000, reason = 'Session ended'): void {
     const session = this.sessions.get(socket);
     if (!session) return;
+    // Capture before removing the player; an in-flight durable write continues
+    // after the socket closes. Once queued, alarms retry delivery across restarts.
+    const pending=this.saveSessionAwards(socket,session,true);
+    this.ctx.waitUntil(pending);
+    this.ctx.waitUntil(this.saveRetiringAwards(socket,session,true));
+    if(session.awards){
+      const {playerId}=session.awards,ids=this.unsavedAwards(session,session.awards);
+      // Include awards earned while a previous write was still in flight.
+      if(ids.length)this.ctx.waitUntil(this.awardOutbox.enqueue(playerId,ids).catch(()=>{}));
+      this.awardOutbox.release(playerId);
+    }
     this.sessions.delete(socket); this.inputs.delete(session.id); removePlayer(this.world, session.id);
     try { socket.close(code, reason); } catch { /* Already disconnected. */ }
     if (!this.sessions.size) {

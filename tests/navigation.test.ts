@@ -208,3 +208,48 @@ test('destination and mini-game protocol accepts only finite bounded requests',(
   assert.equal(parseMessage('{"type":"destination","x":0,"z":0,"requestId":0}'),null);
   assert.equal(parseMessage('{"type":"minigame","game":"bogus"}'),null);
 });
+
+test('award binding accepts only a one-use ticket and positive request IDs',()=>{
+  const ticket='a'.repeat(64);
+  assert.deepEqual(parseMessage(JSON.stringify({type:'bindAwards',ticket,requestId:1})),{type:'bindAwards',ticket,requestId:1});
+  assert.deepEqual(parseMessage(JSON.stringify({type:'unbindAwards',requestId:2})),{type:'unbindAwards',requestId:2});
+  for(const packet of [
+    {type:'bindAwards',ticket:'a'.repeat(63),requestId:1},
+    {type:'bindAwards',ticket:'G'.repeat(64),requestId:1},
+    {type:'bindAwards',ticket,requestId:0},
+    {type:'unbindAwards',requestId:-1},
+  ])assert.equal(parseMessage(JSON.stringify(packet)),null);
+});
+
+test('self-driving rounds city turns without abrupt steering changes',()=>{
+  const {world,car}=drivingWorld();
+  assert.equal(setDestination(world,'driver',{x:-120,z:-60}),true);
+  let previous=car.steering,maxChange=0;
+  for(let i=0;i<2400&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    if(car.speed>2)maxChange=Math.max(maxChange,Math.abs(car.steering-previous));
+    previous=car.steering;
+  }
+  assert.equal(car.navigation?.status,'arrived');assert.equal(car.health,100);
+  assert.ok(maxChange<.21,`largest steering change while moving: ${maxChange}`);
+});
+
+test('self-driving follows a stopped car progressively and resumes when the lane clears',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-180,z:-177,yaw:-Math.PI/2,speed:12});
+  const leader=makeEntity('stopped-leader','model-3',-140,-177);leader.yaw=-Math.PI/2;world.entities.push(leader);
+  assert.equal(setDestination(world,'driver',{x:-60,z:-177}),true);
+  let previousSpeed=car.speed,maxDeceleration=0,minSeparation=Infinity,stopped=false;
+  for(let i=0;i<1200&&car.autopilot;i++){
+    if(i===400)world.entities=world.entities.filter(e=>e!==leader);
+    if(i<400)minSeparation=Math.min(minSeparation,leader.x-car.x);
+    step(world,new Map(),.05);
+    maxDeceleration=Math.max(maxDeceleration,(previousSpeed-car.speed)/.05);
+    if(i<400&&car.speed<.2)stopped=true;
+    previousSpeed=car.speed;
+  }
+  assert.ok(stopped,'the car waited for traffic');
+  assert.ok(minSeparation>5,'the vehicles did not overlap');
+  assert.ok(maxDeceleration<4,`largest deceleration: ${maxDeceleration}`);
+  assert.equal(car.health,100);assert.equal(car.navigation?.status,'arrived');
+});

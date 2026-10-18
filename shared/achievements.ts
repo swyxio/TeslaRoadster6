@@ -1,4 +1,4 @@
-import type { Entity, Player } from './game';
+import type { Entity, Player, World } from './game';
 import { REGIONS, insidePolygon, isLand } from './map';
 import type { DomeParticipant } from './soccer';
 
@@ -12,6 +12,10 @@ export const ACHIEVEMENTS = {
   'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match.' },
   'garage-champion': { name:'Garage Champion', description:'Win a Rocket Dome match with a goal credited to your rocket-retrofitted car.' },
   'no-rockets-needed': { name:'No Rockets Needed', description:'Win with a goal, touching the ball only in cars without rockets.' },
+  'park-it': { name:'Perfect Park', description:'Complete a Park It challenge.' },
+  'queue-cutter': { name:'Queue Cutter', description:'Claim a space in Cut the Queue.' },
+  'race-finisher': { name:'Checkered Flag', description:'Finish a race course.' },
+  'race-winner': { name:'First Across', description:'Win a race against another finisher.' },
   'to-mars': { name:'To Mars', description:'Fund the room’s $1 billion mission together and board at the Fremont spaceport.' },
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
@@ -33,6 +37,23 @@ export function awardDomeMatchAchievements(player:Player,participant:DomePartici
   if(participant.touches.roadster&&participant.goals.roadster>0)unlock(state,'roadster-champion');
   if(participant.touches.retrofit&&participant.goals.retrofit>0)unlock(state,'garage-champion');
   if(participant.touches.stock&&participant.goals.stock>0&&!participant.touches.roadster&&!participant.touches.retrofit)unlock(state,'no-rockets-needed');
+}
+
+/** Mini-game achievements use only the simulation's completed results. */
+export function updateGameAchievements(world:World):void {
+  for(const round of world.parking.rounds)for(const entrant of round.entrants){
+    if(entrant.finishedAt===null)continue;
+    const player=world.players.find(p=>p.id===entrant.playerId);
+    if(player)unlock(player.achievements,round.mode==='park'?'park-it':'queue-cutter');
+  }
+  for(const round of world.races.rounds)for(const entrant of round.entrants){
+    if(entrant.status!=='finished')continue;
+    const player=world.players.find(p=>p.id===entrant.playerId);
+    if(!player)continue;
+    unlock(player.achievements,'race-finisher');
+    if(round.phase==='results'&&entrant.rank===1&&round.entrants.filter(other=>other.status==='finished').length>=2)
+      unlock(player.achievements,'race-winner');
+  }
 }
 // Region polygons also contain the Peninsula and East Bay; the achievement's
 // endpoints are the SF and Oakland city grids, not the full Bay corridor.

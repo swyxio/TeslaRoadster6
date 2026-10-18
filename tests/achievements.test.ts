@@ -111,3 +111,23 @@ test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));
 });
+
+test('parking and racing awards follow completed game results without inventing solo race wins',async()=>{
+  const {updateGameAchievements}=await import('../shared/achievements');
+  const {world,player,car}=setup(),other=addPlayer(world,'other','Other');
+  const parking={lotId:'test',mode:'park' as const,phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,
+    entrants:[{playerId:player.id,entityId:car.id,joinedAt:0,targetId:'a',hold:2,finishedAt:1,elapsed:1,overtakes:null}],claimedStallIds:[]};
+  world.parking.rounds=[parking];
+  const entrant={playerId:player.id,entityId:car.id,status:'finished' as const,nextGate:1,finishedAt:1,elapsed:1,rank:1,feedback:null,feedbackUntil:0,previous:{x:0,y:0,z:0,time:0}};
+  const round={courseId:'short',phase:'results' as const,hostId:player.id,openedAt:0,startedAt:0,endsAt:10,entrants:[entrant]};
+  world.races.rounds=[round];updateGameAchievements(world);
+  assert.ok(player.achievements.unlocked.includes('park-it'));
+  assert.ok(player.achievements.unlocked.includes('race-finisher'));
+  assert.ok(!player.achievements.unlocked.includes('race-winner'));
+  round.entrants.push({...entrant,playerId:other.id,entityId:other.entityId,elapsed:2,rank:2});
+  updateGameAchievements(world);updateGameAchievements(world);
+  assert.equal(player.achievements.unlocked.filter(id=>id==='race-winner').length,1);
+  assert.ok(!other.achievements.unlocked.includes('race-winner'));
+  world.parking.rounds=[{...parking,mode:'queue'}];updateGameAchievements(world);
+  assert.ok(player.achievements.unlocked.includes('queue-cutter'));
+});

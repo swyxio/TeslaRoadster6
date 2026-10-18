@@ -1,6 +1,23 @@
 /** Newest first. Release versions are distinct from the multiplayer protocol. */
 export const RELEASES = [
   {
+    version: '0.0.13-alpha',
+    label: '0.0.13 Alpha',
+    date: '2026-10-18',
+    title: 'Take the scenic ride',
+    intro: 'Settle in for smoother self-driving and keep your little victories.',
+    sections: [
+      { title: 'Cruise to your delivery', items: [
+        'Double-tap Shift or tap Self-drive to delivery to head toward the next pickup or drop-off. Use the controls any time to take over.',
+        'Cars steer more smoothly through turns and leave more room in traffic. Rooftops and some destinations still need you to drive or fly the last stretch.'
+      ] },
+      { title: 'Keep your victories', items: [
+        'Scores show delivery progress and current or recent mini-game results for this drive.',
+        'Earn new parking and racing awards. Confirmed awards stay with your saved driver across drives and devices; solo awards are self-reported.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.12-alpha',
     label: '0.0.12 Alpha',
     date: '2026-10-18',
@@ -66,7 +83,7 @@ export const RELEASES = [
         'Visit the fictional Tesla × SpaceX gigafactory and Starship/Super Heavy launch complex in Fremont, unlocked with the South Bay at level 2.',
         'Contribute earned session cash to your room’s permanent $1 billion Mars fund. Other drivers in the same room can contribute too; every dollar counts once.',
         'Once fully funded, stop in the gold boarding ring at the spaceport to launch, win and earn the To Mars achievement. You can return to the Bay afterwards.',
-        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. Room funds persist, while personal cash, cars and achievements remain session-only.',
+        'Current delivery payouts are small; the million-dollar earnings needed for the long-term goal will come in future levels. At this release, room funds persisted while personal cash, cars and achievements were session-only.',
         'Play always joins a shared room; if the Bay is full, retry or name another room.'
       ] }
     ]

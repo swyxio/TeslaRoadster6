@@ -2,6 +2,12 @@
 
 These entries describe separate historical builds. Check the version and scope in each entry before applying its results to another build.
 
+## Self-driving and driver awards · protocol v31 · 2026-10-18 Pacific
+
+- Before integrating the later performance release, `pnpm test` passed 476 tests and `pnpm build` passed both TypeScript checks, with Vite’s existing large-chunk warning. An isolated local Wrangler run passed the full two-client room integration, including a real five-goal Dome match, award-ticket replay rejection, durable winner/spectator isolation and saved-driver recovery. An isolated Wrangler restart restored the same driver and self-reported solo awards. Earlier room runs under heavy host load timed out at varying steps; the successful run used a keepalive and an authoritative reset barrier. These are functional checks, not capacity measurements.
+- In a deterministic city route, the maximum 20 Hz steering change fell from 0.3025 to 0.1745 and yaw-rate change from 0.5256 to 0.2972; the car reached its destination with full health. In a stopped-leader scenario beginning 40 m ahead at 12 m/s, peak deceleration fell from 9.52 to 3.06 m/s² while retaining over 5 m separation and resuming after the lane cleared. A closer leader still triggered emergency braking. These are scoped simulation comparisons, not real-world or universal safety claims.
+- Chrome on the local pre-performance build accepted double Shift and the touch HUD button for a delivery route and showed the car move toward the pickup. Scores and Awards were inspected on desktop and emulated 390×844 portrait and 844×390 landscape; the awards list scrolled to its end and its close button worked by touch in portrait. No physical mobile device was tested. Some fallback spawn poses cannot reach an arbitrary chosen route; the UI reports route rejection.
+
 ## Wooded North Bay, Peninsula routes and skyline · protocol v30 · 2026-10-18 Pacific
 
 - After integrating the persistent chat identity update, `pnpm test` passed all 450 tests, `pnpm build` passed with Vite's large-chunk warning, and local Wrangler passed the two-client prediction/acknowledgement and chat integrations. The chat check covered renames, collisions and recovery with stable IDs.

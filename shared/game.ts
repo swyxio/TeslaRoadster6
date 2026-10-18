@@ -9,7 +9,7 @@ import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHig
 import { planNavigation, type Navigation } from './navigation';
 import { initialDelivery, orderTarget, requiredLevelAt, updateDelivery, type DeliveryState } from './delivery';
 import { setOta, updateOta } from './ota';
-import { awardDomeMatchAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
+import { awardDomeMatchAchievements, updateGameAchievements, initialAchievements, resetAchievementFlight, updateAchievements, type AchievementState } from './achievements';
 import { newPolice, policeInput, updatePolice, type PoliceState } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
@@ -26,7 +26,7 @@ import { initialSoccer, stepSoccer, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 
-export const PROTOCOL_VERSION=30;
+export const PROTOCOL_VERSION=31;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -739,7 +739,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
       if((boostFraction||hoverFraction||flightFraction)&&input.steer<0)e.thrusters|=THRUSTER_SIDE_LEFT;
     }
     const manualDriver=!!e.driver&&!e.autopilot;
-    e.steering+=(input.steer-e.steering)*Math.min(1,dt*(manualDriver?14:8));
+    e.steering+=(input.steer-e.steering)*Math.min(1,dt*(manualDriver?14:e.driver?4:8));
     if(e.supportId==='dome'&&e.domeS!==null){
       // Steering and speed live on the unwrapped capsule, then map back to 3D.
       const before=domeSurface(e.domeS),roadTop=spec!.maxSpeed*(e.upgrades.motor?1.1:1),top=boostFraction?Math.max(72,roadTop):roadTop;
@@ -1025,6 +1025,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number):void {
   }
   updateParking(world.parking,PARKING_LOTS,world,dt);
   updateRace(world.races,RACE_COURSES,world,dt);
+  updateGameAchievements(world);
   for(const pickup of world.pickups){
     if(pickup.kind==='rocket'){updateRocketPickup(pickup,world.entities,world.time);continue;}
     if(!pickup.active&&world.time>=(pickup.readyAt??Infinity))pickup.active=true;if(!pickup.active)continue;

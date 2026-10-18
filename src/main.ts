@@ -1,6 +1,9 @@
 import './style.css';
 import './identity.css';
 import { setupMinigames } from './minigames';
+import { createProgressPanels } from './progress-panels';
+import { createAwardSync } from './award-sync';
+import { listenForDoubleShift } from './double-shift';
 import { createMapDialog } from './map-dialog';
 import { createChatPanel } from './chat-panel';
 import { GlobalChat } from './chat';
@@ -64,7 +67,7 @@ document.querySelector('#app')!.innerHTML = `
 <section id="hud" class="hidden" aria-label="Driving instruments">
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
- <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
+ <div class="mission" id="mission-panel" aria-live="polite"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><button type="button" id="delivery-drive" class="mars-quick">🚘 Self-drive to delivery</button><button type="button" id="mars-quick" class="mars-quick">🚀 Mars mission</button><span id="police-status"></span><span id="ferry-status"></span><span id="parking-status"></span><span id="race-status"></span></div>
  <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
@@ -73,16 +76,16 @@ document.querySelector('#app')!.innerHTML = `
  <div id="objective-sign" class="objective-sign" hidden aria-hidden="true"><span id="objective-phase"></span><strong id="objective-name"></strong><small id="objective-distance"></small></div>
  <div class="map-panel"><div class="map-title"><span id="map-label">LOCAL · TAP</span><span id="day-clock">06:00</span></div><button id="map-toggle" class="map-toggle" aria-label="Switch between local and Bay map" aria-pressed="false"><canvas id="minimap" width="240" height="240" aria-label="Map of the Bay; ferry docks are white diamonds, the ferry is a white boat, orange bars are island ramps, blue dashed arrows are sky lanes, gold rings are thermals, mint dots are Superchargers, purple diamonds are upgrade shops, lavender dots are rocket kits, yellow ring is your delivery, gold dots mark monuments, orange dot is the Fremont spaceport, red dots are police, orange arrow is you"></canvas></button><div class="map-key"><b>▲ YOU</b> <i></i> AIR <b class="shop-key">◆ SHOP · KIT</b> <span id="players">1 DRIVER</span></div><div class="sky-key">┄ SKY LANES &nbsp; ◌ THERMALS</div></div>
  <div class="telemetry"><div class="vehicle-title"><span id="vehicle">TESLA ROADSTER</span><span id="flight" class="flight">GROUNDED</span></div><div id="handling" class="handling"></div><div class="speed"><strong id="speed">000</strong><span>KM/H<br><b id="altitude">0 M ALT</b></span></div><div class="meter-row"><span id="air-label">AIR LV 1</span><div class="meter"><i id="air-bar"></i></div><b id="air">100%</b></div><div class="meter-row health"><span>CONDITION</span><div class="meter"><i id="health-bar"></i></div><b id="health">100%</b></div><div id="station-status">Find a Supercharger to refill</div></div>
- <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for North Bay Playground.</small></div></div>
+ <div class="control-guide"><button id="controls-toggle" class="hud-toggle" aria-expanded="false" aria-controls="keyboard-help">⌨ &nbsp;Controls</button><div id="keyboard-help" class="keyboard-help" hidden><strong>DRIVING CONTROLS</strong><p><kbd>W A S D</kbd> or arrows · drive and fly forward / back, steer</p><p><kbd>SPACE</kbd> brake / drift on the road · flip in the air</p><p><kbd>E</kbd> jump / hold to hover &nbsp; <kbd>X</kbd> flip</p><p><kbd>SHIFT</kbd> boost · double-tap to self-drive to your delivery &nbsp; <kbd>Q / R</kbd> roll</p><p><kbd>F</kbd> enter / exit &nbsp; <kbd>K</kbd> unstuck &nbsp; <kbd>C</kbd> camera</p><p><kbd>V</kbd> autopilot &nbsp; <kbd>G</kbd> fleet &nbsp; <kbd>B</kbd> shop &nbsp; <kbd>L</kbd> scores &nbsp; <kbd>T</kbd> awards</p><small>Gold diamonds refill air and give $5; green diamonds repair and give $5. Purple pads grant flight for the session or refill an equipped car. Blue sky lanes add speed and refill air; golden thermals lift and refill air. Drive onto the SF ferry for North Bay Playground.</small></div></div>
  <div class="touch-controls"><div class="steering"><button data-control="KeyA" aria-label="Steer left">◀</button><button data-control="KeyD" aria-label="Steer right">▶</button><button data-control="KeyS" aria-label="Reverse; brake to drift">REV</button><button data-control="Space" aria-label="Brake; steer while moving forward to drift">BRAKE</button></div><div class="touch-flight"><button data-control="KeyQ" aria-label="Roll left">↶</button><button data-control="KeyR" aria-label="Roll right">↷</button><button class="flip-control" data-control="KeyX" aria-label="Flip">FLIP</button></div><div class="pedals"><button data-control="ShiftLeft">BOOST</button><button id="jump-control" data-control="KeyE" aria-label="Jump">JUMP ↑</button><button id="drive-control" class="accelerate" data-control="KeyW" aria-label="Drive">DRIVE ↑</button></div></div>
 </section>
 <dialog id="controls-dialog" class="controls-dialog" aria-labelledby="controls-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / INPUTS</span><h2 id="controls-title">Controls &amp; gamepad</h2></div><button id="controls-close" aria-label="Close controls">✕</button></div><div class="gamepad-guide"><strong>Controller · Xbox / PlayStation</strong><p id="gamepad-status" role="status"></p><p>Left stick steer · RT / R2 accelerate · LT / L2 brake, then reverse · A / ✕ jump / hold to hover · X / □ flip · B / ○ boost · LB / L1 and RB / R1 roll (or right stick).</p><p>D-pad: up enter / exit, down camera, left unstuck, right autopilot · Menu / Options opens the menu. Use mouse, keyboard or touch for menus.</p></div><div class="bindings-heading"><strong>Keyboard bindings</strong><button id="bindings-reset" type="button">Reset defaults</button></div><p class="form-note">Select either key to change it. Backspace clears; Escape cancels. Browser shortcuts stay available.</p><p id="bindings-feedback" class="bindings-feedback" role="status"></p><div id="bindings-list" class="bindings-list"></div></dialog>
 <dialog id="fleet-dialog" aria-labelledby="fleet-title"><div class="fleet-header"><div><span class="eyebrow">TESLAND / TESLA COLLECTION</span><h2 id="fleet-title">Choose your Tesla.</h2></div><button id="fleet-close" aria-label="Close fleet">✕</button></div><p class="fleet-intro">Choose a Tesla here. Waymo, Cruise and Zoox vehicles can only be taken from the street. Upgrades stay with each car; choosing a Tesla replaces your personal car.</p><div class="fleet-body"><div id="fleet-list" class="fleet-list"></div><aside class="fleet-detail"><span id="fleet-brand" class="eyebrow"></span><h3 id="fleet-name"></h3><p id="fleet-status"></p><canvas id="fleet-preview" aria-label="Selected low-poly vehicle model"></canvas><dl id="fleet-specs"></dl><p id="fleet-estimates"></p><a id="fleet-source" target="_blank" rel="noopener noreferrer">View design source ↗</a><button id="fleet-drive" class="primary">Take this ride →</button><p class="form-note" id="fleet-feedback" role="status">Stop on the ground before changing rides.</p></aside></div></dialog>
 <dialog id="shop-dialog" class="shop-dialog" aria-labelledby="shop-title"><div class="fleet-header"><div><span class="eyebrow">FICTIONAL SPACEX / UPGRADE BAY</span><h2 id="shop-title">Make it yours.</h2></div><button id="shop-close" aria-label="Close shop">✕</button></div><p id="shop-location" class="fleet-intro"></p><div class="shop-wallet"><span id="shop-car"></span><strong id="shop-cash"></strong></div><div class="shop-item ota-plan"><div><strong>Remote shop · OTA</strong><p>$5 per game hour (2 real minutes). Use the shop anywhere. Upgrades cost extra. Pauses if renewal cannot be paid; resumes when you have $5. Session only.</p><p id="ota-status" role="status"></p></div><button id="ota-toggle"></button></div><div id="shop-items" class="shop-items"></div><p id="shop-feedback" class="form-note" role="status">Earn cash by delivering food. Upgrades stay on this car while it remains in the session. Fictional workshop; no affiliation implied.</p></dialog>
-<dialog id="scores-dialog" aria-labelledby="scores-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / DELIVERY SCORES</span><h2 id="scores-title">Delivery leaderboard</h2></div><button id="scores-close" aria-label="Close leaderboard">✕</button></div><p class="fleet-intro">Ranked by current cash; shorter active time breaks ties. Cash can be spent or lost to tickets. Scores reset with your drive and aren’t saved with your driver. First-person stats are self-reported; a first-person delivery takes the whole active run in cockpit view.</p><p id="scores-summary" class="form-note" role="status"></p><div id="score-head" class="score-head"><span>DRIVER</span><span>CASH</span><span>ACTIVE</span><span>PER MIN</span></div><ol id="scores-list" class="scores-list"></ol></dialog>
-<dialog id="awards-dialog" aria-labelledby="awards-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVE / LITTLE VICTORIES</span><h2 id="awards-title">Achievements</h2></div><button id="awards-close" aria-label="Close achievements">✕</button></div><p class="fleet-intro">Explore, play in the Rocket Dome, and earn these during this drive. Awards reset with your session and don’t affect cash.</p><p id="awards-summary" class="form-note" role="status"></p><ul id="awards-list" class="awards-list"></ul></dialog>
+<dialog id="scores-dialog" aria-labelledby="scores-title"></dialog>
+<dialog id="awards-dialog" aria-labelledby="awards-title"></dialog>
 <dialog id="sound-dialog" class="sound-dialog" aria-labelledby="sound-title"><div class="fleet-header"><div><span class="eyebrow">YOUR MIX / TESLAND RADIO</span><h2 id="sound-title">Sound settings</h2></div><button id="sound-close" aria-label="Close sound settings">✕</button></div><p class="fleet-intro">Choose a soundtrack for your drive. Sound effects stay on their own channel.</p><div class="radio-panel"><label for="radio-station">RADIO STATION</label><select id="radio-station"><option value="chiptune">Tesland 8-bit</option><option value="latent-space">Latent Space podcast</option><option value="thursdai">ThursdAI podcast</option></select><div id="radio-episode" class="radio-episode" hidden><span id="radio-label">UP NEXT</span><a id="radio-title" target="_blank" rel="noopener noreferrer"></a></div><div id="radio-controls" class="radio-controls" hidden><button id="radio-play" type="button">Play</button><button id="radio-next" type="button">Next random episode ↗</button></div><p id="radio-status" role="status"></p></div><div class="sound-sliders"><label>Master <output id="master-value"></output><input id="master-volume" type="range" min="0" max="100" aria-label="Master volume"></label><label>Music / radio <output id="music-value"></output><input id="music-volume" type="range" min="0" max="100" aria-label="Music and radio volume"></label><label>Effects <output id="effects-value"></output><input id="effects-volume" type="range" min="0" max="100" aria-label="Effects volume"></label></div><div class="sound-actions"><button id="sound-mute" aria-pressed="false">Mute all</button><button id="sound-test">Test sound</button></div><p id="sound-status" class="form-note" role="status">Sound starts when you begin a drive.</p></dialog>
-<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>This browser remembers your driver by default. Copy the recovery code to use the same ID on another device. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
+<dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>This browser remembers your driver by default. Copy the recovery code to use the same ID on another device. Awards stay with a saved driver. Your car, deliveries, and earnings are session-only.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Paste your recovery code. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
 <div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
@@ -308,6 +311,7 @@ if(rememberedCode)ensureChat();
 
 const roomParam = new URLSearchParams(location.search).get('room');
 const playStorage=browserStorage(),previousPlay=playStorage?readLastPlayed(playStorage):null;
+const awardSync=createAwardSync(chat,session,playStorage);
 if(previousPlay){
   const release=RELEASES.find(item=>item.version===previousPlay.version);
   $('last-played').textContent=`Last played ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(previousPlay.playedAt))} · ${release?.label??previousPlay.version}. Saved on this browser.`;
@@ -411,7 +415,7 @@ const mapExtents=[
 ] as const;
 const localRoads=ROADS.filter(road=>road.kind!=='highway');
 let mapLocal=true,mapKey='';
-let pendingDestination:{requestId:number;expires:number}|null=null,navigationDriving=false;
+let pendingDestination:{requestId:number;expires:number;success?:string;failure?:string}|null=null,navigationDriving=false;
 const mapDialog=createMapDialog({onDestination(point){
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
   if(!player||!car||car.kind==='person')return 'Get into a car to use self-driving.';
@@ -420,6 +424,19 @@ const mapDialog=createMapDialog({onDestination(point){
   controls.clear();const requestId=session.setDestination(point.x,point.z);
   pendingDestination={requestId,expires:performance.now()+5000};notice('Finding a route…');
 }});
+function driveToDelivery(){
+  const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car||car.kind==='person'){notice('Get into a car to self-drive to your delivery.');return;}
+  if(car.supportId!=='ground'||car.inDome){notice('Drive onto a ground road outside the Dome first.');return;}
+  const target=orderTarget(player.delivery.order);
+  if(target.rooftop){notice('This delivery is on a rooftop. Fly there and land to finish it.');return;}
+  if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
+  controls.clear();const requestId=session.setDestination(target.x,target.z);
+  pendingDestination={requestId,expires:performance.now()+5000,success:`Self-driving toward ${target.name}. Use the controls to take over.`,failure:'No road route to this delivery. Drive closer and try again.'};
+  notice('Finding a route to your delivery…');
+}
+$('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
+listenForDoubleShift({enabled:()=>controls.enabled&&!menu&&!openDrawer,allowed:code=>!Object.entries(controls.bindings).some(([name,keys])=>name!=='boost'&&keys.includes(code)),onDoubleTap:driveToDelivery});
 mapDialog.element.addEventListener('close',()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
 $('map-toggle').setAttribute('aria-label','Open the map and choose a self-driving destination');
 $('map-toggle').removeAttribute('aria-pressed');$('map-label').textContent='MAP · TAP TO EXPLORE';
@@ -520,55 +537,19 @@ function minimap(entity:Entity|undefined,level:Level){
   }
 }
 
-const scoresDialog=$<HTMLDialogElement>('scores-dialog');
 const clock=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
 const money=(amount:number)=>`${amount<0?'−':''}$${Math.abs(amount).toLocaleString('en-US')}`;
+const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
 const marsUi=createMarsUI(session,money,()=>{setDrawer(null);controls.clear();controls.enabled=false;},()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');});
 $('mars-quick').onclick=()=>marsUi.open();$('mars-action').onclick=()=>marsUi.open();
-function updateScores(){
-  const list=$('scores-list');list.replaceChildren();
-  const available=session.status==='solo'||session.status==='online';
-  const player=available?session.world.players.find(p=>p.id===session.id):undefined;
-  $('score-head').classList.toggle('hidden',!available||session.world.players.length===0);
-  const summary=!available?'Scores will appear when your drive is connected.':!session.world.players.length?'No drivers in this session yet.':`${session.status==='solo'?'Solo drive':'This room'} · ${session.world.players.length} ${session.world.players.length===1?'driver':'drivers'}${player?` · ${player.delivery.completed} ${player.delivery.completed===1?'delivery':'deliveries'} completed by you`:''}`;
-  if($('scores-summary').textContent!==summary)$('scores-summary').textContent=summary;
-  if(!available)return;
-  for(const p of [...session.world.players].sort((a,b)=>b.delivery.cash-a.delivery.cash||a.delivery.activeSeconds-b.delivery.activeSeconds)){
-    const row=document.createElement('li');
-    const driver=document.createElement('span');driver.className='score-driver';
-    const name=document.createElement('span');name.textContent=p.name+(p.id===session.id&&p.name!=='You'?' (you)':'');driver.append(name);
-    if(p.cockpit.active||p.cockpit.activeSeconds>0||p.cockpit.deliveries>0){
-      const badge=document.createElement('small');badge.textContent=`${p.cockpit.active?'● FIRST PERSON · ':'FIRST PERSON · '}${p.cockpit.deliveries} ${p.cockpit.deliveries===1?'run':'runs'} · ${clock(p.cockpit.activeSeconds)}`;driver.append(badge);
-    }
-    row.append(driver);
-    for(const value of [money(p.delivery.cash),clock(p.delivery.activeSeconds),p.delivery.activeSeconds>=1?money(Math.round(p.delivery.cash*60/p.delivery.activeSeconds)):'—']){
-      const cell=document.createElement('span');cell.textContent=value;row.append(cell);
-    }
-    list.append(row);
-  }
-}
-function openScores(){controls.clear();controls.enabled=false;updateScores();scoresDialog.showModal();}
-function closeScores(){scoresDialog.close();controls.clear();controls.enabled=!menu;}
-$('scores-close').onclick=closeScores;scoresDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu;});
-
-const awardsDialog=$<HTMLDialogElement>('awards-dialog');
-const ticketDialog=$<HTMLDialogElement>('ticket-dialog');
-function updateAwards(){
-  const player=(session.status==='solo'||session.status==='online')?session.world.players.find(p=>p.id===session.id):undefined,list=$('awards-list');list.replaceChildren();
-  const summary=player?`${player.achievements.unlocked.length} of ${Object.keys(ACHIEVEMENTS).length} earned this drive`:'Your awards will appear when your drive is connected.';
-  if($('awards-summary').textContent!==summary)$('awards-summary').textContent=summary;
-  if(!player)return;
-  for(const [id,award] of Object.entries(ACHIEVEMENTS)){
-    const unlocked=player?.achievements.unlocked.includes(id as AchievementId)??false;
-    const row=document.createElement('li');row.className=unlocked?'unlocked':'';
-    const badge=document.createElement('span');badge.className='award-icon';badge.textContent=unlocked?'★':'◇';
-    const copy=document.createElement('div'),name=document.createElement('strong'),description=document.createElement('p');name.textContent=award.name;description.textContent=award.description;copy.append(name,description);
-    const status=document.createElement('span');status.className='award-status';status.textContent=unlocked?'EARNED':id==='regular'?`${Math.min(player.delivery.completed,3)} / 3`:'TO EARN';row.append(badge,copy,status);list.append(row);
-  }
-}
-function openAwards(){controls.clear();controls.enabled=false;updateAwards();awardsDialog.showModal();}
-function closeAwards(){awardsDialog.close();controls.clear();controls.enabled=!menu&&session.status!=='disconnected';}
-$('awards-close').onclick=closeAwards;awardsDialog.addEventListener('cancel',()=>{controls.clear();controls.enabled=!menu&&session.status!=='disconnected';});
+const progressPanels=createProgressPanels({
+  session,
+  awards:()=>awardSync.snapshot(),
+  onOpen:()=>{setDrawer(null);controls.clear();controls.enabled=false;},
+  onClose:()=>{controls.clear();controls.enabled=!openDrawer&&!menu&&session.status!=='disconnected'&&!document.querySelector('dialog[open]');},
+});
+const {scoresDialog,awardsDialog}=progressPanels;
+const openScores=progressPanels.openScores,openAwards=progressPanels.openAwards;
 function announceAchievements(){
   const id=achievementQueue.shift();if(!id){achievementTimer=0;$('achievement-toast').classList.add('hidden');return;}
   $('achievement-toast').textContent=`★ ACHIEVEMENT UNLOCKED · ${ACHIEVEMENTS[id].name}`;$('achievement-toast').classList.remove('hidden');
@@ -720,7 +701,7 @@ scene.start(dt=>{
   const current=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===current?.entityId);
   const cockpit=!!car&&car.kind!=='person'&&scene.cameraMode==='cockpit'&&!menu&&started;
   const input=controls.read();input.cockpit=cockpit&&!document.hidden&&document.hasFocus();
-  session.tick(dt,input);audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));
+  session.tick(dt,input);awardSync.update();progressPanels.update();audio.update(session.world,session.id,started&&!menu&&(session.status==='solo'||session.status==='online'));
   const renderWorld=session.renderWorld();scene.render(renderWorld,session.id,dt,menu,renderWorld!==session.world,session.takePresentationSnap());
   const observedPlayer=session.world.players.find(p=>p.id===session.id),observedCar=session.world.entities.find(e=>e.id===observedPlayer?.entityId);
   if(navigationDriving&&observedCar?.navigation?.status==='arrived')notice('Arrived near your destination.');
@@ -739,7 +720,7 @@ scene.start(dt=>{
   }
   if(pendingDestination){
     const result=session.destinationResult;
-    if(result?.requestId===pendingDestination.requestId){notice(result.ok?'Self-driving to your destination. Use the controls to take over.':'No route found. Choose an unlocked nearby road and try again.');pendingDestination=null;}
+    if(result?.requestId===pendingDestination.requestId){notice(result.ok?(pendingDestination.success??'Self-driving to your destination. Use the controls to take over.'):(pendingDestination.failure??'No route found. Choose an unlocked nearby road and try again.'));pendingDestination=null;}
     else if(performance.now()>pendingDestination.expires){notice('Could not confirm the route. Please try again.');pendingDestination=null;}
   }
   if(started&&!menu&&!document.hidden&&(session.status==='solo'||session.status==='online')&&observedPlayer){
@@ -847,7 +828,6 @@ scene.start(dt=>{
     const chased=session.world.entities.some(c=>c.police?.targetId===player.id);
     $('police-status').textContent=chased?'⚠ POLICE PURSUIT · LAND OR ESCAPE · FINE RISING':protectedArea?'North Bay Playground and the ferry are police-free.':d.lastTicket!==null?`Last citation −${money(d.lastTicket.amount)} · repeat fines rise`:'Flying near police starts a chase.';
     $('police-status').classList.toggle('chased',chased);
-    if(scoresDialog.open)updateScores();if(awardsDialog.open)updateAwards();
     const newAwards=player.achievements.unlocked.filter(id=>!seenAchievements.has(id));
     for(const id of newAwards){seenAchievements.add(id);achievementQueue.push(id);}
     if(newAwards.length&&!achievementTimer)announceAchievements();

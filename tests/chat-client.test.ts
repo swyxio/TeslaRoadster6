@@ -44,14 +44,32 @@ test('chat preserves saved identity across reconnect, waits for replacement, and
     Socket.sockets = [];
     const states: ChatStatus[] = [];
     const errors: string[] = [];
+    const awardEvents: unknown[] = [],ticketEvents: unknown[] = [];
     const client = new GlobalChat({
       onStatus: status => states.push(status), onReady: () => {}, onRenamed: () => {}, onMessage: () => {},
       onRecovery: () => {}, onError: error => errors.push(error),
+      onAwards: awards => awardEvents.push(awards), onAwardTicket: ticket => ticketEvents.push(ticket),
     });
     client.connect('Sky');
     const first = Socket.sockets[0]; first.open();
     assert.deepEqual(first.packets()[0], { type: 'hello', name: 'Sky' });
-    first.receive({ type: 'ready', playerId: 'id-1', name: 'Sky', messages: [] });
+    first.receive({ type: 'ready', playerId: 'id-1', name: 'Sky', messages: [], awards: {room:['regular'],solo:[]} });
+    assert.deepEqual(client.awards, {room:['regular'],solo:[]});
+    assert.equal(client.readyGeneration,1);
+    assert.equal(client.requestAwardTicket(9),true);
+    assert.deepEqual(first.packets().at(-1),{type:'awardTicket',requestId:9});
+    first.receive({type:'awardTicket',requestId:9,ticket:'a'.repeat(64),expiresAt:12345});
+    assert.deepEqual(ticketEvents.at(-1),{requestId:9,ticket:'a'.repeat(64),expiresAt:12345});
+    assert.equal(client.saveSoloAwards(['roof-rider']),true);
+    assert.deepEqual(first.packets().at(-1),{type:'soloAwards',achievements:['roof-rider']});
+    assert.equal(client.getAwards(),true);
+    assert.deepEqual(first.packets().at(-1),{type:'getAwards'});
+    first.receive({type:'awards',awards:{room:['regular'],solo:['roof-rider']}});
+    assert.deepEqual(awardEvents.at(-1),{room:['regular'],solo:['roof-rider']});
+    first.receive({type:'awards',awards:{room:['invented'],solo:[]}});
+    assert.equal(client.awards,null,'malformed server awards are never presented as saved');
+    first.receive({type:'error',code:'awards_failed',message:'Try again'});
+    assert.equal(client.awardFailure?.revision,1);
     assert.equal(intervals.size, 1);
     const heartbeat = [...intervals.values()][0];
     assert.equal(heartbeat.delay, 25_000);

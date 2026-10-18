@@ -1,4 +1,5 @@
 // Run against Wrangler or deployment: pnpm exec tsx tests/room.integration.ts [http://localhost:8787]
+// Local award round trip only: TESLAND_ROOM_AWARDS_ONLY=1 pnpm exec tsx tests/room.integration.ts
 import assert from 'node:assert/strict';
 import { PROTOCOL_VERSION, NEUTRAL, THRUSTER_REAR, THRUSTER_DOWN_LEFT, THRUSTER_DOWN_RIGHT, THRUSTER_SIDE_RIGHT, type World } from '../shared/game';
 import { DOME } from '../shared/dome';
@@ -7,8 +8,8 @@ import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { supportHeight } from '../shared/map';
 const base = process.argv[2] ?? 'http://localhost:8787';
 let inputSeq=0, observerSeq=0;
-// Protocol 30 combines sequenced inputs with the updated Bay map and sky currents.
-assert.equal(PROTOCOL_VERSION, 30);
+// Protocol 31 adds the private, authenticated award binding.
+assert.equal(PROTOCOL_VERSION, 31);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -24,11 +25,12 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 }
 function connect() {
   const socket = new WebSocket(url);
-  const state: { id?: string; world?: World; capacity?: number; inputAck?:number; closed?: number; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; inputAck?:number; sync?:number; closed?: number; awardBindings?: {requestId:number;ok:boolean}[]; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     if (data.type === 'welcome') { assert.equal(data.version, PROTOCOL_VERSION); state.id = data.id; state.capacity = data.capacity; }
-    if (data.type === 'state') {state.world = data.world;state.inputAck=data.inputAck;}
+    if (data.type === 'state') {state.world = data.world;state.inputAck=data.inputAck;if(data.sync)state.sync=Math.max(state.sync??0,data.sync);}
+    if (data.type === 'awardsBound') (state.awardBindings??=[]).push(data);
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'otaResult') (state.otaResults??=[]).push(data);
     if (data.type === 'destinationResult') (state.destinationResults??=[]).push(data);
@@ -38,10 +40,66 @@ function connect() {
   return { socket, state };
 }
 const one = connect(), two = connect();
-// Keep the observing client connected through the full five-goal match.
-const keepObserverAlive=setInterval(()=>{if(two.socket.readyState===WebSocket.OPEN)two.socket.send(JSON.stringify({type:'input',seq:++observerSeq,input:NEUTRAL}));},5000);
+type ChatEvent = { type:string; playerId?:string; name?:string; code?:string; ticket?:string; requestId?:number; awards?:{room:string[];solo:string[]}|null };
+const chatSockets:WebSocket[] = [];
+function chatConnection() {
+  const socket = new WebSocket(base.replace(/^http/, 'ws') + '/api/chat');
+  const events:ChatEvent[] = [];
+  socket.addEventListener('message', event => events.push(JSON.parse(String(event.data))));
+  chatSockets.push(socket);
+  return { socket, events };
+}
+async function savedDriver(name:string) {
+  const chat=chatConnection();
+  await eventually(()=>chat.socket.readyState===WebSocket.OPEN, 'chat opens');
+  chat.socket.send(JSON.stringify({type:'hello',name}));
+  await eventually(()=>chat.events.some(event=>event.type==='ready'), 'chat identity');
+  chat.socket.send(JSON.stringify({type:'save'}));
+  await eventually(()=>chat.events.some(event=>event.type==='recovery'), 'saved driver');
+  const code=chat.events.find(event=>event.type==='recovery')!.code!;
+  chat.socket.send(JSON.stringify({type:'awardTicket',requestId:1}));
+  await eventually(()=>chat.events.some(event=>event.type==='awardTicket'&&event.requestId===1), 'private room award ticket');
+  return {...chat,code,ticket:chat.events.find(event=>event.type==='awardTicket')!.ticket!,playerId:chat.events.find(event=>event.type==='ready')!.playerId!};
+}
+async function recoverDriver(code:string) {
+  const chat=chatConnection();
+  await eventually(()=>chat.socket.readyState===WebSocket.OPEN, 'recovery chat opens');
+  // Closing a socket and releasing its identity can cross in flight. Retry an
+  // active-identity response on the same socket, as the browser client does.
+  for(let attempt=0;attempt<5;attempt++) {
+    const start=chat.events.length;
+    chat.socket.send(JSON.stringify({type:'hello',name:'Recovery',code}));
+    await eventually(()=>chat.events.slice(start).some(event=>event.type==='ready'||event.type==='error'), 'recovery response');
+    const ready=chat.events.slice(start).find(event=>event.type==='ready');
+    if(ready)return {...chat,ready};
+    await delay(250);
+  }
+  throw new Error('Saved identity did not reconnect');
+}
+// The extra checks create durable identities, so run them only on local Wrangler.
+const localAwards=['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname);
+const awardsOnly=process.env.TESLAND_ROOM_AWARDS_ONLY==='1';
+if(awardsOnly&&!localAwards)throw new Error('The awards-only integration test requires local Wrangler.');
+let winningDriver:Awaited<ReturnType<typeof savedDriver>>|undefined;
+let spectatorDriver:Awaited<ReturnType<typeof savedDriver>>|undefined;
+// Keep both clients connected during long, heavily loaded local runs without
+// interfering with the driver's controls.
+const keepObserverAlive=setInterval(()=>{
+  if(one.socket.readyState===WebSocket.OPEN)one.socket.send(JSON.stringify({type:'sync',token:1}));
+  if(two.socket.readyState===WebSocket.OPEN)two.socket.send(JSON.stringify({type:'input',seq:++observerSeq,input:NEUTRAL}));
+},5000);
 try {
   await eventually(() => !!one.state.id && !!two.state.id && one.state.world?.players.length === 2 && two.state.world?.players.length === 2, 'two players visible in both snapshots');
+  if(localAwards) {
+    [winningDriver,spectatorDriver]=await Promise.all([savedDriver('Award Driver'),savedDriver('Award Spectator')]);
+    one.socket.send(JSON.stringify({type:'bindAwards',ticket:winningDriver.ticket,requestId:101}));
+    await eventually(()=>one.state.awardBindings?.some(result=>result.requestId===101&&result.ok)??false, 'winner binds saved driver');
+    two.socket.send(JSON.stringify({type:'bindAwards',ticket:winningDriver.ticket,requestId:102}));
+    await eventually(()=>two.state.awardBindings?.some(result=>result.requestId===102&&!result.ok)??false, 'room ticket cannot be replayed');
+    two.socket.send(JSON.stringify({type:'bindAwards',ticket:spectatorDriver.ticket,requestId:103}));
+    await eventually(()=>two.state.awardBindings?.some(result=>result.requestId===103&&result.ok)??false, 'spectator binds their own driver');
+    assert.ok(!(one.state.awardBindings??[]).some(result=>result.requestId===103),'binding results are private');
+  }
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===0&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
     assert.equal(state.world!.entities.filter(e=>e.police).length,4);
@@ -62,7 +120,8 @@ try {
   one.socket.send(JSON.stringify({type:'mars',action:'contribute',amount:1,requestId:90}));
   await eventually(()=>one.state.marsResults?.some(r=>r.requestId===90&&!r.ok)??false,'unfunded contribution is rejected');
   await delay(500);one.socket.send(JSON.stringify({type:'mars',action:'board',requestId:91}));
-  await eventually(()=>one.state.marsResults?.some(r=>r.requestId===91&&!r.ok)??false,'early remote boarding is rejected');
+  try { await eventually(()=>one.state.marsResults?.some(r=>r.requestId===91&&!r.ok)??false,'early remote boarding is rejected'); }
+  catch(error) { throw new Error(`Boarding request failed: ${JSON.stringify({results:one.state.marsResults,closed:one.state.closed,socket:one.socket.readyState})}`,{cause:error}); }
   assert.equal(two.state.marsResults?.length??0,0,'Mars action results are private');
   await delay(500);
   one.socket.send(JSON.stringify({type:'parking',action:'park'}));
@@ -134,17 +193,29 @@ try {
   one.socket.send(JSON.stringify({type:'dome'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.id===entityId&&e.inDome)??false,'immediate arena re-entry replicated');
   assert.equal(two.state.world!.soccer.blueScore,0);assert.equal(two.state.world!.soccer.orangeScore,0);
-  for(let i=0;i<70;i++){one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1}}));await delay(50);}
+  // A busy host can skip timer callbacks; drive for simulation time, not a
+  // fixed number of real-time sends, to reproduce the same shot reliably.
+  const shoot=async()=>{
+    const start=two.state.world!.time,deadline=Date.now()+25000;
+    while((two.state.world?.time??start)-start<3.5&&Date.now()<deadline){
+      one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1}}));await delay(50);
+    }
+    assert.ok((two.state.world?.time??start)-start>=3.5,`the room advanced enough simulation time for the shot: ${JSON.stringify({start,end:two.state.world?.time,oneClosed:one.state.closed,twoClosed:two.state.closed,oneSocket:one.socket.readyState,twoSocket:two.socket.readyState,oneAck:one.state.inputAck,car:two.state.world?.entities.find(e=>e.id===entityId)})}`);
+  };
+  await shoot();
   await eventually(()=>!!two.state.world&&two.state.world.soccer.ball.x>DOME.x+2,'car impact moves the shared ball');
   one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:NEUTRAL}));
-  await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000);
+  try { await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000); }
+  catch (error) {
+    throw new Error(`First goal did not complete: ${JSON.stringify({soccer:two.state.world?.soccer,car:two.state.world?.entities.find(e=>e.id===entityId),inputAck:one.state.inputAck,expectedInput:inputSeq})}`, { cause:error });
+  }
   await eventually(()=>two.state.world?.soccer.participants.some(p=>p.playerId===id&&p.touches.roadster&&p.goals.roadster===1)??false,'authoritative Roadster touch and goal credit replicated');
   assert.ok(!one.state.world!.players.find(p=>p.id===id)!.achievements.unlocked.includes('rocket-rookie'),'playing award waits for the completed match');
   for(let score=2;score<=5;score++){
     await eventually(()=>two.state.world?.soccer.phase==='play','next kickoff',15000);
     one.socket.send(JSON.stringify({type:'reset'}));
     await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&Math.abs(e.x-(DOME.x-30))<1&&Math.abs(e.z-DOME.z)<1;},'dome reset to shooting position',8000);
-    for(let i=0;i<70;i++){one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:{...NEUTRAL,throttle:1}}));await delay(50);}
+    await shoot();
     one.socket.send(JSON.stringify({type:'input',seq:++inputSeq,input:NEUTRAL}));
     await eventually(()=>one.state.world?.soccer.blueScore===score&&two.state.world?.soccer.blueScore===score,`goal ${score} replicated`,12000);
   }
@@ -153,6 +224,22 @@ try {
     return soccer?.phase==='win'&&soccer.winningPlayers.includes(id)&&p?.achievements.unlocked.includes('rocket-rookie')&&p.achievements.unlocked.includes('roadster-champion');
   },'match winner and both Roadster awards replicated');
   assert.deepEqual(two.state.world!.players.find(p=>p.id===two.state.id)!.achievements.unlocked,[],'nonparticipant receives no Dome award');
+  if(winningDriver&&spectatorDriver) {
+    const ownsAwards=(event:ChatEvent)=>event.type==='awards'&&!!event.awards?.room.includes('rocket-rookie')&&event.awards.room.includes('roadster-champion');
+    await eventually(()=>winningDriver!.events.some(ownsAwards),'room-earned awards are durably confirmed to the winner',15000);
+    assert.ok(!spectatorDriver.events.some(ownsAwards),'room-earned awards are not sent to another identity');
+    winningDriver.socket.close();
+    spectatorDriver.socket.close();
+    const [winnerRecovered,spectatorRecovered]=await Promise.all([recoverDriver(winningDriver.code),recoverDriver(spectatorDriver.code)]);
+    assert.equal(winnerRecovered.ready.playerId,winningDriver.playerId);
+    assert.ok(winnerRecovered.ready.awards?.room.includes('rocket-rookie'));
+    assert.ok(winnerRecovered.ready.awards?.room.includes('roadster-champion'));
+    assert.equal(spectatorRecovered.ready.playerId,spectatorDriver.playerId);
+    assert.deepEqual(spectatorRecovered.ready.awards,{room:[],solo:[]},'another saved driver cannot inherit the winner’s awards');
+  }
+  if(awardsOnly) {
+    console.log('PASS: saved drivers bind privately; room ticket replay is rejected; a real five-goal Dome match saves awards to the winning driver; recovery restores those awards and isolates the spectator.');
+  } else {
   // Drive from the kickoff onto a wall; the room must refill air for both clients.
   await delay(500);one.socket.send(JSON.stringify({type:'reset'}));
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.inDome&&Math.abs(e.x-(DOME.x-30))<.1&&e.y<.1;},'arena reset for wall charge');
@@ -203,9 +290,29 @@ try {
   await eventually(()=>two.state.world?.players.find(p=>p.id===id)?.delivery.ota.enabled===false,'cancellation replicated');
   await delay(500);one.socket.send(JSON.stringify({type:'autopilot'}));
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot)??false,'autonomous mode replicated');
-  await delay(500);one.socket.send(JSON.stringify({type:'reset'}));await delay(700);
+  // Reset can choose an occupied-avoidance spawn off this connected route.
+  // A sync barrier observes the processed action, rather than assuming a fixed
+  // delay implies a reset under load. The Bay approach is a known route origin.
+  let routeOrigin=false;
+  const routeSpawns:unknown[]=[];
+  for(let attempt=0;attempt<8&&!routeOrigin;attempt++){
+    await delay(700);
+    const token=10+attempt;
+    one.socket.send(JSON.stringify({type:'reset'}));
+    one.socket.send(JSON.stringify({type:'sync',token}));
+    await eventually(()=>(one.state.sync??0)>=token,'reset processed before destination',8000);
+    const car=one.state.world?.entities.find(e=>e.driver===id);
+    routeOrigin=!!car&&!car.autopilot&&car.supportId==='ground'&&Math.abs(car.speed)<=1&&Math.hypot(car.x-40,car.z-60)<1;
+    routeSpawns.push(car&&{x:car.x,z:car.z,yaw:car.yaw,supportId:car.supportId,speed:car.speed,autopilot:car.autopilot});
+  }
+  assert.ok(routeOrigin,`known connected route origin is available: ${JSON.stringify(routeSpawns)}`);
+  await delay(500);
   one.socket.send(JSON.stringify({type:'destination',x:-120,z:60,requestId:9}));
-  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9&&r.ok)??false,'destination is accepted by the room');
+  try { await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===9)??false,'destination receives a result'); }
+  catch (error) {
+    throw new Error(`Destination request failed: ${JSON.stringify({results:one.state.destinationResults,car:two.state.world?.entities.find(e=>e.driver===id),player:two.state.world?.players.find(p=>p.id===id)})}`, {cause:error});
+  }
+  assert.equal(one.state.destinationResults?.find(r=>r.requestId===9)?.ok,true,'destination is accepted by the room');
   await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&e.navigation?.status==='driving')??false,'destination route is replicated');
   assert.equal(two.state.destinationResults?.length??0,0,'destination response goes only to the requester');
   await delay(500);one.socket.send(JSON.stringify({type:'minigame',game:'short'}));
@@ -223,4 +330,5 @@ try {
   const response = await fetch(base + '/api/room/test'); assert.equal(response.status, 426);
   const invalid = await fetch(base + '/api/room/INVALID'); assert.equal(invalid.status, 404);
   console.log(`PASS: two-client join, ferry and activity snapshots, shared sky-lane speed and refill, arena entry, shared ball impact, five goals, authoritative match winner and Roadster awards, spectator exclusion, wall refill and exit, traffic, room clock, surface and upgrade snapshots, movement, delivery, police, jump, flip, landing, Tesla-only selection, rejected purchase, autonomous mode, destination navigation, direct mini-game entry, invalid-input isolation, disconnect cleanup, route checks; advertised capacity ${two.state.capacity}. This is not a ferry crossing or load test.`);
-} finally { clearInterval(keepObserverAlive); one.socket.close(); two.socket.close(); }
+  }
+} finally { clearInterval(keepObserverAlive); one.socket.close(); two.socket.close(); for(const socket of chatSockets)socket.close(); }

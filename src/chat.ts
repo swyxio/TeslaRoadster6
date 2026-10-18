@@ -1,6 +1,9 @@
 import type { ChatMessage } from './chat-panel';
+import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 
 export type ChatStatus = 'connecting' | 'online' | 'offline';
+export type AwardProgress = { room: AchievementId[]; solo: AchievementId[] };
+export type AwardTicket = { requestId:number; ticket:string; expiresAt:number };
 type ChatCallbacks = {
   onStatus: (status: ChatStatus, detail?: string) => void;
   onReady: (playerId: string, name: string, messages: ChatMessage[]) => void;
@@ -8,7 +11,16 @@ type ChatCallbacks = {
   onMessage: (message: ChatMessage) => void;
   onRecovery: (code: string) => void;
   onError: (message: string, code?: string, requestId?: number) => void;
+  onAwards?: (awards:AwardProgress|null) => void;
+  onAwardTicket?: (ticket:AwardTicket) => void;
 };
+
+function parseAwards(value:unknown):AwardProgress|null {
+  if(!value||typeof value!=='object')return null;
+  const {room,solo}=value as Record<string,unknown>;
+  const valid=(ids:unknown):ids is AchievementId[]=>Array.isArray(ids)&&ids.every(id=>typeof id==='string'&&Object.hasOwn(ACHIEVEMENTS,id));
+  return valid(room)&&valid(solo)?{room:[...new Set(room)],solo:[...new Set(solo)]}:null;
+}
 
 /** Global chat is independent of the current driving room. */
 export class GlobalChat {
@@ -16,6 +28,13 @@ export class GlobalChat {
   name = '';
   playerId = '';
   code: string | undefined;
+  // Event snapshots let the game consume replies independently of chat UI.
+  awards: AwardProgress|null = null;
+  awardsRevision = 0;
+  awardTicket: AwardTicket|null = null;
+  awardFailure: { revision:number; message:string; requestId?:number }|null = null;
+  readyGeneration = 0;
+  identityTransition = false;
   private requestedName = 'Driver';
   private requestedCode: string | undefined;
   private socket?: WebSocket;
@@ -34,6 +53,10 @@ export class GlobalChat {
     if (!force && (this.status === 'online' || this.status === 'connecting') &&
         code === this.requestedCode && (wanted === this.name || wanted === this.requestedName)) return;
     this.requestedName = wanted;
+    // During a deliberate identity change the old ID must not receive new
+    // awards while the replacement socket authenticates.
+    this.identityTransition = !code || code !== this.code;
+    if(this.identityTransition){this.awardTicket=null;this.awards=null;}
     this.requestedCode = code;
     this.blocked = false;
     this.retries = 0;
@@ -53,6 +76,14 @@ export class GlobalChat {
   }
   save(): boolean { return this.sendPacket({ type: 'save' }); }
   rename(name: string, requestId: number): boolean { return this.sendPacket({ type: 'rename', name, requestId }); }
+  requestAwardTicket(requestId:number):boolean { return this.sendPacket({type:'awardTicket',requestId}); }
+  saveSoloAwards(achievements:AchievementId[]):boolean { return this.sendPacket({type:'soloAwards',achievements}); }
+  getAwards():boolean { return this.sendPacket({type:'getAwards'}); }
+
+  private receiveAwards(value:unknown) {
+    this.awards=parseAwards(value);this.awardsRevision++;
+    this.callbacks.onAwards?.(this.awards);
+  }
 
   private sendPacket(packet: object): boolean {
     if (this.status !== 'online' || this.socket?.readyState !== WebSocket.OPEN) return false;
@@ -110,6 +141,10 @@ export class GlobalChat {
         this.playerId = data.playerId;
         this.name = data.name;
         this.code = this.requestedCode;
+        this.identityTransition = false;
+        this.awardTicket = null;
+        this.readyGeneration++;
+        this.receiveAwards(data.awards);
         this.retries = 0;
         this.identityRetries = 0;
         this.setStatus('online');
@@ -125,7 +160,13 @@ export class GlobalChat {
         this.code = data.code;
         this.requestedCode = data.code;
         this.callbacks.onRecovery(data.code);
+      } else if(data.type==='awards') {
+        this.receiveAwards(data.awards);
+      } else if(data.type==='awardTicket' && Number.isSafeInteger(data.requestId) && (data.requestId as number)>0 && typeof data.ticket==='string' && /^[0-9a-f]{64}$/.test(data.ticket) && typeof data.expiresAt==='number' && Number.isFinite(data.expiresAt)) {
+        this.awardTicket={requestId:data.requestId as number,ticket:data.ticket,expiresAt:data.expiresAt};
+        this.callbacks.onAwardTicket?.(this.awardTicket);
       } else if (data.type === 'error' && typeof data.message === 'string') {
+        if(data.code==='awards_failed')this.awardFailure={revision:(this.awardFailure?.revision??0)+1,message:data.message,...(typeof data.requestId==='number'?{requestId:data.requestId}:{})};
         if (this.status === 'connecting' && data.code === 'identity_active' && this.requestedCode && this.identityRetries < 4) {
           // A prior connection can take longer to disappear on the server than
           // it does locally. Retry on this socket before requiring user action.

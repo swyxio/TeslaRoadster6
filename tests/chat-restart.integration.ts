@@ -98,7 +98,7 @@ async function waitForServer(child: ChildProcess, base: string) {
   }, 'isolated Wrangler startup', 25_000);
 }
 
-type ChatEvent = { type: string; playerId?: string; name?: string; code?: string; messages?: unknown[]; message?: { text?: string } };
+type ChatEvent = { type: string; playerId?: string; name?: string; code?: string; ticket?: string; requestId?: number; expiresAt?: number; awards?: { room: string[]; solo: string[] } | null; messages?: unknown[]; message?: { text?: string } };
 function connect(url: string) {
   const socket = new WebSocket(url);
   const events: ChatEvent[] = [];
@@ -131,11 +131,22 @@ try {
   send(first.socket, { type: 'save' });
   const renamed = `Again${randomUUID().slice(0, 8)}`;
   send(first.socket, { type: 'rename', name: renamed, requestId: 1 });
+  send(first.socket, { type: 'soloAwards', achievements: ['regular', 'roof-rider'] });
+  send(first.socket, { type: 'awardTicket', requestId: 2 });
   await until(() => first.events.some(event => event.type === 'recovery'), 'recovery code');
   const code = first.events.find(event => event.type === 'recovery')!.code;
   assert.ok(code);
   await until(() => first.events.some(event => event.type === 'renamed'), 'renamed driver before restart');
   assert.equal(first.events.find(event => event.type === 'renamed')?.playerId, guest.playerId);
+  await until(() => first.events.some(event => event.type === 'awards' && event.awards?.solo.includes('regular')), 'solo awards saved');
+  const savedAwards = first.events.find(event => event.type === 'awards' && event.awards?.solo.includes('regular'))!.awards;
+  assert.deepEqual(savedAwards, { room: [], solo: ['roof-rider', 'regular'] });
+  await until(() => first.events.some(event => event.type === 'awardTicket'), 'private room grant');
+  const ticket = first.events.find(event => event.type === 'awardTicket')!;
+  assert.equal(ticket.requestId, 2);
+  assert.match(ticket.ticket!, /^[0-9a-f]{64}$/);
+  assert.ok(ticket.expiresAt! > Date.now());
+  assert.ok(!JSON.stringify(ticket).includes(code), 'the room grant never contains a recovery code');
   await stop(child);
   child = undefined;
 
@@ -150,8 +161,9 @@ try {
   assert.ok(recovered, 'saved recovery code must be accepted after the restart');
   assert.equal(recovered.playerId, guest.playerId);
   assert.equal(recovered.name, renamed);
+  assert.deepEqual(recovered.awards, savedAwards, 'confirmed solo awards survive a restart with their identity');
   assert.deepEqual(recovered.messages, [], 'chat history must not survive a restart');
-  console.log('PASS: real local Wrangler restart preserved saved player ID/name and discarded chat history.');
+  console.log('PASS: real local Wrangler restart preserved saved player ID, name, and solo awards and discarded chat history.');
 } finally {
   for (const socket of sockets) if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
   if (child) await stop(child);
