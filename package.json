@@ -15,7 +15,8 @@
     "deploy": "pnpm build && wrangler deploy",
     "perf:baseline": "node scripts/performance-baseline.mjs",
     "perf:report": "node scripts/performance-report.mjs",
-    "playtest:record": "tsx scripts/playtest-record.ts"
+    "playtest:record": "tsx scripts/playtest-record.ts",
+    "playtest:blog-video": "node scripts/playtest-to-blog.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"
