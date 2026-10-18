@@ -1,4 +1,4 @@
-import { isSurface, nearbyBuildings, ROADS } from './map';
+import { isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
 import { requiredLevelAt, type Level } from './delivery';
 import { ROUTES, type Point } from './traffic';
 import { VEHICLES } from './vehicles';
@@ -139,6 +139,16 @@ export function nearestNavigationAnchor(origin:Point,level:Level):{point:Point;d
   return best;
 }
 function allowed(a:Point,b:Point,level:Level):boolean{
+  // Road navigation must not enter the loop, drive up the ramp, or try to
+  // pass through its high end. Manual driving still uses the stunt surfaces.
+  const crosses=(x:number,z:number,width:number)=>{
+    const dx=b.x-a.x;if(!dx)return false;
+    const t=(x-a.x)/dx;
+    return t>=0&&t<=1&&Math.abs(a.z+(b.z-a.z)*t-z)<width/2;
+  };
+  if(crosses(STUNT_LOOP.x,STUNT_LOOP.z,STUNT_LOOP.width)||
+    (a.x<=STUNT_RAMP.start&&b.x>STUNT_RAMP.start&&crosses(STUNT_RAMP.start,STUNT_RAMP.z,STUNT_RAMP.width))||
+    (a.x>=STUNT_RAMP.end&&b.x<STUNT_RAMP.end&&crosses(STUNT_RAMP.end,STUNT_RAMP.z,STUNT_RAMP.width)))return false;
   const count=Math.max(1,Math.ceil(distance(a,b)/30));
   // A purchase may lower a driver's level while they are in a locked area.
   // Permit egress, but never let a route climb back into a higher tier.
@@ -266,7 +276,8 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     const heading=alignment(start)*(start.reverse?-1:1);
     const cuts=segmentNodes[start.i];
     const next=start.reverse?[...cuts].reverse().find(c=>c.t<=start.t+1e-7):cuts.find(c=>c.t>=start.t-1e-7);
-    if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||!allowed(car,nodes[next.id],level))continue;
+    if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||
+      !allowed(car,nodes[next.id],level)||!allowed(start.point,nodes[next.id],level))continue;
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
     const cost=(onRoad?start.distance*2:approachLength)+(1-heading)*8+distance(start.point,nodes[next.id]);
     if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);queue.push(next.id,cost);}
@@ -274,7 +285,7 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
   let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
   // Direct travel on a single segment need not pass through an intersection.
   let direct:Point[]|undefined,directStart:typeof closeStarts[number]|undefined;
-  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)){
+  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)&&allowed(start.point,end.point,level)){
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
     const cost=(onRoad?start.distance*2:approachLength)+distance(start.point,end.point)+end.distance*2;
     if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[...start.approach,end.point];directStart=start;}

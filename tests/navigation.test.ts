@@ -45,6 +45,34 @@ function cityPavementEdge(point:{x:number;z:number}):number{
   return edge;
 }
 
+test('Oakland delivery navigation turns before the stunt loop and ramp',()=>{
+  for(const kind of ['model-3','roadster'] as const){
+    const {world,player,car}=drivingWorld();
+    player.delivery.level=1;player.delivery.cash=LEVELS[1].cash+2_500;
+    player.delivery.order.restaurant=RESTAURANTS.findIndex(place=>place.id==='oakland-saints');
+    player.delivery.order.customer=CUSTOMERS.findIndex(place=>place.id==='customer-oakland-07');
+    player.delivery.order.stage='dropoff';
+    Object.assign(car,{kind,x:507,z:139,yaw:Math.PI,speed:0,vx:0,vz:0});
+    assert.equal(setDeliveryDestination(world,'driver'),true,`${kind}: destination planned`);
+    for(let i=0;i<6000&&car.autopilot;i++){
+      step(world,new Map(),.05);
+      assert.notEqual(car.supportId,'stunt-loop',`${kind}: does not enter the stunt loop`);
+      assert.notEqual(car.supportId,'stunt-ramp',`${kind}: does not enter the stunt ramp`);
+    }
+    assert.equal(car.navigation?.status,'arrived',`${kind}: destination reached`);
+    assert.ok(Math.hypot(car.x-487,car.z-117)<9,`${kind}: within delivery marker`);
+    assert.equal(player.delivery.completed,1,`${kind}: actual dropoff completed`);
+    assert.equal(car.health,100,`${kind}: no collision damage`);
+  }
+});
+
+test('delivery navigation does not promise a direct route through either ramp end',()=>{
+  const west=makeEntity('west','model-3',410,177);west.yaw=Math.PI/2;
+  const east=makeEntity('east','model-3',350,177);east.yaw=-Math.PI/2;
+  assert.equal(planNavigation(west,{x:360,z:177},1,DELIVERY_DESTINATION_SNAP),null);
+  assert.equal(planNavigation(east,{x:410,z:177},1,DELIVERY_DESTINATION_SNAP),null);
+});
+
 test('delivery navigation reaches western and central SF markers on the mapped streets',()=>{
   const targets=[...RESTAURANTS.filter(place=>['burma','tartine','tonys','nanking'].includes(place.id)),
     CUSTOMERS.find(place=>place.id==='coast')!];

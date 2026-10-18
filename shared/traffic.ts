@@ -15,7 +15,10 @@ export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
 // large district loops let NPCs tour more than a single block.
 function loop(left:number,top:number,right:number,bottom:number):Point[]{return [{x:left+3,z:top+3},{x:right-3,z:top+3},{x:right-3,z:bottom-3},{x:left+3,z:bottom-3}];}
-export const ROUTES:Point[][]=[loop(-240,-180,0,120),loop(-180,-120,60,120),loop(-120,-60,0,60),loop(330,-180,510,180),loop(390,-120,570,120),loop(330,-60,450,60)];
+// Turn north before the Oakland stunt loop and ramp, then rejoin the city loop.
+const oaklandLoop:Point[]=[{x:333,z:-177},{x:507,z:-177},{x:507,z:177},
+  {x:453,z:177},{x:453,z:117},{x:333,z:117}];
+export const ROUTES:Point[][]=[loop(-240,-180,0,120),loop(-180,-120,60,120),loop(-120,-60,0,60),oaklandLoop,loop(390,-120,570,120),loop(330,-60,450,60)];
 for(let x=-240;x<0;x+=60)for(let z=-180;z<180;z+=60){
   if(x>=-180&&z>=120)continue; // The China Basin stadium replaces these blocks.
   ROUTES.push(loop(x,z,x+60,z+60));
@@ -110,9 +113,9 @@ function wallAhead(e:Entity):boolean {
   return false;
 }
 export function routePose(index:number,count:number) {
-  const routeId=index%6,route=ROUTES[routeId],side=(index*4/count)%4,segment=Math.floor(side),t=side-segment;
-  const a=route[segment],b=route[(segment+1)%4];
-  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),routeId,waypoint:(segment+1)%4};
+  const routeId=index%6,route=ROUTES[routeId],side=(index*route.length/count)%route.length,segment=Math.floor(side),t=side-segment;
+  const a=route[segment],b=route[(segment+1)%route.length];
+  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),routeId,waypoint:(segment+1)%route.length};
 }
 export function engageAutopilot(e:Entity):boolean {
   // All current routes follow ground; an overlapping deck or roof is not a route.
