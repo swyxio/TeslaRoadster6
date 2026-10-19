@@ -89,19 +89,20 @@ let replayable = true;
 const replaySteps: Record<string, unknown>[] = [];
 let replayLastActionEnd: number | undefined;
 let replayFinishedAt: number | undefined;
-type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null; deliveryRestaurant: number | null; deliveryCustomer: number | null; deliverySearching: boolean | null };
+type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null; deliveryRestaurant: number | null; deliveryCustomer: number | null; deliverySearching: boolean | null; visual?: { kind: string; car: Record<string, unknown> | null; traffic: Record<string, unknown> | null } };
 const poses: Pose[] = [];
 const inputEvents: Record<string, unknown>[] = [];
 let posesTruncated = false;
 let latestPose: Pose | undefined;
 let activeRoom: PlaywrightWebSocket | undefined;
 let playerId: string | undefined;
+let visualCarId: string | undefined;
 
 function observeRoom(socket: PlaywrightWebSocket) {
   let path: string;
   try { path = new URL(socket.url()).pathname; } catch { return; }
   if (!path.startsWith('/api/room/')) return;
-  activeRoom = socket; playerId = undefined; latestPose = undefined;
+  activeRoom = socket; playerId = undefined; latestPose = undefined; visualCarId = undefined;
   socket.on('close', () => {
     if (socket === activeRoom) { activeRoom = undefined; playerId = undefined; latestPose = undefined; }
   });
@@ -124,6 +125,9 @@ function observeRoom(socket: PlaywrightWebSocket) {
       const player = message.world.players.find((candidate: { id?: unknown }) => candidate.id === playerId);
       const car = message.world.entities.find((candidate: { id?: unknown }) => candidate.id === player?.entityId);
       if (!car || !['x', 'y', 'z', 'yaw', 'speed'].every(key => typeof car[key] === 'number' && Number.isFinite(car[key]))) return;
+      if (!visualCarId && car.kind !== 'person') visualCarId = car.id;
+      const visualActor = (actor: any) => actor && ['x', 'y', 'z', 'yaw'].every(key => typeof actor[key] === 'number' && Number.isFinite(actor[key]))
+        ? {kind: actor.kind, npc: !!actor.npc, x: actor.x, y: actor.y, z: actor.z, yaw: actor.yaw} : null;
       const order = player?.delivery?.order;
       latestPose = { atMs: Math.round(performance.now() - started), tick: Number.isSafeInteger(message.tick) ? message.tick : null, worldTime: typeof message.world.time === 'number' && Number.isFinite(message.world.time) ? message.world.time : null, poseRevision: Number.isSafeInteger(message.poseRevision) ? message.poseRevision : null, x: car.x, y: car.y, z: car.z, yaw: car.yaw, speed: car.speed,
         vy: typeof car.vy === 'number' && Number.isFinite(car.vy) ? car.vy : null,
@@ -135,7 +139,8 @@ function observeRoom(socket: PlaywrightWebSocket) {
         deliveryStage: order?.stage === 'pickup' || order?.stage === 'dropoff' ? order.stage : null,
         deliveryRestaurant: Number.isSafeInteger(order?.restaurant) ? order.restaurant : null,
         deliveryCustomer: Number.isSafeInteger(order?.customer) ? order.customer : null,
-        deliverySearching: order && typeof order === 'object' ? !!order.search : null };
+        deliverySearching: order && typeof order === 'object' ? !!order.search : null,
+        ...(target.searchParams.has('visual-actors') ? {visual: {kind: car.kind, car: visualActor(message.world.entities.find((actor: {id?: unknown}) => actor.id === visualCarId)), traffic: visualActor(message.world.entities.find((actor: {id?: unknown}) => actor.id === 'traffic-4'))}} : {}) };
       if (poses.length < 100000) poses.push(latestPose); else posesTruncated = true;
     } catch { /* Other protocol versions may not have this snapshot shape. */ }
   });
@@ -418,7 +423,9 @@ async function act(action: Action): Promise<unknown> {
       case 'screenshot': {
         const file = `${nameField(action)}.png`;
         if (screenshots.includes(file)) throw new Error('Screenshot name already used.');
-        await page!.screenshot({ path: join(out, file) }); screenshots.push(file); result = { file }; break;
+        if (action.selector) await page!.locator(textField(action, 'selector')).first().screenshot({ path: join(out, file) });
+        else await page!.screenshot({ path: join(out, file) });
+        screenshots.push(file); result = { file }; break;
       }
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');

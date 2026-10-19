@@ -1,0 +1,55 @@
+name: Temporary close-up proof
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+jobs:
+  closeups:
+    if: ${{ github.event.pull_request.head.ref == 'codex/closeup-proof' }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: harness
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 8f468ddd89bf96b097c9fbe7e806d6ef15ff3d62
+          path: base
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: c57e47ea75e5ff0998929fe1e83cb67a88fde155
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install candidate and Chromium
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+      - name: Install base and link harness dependencies
+        run: |
+          (cd base && pnpm install --frozen-lockfile)
+          ln -s "$GITHUB_WORKSPACE/candidate/node_modules" "$GITHUB_WORKSPACE/harness/node_modules"
+      - name: Capture close-ups
+        run: |
+          node harness/scripts/closeup-proof.mjs \
+            --base-root "$GITHUB_WORKSPACE/base" --candidate-root "$GITHUB_WORKSPACE/candidate" \
+            --out "$RUNNER_TEMP/tesland-closeups" --gpu metal
+      - name: Upload stills and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-closeups-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tesland-closeups/
+          if-no-files-found: warn
+          retention-days: 30
