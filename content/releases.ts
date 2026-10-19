@@ -18,8 +18,8 @@ export const RELEASES = [
     ]
   },
   {
-    version: '0.0.33-alpha',
-    label: '0.0.33 Alpha',
+    version: '0.0.34-alpha',
+    label: '0.0.34 Alpha',
     date: '2026-10-18',
     title: 'More of the Bay',
     intro: 'Find 100 more Bay-inspired places across the map.',
