@@ -42,7 +42,8 @@ function identity(manifest) {
   if (!/^[0-9a-f]{40}$/i.test(target?.refProvidedByOperator ?? '') || !present(target?.origin) || !present(target?.pathname) || typeof target?.perf !== 'boolean' || !hash(manifest?.scenarioSha256) ||
       ![r?.platform, r?.architecture, r?.release, r?.cpu, r?.nodeVersion, r?.playwrightVersion, r?.browserChannel, r?.browserVersion, r?.gpuMode, r?.webgl?.renderer, r?.webgl?.vendor].every(present) ||
       !hash(r?.recorderSourceSha256) || !hash(r?.captureSourceSha256) || !hash(r?.audioSourceSha256) || !Number.isSafeInteger(r?.logicalCpuCount) || r.logicalCpuCount < 1 || typeof r?.headed !== 'boolean' ||
-      !Number.isSafeInteger(v?.width) || v.width < 1 || !Number.isSafeInteger(v?.height) || v.height < 1 || !finite(v?.deviceScaleFactor ?? 1) || (v?.deviceScaleFactor ?? 1) <= 0 ||
+      !Number.isSafeInteger(v?.width) || v.width < 1 || !Number.isSafeInteger(v?.height) || v.height < 1 ||
+      !finite(source === 'tab' ? v?.deviceScaleFactor : v?.deviceScaleFactor ?? 1) || (v?.deviceScaleFactor ?? 1) <= 0 ||
       (v?.isMobile !== undefined && typeof v.isMobile !== 'boolean') || (v?.hasTouch !== undefined && typeof v.hasTouch !== 'boolean')) return null;
   return JSON.stringify([target.refProvidedByOperator.toLowerCase(), target.origin, target.pathname, target.perf, manifest.scenarioSha256, r.platform, r.architecture, r.release, r.cpu, r.logicalCpuCount,
     r.nodeVersion, r.playwrightVersion, r.browserChannel, r.browserVersion, r.gpuMode, r.headed, r.webgl.renderer, r.webgl.vendor,
@@ -87,6 +88,7 @@ export function compareRecording(control, recorded) {
     limitations: [
       'The revision is an operator-provided label; verify it against the served build. The same input script does not by itself prove identical paths or workload.',
       'Animation intervals are browser callbacks. Screencast frame timestamps and tab recording start/stop times are different capture observations; neither measures physical display presentation or GPU completion.',
+      'Matching dimensions alone cannot establish captured tab identity or the correct crop.',
       'Capture adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.',
       'When audio is enabled, the recorded run includes audio capture overhead, and its separate audio files are not proof of audible synchronization.',
       'Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay. Automated quality acceptance remains HOLD.'
@@ -184,10 +186,18 @@ export async function inspectVideos(manifest, manifestPath) {
 
 // Keep file-integrity failures distinct: an invalid packet timestamp is not
 // evidence that the encoder produced the wrong dimensions or lost bytes.
-export function tabIntegrityReasons(video, trace) {
+export function tabIntegrityReasons(video, trace, viewport) {
   const reasons = [];
   if (video.bytes !== trace.bytes) reasons.push(`${video.file}: video byte count differs from its capture trace.`);
   if (video.width !== trace.width || video.height !== trace.height) reasons.push(`${video.file}: video dimensions differ from its capture trace.`);
+  const width = viewport?.width * viewport?.deviceScaleFactor, height = viewport?.height * viewport?.deviceScaleFactor;
+  if (!Number.isSafeInteger(viewport?.width) || viewport.width < 1 || !Number.isSafeInteger(viewport?.height) || viewport.height < 1 ||
+      !finite(viewport?.deviceScaleFactor) || viewport.deviceScaleFactor <= 0 || !Number.isSafeInteger(width) || width < 1 || !Number.isSafeInteger(height) || height < 1) {
+    reasons.push(`${video.file}: manifest viewport or explicit device scale factor cannot establish integer pixel dimensions.`);
+  } else {
+    if (trace.width !== width || trace.height !== height) reasons.push(`${video.file}: capture trace dimensions differ from the manifest viewport pixel dimensions (${width}x${height}).`);
+    if (video.width !== width || video.height !== height) reasons.push(`${video.file}: video dimensions differ from the manifest viewport pixel dimensions (${width}x${height}).`);
+  }
   if (video.packetNonIncreasing) reasons.push(`${video.file}: ${video.packetNonIncreasing} non-increasing video packet timestamp${video.packetNonIncreasing === 1 ? '' : 's'}.`);
   return reasons;
 }
@@ -239,7 +249,7 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
   for (let i = 0; i < encodedVideos.length; i++) {
     const video = encodedVideos[i], trace = captureTraces[i];
     if (trace?.mode !== 'tab' || video?.status !== 'available') continue;
-    reasons.push(...tabIntegrityReasons(video, trace));
+    reasons.push(...tabIntegrityReasons(video, trace, manifest.viewport));
     if (video.packetGapsAtLeast100Ms) warnings.push(`${video.file}: ${video.packetGapsAtLeast100Ms} encoded packet gaps of at least 100 ms; inspect the footage.`);
   }
   // Only reject video shorter than the observed trace. Allow at most 250 ms for
@@ -263,7 +273,7 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
   }
   return { artifact: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED',
     qualityAcceptance: 'HOLD', playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles, durationChecks,
-    limitations: ['Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression.'] };
+    limitations: ['Matching dimensions alone cannot establish captured tab identity or the correct crop.', 'Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression.'] };
 }
 
 // Keep the saved on/off comparison consistent with the inspected artifact.

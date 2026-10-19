@@ -13,7 +13,7 @@ const run = (video: boolean) => ({
     nodeVersion: 'v22', playwrightVersion: '1.64.1', browserChannel: 'chrome', browserVersion: '155',
     gpuMode: 'metal', headed: false, webgl: { renderer: 'Metal', vendor: 'Apple' }, recorderSourceSha256: hash,
     captureSourceSha256: hash, audioSourceSha256: hash, hostLoadAverageAtStart: [2, 3, 4], hostLoadAverageAtFinish: [3, 4, 5] },
-  viewport: { width: 1280, height: 720 }, browserErrors: { pageErrors: 0, consoleErrors: 0 },
+  viewport: { width: 1280, height: 720, deviceScaleFactor: 1 }, browserErrors: { pageErrors: 0, consoleErrors: 0 },
   capture: { enabled: video, audio: false, requestedFps: 30, segments: video ? [{ video: 'segment-001.webm', status: 'available', finalized: true, intervalMs: { gapsAtLeast100Ms: 1 } }] : [] },
   recordings: video ? ['segment-001.webm'] : [],
   events: [{ type: 'recordStart', status: 'ok', commandStartedAtMs: 90 }, { type: 'frameStart', status: 'ok', commandStartedAtMs: 100 }, { type: 'frameStop', status: 'ok', commandStartedAtMs: 4000,
@@ -23,13 +23,25 @@ const run = (video: boolean) => ({
 test('tab integrity identifies packet ordering separately from bytes and dimensions', () => {
   const video = { file: 'segment-001.webm', bytes: 60348559, width: 1280, height: 720, packetNonIncreasing: 2 };
   const trace = { bytes: 60348559, width: 1280, height: 720 };
-  assert.deepEqual(tabIntegrityReasons(video, trace), ['segment-001.webm: 2 non-increasing video packet timestamps.']);
-  assert.deepEqual(tabIntegrityReasons({ ...video, packetNonIncreasing: 0 }, trace), []);
-  assert.deepEqual(tabIntegrityReasons({ ...video, bytes: 1, width: 640, packetNonIncreasing: 1 }, trace), [
+  const viewport = { width: 1280, height: 720, deviceScaleFactor: 1 };
+  assert.deepEqual(tabIntegrityReasons(video, trace, viewport), ['segment-001.webm: 2 non-increasing video packet timestamps.']);
+  assert.deepEqual(tabIntegrityReasons({ ...video, packetNonIncreasing: 0 }, trace, viewport), []);
+  assert.deepEqual(tabIntegrityReasons({ ...video, bytes: 1, width: 640, packetNonIncreasing: 1 }, trace, viewport), [
     'segment-001.webm: video byte count differs from its capture trace.',
     'segment-001.webm: video dimensions differ from its capture trace.',
+    'segment-001.webm: video dimensions differ from the manifest viewport pixel dimensions (1280x720).',
     'segment-001.webm: 1 non-increasing video packet timestamp.',
   ]);
+  const smallVideo = { ...video, width: 16, height: 16, packetNonIncreasing: 0 };
+  const smallTrace = { ...trace, width: 16, height: 16 };
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, viewport), [
+    'segment-001.webm: capture trace dimensions differ from the manifest viewport pixel dimensions (1280x720).',
+    'segment-001.webm: video dimensions differ from the manifest viewport pixel dimensions (1280x720).',
+  ]);
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16, deviceScaleFactor: 1 }), []);
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 8, height: 8, deviceScaleFactor: 2 }), []);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16 }).join(' '), /explicit device scale factor/);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 15, height: 15, deviceScaleFactor: 1.5 }).join(' '), /integer pixel dimensions/);
 });
 
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {
@@ -209,17 +221,28 @@ test('tab capture verifies source, bytes and timing while preserving gap warning
       settings: { displaySurface: 'browser', width: 16, height: 16, frameRate: 5 } };
     const segment = { video: 'segment-001.webm', traceFile: 'segment-001.capture.json', mode: 'tab', status: 'available', finalized: true };
     const rawControl = run(false), rawRecorded = run(true);
-    const control = { ...rawControl, runner: { ...rawControl.runner, tabCaptureSourceSha256: hash }, capture: { ...rawControl.capture, source: 'tab' } };
-    const recorded = { ...rawRecorded, runner: { ...rawRecorded.runner, tabCaptureSourceSha256: hash }, capture: { ...rawRecorded.capture, source: 'tab', segments: [segment] } };
+    const viewport = { width: 16, height: 16, deviceScaleFactor: 1 };
+    const control = { ...rawControl, viewport, runner: { ...rawControl.runner, tabCaptureSourceSha256: hash }, capture: { ...rawControl.capture, source: 'tab' } };
+    const recorded = { ...rawRecorded, viewport, runner: { ...rawRecorded.runner, tabCaptureSourceSha256: hash }, capture: { ...rawRecorded.capture, source: 'tab', segments: [segment] } };
     const controlPath = join(dir, 'control.json'), recordedPath = join(dir, 'manifest.json'), tracePath = join(dir, segment.traceFile);
     writeFileSync(controlPath, JSON.stringify(control)); writeFileSync(recordedPath, JSON.stringify(recorded)); writeFileSync(tracePath, JSON.stringify(trace));
     assert.equal(compareRecording(control, recorded).comparison, 'available');
+    const mismatch = await inspectRecordingArtifact({ ...recorded, viewport: rawRecorded.viewport }, recordedPath);
+    assert.equal(mismatch.artifact, 'HOLD');
+    assert.match(mismatch.reasons.join(' '), /capture trace dimensions differ from the manifest viewport pixel dimensions/);
+    assert.match(mismatch.reasons.join(' '), /video dimensions differ from the manifest viewport pixel dimensions/);
+    assert.doesNotMatch(mismatch.reasons.join(' '), /byte count differs|non-increasing video packet timestamp/);
+    const missingDpr = { ...recorded, viewport: { width: 16, height: 16 } };
+    assert.equal((await inspectRecordingArtifact(missingDpr, recordedPath)).artifact, 'HOLD');
+    assert.equal(compareRecording(control, missingDpr).comparison, 'HOLD');
     const checked = await inspectRecordingArtifact(recorded, recordedPath);
     assert.equal(checked.artifact, 'available');
     assert.equal(checked.playerFidelity, 'UNVERIFIED');
+    assert.match(checked.limitations.join(' '), /cannot establish captured tab identity or the correct crop/);
     assert.match(checked.warnings.join(' '), /packet gaps/);
     const merged = mergeRecordingInspection(compareRecording(control, recorded), checked);
     assert.equal(merged.comparison, 'available');
+    assert.match(merged.limitations.join(' '), /cannot establish captured tab identity or the correct crop/);
     assert.equal(merged.recordingQuality, 'HOLD');
     assert.match(merged.warnings.join(' '), /packet gaps/);
     assert.equal(merged.qualityAcceptance, 'HOLD');

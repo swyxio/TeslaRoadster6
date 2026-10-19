@@ -30,6 +30,7 @@ const manifestPath = join(out, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 assert.equal(manifest.status, 'complete');
 assert.equal(manifest.capture.source, 'tab');
+assert.equal(manifest.viewport.deviceScaleFactor, 1);
 assert.deepEqual(manifest.recordings, ['segment-001.webm', 'segment-002.webm']);
 assert.ok(manifest.events.some((event: { type: string; status: string }) => event.type === 'assertNumberAbove' && event.status === 'ok'));
 const inspection = await inspectRecordingArtifact(manifest, manifestPath);

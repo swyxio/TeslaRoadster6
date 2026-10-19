@@ -77,17 +77,21 @@ for an appropriately configured Linux host. `--gpu swiftshader` forces a
 software WebGL implementation for isolated, trusted CI runs. None of these
 flags proves hardware acceleration: inspect `runner.webgl.renderer` in the manifest. The default
 browser is the Playwright-pinned Chromium headless shell; `--browser chrome`
-uses installed Chrome and `--headed` opens a visible browser. Output uses the
-viewport's CSS dimensions, defaults to 1280 × 720 and 30 fps, and can be set
-with `--width`, `--height` and `--fps` (1–60). `--mobile` enables touch and a
-mobile viewport; use `scripts/playtests/touch-drive.json` for a held touch.
+uses installed Chrome and `--headed` opens a visible browser. The requested
+viewport defaults to 1280 × 720 CSS pixels and recording defaults to 30 fps;
+set these with `--width`, `--height` and `--fps` (1–60). Screencast requests
+the viewport size; actual tab-track dimensions can differ and must be checked.
+`--mobile` enables touch and a mobile viewport; use
+`scripts/playtests/touch-drive.json` for a held touch.
 These are browser emulations, not physical-device tests.
 
 For an experimental alternative to Playwright's JPEG screencast, add
 `--video-source tab --fps 60`. This launches the full Chromium browser in an
-isolated test profile, selects only the uniquely titled test tab, and uses
-Chromium tab capture plus MediaRecorder. It records the game canvas and HTML
-HUD together. Chunks are written incrementally, with a bounded pending queue;
+isolated test profile and requests the uniquely titled test tab using Chromium
+tab capture plus MediaRecorder. The browser's selection and resulting pixels
+must be verified; a browser surface and matching dimensions do not prove tab
+identity or crop. Intended capture includes the game canvas and HTML HUD.
+Chunks are written incrementally, with a bounded pending queue;
 start/stop and file integrity are checked separately from screencast frame
 timestamps. The matching `--no-video` control must also specify
 `--video-source tab` to use the same browser mode. Both modes still require
@@ -270,8 +274,12 @@ after manual review, so it always reports `qualityAcceptance: HOLD`. The diagnos
 unverified; neither is an approval. The optional CI video run fails closed for
 both `HOLD` and `UNVERIFIED` while retaining the recording and diagnostic
 artifacts. Its automated checks do not approve player fidelity.
-It checks metadata and video packets, not whether images
-are unique or look smooth. The frame callback transfers JPEG data and adds
+For tab capture, the track and encoded video dimensions must each equal the
+manifest viewport dimensions multiplied by its explicitly recorded configured
+device scale factor; missing, non-integral or mismatched dimensions are `HOLD`.
+This check does not establish the captured tab identity or crop. It checks
+metadata and video packets, not whether images are unique or look smooth. The
+frame callback transfers JPEG data and adds
 recording overhead. Capture timestamps are not physical display or GPU timing;
 the full commit is an operator label and must be checked against the served
 build. Inspect the video and scenario trajectory, compare with real gameplay,
