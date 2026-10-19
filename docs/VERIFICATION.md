@@ -3,6 +3,7 @@
 ## Rocket-pad scan · candidate · 2026-10-18 Pacific
 
 - The scan skips a full distance calculation only when both coordinate deltas are finite and at least one is four metres or more; nearby and nonfinite coordinates retain the original check. Eligibility callbacks, winner ordering and cooldown behavior remain unchanged. This does not establish room throughput or driving-continuity acceptance.
+- On exact-base candidate `2376ce1`, 1,077 tests and the build passed; Vite retained its existing large-chunk warning. Local Wrangler protocol 49 passed the two-client room and prediction integrations sequentially; these functional tests do not measure capacity or latency. An independent review found no functional issues. A [paired synthetic simulation](performance-baselines/2026-10-18-rocket-pickup/) matched complete worlds for 250 ticks in each of two scenarios, with matching final hashes in all six timing pairs. Median process CPU was 706.0 → 509.7 ms in city and 544.2 → 268.3 ms in open lanes. The 18-logical-CPU desktop had substantial unrelated activity and load about 10.2–11.1. This is not a room, Worker, capacity, rendering, mobile or driving-continuity result.
 
 ## Manual delivery economy rebalance · 2026-10-18 Pacific
 
