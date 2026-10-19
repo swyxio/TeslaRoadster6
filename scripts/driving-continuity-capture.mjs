@@ -151,7 +151,6 @@ async function main() {
   const startedAt = new Date().toISOString(), loadBefore = os.loadavg(), secret = randomBytes(32).toString('hex');
   const room = `motion-${randomBytes(5).toString('hex')}`, worker = join(out, 'stage-worker.ts'), config = join(out, 'wrangler.json');
   const dist = join(out, 'dist'), viteCache = join(out, 'vite-cache');
-  const stageSource = await readFile(stage, 'utf8');
   const sourceHashes = Object.fromEntries(await Promise.all([
     ['targetStage', stage], ['targetWorker', join(root, 'worker/index.ts')], ['targetGame', join(root, 'shared/game.ts')], ['runner', fileURLToPath(import.meta.url)],
     ['workerTemplate', join(here, 'continuity-worker-template.mjs')], ['groundInstrumentation', join(here, 'continuity-ground-instrument.mjs')], ['instrumentation', join(harness, 'instrument.mjs')],
@@ -284,7 +283,6 @@ async function main() {
     Object.assign(authority.clock, bounds ?? {}, { bracketedBefore: !!bounds, bracketedAfter: !!bounds, offsetModel: 'bounded' });
     const metadata = { format: 1, revision, startedAt, finishedAt: new Date().toISOString(), health, sourceHashes,
       stage: { targetFixture: stage, targetStageSha256: sourceHashes.targetStage, targetWorkerSha256: sourceHashes.targetWorker,
-        schedulerObservation: stageSource.includes("Reflect.get(this, 'startTicks')") ? 'target-stage-startTicks' : 'target-stage-original-timer',
         room: 'fresh loopback room, initial ambient vehicles removed; exact target stage and runtime in a disposable archive with ground-only trace hooks',
         collisionCoverage: 'grounded-path-v1', instrumentedGameSha256: sourceHashes.instrumentedGame },
       environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length,

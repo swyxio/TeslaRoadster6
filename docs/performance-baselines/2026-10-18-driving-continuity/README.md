@@ -247,6 +247,12 @@ one-minute load 15.47 → 13.47; it is not a GPU-completion or paired result.
 [Selected logs and reports](hosted-39178956817-summary.tar.gz) have SHA-256
 `72923a7ede64012eac8b5ba8a4d96966b36306ea7abdff451fabcbf48c49e2cf`.
 
+The fixture now detects and pauses either the baseline's direct interval or
+the candidate's start/stop scheduler, rejecting an unknown scheduler. The same
+local Wrangler integration passed against built baseline `1f722dd` and
+candidate `2a2c7db`, including paused snapshots and resumed inputs. This is a
+functional fixture check; a new hosted comparison is still required.
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's

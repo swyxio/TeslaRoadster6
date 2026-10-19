@@ -77,6 +77,35 @@ export class GameRoom extends ProductionGameRoom {
     this.pausedHeartbeat = undefined;
   }
 
+  // The comparison fixture is mounted on both the target room and an older
+  // baseline. Pause and resume each room using its own scheduler: the newer
+  // room has start/stop methods, while the baseline owns a direct interval.
+  private pauseRoomTicks(): void {
+    const start = Reflect.get(this, 'startTicks'), stop = Reflect.get(this, 'stopTicks');
+    if (typeof start === 'function' && typeof stop === 'function') {
+      Reflect.apply(stop, this, []);
+      return;
+    }
+    if (start !== undefined || stop !== undefined) throw new Error('Unsupported room scheduler');
+    const timer = Reflect.get(this, 'timer') as ReturnType<typeof setInterval> | null | undefined;
+    if (timer == null) throw new Error('Room interval was not started');
+    clearInterval(timer);
+    Reflect.set(this, 'timer', null);
+  }
+
+  private resumeRoomTicks(): void {
+    const start = Reflect.get(this, 'startTicks'), stop = Reflect.get(this, 'stopTicks');
+    if (typeof start === 'function' && typeof stop === 'function') {
+      Reflect.apply(start, this, []);
+      return;
+    }
+    if (start !== undefined || stop !== undefined || Reflect.get(this, 'timer') !== null)
+      throw new Error('Unsupported room scheduler');
+    const tick = Reflect.get(this, 'tick');
+    if (typeof tick !== 'function') throw new Error('Room tick is unavailable');
+    Reflect.set(this, 'timer', setInterval(() => Reflect.apply(tick, this, []), 50));
+  }
+
   // A repeated snapshot at the same tick keeps the browser connection alive
   // while the recorder prepares. It does not advance the room simulation.
   private publishPausedSnapshot(): void {
@@ -132,7 +161,7 @@ export class GameRoom extends ProductionGameRoom {
     this.publishPausedSnapshot();
     this.pausedWorld = undefined;
     this.startedWorld = world;
-    Reflect.apply(Reflect.get(this, 'startTicks'), this, []);
+    this.resumeRoomTicks();
     return { ok: true, tick: status.tick, poseRevision: session.poseRevision };
   }
 
@@ -183,7 +212,7 @@ export class GameRoom extends ProductionGameRoom {
     if (options.pause) {
       // super.fetch starts the normal timer immediately before returning.
       // Stop it synchronously before yielding to the event loop.
-      Reflect.apply(Reflect.get(this, 'stopTicks'), this, []);
+      this.pauseRoomTicks();
       this.pausedWorld = world;
     }
 

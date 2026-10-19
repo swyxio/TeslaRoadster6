@@ -1,13 +1,15 @@
 // Run after pnpm build: pnpm exec tsx tests/playtest-stage.integration.ts
-// Uses an isolated local Wrangler process, two fresh rooms, and temporary storage.
+// PLAYTEST_TARGET_ROOT may select another built checkout, including the baseline.
+// Mounts this same fixture onto the target with isolated Wrangler storage.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createWorld, NEUTRAL, PROTOCOL_VERSION, type Entity, type World } from '../shared/game';
+import { pathToFileURL } from 'node:url';
+import type { Entity, World } from '../shared/game';
 import { RoomInputClient } from './room-input-client';
 
 type Message = { type:string; [key:string]:any };
@@ -32,8 +34,11 @@ async function stop(child:ChildProcess) {
   if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid!,'SIGKILL');}catch{ /* already stopped */ }
 }
 
+const targetRoot=resolve(process.env.PLAYTEST_TARGET_ROOT??'.');
+const {createWorld,NEUTRAL,PROTOCOL_VERSION}=await import(pathToFileURL(join(targetRoot,'shared/game.ts')).href) as typeof import('../shared/game');
 const directory=await mkdtemp(join(tmpdir(),'tesland-playtest-stage-'));
-const port=await freePort(),base=`http://127.0.0.1:${port}`;
+const port=await freePort();let inspectorPort=await freePort();while(inspectorPort===port)inspectorPort=await freePort();
+const base=`http://127.0.0.1:${port}`;
 const stageSecret=randomBytes(32).toString('hex'),secretFile=join(directory,'stage.env');
 const authorization={Authorization:`Bearer ${stageSecret}`};
 const sockets:WebSocket[]=[];
@@ -69,13 +74,20 @@ function ambient(client:ReturnType<typeof connect>) {
 }
 
 try {
+  const stage=await readFile(resolve('tests/fixtures/playtest-stage-worker.ts'),'utf8');
+  const mounted=stage.replace(/(['"])\.\.\/\.\.\/(worker|shared)\/([^'"]+)\1/g,
+    (_match,_quote,directory,module)=>JSON.stringify(join(targetRoot,directory,`${module}.ts`)));
+  const config=JSON.parse((await readFile(resolve('tests/fixtures/wrangler.playtest-stage.jsonc'),'utf8')).replace(/^\s*\/\/.*$/gm,''));
+  const stageFile=join(directory,'playtest-stage-worker.ts'),configFile=join(directory,'wrangler.json');
+  config.main=stageFile;config.assets.directory=join(targetRoot,'dist');
+  await writeFile(stageFile,mounted);await writeFile(configFile,JSON.stringify(config));
   await writeFile(secretFile,`PLAYTEST_STAGE_SECRET=${stageSecret}\n`,{mode:0o600,flag:'wx'});
-  worker=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev',
-    '--config','tests/fixtures/wrangler.playtest-stage.jsonc','--env-file',secretFile,'--local','--ip','127.0.0.1','--port',String(port),
+  worker=spawn(process.execPath,[resolve(targetRoot,'node_modules/wrangler/bin/wrangler.js'),'dev',
+    '--config',configFile,'--env-file',secretFile,'--local','--ip','127.0.0.1','--port',String(port),'--inspector-port',String(inspectorPort),
     '--var','PLAYTEST_X:-190','--var','PLAYTEST_Z:120','--var',`PLAYTEST_YAW:${-Math.PI/2}`,
     '--var','PLAYTEST_SEED:0','--var','PLAYTEST_PAUSE:1',
     '--persist-to',join(directory,'storage'),'--show-interactive-dev-session','false'],
-    {cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none',CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV:'true',CLOUDFLARE_INCLUDE_PROCESS_ENV:'false'}});
+    {cwd:targetRoot,detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none',CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV:'true',CLOUDFLARE_INCLUDE_PROCESS_ENV:'false'}});
   const append=(chunk:Buffer)=>{logs=(logs+chunk.toString()).slice(-20_000);};
   worker.stdout?.on('data',append);worker.stderr?.on('data',append);
   await until(async()=>{
