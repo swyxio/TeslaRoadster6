@@ -4,7 +4,9 @@
 
 - Integrated main `dacde0c` at protocol v48 and release 0.0.35. All 1,030 tests and `pnpm build` passed; the existing large-chunk warning remains. The local Wrangler room integration completed a two-player, five-goal match and checked the winner's cash and both unlocks, spectator exclusion, and wall charge. Prediction and chat integrations passed separately. These are functional checks, not capacity or latency measurements.
 - The payout recovery integration passed again, including a match in `public:1` overflow, a simulated receiving clock behind the room, a disconnected driver, crash recovery and replay without duplicate rewards. Separate award-wallet and room-earnings integrations passed held/rejected writes, driver binding, idempotency and restart. This is local fixture evidence, not a distributed production clock-skew or throughput test.
+- A [hosted paired observation](https://github.com/swyxio/TeslaRoadster6/actions/runs/39185236350) compared main `8be55d4` and Dome candidate `0a5bc0f`. All three route legs aligned; callback p95 was 116.7 ms on both and room simulated/wall was 0.929 versus 0.920. The three-CPU virtual host's one-minute load was 15.79 to 14.92 for the base and 15.75 to 17.10 for the candidate. This single loaded run is descriptive, not a regression verdict, GPU-completion result or capacity measurement.
 - A local Chrome practice guest entered the Dome from the mini-game menu; the reward amounts, unlock guidance and wall refill cue were visible on desktop and at emulated 390 × 844 portrait and 844 × 390 landscape without observed HUD overlap. An attempted portrait Drive hold and emulated touch did not establish movement; touch driving and physical devices remain unverified. This visual pass did not complete a match.
+- The provisional combination with Starship tower candidate `bb7a839` keeps protocol v48 and assigns Dome release 0.0.36. All 1,030 tests and the build passed; the build retained the existing large-chunk warning. Actual-main integration and deployment readback remain separate.
 
 ## Rocket Dome rewards candidate · protocol v47 · 2026-10-18 Pacific
 
@@ -14,6 +16,13 @@
 - After the identity and clock-skew fixes, all 1,010 tests and the build passed. A local Wrangler payout integration simulated a receiving clock 500 ms behind during the first stage validation: the pre-fix player disconnected, while the updated player stayed connected and the original award settled once. A focused simulation test also confirmed that Pulse Shot cannot trigger or spend its cooldown while identity attachment is pending. The clock case is simulated, not a distributed production measurement.
 - Local Chrome displayed the Dome reward and power-up instructions on desktop and at emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape settings; controls did not overlap the score panel in the inspected frames. Awards listed both unlocks. The browser session scaled the page, so these are emulated settings, not physical-device results. An attempted portrait touch check was interrupted by a local server reload and a later browser adapter timeout; it is not a passed touch-control test.
 - At that time, the integrated driving-continuity and performance gates remained open and the candidate had not been released.
+
+## Starship tower progress · candidate · 2026-10-18 Pacific
+
+- The tower's two visible faces show dollar milestones and a rising fill based on the last confirmed game-wide earnings, with an exact total in the launch view. Room donations do not affect the scale. Missing earnings show a waiting state rather than zero.
+- In isolated local Wrangler, Chrome showed the scale at $122,607 and at a synthetic $350,000,000 (35% of the $1 billion goal). Desktop and emulated 390 × 844 portrait and 844 × 390 landscape launch views showed the fill and milestones; portrait camera framing and landscape overlay placement kept the tower visible. The driving world also rendered the tower. No physical device was tested, and no launch was triggered.
+- On base `dacde0c`, all 1,026 tests and `pnpm build` passed. The same checks passed after integrating main `8be55d4` and preparing release 0.0.35. The subsequent main `c5bd893` changes only the performance workflow and documentation, leaving tested game source unchanged. The existing Vite large-chunk warning remains. These are candidate checks, not production evidence.
+- The preceding workflow release `c5bd893` was verified in production on 2026-10-18: Workers build `19403612-56ca-432e-aa5b-26440a9a9ea0` succeeded, health reported protocol 47, root JS/CSS hashes matched, and the #116 article and poster were served.
 
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 
@@ -1512,6 +1521,11 @@ These observations and screenshots describe the former Alcatraz arena before the
 - The automated blog helper built game revision `1f722dd` with uncommitted recording-tool changes and captured a fresh local room in Chromium on Apple M5 Pro / ANGLE Metal. The 1280×720 MP4 is 9.21 seconds, 1,733,062 bytes, and has H.264 video and stereo AAC game audio. FFmpeg reported a −12.2 dB peak; the room supplied 151 trajectory samples, with zero recorded page or console errors. The footage and local room HUD were inspected; this is not a human or physical-device playtest.
 - A separate synthetic calibration fired a white-frame cue and a 440 Hz tone from the same key event; in four muxed tests, the detected starts differed by 0–57 ms at the test’s 30 fps / 10 ms measurement resolution. A simulated audio-finalization failure left scripted and interactive runs failed but preserved their finalized video. Start-command timing is approximate and this is not proof of frame-accurate synchronization in every run. The audio capture excludes the separate podcast player, microphone and system audio.
 - The full unit suite passed 1,006 tests; the production build and the audio calibration passed. The existing Vite large-chunk warning remains.
+
+## Performance workflow readiness trigger · 2026-10-18 Pacific
+
+- PR #104 integrated with production base `dacde0c` at `e953701`. All 1,026 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. Ten performance-report tests and workflow syntax/expression lint also passed. External shell and Python lint were disabled for the workflow lint. The only changes to that base are the workflow event list and documentation; no gameplay or protocol code changed. Production verification follows the merge.
+- After integrating the article and video release #116 at `8be55d4`, the combined candidate `ab15df2` again passed all 1,026 tests and the build. The game JavaScript and CSS hashes match the prior candidate.
 
 ## Hosted preview and alpha comparison · 2026-10-18 Pacific
 
