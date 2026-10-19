@@ -260,6 +260,36 @@ try{
   assert.deepEqual((await rpc<string[]>('sources',assignmentCrash)).sort(),['earned-source:delivery:1:dropoff','earned-source:delivery:2:pickup']);
   assert.equal(await rpc('assignment',{...assignmentCrash,eventId:firstStop.eventId}),null,'completed checkpoint is removed');
 
+  // A pre-map-update leg-one checkpoint must be revalidated after a restart;
+  // replaying the accepted stop still pays only once.
+  const legacyCrash=entry(),legacyInitial=await acquire(legacyCrash);
+  const legacyPose={...pose(4),x:pose(4).x+.123456};
+  const legacyPreview=initialDelivery(legacyPose),legacyPrior={...legacyInitial.progress.order,elapsed:45};
+  Object.assign(legacyPreview,{cash:legacyInitial.progress.cash,lifetimeIncome:legacyInitial.progress.eligibleIncome,
+    earned:legacyInitial.progress.earned,completed:legacyInitial.progress.completed,level:legacyInitial.progress.level,order:legacyPrior});
+  assert.ok(applyDeliveryStop(legacyPreview,legacyPose));
+  const legacyAwards=initialAchievements();legacyAwards.unlocked=[...legacyInitial.progress.unlocked];
+  applyAcceptedDelivery(legacyPreview,legacyAwards,legacyInitial.progress.achievementTiers!,legacyPrior,false,CUSTOMERS[4].id,true);
+  for(let i=0;i<10_000&&legacyPreview.order.search;i++)advanceDeliverySearch(legacyPreview,false);
+  assert.equal(legacyPreview.order.search,undefined);
+  const legacyStop=stage(legacyCrash,1,5,legacyPose,1,assignmentAt);
+  assert.equal(await rpc('stage',{...legacyCrash,stage:legacyStop}),'accepted');
+  await rpc('hold-assignment',legacyCrash);
+  const legacyFlight=rpc('submit',{...legacyCrash,intent:intent(legacyStop,0,1)},30_000);void legacyFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',legacyCrash),'legacy assignment checkpoint held');
+  await rpc('legacy-assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  const oldCheckpoint=await rpc<{delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  assert.deepEqual(oldCheckpoint.delivery.order.search.cursor,{pair:128,leg:1,heading:0});
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',legacyCrash,15_000);
+  const legacyRecovered=await rpc<Profile>('profile',legacyCrash);
+  assert.equal(legacyRecovered.progress.completed,1);
+  assert.equal(legacyRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
+  assert.equal(legacyRecovered.progress.order.customer,legacyPreview.order.customer);
+  assert.deepEqual(await rpc('sources',legacyCrash),['earned-source:delivery:1:dropoff']);
+  await rpc('freeze',legacyCrash,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',legacyCrash)).progress,legacyRecovered.progress,'recovery pays only once');
+  assert.equal(await rpc('assignment',{...legacyCrash,eventId:legacyStop.eventId}),null);
+
   // A ticket relocks an already-collected Oakland order. The later physical
   // dropoff is accepted while the replacement assignment is checkpointed.
   const relock=entry(),relockInitial=await acquire(relock);
