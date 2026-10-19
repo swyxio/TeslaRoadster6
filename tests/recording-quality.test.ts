@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { compareRecording, inspectAudio, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos } from '../scripts/recording-quality.mjs';
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
@@ -88,5 +89,47 @@ test('capture inspection rejects truncated and non-monotonic trace files', async
     writeFileSync(file, JSON.stringify(trace));
     manifest.capture.segments[0].callbacksReceived = 4;
     assert.equal((await inspectCaptureTraces(manifest, join(dir, 'manifest.json')))[0].status, 'unavailable');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+const ffmpegEncoders = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+test('each artifact segment requires finalized traces and readable encoded video', {
+  skip: ffmpegEncoders.status !== 0 || !/\blibvpx\b/.test(ffmpegEncoders.stdout ?? '') || spawnSync('ffprobe', ['-version']).status !== 0,
+}, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-artifact-check-'));
+  try {
+    const first = join(dir, 'segment-001.webm'), second = join(dir, 'segment-002.webm');
+    const encode = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=10:d=0.2', '-c:v', 'libvpx', '-an', first]);
+    assert.equal(encode.status, 0, encode.stderr.toString());
+    copyFileSync(first, second);
+    const trace = { format: 1, columns: ['browserPresentedAtUnixMs', 'callbackReceivedAtRunMs', 'viewportWidth', 'viewportHeight'],
+      samples: [[1000, 1, 1280, 720], [1101, 102, 1280, 720]] };
+    const segments = [1, 2].map(n => ({ video: `segment-00${n}.webm`, traceFile: `segment-00${n}.capture.json`,
+      status: 'available', finalized: true, samplesRetained: 2, callbacksReceived: 2, truncated: false,
+      intervalMs: { gapsAtLeast100Ms: 1 } }));
+    for (const segment of segments) writeFileSync(join(dir, segment.traceFile), JSON.stringify(trace));
+    const manifest = { status: 'complete', capture: { enabled: true, audio: false, segments }, recordings: segments.map(s => s.video) };
+    const path = join(dir, 'manifest.json');
+    const valid = await inspectRecordingArtifact(manifest, path);
+    assert.equal(valid.artifact, 'available');
+    assert.equal(valid.recordingQuality, 'HOLD'); // Host/capture gaps do not invalidate route comparison.
+    assert.equal(valid.playerFidelity, 'UNVERIFIED');
+    assert.equal(valid.encodedVideos.length, 2);
+    assert.equal(valid.captureTraces.length, 2);
+    assert.match(valid.warnings.join(' '), /timestamp gaps/);
+
+    segments[1].status = 'incomplete';
+    assert.equal((await inspectRecordingArtifact(manifest, path)).artifact, 'HOLD');
+    segments[1].status = 'available';
+    segments[1].finalized = false;
+    assert.equal((await inspectRecordingArtifact(manifest, path)).artifact, 'HOLD');
+    segments[1].finalized = true;
+    segments[1].callbacksReceived = 3;
+    assert.equal((await inspectRecordingArtifact(manifest, path)).artifact, 'HOLD');
+    segments[1].callbacksReceived = 2;
+    writeFileSync(second, 'nonempty but not video');
+    const badVideo = await inspectRecordingArtifact(manifest, path);
+    assert.equal(badVideo.artifact, 'HOLD');
+    assert.equal(badVideo.encodedVideos[1].status, 'unavailable');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

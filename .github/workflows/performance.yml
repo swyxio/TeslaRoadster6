@@ -227,6 +227,35 @@ jobs:
             --target-root "$GITHUB_WORKSPACE/candidate" \
             --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --video \
             > "$RUNNER_TEMP/tesland-performance/candidate-video.log" 2>&1
+      - id: video_inspection
+        name: Inspect each recorded artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
+        continue-on-error: true
+        run: |
+          node --input-type=module - "$RUNNER_TEMP/tesland-performance/base-video" "$RUNNER_TEMP/tesland-performance/candidate-video" <<'NODE'
+          import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { inspectRecordingArtifact } from './candidate/scripts/recording-quality.mjs';
+          let failed = false;
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, '### Recording artifacts\n');
+          for (const dir of process.argv.slice(2)) {
+            const manifestPath = join(dir, 'browser', 'manifest.json');
+            let result;
+            try {
+              const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+              result = await inspectRecordingArtifact(manifest, manifestPath);
+            } catch (error) {
+              result = { artifact: 'HOLD', recordingQuality: 'HOLD', playerFidelity: 'UNVERIFIED', reasons: [`Manifest unavailable: ${error.message}`], warnings: [] };
+            }
+            await mkdir(dir, { recursive: true });
+            await writeFile(join(dir, 'recording-inspection.json'), JSON.stringify(result, null, 2) + '\n');
+            await appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${dir.split('/').at(-1)}: trace and video packets ${result.artifact}; recording quality ${result.recordingQuality}; player fidelity ${result.playerFidelity}.\n`);
+            for (const item of [...result.reasons, ...result.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - ${item}\n`);
+            if (result.artifact !== 'available') failed = true;
+          }
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, 'Packet inspection does not decode video or verify playback. Capture quality is diagnostic; jitter on a shared host is not a game regression.\n');
+          if (failed) process.exitCode = 1;
+          NODE
       - name: Summarize available observations
         if: ${{ always() }}
         env:
@@ -265,6 +294,7 @@ jobs:
           VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
           VIDEO_BASE_OUTCOME: ${{ steps.video_base.outcome }}
           VIDEO_CANDIDATE_OUTCOME: ${{ steps.video_candidate.outcome }}
+          VIDEO_INSPECTION_OUTCOME: ${{ steps.video_inspection.outcome }}
         run: |
           if [ "$BASE_OUTCOME" != success ] || [ "$CANDIDATE_OUTCOME" != success ]; then
             echo 'A measurement did not finish; inspect the artifact and HOLD summary.'
@@ -309,12 +339,8 @@ jobs:
           for (const dir of process.argv.slice(2)) {
             try {
               const report = JSON.parse(fs.readFileSync(path.join(dir, 'report.json'), 'utf8'));
-              const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'browser', 'manifest.json'), 'utf8'));
-              const files = manifest.recordings;
-              if (!report.fixture?.captureVideo || report.route?.status !== 'available' || manifest.status !== 'complete' ||
-                  !Array.isArray(files) || !files.length || files.some(name => typeof name !== 'string' ||
-                    !/^segment-\d{3}\.webm$/.test(name) || fs.statSync(path.join(dir, 'browser', name)).size === 0)) {
-                console.error(`${dir}: missing completed route or recording`);
+              if (!report.fixture?.captureVideo || report.route?.status !== 'available') {
+                console.error(`${dir}: missing completed recorded route`);
                 missing = true;
               }
             } catch (error) {
@@ -324,6 +350,10 @@ jobs:
           }
           if (missing) process.exitCode = 1;
           NODE
+            if [ "$VIDEO_INSPECTION_OUTCOME" != success ]; then
+              echo 'A requested recording failed artifact inspection; inspect recording-inspection.json.'
+              exit 1
+            fi
             node candidate/scripts/performance-compare.mjs \
               "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
               "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" --require-route

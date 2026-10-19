@@ -144,6 +144,41 @@ export async function inspectAudio(manifest, manifestPath) {
   }));
 }
 
+// Check one actual artifact independently of route comparability or player fidelity.
+export async function inspectRecordingArtifact(manifest, manifestPath) {
+  const reasons = [], warnings = [];
+  const files = manifest?.recordings, segments = manifest?.capture?.segments;
+  if (manifest?.status !== 'complete' || manifest?.capture?.enabled !== true)
+    reasons.push('Run did not complete with video capture enabled.');
+  if (!Array.isArray(files) || !files.length || new Set(files).size !== files.length ||
+      files.some(name => typeof name !== 'string' || !/^segment-\d{3}\.webm$/.test(name)) ||
+      !Array.isArray(segments) || segments.length !== files.length || segments.some((segment, i) =>
+        segment?.video !== files[i] || segment.traceFile !== files[i].replace(/\.webm$/, '.capture.json') ||
+        segment.status !== 'available' || segment.finalized !== true))
+    reasons.push('Recording segments or their finalized capture metadata are missing or inconsistent.');
+  if (manifest?.capture?.audio === true && (!Array.isArray(files) || !Array.isArray(manifest?.audioRecordings) ||
+      manifest.audioRecordings.length !== files.length || manifest.audioRecordings.some((audio, i) =>
+        typeof files[i] !== 'string' || audio?.file !== files[i].replace(/\.webm$/, '-audio.webm') ||
+        !finite(audio.offsetMs) || !finite(audio.startCommandWindowMs) || audio.startCommandWindowMs < 0)))
+    reasons.push('Audio segments or their start timing metadata are missing or invalid.');
+  const [encodedVideos, captureTraces, audioFiles] = await Promise.all([
+    inspectVideos(manifest, manifestPath), inspectCaptureTraces(manifest, manifestPath), inspectAudio(manifest, manifestPath),
+  ]);
+  if (encodedVideos.some(video => video.status !== 'available')) reasons.push('Video files or ffprobe packet metadata unavailable.');
+  if (captureTraces.some(trace => trace.status !== 'available')) reasons.push('Capture traces are missing, incomplete or invalid.');
+  if (audioFiles.some(audio => audio.status !== 'available')) reasons.push('Audio files or ffprobe packet metadata unavailable.');
+  const frameIntervals = animation(manifest);
+  if (frameIntervals?.p95Ms > 33.4) warnings.push(`Animation callback p95 was ${frameIntervals.p95Ms} ms; inspect this footage for stutter.`);
+  if (Array.isArray(segments)) for (const segment of segments) {
+    if (segment?.intervalMs?.gapsAtLeast100Ms > 0) warnings.push(`${segment.video}: ${segment.intervalMs.gapsAtLeast100Ms} browser screencast timestamp gaps of at least 100 ms.`);
+    if (segment?.firstCallbackDelayMs >= 100) warnings.push(`${segment.video}: ${round(segment.firstCallbackDelayMs)} ms before the first callback.`);
+    if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
+  }
+  return { artifact: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED',
+    playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles,
+    limitations: ['Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression.'] };
+}
+
 async function main() {
   const [controlPath, recordedPath, ...rest] = process.argv.slice(2);
   if (!controlPath || !recordedPath || rest.length) throw new Error('Usage: node scripts/recording-quality.mjs NO_VIDEO_MANIFEST RECORDED_MANIFEST');
