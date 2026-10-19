@@ -77,12 +77,49 @@ baseline; their rejection counts cannot establish causation or a relative
 speedup. Both were pinned preview research after main had advanced, not
 current-main release checks. Temporary baseline PR #117 was closed afterward.
 
+For that candidate's hosted assembly job, the three-pair median process CPU
+for 50 broadcasts was 182.26 → 132.63 ms clustered, 133.12 → 114.61 ms
+spread, and 145.53 → 155.09 ms for distinct distant owned cars. The last case
+was slower in this small sample; these timings are not end-to-end room results.
+
 In the first hosted sample, 148 of 374 measured late inputs already targeted
 the maximum eight ticks beyond the latest snapshot. The observations cannot
 separate uplink, Worker handling, downlink and generator callback delays.
 Raising a minimum lead alone therefore cannot explain all misses, and changing
 the shared prediction clock requires its own motion and contact regression
 tests. This candidate does not change that clock.
+
+In the corrected historical candidate, 334 of 798 measured late inputs were
+already targeted eight ticks past the last received snapshot; in the incomplete
+baseline, 123 of 396 were. A candidate driver had 41 consecutive late command
+sequences sent over 1.81 seconds; a baseline driver had 21 over 0.91 seconds.
+The sampled straight-line motion can continue on held input or momentum, so it
+does not establish that steering and braking stayed responsive. These traces do
+not contain the authoritative tick at command receipt for accepted and rejected
+inputs. A bounded preview trace correlating receipt tick, target tick, last
+snapshot, held controls and rendered response is needed to distinguish an
+exhausted scheduling margin from other causes; unsynchronized clocks cannot
+individually resolve uplink and downlink delays.
+
+The [v48 candidate run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39187526596)
+used candidate `4dfd261` based on then-current main `e07f0be`, with identity checks before
+and after the sample. All 64 staged drivers stayed connected and completed all
+384 sampled movement blocks; each runner saw at least 59.8 simulated seconds
+in approximately one minute. It recorded 263 late replies among 83,883 measured
+inputs, so the diagnostic failed its input-rejection gate. The 65th connection
+was rejected as full. The same-runner three-pair assembly medians were
+101.29 → 88.50 ms clustered, 94.87 → 80.83 ms spread, and 101.29 → 100.26 ms
+for distinct distant owned cars. These short synthetic measurements do not
+establish end-to-end speed or responsiveness.
+
+The [unchanged-runtime v48 baseline](https://github.com/swyxio/TeslaRoadster6/actions/runs/39187590890)
+used the same base and diagnostic source on separate hosts. All 64 stayed
+connected for approximately a minute and each runner observed at least 59.7
+simulated seconds. It recorded 403 late replies among 84,723 measured inputs;
+one of 384 movement blocks fell below the sustained-motion thresholds. The 65th
+connection was rejected. Both runs failed their diagnostic gates, and separate
+hosts and network paths make the rejection counts descriptive, not proof of a
+regression or improvement. The temporary baseline PR was closed afterward.
 
 ## External experience and implications
 
@@ -98,10 +135,20 @@ tests. This candidate does not change that clock.
   suggests lower update frequency for distant cars. Tesland's whole-Bay map
   and nearby collisions require explicit continuity and re-entry tests before
   adopting such a design.
+- [SnapNet's interpolation discussion](https://snapnet.dev/blog/netcode-architectures-part-3-snapshot-interpolation/)
+  explains the tradeoff between smoothing jitter and showing older remote
+  objects, including consequences for player-to-player collisions. A
+  [game developer forum discussion](https://www.reddit.com/r/gamedev/comments/1jcwfyi/how_does_a_server_handle_late_inputs_from_a_client/)
+  proposes input buffering and tick-based scheduling, but that advice does not
+  identify this game's cause or justify changing its prediction clock.
 - [Cloudflare's WebSocket guidance](https://developers.cloudflare.com/durable-objects/best-practices/websockets/#batch-messages-to-reduce-overhead)
   discusses batching frequent messages. Delaying steering, braking or button
   edges has a responsiveness cost; do not infer that batching input is safe
   without measuring it against the motion gates.
+- [Cloudflare's timer documentation](https://developers.cloudflare.com/workers/runtime-apis/performance/)
+  says deployed Worker timers do not advance during CPU-only execution. Use
+  appropriate local or Cloudflare CPU profiling rather than subtracting
+  deployed callback timestamps and calling the result tick CPU time.
 
 The isolated [64-driver diagnostic](../scripts/room-64-README.md) is designed
 to collect synchronized sustained movement and input observations from four
