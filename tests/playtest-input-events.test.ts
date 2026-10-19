@@ -8,6 +8,8 @@ test('playtest diagnostics retain input rejection reasons without identity data'
     roomEpoch: 'private', input: { jump: 1, hover: false } };
   assert.deepEqual(controlEvent('sent', input, 100), { atMs: 100, type: 'sent', seq: 68, targetTick: 73,
     controlRevision: 2, actionSeq: 3, jump: 1, hover: false });
+  assert.deepEqual(controlEvent('sent', { ...input, seq: 69, input: { jump: 0, hover: false, throttle: 1 } }, 110),
+    { atMs: 110, type: 'sent', seq: 69, targetTick: 73, controlRevision: 2, actionSeq: 3, jump: 0, hover: false });
   assert.deepEqual(controlEvent('received', { type: 'inputRejected', seq: 68, targetTick: 73, reason: 'future', recoveryCode: 'private' }, 120),
     { atMs: 120, type: 'rejected', seq: 68, targetTick: 73, reason: 'future' });
   assert.deepEqual(controlEvent('received', { type: 'inputEdge', kind: 'jump', id: 1, targetTick: 73, status: 'expired' }, 121),

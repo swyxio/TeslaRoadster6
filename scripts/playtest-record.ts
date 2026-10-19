@@ -104,6 +104,12 @@ type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseR
 const poses: Pose[] = [];
 const inputEvents: Record<string, unknown>[] = [];
 let posesTruncated = false;
+let inputEventsTruncated = false;
+function recordInputEvent(event: Record<string, unknown> | null) {
+  if (!event) return;
+  if (inputEvents.length < 5000) inputEvents.push(event);
+  else inputEventsTruncated = true;
+}
 let latestPose: Pose | undefined;
 let activeRoom: PlaywrightWebSocket | undefined;
 let playerId: string | undefined;
@@ -117,20 +123,17 @@ function observeRoom(socket: PlaywrightWebSocket) {
     if (socket === activeRoom) { activeRoom = undefined; playerId = undefined; latestPose = undefined; }
   });
   socket.on('framesent', ({ payload }) => {
-    if (socket !== activeRoom || typeof payload !== 'string' || inputEvents.length >= 5000) return;
+    if (socket !== activeRoom || typeof payload !== 'string') return;
     try {
       const event = controlEvent('sent', JSON.parse(payload), Math.round(performance.now() - started));
-      if (event) inputEvents.push(event);
+      recordInputEvent(event);
     } catch { /* Only the nonsecret control fields above are retained. */ }
   });
   socket.on('framereceived', ({ payload }) => {
     if (socket !== activeRoom || typeof payload !== 'string') return;
     try {
       const message = JSON.parse(payload);
-      if (inputEvents.length < 5000) {
-        const event = controlEvent('received', message, Math.round(performance.now() - started));
-        if (event) inputEvents.push(event);
-      }
+      recordInputEvent(controlEvent('received', message, Math.round(performance.now() - started)));
       if (message.type === 'welcome' && typeof message.id === 'string') { playerId = message.id; return; }
       if (message.type !== 'state' || !playerId || !Array.isArray(message.world?.players) || !Array.isArray(message.world?.entities)) return;
       const player = message.world.players.find((candidate: { id?: unknown }) => candidate.id === playerId);
@@ -771,6 +774,7 @@ finally {
     await writeFile(join(out, 'trajectory.json'), JSON.stringify(poses, null, 2) + '\n');
     await writeFile(join(out, 'input-events.json'), JSON.stringify(inputEvents, null, 2) + '\n');
     manifest.trajectory = { file: 'trajectory.json', status: poses.length ? (posesTruncated ? 'truncated' : 'available') : 'unavailable', samples: poses.length, source: 'received authoritative room snapshots; not displayed-frame positions' };
+    manifest.inputEvents = { file: 'input-events.json', status: inputEventsTruncated ? 'truncated' : 'available', samples: inputEvents.length };
     if (!poses.length) failure ??= new Error('No compatible authoritative trajectory was received.');
   }
   if (values.serve) {

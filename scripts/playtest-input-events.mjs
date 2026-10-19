@@ -3,7 +3,7 @@ export function controlEvent(direction, message, atMs) {
   if (!message || typeof message !== 'object' || !Number.isFinite(atMs)) return null;
   if (direction === 'sent' && message.type === 'input' &&
       [message.seq, message.targetTick, message.controlRevision, message.actionSeq, message.input?.jump].every(Number.isSafeInteger) &&
-      typeof message.input?.hover === 'boolean' && (message.input.jump > 0 || message.input.hover)) {
+      typeof message.input?.hover === 'boolean') {
     return { atMs, type: 'sent', seq: message.seq, targetTick: message.targetTick,
       controlRevision: message.controlRevision, actionSeq: message.actionSeq,
       jump: message.input.jump, hover: message.input.hover };
