@@ -83,7 +83,7 @@ try{
   const baseFare=payoutFor({...order(),elapsed:45});
   assert.equal(paid.delivery?.matched,true);assert.equal(paid.delivery?.earnings[0].amount,baseFare);
   assert.equal(paid.progress.completed,1);assert.ok(paid.awards.includes('deliveries-1'));
-  assert.equal(paid.progress.cash,10_120+baseFare+500+100,'first early-delivery tier commits with the fare');
+  assert.equal(paid.progress.cash,10_120+baseFare+350+100,'first early-delivery tier commits with the fare');
   assert.deepEqual(paid.progress.achievementTiers?.deliveries,{count:1,claimed:1});
   assert.deepEqual(paid.progress.achievementTiers?.['early-deliveries'],{count:1,claimed:1});
   assert.deepEqual(await rpc('sources',e),['earned-source:delivery:1:dropoff']);

@@ -207,11 +207,11 @@ export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number
   return true;
 }
 export function pickupBonusFor(order: Order): number {
-  return Math.round(order.base * .4 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
+  return Math.round(order.base * .25 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
 }
 export function payoutFor(order: Order): number {
   const difference = order.estimate - order.elapsed;
-  const bonus = difference > 0 ? Math.round(order.base * .75 * Math.min(1, difference / order.estimate)) : 0;
+  const bonus = difference > 0 ? Math.round(order.base * .35 * Math.min(1, difference / order.estimate)) : 0;
   const latePenalty = difference < 0 ? Math.round(order.base * Math.min(1, -difference / (order.estimate * 1.5))) : 0;
   // Even a very late delivery should pay for the trip. Round the half-dollar
   // up so an odd quoted base never falls below the 50% minimum.

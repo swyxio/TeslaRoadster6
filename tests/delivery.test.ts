@@ -20,16 +20,16 @@ test('a fast first delivery pays a useful reward without immediately unlocking O
   assert.equal(order.base,600);
   const pickup=orderTarget(order);Object.assign(car,{x:pickup.x,z:pickup.z,y:0,speed:0,vy:0,supportId:'ground'});
   updateDelivery(world,player,car,NEUTRAL,0);
-  assert.equal(player.delivery.cash,2_740);
+  assert.equal(player.delivery.cash,2_650);
   const dropoff=orderTarget(order);Object.assign(car,{x:dropoff.x,z:dropoff.z,y:0,speed:0,vy:0,supportId:'ground'});
   updateDelivery(world,player,car,NEUTRAL,0);
   updateAchievements(player,car,false,undefined,true);
-  assert.equal(player.delivery.cash,4_290);
-  assert.equal(player.delivery.lifetimeIncome,1_790);
+  assert.equal(player.delivery.cash,3_810);
+  assert.equal(player.delivery.lifetimeIncome,1_310);
   assert.equal(player.delivery.level,0);
   assert.ok(player.achievements.unlocked.includes('deliveries-1'));
   updateAchievements(player,car,false,undefined,true);
-  assert.equal(player.delivery.cash,4_290,'the first-delivery award is one-off');
+  assert.equal(player.delivery.cash,3_810,'the first-delivery award is one-off');
 });
 test('restaurant and fictional customer markers are on clear, reachable ground',()=>{
   for(const place of [...RESTAURANTS,...CUSTOMERS.filter(c=>!c.rooftop)]){
@@ -39,8 +39,8 @@ test('restaurant and fictional customer markers are on clear, reachable ground',
 });
 test('delivery pay keeps the fast bonus and late penalty until the 50% floor',()=>{
   const order={...initialDelivery({x:40,z:60}).order,base:600,estimate:100};
-  assert.equal(payoutFor({...order,elapsed:0}),1_050);
-  assert.equal(payoutFor({...order,elapsed:50}),825);
+  assert.equal(payoutFor({...order,elapsed:0}),810);
+  assert.equal(payoutFor({...order,elapsed:50}),705);
   assert.equal(payoutFor({...order,elapsed:100}),600);
   assert.equal(payoutFor({...order,elapsed:125}),500);
   assert.equal(payoutFor({...order,elapsed:175}),300);
@@ -56,6 +56,7 @@ test('the minimum fare rounds up for odd-dollar quotes',()=>{
 test('pickup bonus decreases with active time and expires at the estimate',()=>{
   const order=initialDelivery({x:40,z:60}).order;
   const early=pickupBonusFor(order),later=pickupBonusFor({...order,elapsed:order.pickupEstimate/2});
+  assert.equal(early,150);assert.equal(later,75);
   assert.ok(early>later&&later>0);assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate}),0);
   assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate*2}),0);
 });

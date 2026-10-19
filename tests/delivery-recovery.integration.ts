@@ -44,7 +44,7 @@ try{
   const earlyCommitted=45.05<committed.initial.order.estimate;
   assert.equal(committed.saved.achievementTiers?.deliveries.count,1);
   assert.equal(committed.saved.achievementTiers?.['early-deliveries'].count,Number(earlyCommitted));
-  assert.equal(committed.saved.cash,committed.initial.cash+committed.expectedFare+500+(earlyCommitted?100:0),'the rejected contribution is not resurrected');
+  assert.equal(committed.saved.cash,committed.initial.cash+committed.expectedFare+350+(earlyCommitted?100:0),'the rejected contribution is not resurrected');
   const unknownResponse=await fetch(base+'/unknown',{signal:AbortSignal.timeout(5_000)});
   if(!unknownResponse.ok)throw new Error(`${await unknownResponse.text()}\n${logs}`);
   const unknown=await unknownResponse.json() as {saved:DriverProgress;initial:DriverProgress;writes:EconomyIntent[];expectedFare:number;expectedPickup:number;earlyDelivery:boolean;earlyPickup:boolean;deferredSpend:boolean;driverMoved:boolean;otherMoved:boolean;health:number};
@@ -59,7 +59,7 @@ try{
   assert.equal(unknown.saved.achievementTiers?.['early-deliveries'].count,Number(unknown.earlyDelivery));
   assert.equal(unknown.saved.achievementTiers?.['early-pickups'].count,Number(unknown.earlyPickup));
   assert.equal(unknown.saved.achievementTiers?.['supply-pickups'].count,1);
-  assert.equal(unknown.saved.cash,unknown.initial.cash+unknown.expectedFare+unknown.expectedPickup+505+200+
+  assert.equal(unknown.saved.cash,unknown.initial.cash+unknown.expectedFare+unknown.expectedPickup+355+200+
     (unknown.earlyDelivery?100:0)+(unknown.earlyPickup?100:0));
   assert.equal(unknown.deferredSpend,true,'a spend cannot use an uncertain draft balance');
   assert.equal(unknown.driverMoved,true,'the affected driver continues moving while the rate is held');

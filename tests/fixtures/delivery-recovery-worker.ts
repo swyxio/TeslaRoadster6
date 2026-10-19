@@ -85,6 +85,8 @@ async function unknownRateScenario(knownRate=false){
   player.achievements.unlocked.push('region-oakland');
   const initial=progressFrom(player.delivery,player.achievements.unlocked,{},[],0,0);
   initial.achievementTiers=normalizeAchievementTiers(undefined,initial.completed,initial.unlocked);
+  // The real profile normalizes legacy collections before returning receipts.
+  initial.vehicleCollections={driven:[],stolen:[]};
   let saved=structuredClone(initial),release=()=>{},started=()=>{};
   const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;});
   const writes:EconomyIntent[]=[],messages:unknown[]=[];
@@ -166,8 +168,10 @@ async function unknownRateScenario(knownRate=false){
   session.contributeMars(1_000,7);
   const deferredSpend=messages.some(value=>typeof value==='object'&&value!==null&&Reflect.get(value,'type')==='marsResult'&&Reflect.get(value,'ok')===false);
   release();
-  for(let i=0;i<2_000&&Reflect.get(session,'processing');i++)await new Promise(resolve=>setTimeout(resolve,1));
-  if(Reflect.get(session,'processing'))throw new Error('Historical-rate queue did not drain');
+  const pending=()=>Reflect.get(session,'processing')||(Reflect.get(session,'queue') as unknown[]).length>0||
+    (Reflect.get(session,'staging') as Set<unknown>).size>0;
+  for(let i=0;i<2_000&&pending();i++)await new Promise(resolve=>setTimeout(resolve,1));
+  if(pending())throw new Error('Historical-rate queue did not drain');
   return {saved,writes,initial,expectedFare,expectedPickup,earlyDelivery,earlyPickup,deferredSpend,driverMoved,otherMoved,health:car.health};
 }
 
