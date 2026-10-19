@@ -82,10 +82,10 @@ async function rpc<T>(op:string,fields:Record<string,unknown>={},timeout=10_000)
   const response=await fetch(base,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op,...fields}),signal:AbortSignal.timeout(timeout)});
   const body=await response.text();if(!response.ok)throw new Error(`${op}: ${response.status} ${body}\n${logs}`);return JSON.parse(body) as T;
 }
-async function prepare(e:Entry,s:Scenario,multiplier:1|null=1){
+async function prepare(e:Entry,s:Scenario,multiplier:1|null=1,initialCash=9_000){
   await rpc('persistent-producer',{...e,active:true});
   const order={...initialDelivery({x:0,z:0}).order,stage:'dropoff' as const,customer:0,elapsed:0,base:600,estimate:60};
-  const progress={cash:9_000,level:0,completed:s.completed,order,deliveryClock:0,unlocked:s.unlocked,
+  const progress={cash:initialCash,level:0,completed:s.completed,order,deliveryClock:0,unlocked:s.unlocked,
     achievementTiers:normalizeAchievementTiers(undefined,s.completed,s.unlocked)};
   await rpc('acquire',{...e,progress});
   const observed=stage(e,multiplier),submitted=intent(observed);
@@ -147,6 +147,21 @@ try {
     assert.deepEqual(await rpc('sources',e),[],'checkpoint is durable before any earnings commit');
     pending.push({scenario,e,submitted});
   }
+  // A saved search can already be complete before its transaction commits.
+  // Resolve a room-win boost from history, then crash at that exact point.
+  const boostedEntry=entry(),boostedScenario=scenarios[0];
+  await rpc('room-win',{...boostedEntry,eventId:randomUUID(),at:Date.now()-10_000});
+  const {observed:boostedStop,submitted:boostedIntent}=await prepare(boostedEntry,boostedScenario,null,8_000);
+  await rpc('hold-assignment',{...boostedEntry,done:true});
+  const boostedFlight=rpc('submit',{...boostedEntry,intent:boostedIntent},45_000);void boostedFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',boostedEntry),'completed boosted assignment held',40_000);
+  const boostedCheckpoint=await rpc<{done:boolean;context:string}>('assignment',{...boostedEntry,eventId:boostedStop.eventId});
+  assert.equal(boostedCheckpoint.done,true);
+  assert.equal((JSON.parse(boostedCheckpoint.context) as {level:number}).level,1,'old boosted payout crosses $10k');
+  const boostedRecord=await rpc<{cabEvents:EarningsEvents}>('record',{...boostedEntry,eventId:boostedStop.eventId});
+  assert.equal(boostedRecord.cabEvents.room.length,1,'the unresolved rate is saved with its room event history');
+  assert.equal((await rpc<Profile>('profile',boostedEntry)).progress.cash,8_000);
+  assert.deepEqual(await rpc('sources',boostedEntry),[]);
   // Checkpoint searches are initiated before these independent settlements,
   // which can otherwise warm the route cache and finish a search in one step.
   // The completed cases prove the same old worker pays the old fare and each
@@ -169,6 +184,18 @@ try {
   paid.push({scenario:historyScenario,e:historyEntry,submitted:historyIntent,result:historyResult,events:historyRecord.cabEvents});
   await stop(child);child=undefined;
   await writeConfig(join(current,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
+
+  const boosted=await rpc<DriverOutcome>('submit',{...boostedEntry,intent:boostedIntent},40_000);success(boosted);
+  assert.equal(boosted.delivery?.earnings[0].amount,1_215,'the revised fare keeps the 1.5x room boost');
+  assert.equal(boosted.delivery?.earnings[0].multiplier,1.5);
+  assert.equal(boosted.progress.cash,9_665);
+  assert.equal(boosted.progress.level,0,'the revised payout stays below $10k');
+  assert.equal(boosted.progress.order.search,undefined);
+  assert.equal(isOrderAccessible(boosted.progress.order,0,false),true);
+  assert.deepEqual(await rpc('submit',{...boostedEntry,intent:boostedIntent}),boosted);
+  assert.deepEqual(await rpc('commit',{...boostedEntry,intent:boostedIntent,events:boostedRecord.cabEvents}),boosted);
+  assert.deepEqual(await rpc('sources',boostedEntry),['earned-source:delivery:1:dropoff']);
+  assert.equal(await rpc('assignment',{...boostedEntry,eventId:boostedStop.eventId}),null);
 
   // Go straight to the upgraded profile, before the room journal can answer
   // from its own cache: a committed legacy receipt keeps its original value.
@@ -239,6 +266,7 @@ try {
   }
   console.log('PASS: old-rule assignment checkpoints replay under new fare and achievement rules across the $10k boundary.');
   console.log('PASS: upgraded profiles preserve committed old-rule receipts and reject changed intents or event histories.');
+  console.log('PASS: a completed assignment with an unknown, boosted rate replays using its saved event history.');
   console.log('PASS: accepted stops, committed receipts, source IDs and new-fence recovery remain exactly once.');
 } finally {
   if(child)await stop(child);
