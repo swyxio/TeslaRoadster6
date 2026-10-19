@@ -441,6 +441,22 @@ and the optional recording `fps` setting was added in 1.64. A video can contain
 only frames the browser produced. Pin the actual Playwright and browser
 versions, and verify installed features instead of assuming current docs apply.
 
+The tab path currently requests VP8 and a frame rate up to 60; Chromium can
+still [decimate or downscale the selected source](https://w3c.github.io/mediacapture-screen-share/),
+so check the actual track and decoded frames. If a matched capture still
+stutters, compare browser-default or H.264 MediaRecorder encoding on the same
+route before building a separate encoder. A WebCodecs pipeline adds queue and
+container handling and cannot recover frames the track never supplied; its
+hardware preference is a hint, not proof of hardware encoding. See Chrome's
+[WebCodecs guidance](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs/).
+
+On macOS, a separately measured [ScreenCaptureKit window recording](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos)
+could provide another view for comparison. Use an isolated game window and
+independent visible markers; a window is not a tab identity, recording access
+requires system permission, and simultaneous capture itself changes workload.
+Neither a matching Capture Handle nor agreement between recordings proves
+physical-display presentation or another player's device performance.
+
 [Keyboard down and up](https://playwright.dev/docs/api/class-keyboard) support
 held and simultaneous controls. This exercises the browser input path, although
 it does not prove physical keyboard or touch-device behavior. Use the full
