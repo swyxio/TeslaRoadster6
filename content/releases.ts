@@ -16,6 +16,19 @@ export const RELEASES = [
     ]
   },
   {
+    version: '0.0.33-alpha',
+    label: '0.0.33 Alpha',
+    date: '2026-10-18',
+    title: 'Find your Bay',
+    intro: 'Keep driving when the Bay fills up.',
+    sections: [
+      { title: 'Room for another drive', items: [
+        'When the public Bay is full, the game finds another open Bay room automatically.',
+        'Invite links take friends to your exact room. If it is full, you can retry or choose another room.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.32-alpha',
     label: '0.0.32 Alpha',
     date: '2026-10-18',
