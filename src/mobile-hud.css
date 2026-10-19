@@ -32,7 +32,11 @@
  .telemetry.mobile-compact>#station-status:not(.air-warning):not(.sky-active):not(.dome-active){display:none}
  .telemetry.mobile-compact>#station-status.air-warning,.telemetry.mobile-compact>#station-status.sky-active,.telemetry.mobile-compact>#station-status.dome-active{display:block}
 }
-@media(max-height:550px) and (pointer:coarse),(max-height:550px) and (max-width:600px) and (orientation:portrait){
+@media(max-height:550px) and (pointer:coarse),(max-height:550px) and (max-width:800px){
  .mission.mobile-hud-enabled{max-height:calc(100dvh - 180px)}
  .cockpit-active .mission.mobile-hud-enabled{max-height:calc(100dvh - 230px)}
+}
+@media(max-height:550px) and (max-width:800px) and (orientation:landscape){
+ .mission.mobile-hud-enabled{max-width:min(280px,calc(100vw - 130px))}
+ body:not(.cockpit-active) .mission.mobile-hud-enabled{top:62px}
 }

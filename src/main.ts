@@ -48,7 +48,7 @@ import { playerRace } from '../shared/race';
 import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { OTA_FEE } from '../shared/ota';
 import { marketPaintColor } from '../shared/market-catalog';
-import { canAssignDeliveryRoof, LEVELS, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
+import { canAssignDeliveryRoof, LEVELS, PICKUP_STOP_ALLOWANCE, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
 import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUntilCheckpoint } from '../shared/delivery-checkpoint';
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
@@ -56,6 +56,7 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { selectAchievementTiers, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import { AchievementEventTracker } from './achievement-events';
 import { LevelEventTracker } from './level-events';
+import { DeliveryGuidance, type GuidanceResponse } from './delivery-guidance';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
@@ -76,6 +77,20 @@ import { readDriverRecovery, stageDriverRecovery, confirmDriverRecovery, setDriv
 
 document.title=`Tesland · v${CURRENT_RELEASE.label}`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+let deliveryGuide:DeliveryGuidance|undefined;
+function roadGuidance():DeliveryGuidance {
+  if(!deliveryGuide){
+    let worker:Worker|undefined;
+    deliveryGuide=new DeliveryGuidance(request=>worker?.postMessage(request));
+    try {
+      worker=new Worker(new URL('./delivery-guidance.worker.ts',import.meta.url),{type:'module'});
+      worker.onmessage=(event:MessageEvent<GuidanceResponse>)=>deliveryGuide!.receive(event.data);
+      worker.onerror=()=>deliveryGuide!.workerFailed();
+      worker.onmessageerror=()=>deliveryGuide!.workerFailed();
+    } catch {deliveryGuide.workerFailed();}
+  }
+  return deliveryGuide;
+}
 document.querySelector('#app')!.innerHTML = `
 <canvas id="world" aria-label="Tesland 3D driving world"></canvas>
 <div class="vignette"></div>
@@ -1318,12 +1333,16 @@ scene.start(dt=>{
     awardButton.hidden=!nextAwardTarget;if(awardButton.textContent!==awardLabel)awardButton.textContent=awardLabel;
     awardButton.title=guestAward?ACHIEVEMENTS[guestAward].description:'View this award';
     $('mission-label').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
-    const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
+    const guidance=searching||unavailable?null:roadGuidance().update(e,target,d.level,performance.now());
+    const waypoint=guidance?.waypoint;
+    const bearing=waypoint?Math.atan2(-(waypoint.x-e.x),-(waypoint.z-e.z))-e.yaw:0;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
-    $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
+    $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':
+      !waypoint?`${guidance?.status==='unavailable'?'No road route':'Finding road route'} · ${target.name} · ${distance} m`:
+      `${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m · ${guidance?.status==='flight'?'fly direct':guidance?.status==='overpass'?'exit overpass':'via road'}`;
     const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
-    $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
+    $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`pickup bonus +${money(pickupBonus)} · up to ${PICKUP_STOP_ALLOWANCE}s past estimate`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
     $('cockpit-phase').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP':target.rooftop?'ROOFTOP DELIVERY':'DELIVER';
     $('cockpit-target').textContent=$('mission').textContent;$('cockpit-estimate').textContent=$('hint').textContent;
     $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=searching?'Finding a safe route':unavailable?'Delivery unavailable':target.name;$('objective-distance').textContent=searching||unavailable?'':`${distance} m`;
