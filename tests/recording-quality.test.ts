@@ -7,7 +7,7 @@ import { compareRecording, inspectAudio, inspectCaptureTraces, inspectVideos } f
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
-  status: 'complete', target: { refProvidedByOperator: ref, origin: 'http://127.0.0.1:8787', pathname: '/' }, scenarioSha256: hash,
+  status: 'complete', target: { refProvidedByOperator: ref, origin: 'http://127.0.0.1:8787', pathname: '/', perf: true }, scenarioSha256: hash,
   runner: { platform: 'darwin', architecture: 'arm64', release: '24', cpu: 'Apple', logicalCpuCount: 10,
     nodeVersion: 'v22', playwrightVersion: '1.64.1', browserChannel: 'chrome', browserVersion: '155',
     gpuMode: 'metal', headed: false, webgl: { renderer: 'Metal', vendor: 'Apple' }, recorderSourceSha256: hash,
@@ -42,6 +42,7 @@ test('recording comparison holds missing, mixed or incomplete evidence', () => {
   assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true }, audioRecordings: [{ file: 'segment-001-audio.webm', offsetMs: 2, startCommandWindowMs: 1 }] }).comparison, 'available');
   assert.equal(compareRecording(control, { ...video, target: { ...video.target, origin: 'https://example.com' } }).comparison, 'HOLD');
+  assert.equal(compareRecording(control, { ...video, target: { ...video.target, perf: false } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, target: { ...video.target, refProvidedByOperator: 'main' } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, browserErrors: { pageErrors: 1, consoleErrors: 0 } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, segments: [{ ...video.capture.segments[0], finalized: false }] } }).comparison, 'HOLD');

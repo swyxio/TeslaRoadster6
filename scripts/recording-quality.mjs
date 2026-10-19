@@ -36,12 +36,12 @@ function animation(manifest) {
 
 function identity(manifest) {
   const target = manifest?.target, r = manifest?.runner, v = manifest?.viewport;
-  if (!/^[0-9a-f]{40}$/i.test(target?.refProvidedByOperator ?? '') || !present(target?.origin) || !present(target?.pathname) || !hash(manifest?.scenarioSha256) ||
+  if (!/^[0-9a-f]{40}$/i.test(target?.refProvidedByOperator ?? '') || !present(target?.origin) || !present(target?.pathname) || typeof target?.perf !== 'boolean' || !hash(manifest?.scenarioSha256) ||
       ![r?.platform, r?.architecture, r?.release, r?.cpu, r?.nodeVersion, r?.playwrightVersion, r?.browserChannel, r?.browserVersion, r?.gpuMode, r?.webgl?.renderer, r?.webgl?.vendor].every(present) ||
       !hash(r?.recorderSourceSha256) || !hash(r?.captureSourceSha256) || !hash(r?.audioSourceSha256) || !Number.isSafeInteger(r?.logicalCpuCount) || r.logicalCpuCount < 1 || typeof r?.headed !== 'boolean' ||
       !Number.isSafeInteger(v?.width) || v.width < 1 || !Number.isSafeInteger(v?.height) || v.height < 1 || !finite(v?.deviceScaleFactor ?? 1) || (v?.deviceScaleFactor ?? 1) <= 0 ||
       (v?.isMobile !== undefined && typeof v.isMobile !== 'boolean') || (v?.hasTouch !== undefined && typeof v.hasTouch !== 'boolean')) return null;
-  return JSON.stringify([target.refProvidedByOperator.toLowerCase(), target.origin, target.pathname, manifest.scenarioSha256, r.platform, r.architecture, r.release, r.cpu, r.logicalCpuCount,
+  return JSON.stringify([target.refProvidedByOperator.toLowerCase(), target.origin, target.pathname, target.perf, manifest.scenarioSha256, r.platform, r.architecture, r.release, r.cpu, r.logicalCpuCount,
     r.nodeVersion, r.playwrightVersion, r.browserChannel, r.browserVersion, r.gpuMode, r.headed, r.webgl.renderer, r.webgl.vendor,
     r.recorderSourceSha256, r.captureSourceSha256, r.audioSourceSha256, v.width, v.height, v.deviceScaleFactor ?? 1, v.isMobile ?? false, v.hasTouch ?? false]);
 }

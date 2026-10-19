@@ -58,7 +58,7 @@ const id = randomUUID();
 const started = performance.now();
 const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
-  target: { origin: target.origin, pathname: target.pathname, refProvidedByOperator: values['target-ref'] },
+  target: { origin: target.origin, pathname: target.pathname, perf: target.searchParams.has('perf'), refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
   runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
   viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
