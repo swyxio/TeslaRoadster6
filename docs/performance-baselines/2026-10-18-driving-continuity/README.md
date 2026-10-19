@@ -3,6 +3,26 @@
 **HOLD:** these checks do not establish the steady-motion release gate or
 playable capacity. The candidate was not merged or deployed on this evidence.
 
+## Integrated candidate hosted observation
+
+[Run 39188192273](https://github.com/swyxio/TeslaRoadster6/actions/runs/39188192273)
+compared main `e07f0be` and candidate `38f56a0`, with the three route legs
+aligned (path separation p95 0.102 m, maximum 0.272 m). Animation callback
+p95 was 133.3 / 116.7 ms; modeled 150 ms bunched-delivery display/body speed
+p05–p95 was 0.936–1.151 / 0.862–1.019. One local room observed simulated /
+wall ratios of 0.916 / 1.000. One-minute load was 14.67 → 15.68 for base and
+17.10 → 17.73 for candidate on a three-logical-CPU Apple M1 virtual runner at
+1280 × 720, DPR 1. Browser and Worker shared that host. The [raw reports and
+traces](hosted-38f56a0-39188192273.tar.gz) have SHA-256
+`e3fdf9b93e7c0632eb6b61bc35f224ae8a486a4e974dd84f63baae8fd3249195`.
+
+The workflow verified observation completeness and route comparability; it did
+not apply the release thresholds. Callback intervals are not GPU completion or
+display presentation, and the motion model is synthetic. The single heavily
+loaded pair does not establish a causal change, representative rendering, or
+room capacity. The observed values do not satisfy the corresponding numeric
+targets in this run; the full gates remain open.
+
 ## Matched inherited peer-contact defect
 
 The [matched trace archive](matched-main-candidate-20261018.tar.gz) (SHA-256
