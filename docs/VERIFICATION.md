@@ -3,7 +3,7 @@
 ## Snapshot serialization · unreleased candidate · 2026-10-18 Pacific
 
 - On current-main base `a3bde95` (protocol 49), serializer runtime `6dea768` passed 1,075 tests and the build, with the existing Vite chunk-size warning. Before adding the gate tests, 84 complete synthetic snapshots matched the same base byte for byte across private awards, ownership, interest boundaries and fresh ticks. The source hashes and output digest are produced by `scripts/compare-snapshot-serialization.ts`.
-- A local two-client `room.integration.ts` run was interrupted to avoid overlapping another graphics measurement; it is not a pass. The hosted five-pair assembly gate and final room integration remain required for this candidate. Earlier v48 timing observations on `e07f0be` are historical, not a current-main performance result. No end-to-end speedup or 64-player smoothness is claimed.
+- A local two-client `room.integration.ts` run was interrupted to avoid overlapping another graphics measurement; it is not a pass. The hosted five-pair assembly gate and final room integration remain required for this candidate. The timing job fails closed until a fresh window is coordinated and marked by `snapshot-timing-coordinated`; functional checks can run independently. Earlier v48 timing observations on `e07f0be` are historical, not a current-main performance result. No end-to-end speedup or 64-player smoothness is claimed.
 
 ## Manual delivery economy rebalance · 2026-10-18 Pacific
 

@@ -3,7 +3,7 @@ name: Snapshot serialization gate
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
     paths:
       - 'worker/snapshot.ts'
       - 'tests/snapshot.test.ts'
@@ -92,6 +92,14 @@ jobs:
           raw_dir="$RUNNER_TEMP/snapshot-serialization"
           mkdir -p "$raw_dir"
           printf 'RAW_DIR=%s\n' "$raw_dir" >> "$GITHUB_ENV"
+      - name: Require a coordinated timing window
+        env:
+          TIMING_COORDINATED: ${{ contains(github.event.pull_request.labels.*.name, 'snapshot-timing-coordinated') }}
+        run: |
+          if [ "$TIMING_COORDINATED" != true ]; then
+            echo '::error::HOLD: coordinate a fresh timing window before applying snapshot-timing-coordinated.'
+            exit 1
+          fi
       - name: Check out exact PR head
         uses: actions/checkout@v4
         with:
