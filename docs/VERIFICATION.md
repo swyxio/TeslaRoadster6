@@ -1498,6 +1498,11 @@ These observations and screenshots describe the former Alcatraz arena before the
 - A separate synthetic calibration fired a white-frame cue and a 440 Hz tone from the same key event; in four muxed tests, the detected starts differed by 0–57 ms at the test’s 30 fps / 10 ms measurement resolution. A simulated audio-finalization failure left scripted and interactive runs failed but preserved their finalized video. Start-command timing is approximate and this is not proof of frame-accurate synchronization in every run. The audio capture excludes the separate podcast player, microphone and system audio.
 - The full unit suite passed 1,006 tests; the production build and the audio calibration passed. The existing Vite large-chunk warning remains.
 
+## Performance workflow readiness trigger · 2026-10-18 Pacific
+
+- PR #104 integrated with production base `dacde0c` at `e953701`. All 1,026 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. Ten performance-report tests and workflow syntax/expression lint also passed. External shell and Python lint were disabled for the workflow lint. The only changes to that base are the workflow event list and documentation; no gameplay or protocol code changed. Production verification follows the merge.
+- After integrating the article and video release #116 at `8be55d4`, the combined candidate `ab15df2` again passed all 1,026 tests and the build. The game JavaScript and CSS hashes match the prior candidate.
+
 ## Hosted preview and alpha comparison · 2026-10-18 Pacific
 
 - Recorded the older hosted preview (protocol 29) and live 0.0.34 alpha (protocol 47) in fresh separate rooms using the same keyboard scenario, Chromium and ANGLE Metal on Apple M5 Pro. Both room snapshots start at (40, 60); at eight seconds their sampled positions differ by about 0.8 m, with a largest difference of about 9.9 m at the half-second samples. This is a matched-route feature demonstration, not a performance or physical-device test. See [capture notes](benchmarks/2026-10-18-preview-alpha-playtest.md).
