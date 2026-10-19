@@ -538,6 +538,17 @@ overhead, wire bytes and a validated per-tick CPU source remain unverified.
 Hosted execution stays disabled; no 64-player or throughput gate was run. The
 lab is based on runtime source from `e6ad3b7`, not a deployed artifact.
 
+The [subsequent raw-sweep lab](hosted-stage-raw-sweeps-20261019.tar.gz)
+(SHA-256 `04b519c731cb9024c514aae2fbb2826cffb8e3cf9ae5bf5c075329c505738b5c`)
+retains bounded anonymous start, attempted and end ground-path observations for
+independent reconstruction and streams verified pages to a partial file before
+completion. Seven focused tests and both lab typechecks passed. The extended
+local smoke has not yet run. At its configured maximum, raw and pose buffers
+alone can consume about 116 MiB; with 128 observed entities the record cap
+lasts only 51.2 simulated seconds. Special surfaces and full collision coverage,
+provider isolation and instrumentation overhead remain unverified. Hosted
+execution stays disabled, and this is not a 64-player result.
+
 ## Hosted comparison
 
 [Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
