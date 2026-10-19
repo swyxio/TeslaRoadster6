@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
+import { ScreencastCapture } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -15,6 +16,7 @@ process.umask(0o077);
 type Action = Record<string, unknown> & { type: string };
 type Scenario = { freshGuest?: boolean; viewport?: { width: number; height: number; deviceScaleFactor?: number; isMobile?: boolean; hasTouch?: boolean }; steps: Action[] };
 type ManifestEvent = { type: string; commandStartedAtMs: number; commandDurationMs: number; status: 'ok' | 'failed'; key?: string; sample?: unknown };
+class PublicActionError extends Error {}
 
 const { values } = parseArgs({ options: {
   url: { type: 'string' }, scenario: { type: 'string' }, out: { type: 'string' },
@@ -43,6 +45,8 @@ if (!Number.isInteger(fps) || fps < 1 || fps > 60) throw new Error('FPS must be 
 const scenarioBytes = values.scenario ? await readFile(resolve(values.scenario)) : null;
 const scenario = scenarioBytes ? JSON.parse(scenarioBytes.toString()) as Scenario : { steps: [] };
 if (!Array.isArray(scenario.steps)) throw new Error('Scenario steps must be an array.');
+const sourceHash = async (file: string) => createHash('sha256').update(await readFile(new URL(file, import.meta.url))).digest('hex');
+const [recorderSourceSha256, captureSourceSha256, audioSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js')]);
 const view = scenario.viewport ?? { width: Number(values.width), height: Number(values.height), isMobile: values.mobile, hasTouch: values.mobile };
 if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width < 200 || view.width > 3840 || view.height < 200 || view.height > 2160 || (view.deviceScaleFactor !== undefined && (!(view.deviceScaleFactor > 0) || view.deviceScaleFactor > 4))) throw new Error('Invalid viewport.');
 const out = resolve(values.out ?? join('playtest-runs', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`));
@@ -54,14 +58,15 @@ const id = randomUUID();
 const started = performance.now();
 const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
-  target: { origin: target.origin, pathname: target.pathname, refProvidedByOperator: values['target-ref'] },
+  target: { origin: target.origin, pathname: target.pathname, perf: target.searchParams.has('perf'), refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
-  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
-  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
+  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
+  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
 const recordings = manifest.recordings as string[];
 const screenshots = manifest.screenshots as string[];
+const captureSegments = (manifest.capture as { segments: Record<string, unknown>[] }).segments;
 const held = new Set<string>();
 let browser: Browser | undefined;
 let context: BrowserContext | undefined;
@@ -72,6 +77,7 @@ let pointerHeld = false;
 let recording = false;
 let segment = 0;
 let pendingVideo = '';
+let pendingCapture: ScreencastCapture | undefined;
 let pendingAudio: { file: string; offsetMs: number; startCommandWindowMs: number } | undefined;
 const audioRecordings: { file: string; offsetMs: number; startCommandWindowMs: number }[] = [];
 if (values.audio) manifest.audioRecordings = audioRecordings;
@@ -83,7 +89,7 @@ let replayable = true;
 const replaySteps: Record<string, unknown>[] = [];
 let replayLastActionEnd: number | undefined;
 let replayFinishedAt: number | undefined;
-type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null };
+type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null; deliveryRestaurant: number | null; deliveryCustomer: number | null; deliverySearching: boolean | null };
 const poses: Pose[] = [];
 const inputEvents: Record<string, unknown>[] = [];
 let posesTruncated = false;
@@ -126,7 +132,10 @@ function observeRoom(socket: PlaywrightWebSocket) {
         jumpBurstUntil: typeof car.jumpBurstUntil === 'number' && Number.isFinite(car.jumpBurstUntil) ? car.jumpBurstUntil : null,
         lastJump: Number.isSafeInteger(car.lastJump) ? car.lastJump : null,
         deliveryCompleted: Number.isSafeInteger(player?.delivery?.completed) ? player.delivery.completed : null,
-        deliveryStage: order?.stage === 'pickup' || order?.stage === 'dropoff' ? order.stage : null };
+        deliveryStage: order?.stage === 'pickup' || order?.stage === 'dropoff' ? order.stage : null,
+        deliveryRestaurant: Number.isSafeInteger(order?.restaurant) ? order.restaurant : null,
+        deliveryCustomer: Number.isSafeInteger(order?.customer) ? order.customer : null,
+        deliverySearching: order && typeof order === 'object' ? !!order.search : null };
       if (poses.length < 100000) poses.push(latestPose); else posesTruncated = true;
     } catch { /* Other protocol versions may not have this snapshot shape. */ }
   });
@@ -178,12 +187,19 @@ async function stopRecording() {
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
     } finally { pendingAudio = undefined; }
   }
-  try {
-    if (!values['no-video']) {
-      await page!.screencast.stop();
-      recordings.push(pendingVideo);
-    }
-  } finally { recording = false; pendingVideo = ''; }
+  if (values['no-video']) { recording = false; pendingVideo = ''; if (audioFailure) throw audioFailure; return; }
+  const video = pendingVideo;
+  const stopRequestedAtRunMs = performance.now() - started;
+  let stopError: unknown;
+  try { await page!.screencast.stop(); } catch (error) { stopError = error; }
+  recording = false; pendingVideo = '';
+  const capture = pendingCapture!.finish(stopRequestedAtRunMs);
+  pendingCapture = undefined;
+  const traceFile = video.replace(/\.webm$/, '.capture.json');
+  await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+  captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+  if (stopError) throw stopError;
+  recordings.push(video);
   if (audioFailure) throw audioFailure;
 }
 async function releaseInputs() {
@@ -272,7 +288,7 @@ async function act(action: Action): Promise<unknown> {
         if (!result) throw new Error('Jump was not observed after five keyboard attempts.');
         break;
       }
-      case 'waitForRoomReady': case 'beginRoom': {
+      case 'waitForRoomReady': case 'beginRoom': case 'stageRepeatDelivery': {
         const room = target.searchParams.get('room');
         if (!['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || !room || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(room)) throw new Error('Room control requires a local fixture and a valid room.');
         const stageSecret = process.env.PLAYTEST_STAGE_SECRET;
@@ -288,6 +304,33 @@ async function act(action: Action): Promise<unknown> {
             await page!.waitForTimeout(100);
           } while (performance.now() < deadline);
           if (!result) throw new Error('Timed out waiting for a ready local playtest room.');
+          break;
+        }
+        if (action.type === 'stageRepeatDelivery') {
+          if (!values.trajectory) throw new Error('stageRepeatDelivery requires --trajectory.');
+          const deadline = performance.now() + timeout(action, 120000, 240000);
+          let staged: { order: { restaurant: { index: number }; customer: { index: number } }; stagedTick: number; poseRevision: number } | undefined;
+          while (performance.now() < deadline) {
+            const response = await fetch(new URL(`/api/playtest/repeat/${room}`, target), { method: 'POST', headers, signal: AbortSignal.timeout(Math.max(1, Math.min(30000, Math.ceil(deadline - performance.now())))) });
+            const body = await response.json() as { ok?: boolean; retry?: boolean; order?: { restaurant?: { index?: number }; customer?: { index?: number } }; stagedTick?: number; poseRevision?: number };
+            if (response.ok && body.ok === true && Number.isSafeInteger(body.order?.restaurant?.index) && Number.isSafeInteger(body.order?.customer?.index) && Number.isSafeInteger(body.stagedTick) && Number.isSafeInteger(body.poseRevision)) {
+              staged = body as typeof staged; break;
+            }
+            if (response.status !== 409 || body.ok !== false || body.retry !== true) throw new Error('Local second-delivery staging was rejected.');
+            await page!.waitForTimeout(100);
+          }
+          if (!staged) throw new Error('Timed out waiting to stage the second delivery.');
+          while (performance.now() < deadline) {
+            if (!activeRoom) throw new Error('Room disconnected after second-delivery staging.');
+            if (latestPose?.tick !== null && latestPose?.tick !== undefined && latestPose.tick > staged.stagedTick) {
+              if (latestPose.poseRevision !== staged.poseRevision || latestPose.deliveryCompleted !== 1 || latestPose.deliveryStage !== 'pickup' ||
+                  latestPose.deliverySearching !== false || latestPose.deliveryRestaurant !== staged.order.restaurant.index ||
+                  latestPose.deliveryCustomer !== staged.order.customer.index) throw new Error('The staged second delivery was not confirmed by the room.');
+              result = { order: staged.order, stagedTick: staged.stagedTick, confirmedTick: latestPose.tick }; break;
+            }
+            await page!.waitForTimeout(50);
+          }
+          if (!result) throw new Error('Timed out waiting for the staged order snapshot.');
           break;
         }
         const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers });
@@ -379,17 +422,34 @@ async function act(action: Action): Promise<unknown> {
       }
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');
+        if (values.audio && !await page!.evaluate('window.__teslandAudioCapture.ready()'))
+          throw new PublicActionError('Trigger a game input to start audio before recording.');
         pendingVideo = `segment-${String(++segment).padStart(3, '0')}.webm`;
         if (!values['no-video']) {
+          const capture = new ScreencastCapture(performance.now() - started);
           const videoBefore = performance.now();
-          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps });
+          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
+            onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
           const videoAfter = performance.now();
+          pendingCapture = capture;
           recording = true;
           if (values.audio) {
-            const audioBefore = performance.now();
-            await page!.evaluate('window.__teslandAudioCapture.start()');
-            const audioAfter = performance.now();
-            pendingAudio = { file: `segment-${String(segment).padStart(3, '0')}-audio.webm`, offsetMs: ((audioBefore + audioAfter) - (videoBefore + videoAfter)) / 2, startCommandWindowMs: ((videoAfter - videoBefore) + (audioAfter - audioBefore)) / 2 };
+            try {
+              const audioBefore = performance.now();
+              await page!.evaluate('window.__teslandAudioCapture.start()');
+              const audioAfter = performance.now();
+              pendingAudio = { file: `segment-${String(segment).padStart(3, '0')}-audio.webm`, offsetMs: ((audioBefore + audioAfter) - (videoBefore + videoAfter)) / 2, startCommandWindowMs: ((videoAfter - videoBefore) + (audioAfter - audioBefore)) / 2 };
+            } catch (error) {
+              // Starting audio and video is one action. A rejected audio start
+              // must not leave a video running or list a partial as usable.
+              const video = pendingVideo;
+              try { await page!.evaluate('window.__teslandAudioCapture.cancel()'); } catch (cleanupError) { failure ??= cleanupError; }
+              try { await stopRecording(); } catch (cleanupError) { failure ??= cleanupError; }
+              if (recordings.at(-1) === video) recordings.pop();
+              const discarded = captureSegments.at(-1);
+              if (discarded?.video === video) discarded.discarded = true;
+              throw error;
+            }
           }
         }
         recording = true; result = await sample(); break;
@@ -488,7 +548,7 @@ try {
           if (!incoming || typeof incoming !== 'object' || typeof incoming.type !== 'string') throw new Error('Invalid action');
           // These fixture-specific actions can block longer than the control
           // server's interactive limit; use them in scripted scenarios only.
-          if (['waitForTicks', 'waitForGround', 'jumpUntilAirborne'].includes(incoming.type)) throw new Error('Scripted action only');
+          if (['waitForTicks', 'waitForGround', 'jumpUntilAirborne', 'stageRepeatDelivery'].includes(incoming.type)) throw new Error('Scripted action only');
           if (incoming.type === 'wait' && duration(incoming, 'ms', 0, 60000) > 1000) throw new Error('Interactive wait too long');
           if ((incoming.type === 'waitFor' || incoming.type === 'waitForPoseRevision' || incoming.type === 'waitForDelivery' || incoming.type === 'waitForRoomReady') && timeout(incoming, 30000, 240000) > 1000) throw new Error('Interactive wait too long');
         } catch { if (!res.destroyed) json(res, 400, { error: 'Invalid request or interactive wait over 1000 ms' }); return; }
@@ -506,7 +566,7 @@ try {
           const result = await act(action); json(res, 200, { ok: true, result: result ?? null }); return;
         }
         json(res, 404, { error: 'Not found' });
-      }).catch(() => { if (!res.headersSent) json(res, 400, { error: 'Action failed' }); else res.end(); }).finally(() => { queued--; });
+      }).catch(error => { if (!res.headersSent) json(res, 400, { error: error instanceof PublicActionError ? error.message : 'Action failed' }); else res.end(); }).finally(() => { queued--; });
     });
     const port = Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port.');
@@ -520,6 +580,7 @@ try {
   }
 } catch (error) { failure = error; }
 finally {
+  (manifest.runner as Record<string, unknown>).hostLoadAverageAtFinish = os.platform() === 'win32' ? null : os.loadavg();
   const endedAt = replayFinishedAt ?? performance.now();
   if (page) {
     await releaseInputs();
