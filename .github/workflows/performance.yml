@@ -19,6 +19,7 @@ on:
       - 'scripts/motion-*/**'
       - 'scripts/performance-*'
       - 'scripts/performance-*/**'
+      - 'scripts/recording-*'
       - 'scripts/playtest*'
       - 'scripts/playtest*/**'
       - 'tests/fixtures/playtest-stage-worker.ts'
