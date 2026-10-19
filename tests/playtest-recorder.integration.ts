@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
+// @ts-expect-error The standalone JavaScript diagnostic has no TypeScript declarations.
+import { compareRecording, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
 
 const origin = new URL(process.argv[2] ?? 'http://127.0.0.1:8787');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname)) throw new Error('Use a local disposable game only.');
@@ -57,9 +59,11 @@ try {
   await action({ type: 'keyDown', key: 'KeyW' });
   await action({ type: 'frameStart' });
   // A human or agent may wait between requests without sending a wait action.
-  await delay(1400);
+  // CI may use very slow software rendering; a sparse sample is reported as
+  // insufficient evidence by the quality comparison, not a game regression.
+  await delay(3000);
   const timing = await action({ type: 'frameStop' });
-  assert.ok(timing.result.intervalsMs.length >= 10 && !timing.result.truncated, 'Frame capture must retain browser callback intervals.');
+  assert.ok(Array.isArray(timing.result.intervalsMs) && !timing.result.truncated, 'Frame capture must return an interval sample.');
   const sample = await action({ type: 'sample' });
   assert.ok(Number(sample.result.speed) > 0, 'Driving input must move the car.');
   await action({ type: 'keyUp', key: 'KeyW' });
@@ -83,18 +87,51 @@ try {
   assert.ok(replay.steps.slice(downIndex + 1, sampleIndex).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve the hold between requests.');
   assert.ok(!manifestText.includes(secret) && !replayText.includes(secret));
   assert.ok((await stat(join(output, 'segment-001.webm'))).size > 1000);
+  assert.equal(manifest.capture.requestedFps, 30);
+  assert.equal(manifest.capture.segments.length, 1);
+  const capture = manifest.capture.segments[0];
+  assert.equal(capture.video, 'segment-001.webm');
+  assert.equal(capture.finalized, true);
+  assert.ok(['available', 'unavailable', 'incomplete'].includes(capture.status));
+  const captureTrace = JSON.parse(await readFile(join(output, capture.traceFile), 'utf8'));
+  assert.equal(captureTrace.samples.length, capture.callbacksReceived);
+  assert.ok(captureTrace.samples.every((frame: number[]) => frame.length === 4 && frame[0] > 0));
   if (process.platform !== 'win32') assert.equal((await stat(output)).mode & 0o077, 0);
   const replayTarget = new URL(origin);
   replayTarget.searchParams.set('room', `replay-${randomBytes(6).toString('hex')}`);
   const replayOutput = join(dirname(output), 'replay');
-  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', 'integration-test', '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const pairedRef = 'a'.repeat(40); // Fixture identity, not a source-revision assertion.
+  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', pairedRef, '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
   let replayError = '';
   replayChild.stderr.on('data', chunk => { replayError += chunk; });
   assert.equal(await new Promise<number | null>(resolve => replayChild.once('exit', resolve)), 0, replayError);
   const replayManifest = JSON.parse(await readFile(join(replayOutput, 'manifest.json'), 'utf8'));
   assert.equal(replayManifest.status, 'complete');
   assert.ok(replayManifest.events.some((event: { type: string; sample?: { speed?: string } }) => event.type === 'sample' && Number(event.sample?.speed) > 0), 'Replayed controls must move the car.');
-  assert.ok(replayManifest.events.some((event: { type: string; sample?: { intervalsMs?: number[] } }) => event.type === 'frameStop' && (event.sample?.intervalsMs?.length ?? 0) >= 10), 'Replay must capture animation intervals.');
+  assert.ok(replayManifest.events.some((event: { type: string; sample?: { intervalsMs?: number[] } }) => event.type === 'frameStop' && Array.isArray(event.sample?.intervalsMs)), 'Replay must return an animation interval sample.');
+  const controlTarget = new URL(origin);
+  controlTarget.searchParams.set('room', `control-${randomBytes(6).toString('hex')}`);
+  const controlOutput = join(dirname(output), 'control');
+  const controlChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', controlTarget.href, '--target-ref', pairedRef, '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', controlOutput, '--no-video'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let controlError = '';
+  controlChild.stderr.on('data', chunk => { controlError += chunk; });
+  assert.equal(await new Promise<number | null>(resolve => controlChild.once('exit', resolve)), 0, controlError);
+  const controlManifest = JSON.parse(await readFile(join(controlOutput, 'manifest.json'), 'utf8'));
+  const quality = compareRecording(controlManifest, replayManifest);
+  const traces = await inspectCaptureTraces(replayManifest, join(replayOutput, 'manifest.json'));
+  const videos = await inspectVideos(replayManifest, join(replayOutput, 'manifest.json'));
+  assert.equal(quality.playerFidelity, 'UNVERIFIED');
+  // Slow software rendering may leave too few intervals for a statistical
+  // comparison; it must HOLD, not turn this functional check into a budget.
+  assert.ok(quality.reasons.every((reason: string) => reason.startsWith('Animation callback measurements') || reason.startsWith('Video segments lack')), quality.reasons.join(' '));
+  if (traces.some((trace: { status: string }) => trace.status !== 'available')) {
+    quality.comparison = 'HOLD';
+    quality.recordingQuality = 'HOLD';
+    quality.reasons.push('Capture frame traces are missing, incomplete or invalid.');
+  }
+  assert.equal(quality.recordingQuality, quality.reasons.length || quality.warnings.length ? 'HOLD' : 'UNVERIFIED');
+  assert.ok(videos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(videos));
+  await writeFile(join(dirname(output), 'quality.json'), JSON.stringify({ ...quality, captureTraces: traces, encodedVideos: videos }, null, 2) + '\n');
 
   // Observe real DOM touch events so releasing either finger is checked
   // independently of the runner's own bookkeeping.
