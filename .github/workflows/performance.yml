@@ -198,7 +198,8 @@ jobs:
           name: tesland-recorder-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/tesland-recorder-test-*/
-            !${{ runner.temp }}/tesland-recorder-test-*/**/*.webm.partial
+            !${{ runner.temp }}/tesland-recorder-test-*/**/*.webm*
+            !${{ runner.temp }}/tesland-recorder-test-*/**/.tesland-quarantine-*/**
           if-no-files-found: warn
           retention-days: 7
       - name: Install and build base
@@ -331,8 +332,19 @@ jobs:
           name: tesland-performance-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/tesland-performance/
-            !${{ runner.temp }}/tesland-performance/**/*.webm.partial
+            !${{ runner.temp }}/tesland-performance/**/*.webm*
+            !${{ runner.temp }}/tesland-performance/**/.tesland-quarantine-*/**
           if-no-files-found: warn
+          retention-days: 90
+      - name: Upload completed recording files
+        if: ${{ always() && steps.video_base.outcome == 'success' && steps.video_candidate.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-recordings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/tesland-performance/base-video/browser/*.webm
+            ${{ runner.temp }}/tesland-performance/candidate-video/browser/*.webm
+          if-no-files-found: error
           retention-days: 90
       - name: Require complete collections (not quality approval)
         if: ${{ always() }}

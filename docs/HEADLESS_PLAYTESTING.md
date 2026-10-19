@@ -372,7 +372,12 @@ secret as a bearer token to `GET <endpoint>` for status,
 serialized; interactive waits and wait-for timeouts are limited to one second
 per request, and `recordStop` releases held inputs before encoding. `finish`
 returns HTTP 202 for acceptance, not completion: wait for the runner to exit
-and inspect `manifest.json`. `replay.json` saves successful commands and the
+and inspect `manifest.json`. A signal waits for accepted actions to finish. If
+they do not drain within a minute, the runner attempts to move the private run
+into a `.tesland-quarantine-*` directory, attempts to close the browser and exits without
+publishing a final manifest. If quarantine or browser close fails, its output
+and browser state remain uncertain; the CI uploads recordings only for two
+successfully completed recorded runs. `replay.json` saves successful commands and the
 elapsed time between them for reuse; this approximates command timing, not
 the exact moment an input reaches the game. A failed action marks it incomplete.
 include a `waitFor` command for any readiness needed by a fresh run. Replayed

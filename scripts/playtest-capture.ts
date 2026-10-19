@@ -19,10 +19,20 @@ export async function withDeadline<T>(operation: Promise<T>, ms: number, message
 /** A failed capture cannot reuse a browser while an old operation may resume. */
 export class CaptureSession {
   private usable = true;
+  private abandoned = false;
   requireUsable() {
     if (!this.usable) throw new Error('The recording browser is unavailable after a capture failure.');
   }
   retire() { this.usable = false; }
+  abandon() { this.retire(); this.abandoned = true; }
+  requirePublishable() {
+    if (this.abandoned) throw new Error('Recorder shutdown abandoned this segment.');
+  }
+  async publish(operation: () => Promise<void>): Promise<void> {
+    this.requirePublishable();
+    await operation();
+    this.requirePublishable();
+  }
   async retireOnFailure<T>(operation: Promise<T>): Promise<T> {
     try { return await operation; }
     catch (error) { this.retire(); throw error; }
@@ -43,6 +53,21 @@ export class CaptureSession {
     try { await close(); } catch (error) { errors.push(error); }
     if (errors.length) throw new AggregateError(errors, 'Could not finish and close the recording browser.');
   }
+}
+
+/** Forced shutdown always attempts each cleanup step and reports uncertainty. */
+export async function abandonControlSession(session: CaptureSession, operations: {
+  quarantine(): Promise<void>;
+  closeContext(): Promise<void>;
+  closeBrowser(): Promise<void>;
+  drain(): Promise<void>;
+}): Promise<string[]> {
+  session.abandon();
+  const failures: string[] = [];
+  for (const name of ['quarantine', 'closeContext', 'closeBrowser', 'drain'] as const) {
+    try { await operations[name](); } catch { failures.push(name); }
+  }
+  return failures;
 }
 
 /** Attempt every held input even if one dispatch fails, and report failures. */

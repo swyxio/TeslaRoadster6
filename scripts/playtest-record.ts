@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
-import { captureError as asError, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from './playtest-capture';
+import { abandonControlSession, captureError as asError, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -227,7 +227,7 @@ async function stopRecording() {
         },
         close: async () => { pendingTab = undefined; await sink.close(); },
         writeTrace: async trace => { await writeFile(join(out, traceFile), JSON.stringify(trace) + '\n'); },
-        publish: async () => { await rename(join(out, partialVideo(video)), join(out, video)); },
+        publish: () => captureSession.publish(() => rename(join(out, partialVideo(video)), join(out, video))),
         remove: async () => { await unlink(join(out, partialVideo(video))); },
       });
       stopError = result.error;
@@ -245,6 +245,7 @@ async function stopRecording() {
       captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
     }
     if (stopError) throw stopError;
+    captureSession.requirePublishable();
     recordings.push(video);
     if (audioFailure) throw audioFailure;
   } finally {
@@ -355,7 +356,7 @@ async function act(action: Action): Promise<unknown> {
         if (action.type === 'waitForRoomReady') {
           const deadline = performance.now() + timeout(action, 30000, 120000);
           do {
-            const response = await fetch(new URL(`/api/playtest/status/${room}`, target), { headers });
+            const response = await fetch(new URL(`/api/playtest/status/${room}`, target), { headers, signal: AbortSignal.timeout(Math.max(1, Math.ceil(deadline - performance.now()))) });
             if (!response.ok) throw new Error(`Could not inspect the local playtest room (${response.status}).`);
             const status = await response.json() as { ready?: boolean; paused?: boolean; started?: boolean };
             if (status.ready && status.paused && !status.started) { result = status; break; }
@@ -391,7 +392,7 @@ async function act(action: Action): Promise<unknown> {
           if (!result) throw new Error('Timed out waiting for the staged order snapshot.');
           break;
         }
-        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers });
+        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers, signal: AbortSignal.timeout(CAPTURE_DEADLINE_MS) });
         if (!response.ok) throw new Error(`Could not start the local playtest room (${response.status}).`);
         result = await response.json(); break;
       }
@@ -688,14 +689,41 @@ try {
         json(res, 404, { error: 'Not found' });
       }).catch(error => { if (!res.headersSent) json(res, 400, { error: error instanceof PublicActionError ? error.message : 'Action failed' }); else res.end(); }).finally(() => { queued--; });
     });
+    const serverClosed = new Promise<void>(resolveClosed => { server.once('close', resolveClosed); });
     const port = Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port.');
     await new Promise<void>((resolveListen, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => resolveListen()); });
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('Server did not bind.');
     console.log(JSON.stringify({ id, endpoint: `http://127.0.0.1:${address.port}/v1/runs/${id}`, output: out }));
-    const stop = () => { replayFinishedAt = performance.now(); server.close(); close(); };
+    const stop = () => { accepting = false; replayFinishedAt = performance.now(); server.close(); close(); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     await done;
+    // Finish accepted actions before the outer cleanup touches inputs or video.
+    // A signal can arrive while an asynchronous recordStop is still running.
+    try { await withDeadline(queue, 60_000, 'Timed out draining accepted control actions.'); }
+    catch (error) {
+      failure ??= asError(error, 'Could not drain accepted control actions.');
+      // Move the entire private run out of the artifact path before forced
+      // abandonment. An already in-flight filesystem call cannot be canceled;
+      // if quarantine fails, callers must treat all output as incomplete.
+      const failedSteps = await abandonControlSession(captureSession, {
+        quarantine: () => withDeadline(rename(out, join(dirname(out), `.tesland-quarantine-${id}`)), CAPTURE_DEADLINE_MS, 'Run quarantine timed out.'),
+        closeContext: abandonBrowser,
+        closeBrowser: () => withDeadline(browser!.close(), CAPTURE_DEADLINE_MS, 'Browser close timed out.'),
+        drain: () => withDeadline(queue, CAPTURE_DEADLINE_MS, 'Control action remained pending after browser close.'),
+      });
+      for (const step of failedSteps) console.error(`Recorder shutdown ${step} failed; output or browser cleanup is uncertain.`);
+      console.error('Recorder shutdown abandoned the incomplete private run.');
+      process.exit(1);
+    }
+    // A client may still be trickling a request body that never entered the
+    // action queue. Give completed responses time to flush, then close it.
+    try { await withDeadline(serverClosed, 2000, 'Control connections did not close.'); }
+    catch {
+      server.closeAllConnections();
+      try { await withDeadline(serverClosed, CAPTURE_DEADLINE_MS, 'Control server close timed out.'); }
+      catch (error) { failure ??= asError(error, 'Could not close the control server.'); }
+    }
     process.off('SIGINT', stop); process.off('SIGTERM', stop);
   }
 } catch (error) { failure = asError(error, 'Playtest failed.'); }

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
-import { CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
+import { abandonControlSession, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
 
 const frame = (timestamp: number) => ({ timestamp, viewportWidth: 1280, viewportHeight: 720 });
 
@@ -154,6 +157,43 @@ test('a failed release finalizes the active capture before closing even if final
   ), AggregateError);
   assert.deepEqual(calls, ['finish', 'close']);
   assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('forced abandonment attempts all cleanup, reports failures and rejects late publication', async () => {
+  const session = new CaptureSession();
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const publication = session.publish(() => pending);
+  const calls: string[] = [];
+  const failed = await abandonControlSession(session, {
+    quarantine: async () => { calls.push('quarantine'); throw new Error('rename failed'); },
+    closeContext: async () => { calls.push('context'); throw new Error('context failed'); },
+    closeBrowser: async () => { calls.push('browser'); },
+    drain: async () => { calls.push('drain'); throw new Error('queue still pending'); },
+  });
+  assert.deepEqual(calls, ['quarantine', 'context', 'browser', 'drain']);
+  assert.deepEqual(failed, ['quarantine', 'closeContext', 'drain']);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  await assert.rejects(session.publish(async () => {}), /shutdown abandoned/);
+  release();
+  await assert.rejects(publication, /shutdown abandoned/);
+});
+
+test('successful quarantine moves an incomplete run outside its normal output path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-quarantine-test-'));
+  const output = join(root, 'run');
+  const quarantine = join(root, '.tesland-quarantine-test');
+  try {
+    await mkdir(output);
+    await writeFile(join(output, 'segment-001.webm.partial'), 'incomplete');
+    const failed = await abandonControlSession(new CaptureSession(), {
+      quarantine: () => rename(output, quarantine),
+      closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    assert.equal(await readFile(join(quarantine, 'segment-001.webm.partial'), 'utf8'), 'incomplete');
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('a delayed chunk cannot update another segment after its sink closes', async () => {
