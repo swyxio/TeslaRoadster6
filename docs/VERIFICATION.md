@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Starship tower progress · candidate · 2026-10-18 Pacific
+
+- The tower's two visible faces show dollar milestones and a rising fill based on the last confirmed game-wide earnings, with an exact total in the launch view. Room donations do not affect the scale. Missing earnings show a waiting state rather than zero.
+- In isolated local Wrangler, Chrome showed the scale at $122,607 and at a synthetic $350,000,000 (35% of the $1 billion goal). Desktop and emulated 390 × 844 portrait and 844 × 390 landscape launch views showed the fill and milestones; portrait camera framing and landscape overlay placement kept the tower visible. The driving world also rendered the tower. No physical device was tested, and no launch was triggered.
+- On base `dacde0c`, all 1,026 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. These are candidate checks, not production evidence.
+
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 
 - Based on main `1f722dd` (protocol 46), all 1,010 unit tests and the production build passed; the existing Vite large-chunk warning remains. A local Wrangler room integration at the configured 64-seat limit passed its two-client gameplay checks; global chat and Cybercab room-history integration passed separately. These are functional checks, not capacity evidence.
