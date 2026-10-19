@@ -15,6 +15,13 @@
 - The production entry JavaScript and candidate were compressed with the same local Node settings: 1,232,633 / 364,473 / 299,288 bytes versus 1,232,634 / 364,476 / 299,011 bytes (raw / gzip / Brotli). This is entry-bundle size, not complete startup transfer or a frame-time measurement.
 - The [hosted paired observation](https://github.com/swyxio/TeslaRoadster6/actions/runs/39179270097) compared main `8b3d6fe` with candidate `2b085df`; its one-delivery and flight route aligned across all three legs. Browser callback p95 was 133.2 / 116.7 ms and room simulation/wall was 0.920 / 0.916. The three-CPU Apple M1 virtual runner was heavily loaded, so this single pair is descriptive, not a regression verdict or GPU measurement. Subsequent edits in this entry and the protocol introduction only change documentation.
 
+## Starship tower progress · candidate · 2026-10-18 Pacific
+
+- The tower's two visible faces show dollar milestones and a rising fill based on the last confirmed game-wide earnings, with an exact total in the launch view. Room donations do not affect the scale. Missing earnings show a waiting state rather than zero.
+- In isolated local Wrangler, Chrome showed the scale at $122,607 and at a synthetic $350,000,000 (35% of the $1 billion goal). Desktop and emulated 390 × 844 portrait and 844 × 390 landscape launch views showed the fill and milestones; portrait camera framing and landscape overlay placement kept the tower visible. The driving world also rendered the tower. No physical device was tested, and no launch was triggered.
+- On base `dacde0c`, all 1,026 tests and `pnpm build` passed. The same checks passed after integrating main `8be55d4` and preparing release 0.0.35. The subsequent main `c5bd893` changes only the performance workflow and documentation, leaving tested game source unchanged. The existing Vite large-chunk warning remains. These are candidate checks, not production evidence.
+- The preceding workflow release `c5bd893` was verified in production on 2026-10-18: Workers build `19403612-56ca-432e-aa5b-26440a9a9ea0` succeeded, health reported protocol 47, root JS/CSS hashes matched, and the #116 article and poster were served.
+
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 
 - Based on main `1f722dd` (protocol 46), all 1,010 unit tests and the production build passed; the existing Vite large-chunk warning remains. A local Wrangler room integration at the configured 64-seat limit passed its two-client gameplay checks; global chat and Cybercab room-history integration passed separately. These are functional checks, not capacity evidence.
