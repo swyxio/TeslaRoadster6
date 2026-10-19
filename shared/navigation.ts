@@ -1,4 +1,6 @@
 import { buildingBlocksPose } from './landmark-collision';
+import { primitiveExtent } from './new-landmark-surfaces';
+import { contact } from './physics';
 import { terrainHeight, isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
 import { requiredLevelAt, type Level } from './delivery';
 import { ROUTES, type Point } from './traffic';
@@ -63,7 +65,7 @@ function cityLanes():Segment[] {
       const at=(along:number):Point=>axis==='x'?{x:along,z:center+offset}:{x:center+offset,z:along};
       const safe=(p:Point)=>isSurface(p.x,p.z)&&isSurface(p.x-2,p.z-2)&&isSurface(p.x-2,p.z+2)&&
         isSurface(p.x+2,p.z-2)&&isSurface(p.x+2,p.z+2)&&
-        !nearbyBuildings(p.x,p.z,4).some(b=>b.style==='structure'?buildingBlocksPose(b,{...p,kind:'model-3',y:terrainHeight(p.x,p.z)??0,yaw:axis==='x'?Math.PI/2:0,pitch:0,roll:0,supportId:'ground'}):Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
+        !nearbyBuildings(p.x,p.z,4).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...p,kind:'model-3',y:terrainHeight(p.x,p.z)??0,yaw:axis==='x'?Math.PI/2:0,pitch:0,roll:0,supportId:'ground'}):Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
       let start:number|null=null,last=0;
       const finish=()=>{
         if(start!==null&&last-start>=6){
@@ -204,20 +206,34 @@ class NavigationQueue {
 
 // Connect an off-road car to a lane without crossing a building, unsupported
 // ground, or a locked region. Keep conservative building envelopes for turning
-// clearance; separately indexed bridge/arena beams use actual vertical clearance. This small visibility search runs only when a
-// destination is requested, never on the simulation tick.
+// clearance; bridge/arena beams and spaceport parts use actual vertical clearance.
+// This small visibility search runs only when a destination is requested.
 type NavigationVehicle = Pick<Entity,'x'|'z'|'yaw'|'kind'|'supportId'|'inDome'>;
 function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|null {
   if(car.kind==='person')return null;
-  const radius=Math.max(2,VEHICLES[car.kind].width/2+1);
+  const vehicle=VEHICLES[car.kind],radius=Math.max(2,vehicle.width/2+1);
   const clear=(a:Point,b:Point)=>{
     if(!allowed(a,b,level))return false;
-    const count=Math.max(1,Math.ceil(distance(a,b)/3));
+    const length=distance(a,b),count=Math.max(1,Math.ceil(length/3));
+    const yaw=Math.atan2(a.x-b.x,a.z-b.z);
     for(let i=1;i<=count;i++){
       const t=i/count,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+      const before=(i-1)/count,px=a.x+(b.x-a.x)*before,pz=a.z+(b.z-a.z)*before;
+      const midX=(px+x)/2,midZ=(pz+z)/2,sweptLength=vehicle.length+length/count;
+      // Sweeping the body along each straight interval prevents a thin vehicle
+      // from grazing a narrow spaceport wall between point samples.
+      const swept={x:midX,z:midZ,w:vehicle.width,d:sweptLength,yaw};
+      if(nearbyBuildings(midX,midZ,Math.hypot(vehicle.width,sweptLength)/2).some(building=>
+        building.style==='spaceport'&&building.parts?.some(part=>{
+          const e=primitiveExtent(part),base=building.landmarkBase??0;
+          if(!contact(swept,{x:building.x+part.x,z:building.z+part.z,w:e.w,d:e.d,yaw:e.yaw}))return false;
+          const low=Math.min(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0);
+          const high=Math.max(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0)+vehicle.height;
+          return low<base+e.top-.001&&high>base+e.bottom+.001;
+        })))return false;
       if(!isSurface(x-radius,z-radius)||!isSurface(x-radius,z+radius)||
         !isSurface(x+radius,z-radius)||!isSurface(x+radius,z+radius)||
-        nearbyBuildings(x,z,radius).some(building=>building.style==='structure'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw:Math.atan2(a.x-b.x,a.z-b.z),pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
+        nearbyBuildings(x,z,radius).some(building=>building.style==='spaceport'?false:building.style==='structure'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw,pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
     }
     return true;
   };
@@ -225,7 +241,11 @@ function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|nu
   const reach=distance(car,end)+20;
   const corners=nearbyBuildings(car.x,car.z,reach).flatMap(b=>{
     const margin=radius+3;
-    return [-1,1].flatMap(x=>[-1,1].map(z=>({x:b.x+x*(b.w/2+margin),z:b.z+z*(b.d/2+margin)})));
+    const boxes=b.style==='spaceport'&&b.parts?b.parts.map(part=>{
+      const e=primitiveExtent(part),c=Math.abs(Math.cos(e.yaw)),s=Math.abs(Math.sin(e.yaw));
+      return {x:b.x+part.x,z:b.z+part.z,w:e.w*c+e.d*s,d:e.w*s+e.d*c};
+    }):[b];
+    return boxes.flatMap(box=>[-1,1].flatMap(x=>[-1,1].map(z=>({x:box.x+x*(box.w/2+margin),z:box.z+z*(box.d/2+margin)}))));
   }).filter(p=>distance(car,p)<=reach&&distance(end,p)<=reach);
   const points:Point[]=[car,end,...corners],cost=points.map(()=>Infinity),previous=points.map(()=>-1),visited=new Set<number>();
   cost[0]=0;

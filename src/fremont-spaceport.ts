@@ -1,14 +1,15 @@
 import * as T from 'three';
 import { requiredLevelAt } from '../shared/delivery';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
-import { FREMONT_SPACEPORT as site } from '../shared/map';
+import { FREMONT_SPACEPORT as site, STARSHIP_STACK_HEIGHT } from '../shared/map';
 import { spaceportStructureBoxes } from '../shared/spaceport-structures';
 import { STARSHIP_GOAL } from '../shared/starship';
 import { constructionFraction, constructionNoseRadius } from './starship-construction';
 import { createStarshipWorkyard } from './starship-workyard';
+import { buildStarbaseLandscape } from './starbase-landscape';
 import { box, material } from './vehicles';
 
-/** A shared scale on both visible sides of the tower, driven by confirmed income. */
+/** Identical dollar scales face the road, yard and launch pad. */
 function createTowerProgress(tower:T.Group) {
   const width=11.5,height=112,centerY=66,bottom=20,top=114,trackX=3.4,trackWidth=2;
   const scaleCanvas=document.createElement('canvas');scaleCanvas.width=384;scaleCanvas.height=2048;
@@ -33,15 +34,17 @@ function createTowerProgress(tower:T.Group) {
   const fillMaterial=new T.MeshBasicMaterial({color:0xf2b44d});
   const markerMaterial=new T.MeshBasicMaterial({color:0xffe5a1});
   const fills:T.Mesh[]=[],markers:T.Mesh[]=[];
-  for(const side of ['front','right'] as const){
+  for(const side of ['front','right','back','left'] as const){
     const face=new T.Group();
+    face.name=`starship-progress-${side}`;
     if(side==='front')face.position.z=site.tower.d/2+.35;
-    else {face.position.x=site.tower.w/2+.35;face.rotation.y=Math.PI/2;}
+    else if(side==='back'){face.position.z=-site.tower.d/2-.35;face.rotation.y=Math.PI;}
+    else {face.position.x=(site.tower.w/2+.35)*(side==='right'?1:-1);face.rotation.y=side==='right'?Math.PI/2:-Math.PI/2;}
     tower.add(face);
     const plate=new T.Mesh(new T.PlaneGeometry(width,height),scaleMaterial);plate.position.y=centerY;face.add(plate);
     const value=new T.Mesh(new T.PlaneGeometry(width,7.5),valueMaterial);value.position.y=6;face.add(value);
-    const fill=new T.Mesh(new T.PlaneGeometry(trackWidth,1),fillMaterial);fill.position.set(trackX,bottom,.03);face.add(fill);fills.push(fill);
-    const marker=new T.Mesh(new T.PlaneGeometry(trackWidth+1,.8),markerMaterial);marker.position.set(trackX,bottom,.04);face.add(marker);markers.push(marker);
+    const fill=new T.Mesh(new T.PlaneGeometry(trackWidth,1),fillMaterial);fill.name='starship-progress-fill';fill.position.set(trackX,bottom,.03);face.add(fill);fills.push(fill);
+    const marker=new T.Mesh(new T.PlaneGeometry(trackWidth+1,.8),markerMaterial);marker.name='starship-progress-marker';marker.position.set(trackX,bottom,.04);face.add(marker);markers.push(marker);
   }
   let lastTotal:number|null|undefined;
   return (total:number|null)=>{
@@ -62,6 +65,7 @@ function createTowerProgress(tower:T.Group) {
 
 /** Fictional Fremont complex. Factory, pad and tower match shared collision boxes. */
 export function buildFremontSpaceport(scene:T.Scene) {
+  buildStarbaseLandscape(scene);
   const structure=(group:T.Group,kind:'factory'|'pad'|'tower')=>{
     for(const p of spaceportStructureBoxes(kind,site[kind]))box(group,p.x,p.y,p.z,p.w,p.h,p.d,p.color);
   };
@@ -82,9 +86,23 @@ export function buildFremontSpaceport(scene:T.Scene) {
     endSign.position.set(side*(site.factory.w/2+.2),20,0);endSign.rotation.y=side*Math.PI/2;factory.add(endSign);
   }
 
-  const pad=new T.Group();pad.position.set(site.pad.x,0,site.pad.z);scene.add(pad);
+  const pad=new T.Group();pad.name='starbase-pad';pad.position.set(site.pad.x,0,site.pad.z);scene.add(pad);
   structure(pad,'pad');
-  for(const z of [-13,13])box(pad,0,site.pad.h+.12,z,27,.2,.5,0xe8b454);
+  // The shared pad boxes leave a raised, open channel, not an invisible hole
+  // in the terrain. These flush dark plates and edge markings make its outlet
+  // visible while the shared decks, walls and deflector supply its collision.
+  box(pad,0,.04,37,14,.08,60,0x303d40);
+  const channelStripes=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(0x333f40),12);
+  const stripeMatrix=new T.Matrix4();let stripeIndex=0;
+  for(const x of [-8,8]){
+    box(pad,x,site.pad.h+.04,42,1.85,.08,50,0xe8b454);
+    for(let z=20;z<=60;z+=8){
+      stripeMatrix.makeScale(1.8,.04,2.3).setPosition(x,site.pad.h+.09,z);
+      channelStripes.setMatrixAt(stripeIndex++,stripeMatrix);
+    }
+  }
+  pad.add(channelStripes);
+  for(const z of [-13,13])for(const x of [-12,12])box(pad,x,site.pad.h+.06,z,9,.12,.5,0xe8b454);
 
   const tower=new T.Group();tower.position.set(site.tower.x,0,site.tower.z);scene.add(tower);
   structure(tower,'tower');
@@ -92,6 +110,18 @@ export function buildFremontSpaceport(scene:T.Scene) {
   for(let y=8;y<125;y+=12){
     box(tower,0,y,6,12,1,.5,0xcbb59a);box(tower,0,y,-6,12,1,.5,0xcbb59a);
   }
+  // Thin metallic rails frame the tower without obscuring its dollar scale.
+  const rails=new T.InstancedMesh(new T.BoxGeometry(1,1,1),material(0xd4a853),8);
+  const railMatrix=new T.Matrix4();let railIndex=0;
+  for(const x of [-5.9,5.9])for(const z of [-6.45,6.45]){
+    railMatrix.makeScale(.35,site.tower.h,.3).setPosition(x,site.tower.h/2,z);
+    rails.setMatrixAt(railIndex++,railMatrix);
+  }
+  for(const z of [-5.9,5.9])for(const x of [-6.45,6.45]){
+    railMatrix.makeScale(.3,site.tower.h,.35).setPosition(x,site.tower.h/2,z);
+    rails.setMatrixAt(railIndex++,railMatrix);
+  }
+  tower.add(rails);
   const updateTowerProgress=createTowerProgress(tower);
   updateTowerProgress(null);
   const workyard=createStarshipWorkyard(scene);
@@ -125,11 +155,12 @@ export function buildFremontSpaceport(scene:T.Scene) {
   }
   updateBoard(null);
 
-  const rocket=new T.Group();rocket.position.set(site.pad.x,site.pad.h,site.pad.z);scene.add(rocket);
-  // The fixed launch stand and temporary gantry make the site look active even
-  // while the first fraction of the hull is still too small to see at a distance.
+  const rocket=new T.Group();rocket.name='starship-construction';rocket.position.set(site.pad.x,site.pad.h,site.pad.z);scene.add(rocket);
+  // The circular mount leaves its centre open over the exhaust channel.
+  const mount=new T.Mesh(new T.TorusGeometry(5.15,.5,8,32),material(0x52646a,.65));
+  mount.rotation.x=Math.PI/2;mount.position.set(site.pad.x,site.pad.h+.3,site.pad.z);scene.add(mount);
+  // Temporary gantry stays visible while the hull is under construction.
   const gantry=new T.Group();gantry.position.copy(rocket.position);scene.add(gantry);
-  const stand=new T.Mesh(new T.CylinderGeometry(5.1,5.1,1,24),material(0x4c5d5d));stand.position.y=.5;gantry.add(stand);
   for(const x of [-7,7])for(const z of [-7,7])box(gantry,x,9,z,.55,18,.55,0xd19947);
   for(const y of [4,10,16]){
     box(gantry,0,y,-7,14,.35,.35,0xd19947);
@@ -139,8 +170,9 @@ export function buildFremontSpaceport(scene:T.Scene) {
   // the solid shell grows from the pad in direct proportion to confirmed income.
   const outlinePoints:number[]=[];
   const line=(x1:number,y1:number,z1:number,x2:number,y2:number,z2:number)=>outlinePoints.push(x1,y1,z1,x2,y2,z2);
-  for(let y=0;y<=110;y+=10){
-    const radius=y<=107?4.4:4.4*(120-y)/13;
+  const noseBase=STARSHIP_STACK_HEIGHT-13;
+  for(let y=0;y<=noseBase+3;y+=10){
+    const radius=y<=noseBase?4.4:4.4*(STARSHIP_STACK_HEIGHT-y)/13;
     for(let i=0;i<16;i++){
       const a=i*Math.PI/8,b=(i+1)*Math.PI/8;
       line(Math.cos(a)*radius,y,Math.sin(a)*radius,Math.cos(b)*radius,y,Math.sin(b)*radius);
@@ -148,24 +180,30 @@ export function buildFremontSpaceport(scene:T.Scene) {
   }
   for(let i=0;i<8;i++){
     const a=i*Math.PI/4,x=Math.cos(a)*4.4,z=Math.sin(a)*4.4;
-    line(x,0,z,x,107,z);line(x,107,z,0,120,0);
+    line(x,0,z,x,noseBase,z);line(x,noseBase,z,0,STARSHIP_STACK_HEIGHT,0);
   }
   const outlineGeometry=new T.BufferGeometry();outlineGeometry.setAttribute('position',new T.Float32BufferAttribute(outlinePoints,3));
-  const outline=new T.LineSegments(outlineGeometry,new T.LineBasicMaterial({color:0x438c8b,transparent:true,opacity:.85}));rocket.add(outline);
+  const outline=new T.LineSegments(outlineGeometry,new T.LineBasicMaterial({color:0x438c8b,transparent:true,opacity:.85}));outline.name='starship-outline';rocket.add(outline);
+  // The scene already supplies an environment map. A polished metallic finish
+  // catches its light rather than painting the stainless hull flat grey.
+  const hullMaterial=new T.MeshStandardMaterial({color:0xe3e9e7,metalness:.9,roughness:.2,envMapIntensity:1.25});
+  const upperHullMaterial=new T.MeshStandardMaterial({color:0xf0f2ee,metalness:.88,roughness:.2,envMapIntensity:1.25});
   const bodyGeometry=new T.CylinderGeometry(4.5,4.5,1,32),noseGeometry=new T.CylinderGeometry(4.5,4.5,1,32,1,true);
   const nosePositions=noseGeometry.getAttribute('position') as T.BufferAttribute;
   const noseTop=Array.from({length:33},(_,i)=>({x:nosePositions.getX(i),z:nosePositions.getZ(i)}));
   let lastNoseHeight=-1;
-  const parts=[{bottom:0,height:36,color:0xb4c0bf,geometry:bodyGeometry},
-    {bottom:36,height:36,color:0xb4c0bf,geometry:bodyGeometry},
-    {bottom:72,height:35,color:0xc7d0cd,geometry:bodyGeometry},
-    {bottom:107,height:13,color:0xc7d0cd,geometry:noseGeometry}].map(part=>{
-      const mesh=new T.Mesh(part.geometry,material(part.color,.3));rocket.add(mesh);return {...part,mesh};
+  const parts=[{bottom:0,height:36,finish:hullMaterial,geometry:bodyGeometry},
+    {bottom:36,height:36,finish:hullMaterial,geometry:bodyGeometry},
+    {bottom:72,height:35,finish:upperHullMaterial,geometry:bodyGeometry},
+    {bottom:107,height:13,finish:upperHullMaterial,geometry:noseGeometry}].map(part=>{
+      const mesh=new T.Mesh(part.geometry,part.finish);mesh.name=`starship-hull-${part.bottom}`;rocket.add(mesh);return {...part,mesh};
     });
   const ribs=[3,20,40,60,71].map(y=>{
     const mesh=new T.Mesh(new T.CylinderGeometry(4.56,4.56,.35,32),material(0x65757a,.7));mesh.position.y=y;rocket.add(mesh);return {mesh,y};
   });
-  const tiles=box(rocket,0,0,4.5,7,1,.2,0x202a30);
+  // Curved heat-shield tiles follow the hull instead of floating as a flat panel.
+  const tiles=new T.Mesh(new T.CylinderGeometry(4.54,4.54,1,32,1,true,-Math.PI/2,Math.PI),material(0x202a30));
+  rocket.add(tiles);
   const fins=new T.Group(),flaps=new T.Group();rocket.add(fins,flaps);
   for(const side of [-1,1]){
     const fin=box(fins,side*5,78,0,4,12,1,0x3b484c);fin.rotation.z=side*.28;
@@ -181,7 +219,7 @@ export function buildFremontSpaceport(scene:T.Scene) {
   return {update(time:number,launchAt:number|null,total:number|null,ambientTime=time){
     const elapsed=launchAt===null?-1:time-launchAt;
     const launching=elapsed>=0&&elapsed<MARS_LAUNCH_SECONDS;
-    const height=120*(launching?1:constructionFraction(total)??0);
+    const height=STARSHIP_STACK_HEIGHT*(launching?1:constructionFraction(total)??0);
     for(const part of parts){
       const visibleHeight=Math.max(0,Math.min(part.height,height-part.bottom));
       part.mesh.visible=visibleHeight>0;part.mesh.scale.y=visibleHeight;part.mesh.position.y=part.bottom+visibleHeight/2;
@@ -193,7 +231,7 @@ export function buildFremontSpaceport(scene:T.Scene) {
     }
     for(const rib of ribs)rib.mesh.visible=height>=rib.y;
     const tileHeight=Math.max(0,Math.min(23,height-73.5));tiles.visible=tileHeight>0;tiles.scale.y=tileHeight;tiles.position.y=73.5+tileHeight/2;
-    fins.visible=height>=84;flaps.visible=height>=106;engines.visible=height>=3;outline.visible=height<120;gantry.visible=height<120;
+    fins.visible=height>=84;flaps.visible=height>=106;engines.visible=height>=3;outline.visible=height<STARSHIP_STACK_HEIGHT;gantry.visible=height<STARSHIP_STACK_HEIGHT;
     updateBoard(total);
     updateTowerProgress(total);
     workyard.update(ambientTime,!launching);
