@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
 import type { AchievementId } from '../shared/achievements';
 import { CUSTOMERS, initialDelivery, isOrderAccessible, type DeliveryStop } from '../shared/delivery';
+import type { EarningsEvents } from '../shared/earnings-events';
 import { terrainHeight } from '../shared/map';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
 import type { DeliveryStage } from '../worker/room-economy';
@@ -52,9 +53,9 @@ function pose():DeliveryStop {
   const {x,z}=CUSTOMERS[0],y=terrainHeight(x,z);assert.notEqual(y,null);
   return {x,y:y!,z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false};
 }
-function stage(e:Entry):DeliveryStage {
+function stage(e:Entry,multiplier:1|null=1):DeliveryStage {
   return {eventId:randomUUID(),driverId:e.driverId,fence:e.fence,roomId:e.room,walletOrder:1,clock:0,
-    action:{kind:'delivery',stop:pose(),atMs:Date.now()-2_000,multiplier:1}};
+    action:{kind:'delivery',stop:pose(),atMs:Date.now()-2_000,multiplier}};
 }
 function intent(s:DeliveryStage):EconomyIntent {
   return {eventId:s.eventId,driverId:s.driverId,fence:s.fence,roomId:s.roomId,revision:0,sequence:1,clock:s.clock,action:s.action};
@@ -81,13 +82,13 @@ async function rpc<T>(op:string,fields:Record<string,unknown>={},timeout=10_000)
   const response=await fetch(base,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op,...fields}),signal:AbortSignal.timeout(timeout)});
   const body=await response.text();if(!response.ok)throw new Error(`${op}: ${response.status} ${body}\n${logs}`);return JSON.parse(body) as T;
 }
-async function prepare(e:Entry,s:Scenario){
+async function prepare(e:Entry,s:Scenario,multiplier:1|null=1){
   await rpc('persistent-producer',{...e,active:true});
   const order={...initialDelivery({x:0,z:0}).order,stage:'dropoff' as const,customer:0,elapsed:0,base:600,estimate:60};
   const progress={cash:9_000,level:0,completed:s.completed,order,deliveryClock:0,unlocked:s.unlocked,
     achievementTiers:normalizeAchievementTiers(undefined,s.completed,s.unlocked)};
   await rpc('acquire',{...e,progress});
-  const observed=stage(e),submitted=intent(observed);
+  const observed=stage(e,multiplier),submitted=intent(observed);
   assert.equal(await rpc('stage',{...e,stage:observed}),'accepted');
   return {observed,submitted};
 }
@@ -114,6 +115,20 @@ try {
   achievements=replaceOnce(achievements,"{count:3,id:'regular',reward:200}","{count:3,id:'regular',reward:400}");
   achievements=replaceOnce(achievements,"{count:5,id:'deliveries-5',reward:400}","{count:5,id:'deliveries-5',reward:600}");
   await writeFile(achievementsPath,achievements);
+  // Expose the profile's optional event history on this local fixture only so
+  // the test can retry the actual receipt and reject different histories.
+  let fixture=await readFile(resolve('tests/fixtures/delivery-journal-worker.ts'),'utf8');
+  fixture=replaceOnce(fixture,"case 'commit':return Response.json(await driver.commit(body.intent));",
+    "case 'commit':return Response.json(await driver.commit(body.intent,body.events));");
+  await writeFile(join(legacy,'tests/fixtures/delivery-journal-worker.ts'),fixture);
+  const current=join(dir,'current');
+  await mkdir(join(current,'tests/fixtures'),{recursive:true});
+  await Promise.all([
+    writeFile(join(current,'tests/fixtures/delivery-journal-worker.ts'),fixture),
+    cp(resolve('tests/fixtures/cybercab-events-worker.ts'),join(current,'tests/fixtures/cybercab-events-worker.ts')),
+    symlink(resolve('shared'),join(current,'shared'),'dir'),symlink(resolve('worker'),join(current,'worker'),'dir'),
+    symlink(resolve('node_modules'),join(current,'node_modules'),'dir'),cp(resolve('package.json'),join(current,'package.json')),
+  ]);
   await writeConfig(join(legacy,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
 
   const pending:Array<{scenario:Scenario;e:Entry;submitted:EconomyIntent}>=[];
@@ -136,15 +151,47 @@ try {
   // which can otherwise warm the route cache and finish a search in one step.
   // The completed cases prove the same old worker pays the old fare and each
   // old achievement value, not merely that its source was transformed.
+  const paid:Array<{scenario:Scenario;e:Entry;submitted:EconomyIntent;result:Extract<DriverOutcome,{ok:true}>;events?:EarningsEvents}>=[];
   for(const s of scenarios){
     const e=entry(),{submitted}=await prepare(e,s);
     const result=await rpc<DriverOutcome>('submit',{...e,intent:submitted},30_000);success(result);
     assert.equal(result.delivery?.earnings[0].amount,1_050,`${s.name}: old fare`);
     assert.equal(result.progress.cash,s.legacyCash,`${s.name}: old fare and achievement awards`);
     if(s.award)assert.ok(result.awards.includes(s.award),`${s.name}: old milestone`);
+    paid.push({scenario:s,e,submitted,result});
   }
+  const historyEntry=entry(),historyScenario=scenarios[0];
+  const {submitted:historyIntent}=await prepare(historyEntry,historyScenario,null);
+  const historyResult=await rpc<DriverOutcome>('submit',{...historyEntry,intent:historyIntent},30_000);success(historyResult);
+  const historyRecord=await rpc<{cabEvents?:EarningsEvents}>('record',{...historyEntry,eventId:historyIntent.eventId});
+  assert.ok(historyRecord.cabEvents,'old receipt records the event history used to determine its rate');
+  assert.equal(historyResult.delivery?.earnings[0].amount,1_050);
+  paid.push({scenario:historyScenario,e:historyEntry,submitted:historyIntent,result:historyResult,events:historyRecord.cabEvents});
   await stop(child);child=undefined;
-  await writeConfig(resolve('tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
+  await writeConfig(join(current,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
+
+  // Go straight to the upgraded profile, before the room journal can answer
+  // from its own cache: a committed legacy receipt keeps its original value.
+  for(const {scenario,e,submitted,result,events} of paid){
+    const replay=await rpc<DriverOutcome>('commit',{...e,intent:submitted,...(events?{events}:{})});
+    assert.deepEqual(replay,result,`${scenario.name}: old profile receipt after upgrade`);
+    assert.equal(replay.ok&&replay.delivery?.earnings[0].amount,1_050);
+    assert.equal((await rpc<Profile>('profile',e)).progress.cash,scenario.legacyCash);
+    const sources=[`earned-source:delivery:${scenario.completed+1}:dropoff`,
+      ...((scenario.completed+1)%3===0?[`earned-source:delivery:${scenario.completed+1}:checkpoint`]:[])].sort();
+    assert.deepEqual((await rpc<string[]>('sources',e)).sort(),sources);
+    assert.equal(submitted.action.kind,'delivery');
+    if(submitted.action.kind!=='delivery')throw new Error('Expected a delivery intent');
+    const changed={...submitted,action:{...submitted.action,atMs:submitted.action.atMs+1}} satisfies EconomyIntent;
+    assert.deepEqual(await rpc('commit',{...e,intent:changed,...(events?{events}:{})}),{ok:false,reason:'conflict'});
+    if(events){
+      const changedEvents:EarningsEvents={room:[{startsAtMs:1,endsAtMs:600_001}],global:[]};
+      assert.notDeepEqual(changedEvents,events);
+      assert.deepEqual(await rpc('commit',{...e,intent:submitted,events:changedEvents}),{ok:false,reason:'conflict'});
+    }
+    assert.deepEqual(await rpc('commit',{...e,intent:submitted,...(events?{events}:{})}),result,'conflicts do not alter the receipt');
+    assert.deepEqual((await rpc<string[]>('sources',e)).sort(),sources);
+  }
 
   for(const {scenario,e,submitted} of pending){
     if(scenario.name==='$10k boundary'){
@@ -191,6 +238,7 @@ try {
     assert.deepEqual((await rpc<string[]>('sources',e)).sort(),sources);
   }
   console.log('PASS: old-rule assignment checkpoints replay under new fare and achievement rules across the $10k boundary.');
+  console.log('PASS: upgraded profiles preserve committed old-rule receipts and reject changed intents or event histories.');
   console.log('PASS: accepted stops, committed receipts, source IDs and new-fence recovery remain exactly once.');
 } finally {
   if(child)await stop(child);
