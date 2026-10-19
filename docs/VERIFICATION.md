@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## 64-player investigation · candidate · 2026-10-18 Pacific
+
+- A v47 snapshot assembly candidate preserves recipient projections while reusing identical entity arrays within one broadcast. Focused equivalence tests cover owners, collection privacy, ferry passengers, more than 32 optional entities, cache reuse and a later tick. A short paired synthetic CPU experiment and a separate preview WebSocket compression handshake are documented in [the investigation](PERFORMANCE_64_PLAYERS.md); neither establishes a room-throughput or smooth-play gain. The full distributed sustained-movement, browser and device gates remain open.
+- The candidate passed 1,027 unit tests and `pnpm build`; Vite retained its existing large-chunk warning. The diagnostic's targeted safety, observation and type checks also passed. These checks do not measure room capacity.
+
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 
 - Based on main `1f722dd` (protocol 46), all 1,010 unit tests and the production build passed; the existing Vite large-chunk warning remains. A local Wrangler room integration at the configured 64-seat limit passed its two-client gameplay checks; global chat and Cybercab room-history integration passed separately. These are functional checks, not capacity evidence.
