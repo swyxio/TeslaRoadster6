@@ -7,7 +7,7 @@ export const HORIZON_BOUNDS = {
   minZ: MAP_BOUNDS.minZ - 2200, maxZ: MAP_BOUNDS.maxZ + 2200,
 };
 
-const BASE_HEIGHT = -220;
+const BASE_HEIGHT = -140;
 const PROJECTION_DISTANCE = 1500; // Behind the fog, inside the normal camera far plane.
 
 export function createHorizonGeometryData() {
@@ -16,8 +16,8 @@ export function createHorizonGeometryData() {
   // Marin, Diablo/East Bay, South Bay and the Santa Cruz/Peninsula ranges.
   // Subdivision preserves the bearing of nearby points when projected.
   const edges = [
-    [minX,minZ,maxX,minZ,700,850], [maxX,minZ,maxX,maxZ,850,820],
-    [maxX,maxZ,minX,maxZ,820,720], [minX,maxZ,minX,minZ,720,700],
+    [minX,minZ,maxX,minZ,460,550], [maxX,minZ,maxX,maxZ,550,520],
+    [maxX,maxZ,minX,maxZ,520,450], [minX,maxZ,minX,minZ,450,460],
   ];
   const perimeter=2*((maxX-minX)+(maxZ-minZ));
   // An even number of mirrored repeats makes both the tile seams and the final
