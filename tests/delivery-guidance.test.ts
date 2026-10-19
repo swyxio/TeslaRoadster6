@@ -53,6 +53,16 @@ test('a missed turn replans and stale worker replies cannot point at an old dest
   assert.deepEqual(guide.update(car,other,player.delivery.level,300).waypoint,{x:-100,z:-60});
 });
 
+test('turning around in place replans without treating a normal turn as a U-turn',()=>{
+  const {player,car,target}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[{x:car.x,z:car.z-80}]});
+  assert.equal(guide.update({...car,yaw:car.yaw+Math.PI/2},target,player.delivery.level,100).status,'ready');
+  assert.equal(requests.length,1);
+  assert.equal(guide.update({...car,yaw:car.yaw+Math.PI},target,player.delivery.level,200).status,'routing');
+  assert.equal(requests.length,2);
+});
+
 test('unreachable roads are labelled instead of falling back to a bearing through buildings',()=>{
   const {player,car,target}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
   guide.update(car,target,player.delivery.level,0);

@@ -21,8 +21,10 @@ export class DeliveryGuidance {
   private pending=false;
   private requestedAt=-Infinity;
   private requestedFrom:Point={x:0,z:0};
+  private requestedYaw=0;
   private path:Point[]=[];
   private origin:Point={x:0,z:0};
+  private headingAnchor:(Point & {yaw:number})|null=null;
   private index=0;
   private failed=false;
   private workerUnavailable=false;
@@ -38,6 +40,7 @@ export class DeliveryGuidance {
     this.failed=!result.path?.length;
     this.path=result.path??[];
     this.origin=this.requestedFrom;
+    this.headingAnchor={...this.requestedFrom,yaw:this.requestedYaw};
     this.index=0;
   }
 
@@ -54,6 +57,12 @@ export class DeliveryGuidance {
     if(key!==this.key){
       this.key=key;this.requestId++;this.pending=false;this.requestedAt=-Infinity;this.path=[];this.failed=false;
     }
+    if(this.path.length&&this.headingAnchor){
+      if(distance(car,this.headingAnchor)>8)this.headingAnchor={x:car.x,z:car.z,yaw:car.yaw};
+      else if(Math.cos(car.yaw-this.headingAnchor.yaw)<-.7){
+        this.path=[];this.failed=false;this.requestedAt=-Infinity;
+      }
+    }
     while(this.index<this.path.length-1){
       const waypoint=this.path[this.index],next=this.path[this.index+1];
       if(distance(car,waypoint)>8&&segmentDistance(car,waypoint,next)>7)break;
@@ -66,7 +75,7 @@ export class DeliveryGuidance {
       }
     }
     if(!this.path.length&&!this.pending&&now-this.requestedAt>=3000){
-      this.pending=true;this.requestedAt=now;this.requestedFrom={x:car.x,z:car.z};
+      this.pending=true;this.requestedAt=now;this.requestedFrom={x:car.x,z:car.z};this.requestedYaw=car.yaw;
       const vehicle=car.kind==='person'?{...car,kind:'model-3' as const}:car;
       this.request({id:++this.requestId,car:vehicle,destination:{x:destination.x,z:destination.z},level});
     }
