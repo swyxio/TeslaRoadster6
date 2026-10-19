@@ -59,6 +59,8 @@ import { LevelEventTracker } from './level-events';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
+import { DOME_MATCH_CASH, DOME_WIN_CASH } from '../shared/earnings-events';
+import { pulseShotRemaining } from '../shared/soccer';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
 import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
@@ -99,7 +101,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><div class="mission-head"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><button type="button" id="mission-panel-toggle" class="mobile-panel-toggle" aria-controls="mission-panel" aria-expanded="true">Details −</button></div><button type="button" id="mars-quick" class="mission-link" hidden>🚀 Fremont mission sign</button><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><span id="route-advice" class="mission-advice" hidden></span><button type="button" id="next-award" class="mission-link" hidden></button><span id="parking-status"></span><span id="race-status"></span></div>
- <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
+ <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small id="dome-powerups" aria-live="off">Touch the ball and finish to unlock Pulse Shot · Win to unlock Champion Charge</small><small>Touch + finish: $${DOME_MATCH_CASH} · Win: +$${DOME_WIN_CASH} · Bonuses apply</small><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
@@ -1251,6 +1253,12 @@ scene.start(dt=>{
     if($('dome-orange').textContent!==orange)$('dome-orange').textContent=orange;
     if($('dome-status').textContent!==status)$('dome-status').textContent=status;
     if($('dome-standings').textContent!==standings)$('dome-standings').textContent=standings;
+    const unlocked=player?.achievements.unlocked??[];
+    const remaining=Math.ceil(pulseShotRemaining(soccer,session.id,session.world.time));
+    const pulse=unlocked.includes('dome-debut')?(remaining?`Pulse Shot ${remaining}s`:'Pulse Shot ready · stronger hit'):'Touch + finish to unlock Pulse Shot';
+    const charge=unlocked.includes('dome-champion')?'Goal: +25 rocket air':'Win to unlock Champion Charge';
+    const powerups=`${pulse} · ${charge}`;
+    if($('dome-powerups').textContent!==powerups)$('dome-powerups').textContent=powerups;
   }
   const minute=Math.floor(dayMinute(session.world.time));$('day-clock').textContent=`${Math.floor(minute/60).toString().padStart(2,'0')}:${(minute%60).toString().padStart(2,'0')}`;
   $('speed').textContent=Math.round(Math.abs(e.speed)*3.6).toString().padStart(3,'0');$('altitude').textContent=`${Math.round(e.y)} M ALT`;

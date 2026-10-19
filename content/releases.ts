@@ -6,6 +6,33 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'The long way around the Bay',
+    intro: 'There is more to see and do on the Bay highways.',
+    sections: [
+      { title: 'On the road', items: [
+        'Pass Bay-inspired buildings, trees and billboards along 101 and 880. Highway traffic uses multiple lanes, including marked HOV lanes open to every driver.',
+        'Find directional skyways above stretches of the highways as you unlock the surrounding regions.',
+        'Highway patrols pursue drivers above 125 km/h; a rocket-equipped officer can take short hops. Keep an eye on the sky for rare visitors.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.39-alpha',
+    label: '0.0.39 Alpha',
+    date: '2026-10-18',
+    title: 'Rocket Dome rewards',
+    intro: 'Play Rocket Dome to earn cash and unlock new abilities.',
+    sections: [
+      { title: 'Get in the game', items: [
+        'Touch the ball and stay through a match to earn $250, plus $500 if you win. Existing earnings bonuses apply.',
+        'Your first qualifying match unlocks Pulse Shot; your first credited win unlocks Champion Charge for rocket-equipped cars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.38-alpha',
+    label: '0.0.38 Alpha',
+    date: '2026-10-18',
     title: 'Rocket pad tune-up',
     intro: 'Rocket pads keep the same pickup behavior with lighter background processing.',
     sections: [

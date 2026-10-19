@@ -43,6 +43,13 @@ export class DriverProfile extends ProductionDriverProfile {
   private loseDelivery=false;
   private lost=false;
   fixtureLoseDelivery(){this.loseDelivery=true;}
+  async fixtureCapDome(){
+    const record=await this.ctx.storage.get<{progress:import('../../worker/driver-profile').DriverProgress}>('driver');
+    if(!record?.progress.achievementTiers)throw new Error('Missing achievement tiers');
+    record.progress.achievementTiers['dome-matches']={count:10_000,claimed:5};
+    record.progress.achievementTiers['dome-wins']={count:10_000,claimed:5};
+    await this.ctx.storage.put('driver',record);
+  }
   override async commit(intent:EconomyIntent,cabEvents?:import('../../shared/earnings-events').EarningsEvents){
     const result=await super.commit(intent,cabEvents);
     if(intent.action.kind==='delivery'&&result.ok&&result.delivery?.earnings.some(part=>part.kind==='delivery')){
@@ -64,8 +71,12 @@ export class DriverProfile extends ProductionDriverProfile {
 export class RoomEconomy extends ProductionRoomEconomy {
   private holdWin=false;
   private heldWin=false;
-  override recordEarningsWinWithoutPayout(eventId:string,atMs:number){
-    const result=super.recordEarningsWinWithoutPayout(eventId,atMs);
+  private holdStage=false;
+  private heldStage=false;
+  private skewStage=false;
+  private skewObserved=false;
+  override commitEarningsWin(eventId:string){
+    const result=super.commitEarningsWin(eventId);
     // DO RPC permits a Promise return; the cast adapts the synchronous base
     // signature in this local fault fixture without altering production.
     if(this.holdWin){this.heldWin=true;return new Promise<typeof result>(()=>{}) as unknown as typeof result;}
@@ -73,9 +84,49 @@ export class RoomEconomy extends ProductionRoomEconomy {
   }
   fixtureHoldWin(){this.holdWin=true;}
   fixtureWinFault(){return {held:this.heldWin};}
+  fixtureHoldStage(){this.holdStage=true;}
+  fixtureStageFault(){return {held:this.heldStage};}
+  fixtureSkewStage(){this.skewStage=true;}
+  fixtureSkewObserved(){return {observed:this.skewObserved};}
+  override async stageAchievement(stage:import('../../worker/room-economy').AchievementStage){
+    if(this.holdStage&&stage.action.dome){this.heldStage=true;await new Promise<void>(()=>{});}
+    if(this.skewStage&&stage.action.dome){
+      this.skewStage=false;this.skewObserved=true;
+      const actualNow=Date.now;
+      try{
+        // Simulate the receiving object being behind only during validation.
+        Date.now=()=>stage.action.dome!.atMs-500;
+        return super.stageAchievement(stage);
+      }finally{Date.now=actualNow;}
+    }
+    return super.stageAchievement(stage);
+  }
   fixtureWins(){return this.ctx.storage.sql.exec('SELECT event_id,requested_at,won_at,ends_at FROM room_earnings_wins').toArray();}
 }
 export class GameRoom extends ProductionGameRoom {
+  private historyHold=false;
+  private historyHeld=false;
+  private releaseHistory:(()=>void)[]=[];
+  fixtureHoldHistory(){this.historyHold=true;}
+  fixtureHistoryFault(){return {held:this.historyHeld};}
+  fixtureReleaseHistory(){this.historyHold=false;for(const release of this.releaseHistory.splice(0))release();}
+  override async cabEarningsHistory(roomId:string,fromMs:number,toMs:number){
+    if(this.historyHold){this.historyHeld=true;await new Promise<void>(resolve=>{this.releaseHistory.push(resolve);});}
+    return super.cabEarningsHistory(roomId,fromMs,toMs);
+  }
+  fixtureWinAtPendingDelivery(id:string){
+    const sessions=Reflect.get(this,'sessions') as Map<WebSocket,{id:string;economy:object}>;
+    const session=[...sessions.values()].find(item=>item.id===id);
+    const queue=Reflect.get(session!.economy,'queue') as {intent:{action:{kind:string;atMs?:number}}}[];
+    // Follow-up stop samples may already be queued; the forced match must not
+    // be backdated before any of those physically earlier observations.
+    const at=queue.filter(item=>item.intent.action.kind==='delivery').at(-1)?.intent.action.atMs;
+    if(at===undefined)throw new Error('No pending historical delivery');
+    this.fixtureWin(id);
+    const actualNow=Date.now;
+    try{Date.now=()=>at;Reflect.get(this,'tick').call(this);}finally{Date.now=actualNow;}
+    return {at};
+  }
   async fixtureRefresh(){
     await Reflect.get(this,'refreshEarnings').call(this);
     return {snapshot:Reflect.get(this,'earningsSnapshot'),now:Date.now()};
@@ -102,11 +153,19 @@ export class GameRoom extends ProductionGameRoom {
   }
   fixtureWin(id:string){
     const world=Reflect.get(this,'world') as World;
-    if(!travelDome(world,id))throw new Error('Could not enter Dome');
+    const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
+    if(!car?.inDome&&!travelDome(world,id))throw new Error('Could not enter Dome');
+    world.soccer.phase='play';
     world.soccer.participants=[{playerId:id,touches:{roadster:true,retrofit:false,stock:false},goals:{roadster:4,retrofit:0,stock:0}}];
     world.soccer.lastTouch={playerId:id,carClass:'roadster'};
     world.soccer.blueScore=4;
     Object.assign(world.soccer.ball,{x:DOME.x+DOME.halfLength-2,y:3,z:DOME.z,vx:90,vy:0,vz:0});
+  }
+  fixtureUncreditedWin(id:string){
+    this.fixtureWin(id);
+    const world=Reflect.get(this,'world') as World;
+    world.soccer.participants=[{playerId:id,touches:{roadster:false,retrofit:false,stock:true},goals:{roadster:0,retrofit:0,stock:0}}];
+    world.soccer.lastTouch=null;
   }
   async fixtureState(){
     return {pending:this.ctx.storage.sql.exec('SELECT * FROM game_room_pending_wins').toArray(),snapshot:Reflect.get(this,'earningsSnapshot'),hasPending:Reflect.get(this,'hasPendingWin'),alarm:await this.ctx.storage.getAlarm()};
@@ -130,11 +189,21 @@ export default {
         case 'player':return Response.json(await room.fixturePlayer(data.player!));
         case 'place':return Response.json(await room.fixturePlace(data.player!));
         case 'win':await room.fixtureWin(data.player!);return Response.json({ok:true});
+        case 'win-uncredited':await room.fixtureUncreditedWin(data.player!);return Response.json({ok:true});
+        case 'hold-history':await room.fixtureHoldHistory();return Response.json({ok:true});
+        case 'history-fault':return Response.json(await room.fixtureHistoryFault());
+        case 'release-history':await room.fixtureReleaseHistory();return Response.json({ok:true});
+        case 'win-same-ms':return Response.json(await room.fixtureWinAtPendingDelivery(data.player!));
         case 'room':return Response.json(await room.fixtureState());
         case 'wins':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureWins());
         case 'hold-win':await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureHoldWin();return Response.json({ok:true});
         case 'win-fault':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureWinFault());
+        case 'hold-stage':await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureHoldStage();return Response.json({ok:true});
+        case 'stage-fault':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureStageFault());
+        case 'skew-stage':await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureSkewStage();return Response.json({ok:true});
+        case 'skew-observed':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureSkewObserved());
         case 'profile':return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureState());
+        case 'cap-dome':await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureCapDome();return Response.json({ok:true});
         case 'lose-delivery':await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureLoseDelivery();return Response.json({ok:true});
         case 'replay':return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureReplay());
         case 'hold':await income.fixtureHold(data.driver!);return Response.json({ok:true});

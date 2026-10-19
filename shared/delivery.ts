@@ -82,7 +82,7 @@ export const CUSTOMERS: Customer[] = [
 type DeliverySearch = {kind:'next'|'reroute';origin:{x:number;z:number;supportId?:Entity['supportId']};level:Level;roofEligible:boolean;cursor:DeliverySearchCursor};
 export type Order = { restaurant: number; customer: number; stage: 'pickup' | 'dropoff'; elapsed: number; pickupEstimate: number; estimate: number; base: number; search?:DeliverySearch };
 export type Ticket = { amount:number; offense:number; flightSeconds:number; peakHeight:number; durationFine:number; heightFine:number; repeatFine:number; cause?:'flight'|'speeding'; speedKph?:number; speedFine?:number };
-export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'; amount:number };
+export type DeliveryReward = { id:number; kind:'pickup'|'delivery'|'pickup-research'|'delivery-research'|'supply-repair'|'supply-air'|'research'|'dome-match'; amount:number };
 export type DeliveryState = { cash: number; lifetimeIncome:number; ota: OtaSubscription; earned: number; level: Level; lastBlocked: {level:Level; at:number} | null; activeSeconds: number; activeUntil: number; completed: number; order: Order; lastPayout: number | null; lastReroute: {id:number;reason?:'repeat'|'ferry'|'unavailable'|'searching'|'ready';origin?:{x:number;z:number};level?:Level} | null; lastReward: DeliveryReward | null; lastTicket: Ticket | null; tickets: number; ticketGraceUntil: number; flight: { seconds:number; peakHeight:number; lastAirborneAt:number } };
 
 /** A full Level 3 tank provides a conservative budget for the current roof jobs. */
