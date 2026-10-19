@@ -29,6 +29,12 @@ export const JET_STREAMS:JetStream[]=[
  {kind:'jet',id:'bay-bridge',name:'Bay Bridge Breeze',start:{x:-30,z:60},end:{x:520,z:60},height:30,halfWidth:18,halfHeight:8},
  {kind:'jet',id:'oakland',name:'East Bay Express',start:{x:320,z:-180},end:{x:570,z:-180},height:62,halfWidth:16,halfHeight:8},
  {kind:'jet',id:'skyline',name:'Skyline Express',start:{x:-220,z:-120},end:{x:500,z:-120},height:150,halfWidth:18,halfHeight:8},
+ // Fictional two-way wind corridors above long, relatively straight sections
+ // of the compressed freeways. They are separated so each direction is clear.
+ {kind:'jet',id:'101-south',name:'101 Skyway · South',start:{x:-824,z:3050},end:{x:-776,z:3950},height:55,halfWidth:7,halfHeight:6},
+ {kind:'jet',id:'101-north',name:'101 Skyway · North',start:{x:-756,z:3950},end:{x:-804,z:3050},height:55,halfWidth:7,halfHeight:6},
+ {kind:'jet',id:'880-south',name:'880 Skyway · South',start:{x:1425,z:3600},end:{x:1438,z:4600},height:55,halfWidth:7,halfHeight:6},
+ {kind:'jet',id:'880-north',name:'880 Skyway · North',start:{x:1458,z:4600},end:{x:1445,z:3600},height:55,halfWidth:7,halfHeight:6},
  ...CALTRAIN_CURRENTS,
 ];
 // Offset from the landmark collision boxes, above streets accessible by a jump.

@@ -19,11 +19,15 @@ import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
 import { CALTRAIN_PARKING_LOTS, CALTRAIN_ROADS, CALTRAIN_STOPS, CALTRAIN_TRACK } from './caltrain';
+import { PARKING_LOTS } from './parking-lots';
+import { SHOPS } from './upgrades';
+import { generateRoadsideBuildings, type RoadsideExclusion } from './roadside-buildings';
 import { EAST_SOUTH_ADDITIONS } from './east-south-additions';
 import { MARIN_ROADS } from './marin-roads';
 import { TOWN_DELIVERY_ROADS } from './town-delivery-roads';
 import { SFO_DELIVERY_ROADS } from './sfo-delivery-road';
 import { LANDMARK_ACCESS_ROADS } from './landmark-access-roads';
+import { ADDED_CUSTOMERS, ADDED_RESTAURANTS } from './delivery-locations';
 export type MapPoint = { x:number; z:number };
 export type Region = { id:string; name:string; color:number; points:MapPoint[] };
 const polygon=(pairs:number[][]):MapPoint[]=>pairs.map(([x,z])=>({x,z}));
@@ -429,6 +433,18 @@ for(const p of [...BRIDGES.flatMap(bridgeTowerBoxes),...DOME_STRUCTURE_BOXES.fil
  BUILDINGS.push({x:p.x,z:p.z,w:p.w,d:p.d,h:p.y+p.h/2,district:'sf',style:'structure',
   parts:[{shape:'box',x:0,y:p.y,z:0,w:p.w,h:p.h,d:p.d}]});
 }
+// Ordinary freeway buildings use the same authoritative envelopes as the
+// rest of the city. Keep every activity, approach and landmark arrival clear.
+const pointExclusion=(p:{x:number;z:number}):RoadsideExclusion=>({x:p.x,z:p.z,w:40,d:40});
+const hillExclusion=(h:{minX:number;maxX:number;minZ:number;maxZ:number}):RoadsideExclusion=>({x:(h.minX+h.maxX)/2,z:(h.minZ+h.maxZ)/2,w:h.maxX-h.minX,d:h.maxZ-h.minZ});
+export const ROADSIDE_EXCLUSIONS:RoadsideExclusion[]=[AIRPORT_RUNWAY,...[HILL,...NATURAL_HILLS].map(hillExclusion),
+ ...PARKING_LOTS.flatMap(lot=>[{x:lot.area.x,z:lot.area.z,w:lot.area.width,d:lot.area.length,yaw:lot.area.yaw},{x:lot.approach.x,z:lot.approach.z,w:lot.approach.width,d:lot.approach.length,yaw:lot.approach.yaw},pointExclusion(lot.pickup)]),
+ ...CALTRAIN_STOPS.map(stop=>({x:stop.platform.x,z:stop.platform.z,w:44,d:8})),
+ ...NEW_LANDMARKS.map(({x,z,w,d})=>({x,z,w,d})),
+ ...[...STATIONS,...SHOPS,...LANDMARKS.map(place=>place.arrival),...ADDED_CUSTOMERS,...ADDED_RESTAURANTS,FREMONT_SPACEPORT.entrance,LUXURY_SHOWROOM.arrival].map(pointExclusion)];
+export const ROADSIDE_BUILDINGS=generateRoadsideBuildings({highways:HIGHWAYS,buildings:BUILDINGS,roads:ROADS,
+ exclusions:ROADSIDE_EXCLUSIONS,rail:CALTRAIN_TRACK,regions:REGIONS,isLand,terrainHeight});
+BUILDINGS.push(...ROADSIDE_BUILDINGS);
 // Store structural geometry once. Neither simulation nor prediction scans the catalog.
 for(const b of BUILDINGS){b.parts??=b.landmarkId?newLandmarkPrimitives(b.landmarkId):existingBuildingParts(b);}
 // Shared candidate index keeps collision cost local as the city grows.

@@ -1,0 +1,5 @@
+PASS: old-rule assignment checkpoints replay under new fare and achievement rules across the $10k boundary.
+PASS: upgraded profiles preserve committed old-rule receipts and reject changed intents or event histories.
+PASS: a completed assignment with an unknown, boosted rate replays using its saved event history.
+PASS: staged and committed pickups survive the 15-second allowance change exactly once.
+PASS: accepted stops, committed receipts, source IDs and new-fence recovery remain exactly once.

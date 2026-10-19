@@ -1,0 +1,1 @@
+PASS: v53 owner-only tick controls, action fence and relocation-safe edge bridge, reset/cooldown ordering, rejection and invalid-action checks, coalesced sync and fresh reconnect. Local room protocol test, not a load or latency test.

@@ -6,12 +6,13 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
-    title: 'A closer look at the Bay',
-    intro: 'Buildings, redwoods and vehicles have more detail to discover.',
+    title: 'A livelier Bay',
+    intro: 'Discover more detail and activity around the Bay.',
     sections: [
-      { title: 'Around the Bay', items: [
-        'Look for framed windows and more detailed landmark facades around the city.',
-        'Redwood canopies, vehicle wheels and lights, and autonomous sensor rigs have a more detailed look.'
+      { title: 'On the road', items: [
+        'Highway traffic uses multiple lanes, including marked HOV lanes open to every driver.',
+        'Find directional skyways and highway patrols as you explore the Bay.',
+        'Look for framed windows, detailed redwoods, vehicles and landmark facades.'
       ] }
     ]
   },

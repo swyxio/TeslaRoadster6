@@ -1,0 +1,125 @@
+{
+  "format": 1,
+  "id": "1f457298-de6c-4908-b9f6-021602fbf419",
+  "startedAt": "2026-10-19T00:19:57.926Z",
+  "status": "complete",
+  "target": {
+    "origin": "http://127.0.0.1:8899",
+    "pathname": "/",
+    "refProvidedByOperator": "a1d6e14",
+    "httpStatus": 200
+  },
+  "scenarioSha256": "27f662eb1e58fe9eb66b9a50a9c09ba654938307a10cf1f887e30e0188d4cc3d",
+  "runner": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "release": "25.4.0",
+    "cpu": "Apple M5 Pro",
+    "nodeVersion": "v22.22.2",
+    "playwrightVersion": "1.64.1",
+    "browserChannel": "chromium",
+    "gpuMode": "metal",
+    "headed": false,
+    "browserVersion": "156.0.8078.4",
+    "webgl": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+      "vendor": "Google Inc. (Apple)"
+    }
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "isMobile": false,
+    "hasTouch": false
+  },
+  "capture": {
+    "enabled": false,
+    "requestedFps": 30
+  },
+  "events": [
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 2512,
+      "commandDurationMs": 255,
+      "status": "ok"
+    },
+    {
+      "type": "waitForPoseRevision",
+      "commandStartedAtMs": 2767,
+      "commandDurationMs": 0,
+      "status": "ok",
+      "sample": {
+        "atMs": 2692,
+        "tick": 2,
+        "worldTime": 0.1,
+        "poseRevision": 1,
+        "x": -798,
+        "y": 0,
+        "z": 3300,
+        "yaw": 0.053,
+        "speed": 0,
+        "vy": 0,
+        "supported": true,
+        "thrusters": 0,
+        "jumpBurstUntil": 0,
+        "lastJump": 0,
+        "deliveryCompleted": 0,
+        "deliveryStage": "pickup"
+      }
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 2767,
+      "commandDurationMs": 1002,
+      "status": "ok"
+    },
+    {
+      "type": "keyPress",
+      "commandStartedAtMs": 3769,
+      "commandDurationMs": 299,
+      "status": "ok",
+      "key": "KeyV"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 4069,
+      "commandDurationMs": 10001,
+      "status": "ok"
+    },
+    {
+      "type": "assertNumberAbove",
+      "commandStartedAtMs": 14070,
+      "commandDurationMs": 7,
+      "status": "ok",
+      "sample": {
+        "value": 74,
+        "greaterThan": 0
+      }
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 14077,
+      "commandDurationMs": 97,
+      "status": "ok",
+      "sample": {
+        "file": "highway.png"
+      }
+    }
+  ],
+  "recordings": [],
+  "screenshots": [
+    "highway.png"
+  ],
+  "trajectory": {
+    "file": "trajectory.json",
+    "status": "available",
+    "samples": 110,
+    "source": "received authoritative room snapshots; not displayed-frame positions"
+  },
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "finishedAt": "2026-10-19T00:20:12.158Z",
+  "durationMs": 14231
+}

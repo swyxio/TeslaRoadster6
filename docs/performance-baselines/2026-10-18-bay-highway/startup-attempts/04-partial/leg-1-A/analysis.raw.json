@@ -1,0 +1,135 @@
+{
+  "status": "evidence-complete",
+  "reasons": [],
+  "target": {
+    "origin": "http://127.0.0.1:54919",
+    "pathname": "/",
+    "perf": true,
+    "refProvidedByOperator": "fa1713cda3335e0caa1b798e3025e22e8e51ba76",
+    "httpStatus": 200
+  },
+  "startedAt": "2026-10-19T04:45:14.936Z",
+  "command": {
+    "startAtMs": 3202.1487500000003,
+    "outcome": {
+      "kind": "key-command-outcome",
+      "atMs": 3490.222167,
+      "status": "completed",
+      "error": null
+    },
+    "durationMs": 288.0734169999996
+  },
+  "page": {
+    "firstGesture": {
+      "type": "keydown",
+      "atMs": 2609.600000143051,
+      "code": "KeyV",
+      "trusted": true
+    },
+    "firstGestureCold": true,
+    "keyNodeTimeRangeMs": [
+      3207.4200420953675,
+      3209.0328340953674
+    ],
+    "events": [
+      {
+        "type": "keydown",
+        "atMs": 2609.600000143051,
+        "code": "KeyV",
+        "trusted": true
+      },
+      {
+        "type": "autopilotSendStart",
+        "atMs": 2876.4000000953674
+      },
+      {
+        "type": "autopilotSendEnd",
+        "atMs": 2876.5
+      },
+      {
+        "type": "syncSendStart",
+        "atMs": 2876.5
+      },
+      {
+        "type": "syncSendEnd",
+        "atMs": 2876.5
+      },
+      {
+        "type": "keyup",
+        "atMs": 2881.7000000476837,
+        "code": "KeyV",
+        "trusted": true
+      }
+    ],
+    "displayedMotion": "unmeasured"
+  },
+  "action": {
+    "autopilotSentAtMs": 3477.5667089999997,
+    "syncSentAtMs": 3477.6336249999995,
+    "syncToken": 1,
+    "syncAcknowledgedAtMs": 3540.959167
+  },
+  "snapshot": {
+    "window": [
+      3202.1487500000003,
+      13202.14875
+    ],
+    "count": 95,
+    "preEdgeAtMs": 3115.924709,
+    "postEdgeAtMs": 13266.958459,
+    "maxWindowGapMs": 288.5358749999996,
+    "monotonicTicks": true,
+    "revisions": [
+      1
+    ],
+    "coalescedWindows": 0,
+    "throughput": "unavailable: 10-second startup probe"
+  },
+  "motion": {
+    "initial": {
+      "kind": "controlled-pose",
+      "atMs": 3116.033875,
+      "receivedAtMs": 3115.924709,
+      "tick": 26,
+      "poseRevision": 1,
+      "controlledIdMatches": true,
+      "x": -798,
+      "y": 0,
+      "z": 3300,
+      "yaw": 0.053,
+      "speed": 0
+    },
+    "firstAtOrBeyondQuarterMeter": {
+      "kind": "controlled-pose",
+      "atMs": 3963.6276669999997,
+      "receivedAtMs": 3963.5188749999998,
+      "tick": 42,
+      "poseRevision": 1,
+      "controlledIdMatches": true,
+      "x": -798.0152228918631,
+      "y": 0,
+      "z": 3299.712525914715,
+      "yaw": 0.05280181390745997,
+      "speed": 1.0966581558409727
+    },
+    "gestureToFirstReceivedMotionMs": 761.3701249999995
+  },
+  "frame": {
+    "maxObservedGapMs": 283.60000014305115,
+    "longFrameCountOver50": 1,
+    "clockOffsetRangeMs": [
+      597.8200419523164,
+      599.4328339523163
+    ],
+    "firstEdgeGapRangeMs": [
+      5.0159160000002885,
+      6.628708000000188
+    ],
+    "lastEdgeGapRangeMs": [
+      11.47129214305096,
+      13.084084143050859
+    ],
+    "note": "Full callback gaps intersecting the clock-uncertain window are reported, including pre/post boundary; may include a small amount outside it."
+  },
+  "limits": "Unreviewed, single-leg diagnostics. Authoritative pose is not displayed motion; no GPU, capacity, real-device or regression conclusion."
+}

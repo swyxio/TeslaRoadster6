@@ -7,6 +7,8 @@ import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
 import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
 import { buildBay } from './bay-world';
+import { buildBayRoadsideScenery } from './bay-roadside-scenery';
+import { createBayUfo } from './bay-ufo';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
@@ -78,6 +80,7 @@ export class GameScene {
   private progressionGates=createProgressionGates();
   private dome=createRocketDome();
   private skyCurrents=createSkyCurrents();
+  private bayUfo=createBayUfo();
   private propertyScene=createPropertyScene();
   private ballPosition=new T.Vector3();
   private ballReady=false;
@@ -122,6 +125,7 @@ export class GameScene {
     this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
+    this.scene.add(this.bayUfo.group);
     this.scene.add(this.propertyScene.group);
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
     this.objectiveBeam.position.y=9;this.objective.add(this.objectiveBeam);
@@ -133,6 +137,7 @@ export class GameScene {
   private buildWorld() {
     const scene=this.scene;
     buildBay(scene);
+    buildBayRoadsideScenery(scene);
     buildNorthLandmarks(scene);
     // Local batches keep distant parts cullable; each atlas holds at most 48 labels.
     const landmarkCells=new Map<string,typeof NEW_LANDMARKS>();
@@ -326,6 +331,7 @@ export class GameScene {
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
     this.skyCurrents.update(world.time,controlled);
+    this.bayUfo.update(world.time+elapsed,controlled);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
     const landingScale=this.landingPulse.update(controlled?.id,!!controlled&&controlled.supportId!==null,menu||cockpit,snapLocal||snapCamera,this.reducedMotion.matches,dt);
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}

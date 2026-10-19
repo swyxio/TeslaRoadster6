@@ -1,0 +1,75 @@
+{
+  "comparable": false,
+  "reason": "Distance-normalized paths diverge beyond 25 m p95 or 50 m maximum",
+  "pathSeparationM": {
+    "p95": 34.453399512965234,
+    "max": 36.26732365366937
+  },
+  "baseline": {
+    "target": {
+      "revision": "fa1713cda3335e0caa1b798e3025e22e8e51ba76",
+      "dirty": false,
+      "version": "0.0.39-alpha",
+      "protocol": 50
+    },
+    "frame": {
+      "status": "available",
+      "p95Ms": 16.7,
+      "samples": 3842,
+      "observedSeconds": 64.131
+    },
+    "room": {
+      "status": "available",
+      "wallSeconds": 63.97,
+      "simulationSeconds": 61.2,
+      "ratio": 0.957,
+      "snapshots": 613,
+      "maxGapMs": 116
+    },
+    "lengthM": 1460.138,
+    "loadBefore": [
+      5.9208984375,
+      6.89794921875,
+      8.57861328125
+    ],
+    "loadAfter": [
+      8.29638671875,
+      7.4423828125,
+      8.6533203125
+    ]
+  },
+  "candidate": {
+    "target": {
+      "revision": "a1358fe83147eb2657bd815d4d437b86eacb9eb1",
+      "dirty": false,
+      "version": "0.0.40-alpha",
+      "protocol": 51
+    },
+    "frame": {
+      "status": "available",
+      "p95Ms": 16.7,
+      "samples": 3840,
+      "observedSeconds": 68.131
+    },
+    "room": {
+      "status": "available",
+      "wallSeconds": 64.02,
+      "simulationSeconds": 65.2,
+      "ratio": 1.018,
+      "snapshots": 653,
+      "maxGapMs": 112
+    },
+    "lengthM": 1423.87,
+    "loadBefore": [
+      8.18310546875,
+      7.44384765625,
+      8.6396484375
+    ],
+    "loadAfter": [
+      7.71240234375,
+      7.53369140625,
+      8.57421875
+    ]
+  },
+  "note": "One local seeded highway run per revision. Browser callbacks are not GPU or physical display timings; no capacity, physical-device or production result is implied."
+}

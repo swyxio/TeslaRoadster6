@@ -1,0 +1,17 @@
+{
+  "freshGuest": true,
+  "steps": [
+    {"type":"waitFor","selector":"#connection:has-text(\"LIVE\")","timeoutMs":60000},
+    {"type":"waitFor","selector":"#hud:not(.hidden)","state":"attached","timeoutMs":60000},
+    {"type":"waitForPoseRevision","value":1,"timeoutMs":30000},
+    {"type":"wait","ms":1000},
+    {"type":"screenshot","name":"before"},
+    {"type":"recordStart"},
+    {"type":"keyPress","key":"KeyV"},
+    {"type":"wait","ms":16000}, {"type":"screenshot","name":"at16"},
+    {"type":"wait","ms":16000}, {"type":"screenshot","name":"at32"},
+    {"type":"wait","ms":16000}, {"type":"screenshot","name":"at48"},
+    {"type":"wait","ms":16000}, {"type":"screenshot","name":"at64"},
+    {"type":"recordStop"}
+  ]
+}

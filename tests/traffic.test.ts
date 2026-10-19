@@ -5,7 +5,8 @@ import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
+import { buildingBlocksPose } from '../shared/landmark-collision';
+import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, trafficInput, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
 import { initialSoccer } from '../shared/soccer';
 
@@ -112,7 +113,7 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
     world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
     occupied.driver='p';player.entityId=occupied.id;
   }
-  for(let i=0;i<50;i++){
+  for(let i=0;i<8;i++){
     first.time=timeAtHour(8)+i*5;second.time=first.time;
     updateHighwayTraffic(first,5,makeEntity);updateHighwayTraffic(second,5,makeEntity);
   }
@@ -180,6 +181,25 @@ test('disconnecting a taken ambient car on a city route replenishes highway traf
   assert.ok(world.entities.includes(car));
 });
 
+test('four taken highway cars replenish at peak without exceeding the twelve-car pool', () => {
+  const world=createWorld();addPlayer(world,'observer','Observer');
+  for(let time=240;time<=280;time+=5){world.time=time;updateHighwayTraffic(world,5,makeEntity);}
+  const ambient=()=>world.entities.filter(entity=>entity.id.startsWith('ambient-'));
+  const targets=ambient().filter(entity=>entity.autopilot&&!entity.driver).slice(0,4);
+  assert.equal(targets.length,4);assert.equal(ambient().length,4);
+  for(const [i,car] of targets.entries()){
+    const id=`take-${i}`,player=addPlayer(world,id,id);player.delivery.level=3;player.delivery.cash=1_000_000;
+    const person=makeEntity(`person-${id}`,'person',car.x+3,car.z,id);
+    world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
+    world.entities.push(person);player.entityId=person.id;interact(world,id);
+    assert.equal(player.entityId,car.id);assert.equal(car.driver,id);
+  }
+  for(let time=285;time<=300;time+=5){world.time=time;updateHighwayTraffic(world,5,makeEntity);}
+  assert.equal(ambient().length,8);
+  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,4);
+  for(const car of targets)assert.ok(world.entities.includes(car)&&car.driver,'occupied cars remain in the pool');
+});
+
 test('ambient reserve stays bounded and safely reclaims off-route and city cars when full', () => {
   const world=createWorld(),player=addPlayer(world,'p','Player');
   world.entities=world.entities.filter(entity=>!entity.id.startsWith('ambient-')&&entity.id!==player.entityId);
@@ -234,6 +254,7 @@ test('five-second reconciliation keeps up with a synthetic open-space morning ra
     const target=Math.round(2+2*trafficDemand(time).intensity);
     const active=world.entities.filter(entity=>entity.id.startsWith('ambient-')&&!entity.driver&&entity.autopilot).length;
     maxShortfall=Math.max(maxShortfall,target-active);
+    if(time===15)assert.equal(active,2);
     if(time===60)assert.equal(active,3);
     if(time===180)assert.equal(active,4);
   }
@@ -245,12 +266,12 @@ test('initial highway traffic is supported and clear of buildings and the existi
   assert.equal(ambient.length,2);
   for(const car of ambient){
     assert.ok(isSurface(car.x,car.z),car.id);
-    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>contact(body(car),{...building,yaw:0})),car.id);
+    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)),car.id);
     assert.ok(world.entities.every(other=>other===car||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
   }
 });
 
-test('peak target is 12 ambient cars plus four police when no ambient cars are taken or abandoned', () => {
+test('peak target is eight city cars, four highway cars and four police', () => {
   const world=createWorld();addPlayer(world,'budget-player','Player');
   for(let i=0;i<50;i++){
     world.time=timeAtHour(8)+i*5;
@@ -297,6 +318,20 @@ test('rush profiles peak separately and transition continuously', () => {
     const t=timeAtHour(hour);
     assert.ok(Math.abs(trafficDemand(t-.05).intensity-trafficDemand(t+.05).intensity)<.001);
   }
+});
+
+test('a turning car is detected across its full width while a parallel car stays clear', () => {
+  const world=createWorld();
+  const follower=makeEntity('follower','roadster',-220,-177);
+  const leader=makeEntity('leader','model-3',-208,-174.2,'p');
+  Object.assign(follower,{npc:true,autopilot:true,routeId:0,waypoint:1,yaw:-Math.PI/2,speed:6});
+  Object.assign(leader,{yaw:follower.yaw,speed:4.5});
+  world.entities=[follower,leader];
+  const parallel=trafficInput(follower,world);
+  assert.equal(parallel.brake,false,'the neighboring parallel lane remains clear');
+  assert.ok(parallel.throttle>0);
+  leader.yaw+=Math.PI/4;
+  assert.equal(trafficInput(follower,world).brake,true,'the turning body now overlaps the path');
 });
 
 test('a following car slows for a stopped leader and resumes after the obstruction clears', () => {

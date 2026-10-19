@@ -162,11 +162,44 @@ export function buildBay(scene:T.Scene) {
       highwayEdges.push(line(0,side*(r.w/2-.5),r.d,.14));
       highwayCenter.push(line(0,side*.22,r.d,.12));
       for(let along=-r.d/2+4;along<r.d/2-4;along+=14){
-        highwayDashes.push(line(along,side*r.w/4,6,.14));
+        // Three lanes fit within each half of a 32 m freeway: the inside
+        // lane ends at 7 m, and the two general lanes end at 12 and 16 m.
+        // Narrower roads keep their existing two-lane markings.
+        for(const offset of r.w===32?[7,12]:[r.w/4])highwayDashes.push(line(along,side*offset,6,.14));
       }
     }
   }
   batches(0xd6d8ca,highwayEdges);batches(0xe9cd82,highwayCenter);batches(0xe4e6dd,highwayDashes);
+  // Fictional HOV markings sit in the inside lane of 101 and 880. The lane
+  // paint uses the existing road surface and does not add asphalt or barriers.
+  const hovCanvas=document.createElement('canvas');hovCanvas.width=128;hovCanvas.height=256;
+  const hovContext=hovCanvas.getContext('2d')!;
+  hovContext.strokeStyle='rgba(245,245,230,.9)';hovContext.lineWidth=8;
+  hovContext.beginPath();hovContext.moveTo(64,20);hovContext.lineTo(106,67);hovContext.lineTo(64,114);hovContext.lineTo(22,67);hovContext.closePath();hovContext.stroke();
+  hovContext.fillStyle='rgba(245,245,230,.9)';hovContext.font='bold 48px system-ui';hovContext.textAlign='center';hovContext.fillText('HOV',64,185);
+  const hovTexture=new T.CanvasTexture(hovCanvas);hovTexture.colorSpace=T.SRGBColorSpace;
+  const hovGeometry=new T.PlaneGeometry(5,10);hovGeometry.rotateX(-Math.PI/2);
+  const hovPositions:{x:number;z:number;angle:number}[]=[];
+  for(const highway of HIGHWAYS.slice(0,2)){
+    let next=180;
+    for(let i=1;i<highway.points.length;i++){
+      const a=highway.points[i-1],b=highway.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+      if(!length)continue;
+      const tx=dx/length,tz=dz/length,angle=Math.atan2(dx,dz);
+      while(next<length-8){
+        if(next>8)for(const side of [-1,1])hovPositions.push({x:a.x+tx*next+tz*side*4,z:a.z+tz*next-tx*side*4,angle:angle+(side<0?Math.PI:0)});
+        next+=360;
+      }
+      next-=length;
+      if(next<8)next+=360;
+    }
+  }
+  if(hovPositions.length){
+    const hov=new T.InstancedMesh(hovGeometry,new T.MeshBasicMaterial({map:hovTexture,transparent:true,depthWrite:false,side:T.DoubleSide}),hovPositions.length);
+    const matrix=new T.Matrix4(),position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3(1,1,1),up=new T.Vector3(0,1,0);
+    hovPositions.forEach((p,i)=>hov.setMatrixAt(i,matrix.compose(position.set(p.x,.16,p.z),rotation.setFromAxisAngle(up,p.angle),scale)));
+    hov.computeBoundingSphere();scene.add(hov);
+  }
   // Airport paint is on supported land and follows the shared location; it is
   // a playful driving area, not an aviation simulation.
   const runway=AIRPORT_RUNWAY;

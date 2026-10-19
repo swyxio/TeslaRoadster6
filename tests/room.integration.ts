@@ -12,7 +12,7 @@ import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
 // Both clients must agree on finishes, self-drive modes and the tick/action contract.
-assert.equal(PROTOCOL_VERSION, 52);
+assert.equal(PROTOCOL_VERSION, 53);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -59,7 +59,9 @@ try {
   assert.equal(one.state.starshipStatus!.privacyPending,false);assert.equal(one.state.starshipStatus!.publicName,null);assert.equal(one.state.starshipStatus!.status.personal,0);
   for(const state of [one.state,two.state]){
     assert.ok(state.world!.players.every(p=>p.delivery.cash===2500&&p.delivery.earned===0&&p.delivery.level===0&&p.delivery.completed===0&&p.delivery.lastBlocked===null&&p.delivery.order.stage==='pickup'&&p.delivery.order.pickupEstimate>0&&p.delivery.lastReward===null&&p.delivery.lastTicket===null&&p.delivery.flight.seconds===0&&p.achievements.unlocked.length===0));
-    assert.equal(state.world!.entities.filter(e=>e.police).length,4);
+    // The two city officers are nearby; highway patrols outside the room's
+    // ambient-interest radius are intentionally absent from this snapshot.
+    assert.ok(['police-0','police-1'].every(id=>state.world!.entities.some(e=>e.id===id&&e.police)));
   }
   assert.ok(one.state.world!.entities.some(e=>e.id===one.state.world!.players.find(p=>p.id===two.state.id)!.entityId),'nearby player entity is present');
   assert.ok(two.state.world!.entities.some(e=>e.npc),'nearby traffic is present in the room snapshot');

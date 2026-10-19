@@ -36,7 +36,10 @@ function spatialIndex<T extends Place>(items:readonly T[],requiredLevelAt:(x:num
 export const DELIVERY_SEARCH_CANDIDATES_PER_STEP=512;
 export const DELIVERY_SEARCH_PLANS_PER_STEP=2;
 export const DELIVERY_SEARCH_PAIRS_PER_STEP=16;
-export type DeliverySearchCursor={pair:number;leg:0|1;heading:number};
+// Bump when candidate ordering or route eligibility changes. A durable
+// checkpoint must not skip a route checked against an older map.
+export const DELIVERY_SEARCH_VERSION=1;
+export type DeliverySearchCursor={pair:number;leg:0|1;heading:number;version?:number};
 type SearchStep={status:'found';choice:Choice;plans:number;pairs:number;scans:number}|{status:'pending';cursor:DeliverySearchCursor;plans:number;pairs:number;scans:number}|{status:'none';plans:number;pairs:number;scans:number};
 type Previous=Pick<Order,'restaurant'|'customer'>;
 type Prepared={
@@ -110,7 +113,9 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     cursor:DeliverySearchCursor={pair:0,leg:0,heading:0}):SearchStep {
     const work=candidates(completed,origin,level,roofEligible,previous);
     if(!work)return {status:'none',plans:0,pairs:0,scans:0};
-    const next={...cursor};let plans=0,pairs=0,scans=0;
+    const next=cursor.version===DELIVERY_SEARCH_VERSION?{...cursor}:
+      {pair:0,leg:0 as const,heading:0,version:DELIVERY_SEARCH_VERSION};
+    let plans=0,pairs=0,scans=0;
     const explore=level>0&&completed%2===0;
     const preferRooftop=roofEligible&&level>0&&!explore&&completed%3===1;
     const originLevel=requiredLevelAt(origin.x,origin.z),newest=Math.min(level,6);

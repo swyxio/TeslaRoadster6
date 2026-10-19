@@ -7,7 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop, type Order } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { applyTicketEvidence } from '../shared/police';
 import { applyAcceptedDelivery } from '../worker/achievement-progress';
@@ -117,6 +117,23 @@ try{
     assert.equal(result.progress.cash,49_960);
     assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,roofEligible===true,`ticket roof capability ${roofEligible}`);
     assert.equal(result.progress.order.stage,'dropoff');
+  }
+
+  // A speeding stop uses the same durable journal and is charged only once,
+  // including when the room has to replay a lost response.
+  {
+    const driver=entry(),acquired=await acquire(driver);
+    const ticket:TicketStage={eventId:randomUUID(),driverId:driver.driverId,fence:driver.fence,roomId:driver.room,walletOrder:1,clock:0,
+      action:{kind:'ticket',evidence:{seconds:0,peakHeight:0,at:1,x:-800,z:3300,canFly:true,cause:'speeding',speedKph:150},orderBefore:acquired.progress.order,completedBefore:0}};
+    assert.equal(await rpc('stage-ticket',{...driver,stage:ticket}),'accepted');
+    const submitted:EconomyIntent={...ticket,revision:0,sequence:1,action:ticket.action};
+    const result=await rpc<DriverOutcome>('submit',{...driver,intent:submitted});success(result);
+    assert.equal(result.progress.cash,acquired.progress.cash-100);
+    assert.equal(result.progress.tickets,1);
+    assert.deepEqual(await rpc('submit',{...driver,intent:submitted}),result,'replay cannot charge the speeding fine twice');
+    await rpc('freeze',driver,15_000);
+    const saved=await rpc<Profile>('profile',driver);
+    assert.equal(saved.progress.cash,acquired.progress.cash-100);assert.equal(saved.progress.tickets,1);
   }
 
   // On-foot evidence survives durable replay: preserve accessible roofs, but
@@ -242,6 +259,65 @@ try{
   assert.equal(assignmentRecovered.progress.achievementTiers?.pickups.count,1);
   assert.deepEqual((await rpc<string[]>('sources',assignmentCrash)).sort(),['earned-source:delivery:1:dropoff','earned-source:delivery:2:pickup']);
   assert.equal(await rpc('assignment',{...assignmentCrash,eventId:firstStop.eventId}),null,'completed checkpoint is removed');
+
+  // A pre-map-update leg-one checkpoint must be revalidated after a restart;
+  // replaying the accepted stop still pays only once.
+  const legacyCrash=entry(),legacyInitial=await acquire(legacyCrash);
+  const legacyPose={...pose(4),x:pose(4).x+.123456};
+  const legacyPreview=initialDelivery(legacyPose),legacyPrior={...legacyInitial.progress.order,elapsed:45};
+  Object.assign(legacyPreview,{cash:legacyInitial.progress.cash,lifetimeIncome:legacyInitial.progress.eligibleIncome,
+    earned:legacyInitial.progress.earned,completed:legacyInitial.progress.completed,level:legacyInitial.progress.level,order:legacyPrior});
+  assert.ok(applyDeliveryStop(legacyPreview,legacyPose));
+  const legacyAwards=initialAchievements();legacyAwards.unlocked=[...legacyInitial.progress.unlocked];
+  applyAcceptedDelivery(legacyPreview,legacyAwards,legacyInitial.progress.achievementTiers!,legacyPrior,false,CUSTOMERS[4].id,true);
+  for(let i=0;i<10_000&&legacyPreview.order.search;i++)advanceDeliverySearch(legacyPreview,false);
+  assert.equal(legacyPreview.order.search,undefined);
+  const legacyStop=stage(legacyCrash,1,5,legacyPose,1,assignmentAt);
+  assert.equal(await rpc('stage',{...legacyCrash,stage:legacyStop}),'accepted');
+  await rpc('hold-assignment',legacyCrash);
+  const legacyFlight=rpc('submit',{...legacyCrash,intent:intent(legacyStop,0,1)},30_000);void legacyFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',legacyCrash),'legacy assignment checkpoint held');
+  await rpc('legacy-assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  const oldCheckpoint=await rpc<{searchVersion?:number;delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  assert.equal(oldCheckpoint.searchVersion,undefined);
+  assert.deepEqual(oldCheckpoint.delivery.order.search.cursor,{pair:128,leg:1,heading:0});
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',legacyCrash,15_000);
+  const legacyRecovered=await rpc<Profile>('profile',legacyCrash);
+  assert.equal(legacyRecovered.progress.completed,1);
+  assert.equal(legacyRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
+  assert.equal(legacyRecovered.progress.order.customer,legacyPreview.order.customer);
+  assert.deepEqual(await rpc('sources',legacyCrash),['earned-source:delivery:1:dropoff']);
+  await rpc('freeze',legacyCrash,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',legacyCrash)).progress,legacyRecovered.progress,'recovery pays only once');
+  assert.equal(await rpc('assignment',{...legacyCrash,eventId:legacyStop.eventId}),null);
+
+  // A completed checkpoint may also outlive its map: interruption can occur
+  // after assignment finishes but before the accepted payout commits.
+  const completedCrash=entry();await acquire(completedCrash);
+  await rpc('room-win',{...completedCrash,eventId:'completed-checkpoint-win',at:assignmentAt-1_000});
+  const completedStop=stage(completedCrash,1,5,legacyPose,null,assignmentAt);
+  assert.equal(await rpc('stage',{...completedCrash,stage:completedStop}),'accepted');
+  await rpc('hold-completed-assignment',completedCrash);
+  const completedFlight=rpc('submit',{...completedCrash,intent:intent(completedStop,0,1)},30_000);void completedFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',completedCrash),'completed assignment checkpoint held');
+  const beforeLegacy=await rpc<{done:boolean;context:string}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+  assert.equal(beforeLegacy.done,true);
+  const staleRestaurant=(legacyPreview.order.restaurant+1)%RESTAURANTS.length;
+  const staleCustomer=(legacyPreview.order.customer+1)%CUSTOMERS.length;
+  await rpc('legacy-completed-assignment',{...completedCrash,eventId:completedStop.eventId,restaurant:staleRestaurant,customer:staleCustomer});
+  const staleCheckpoint=await rpc<{done:boolean;context:string;delivery:{order:Order}}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+  assert.equal(staleCheckpoint.done,true);assert.equal(staleCheckpoint.context,beforeLegacy.context);
+  assert.equal(staleCheckpoint.delivery.order.restaurant,staleRestaurant);
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',completedCrash,15_000);
+  const completedRecovered=await rpc<Profile>('profile',completedCrash);
+  assert.equal(completedRecovered.progress.completed,1);
+  assert.equal(completedRecovered.progress.cash,10_120+Math.round(baseFare*1.5)+350+100,'the captured room multiplier survives recovery');
+  assert.equal(completedRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
+  assert.equal(completedRecovered.progress.order.customer,legacyPreview.order.customer);
+  assert.deepEqual(await rpc('sources',completedCrash),['earned-source:delivery:1:dropoff']);
+  await rpc('freeze',completedCrash,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',completedCrash)).progress,completedRecovered.progress,'completed checkpoint replay pays once');
+  assert.equal(await rpc('assignment',{...completedCrash,eventId:completedStop.eventId}),null);
 
   // A ticket relocks an already-collected Oakland order. The later physical
   // dropoff is accepted while the replacement assignment is checkpointed.

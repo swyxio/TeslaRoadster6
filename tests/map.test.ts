@@ -180,7 +180,7 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
    assert.ok(isLand(x,z),`${highway.id} segment ${i}: unsupported at ${x},${z}`);
    if(Math.abs(offset)>9)continue;
    const car=makeEntity('clearance','waymo-peterbilt',x,z);car.yaw=Math.atan2(-dx,-dz);
-   assert.ok(!nearbyBuildings(x,z,12).some(building=>contact(body(car),{...building,yaw:0})),`${highway.id} segment ${i}: blocked at ${x},${z}`);
+   assert.ok(!nearbyBuildings(x,z,12).some(building=>buildingBlocksPose(building,car)),`${highway.id} segment ${i}: blocked at ${x},${z}`);
   }
  }
  const length=BAY_CIRCUIT.reduce((sum,a,i)=>{const b=BAY_CIRCUIT[(i+1)%BAY_CIRCUIT.length];return sum+Math.hypot(b.x-a.x,b.z-a.z);},0);
