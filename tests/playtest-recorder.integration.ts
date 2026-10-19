@@ -125,7 +125,7 @@ try {
   // Slow software rendering may leave too few intervals for a statistical
   // comparison; it must HOLD, not turn this functional check into a budget.
   assert.ok(comparison.reasons.every((reason: string) => reason.startsWith('Animation callback measurements') || reason.startsWith('Video segments lack')), comparison.reasons.join(' '));
-  assert.ok(inspected.encodedVideos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(inspected.encodedVideos));
+  assert.ok(inspected.encodedVideos.length > 0 && inspected.encodedVideos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(inspected.encodedVideos));
 
   // Observe real DOM touch events so releasing either finger is checked
   // independently of the runner's own bookkeeping.
