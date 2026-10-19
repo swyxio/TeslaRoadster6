@@ -297,7 +297,7 @@ jobs:
         env:
           VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         run: |
-          mkdir -p "$RUNNER_TEMP/tesland-performance"
+          mkdir -p "$RUNNER_TEMP/tesland-performance"{,/base-video,/candidate-video}
           if [ "$VIDEO_REQUESTED" = true ]; then
             echo '**Recording quality acceptance: HOLD.** Collection and automated checks cannot approve player fidelity. This optional video run remains on hold; inspect playback and compare against the player experience on representative hardware before relying on it.' >> "$GITHUB_STEP_SUMMARY"
           fi

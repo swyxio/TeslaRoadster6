@@ -52,13 +52,24 @@ console.log(`Tab capture completed two segments in ${dir}; artifact ${inspection
 let notifySlow!: () => void;
 const slowStarted = new Promise<void>(resolve => { notifySlow = resolve; });
 const slowResponses: ServerResponse[] = [];
+let tabStopError = '';
 const fixture = createServer((request, response) => {
   if (request.url === '/slow') { slowResponses.push(response); notifySlow(); return; }
+  if (request.url === '/stop-error') {
+    request.setEncoding('utf8');
+    request.on('data', chunk => { tabStopError += chunk; });
+    request.on('end', () => { response.writeHead(204); response.end(); });
+    return;
+  }
   response.writeHead(200, { 'Content-Type': 'text/html' });
   response.end(`<!doctype html><title>Recorder signal test</title><body>Signal test
     <script>
       const stopCapture = window.__teslandTabCapture.stop;
-      window.__teslandTabCapture.stop = async () => { await fetch('/slow'); return stopCapture(); };
+      window.__teslandTabCapture.stop = async () => {
+        await fetch('/slow');
+        try { return await stopCapture(); }
+        catch (error) { await fetch('/stop-error', { method: 'POST', body: String(error && error.stack || error) }); throw error; }
+      };
     </script></body>`);
 });
 await new Promise<void>(resolve => fixture.listen(0, '127.0.0.1', resolve));
@@ -111,7 +122,8 @@ try {
   await delay(150);
   assert.equal(slowResponses.length, 1, 'Shutdown must not start a second overlapping tab stop.');
   slowResponses[0].writeHead(200); slowResponses[0].end('done');
-  assert.equal((await stopping).status, 200);
+  const stopResponse = await stopping;
+  assert.equal(stopResponse.status, 200, `Tab stop failed: ${tabStopError || await stopResponse.text()}; recorder: ${signalError}`);
   assert.equal(await Promise.race([signalExited, delay(30000, undefined, { ref: false }).then(() => { throw new Error('Signal recorder did not exit.'); })]), 0, signalError);
   const signalManifest = JSON.parse(await readFile(join(signalOutput, 'manifest.json'), 'utf8'));
   assert.equal(signalManifest.status, 'complete');
