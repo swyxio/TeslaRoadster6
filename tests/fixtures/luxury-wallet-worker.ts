@@ -217,6 +217,19 @@ export class DriverProfile extends ProductionDriverProfile {
     });
   }
 
+  /** Remove the new field to exercise an existing paid vehicle record. */
+  async seedLegacyAutonomy() {
+    return this.ctx.storage.transaction(async txn=>{
+      const record=await txn.get<{progress:DriverProgress}>('driver');
+      if(!record?.progress.vehicles.roadster)throw new Error('No Roadster upgrade record to seed');
+      const upgrades=record.progress.vehicles.roadster.upgrades;
+      if(!upgrades.autonomyJump||!upgrades.autonomySky)throw new Error('Expected previously purchased flight tiers');
+      delete (upgrades as Partial<typeof upgrades>).autonomyIntercity;
+      await txn.put('driver',record);
+      return record.progress;
+    });
+  }
+
   async armFault(fault:Fault|Fault[]) {
     if (this.held) throw new Error('Release the held commit before arming another fault');
     this.faults = Array.isArray(fault)?[...fault]:[fault];
@@ -641,6 +654,7 @@ export default {
       }
       case '/__wallet-test/fund': return Response.json(await driver.seedFunds(body.seedCash));
       case '/__wallet-test/legacy-ota': return Response.json(await driver.seedLegacyOta(body.count));
+      case '/__wallet-test/legacy-autonomy': return Response.json(await driver.seedLegacyAutonomy());
       case '/__wallet-test/inspect': return Response.json(await driver.inspect() ?? null);
       case '/__wallet-test/profile-keys': return Response.json(await driver.fixtureKeys());
       case '/__wallet-test/economy-keys': return Response.json(await economy.fixtureKeys());

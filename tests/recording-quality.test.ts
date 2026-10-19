@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos, mergeRecordingInspection, recordingQualityApproved, tabIntegrityReasons } from '../scripts/recording-quality.mjs';
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
@@ -13,11 +13,37 @@ const run = (video: boolean) => ({
     nodeVersion: 'v22', playwrightVersion: '1.64.1', browserChannel: 'chrome', browserVersion: '155',
     gpuMode: 'metal', headed: false, webgl: { renderer: 'Metal', vendor: 'Apple' }, recorderSourceSha256: hash,
     captureSourceSha256: hash, audioSourceSha256: hash, hostLoadAverageAtStart: [2, 3, 4], hostLoadAverageAtFinish: [3, 4, 5] },
-  viewport: { width: 1280, height: 720 }, browserErrors: { pageErrors: 0, consoleErrors: 0 },
+  viewport: { width: 1280, height: 720, deviceScaleFactor: 1 }, browserErrors: { pageErrors: 0, consoleErrors: 0 },
   capture: { enabled: video, audio: false, requestedFps: 30, segments: video ? [{ video: 'segment-001.webm', status: 'available', finalized: true, intervalMs: { gapsAtLeast100Ms: 1 } }] : [] },
   recordings: video ? ['segment-001.webm'] : [],
   events: [{ type: 'recordStart', status: 'ok', commandStartedAtMs: 90 }, { type: 'frameStart', status: 'ok', commandStartedAtMs: 100 }, { type: 'frameStop', status: 'ok', commandStartedAtMs: 4000,
     sample: { intervalsMs: [...Array(98).fill(16.7), 40, 120], truncated: false } }, { type: 'recordStop', status: 'ok', commandStartedAtMs: 4010 }],
+});
+
+test('tab integrity identifies packet ordering separately from bytes and dimensions', () => {
+  const video = { file: 'segment-001.webm', bytes: 60348559, width: 1280, height: 720, packetNonIncreasing: 2 };
+  const trace = { bytes: 60348559, width: 1280, height: 720 };
+  const viewport = { width: 1280, height: 720, deviceScaleFactor: 1 };
+  assert.deepEqual(tabIntegrityReasons(video, trace, viewport), ['segment-001.webm: 2 non-increasing video packet timestamps.']);
+  assert.deepEqual(tabIntegrityReasons({ ...video, packetNonIncreasing: 0 }, trace, viewport), []);
+  assert.deepEqual(tabIntegrityReasons({ ...video, bytes: 1, width: 640, packetNonIncreasing: 1 }, trace, viewport), [
+    'segment-001.webm: video byte count differs from its capture trace.',
+    'segment-001.webm: video dimensions differ from its capture trace.',
+    'segment-001.webm: video dimensions differ from the manifest viewport pixel dimensions (1280x720).',
+    'segment-001.webm: 1 non-increasing video packet timestamp.',
+  ]);
+  const smallVideo = { ...video, width: 16, height: 16, packetNonIncreasing: 0 };
+  const smallTrace = { ...trace, width: 16, height: 16 };
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, viewport), [
+    'segment-001.webm: capture trace dimensions differ from the manifest viewport pixel dimensions (1280x720).',
+    'segment-001.webm: video dimensions differ from the manifest viewport pixel dimensions (1280x720).',
+  ]);
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16, deviceScaleFactor: 1 }), []);
+  assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 8, height: 8, deviceScaleFactor: 2 }), []);
+  assert.deepEqual(tabIntegrityReasons({ ...smallVideo, width: 230, height: 230 }, { ...smallTrace, width: 230, height: 230 }, { width: 200, height: 200, deviceScaleFactor: 1.15 }), []);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16 }).join(' '), /explicit device scale factor/);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 15, height: 15, deviceScaleFactor: 1.5 }).join(' '), /integer pixel dimensions/);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 1, height: 1, deviceScaleFactor: 2251799813685248.5 }).join(' '), /integer pixel dimensions/);
 });
 
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {
@@ -33,6 +59,7 @@ test('recording comparison describes long callback gaps without claiming player 
   const noGaps = run(true);
   noGaps.capture.segments[0].intervalMs.gapsAtLeast100Ms = 0;
   assert.equal(compareRecording(run(false), noGaps).recordingQuality, 'UNVERIFIED');
+  assert.equal(compareRecording(run(false), noGaps).qualityAcceptance, 'HOLD');
   const slow = run(true);
   slow.events[2].sample!.intervalsMs = Array(100).fill(116.7);
   assert.match(compareRecording(run(false), slow).warnings.join(' '), /callback p95 was 116.7 ms/);
@@ -143,6 +170,15 @@ test('each artifact segment requires finalized traces and readable encoded video
     assert.equal(truncated.artifact, 'HOLD');
     assert.match(truncated.reasons.join(' '), /materially shorter/);
     assert.doesNotMatch(truncated.reasons.join(' '), /duration comparison is unavailable/);
+    const apparentlyClean = run(true);
+    apparentlyClean.capture.segments[0].intervalMs.gapsAtLeast100Ms = 0;
+    const comparison = compareRecording(run(false), apparentlyClean);
+    assert.equal(comparison.comparison, 'available');
+    assert.equal(comparison.recordingQuality, 'UNVERIFIED');
+    const mergedTruncation = mergeRecordingInspection(comparison, truncated);
+    assert.equal(mergedTruncation.comparison, 'HOLD');
+    assert.equal(mergedTruncation.recordingQuality, 'HOLD');
+    assert.match(mergedTruncation.reasons.join(' '), /materially shorter/);
 
     // Out-of-order capture timestamps prevent the duration comparison; they do not
     // establish that the otherwise readable video was actually truncated.
@@ -172,5 +208,84 @@ test('each artifact segment requires finalized traces and readable encoded video
     const badVideo = await inspectRecordingArtifact(manifest, path);
     assert.equal(badVideo.artifact, 'HOLD');
     assert.equal(badVideo.encodedVideos[1].status, 'unavailable');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('tab capture verifies source, bytes and timing while preserving gap warnings', {
+  skip: ffmpegEncoders.status !== 0 || !/\blibvpx\b/.test(ffmpegEncoders.stdout ?? '') || spawnSync('ffprobe', ['-version']).status !== 0,
+}, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-tab-check-'));
+  try {
+    const video = join(dir, 'segment-001.webm');
+    const encode = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=5:d=1', '-c:v', 'libvpx', '-an', video]);
+    assert.equal(encode.status, 0, encode.stderr.toString());
+    const trace = { format: 3, mode: 'tab', captureHandleCheck: 'matched', startedAtBrowserMs: 10, stoppedAtBrowserMs: 1010, chunks: 1, bytes: statSync(video).size,
+      settings: { displaySurface: 'browser', width: 16, height: 16, frameRate: 5 } };
+    const segment = { video: 'segment-001.webm', traceFile: 'segment-001.capture.json', mode: 'tab', status: 'available', finalized: true };
+    const rawControl = run(false), rawRecorded = run(true);
+    const viewport = { width: 16, height: 16, deviceScaleFactor: 1 };
+    const control = { ...rawControl, viewport, runner: { ...rawControl.runner, tabCaptureSourceSha256: hash }, capture: { ...rawControl.capture, source: 'tab' } };
+    const recorded = { ...rawRecorded, viewport, runner: { ...rawRecorded.runner, tabCaptureSourceSha256: hash }, capture: { ...rawRecorded.capture, source: 'tab', segments: [segment] } };
+    const controlPath = join(dir, 'control.json'), recordedPath = join(dir, 'manifest.json'), tracePath = join(dir, segment.traceFile);
+    writeFileSync(controlPath, JSON.stringify(control)); writeFileSync(recordedPath, JSON.stringify(recorded)); writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal(compareRecording(control, recorded).comparison, 'available');
+    writeFileSync(tracePath, JSON.stringify({ ...trace, captureHandleCheck: undefined }));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    writeFileSync(tracePath, JSON.stringify({ ...trace, format: 2 }));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    writeFileSync(tracePath, JSON.stringify(trace));
+    const mismatch = await inspectRecordingArtifact({ ...recorded, viewport: rawRecorded.viewport }, recordedPath);
+    assert.equal(mismatch.artifact, 'HOLD');
+    assert.match(mismatch.reasons.join(' '), /capture trace dimensions differ from the manifest viewport pixel dimensions/);
+    assert.match(mismatch.reasons.join(' '), /video dimensions differ from the manifest viewport pixel dimensions/);
+    assert.doesNotMatch(mismatch.reasons.join(' '), /byte count differs|non-increasing video packet timestamp/);
+    const missingDpr = { ...recorded, viewport: { width: 16, height: 16 } };
+    assert.equal((await inspectRecordingArtifact(missingDpr, recordedPath)).artifact, 'HOLD');
+    assert.equal(compareRecording(control, missingDpr).comparison, 'HOLD');
+    const checked = await inspectRecordingArtifact(recorded, recordedPath);
+    assert.equal(checked.artifact, 'available');
+    assert.equal(checked.playerFidelity, 'UNVERIFIED');
+    assert.match(checked.limitations.join(' '), /cannot establish captured tab identity or the correct crop/);
+    assert.match(checked.warnings.join(' '), /packet gaps/);
+    const merged = mergeRecordingInspection(compareRecording(control, recorded), checked);
+    assert.equal(merged.comparison, 'available');
+    assert.match(merged.limitations.join(' '), /cannot establish captured tab identity or the correct crop/);
+    assert.equal(merged.recordingQuality, 'HOLD');
+    assert.match(merged.warnings.join(' '), /packet gaps/);
+    assert.equal(merged.qualityAcceptance, 'HOLD');
+    assert.equal(recordingQualityApproved(merged), false);
+    const missingArtifact = mergeRecordingInspection(compareRecording(control, recorded), { ...checked, artifact: 'HOLD', reasons: ['Missing video.'] });
+    assert.equal(missingArtifact.comparison, 'HOLD');
+    assert.equal(missingArtifact.recordingQuality, 'HOLD');
+    assert.match(missingArtifact.reasons.join(' '), /Missing video/);
+    assert.equal((await inspectRecordingArtifact({ ...recorded, capture: { ...recorded.capture, source: 'unknown' } }, recordedPath)).artifact, 'HOLD');
+    const cli = spawnSync(process.execPath, ['scripts/recording-quality.mjs', controlPath, recordedPath], { encoding: 'utf8' });
+    assert.equal(cli.status, 1);
+    assert.match(JSON.parse(cli.stdout).warnings.join(' '), /packet gaps/);
+    // A static video can have perfect packet cadence, so clean diagnostics
+    // must not become a quality approval or a successful quality CLI exit.
+    const cleanEncode = spawnSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=30:d=1', '-c:v', 'libvpx', '-an', video]);
+    assert.equal(cleanEncode.status, 0, cleanEncode.stderr.toString());
+    trace.bytes = statSync(video).size; trace.settings.frameRate = 30;
+    writeFileSync(tracePath, JSON.stringify(trace));
+    const clean = await inspectRecordingArtifact(recorded, recordedPath);
+    assert.equal(clean.artifact, 'available');
+    assert.equal(clean.recordingQuality, 'UNVERIFIED');
+    assert.equal(clean.qualityAcceptance, 'HOLD');
+    const cleanMerged = mergeRecordingInspection(compareRecording(control, recorded), clean);
+    assert.equal(cleanMerged.recordingQuality, 'UNVERIFIED');
+    assert.equal(cleanMerged.qualityAcceptance, 'HOLD');
+    assert.equal(recordingQualityApproved(cleanMerged), false);
+    assert.equal(recordingQualityApproved({ ...cleanMerged, qualityAcceptance: 'APPROVED', playerFidelity: 'VERIFIED' }), false);
+    const cleanCli = spawnSync(process.execPath, ['scripts/recording-quality.mjs', controlPath, recordedPath], { encoding: 'utf8' });
+    assert.equal(cleanCli.status, 2);
+    assert.equal(JSON.parse(cleanCli.stdout).qualityAcceptance, 'HOLD');
+    assert.equal(compareRecording({ ...control, capture: { ...control.capture, source: 'screencast' } }, recorded).comparison, 'HOLD');
+    trace.bytes++;
+    writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    trace.bytes--; trace.settings.displaySurface = 'monitor';
+    writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

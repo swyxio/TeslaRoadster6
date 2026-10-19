@@ -70,6 +70,7 @@ test('flight tiers fall back when unequipped, short of air, blocked, or crossing
   const {world,car}=fixture(-300,0,-Math.PI/2,{x:-80,z:0});
   const attempt=(mode:DriveMode)=>autonomousFlight(car,world,0,mode,NEUTRAL,initialAutonomousFlight());
   assert.equal(attempt('road').jump,false);
+  assert.equal(attempt('intercity').jump,false,'intercity stays on the ground even in a rocket-equipped car');
   car.kind='model-3';assert.equal(attempt('sky').jump,false);
   car.kind='roadster';car.air=0;assert.equal(attempt('sky').jump,false);
   car.air=100;assert.equal(attempt('jump').jump,false,'do not jump without a stopped leader');

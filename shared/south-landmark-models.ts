@@ -21,7 +21,13 @@ export type SouthModelPiece={
  };
  function facade(g:SouthModelPiece[],l:SouthLandmark,height:number){
   const {w,d,color}=l;block(g,0,height/2,0,w*.9,height,d*.82,color);
-  for(const x of [-.28,0,.28])block(g,x*w,height*.54,d*.415,w*.13,height*.3,.12,glass,'box',false);
+  for(const x of [-.28,0,.28]){
+   block(g,x*w,height*.54,d*.415,w*.13,height*.3,.12,glass,'box',false);
+   block(g,x*w,height*.54,d*.415+.07,w*.012,height*.3,.02,dark,'box',false);
+   block(g,x*w,height*.54,-d*.415,w*.13,height*.3,.12,glass,'box',false);
+  }
+  for(const side of [-1,1])for(const z of [-.22,.22])
+   block(g,side*w*.455,height*.54,z*d,.12,height*.3,d*.13,glass,'box',false);
   block(g,0,height*.16,d*.42,w*.11,height*.32,.13,dark,'box',false);
  }
  export function buildSouthLandmarkModel(l:SouthLandmark):SouthModelPiece[]{

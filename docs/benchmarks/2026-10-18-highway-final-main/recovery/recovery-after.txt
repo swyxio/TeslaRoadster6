@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: a stopped active leader does not cause a reverse after the stall timeout
+ok 1 - a stopped active leader does not cause a reverse after the stall timeout
+  ---
+  duration_ms: 2.347292
+  type: 'test'
+  ...
+# Subtest: a fast follower behind prevents a new recovery reverse
+ok 2 - a fast follower behind prevents a new recovery reverse
+  ---
+  duration_ms: 0.254417
+  type: 'test'
+  ...
+# Subtest: road self-driving waits 60 seconds behind queued driver traffic and resumes
+ok 3 - road self-driving waits 60 seconds behind queued driver traffic and resumes
+  ---
+  duration_ms: 153.94625
+  type: 'test'
+  ...
+# Subtest: road self-driving waits 60 seconds behind queued npc traffic and resumes
+ok 4 - road self-driving waits 60 seconds behind queued npc traffic and resumes
+  ---
+  duration_ms: 83.344833
+  type: 'test'
+  ...
+# Subtest: a leader 7.5 m ahead cancels an active reverse
+ok 5 - a leader 7.5 m ahead cancels an active reverse
+  ---
+  duration_ms: 25.821959
+  type: 'test'
+  ...
+# Subtest: a leader 8.72 m ahead cancels an active reverse
+ok 6 - a leader 8.72 m ahead cancels an active reverse
+  ---
+  duration_ms: 25.662
+  type: 'test'
+  ...
+# Subtest: a fast rear car pauses a pending reverse and recovery resumes
+ok 7 - a fast rear car pauses a pending reverse and recovery resumes
+  ---
+  duration_ms: 10.912334
+  type: 'test'
+  ...
+# Subtest: a fast rear car pauses an active reverse and recovery resumes
+ok 8 - a fast rear car pauses an active reverse and recovery resumes
+  ---
+  duration_ms: 6.20825
+  type: 'test'
+  ...
+# Subtest: a rear car in the adjacent lane does not stop recovery
+ok 9 - a rear car in the adjacent lane does not stop recovery
+  ---
+  duration_ms: 0.949542
+  type: 'test'
+  ...
+# Subtest: a rear car in the moving away does not stop recovery
+ok 10 - a rear car in the moving away does not stop recovery
+  ---
+  duration_ms: 0.414042
+  type: 'test'
+  ...
+# Subtest: rear traffic detection accounts for a reverse collision impulse
+ok 11 - rear traffic detection accounts for a reverse collision impulse
+  ---
+  duration_ms: 0.147333
+  type: 'test'
+  ...
+# Subtest: stationary obstructions still produce bounded recovery failure
+ok 12 - stationary obstructions still produce bounded recovery failure
+  ---
+  duration_ms: 52.024042
+  type: 'test'
+  ...
+# Subtest: an equally close parked obstacle is not hidden by active traffic
+ok 13 - an equally close parked obstacle is not hidden by active traffic
+  ---
+  duration_ms: 0.408042
+  type: 'test'
+  ...
+# Subtest: traffic beyond a wall does not suppress wall recovery
+ok 14 - traffic beyond a wall does not suppress wall recovery
+  ---
+  duration_ms: 0.400417
+  type: 'test'
+  ...
+# Subtest: an away-facing road join still reverses away from a leader
+ok 15 - an away-facing road join still reverses away from a leader
+  ---
+  duration_ms: 94.806125
+  type: 'test'
+  ...
+# Subtest: road self-driving waits for a rotated leader for 20 seconds without contact
+ok 16 - road self-driving waits for a rotated leader for 20 seconds without contact
+  ---
+  duration_ms: 32.599
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 774.1515

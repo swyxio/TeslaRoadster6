@@ -13,6 +13,7 @@ test('sandbox grants max upgrades without infinite air or malformed wire values'
   const world=createEmptyWorld(),p=addPlayer(world,'p','Driver');
   prepareSandboxDriver(world,'p');const e=world.entities.find(e=>e.id===p.entityId)!;
   assert.equal(e.tankLevel,5);assert.ok(Object.values(e.upgrades).every(Boolean));
+  assert.equal(e.upgrades.autonomyIntercity,true,'sandbox includes Hyperloop Pilot');
   assert.equal(p.delivery.cash,SANDBOX_CASH);assert.ok(p.delivery.level>=6);
   assert.equal(buyVehicleStyle(world,p.id,{category:'paint',choice:'mint'}),true);
   sandboxWallet(p,world.time);assert.equal(p.delivery.cash,SANDBOX_CASH);

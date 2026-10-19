@@ -1,6 +1,6 @@
 {
   "name": "tesland",
-  "version": "0.0.42-alpha",
+  "version": "0.0.43-alpha",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -19,13 +19,13 @@
     "playtest:blog-video": "node scripts/playtest-to-blog.mjs"
   },
   "dependencies": {
-    "three": "^0.180.0"
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251011.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^22.18.0",
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.186.0",
     "marked": "^18.1.1",
     "playwright": "1.64.1",
     "tailwindcss": "^4.1.14",

@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS, type DeliveryCityId} from '../shared/delivery-locations';
 import {CUSTOMERS, RESTAURANTS, requiredLevelAt, type Level} from '../shared/delivery';
 import {MARIN_ARRIVAL_POINTS} from '../shared/marin-roads';
@@ -38,6 +39,14 @@ test('historical saved indices retain their exact prefix and all have town metad
  assert.deepEqual(Object.keys(HISTORIC_CUSTOMER_AREAS).sort(),historicCustomers.map(place=>place.id).sort());
 });
 
+test('the complete saved customer index prefix stays unchanged when the picnic stop is appended',()=>{
+ const prefix=CUSTOMERS.slice(0,180).map(place=>place.id);
+ // The hash records the ordered catalog immediately before the new stop.
+ assert.equal(createHash('sha256').update(JSON.stringify(prefix)).digest('hex'),
+  'eb78ee0603081cda9f851d6ba02e9d144522bf6a4495f9fdf0d0733029986821');
+ assert.equal(CUSTOMERS[180].id,'customer-south-san-francisco-11');
+});
+
 test('new places have stable unique IDs, source-backed food details, and distinct fictional customers',()=>{
  const ids=[...historicRestaurants,...historicCustomers,...added].map(place=>place.id);
  assert.equal(new Set(ids).size,ids.length);
@@ -72,11 +81,11 @@ test('each town has ten pickups and at least ten ground customers excluding land
   const customers=[...historicCustomers.filter(place=>!place.id.startsWith('landmark-')&&
    HISTORIC_CUSTOMER_AREAS[place.id as keyof typeof HISTORIC_CUSTOMER_AREAS]?.areaId===cityId),
    ...ADDED_CUSTOMERS.filter(place=>place.areaId===cityId)];
-  assert.equal(pickups,10,cityId);assert.equal(customers.filter(place=>!place.rooftop).length,10,cityId);
-  assert.equal(customers.length,cityId==='san-francisco'?12:cityId==='oakland'?11:10,cityId);
+  assert.equal(pickups,10,cityId);assert.equal(customers.filter(place=>!place.rooftop).length,cityId==='south-san-francisco'?11:10,cityId);
+  assert.equal(customers.length,cityId==='san-francisco'?12:cityId==='oakland'||cityId==='south-san-francisco'?11:10,cityId);
  }
- assert.deepEqual(ADDED_CUSTOMERS.slice(-3).map(place=>place.id),
-  ['customer-san-francisco-05','customer-san-francisco-06','customer-oakland-07']);
+ assert.deepEqual(ADDED_CUSTOMERS.slice(-4).map(place=>place.id),
+  ['customer-san-francisco-05','customer-san-francisco-06','customer-oakland-07','customer-south-san-francisco-11']);
 });
 
 test('SFO has its own sourced pickup and fictional customer, plus its historical landmark',()=>{
@@ -109,7 +118,9 @@ test('authored city stops route between every pair from a sampled lane heading',
  const baselineLevels:Record<string,Level>={'san-francisco':0,'mill-valley':0,'corte-madera':0,oakland:1,berkeley:1,emeryville:1,sfo:2};
  assert.deepEqual(Object.keys(fixtures).sort(),[...new Set(added.map(place=>place.areaId))].sort());
  for(const [area,poses] of Object.entries(fixtures)){
-  const targets=added.filter(place=>place.areaId===area);
+  // The appended picnic stop is intentionally off-lane and has a dedicated
+  // assignment and driving test instead of a road-aligned fixture heading.
+  const targets=added.filter(place=>place.areaId===area&&place.id!=='customer-south-san-francisco-11');
   assert.equal(poses.length,targets.length,area);
   assert.equal(new Set(poses.map(p=>`${p.x},${p.z}`)).size,poses.length,area);
   const town=towns[area];

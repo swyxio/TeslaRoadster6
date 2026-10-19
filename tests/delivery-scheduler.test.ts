@@ -1,13 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, LEVELS, RESTAURANTS, requiredLevelAt, rerouteInaccessibleOrder, updateDelivery, updateLevel, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
-import { createDeliveryScheduler, DELIVERY_MAX_PICKUP_DISTANCE, DELIVERY_MAX_TRIP_DISTANCE, DELIVERY_SEARCH_CANDIDATES_PER_STEP, DELIVERY_SEARCH_PAIRS_PER_STEP, DELIVERY_SEARCH_PLANS_PER_STEP } from '../shared/delivery-scheduler';
+import { createDeliveryScheduler, DELIVERY_MAX_PICKUP_DISTANCE, DELIVERY_MAX_TRIP_DISTANCE, DELIVERY_SEARCH_CANDIDATES_PER_STEP, DELIVERY_SEARCH_PAIRS_PER_STEP, DELIVERY_SEARCH_PLANS_PER_STEP, DELIVERY_SEARCH_VERSION } from '../shared/delivery-scheduler';
 import { addPlayer, createWorld, NEUTRAL } from '../shared/game';
 import { isSurface, terrainHeight } from '../shared/map';
 import { nearestNavigationAnchor } from '../shared/navigation';
 
 const choose=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
 const metres=(a:{x:number;z:number},b:{x:number;z:number})=>Math.hypot(a.x-b.x,a.z-b.z);
+
+test('a legacy delivery search restarts its pickup leg against the current map',()=>{
+  const origin={x:-120,z:60},previous=order({restaurant:0,customer:2});
+  const expected=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt)(1,origin,1,false,previous);
+  assert.ok(expected);
+  for(const cursor of [{pair:128,leg:1 as const,heading:0},{pair:128,leg:1 as const,heading:0,version:0}]){
+    const select=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt);
+    let result=select.advance(1,origin,1,false,previous,cursor);
+    for(let i=0;result.status==='pending';i++){
+      assert.ok(i<1000,'the search advances');
+      assert.equal(result.cursor.version,DELIVERY_SEARCH_VERSION);
+      result=select.advance(1,origin,1,false,previous,result.cursor);
+    }
+    assert.equal(result.status,'found');
+    if(result.status==='found')assert.deepEqual(result.choice,expected);
+  }
+});
+
+test('a current delivery cursor retains its progress after scheduler eviction',()=>{
+  const location=CUSTOMERS.find(place=>place.id==='customer-south-san-francisco-01');
+  assert.ok(location);
+  const origin={x:location.x+.0123456,z:location.z,supportId:'ground' as const};
+  const previous={restaurant:RESTAURANTS.findIndex(place=>place.id==='south-san-francisco-curry-corner'),customer:CUSTOMERS.indexOf(location)};
+  assert.notEqual(previous.restaurant,-1);
+  const cursor={pair:5,leg:1 as const,heading:1,version:DELIVERY_SEARCH_VERSION};
+  const restarted=createDeliveryScheduler(RESTAURANTS,CUSTOMERS,requiredLevelAt).advance(20,origin,2,false,previous,cursor);
+  assert.equal(restarted.status,'pending');
+  if(restarted.status==='pending')assert.deepEqual(restarted.cursor,cursor);
+});
 function order(choice:{restaurant:number;customer:number}):Order {
   return {...choice,stage:'dropoff',elapsed:0,pickupEstimate:20,estimate:30,base:100};
 }
@@ -145,7 +174,7 @@ test('a disconnected catalog resumes candidate and route work without dropping p
     for(let z=origin.z-300;z<=origin.z+300&&destinations.length<60;z+=19){
       const point={x,z};
       if(isSurface(x,z)&&requiredLevelAt(x,z)===5&&metres(point,pickups[0])>=60&&
-        (nearestNavigationAnchor(point,5)?.distance??0)>7)destinations.push({id:`offroad-${destinations.length}`,x,z,rooftop:false});
+        (nearestNavigationAnchor(point,5)?.distance??0)>150)destinations.push({id:`offroad-${destinations.length}`,x,z,rooftop:false});
     }
   }
   assert.equal(destinations.length,60);

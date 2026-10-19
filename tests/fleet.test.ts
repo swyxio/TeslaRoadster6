@@ -48,8 +48,9 @@ test('traffic advances, player can take an NPC, and manual input overrides AV',(
   const world=createWorld();addPlayer(world,'p','P');
   const positions=new Map(world.entities.filter(e=>e.npc).map(e=>[e.id,{x:e.x,z:e.z}]));
   for(let i=0;i<100;i++)step(world,new Map(),.05);
-  const moving=world.entities.filter(e=>e.npc&&Math.hypot(e.x-positions.get(e.id)!.x,e.z-positions.get(e.id)!.z)>2);
-  assert.ok(moving.length>=positions.size*.8,`${moving.length} of ${positions.size} NPCs moved`);
+  const retained=world.entities.filter(e=>e.npc&&positions.has(e.id));
+  const moving=retained.filter(e=>Math.hypot(e.x-positions.get(e.id)!.x,e.z-positions.get(e.id)!.z)>2);
+  assert.ok(retained.length>0&&moving.length>=retained.length*.8,`${moving.length} of ${retained.length} retained NPCs moved`);
   interact(world,'p');const player=world.players[0],person=world.entities.find(e=>e.id===player.entityId)!;
   const npc=world.entities.find(e=>e.npc)!;person.x=npc.x+3;person.z=npc.z;person.speed=0;
   interact(world,'p');assert.equal(player.entityId,npc.id);assert.equal(npc.driver,'p');assert.equal(npc.autopilot,false);

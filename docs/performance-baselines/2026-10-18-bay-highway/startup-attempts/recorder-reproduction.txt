@@ -1,0 +1,12 @@
+Second startup attempt: /private/tmp/tesland-highway-startup-1792384130154-5e4c36877b
+The recorder exited before its output directory or a browser profile appeared.
+Its stderr was discarded, so the exact cause of that attempt is not known.
+
+A separate, bounded, secret-free Node invocation of the retained attempt's
+tsx and copied recorder with --help exited 1. Esbuild reported 29 transform
+errors, beginning at scripts/playtest-record.ts:46:40: "Top-level await is
+currently not supported with the cjs output format". No browser, Worker,
+build, network or timed driving leg was started by this reproduction.
+The copied harness had no package.json; the source repository declares
+"type": "module". This reproduces a specific startup defect but does not
+prove the cause of the original recorder exit, whose stderr was discarded.

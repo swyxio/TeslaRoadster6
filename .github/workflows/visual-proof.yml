@@ -1,0 +1,63 @@
+name: Seeded visual proof
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'visual-proof') }}
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Check out candidate and harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Check out base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install candidate and browser
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+      - name: Install base
+        working-directory: base
+        run: pnpm install --frozen-lockfile
+      - name: Capture seeded desktop and touch stills
+        run: |
+          node candidate/scripts/visual-proof.mjs \
+            --base-root "$GITHUB_WORKSPACE/base" --candidate-root "$GITHUB_WORKSPACE/candidate" \
+            --out "$RUNNER_TEMP/tesland-visual-proof" --gpu metal
+      - name: Summarize proof
+        if: ${{ always() }}
+        run: |
+          echo 'Hosted Chromium screenshots with simulated touch; these are not physical-device or frame-time measurements.' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$RUNNER_TEMP/tesland-visual-proof/summary.json" ]; then
+            echo 'Inspect both sets of stills, browser error counts, and approximate authoritative pose differences in the artifact.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Visual proof did not finish; inspect logs and any partial artifact.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload stills and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-visual-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tesland-visual-proof/
+          if-no-files-found: warn
+          retention-days: 30

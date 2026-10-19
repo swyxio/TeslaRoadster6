@@ -5,7 +5,8 @@ import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
-import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, updateHighwayTraffic } from '../shared/traffic';
+import { buildingBlocksPose } from '../shared/landmark-collision';
+import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, trafficInput, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
 import { initialSoccer } from '../shared/soccer';
 
@@ -104,7 +105,7 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
   const empty=()=>({entities:[],players:[],pickups:[],time:0,soccer:initialSoccer()} as ReturnType<typeof createWorld>);
   const first=empty(),second=empty();
   seedHighwayTraffic(first,makeEntity);seedHighwayTraffic(second,makeEntity);
-  assert.equal(first.entities.length,2);
+  assert.equal(first.entities.length,5);
   assert.deepEqual(first,second);
   assert.ok(first.entities.every(car=>HIGHWAY_ROUTE_IDS.includes(car.routeId as typeof HIGHWAY_ROUTE_IDS[number])));
   for(const world of [first,second]){
@@ -112,12 +113,12 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
     world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
     occupied.driver='p';player.entityId=occupied.id;
   }
-  for(let i=0;i<50;i++){
+  for(let i=0;i<12;i++){
     first.time=timeAtHour(8)+i*5;second.time=first.time;
     updateHighwayTraffic(first,5,makeEntity);updateHighwayTraffic(second,5,makeEntity);
   }
-  assert.equal(first.entities.length,5);
-  assert.equal(first.entities.filter(car=>!car.driver&&car.autopilot).length,4);
+  assert.equal(first.entities.length,13);
+  assert.equal(first.entities.filter(car=>!car.driver&&car.autopilot).length,12);
   assert.deepEqual(first,second);
   const occupied=first.entities[0],queued=first.entities[1];
   queued.speed=0;
@@ -128,7 +129,7 @@ test('ambient fleet is deterministic, capped and retains occupied or stopped car
   }
   assert.ok(first.entities.includes(occupied));
   assert.ok(first.entities.includes(queued));
-  assert.ok(first.entities.length<=5);
+  assert.ok(first.entities.length<=13);
 });
 
 test('taking ambient traffic replenishes it, and disconnecting off-route leaves it parked', () => {
@@ -145,8 +146,8 @@ test('taking ambient traffic replenishes it, and disconnecting off-route leaves 
   assert.equal(car.autopilot,false);
   world.time=5;updateHighwayTraffic(world,5,makeEntity);
   const ambient=()=>world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(ambient().length,3);
-  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,2);
+  assert.equal(ambient().length,6);
+  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,5);
 
   const offRoute=makeEntity('probe','model-3',-1000,3000);
   assert.equal(offRoute.supportId,'ground');
@@ -157,7 +158,7 @@ test('taking ambient traffic replenishes it, and disconnecting off-route leaves 
   assert.equal(car.autopilot,false);
   world.time=10;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(world.entities.includes(car));
-  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,2);
+  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,5);
 });
 
 test('disconnecting a taken ambient car on a city route replenishes highway traffic', () => {
@@ -175,9 +176,28 @@ test('disconnecting a taken ambient car on a city route replenishes highway traf
   assert.ok(!HIGHWAY_ROUTE_IDS.includes(car.routeId as typeof HIGHWAY_ROUTE_IDS[number]));
   world.time=5;updateHighwayTraffic(world,5,makeEntity);
   const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(ambient.length,3);
-  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot&&HIGHWAY_ROUTE_IDS.includes(entity.routeId as typeof HIGHWAY_ROUTE_IDS[number])).length,2);
+  assert.equal(ambient.length,6);
+  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot&&HIGHWAY_ROUTE_IDS.includes(entity.routeId as typeof HIGHWAY_ROUTE_IDS[number])).length,5);
   assert.ok(world.entities.includes(car));
+});
+
+test('four taken highway cars replenish at peak without exceeding the twenty-car pool', () => {
+  const world=createWorld();addPlayer(world,'observer','Observer');
+  for(let time=240;time<=280;time+=5){world.time=time;updateHighwayTraffic(world,5,makeEntity);}
+  const ambient=()=>world.entities.filter(entity=>entity.id.startsWith('ambient-'));
+  const targets=ambient().filter(entity=>entity.autopilot&&!entity.driver).slice(0,4);
+  assert.equal(targets.length,4);assert.equal(ambient().length,12);
+  for(const [i,car] of targets.entries()){
+    const id=`take-${i}`,player=addPlayer(world,id,id);player.delivery.level=3;player.delivery.cash=1_000_000;
+    const person=makeEntity(`person-${id}`,'person',car.x+3,car.z,id);
+    world.entities=world.entities.filter(entity=>entity.id!==player.entityId);
+    world.entities.push(person);player.entityId=person.id;interact(world,id);
+    assert.equal(player.entityId,car.id);assert.equal(car.driver,id);
+  }
+  for(let time=285;time<=300;time+=5){world.time=time;updateHighwayTraffic(world,5,makeEntity);}
+  assert.equal(ambient().length,16);
+  assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,12);
+  for(const car of targets)assert.ok(world.entities.includes(car)&&car.driver,'occupied cars remain in the pool');
 });
 
 test('ambient reserve stays bounded and safely reclaims off-route and city cars when full', () => {
@@ -189,40 +209,40 @@ test('ambient reserve stays bounded and safely reclaims off-route and city cars 
   Object.assign(abandoned,{npc:true,autopilot:false});
   const city=makeEntity('ambient-city','model-3',-120,-177);
   Object.assign(city,{npc:true,autopilot:true,routeId:0,speed:0});
-  const blocked=Array.from({length:9},(_,i)=>{
+  const blocked=Array.from({length:17},(_,i)=>{
     const car=makeEntity(`ambient-blocked-${i}`,'model-3',3000+(i%11)*30,8000+Math.floor(i/11)*30);
     Object.assign(car,{npc:true,autopilot:false});return car;
   });
   world.entities.push(held,abandoned,city,...blocked);
   const ambient=()=>world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(ambient().length,12);
+  assert.equal(ambient().length,20);
   world.time=5;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(world.entities.includes(abandoned),'visible abandoned car stays');
   assert.ok(world.entities.includes(city),'stopped city traffic stays');
-  assert.equal(ambient().length,12);
+  assert.equal(ambient().length,20);
 
   held.x=0;held.z=6000;
   world.time=10;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(abandoned),'hidden abandoned car is reclaimed to make room');
   assert.ok(world.entities.includes(held),'occupied car is retained');
-  assert.equal(ambient().length,11);
+  assert.equal(ambient().length,19);
   world.time=15;updateHighwayTraffic(world,5,makeEntity);
-  assert.equal(ambient().length,12);
+  assert.equal(ambient().length,20);
   assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot&&HIGHWAY_ROUTE_IDS.includes(entity.routeId as typeof HIGHWAY_ROUTE_IDS[number])).length,1);
   world.time=20;updateHighwayTraffic(world,5,makeEntity);
-  assert.equal(ambient().length,12,'no space or safe reclaim means no further spawn');
+  assert.equal(ambient().length,20,'no space or safe reclaim means no further spawn');
   assert.ok(world.entities.includes(city),'stopped city traffic stays when hidden');
   assert.ok(world.entities.includes(held));
   assert.ok(blocked.every(car=>world.entities.includes(car)),'nearby abandoned cars are retained');
   city.speed=8;
   world.time=25;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(city),'free-flowing hidden city car is reclaimed');
-  assert.equal(ambient().length,11);
+  assert.equal(ambient().length,19);
   world.time=30;updateHighwayTraffic(world,5,makeEntity);
-  assert.equal(ambient().length,12);
+  assert.equal(ambient().length,20);
   assert.equal(ambient().filter(entity=>!entity.driver&&entity.autopilot).length,2);
   world.time=35;updateHighwayTraffic(world,5,makeEntity);
-  assert.equal(ambient().length,12);
+  assert.equal(ambient().length,20);
   assert.ok(world.entities.includes(held));
 });
 
@@ -231,26 +251,28 @@ test('five-second reconciliation keeps up with a synthetic open-space morning ra
   let maxShortfall=0;
   for(let time=5;time<=180;time+=5){
     world.time=time;updateHighwayTraffic(world,5,makeEntity);
-    const target=Math.round(2+2*trafficDemand(time).intensity);
+    const target=Math.round(3+9*trafficDemand(time).intensity);
     const active=world.entities.filter(entity=>entity.id.startsWith('ambient-')&&!entity.driver&&entity.autopilot).length;
     maxShortfall=Math.max(maxShortfall,target-active);
-    if(time===60)assert.equal(active,3);
-    if(time===180)assert.equal(active,4);
+    if(time===15)assert.equal(active,5);
+    if(time===60)assert.equal(active,6);
+    if(time===180)assert.equal(active,12);
   }
   assert.ok(maxShortfall<=1,`maximum shortfall ${maxShortfall}`);
 });
 
 test('initial highway traffic is supported and clear of buildings and the existing fleet', () => {
   const world=createWorld(),ambient=world.entities.filter(car=>car.id.startsWith('ambient-'));
-  assert.equal(ambient.length,2);
+  assert.equal(ambient.length,5);
   for(const car of ambient){
     assert.ok(isSurface(car.x,car.z),car.id);
-    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>contact(body(car),{...building,yaw:0})),car.id);
-    assert.ok(world.entities.every(other=>other===car||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
+    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)),car.id);
+    assert.ok(world.entities.every(other=>other===car||other.id.startsWith('jam-')||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
+    assert.ok(world.entities.every(other=>other===car||!contact(body(car),body(other))),`${car.id} has no overlapping body`);
   }
 });
 
-test('peak target is 12 ambient cars plus four police when no ambient cars are taken or abandoned', () => {
+test('peak target includes the bounded ambient fleet and seeded highway queues', () => {
   const world=createWorld();addPlayer(world,'budget-player','Player');
   for(let i=0;i<50;i++){
     world.time=timeAtHour(8)+i*5;
@@ -258,8 +280,10 @@ test('peak target is 12 ambient cars plus four police when no ambient cars are t
   }
   assert.equal(world.entities.filter(car=>car.id.startsWith('traffic-')).length,8);
   assert.equal(world.entities.filter(car=>car.police).length,4);
-  assert.equal(world.entities.filter(car=>car.id.startsWith('ambient-')).length,4);
-  assert.equal(world.entities.filter(car=>car.npc).length,16);
+  assert.equal(world.entities.filter(car=>car.id.startsWith('ambient-')).length,12);
+  const jams=world.entities.filter(car=>car.id.startsWith('jam-')).length;
+  assert.ok(jams>=50&&jams<=60,'supported, unobstructed queue slots are populated');
+  assert.equal(world.entities.filter(car=>car.npc).length,24+jams);
 });
 
 test('a released Rocket NPC does not replay its former driver’s stunt inputs', () => {
@@ -297,6 +321,20 @@ test('rush profiles peak separately and transition continuously', () => {
     const t=timeAtHour(hour);
     assert.ok(Math.abs(trafficDemand(t-.05).intensity-trafficDemand(t+.05).intensity)<.001);
   }
+});
+
+test('a turning car is detected across its full width while a parallel car stays clear', () => {
+  const world=createWorld();
+  const follower=makeEntity('follower','roadster',-220,-177);
+  const leader=makeEntity('leader','model-3',-208,-174.2,'p');
+  Object.assign(follower,{npc:true,autopilot:true,routeId:0,waypoint:1,yaw:-Math.PI/2,speed:6});
+  Object.assign(leader,{yaw:follower.yaw,speed:4.5});
+  world.entities=[follower,leader];
+  const parallel=trafficInput(follower,world);
+  assert.equal(parallel.brake,false,'the neighboring parallel lane remains clear');
+  assert.ok(parallel.throttle>0);
+  leader.yaw+=Math.PI/4;
+  assert.equal(trafficInput(follower,world).brake,true,'the turning body now overlaps the path');
 });
 
 test('a following car slows for a stopped leader and resumes after the obstruction clears', () => {

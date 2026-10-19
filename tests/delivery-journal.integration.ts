@@ -7,7 +7,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop, type Order } from '../shared/delivery';
+import { DELIVERY_SEARCH_VERSION } from '../shared/delivery-scheduler';
 import { initialAchievements } from '../shared/achievements';
 import { applyTicketEvidence } from '../shared/police';
 import { applyAcceptedDelivery } from '../worker/achievement-progress';
@@ -102,6 +103,34 @@ try{
     assert.equal(result.progress.completed,7);
     assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,roofEligible===true,`captured roof capability ${roofEligible}`);
   }
+  // A newly assigned off-lane order keeps its numeric customer identity and
+  // accepted delivery through a Worker restart, without a capability field.
+  const offroad=entry();await rpc('producer',{...offroad,active:true});
+  const priorCustomer=CUSTOMERS.findIndex(place=>place.id==='customer-south-san-francisco-10');
+  const offroadCustomer=CUSTOMERS.findIndex(place=>place.id==='customer-south-san-francisco-11');
+  assert.ok(priorCustomer>=0&&offroadCustomer>=0);
+  const offroadProgress={cash:52_500,level:2,completed:5,order:{...order(),restaurant:0,customer:priorCustomer},deliveryClock:0,unlocked:['region-oakland']};
+  await rpc('acquire',{...offroad,progress:offroadProgress});
+  const priorStop=stage(offroad,1,0,pose(priorCustomer));
+  assert.equal(await rpc('stage',{...offroad,stage:priorStop}),'accepted');
+  const assigned=await rpc<DriverOutcome>('submit',{...offroad,intent:intent(priorStop,0,1)});success(assigned);
+  assert.equal(assigned.progress.order.customer,offroadCustomer,'durable assignment uses the off-lane catalog stop');
+  const offroadPickup=RESTAURANTS[assigned.progress.order.restaurant],pickupHeight=terrainHeight(offroadPickup.x,offroadPickup.z);assert.notEqual(pickupHeight,null);
+  const pickupStop=stage(offroad,2,1,{x:offroadPickup.x,y:pickupHeight!,z:offroadPickup.z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false});
+  assert.equal(await rpc('stage',{...offroad,stage:pickupStop}),'accepted');
+  const collected=await rpc<DriverOutcome>('submit',{...offroad,intent:intent(pickupStop,assigned.revision,2)});success(collected);
+  assert.equal(collected.progress.order.stage,'dropoff');assert.equal(collected.progress.order.customer,offroadCustomer);
+  const delivered=stage(offroad,3,2,pose(offroadCustomer));
+  await rpc('hold-stage',offroad);const offroadFlight=rpc('stage',{...offroad,stage:delivered},30_000);void offroadFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('stage-held',offroad),'off-lane stop accepted before lost reply');
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',offroad,15_000);
+  const offroadRecovered=await rpc<Profile>('profile',offroad);
+  assert.equal(offroadRecovered.progress.completed,7);
+  const offroadSources=await rpc<string[]>('sources',offroad);
+  assert.equal(offroadSources.filter(source=>source==='earned-source:delivery:7:dropoff').length,1);
+  await rpc('freeze',offroad,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',offroad)).progress,offroadRecovered.progress);
+  assert.deepEqual(await rpc('sources',offroad),offroadSources,'recovery does not pay the stop twice');
   // Ticket replay also preserves event-time eligibility after a balance drop.
   for(const roofEligible of [true,false,undefined]){
     const driver=entry();await rpc('producer',{...driver,active:true});
@@ -117,6 +146,23 @@ try{
     assert.equal(result.progress.cash,49_960);
     assert.equal(CUSTOMERS[result.progress.order.customer].rooftop,roofEligible===true,`ticket roof capability ${roofEligible}`);
     assert.equal(result.progress.order.stage,'dropoff');
+  }
+
+  // A speeding stop uses the same durable journal and is charged only once,
+  // including when the room has to replay a lost response.
+  {
+    const driver=entry(),acquired=await acquire(driver);
+    const ticket:TicketStage={eventId:randomUUID(),driverId:driver.driverId,fence:driver.fence,roomId:driver.room,walletOrder:1,clock:0,
+      action:{kind:'ticket',evidence:{seconds:0,peakHeight:0,at:1,x:-800,z:3300,canFly:true,cause:'speeding',speedKph:150},orderBefore:acquired.progress.order,completedBefore:0}};
+    assert.equal(await rpc('stage-ticket',{...driver,stage:ticket}),'accepted');
+    const submitted:EconomyIntent={...ticket,revision:0,sequence:1,action:ticket.action};
+    const result=await rpc<DriverOutcome>('submit',{...driver,intent:submitted});success(result);
+    assert.equal(result.progress.cash,acquired.progress.cash-100);
+    assert.equal(result.progress.tickets,1);
+    assert.deepEqual(await rpc('submit',{...driver,intent:submitted}),result,'replay cannot charge the speeding fine twice');
+    await rpc('freeze',driver,15_000);
+    const saved=await rpc<Profile>('profile',driver);
+    assert.equal(saved.progress.cash,acquired.progress.cash-100);assert.equal(saved.progress.tickets,1);
   }
 
   // On-foot evidence survives durable replay: preserve accessible roofs, but
@@ -231,8 +277,8 @@ try{
   await rpc('hold-assignment',assignmentCrash);await rpc('room-resolve',{...assignmentCrash,eventId:'assignment-win'});
   const assignmentFlight=rpc('submit',{...assignmentCrash,intent:intent(firstStop,0,1)},30_000);void assignmentFlight.catch(()=>{});
   await until(()=>rpc<boolean>('assignment-held',assignmentCrash),'assignment checkpoint held');
-  const checkpoint=await rpc<{done:boolean;version:number}>('assignment',{...assignmentCrash,eventId:firstStop.eventId});
-  assert.equal(checkpoint.done,false);assert.ok(checkpoint.version>=1);
+  const checkpoint=await rpc<{done:boolean;version:number;searchVersion:number}>('assignment',{...assignmentCrash,eventId:firstStop.eventId});
+  assert.equal(checkpoint.done,false);assert.ok(checkpoint.version>=1);assert.equal(checkpoint.searchVersion,DELIVERY_SEARCH_VERSION);
   assert.equal((await rpc<Profile>('profile',assignmentCrash)).progress.completed,0,'payout is not committed before assignment');
   await stop(child);child=undefined;child=start();await ready();await rpc('freeze',assignmentCrash,15_000);
   const assignmentRecovered=await rpc<Profile>('profile',assignmentCrash);
@@ -242,6 +288,105 @@ try{
   assert.equal(assignmentRecovered.progress.achievementTiers?.pickups.count,1);
   assert.deepEqual((await rpc<string[]>('sources',assignmentCrash)).sort(),['earned-source:delivery:1:dropoff','earned-source:delivery:2:pickup']);
   assert.equal(await rpc('assignment',{...assignmentCrash,eventId:firstStop.eventId}),null,'completed checkpoint is removed');
+
+  // A checkpoint written before candidate ordering changed must discard its
+  // old rank and leg on restart, without repeating the accepted payout.
+  for(const [index,version] of [undefined,0].entries()){
+    // A fresh Worker clears the previous case's prepared-search cache, so the
+    // second case also reaches a non-final assignment checkpoint.
+    if(index){await stop(child);child=undefined;child=start();await ready();}
+    const legacyCrash=entry();await rpc('producer',{...legacyCrash,active:true});
+    await rpc('acquire',{...legacyCrash,progress:offroadProgress});
+    const legacyStop=stage(legacyCrash,1,0,pose(priorCustomer));
+    assert.equal(await rpc('stage',{...legacyCrash,stage:legacyStop}),'accepted');
+    // The room can already have observed a pickup from the old assignment.
+    // If recovery chooses a different restaurant, that observation must not pay.
+    const currentPickup=RESTAURANTS.find(place=>place.id==='south-san-francisco-la-guera');assert.ok(currentPickup);
+    const oldPickup=RESTAURANTS.find(place=>Math.hypot(place.x-currentPickup.x,place.z-currentPickup.z)>100);assert.ok(oldPickup);
+    const oldPickupY=terrainHeight(oldPickup.x,oldPickup.z);assert.notEqual(oldPickupY,null);
+    const laterPickup=stage(legacyCrash,2,1,{x:oldPickup.x,y:oldPickupY!,z:oldPickup.z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false});
+    assert.equal(await rpc('stage',{...legacyCrash,stage:laterPickup}),'accepted');
+    await rpc('hold-assignment',legacyCrash);
+    const legacyFlight=rpc('submit',{...legacyCrash,intent:intent(legacyStop,0,1)},30_000);void legacyFlight.catch(()=>{});
+    await until(()=>rpc<boolean>('assignment-held',legacyCrash),`legacy assignment checkpoint held (${version??'unversioned'})`);
+    await rpc('legacy-assignment',{...legacyCrash,eventId:legacyStop.eventId,version});
+    const oldCheckpoint=await rpc<{searchVersion?:number;delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+    assert.equal(oldCheckpoint.searchVersion,version);
+    assert.deepEqual(oldCheckpoint.delivery.order.search.cursor,{pair:128,leg:1,heading:0,...(version===undefined?{}:{version})});
+    await stop(child);child=undefined;child=start();await ready();await rpc('freeze',legacyCrash,15_000);
+    const legacyRecovered=await rpc<Profile>('profile',legacyCrash);
+    assert.equal(legacyRecovered.progress.completed,6);
+    assert.equal(RESTAURANTS[legacyRecovered.progress.order.restaurant].id,'south-san-francisco-la-guera');
+    assert.equal(legacyRecovered.progress.order.customer,offroadCustomer,'the current ranking starts from its first pair');
+    assert.equal(legacyRecovered.progress.order.stage,'pickup','an observation at the old pickup does not collect the reassigned order');
+    assert.deepEqual((await rpc<string[]>('sources',legacyCrash)).sort(),['earned-source:delivery:6:checkpoint','earned-source:delivery:6:dropoff']);
+    await rpc('freeze',legacyCrash,15_000);
+    assert.deepEqual((await rpc<Profile>('profile',legacyCrash)).progress,legacyRecovered.progress,'recovery pays only once');
+    assert.equal(await rpc('assignment',{...legacyCrash,eventId:legacyStop.eventId}),null);
+  }
+
+  // A pre-routing-update leg-one checkpoint must be revalidated after a restart;
+  // replaying the accepted stop still pays only once.
+  const legacyCrash=entry(),legacyInitial=await acquire(legacyCrash);
+  const legacyPose={...pose(4),x:pose(4).x+.123456};
+  const legacyPreview=initialDelivery(legacyPose),legacyPrior={...legacyInitial.progress.order,elapsed:45};
+  Object.assign(legacyPreview,{cash:legacyInitial.progress.cash,lifetimeIncome:legacyInitial.progress.eligibleIncome,
+    earned:legacyInitial.progress.earned,completed:legacyInitial.progress.completed,level:legacyInitial.progress.level,order:legacyPrior});
+  assert.ok(applyDeliveryStop(legacyPreview,legacyPose));
+  const legacyAwards=initialAchievements();legacyAwards.unlocked=[...legacyInitial.progress.unlocked];
+  applyAcceptedDelivery(legacyPreview,legacyAwards,legacyInitial.progress.achievementTiers!,legacyPrior,false,CUSTOMERS[4].id,true);
+  for(let i=0;i<10_000&&legacyPreview.order.search;i++)advanceDeliverySearch(legacyPreview,false);
+  assert.equal(legacyPreview.order.search,undefined);
+  const legacyStop=stage(legacyCrash,1,5,legacyPose,1,assignmentAt);
+  assert.equal(await rpc('stage',{...legacyCrash,stage:legacyStop}),'accepted');
+  await rpc('hold-assignment',legacyCrash);
+  const legacyFlight=rpc('submit',{...legacyCrash,intent:intent(legacyStop,0,1)},30_000);void legacyFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',legacyCrash),'legacy assignment checkpoint held');
+  await rpc('legacy-assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  const oldCheckpoint=await rpc<{searchVersion?:number;delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  assert.equal(oldCheckpoint.searchVersion,undefined);
+  assert.deepEqual(oldCheckpoint.delivery.order.search.cursor,{pair:128,leg:1,heading:0});
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',legacyCrash,15_000);
+  const legacyRecovered=await rpc<Profile>('profile',legacyCrash);
+  assert.equal(legacyRecovered.progress.completed,1);
+  assert.equal(legacyRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
+  assert.equal(legacyRecovered.progress.order.customer,legacyPreview.order.customer);
+  assert.deepEqual(await rpc('sources',legacyCrash),['earned-source:delivery:1:dropoff']);
+  await rpc('freeze',legacyCrash,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',legacyCrash)).progress,legacyRecovered.progress,'recovery pays only once');
+  assert.equal(await rpc('assignment',{...legacyCrash,eventId:legacyStop.eventId}),null);
+
+  // A completed checkpoint may also outlive its routing rules: interruption can occur
+  // after assignment finishes but before the accepted payout commits.
+  for(const [index,version] of [undefined,0,DELIVERY_SEARCH_VERSION].entries()){
+    // Clear the prepared-search cache for each injected completed checkpoint.
+    if(index){await stop(child);child=undefined;child=start();await ready();}
+    const completedCrash=entry();await acquire(completedCrash);
+    await rpc('room-win',{...completedCrash,eventId:'completed-checkpoint-win',at:assignmentAt-1_000});
+    const completedStop=stage(completedCrash,1,5,legacyPose,null,assignmentAt);
+    assert.equal(await rpc('stage',{...completedCrash,stage:completedStop}),'accepted');
+    await rpc('hold-completed-assignment',completedCrash);
+    const completedFlight=rpc('submit',{...completedCrash,intent:intent(completedStop,0,1)},30_000);void completedFlight.catch(()=>{});
+    await until(()=>rpc<boolean>('assignment-held',completedCrash),`completed assignment checkpoint held (${version??'unversioned'})`);
+    const beforeLegacy=await rpc<{done:boolean;context:string}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+    assert.equal(beforeLegacy.done,true);
+    const savedRestaurant=(legacyPreview.order.restaurant+1)%RESTAURANTS.length;
+    const savedCustomer=(legacyPreview.order.customer+1)%CUSTOMERS.length;
+    await rpc('legacy-completed-assignment',{...completedCrash,eventId:completedStop.eventId,restaurant:savedRestaurant,customer:savedCustomer,version});
+    const savedCheckpoint=await rpc<{done:boolean;context:string;searchVersion?:number;delivery:{order:Order}}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+    assert.equal(savedCheckpoint.done,true);assert.equal(savedCheckpoint.context,beforeLegacy.context);assert.equal(savedCheckpoint.searchVersion,version);
+    assert.equal(savedCheckpoint.delivery.order.restaurant,savedRestaurant);assert.equal(savedCheckpoint.delivery.order.customer,savedCustomer);
+    await stop(child);child=undefined;child=start();await ready();await rpc('freeze',completedCrash,15_000);
+    const completedRecovered=await rpc<Profile>('profile',completedCrash);
+    assert.equal(completedRecovered.progress.completed,1);
+    assert.equal(completedRecovered.progress.cash,10_120+Math.round(baseFare*1.5)+350+100,'the captured room multiplier survives recovery');
+    assert.equal(completedRecovered.progress.order.restaurant,version===DELIVERY_SEARCH_VERSION?savedRestaurant:legacyPreview.order.restaurant);
+    assert.equal(completedRecovered.progress.order.customer,version===DELIVERY_SEARCH_VERSION?savedCustomer:legacyPreview.order.customer);
+    assert.deepEqual(await rpc('sources',completedCrash),['earned-source:delivery:1:dropoff']);
+    await rpc('freeze',completedCrash,15_000);
+    assert.deepEqual((await rpc<Profile>('profile',completedCrash)).progress,completedRecovered.progress,'completed checkpoint replay pays once');
+    assert.equal(await rpc('assignment',{...completedCrash,eventId:completedStop.eventId}),null);
+  }
 
   // A ticket relocks an already-collected Oakland order. The later physical
   // dropoff is accepted while the replacement assignment is checkpointed.

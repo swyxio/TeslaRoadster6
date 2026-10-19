@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import { SOUTH_LANDMARKS } from '../shared/south-landmarks';
+import { buildSouthLandmarkModel } from '../shared/south-landmark-models';
 import { southBuildingParts } from '../shared/south-building-structures';
 import { sampleLandmarkPrimitive } from '../shared/new-landmark-surfaces';
 import { BUILDINGS, buildingRoofHeight } from '../shared/map';
@@ -32,6 +33,15 @@ function setup(id:string,dx:number,dz:number){
  Object.assign(car,{x,z,y:buildingRoofHeight(b,x,z)+5,supportId:null,vy:-5,speed:0});
  return {b,world,car};
 }
+
+test('landmark facade glazing is present on all sides without adding collision surfaces',()=>{
+ const landmark=place('south-sf-city-hall');
+ const panes=buildSouthLandmarkModel(landmark).filter(piece=>piece.color===0x6c9295);
+ assert.equal(panes.length,10);
+ assert.ok(panes.every(piece=>!piece.structural));
+ assert.ok(panes.some(piece=>piece.z>0)&&panes.some(piece=>piece.z<0));
+ assert.ok(panes.some(piece=>piece.x>landmark.w*.4)&&panes.some(piece=>piece.x<-landmark.w*.4));
+});
 
 test('South structure profiles are cached, bounded and omit the terrain-only summit marker',()=>{
  for(const p of SOUTH_LANDMARKS){

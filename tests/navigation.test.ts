@@ -10,7 +10,7 @@ import { hasRockets } from '../shared/upgrades';
 import { VEHICLE_IDS, VEHICLES } from '../shared/vehicles';
 import { parseMessage } from '../worker/protocol';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from '../shared/alternate-roads';
-import { HIGHWAY_ROUTE_IDS, ROUTES } from '../shared/traffic';
+import { HIGHWAY_ROUTE_IDS, ROUTES, trafficInput } from '../shared/traffic';
 import { CUSTOMERS, LEVELS, RESTAURANTS, requiredLevelAt } from '../shared/delivery';
 import { DELIVERY_DESTINATION_SNAP, planNavigation } from '../shared/navigation';
 
@@ -386,6 +386,54 @@ test('an off-road delivery starts beside buildings and reverses to recover befor
   assert.ok(Math.hypot(car.x+180,car.z-120)<9,'the pickup is reached');
 });
 
+test('a paused wall recovery restarts its straight clearance before turning',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-225,z:40,yaw:0,speed:0});
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  assert.ok(car.navigation?.join);
+  // Stage the beginning of an existing bounded wall-recovery attempt at this
+  // supported off-road pose, then interrupt it with an approaching car.
+  car.navigation.recovery={index:car.navigation.index,distance:120,at:world.time,attempts:1,reverseUntil:world.time+4};
+  const rear=makeEntity('rear-approach','model-3',car.x,car.z+25);
+  for(let i=0;i<80;i++){
+    // Hold a reproducible moving rear threat for four seconds. The follower is
+    // staged each tick so this checks the paused maneuver, not its route AI.
+    Object.assign(rear,{x:car.x,z:car.z+25,y:car.y,yaw:car.yaw,speed:10,pushX:0,pushZ:0});
+    world.entities=[car,rear];step(world,new Map(),.05);
+  }
+  assert.ok(car.navigation?.recovery&&world.time-car.navigation.recovery.at<.2,'straight clearance is still available');
+  assert.equal(car.health,100);
+  world.entities=[car];
+  let resumed=false;
+  for(let i=0;i<1800&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    if(i<20&&car.speed<-.1)resumed=true;
+  }
+  assert.ok(resumed,'the maneuver resumes within a second');
+  assert.equal(car.health,100);
+  assert.equal(car.navigation?.status,'arrived');
+});
+
+test('an off-road join still reverses toward the lane when an occupied car is in front',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-225,z:50,yaw:0,speed:0});
+  assert.equal(setDeliveryDestination(world,'driver'),true);
+  assert.ok(car.navigation?.join,'the road join starts behind the car');
+  const leaderPlayer=addPlayer(world,'other','Other');
+  const leader=world.entities.find(entity=>entity.id===leaderPlayer.entityId)!;
+  Object.assign(leader,{kind:'model-3',x:-225,z:42.5,yaw:0,speed:0});
+  world.entities=[car,leader];
+  assert.ok(trafficInput(car,world).throttle<0,'the planned join reverses away from traffic');
+  let reversed=false;
+  for(let i=0;i<1800&&car.autopilot;i++){
+    world.entities=[car,leader];step(world,new Map(),.05);
+    reversed ||= car.speed<-.1;
+  }
+  assert.ok(reversed);
+  assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.health,100);
+});
+
 test('off-road join routes around a block before reaching the delivery',()=>{
   const {world,car}=drivingWorld();
   Object.assign(car,{x:-215,z:20,yaw:0,speed:0});
@@ -463,10 +511,14 @@ test('an awkward off-road approach resumes normal road speed after passing the j
   assert.equal(car.health,100);
 });
 
-test('a permanent traffic obstruction produces bounded, visible failure without collision',()=>{
+for(const parkedWasNpc of [false,true])test(`a permanent traffic obstruction${parkedWasNpc?' with a released NPC':''} produces bounded, visible failure without collision`,()=>{
   const {world,car}=drivingWorld();
   Object.assign(car,{x:-180,z:-177,yaw:-Math.PI/2,speed:0});
   const leader=makeEntity('stopped-leader','model-3',-140,-177);leader.yaw=-Math.PI/2;world.entities.push(leader);
+  leader.npc=parkedWasNpc;
+  const otherPlayer=addPlayer(world,'other','Other');
+  const other=world.entities.find(entity=>entity.id===otherPlayer.entityId)!;
+  Object.assign(other,{x:-128,z:-177,yaw:-Math.PI/2,speed:0});
   assert.equal(setDestination(world,'driver',{x:-60,z:-177}),true);
   let clearance=Infinity,reversed=false;
   for(let i=0;i<1500&&car.autopilot;i++){
@@ -478,8 +530,35 @@ test('a permanent traffic obstruction produces bounded, visible failure without 
   assert.ok(clearance>5,'the cars do not overlap');
   assert.equal(car.health,100);
   assert.equal(car.autopilot,false);
-  assert.equal(car.navigation?.status,'failed','the driver is told when recovery cannot complete');
+  assert.equal(car.navigation?.status,'failed','an occupied car beyond the parked obstacle does not mask the failure');
   assert.ok(world.time<75);
+});
+
+test('an unattended obstacle wins an equal-gap tie with active traffic',()=>{
+  const {world,car}=drivingWorld();
+  Object.assign(car,{x:-180,z:-177,yaw:-Math.PI/2,speed:0});
+  const activePlayer=addPlayer(world,'other','Other');
+  const active=world.entities.find(entity=>entity.id===activePlayer.entityId)!;
+  Object.assign(active,{kind:'model-3',x:-140,z:-175.8,yaw:-Math.PI/2,speed:0});
+  const parked=makeEntity('parked','model-3',-140,-178.2);parked.yaw=-Math.PI/2;
+  world.entities=[car,active,parked];
+  assert.equal(setDestination(world,'driver',{x:-60,z:-177}),true);
+  simulate(world,()=>!car.autopilot,75);
+  assert.equal(car.navigation?.status,'failed','a parked obstacle is not masked by an equally distant occupied car');
+  assert.equal(car.health,100);
+});
+
+test('active traffic beyond a wall cannot suppress stuck recovery',()=>{
+  const {world,car}=drivingWorld();
+  const destination={x:-160,z:30};
+  Object.assign(car,{x:-223,z:30,yaw:-Math.PI/2,speed:0,autopilot:true,
+    navigation:{destination,path:[destination],index:0,status:'driving',mode:'road',
+      recovery:{index:0,distance:63,at:0,attempts:0,reverseUntil:0}}});
+  const leader=makeEntity('leader','model-3',-215.5,30,'other');leader.yaw=-Math.PI/2;
+  world.time=13;world.entities=[car,leader];
+  const input=trafficInput(car,world);
+  assert.ok(input.throttle<0,'the car backs away from the building ahead');
+  assert.equal(car.navigation?.recovery?.attempts,1);
 });
 
 test('a red bridge signal does not trigger stuck recovery while a driver waits',()=>{

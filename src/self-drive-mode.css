@@ -16,3 +16,5 @@
 .map-drive-mode .drive-mode-help { grid-column:auto; }
 @media(max-width:600px) { .drive-mode.drive-mode { grid-template-columns:minmax(0,1fr) auto; gap:3px 8px; } .drive-mode label,.map-drive-mode .drive-mode-help { grid-column:1/-1; } }
 @media(max-height:550px) { .drive-mode.drive-mode { grid-template-columns:minmax(0,1fr) auto; } .drive-mode label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); } .drive-mode-help { display:none; } .drive-mode select,.drive-mode-shop { min-height:32px; padding-top:3px; padding-bottom:3px; } }
+/* The narrow actions drawer needs a full-width selector for the mode names. */
+.action-drawer .drive-mode.drive-mode { grid-template-columns:minmax(0,1fr); }

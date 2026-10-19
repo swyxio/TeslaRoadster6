@@ -1,5 +1,5 @@
 import type { Entity, Input, World } from './game';
-import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
+import { BAY_CIRCUIT, HIGHWAYS, ROADS, isSurface, nearbyBuildings } from './map';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { CALTRAIN_ACCESS_ROUTES } from './caltrain';
 import { MARIN_ROUTES } from './marin-roads';
@@ -10,7 +10,7 @@ import { body, contact } from './physics';
 import { buildingBlocksPose } from './landmark-collision';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
-import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
+import { VEHICLES, VEHICLE_IDS } from './vehicles';
 import { requiredLevelAt } from './delivery';
 export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
@@ -84,6 +84,8 @@ export function isTrafficIncident(e:Entity,time:number):boolean {
 }
 
 const wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v));
+// Clear-road targets in metres per second; vehicle and route limits still apply.
+const DRIVE_SPEED={road:14,intercity:20,jump:24,sky:28} as const;
 // Reverse only through currently supported, unlocked space with clearance for
 // the whole car. Recovery is local and does not relocate or phase through cars.
 function clearBehind(e:Entity,world:World):boolean {
@@ -94,7 +96,7 @@ function clearBehind(e:Entity,world:World):boolean {
     const x=e.x-forward.x*d,z=e.z-forward.z*d;
     if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
     const pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
     for(const other of world.entities){
       if(other===e)continue;
       const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
@@ -104,12 +106,37 @@ function clearBehind(e:Entity,world:World):boolean {
   }
   return true;
 }
+// Static clearance can become unsafe as a faster car closes from behind.
+// Pause the maneuver for a same-lane approach; normal collision handling
+// still applies to crossing or unpredictable traffic.
+function approachingFromBehind(e:Entity,world:World):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  for(const other of world.entities){
+    if(other===e)continue;
+    const size=other.kind==='person'?{length:.7,width:.7,height:1.9}:VEHICLES[other.kind];
+    if(e.y>=other.y+size.height||other.y>=e.y+spec.height)continue;
+    const dx=other.x-e.x,dz=other.z-e.z,along=dx*forward.x+dz*forward.z;
+    if(along>=0)continue;
+    const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
+    const alignment=forward.x*otherForward.x+forward.z*otherForward.z;
+    const crosswise=forward.x*otherForward.z-forward.z*otherForward.x;
+    const side=Math.abs(dx*forward.z-dz*forward.x);
+    const lateralReach=(spec.width+size.width*Math.abs(alignment)+size.length*Math.abs(crosswise))/2+.35;
+    if(side>lateralReach)continue;
+    const gap=-along-(spec.length+size.length*Math.abs(alignment)+size.width*Math.abs(crosswise))/2;
+    const incoming=other.speed*alignment+other.pushX*forward.x+other.pushZ*forward.z;
+    const reversing=Math.max(0,-e.speed-e.pushX*forward.x-e.pushZ*forward.z);
+    if(incoming>.5&&gap<5+(incoming+reversing)*2.5)return true;
+  }
+  return false;
+}
 function wallAhead(e:Entity):boolean {
   if(e.kind==='person')return false;
   const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
   for(let d=1;d<=3;d++){
     const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
   }
   return false;
 }
@@ -136,6 +163,95 @@ export function engageAutopilot(e:Entity):boolean {
   if(!Number.isFinite(best))return false;
   Object.assign(e,{autopilot:true,routeId,waypoint,pauseUntil:0});return true;
 }
+
+// The navigation graph stays on the inner lane. Ambient cars may use the
+// middle lane only on a long, straight part of a primary 32 m highway.
+// Keep the complete vehicle envelope inside one authoritative road rectangle;
+// tapered ends and intersecting local roads provide space to merge back.
+type GeneralLane={a:Point;ux:number;uz:number;length:number;cuts:{at:number;radius:number}[]};
+const generalLanes=new Map<string,GeneralLane>();
+const GENERAL_LANE_OFFSET=5.5; // From the +/-4 m navigation lane to the middle lane.
+const cross=(ax:number,az:number,bx:number,bz:number)=>ax*bz-az*bx;
+for(const routeId of HIGHWAY_ROUTE_IDS){
+  const route=ROUTES[routeId];
+  for(let i=0;i<route.length;i++){
+    const a=route[i],b=route[(i+1)%route.length],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+    if(length<500)continue;
+    const ux=dx/length,uz=dz/length,rx=-uz,rz=ux;
+    let supported=false;
+    for(const highway of HIGHWAYS.slice(0,2))for(let j=1;j<highway.points.length;j++){
+      const p=highway.points[j-1],q=highway.points[j],hx=q.x-p.x,hz=q.z-p.z,hLength=Math.hypot(hx,hz);
+      if(!hLength||Math.abs((hx*ux+hz*uz)/hLength)<.9995)continue;
+      const hxUnit=hx/hLength,hzUnit=hz/hLength;
+      // Three meters covers the largest ambient body plus turning clearance.
+      const fits=[15,length-15].every(s=>[0,GENERAL_LANE_OFFSET].every(offset=>{
+        const x=a.x+ux*s+rx*offset-p.x,z=a.z+uz*s+rz*offset-p.z;
+        const along=x*hxUnit+z*hzUnit,side=Math.abs(cross(hxUnit,hzUnit,x,z));
+        return along>=8&&along<=hLength-8&&side<=13;
+      }));
+      if(fits){supported=true;break;}
+    }
+    if(!supported)continue;
+    const cuts:{at:number;radius:number}[]=[];
+    for(const road of ROADS){
+      if(road.kind==='highway'||road.kind==='island')continue;
+      const angle=road.angle??(road.axis==='x'?Math.PI/2:0);
+      const vx=Math.sin(angle),vz=Math.cos(angle),half=(road.axis==='x'?road.w:road.d)/2;
+      const denominator=cross(ux,uz,vx,vz);
+      if(Math.abs(denominator)<.1)continue;
+      const x=road.x-a.x,z=road.z-a.z;
+      const at=cross(x,z,vx,vz)/denominator,along=cross(x,z,ux,uz)/denominator;
+      if(at>0&&at<length&&Math.abs(along)<=half+20){
+        const width=road.axis==='x'?road.d:road.w;
+        cuts.push({at,radius:20+(width/2+10)/Math.abs(denominator)});
+      }
+    }
+    generalLanes.set(`${routeId}:${(i+1)%route.length}`,{a,ux,uz,length,cuts});
+  }
+}
+function generalLaneTarget(e:Entity,world:World,waypoint:number):{target:Point;blocked:boolean}|null {
+  // Keep the scripted incident on its original route for its entire cycle so
+  // its gradual stop and the following queue are not changed by a lane merge.
+  if(e.kind==='person'||e.driver||!e.npc||!e.id.startsWith('ambient-')||e.id===TRAFFIC_INCIDENT.entityId||e.navigation)return null;
+  const segment=generalLanes.get(`${e.routeId}:${waypoint}`);if(!segment)return null;
+  const {a,ux,uz,length,cuts}=segment,rx=-uz,rz=ux;
+  const x=e.x-a.x,z=e.z-a.z,s=x*ux+z*uz,side=x*rx+z*rz;
+  if(s<0||s>length||side< -3||side>10)return null;
+  const lookahead=Math.max(30,Math.min(45,Math.abs(e.speed)*1.8));
+  const at=Math.min(length,s+lookahead);
+  let clearance=Math.min(at-20,length-20-at);
+  for(const cut of cuts)clearance=Math.min(clearance,Math.abs(at-cut.at)-cut.radius);
+  const factor=Math.max(0,Math.min(1,clearance/140));
+  const offset=GENERAL_LANE_OFFSET*factor*factor*(3-2*factor);
+  const movingSide=Math.abs(offset-side)>.4;
+  let blocked=false;
+  if(movingSide){
+    const spec=VEHICLES[e.kind],ownVx=-Math.sin(e.yaw)*e.speed+e.pushX,ownVz=-Math.cos(e.yaw)*e.speed+e.pushZ;
+    for(const other of world.entities){
+      if(other===e)continue;
+      const size=other.kind==='person'?{width:.7,length:.7,height:1.9}:VEHICLES[other.kind];
+      if(e.y>=other.y+size.height||other.y>=e.y+spec.height)continue;
+      const ox=other.x-e.x,oz=other.z-e.z;
+      const vx=-Math.sin(other.yaw)*other.speed+other.pushX-ownVx,vz=-Math.cos(other.yaw)*other.speed+other.pushZ-ownVz;
+      const along=ox*ux+oz*uz,lateral=ox*rx+oz*rz;
+      const endAlong=along+4*(vx*ux+vz*uz),endLateral=lateral+4*(vx*rx+vz*rz);
+      // A following car cannot obstruct the merge if its entire projected body
+      // stays behind ours over the sweep. Treating it as adjacent traffic can
+      // make the leader brake forever while the follower waits for it.
+      const bodyClearance=(Math.hypot(spec.length,spec.width)+Math.hypot(size.length,size.width))/2+1;
+      if(Math.max(along,endAlong)<-bodyClearance)continue;
+      const reach=Math.max(35,Math.abs(e.speed)*2)+(spec.length+size.length)/2;
+      const gap=(spec.width+size.width)/2+1.5;
+      if(Math.min(along,endAlong)<reach&&Math.max(along,endAlong)>-reach&&
+        Math.min(lateral,endLateral)<Math.max(0,offset-side)+gap&&
+        Math.max(lateral,endLateral)>Math.min(0,offset-side)-gap){blocked=true;break;}
+    }
+  }
+  // Freeze the merge while the sweep is occupied. Braking also prevents an
+  // middle-lane car from reaching a junction before its return lane is clear.
+  const desired=blocked?side:offset;
+  return {target:{x:a.x+ux*at+rx*desired,z:a.z+uz*at+rz*desired},blocked};
+}
 export function trafficInput(e:Entity,world:World):Input {
   const neutral:Input={throttle:0,steer:0,boost:false,hover:false,roll:0,brake:false,jump:0,flip:0,cockpit:false};
   if(e.kind==='person')return neutral;
@@ -158,6 +274,9 @@ export function trafficInput(e:Entity,world:World):Input {
   // On city corners, pause briefly; points along a straight road are not stops.
   if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
+    // A waypoint can also be passed with lateral offset, outside the radius
+    // check below. Keep the local approach slow in either case.
+    if(navigation?.exit&&Math.hypot(target.x-navigation.exit.x,target.z-navigation.exit.z)<.1)navigation.exitReached=true;
     waypoint=(waypoint+1)%route.length;
     if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;
     if(!e.driver&&cosine<.75)e.pauseUntil=world.time+.7;
@@ -173,9 +292,12 @@ export function trafficInput(e:Entity,world:World):Input {
       distance=Math.hypot(target.x-e.x,target.z-e.z);
     }
   }
+  const generalLane=generalLaneTarget(e,world,waypoint);
+  if(generalLane)target=generalLane.target;
   const angle=wrap(Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw);
   const spec=VEHICLES[e.kind];
   const steer=Math.max(-1,Math.min(1,angle*1.8));
+  if(generalLane?.blocked)return {...neutral,brake:true,steer};
   if(navigation&&e.driver){
     // Keep the reduced joining speed through the first lane turn. Leaving the
     // approach as soon as we touch it can swing wide into the next building.
@@ -186,52 +308,54 @@ export function trafficInput(e:Entity,world:World):Input {
         delete navigation.join;delete navigation.joinReached;
       }
     }
-    let recovery=navigation.recovery;
-    if(!recovery||recovery.index!==waypoint){
-      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
-    }else if(distance<recovery.distance-2){
-      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
-    }
-    const wall=!!navigation.join&&e.speed>=0&&wallAhead(e);
-    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
-    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
-      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
-    // A red light can last longer than the recovery timeout; waiting in its
-    // queue is expected and should never trigger a reverse manoeuvre.
-    if(waitingAtSignal&&!wall)recovery.at=world.time;
-    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
-      // Three bounded attempts, then return control and expose a failure to
-      // the driver instead of sitting indefinitely against a wall or queue.
-      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
-      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
-    }
-    const reversing=world.time<recovery.reverseUntil||(!!navigation.join&&Math.abs(angle)>2.1);
-    if(reversing&&clearBehind(e,world)){
-      if(e.speed>1)return {...neutral,brake:true,steer};
-      const recovering=world.time<recovery.reverseUntil;
-      // Clear the nose from a wall before rotating, or the physics correctly
-      // rejects the turn even though the straight line behind is open.
-      const straight=recovering&&world.time-recovery.at<2;
-      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
-      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
-      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
-      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
-      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
-      return {...neutral,throttle,steer:reverseSteer};
-    }
   }
   const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  let cruise=navigation?(navigation.join?4.5:12):highway?Math.min(spec.maxSpeed*.92,26*variety):8;
-  if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
-  // Start braking before bends; the approach length uses real-time speed.
-  if(e.driver&&!final&&cosine<.95){
+  // Purchased modes are quicker on clear straights, but still share the same
+  // turn, following-distance and arrival limits below. These are game speeds.
+  // Congestion cohorts crawl together, making the air upgrade a useful choice.
+  const ambientCruise=e.id.startsWith('jam-')&&!e.driver?3:e.id.startsWith('ambient-')&&!e.driver?15+hash(e.id)%9:26*variety;
+  let cruise=navigation?(navigation.join?4.5:Math.min(DRIVE_SPEED[navigation.mode??'road'],spec.maxSpeed*(e.upgrades.motor?1.1:1))):highway?Math.min(spec.maxSpeed*.92,ambientCruise):8;
+  if(navigation?.exit){
+    const exitIndex=route.findIndex(point=>Math.hypot(point.x-navigation.exit!.x,point.z-navigation.exit!.z)<.1);
+    if(exitIndex>=0&&(waypoint>exitIndex||(waypoint===exitIndex&&distance<8)))navigation.exitReached=true;
+    // Measure along the route: the car may be physically close to an exit on
+    // another lane long before the planned route actually reaches that exit.
+    if(navigation.exitReached)cruise=Math.min(cruise,4.5);
+    else if(exitIndex>=waypoint){
+      let remaining=distance;
+      for(let i=waypoint;i<exitIndex;i++)remaining+=Math.hypot(route[i+1].x-route[i].x,route[i+1].z-route[i].z);
+      cruise=Math.min(cruise,Math.sqrt(4.5**2+4*Math.max(0,remaining-12)));
+    }
+  }
+  if(navigation&&e.driver){
+    // A short segment can hide a stop or bend until it is too late to brake.
+    // Look ahead along the route and apply each upcoming speed limit early.
+    let along=distance;
+    for(let i=waypoint;i<route.length;i++){
+      if(i===route.length-1){
+        cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,along-3)));
+      }else{
+        const from=i===waypoint?previous:route[i-1],at=route[i],after=route[i+1];
+        const ax=at.x-from.x,az=at.z-from.z,bx=after.x-at.x,bz=after.z-at.z;
+        const bend=(ax*bx+az*bz)/(Math.hypot(ax,az)*Math.hypot(bx,bz)||1);
+        if(bend<.95){
+          const turnSpeed=Math.max(4.5,6+8*Math.max(0,bend));
+          cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,along-7)));
+        }
+        along+=Math.hypot(after.x-at.x,after.z-at.z);
+      }
+      if(along>300)break;
+    }
+  }else if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
+  else if(e.driver&&cosine<.95){
     const turnSpeed=Math.max(4.5,6+8*Math.max(0,cosine));
     cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,distance-7)));
   }else if(!e.driver&&cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
   if(Math.abs(angle)>.5)cruise=Math.min(cruise,4.5);
   const forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
-  let safeSpeed=cruise,hazardGap=Infinity,hazardClosingSpeed=0;
+  const recoveringFromStall=!!navigation?.recovery&&navigation.recovery.index===waypoint&&world.time<navigation.recovery.reverseUntil;
+  let safeSpeed=cruise,hazardGap=Infinity,hazardClosingSpeed=0,waitingForTraffic=false;
   // The meter is a virtual stopped leader on the eastbound approach. Cars that
   // have already crossed the stop line continue, including on a phase change.
   if(bayBridgeSignal(world.time).state==='red'&&forward.x>.8&&Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth){
@@ -244,16 +368,83 @@ export function trafficInput(e:Entity,world:World):Input {
     if(e.y>=other.y+otherHeight||other.y>=e.y+spec.height)continue;
     const dx=other.x-e.x,dz=other.z-e.z;
     const along=dx*forward.x+dz*forward.z,side=Math.abs(dx*forward.z-dz*forward.x);
+    if(along<=0)continue;
     const size=other.kind==='person'?{length:.7,width:.7}:VEHICLES[other.kind];
-    if(along<=0||side>(spec.width+size.width)/2+.35)continue;
-    const gap=along-(spec.length+size.length)/2;
+    if(side>(spec.width+size.width+size.length)/2+.35)continue;
     const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
-    const leaderSpeed=Math.max(0,other.speed*(forward.x*otherForward.x+forward.z*otherForward.z));
-    if(gap<hazardGap){hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);}
+    // A turning vehicle's length projects across our lane; width alone can
+    // incorrectly clear it while its body still occupies the driving path.
+    const alignment=forward.x*otherForward.x+forward.z*otherForward.z;
+    const crosswise=forward.x*otherForward.z-forward.z*otherForward.x;
+    const lateralReach=(spec.width+size.width*Math.abs(alignment)+size.length*Math.abs(crosswise))/2+.35;
+    if(side>lateralReach)continue;
+    const gap=along-(spec.length+size.length)/2;
+    const leaderSpeed=Math.max(0,other.speed*alignment);
     // Occupied cars start slowing earlier, leaving room to follow smoothly.
     // Ambient traffic retains its existing 1.5-second headway.
     const followingSpeed=Math.max(0,leaderSpeed+(gap-(e.driver?3:2)-Math.max(0,e.speed)*(e.driver?2.2:1.5))*.55);
     safeSpeed=Math.min(safeSpeed,followingSpeed);
+    if(gap<hazardGap){
+      hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);
+      // Active traffic can be a queue; an unattended obstacle still needs
+      // bounded recovery. Also cancel a reverse when a slow leader arrives.
+      waitingForTraffic=!!navigation&&!!e.driver&&other.kind!=='person'&&
+        !!(other.driver||other.autopilot)&&e.speed<.5&&
+        (followingSpeed<.3||(recoveringFromStall&&followingSpeed<1.5));
+    }else if(gap===hazardGap&&waitingForTraffic&&(other.kind==='person'||(!other.driver&&!other.autopilot))){
+      // An unattended obstacle at the same distance takes precedence even
+      // when an active vehicle happens to appear earlier in the entity list.
+      waitingForTraffic=false;
+    }
+  }
+  if(navigation&&e.driver){
+    let recovery=navigation.recovery;
+    if(!recovery||recovery.index!==waypoint){
+      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
+    }else if(distance<recovery.distance-2){
+      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
+    }
+    const checkedWall=!!navigation.join&&e.speed>=0;
+    const wall=checkedWall&&wallAhead(e);
+    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
+    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
+      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
+    // A wall or an away-facing join still needs the checked reverse maneuver.
+    const joinRequiresReverse=!!navigation.join&&Math.abs(angle)>2.1;
+    const queued=waitingForTraffic&&!joinRequiresReverse&&!wall&&(checkedWall||!wallAhead(e));
+    if(queued){
+      recovery.at=world.time;recovery.attempts=0;recovery.reverseUntil=0;
+      if(e.speed<-.15)return {...neutral,brake:true,steer};
+    }
+    // A red light can last longer than the recovery timeout; waiting in its
+    // queue is expected and should never trigger a reverse manoeuvre.
+    if(waitingAtSignal&&!wall)recovery.at=world.time;
+    if(!queued&&(joinRequiresReverse||world.time<recovery.reverseUntil||wall||world.time-recovery.at>12)&&
+      approachingFromBehind(e,world)){
+      // Keep a pending attempt ready. Restart the straight-clearance phase of
+      // an interrupted attempt so it cannot turn against the wall on resume.
+      if(world.time<recovery.reverseUntil){recovery.at=world.time;recovery.reverseUntil=world.time+4;}
+      return {...neutral,brake:true,steer};
+    }
+    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
+      // Three bounded attempts, then return control and expose a failure to
+      // the driver instead of sitting indefinitely against an obstruction.
+      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
+      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
+    }
+    const reversing=!queued&&(world.time<recovery.reverseUntil||joinRequiresReverse);
+    if(reversing&&clearBehind(e,world)){
+      if(e.speed>1)return {...neutral,brake:true,steer};
+      const recovering=world.time<recovery.reverseUntil;
+      // Clear the nose before rotating away from a wall.
+      const straight=recovering&&world.time-recovery.at<2;
+      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
+      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
+      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
+      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
+      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
+      return {...neutral,throttle,steer:reverseSteer};
+    }
   }
   if(world.time<e.pauseUntil)safeSpeed=0;
   if(isTrafficIncident(e,world.time)&&safeSpeed>=e.speed-1){
@@ -288,10 +479,15 @@ function hash(value:string):number {
   return result>>>0;
 }
 
+// These routes are immutable after setup. Reuse their lengths when checking the
+// bounded set of possible spawn locations rather than measuring them each time.
+const highwayLengths=new Map(HIGHWAY_ROUTE_IDS.map(id=>{
+  const route=ROUTES[id],lengths=route.map((a,i)=>Math.hypot(route[(i+1)%route.length].x-a.x,route[(i+1)%route.length].z-a.z));
+  return [id,{lengths,total:lengths.reduce((a,b)=>a+b,0)}] as const;
+}));
 function routeDistancePose(routeId:number,fraction:number){
-  const route=ROUTES[routeId];
-  const lengths=route.map((a,i)=>Math.hypot(route[(i+1)%route.length].x-a.x,route[(i+1)%route.length].z-a.z));
-  const length=lengths.reduce((a,b)=>a+b,0);let distance=((fraction%1)+1)%1*length;
+  const route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
+  let distance=((fraction%1)+1)%1*total;
   for(let i=0;i<route.length;i++){
     if(distance>lengths[i]){distance-=lengths[i];continue;}
     const a=route[i],b=route[(i+1)%route.length],t=lengths[i]?distance/lengths[i]:0;
@@ -300,41 +496,232 @@ function routeDistancePose(routeId:number,fraction:number){
   throw new Error('Empty highway route');
 }
 
-type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=4; // Alongside eight city cars and four police.
-const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
+type EntityFactory=(id:string,kind:Entity['kind'],x:number,z:number)=>Entity;
+const AMBIENT_MAX=12; // Alongside eight city cars and four police.
+const AMBIENT_POOL_MAX=20; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
+const NEAR_DISTANCE=3000, RECYCLE_DISTANCE=4000;
+// Keep very slow models in the city and parked cohorts, where they remain
+// available to drive, instead of placing them in freeway traffic.
+const HIGHWAY_MIN_TOP_SPEED=20;
+const highwayVehicles=VEHICLE_IDS.filter(kind=>VEHICLES[kind].maxSpeed>=HIGHWAY_MIN_TOP_SPEED);
 
-function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
+function desiredAmbient(time:number):number{return Math.round(3+9*trafficDemand(time).intensity);}
 function observers(world:World):Entity[]{
   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
 }
 function hidden(x:number,z:number,viewers:Entity[]):boolean{
   return viewers.every(viewer=>Math.hypot(viewer.x-x,viewer.z-z)>HIDDEN_DISTANCE);
 }
-function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):boolean {
+// Locate the opposite-moving route on the driver's current road. Rewinding
+// along that route makes the approaching car follow the same highway instead
+// of choosing a visually nearby but disconnected road across the Bay.
+function oncomingApproach(viewer:Entity):{routeId:number;fraction:number}|null {
+  if(viewer.supportId!=='ground')return null;
+  const onHighway=ROADS.some(road=>{
+    if(road.kind!=='highway')return false;
+    const angle=road.angle??0,ux=Math.sin(angle),uz=Math.cos(angle),x=viewer.x-road.x,z=viewer.z-road.z;
+    return Math.abs(x*ux+z*uz)<=road.d/2&&Math.abs(x*uz-z*ux)<=road.w/2;
+  });
+  if(!onHighway)return null;
+  const forward={x:-Math.sin(viewer.yaw),z:-Math.cos(viewer.yaw)};
+  let best=Infinity,answer:{routeId:number;fraction:number}|null=null;
+  for(const routeId of HIGHWAY_ROUTE_IDS){
+    const route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
+    let traveled=0;
+    for(let i=0;i<route.length;i++){
+      const a=route[i],b=route[(i+1)%route.length],dx=b.x-a.x,dz=b.z-a.z,length=lengths[i];
+      if(!length){traveled+=length;continue;}
+      const alignment=(dx*forward.x+dz*forward.z)/length;
+      if(alignment<-.5){
+        const t=Math.max(0,Math.min(1,((viewer.x-a.x)*dx+(viewer.z-a.z)*dz)/(length*length)));
+        const distance=Math.hypot(viewer.x-a.x-t*dx,viewer.z-a.z-t*dz);
+        const score=distance+4*(1+alignment);
+        if(distance<24&&score<best){best=score;answer={routeId,fraction:(traveled+t*length)/total};}
+      }
+      traveled+=length;
+    }
+  }
+  return answer;
+}
+// A hidden oncoming car can enter the simulation already moving, but only if
+// two seconds of straight travel are supported and clear of buildings and of
+// the current trajectories of nearby entities. Otherwise it starts at rest.
+function oncomingEntrySpeed(car:Entity,world:World):number {
+  if(car.kind==='person')return 0;
+  const spec=VEHICLES[car.kind],speed=Math.min(15,spec.maxSpeed*.75),forward={x:-Math.sin(car.yaw),z:-Math.cos(car.yaw)};
+  const target=ROUTES[car.routeId]?.[car.waypoint];
+  if(!target||Math.hypot(target.x-car.x,target.z-car.z)<speed*2+15)return 0;
+  for(let d=0;d<=speed*2;d+=3){
+    const x=car.x+forward.x*d,z=car.z+forward.z*d;
+    for(const side of [-1,1])for(const end of [-1,1]){
+      const px=x+side*forward.z*spec.width/2+end*forward.x*spec.length/2;
+      const pz=z-side*forward.x*spec.width/2+end*forward.z*spec.length/2;
+      if(!isSurface(px,pz))return 0;
+    }
+    if(nearbyBuildings(x,z,spec.length+2).some(building=>buildingBlocksPose(building,{...car,x,z})))return 0;
+  }
+  for(const other of world.entities){
+    if(other===car)continue;
+    const size=other.kind==='person'?{width:.7,length:.7,height:1.9}:VEHICLES[other.kind];
+    if(car.y>=other.y+size.height||other.y>=car.y+spec.height)continue;
+    const dx=other.x-car.x,dz=other.z-car.z;
+    const vx=-Math.sin(other.yaw)*other.speed+other.pushX-forward.x*speed;
+    const vz=-Math.cos(other.yaw)*other.speed+other.pushZ-forward.z*speed;
+    const velocitySquared=vx*vx+vz*vz;
+    const t=velocitySquared?Math.max(0,Math.min(2,-(dx*vx+dz*vz)/velocitySquared)):0;
+    const clearance=(Math.hypot(spec.width,spec.length)+Math.hypot(size.width,size.length))/2+4;
+    if(Math.hypot(dx+vx*t,dz+vz*t)<clearance)return 0;
+  }
+  return speed;
+}
+function ambientCandidate(world:World,id:string,clockwise:boolean,make:EntityFactory,nearOnly=false):Entity|null {
+  const baseId=id;let suffix=0;
+  while(world.entities.some(entity=>entity.id===id))id=`${baseId}-${++suffix}`;
   // Spread the same bounded ambient fleet among the main route and both
   // Peninsula alternatives. Preserve the incident's original main route.
   const alternative=id==='ambient-seed-0'?0:hash(`road-${id}`)%(HIGHWAY_ROUTE_IDS.length/2);
   const routeId=HIGHWAY_ROUTE_IDS[alternative*2+(clockwise?0:1)],viewers=observers(world);
-  const kind=VEHICLE_IDS[hash(id)%VEHICLE_IDS.length];
+  const choice=hash(id)%VEHICLE_IDS.length,preferred=VEHICLE_IDS[choice];
+  const kind=VEHICLES[preferred].maxSpeed>=HIGHWAY_MIN_TOP_SPEED?preferred:highwayVehicles[choice%highwayVehicles.length];
+  const nearby=viewers.map(viewer=>world.entities.filter(entity=>entity.id.startsWith('ambient-')&&!entity.driver&&entity.autopilot&&
+    Math.hypot(entity.x-viewer.x,entity.z-viewer.z)<NEAR_DISTANCE).length);
+  const first=viewers.length?Math.floor(world.time/(AMBIENT_INTERVAL*2))%viewers.length:0;
+  const candidates:{pose:ReturnType<typeof routeDistancePose>;score:number;oncoming?:boolean}[]=[];
+  // Prefer up to three spaced oncoming cars on the active road. All such
+  // candidates use the same hidden-space and body checks as ordinary traffic.
+  for(let i=0;i<viewers.length;i++){
+    const viewer=viewers[i],forward={x:-Math.sin(viewer.yaw),z:-Math.cos(viewer.yaw)};
+    const approaching=world.entities.filter(entity=>{
+      if(!entity.id.startsWith('ambient-')||entity.driver||!entity.autopilot)return false;
+      const x=entity.x-viewer.x,z=entity.z-viewer.z,along=x*forward.x+z*forward.z;
+      const side=Math.abs(x*forward.z-z*forward.x);
+      const alignment=-Math.sin(entity.yaw)*forward.x-Math.cos(entity.yaw)*forward.z;
+      return along>0&&along<2200&&side<300&&alignment<-.5;
+    });
+    if(approaching.length>=3)continue;
+    const approach=oncomingApproach(viewer);if(!approach)continue;
+    const {total}=highwayLengths.get(approach.routeId)!;
+    for(const setback of [1605,1625,1650,1700,1750,1850,2000,2200,2500]){
+      const pose=routeDistancePose(approach.routeId,approach.fraction-setback/total);
+      const distance=Math.hypot(pose.x-viewer.x,pose.z-viewer.z);
+      if(distance>NEAR_DISTANCE||!isSurface(pose.x,pose.z)||!hidden(pose.x,pose.z,viewers)||
+        world.entities.some(other=>{
+          const gap=Math.hypot(other.x-pose.x,other.z-pose.z);
+          return gap<30||(gap<150&&other.autopilot&&other.routeId===approach.routeId);
+        }))continue;
+      const rank=(i-first+viewers.length)%viewers.length;
+      candidates.push({pose,score:nearby[i]*10000000+rank*10000+distance-2500,oncoming:true});
+    }
+  }
   for(let attempt=0;attempt<36;attempt++){
     const fraction=(hash(`${id}:${attempt}`)%100000)/100000;
     const pose=routeDistancePose(routeId,fraction);
     if(!isSurface(pose.x,pose.z)||!hidden(pose.x,pose.z,viewers))continue;
     if(world.entities.some(other=>Math.hypot(other.x-pose.x,other.z-pose.z)<30))continue;
+    if(!viewers.length){
+      const car=make(id,kind,pose.x,pose.z);Object.assign(car,pose,{npc:true,autopilot:true});
+      if(!nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)))return car;
+      continue;
+    }
+    // Prefer drivers with fewer nearby cars, rotating ties deterministically.
+    // A candidate must remain hidden from every observer, even when another
+    // driver would benefit from it. Isolated players get a fair share.
+    let score=Infinity;
+    for(let i=0;i<viewers.length;i++){
+      const viewer=viewers[i],distance=Math.hypot(pose.x-viewer.x,pose.z-viewer.z);
+      if(distance>NEAR_DISTANCE)continue;
+      const rank=(i-first+viewers.length)%viewers.length;
+      const ahead=(pose.x-viewer.x)*-Math.sin(viewer.yaw)+(pose.z-viewer.z)*-Math.cos(viewer.yaw)>0;
+      score=Math.min(score,nearby[i]*10000000+rank*10000+distance+(ahead?0:2000));
+    }
+    if(Number.isFinite(score))candidates.push({pose,score});
+    else if(!nearOnly)candidates.push({pose,score:1e9+attempt});
+  }
+  candidates.sort((a,b)=>a.score-b.score);
+  for(const {pose,oncoming} of candidates){
     const car=make(id,kind,pose.x,pose.z);Object.assign(car,pose,{npc:true,autopilot:true});
     if(nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)))continue;
-    world.entities.push(car);return true;
+    if(oncoming){car.speed=oncomingEntrySpeed(car,world);car.vx=-Math.sin(car.yaw)*car.speed;car.vz=-Math.cos(car.yaw)*car.speed;}
+    return car;
   }
-  return false;
+  return null;
+}
+function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):boolean {
+  const car=ambientCandidate(world,id,clockwise,make);
+  if(!car)return false;
+  world.entities.push(car);return true;
 }
 
 /** Called after the small city and parked cohorts have been created. */
 export function seedHighwayTraffic(world:World,make:EntityFactory):void {
   const target=desiredAmbient(world.time);
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
+}
+
+/** Seed slow queues in both directions at supported Bay highway sections. */
+export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number):void {
+  const sites=[{x:-300,z:550},{x:-790,z:3550},{x:700,z:7800},{x:1430,z:4050}];
+  for(const [siteIndex,site] of sites.entries())for(let direction=0;direction<2;direction++){
+    const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId];
+    let best:{segment:GeneralLane;waypoint:number;at:number;distance:number}|null=null;
+    for(let i=0;i<route.length;i++){
+      const waypoint=(i+1)%route.length,segment=generalLanes.get(`${routeId}:${waypoint}`);if(!segment)continue;
+      const {a,ux,uz,length}=segment;
+      const at=Math.max(80,Math.min(length-80,(site.x-a.x)*ux+(site.z-a.z)*uz));
+      const distance=Math.hypot(a.x+ux*at-site.x,a.z+uz*at-site.z);
+      if(!best||distance<best.distance)best={segment,waypoint,at,distance};
+    }
+    if(!best||best.distance>400)continue;
+    const {segment,waypoint,at}=best,{a,ux,uz}=segment;
+    // A single lane per direction avoids opposing merge deadlocks while
+    // keeping another lane available for manual drivers.
+    for(let row=0;row<6;row++){
+      const along=at-row*11,x=a.x+ux*along,z=a.z+uz*along;
+      const id=`jam-${siteIndex}-${direction}-0-${row}`,kind=highwayVehicles[hash(id)%highwayVehicles.length];
+      const car=make(id,kind,x,z);Object.assign(car,{yaw:Math.atan2(-ux,-uz),npc:true,autopilot:true,routeId,waypoint});
+      if(car.supportId!=='ground'||nearbyBuildings(x,z,10).some(building=>buildingBlocksPose(building,car))||
+        world.entities.some(other=>contact(body(car),body(other))))continue;
+      world.entities.push(car);
+    }
+  }
+  // Near San Jose the circuit bends, so keep this queue in the inner lane
+  // and sample positions along the actual curved route instead of offsetting it.
+  const sanJose={x:2013,z:8162};
+  for(let direction=0;direction<2;direction++){
+    const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
+    let traveled=0,bestDistance=Infinity,at=0;
+    for(let i=0;i<route.length;i++){
+      const a=route[i],b=route[(i+1)%route.length],length=lengths[i];if(!length)continue;
+      const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
+      const t=Math.max(0,Math.min(length,(sanJose.x-a.x)*dx+(sanJose.z-a.z)*dz));
+      const distance=Math.hypot(a.x+dx*t-sanJose.x,a.z+dz*t-sanJose.z);
+      if(distance<bestDistance){bestDistance=distance;at=traveled+t;}
+      traveled+=length;
+    }
+    for(let row=0;row<6;row++){
+      const pose=routeDistancePose(routeId,(at-row*11)/total),id=`jam-4-${direction}-0-${row}`;
+      const kind=highwayVehicles[hash(id)%highwayVehicles.length],car=make(id,kind,pose.x,pose.z);
+      Object.assign(car,pose,{npc:true,autopilot:true});
+      if(car.supportId!=='ground'||nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car))||
+        world.entities.some(other=>contact(body(car),body(other))))continue;
+      world.entities.push(car);
+    }
+  }
+  // A few rooms start with one cow crossing ahead of a queue; it walks to the
+  // shoulder and remains there instead of popping into or out of a player's view.
+  const seed=Math.abs(Math.trunc(fleetSeed));
+  if(seed%4===1){
+    const site=Math.floor(seed/4)%sites.length,direction=Math.floor(seed/16)%2;
+    const leader=world.entities.find(e=>e.id===`jam-${site}-${direction}-0-0`);
+    if(leader){
+      const fx=-Math.sin(leader.yaw),fz=-Math.cos(leader.yaw);
+      const cow=make('cow-crossing','person',leader.x+fx*20,leader.z+fz*20);
+      cow.yaw=leader.yaw+Math.PI/2;
+      if(cow.supportId==='ground'&&!world.entities.some(other=>contact(body(cow),body(other))))world.entities.push(cow);
+    }
+  }
 }
 
 /** Reconcile one optional highway car every five real seconds, never an occupied or visible car. */
@@ -354,9 +741,23 @@ export function updateHighwayTraffic(world:World,dt:number,make:EntityFactory):v
     const viewers=observers(world);
     // Retain queues and blocked vehicles. Reclaim off-route or free-flowing city cars only when the pool blocks replenishment.
     const excessTraffic=unattended.length>target;
-    const removable=ambient.find(entity=>entity.id!==TRAFFIC_INCIDENT.entityId&&!entity.driver&&
+    const removable=ambient.find(entity=>entity.id!==TRAFFIC_INCIDENT.entityId&&!entity.driver&&!entity.owner&&entity.supportId!=='ferry'&&
       (excessTraffic?entity.autopilot&&onHighway(entity)&&entity.speed>5:!entity.autopilot||(!onHighway(entity)&&entity.speed>5))&&hidden(entity.x,entity.z,viewers)&&
       !world.entities.some(other=>other!==entity&&Math.hypot(other.x-entity.x,other.z-entity.z)<35));
     if(removable)world.entities=world.entities.filter(entity=>entity!==removable);
+  }else if(unattended.length===target){
+    const viewers=observers(world);
+    // Reclaim a free-flowing car only when it is far from *every* driver and
+    // another hidden, supported slot exists closer to a driver. Both removal
+    // and addition are hidden from every observer in the same snapshot.
+    const far=unattended.find(entity=>entity.id!==TRAFFIC_INCIDENT.entityId&&!entity.owner&&entity.supportId==='ground'&&entity.speed>5&&
+      viewers.every(viewer=>Math.hypot(viewer.x-entity.x,viewer.z-entity.z)>RECYCLE_DISTANCE)&&
+      !world.entities.some(other=>other!==entity&&Math.hypot(other.x-entity.x,other.z-entity.z)<35));
+    if(far){
+      const demand=trafficDemand(world.time),clockwiseChance=.5+.25*demand.morning-.25*demand.evening;
+      const id=`ambient-${tick+1}`,clockwise=(hash(`direction-${tick+1}`)%10000)/10000<clockwiseChance;
+      const replacement=ambientCandidate(world,id,clockwise,make,true);
+      if(replacement){world.entities=world.entities.filter(entity=>entity!==far);world.entities.push(replacement);}
+    }
   }
 }

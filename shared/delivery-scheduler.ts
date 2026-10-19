@@ -1,5 +1,6 @@
 import type { Entity } from './game';
-import { canSnapDeliveryDestination, DELIVERY_DESTINATION_SNAP, nearestNavigationAnchor, planNavigation } from './navigation';
+import { canApproachDeliveryDestination, DELIVERY_DESTINATION_SNAP, nearestNavigationAnchor, planNavigation } from './navigation';
+import { isRocketIsland } from './map';
 import type { Level, Order } from './delivery';
 
 type Place={id:string;x:number;z:number;areaId?:string};
@@ -36,15 +37,18 @@ function spatialIndex<T extends Place>(items:readonly T[],requiredLevelAt:(x:num
 export const DELIVERY_SEARCH_CANDIDATES_PER_STEP=512;
 export const DELIVERY_SEARCH_PLANS_PER_STEP=2;
 export const DELIVERY_SEARCH_PAIRS_PER_STEP=16;
-export type DeliverySearchCursor={pair:number;leg:0|1;heading:number};
+// Bump when candidate ordering or route eligibility changes. A durable
+// checkpoint must not skip a route checked against an older map.
+export const DELIVERY_SEARCH_VERSION=1;
+export type DeliverySearchCursor={pair:number;leg:0|1;heading:number;version?:number};
 type SearchStep={status:'found';choice:Choice;plans:number;pairs:number;scans:number}|{status:'pending';cursor:DeliverySearchCursor;plans:number;pairs:number;scans:number}|{status:'none';plans:number;pairs:number;scans:number};
 type Previous=Pick<Order,'restaurant'|'customer'>;
 type Prepared={
-  from:Point;pickups:Indexed<Place>[];pickup:number;dropoff:number;
+  from:Point;offRoadOrigin:boolean;pickups:Indexed<Place>[];pickup:number;dropoff:number;
   heap:number[];ordered:number[];scores:Float64Array;ready:boolean;
   compare:(a:number,b:number)=>number;
 };
-const routeCache=new Map<string,boolean>(),snapCache=new Map<string,boolean>();
+const routeCache=new Map<string,boolean>(),approachCache=new Map<string,boolean>();
 function remember(cache:Map<string,boolean>,key:string,value:boolean):void {
   if(cache.size>=4096)cache.delete(cache.keys().next().value!);
   cache.set(key,value);
@@ -78,10 +82,13 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
     if(prepared.has(key))return prepared.get(key)!;
     const anchor=nearestNavigationAnchor(origin,level);
     if(!anchor){rememberPrepared(key,null);return null;}
-    // Off-network origins use a road anchor for assignment only; the driver
-    // must still reach that road, for example by taking the ferry.
-    const from=((origin.supportId!==undefined&&origin.supportId!=='ground')||
-      (!!previous&&customers[previous.customer]?.rooftop)||anchor.distance>7)?anchor.point:origin;
+    // Check the real ground join when it is within the planner's range.
+    // Roof, ferry, playground and distant origins still use a road anchor:
+    // the driver must first reach the road, for example by taking the ferry.
+    const anchored=(origin.supportId!==undefined&&origin.supportId!=='ground')||
+      (origin.supportId===undefined&&!!previous&&customers[previous.customer]?.rooftop)||
+      isRocketIsland(origin.x,origin.z)||anchor.distance>150;
+    const from=anchored?anchor.point:origin,offRoadOrigin=!anchored&&anchor.distance>7;
     const explore=level>0&&completed%2===0;
     const preferRooftop=roofEligible&&level>0&&!explore&&completed%3===1;
     const newest=Math.min(level,6),originLevel=requiredLevelAt(origin.x,origin.z);
@@ -103,14 +110,16 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
       return Number(left.repeat)-Number(right.repeat)||(explore?left.exploreRank-right.exploreRank:0)||
         (preferRooftop?Number(right.rooftop)-Number(left.rooftop):0)||scores[a]-scores[b]||a-b;
     };
-    const result:Prepared={from,pickups,pickup:0,dropoff:0,heap:[],ordered:[],scores,ready:false,compare};
+    const result:Prepared={from,offRoadOrigin,pickups,pickup:0,dropoff:0,heap:[],ordered:[],scores,ready:false,compare};
     rememberPrepared(key,result);return result;
   }
   function advance(completed:number,origin:Origin,level:Level,roofEligible:boolean,previous:Previous|undefined,
     cursor:DeliverySearchCursor={pair:0,leg:0,heading:0}):SearchStep {
     const work=candidates(completed,origin,level,roofEligible,previous);
     if(!work)return {status:'none',plans:0,pairs:0,scans:0};
-    const next={...cursor};let plans=0,pairs=0,scans=0;
+    const next=cursor.version===DELIVERY_SEARCH_VERSION?{...cursor}:
+      {pair:0,leg:0 as const,heading:0,version:DELIVERY_SEARCH_VERSION};
+    let plans=0,pairs=0,scans=0;
     const explore=level>0&&completed%2===0;
     const preferRooftop=roofEligible&&level>0&&!explore&&completed%3===1;
     const originLevel=requiredLevelAt(origin.x,origin.z),newest=Math.min(level,6);
@@ -145,17 +154,17 @@ export function createDeliveryScheduler(restaurants:readonly Place[],customers:r
       const key=`${from.x},${from.z}:${to.x},${to.z}:${level}`;
       let reachable=routeCache.get(key);
       if(reachable===undefined){
-        const snapKey=`${to.x},${to.z}:${level}`;
-        let snaps=snapCache.get(snapKey);
-        if(snaps===undefined){snaps=canSnapDeliveryDestination(to,level);remember(snapCache,snapKey,snaps);}
-        if(!snaps){reachable=false;remember(routeCache,key,false);}
+        const approachKey=`${to.x},${to.z}:${level}`;
+        let canApproach=approachCache.get(approachKey);
+        if(canApproach===undefined){canApproach=canApproachDeliveryDestination(to,level);remember(approachCache,approachKey,canApproach);}
+        if(!canApproach){reachable=false;remember(routeCache,key,false);}
         else {
           if(plans>=DELIVERY_SEARCH_PLANS_PER_STEP)return {status:'pending',cursor:next,plans,pairs,scans};
           const bearing=Math.atan2(from.x-to.x,from.z-to.z);
           const yaw=[bearing,0,Math.PI/2,Math.PI,-Math.PI/2][next.heading];
           const vehicle:RouteVehicle={x:from.x,z:from.z,yaw,kind:'model-3',supportId:'ground',inDome:false};
-          reachable=!!planNavigation(vehicle,to,level,DELIVERY_DESTINATION_SNAP);plans++;
-          if(reachable||next.heading===4)remember(routeCache,key,reachable);
+          reachable=!!planNavigation(vehicle,to,level,DELIVERY_DESTINATION_SNAP,true);plans++;
+          if(reachable||next.heading===4||(next.leg===0&&work.offRoadOrigin))remember(routeCache,key,reachable);
           else {next.heading++;continue;}
         }
       }

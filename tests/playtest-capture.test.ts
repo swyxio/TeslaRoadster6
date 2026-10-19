@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
-import { ScreencastCapture } from '../scripts/playtest-capture';
+import { abandonControlSession, CaptureSession, finalizeTabCapture, publishScreencast, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline, writeCaptureScreenshot } from '../scripts/playtest-capture';
 
 const frame = (timestamp: number) => ({ timestamp, viewportWidth: 1280, viewportHeight: 720 });
 
@@ -50,4 +53,224 @@ test('missing, invalid, and truncated callbacks do not produce a usable cadence'
   assert.equal(limitedResult.samplesRetained, 2);
   assert.equal(limitedResult.callbackSilenceAtStopMs, 1);
   assert.ok(limitedResult.flags.includes('trace_truncated'));
+});
+
+test('tab finalization publishes only after stop, close and trace writing succeed', async () => {
+  for (const failing of ['stop', 'close', 'trace', 'publish'] as const) {
+    const calls: string[] = [];
+    const result = await finalizeTabCapture({
+      stop: async () => { calls.push('stop'); if (failing === 'stop') throw null; return { chunks: 1 }; },
+      close: async () => { calls.push('close'); if (failing === 'close') throw false; },
+      writeTrace: async () => { calls.push('trace'); if (failing === 'trace') throw undefined; },
+      publish: async () => { calls.push('publish'); if (failing === 'publish') throw null; },
+      remove: async () => { calls.push('remove'); },
+    });
+    assert.ok(result.error instanceof Error);
+    assert.equal(result.partialRemovalFailed, failing === 'close');
+    assert.deepEqual(calls, {
+      stop: ['stop', 'close', 'remove'], close: ['stop', 'close'],
+      trace: ['stop', 'close', 'trace', 'remove'], publish: ['stop', 'close', 'trace', 'publish', 'remove'],
+    }[failing]);
+  }
+  const failedRemoval = await finalizeTabCapture({
+    stop: async () => { throw new Error('stop failed'); }, close: async () => {},
+    writeTrace: async () => {}, publish: async () => {}, remove: async () => { throw null; },
+  });
+  assert.equal(failedRemoval.partialRemovalFailed, true);
+  assert.ok(failedRemoval.error instanceof AggregateError);
+  const calls: string[] = [];
+  const success = await finalizeTabCapture({
+    stop: async () => { calls.push('stop'); return { chunks: 1 }; }, close: async () => { calls.push('close'); },
+    writeTrace: async () => { calls.push('trace'); }, publish: async () => { calls.push('publish'); },
+    remove: async () => { throw new Error('successful segments must not be removed'); },
+  });
+  assert.equal(success.error, undefined);
+  assert.deepEqual(calls, ['stop', 'close', 'trace', 'publish']);
+});
+
+test('timeouts leave a stalled segment private and do not pretend to cancel work', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const sink = new TabChunkSink({ writeFile: async () => {}, close: async () => { await pending; } }, 10);
+  let removed = false, published = false;
+  const result = await finalizeTabCapture({
+    stop: async () => { await withDeadline(new Promise<void>(() => {}), 10, 'page timed out'); },
+    close: async () => { await sink.close(); }, writeTrace: async () => {},
+    publish: async () => { published = true; }, remove: async () => { removed = true; },
+  });
+  assert.ok(result.error instanceof AggregateError);
+  assert.equal(result.partialRemovalFailed, true);
+  assert.equal(removed, false);
+  assert.equal(published, false);
+  release();
+});
+
+test('a timed-out screencast stop retires the browser before a retry, even if the stop later resolves', async () => {
+  let release!: () => void, closed = false;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const session = new CaptureSession();
+  await assert.rejects(session.stopOrRetire(withDeadline(pending, 10, 'stop timed out'), async () => { closed = true; }), /stop timed out/);
+  assert.equal(closed, true);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  release();
+  await pending;
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  const failedClose = new CaptureSession();
+  await assert.rejects(failedClose.stopOrRetire(Promise.reject(new Error('stop failed')), async () => { throw new Error('close failed'); }), AggregateError);
+  assert.throws(() => failedClose.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('a timed-out input release blocks retries even if the old release later finishes', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const session = new CaptureSession();
+  await assert.rejects(session.retireOnFailure(withDeadline(pending, 10, 'release timed out')), /release timed out/);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  release();
+  await pending;
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  const failedRelease = new CaptureSession();
+  await assert.rejects(failedRelease.retireOnFailure(Promise.reject(new Error('input release failed'))), /input release failed/);
+  assert.throws(() => failedRelease.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('failed input releases still attempt every held control and report the errors', async () => {
+  const keys = new Set(['W', 'A']);
+  const touches = new Map([[0, { x: 1, y: 2 }]]);
+  const calls: string[] = [];
+  await assert.rejects(releaseHeldControls(keys, touches, true, {
+    keyUp: async key => { calls.push(key); if (key === 'W') throw new Error('key failed'); },
+    touchCancel: async () => { calls.push('touch'); throw new Error('touch failed'); },
+    pointerUp: async () => { calls.push('pointer'); },
+  }), error => error instanceof AggregateError && error.errors.length === 2);
+  assert.deepEqual(calls, ['W', 'A', 'touch', 'pointer']);
+  assert.equal(keys.size, 0);
+  assert.equal(touches.size, 0);
+});
+
+test('a failed release finalizes the active capture before closing even if finalization fails', async () => {
+  const session = new CaptureSession();
+  const calls: string[] = [];
+  await assert.rejects(session.finishAndClose(
+    async () => { calls.push('finish'); throw new Error('finish failed'); },
+    async () => { calls.push('close'); },
+  ), AggregateError);
+  assert.deepEqual(calls, ['finish', 'close']);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('forced abandonment attempts all cleanup, reports failures and rejects late publication', async () => {
+  const session = new CaptureSession();
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const publication = session.publish(() => pending);
+  const calls: string[] = [];
+  const failed = await abandonControlSession(session, {
+    quarantine: async () => { calls.push('quarantine'); throw new Error('rename failed'); },
+    closeContext: async () => { calls.push('context'); throw new Error('context failed'); },
+    closeBrowser: async () => { calls.push('browser'); },
+    drain: async () => { calls.push('drain'); throw new Error('queue still pending'); },
+  });
+  assert.deepEqual(calls, ['quarantine', 'context', 'browser', 'drain']);
+  assert.deepEqual(failed, ['quarantine', 'closeContext', 'drain']);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  await assert.rejects(session.publish(async () => {}), /shutdown abandoned/);
+  release();
+  await assert.rejects(publication, /shutdown abandoned/);
+});
+
+test('successful quarantine moves an incomplete run outside its normal output path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-quarantine-test-'));
+  const output = join(root, 'run');
+  const quarantine = join(root, '.tesland-quarantine-test');
+  try {
+    await mkdir(output);
+    await writeFile(join(output, 'segment-001.webm.partial'), 'incomplete');
+    const failed = await abandonControlSession(new CaptureSession(), {
+      quarantine: () => rename(output, quarantine),
+      closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    assert.equal(await readFile(join(quarantine, 'segment-001.webm.partial'), 'utf8'), 'incomplete');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a delayed screenshot cannot recreate an abandoned run directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-screenshot-test-'));
+  const output = join(root, 'run'), quarantine = join(root, '.tesland-quarantine-test');
+  const session = new CaptureSession();
+  let release!: (bytes: Uint8Array) => void;
+  const pending = new Promise<Uint8Array>(resolve => { release = resolve; });
+  try {
+    await mkdir(output);
+    const rejected = assert.rejects(writeCaptureScreenshot(session, () => pending, join(output, 'shot.png')), /shutdown abandoned/);
+    const failed = await abandonControlSession(session, {
+      quarantine: () => rename(output, quarantine), closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    release(Buffer.from('image'));
+    await rejected;
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    await assert.rejects(access(join(quarantine, 'shot.png')), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('completed screenshots and nonempty screencasts are published once', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-publish-test-'));
+  const output = join(root, 'run'), stage = join(root, 'stage');
+  const session = new CaptureSession();
+  try {
+    await mkdir(output); await mkdir(stage);
+    const screenshot = join(output, 'shot.png');
+    await writeCaptureScreenshot(session, async () => Buffer.from('image'), screenshot);
+    assert.equal(await readFile(screenshot, 'utf8'), 'image');
+    await assert.rejects(writeCaptureScreenshot(session, async () => Buffer.from('replacement'), screenshot), { code: 'EEXIST' });
+    assert.equal(await readFile(screenshot, 'utf8'), 'image');
+    const staged = join(stage, 'segment.webm'), video = join(output, 'segment.webm');
+    await writeFile(staged, '');
+    await assert.rejects(publishScreencast(session, staged, video), /empty or unavailable/);
+    await writeFile(staged, 'video');
+    await publishScreencast(session, staged, video);
+    assert.equal(await readFile(video, 'utf8'), 'video');
+    await assert.rejects(access(staged), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a late screencast save stays in its private stage after abandonment', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-screencast-test-'));
+  const output = join(root, 'run'), quarantine = join(root, '.tesland-quarantine-test'), stage = join(root, '.tesland-capture-stage-test');
+  const session = new CaptureSession();
+  try {
+    await mkdir(output); await mkdir(stage);
+    const failed = await abandonControlSession(session, {
+      quarantine: () => rename(output, quarantine), closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    // Simulate Playwright's delayed mkdir/copy after its stop timed out.
+    await mkdir(stage, { recursive: true });
+    await writeFile(join(stage, 'segment.webm'), 'late video');
+    await assert.rejects(publishScreencast(session, join(stage, 'segment.webm'), join(output, 'segment.webm')), /shutdown abandoned/);
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    assert.equal(await readFile(join(stage, 'segment.webm'), 'utf8'), 'late video');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a delayed chunk cannot update another segment after its sink closes', async () => {
+  let signalStart!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { signalStart = resolve; });
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const first = new TabChunkSink({ writeFile: async () => { signalStart(); await pending; }, close: async () => { await pending; } });
+  const writing = first.append(0, 'YQ==');
+  await started;
+  const closing = first.close();
+  await assert.rejects(first.append(0, 'Yg=='), /Invalid tab recording chunk/);
+  const second = new TabChunkSink({ writeFile: async () => {}, close: async () => {} });
+  await second.append(0, 'Yg==');
+  const rejected = assert.rejects(writing, /closed while writing/);
+  release();
+  await rejected;
+  await closing;
+  assert.deepEqual([first.chunks, first.bytes, second.chunks, second.bytes], [0, 0, 1, 1]);
+  await second.close();
 });

@@ -2,15 +2,17 @@ import './self-drive-mode.css';
 import type { DriveMode } from '../shared/drive-mode';
 
 const modes: { value: DriveMode; label: string; description: string }[] = [
-  { value: 'road', label: 'Street Pilot', description: 'Follows streets and tries to recover from blockages.' },
-  { value: 'jump', label: 'Ludicrous Leap', description: 'Tries to hop past obstacles using rocket air.' },
-  { value: 'sky', label: 'Maximum Plaid', description: 'Tries rocket flight and nearby currents when useful.' },
+  { value: 'road', label: 'Street Pilot', description: 'Up to 50 km/h on clear roads; slows for turns and traffic.' },
+  { value: 'intercity', label: 'Hyperloop Pilot', description: 'Up to 72 km/h between Bay cities; no rockets needed.' },
+  { value: 'jump', label: 'Ludicrous Leap', description: 'Up to 86 km/h; can hop past stopped traffic using rocket air.' },
+  { value: 'sky', label: 'Maximum Plaid', description: 'Up to 101 km/h; can fly and use nearby air currents.' },
 ];
 
 /** A single choice controls the next map or delivery trip, wherever it is changed. */
 export function createDriveModes(containers: HTMLElement[], onUnavailable: (reason: string) => void, onInteract: () => void, openShop: () => void) {
-  let selected: DriveMode = 'road', available = { rocket: false, jump: false, sky: false };
-  const enabled = (mode: DriveMode) => mode === 'road' || (available.rocket && available.jump && (mode === 'jump' || available.sky));
+  let selected: DriveMode = 'road', available = { rocket: false, intercity: false, jump: false, sky: false };
+  const enabled = (mode: DriveMode) => mode === 'road' || (mode === 'intercity' && available.intercity) ||
+    (available.rocket && available.jump && (mode === 'jump' || (mode === 'sky' && available.sky)));
   const controls = containers.map((container, index) => {
     container.classList.add('drive-mode');
     const label = document.createElement('label');
@@ -41,27 +43,29 @@ export function createDriveModes(containers: HTMLElement[], onUnavailable: (reas
   });
   function render() {
     const choice = modes.find(mode => mode.value === selected)!;
-    const explanation = !available.jump
-      ? 'Buy Ludicrous Leap and Maximum Plaid at SpaceX. Both also need a rocket-equipped car.'
+    const explanation = !available.intercity
+      ? `${choice.description} Buy Hyperloop Pilot at SpaceX for faster intercity driving. Leap and Plaid add rocket-powered shortcuts.`
+      : !available.jump
+        ? `${choice.description} Ludicrous Leap is available at SpaceX and requires rockets.`
       : !available.rocket
-        ? available.sky ? 'Both upgrades are installed. Equip a rocket kit or collect a rocket pickup.' : 'Ludicrous Leap is installed; equip a rocket to use it. Maximum Plaid is available at SpaceX.'
+        ? available.sky ? `${choice.description} Leap and Plaid are installed; equip a rocket kit to use them.` : `${choice.description} Leap is installed; equip a rocket to use it. Maximum Plaid is available at SpaceX.`
         : !available.sky ? `${choice.description} Maximum Plaid is available at SpaceX.` : `${choice.description} Applies to the next trip.`;
     for (const { select, help, shop } of controls) {
       select.value = selected;
       for (const option of select.options) option.disabled = !enabled(option.value as DriveMode);
       help.textContent = explanation;
-      shop.hidden = available.rocket && available.jump && available.sky;
+      shop.hidden = available.intercity && available.rocket && available.jump && available.sky;
     }
   }
   render();
   return {
     mode: () => selected,
     label: (mode: DriveMode) => modes.find(item => item.value === mode)!.label,
-    update(next: { rocket: boolean; jump: boolean; sky: boolean }) {
-      if (available.rocket === next.rocket && available.jump === next.jump && available.sky === next.sky) return;
+    update(next: { rocket: boolean; intercity: boolean; jump: boolean; sky: boolean }) {
+      if (available.rocket === next.rocket && available.intercity === next.intercity && available.jump === next.jump && available.sky === next.sky) return;
       available = next;
       const reset = !enabled(selected);
-      const reason = !available.jump ? 'Buy Ludicrous Leap at a SpaceX shop for this car.' : selected === 'sky' && !available.sky ? 'Buy Maximum Plaid at a SpaceX shop for this car.' : 'Equip a rocket kit or collect a rocket pickup.';
+      const reason = selected === 'intercity' && !available.intercity ? 'Buy Hyperloop Pilot at a SpaceX shop for this car.' : !available.jump ? 'Buy Ludicrous Leap at a SpaceX shop for this car.' : selected === 'sky' && !available.sky ? 'Buy Maximum Plaid at a SpaceX shop for this car.' : 'Equip a rocket kit or collect a rocket pickup.';
       if (reset) selected = 'road';
       render();
       if (reset) onUnavailable(reason);

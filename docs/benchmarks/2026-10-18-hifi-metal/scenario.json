@@ -1,0 +1,33 @@
+{
+  "freshGuest": true,
+  "viewport": { "width": 1280, "height": 720, "deviceScaleFactor": 1 },
+  "steps": [
+    { "type": "waitFor", "selector": "#connection:has-text(\"LIVE\")", "timeoutMs": 60000 },
+    { "type": "waitForPoseRevision", "value": 1, "timeoutMs": 30000 },
+    { "type": "waitForDelivery", "completed": 0, "stage": "pickup", "timeoutMs": 30000 },
+    { "type": "waitForRoomReady", "timeoutMs": 30000 },
+    { "type": "recordStart" },
+    { "type": "frameStart" },
+    { "type": "beginRoom" },
+    { "type": "waitForTicks", "count": 20 },
+    { "type": "keyPress", "key": "Shift" },
+    { "type": "keyPress", "key": "Shift" },
+    { "type": "waitForDelivery", "completed": 0, "stage": "dropoff", "timeoutMs": 180000 },
+    { "type": "keyPress", "key": "Shift" },
+    { "type": "keyPress", "key": "Shift" },
+    { "type": "waitForDelivery", "completed": 1, "stage": "pickup", "timeoutMs": 180000 },
+    { "type": "waitForGround" },
+    { "type": "jumpUntilAirborne" },
+    { "type": "waitForGround" },
+    { "type": "jumpUntilAirborne", "hold": true },
+    { "type": "keyDown", "key": "KeyW" },
+    { "type": "waitForTicks", "count": 6 },
+    { "type": "keyUp", "key": "KeyW" },
+    { "type": "waitForTicks", "count": 30 },
+    { "type": "keyUp", "key": "KeyE" },
+    { "type": "waitForGround" },
+    { "type": "frameStop" },
+    { "type": "sample" },
+    { "type": "recordStop" }
+  ]
+}
