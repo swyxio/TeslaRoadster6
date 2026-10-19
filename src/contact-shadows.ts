@@ -5,9 +5,10 @@ import { VEHICLES } from '../shared/vehicles';
 
 const MAX_SHADOWS=32;
 const MAX_DISTANCE_SQUARED=60**2;
-// Roads and their painted lines sit slightly above the shared ground surface.
-// This is above the asphalt and below most markings; it is not a physics height.
-const GROUND_OFFSET=.14;
+// Roads and parking approaches sit above the shared ground surface. Keep the
+// patch above their rendered tops (approaches reach .18), below lot markings,
+// and separate from the authoritative physics height.
+const GROUND_OFFSET=.20;
 const HILLS=[HILL,...NATURAL_HILLS];
 
 /** One bounded batch of soft contact patches; these never alter world state. */

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import type { Entity } from '../shared/game';
 import { terrainHeight } from '../shared/map';
+import { PARKING_LOTS } from '../shared/parking-lots';
 import { ContactShadows } from '../src/contact-shadows';
 
 const entity=(id:string,fields:Partial<Entity>={}):Entity=>({id,kind:'roadster',supportId:'ground',inDome:false,...fields} as Entity);
@@ -17,13 +18,28 @@ test('contact patches follow rendered cars and clear stale instances',()=>{
   assert.equal(scene.children.filter(child=>child instanceof T.InstancedMesh).length,1);
   const matrix=new T.Matrix4();shadows.mesh.getMatrixAt(0,matrix);
   const position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();matrix.decompose(position,rotation,scale);
-  assert.ok(position.distanceTo(new T.Vector3(-120,.14,-120))<.00001);
+  assert.ok(position.distanceTo(new T.Vector3(-120,.20,-120))<.00001);
   assert.ok(Math.abs(new T.Euler().setFromQuaternion(rotation).y-.7)<.00001);
   mesh.position.set(-115,0,-120);shadows.update([car],meshes,camera,car);
   shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
   assert.ok(Math.abs(position.x-(-115))<.00001);
   shadows.update([],new Map(),camera);
   assert.equal(shadows.mesh.count,0);assert.equal(shadows.mesh.visible,false);
+});
+
+test('grounded cars remain visible over parking surfaces',()=>{
+  const lot=PARKING_LOTS.find(item=>item.id==='sf-playground')!;
+  const shadows=new ContactShadows(new T.Scene()),car=entity('car');
+  // In scene.ts the parking area top is .14 and the approach top is .18.
+  for(const [surface,top] of [[lot.area,.14],[lot.approach,.18]] as const){
+    const mesh=vehicle(surface.x,0,surface.z),camera=mesh.position.clone().add(new T.Vector3(0,4,5));
+    shadows.update([car],new Map([[car.id,mesh]]),camera,car);
+    assert.equal(shadows.mesh.count,1);
+    const matrix=new T.Matrix4(),position=new T.Vector3();
+    shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
+    assert.ok(position.y>top,`patch must be above rendered parking surface ${top}`);
+    assert.ok(position.y<.21,'patch must remain below the lot markings');
+  }
 });
 
 test('unsupported, airborne, hidden and non-flat positions do not cast a patch',()=>{
