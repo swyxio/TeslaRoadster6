@@ -6,6 +6,7 @@ import { DOME } from '../shared/dome';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
 import { TECH_CAMPUSES } from '../shared/tech-campuses';
 import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
 
 const width=1200, height=1530, scale=.103;
 const x=(v:number)=>600+(v-300)*scale;
@@ -17,6 +18,7 @@ const building=(style:string)=>BUILDINGS.find(p=>p.style===style)!;
 const station=(id:string)=>CALTRAIN_STOPS.find(p=>p.id===id)!;
 const campus=(id:string)=>TECH_CAMPUSES.find(p=>p.id===id)!;
 const destination=(id:string)=>EAST_SOUTH_ADDITIONS.find(p=>p.id===id)!;
+const newPlace=(id:string)=>NEW_LANDMARKS.find(p=>p.id===id)!;
 const markers=[
   {n:1,name:'North Bay Playground',sub:'Races, ramps & ferry',p:{x:200,z:-1700},side:'left',labelY:245},
   {n:2,name:'Golden Gate Bridge',sub:'Marin to San Francisco',p:{x:-240,z:-330},side:'left',labelY:315},
@@ -38,6 +40,8 @@ const markers=[
   {n:18,name:'NASA Ames',sub:'Mountain View',p:destination('nasa-ames'),side:'left',labelY:980},
   {n:19,name:'Levi’s Stadium',sub:'Santa Clara',p:destination('levis-stadium'),side:'right',labelY:1200},
   {n:20,name:'Apple Park',sub:'Cupertino',p:campus('apple'),side:'left',labelY:1180},
+  {n:21,name:'Muir Woods',sub:'Marin-inspired grove',p:newPlace('muir-woods'),side:'left',labelY:595},
+  {n:22,name:'USS Hornet Museum',sub:'Compressed East Bay',p:newPlace('new-uss-hornet'),side:'right',labelY:735},
 ] as const;
 const polygon=(points:readonly MapPoint[])=>points.map(pt).join(' ');
 const lines=HIGHWAYS.map(road=>`<polyline points="${polygon(road.points)}" fill="none" stroke="#e6bc7b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
@@ -54,7 +58,7 @@ const labels=markers.map(m=>{
  return `<path d="M${f(px)} ${f(py)} L${edge} ${m.labelY}" fill="none" stroke="#d1e1d1" stroke-opacity=".66" stroke-width="1.6"/><circle cx="${f(px)}" cy="${f(py)}" r="5" fill="#ffcc83" stroke="#153942" stroke-width="2"/><circle cx="${cx}" cy="${m.labelY}" r="14" fill="#ffcb83"/><text x="${cx}" y="${m.labelY+5}" text-anchor="middle" class="number">${m.n}</text><text x="${tx}" y="${m.labelY-3}" class="place">${m.name.replaceAll('&','&amp;')}</text><text x="${tx}" y="${m.labelY+17}" class="detail">${m.sub.replaceAll('&','&amp;')}</text>`;
 }).join('');
 const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
-<title id="title">The Tesland Bay, from North Bay Playground to San José</title><desc id="desc">The game map connects San Francisco, the East Bay and the Peninsula to San José. Stops include Redwood City's station, the four research sites, Chabot, Oakland Zoo, NASA Ames, Levi’s Stadium and Apple Park, along with bridges and fictional attractions. A dashed line shows the decorative Caltrain tracks.</desc>
+<title id="title">The Tesland Bay, from North Bay Playground to San José</title><desc id="desc">The game map connects San Francisco, the East Bay and the Peninsula to San José. Stops include Redwood City's station, the four research sites, Chabot, Oakland Zoo, NASA Ames, Levi’s Stadium, Apple Park, Muir Woods and the USS Hornet, along with bridges and fictional attractions. A dashed line shows the decorative Caltrain tracks.</desc>
 <style>.eyebrow{font:700 15px system-ui;letter-spacing:3px;fill:#afd0bf}.heading{font:700 44px system-ui;fill:#fff0dc;letter-spacing:-1px}.place{font:700 19px system-ui;fill:#fff1df}.detail{font:15px system-ui;fill:#b6cebf}.number{font:700 13px system-ui;fill:#173b40}</style>
 <rect width="${width}" height="${height}" rx="24" fill="#173b40"/><rect x="350" y="165" width="500" height="${f((MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ)*scale)}" rx="12" fill="#2d6670"/>
 <text x="44" y="58" class="eyebrow">EXPLORE THE BAY</text><text x="44" y="112" class="heading">A world full of destinations</text>

@@ -6,6 +6,7 @@ import { CUSTOMERS, RESTAURANTS } from './delivery';
 import { PARKING_LOTS } from './parking-lots';
 import { FERRY_DECK } from './ferry';
 import { contact } from './physics';
+import { DOME } from './dome';
 
 export const BILLBOARD_WIDTH=16;
 export const BILLBOARD_HEIGHT=6;
@@ -33,6 +34,7 @@ const apronMinX=Math.min(...apronX),apronMaxX=Math.max(...apronX),apronMinZ=Math
 // ferry. Two meters of margin keeps a sign frame off their edges.
 const protectedAreas=[
   ...PARKING_LOTS.flatMap(lot=>[lot.area,lot.approach]),
+  {x:DOME.x,z:DOME.z+7.5,yaw:0,width:192,length:145},
   {x:(apronMinX+apronMaxX)/2,z:(apronMinZ+apronMaxZ)/2,yaw:0,width:apronMaxX-apronMinX,length:apronMaxZ-apronMinZ},
   {x:FERRY_DOCKS.sf.x,z:FERRY_DOCKS.sf.deckZ,yaw:0,width:FERRY_DECK.width,length:FERRY_DECK.length},
 ];
@@ -78,6 +80,9 @@ function clearBillboard(x:number,z:number,yaw:number):boolean {
 
 /** Decorative, non-colliding props placed on real shared ground alongside shared roads. */
 export const BILLBOARDS:Billboard[]=[];
+// A city-street sign keeps the parody visible before the highway unlock.
+const cityBoard={x:-130,z:-210,yaw:Math.PI/2,design:0,route:'San Francisco'};
+if(clearBillboard(cityBoard.x,cityBoard.z,cityBoard.yaw))BILLBOARDS.push(cityBoard);
 for(const highway of HIGHWAYS){
   fractions.forEach((fraction,index)=>{
     const point=pointAlong(highway.points,fraction),c=Math.cos(point.yaw),s=Math.sin(point.yaw);

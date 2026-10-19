@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateAchievementEvidence, isAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { awardDomeMatchAchievements, updateAchievements, updateGameAchievements, type AchievementId } from '../shared/achievements';
-import { addPlayer, createEmptyWorld } from '../shared/game';
+import { addPlayer, createEmptyWorld, NEUTRAL, step, type EconomyHooks } from '../shared/game';
 import { BUILDINGS, LANDMARKS, terrainHeight } from '../shared/map';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
 import { RESEARCH_SITES } from '../shared/research';
@@ -28,6 +28,29 @@ test('roof evidence preserves the existing ordinary and named-roof awards',()=>{
     assert.deepEqual(evaluateAchievementEvidence(awards.map(award=>award.id),{kind:'roof',roof}),[]);
   }
   assert.deepEqual(evaluateAchievementEvidence(['roof-rider'],{kind:'roof',roof:'coit'}),[{id:'coit-landing',reward:1_000}]);
+});
+
+test('a real jump onto a new part-level landmark roof produces ordinary roof evidence',()=>{
+  const {world,player,car}=setup(),index=BUILDINGS.findIndex(building=>building.landmarkId==='new-uss-hornet');
+  assert.ok(index>=0);
+  const building=BUILDINGS[index],evidence:AchievementEvidence[]=[];
+  const economy:EconomyHooks={update:(_player,apply)=>{apply();},pickup:()=>{},achievement:(_player,item)=>evidence.push(item)};
+  Object.assign(car,{x:building.x,z:building.z+building.d*.1,y:building.h+2,yaw:0,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+  for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05,{economy});
+  assert.ok(car.supportId?.startsWith(`roof:${index}:`),`initial support ${car.supportId}`);
+  assert.deepEqual(evidence.filter(item=>item.kind==='roof'),[],'initial placement is not a flight');
+  const inputs=new Map([[player.id,{...NEUTRAL,jump:1}]]);
+  let airborne=false;
+  for(let i=0;i<200;i++){
+    step(world,inputs,.05,{economy});
+    if(car.supportId===null)airborne=true;
+    if(airborne&&car.supportId!==null)break;
+  }
+  assert.ok(airborne,'jump did not launch');
+  assert.ok(car.supportId?.startsWith(`roof:${index}:`),`landing support ${car.supportId}`);
+  const roofEvidence=evidence.filter(item=>item.kind==='roof');
+  assert.deepEqual(roofEvidence,[{kind:'roof',roof:'ordinary'}]);
+  assert.deepEqual(evaluateAchievementEvidence([],roofEvidence[0]),[{id:'roof-rider',reward:500}]);
 });
 
 test('sites derive the same IDs and rewards as physical arrivals',()=>{
