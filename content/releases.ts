@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Rocket Dome rewards',
+    intro: 'Play Rocket Dome to earn cash and unlock new abilities.',
+    sections: [
+      { title: 'Get in the game', items: [
+        'Touch the ball and stay through a match to earn $250, plus $500 if you win. Existing earnings bonuses apply.',
+        'Your first qualifying match unlocks Pulse Shot; your first credited win unlocks Champion Charge for rocket-equipped cars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.38-alpha',
+    label: '0.0.38 Alpha',
+    date: '2026-10-18',
     title: 'Rocket pad tune-up',
     intro: 'Rocket pads keep the same pickup behavior with lighter background processing.',
     sections: [

@@ -12,7 +12,7 @@ import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
 // Both clients must agree on finishes, self-drive modes and the tick/action contract.
-assert.equal(PROTOCOL_VERSION, 49);
+assert.equal(PROTOCOL_VERSION, 50);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -29,7 +29,7 @@ async function eventually(check: () => boolean, label: string, timeout = 4000) {
 function connect() {
   const socket = new WebSocket(url);
   const input = new RoomInputClient(socket);
-  const state: { id?: string; world?: World; capacity?: number; closed?: number; walletReady?:boolean; teleportRejected?:boolean; starshipStatus?:{privacyPending:boolean;publicName:string|null;status:{personal:number}}; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
+  const state: { id?: string; world?: World; capacity?: number; closed?: number; walletReady?:boolean; rewards?:{kind:string;amount:number}[]; teleportRejected?:boolean; starshipStatus?:{privacyPending:boolean;publicName:string|null;status:{personal:number}}; upgradeResults?: {requestId:number;upgrade:string;ok:boolean}[]; vehicleStyleResults?: {requestId:number;category:string;choice:string;ok:boolean}[]; otaResults?: {requestId:number;enabled:boolean;ok:boolean}[]; destinationResults?: {requestId:number;ok:boolean}[]; marsResults?: {requestId:number;action:string;ok:boolean;amount:number}[] } = {};
   socket.addEventListener('message', event => {
     const data = JSON.parse(String(event.data));
     input.observe(data);
@@ -37,6 +37,7 @@ function connect() {
     if (data.type === 'state') state.world = data.world;
     if(data.type==='teleportResult'&&data.requestId===990)state.teleportRejected=!data.ok;
     if (data.type === 'wallet') state.walletReady = true;
+    if (data.type === 'reward') (state.rewards??=[]).push(data.reward);
     if (data.type === 'starshipStatus') state.starshipStatus = data;
     if (data.type === 'upgradeResult') (state.upgradeResults??=[]).push(data);
     if (data.type === 'vehicleStyleResult') (state.vehicleStyleResults??=[]).push(data);
@@ -178,6 +179,8 @@ try {
   await eventually(()=>one.state.world?.soccer.blueScore===1&&two.state.world?.soccer.blueScore===1,'goal score replicated to both clients',6000);
   await eventually(()=>two.state.world?.soccer.participants.some(p=>p.playerId===id&&p.touches.roadster&&p.goals.roadster===1)??false,'authoritative Roadster touch and goal credit replicated');
   assert.ok(!one.state.world!.players.find(p=>p.id===id)!.achievements.unlocked.includes('rocket-rookie'),'playing award waits for the completed match');
+  const cashBeforeDome=one.state.world!.players.find(p=>p.id===id)!.delivery.cash;
+  const spectatorCash=two.state.world!.players.find(p=>p.id===two.state.id)!.delivery.cash;
   for(let score=2;score<=5;score++){
     await eventually(()=>two.state.world?.soccer.phase==='play','next kickoff',15000);
     one.input.action({type:'reset'});
@@ -191,6 +194,9 @@ try {
     return soccer?.phase==='win'&&soccer.winningPlayers.includes(id)&&!!p&&p.achievements.unlocked.includes('rocket-rookie')&&p.achievements.unlocked.includes('roadster-champion');
   },'match winner and both Roadster awards replicated');
   assert.deepEqual(two.state.world!.players.find(p=>p.id===two.state.id)!.achievements.unlocked,[],'nonparticipant receives no Dome award');
+  await eventually(()=>one.state.rewards?.some(reward=>reward.kind==='dome-match'&&reward.amount>=750)??false,'committed Dome match payout notification',15000);
+  await eventually(()=>{const player=one.state.world?.players.find(p=>p.id===id);return !!player&&player.delivery.cash>=cashBeforeDome+750&&player.achievements.unlocked.includes('dome-debut')&&player.achievements.unlocked.includes('dome-champion');},'Dome cash and both earned abilities committed',15000);
+  assert.equal(two.state.world!.players.find(p=>p.id===two.state.id)!.delivery.cash,spectatorCash,'nonparticipant receives no Dome match cash');
   // Drive from the kickoff onto a wall; the room must refill air for both clients.
   await delay(500);one.input.action({type:'reset'});
   await eventually(()=>{const e=two.state.world?.entities.find(e=>e.id===entityId);return !!e&&e.inDome&&Math.abs(e.x-(DOME.x-30))<.1&&e.y<.1;},'arena reset for wall charge');

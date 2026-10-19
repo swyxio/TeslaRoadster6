@@ -5,6 +5,8 @@ export type GlobalEventLease = { issuedAtMs:number; validUntilMs:number; windows
 
 export const ROOM_WIN_DURATION_MS = 10 * 60 * 1000;
 export const GLOBAL_EVENT_DURATION_MS = 30 * 60 * 1000;
+export const DOME_MATCH_CASH = 250;
+export const DOME_WIN_CASH = 500;
 export const CAB_REMAINDER_DENOMINATOR = 2 * 60 * 60 * 1000;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 const MAX_MONEY = BigInt(Number.MAX_SAFE_INTEGER);

@@ -80,6 +80,9 @@ export function evaluateAchievementEvidence(unlocked:readonly AchievementId[],ev
       break;
     case 'dome': {
       const {touches,goals,won}=evidence;
+      const touched=Object.values(touches).some(Boolean);
+      if(touched)award('dome-debut',0);
+      if(touched&&won&&Object.values(goals).some(goal=>goal>0))award('dome-champion',0);
       if(touches.roadster)award('rocket-rookie',500);
       if(touches.retrofit)award('built-to-fly',500);
       if(won&&touches.roadster&&goals.roadster>0)award('roadster-champion',500);
