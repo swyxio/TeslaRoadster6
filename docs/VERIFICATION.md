@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Delivery guidance and pickup stopping allowance · candidate · 2026-10-18 Pacific
+
+- A fresh local Chrome practice guest manually followed the opening Tartine pickup. The road arrow changed from straight ahead to a left turn at the intersection and then back toward the pickup; the guest reached the pickup and saw the next drop-off route. The run took 1:11 active and its pickup bonus had expired. Earlier on that run, the HUD still showed +$18 at 0:48 and +$3 at 0:56 against a 0:44 estimate. A second drive was interrupted by a local server reload before reaching the pickup.
+- Before the final guidance error handling and release metadata, 1,096 tests and the build/typechecks passed. A local three-worker payout-replay integration covered staged pickup recovery under the new curve and preservation of an already committed payout. These checks do not establish a performance or physical-device result.
+
 ## Rocket Dome rewards · integrated candidate · 2026-10-18 Pacific
 
 - The prospective combination with rocket-pad candidate `4236c30` assigns release 0.0.39 and retains protocol v50. All 1,090 tests and the build/typechecks passed; the existing large-chunk warning remains. The pad candidate is awaiting its own release.
