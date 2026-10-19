@@ -121,6 +121,38 @@ connection was rejected. Both runs failed their diagnostic gates, and separate
 hosts and network paths make the rejection counts descriptive, not proof of a
 regression or improvement. The temporary baseline PR was closed afterward.
 
+## Local input receipt trace
+
+`pnpm exec tsx tests/input-trace.integration.ts` runs one real `Session` against
+the real room in an isolated local Wrangler worker. Its fixture denies persistent
+services, binds to loopback, and has no deployment configuration. It records
+bounded client and server event rings with explicit drop counts, without raw
+messages or player identifiers. It observes snapshot delivery, client sends and
+buffered bytes, handler entry, scheduler receipt and rejection, held controls,
+post-physics edge results and successful snapshot sends. The test checks that a
+second input waits behind an artificially held dispatch; other message types
+are outside that simulation. The server and client clocks have independent
+origins and are not subtracted to infer one-way latency.
+Scheduler rejections still advance `receivedSeq`, and `appliedSeq` can skip a
+superseded input; neither is a count of successfully executed commands.
+
+In one controlled v48 run, a normal jump was accepted and processed. Holding
+snapshots until tick 6 made a command based on snapshot tick 2 and target tick 5
+arrive late. Holding an actual queued flip for 82 ms made its target tick 7
+arrive at tick 8; the edge was rescheduled to tick 9 and then processed. A
+fixture-only gate held a timely input after callback entry at tick 10 until tick
+12, past its target tick 11; a second input queued behind it was received in
+sequence. A future target was rejected by the scheduler, and a wrong epoch before
+it. Both event rings reported zero drops. The [sanitized trace](benchmarks/2026-10-18-input-trace-v48.json.gz)
+records the observations; these injected scenarios validate the fixture, not
+the cause of hosted late inputs or any capacity claim. The current production input
+handler calls the scheduler synchronously after callback entry; the artificial
+dispatch delay does not represent measured production CPU time. Runtime queueing
+before callback entry remains unobserved. A separately secured, non-production
+preview overlay and a fresh timing reservation would be needed for a matched
+64-player investigation. This fixture is not configured for preview and must
+not be deployed; its hostname check is not a deployment security boundary.
+
 ## External experience and implications
 
 - [Glenn Fiedler's snapshot compression experiments](https://gafferongames.com/post/snapshot_compression/)
@@ -149,6 +181,19 @@ regression or improvement. The temporary baseline PR was closed afterward.
   says deployed Worker timers do not advance during CPU-only execution. Use
   appropriate local or Cloudflare CPU profiling rather than subtracting
   deployed callback timestamps and calling the result tick CPU time.
+- A [game developer's input-backlog discussion](https://gamedev.net/forums/topic/665916-catching-up-when-a-clients-input-stream-is-interrupted/)
+  illustrates how replaying every stale command can perpetuate delay, while
+  discarding commands can lose a jump. Tesland's discrete edge outcomes must be
+  evaluated separately from held steering and throttle before changing policy.
+- A [WebSocket discussion](https://gamedev.net/forums/topic/700489-using-concurrent-tcpwebsockets-to-mitigate-head-of-line-blocking/)
+  cautions that burst loss can stall multiple connections together. It does not
+  show that packet loss caused Tesland's misses or justify adding sockets.
+  The browser's [bufferedAmount](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/bufferedAmount)
+  measures bytes queued locally for transmission, not server receipt or RTT.
+- A [Three.js developer's profiling report](https://discourse.threejs.org/t/optimization-of-large-amounts-100-1000-of-skinned-meshes-cpu-bottlenecks/58196)
+  found animation and matrix-update CPU costs in a different, animated-character
+  scene. Profile Tesland's update, draw submission and device rendering separately;
+  that report is not evidence of Tesland's bottleneck.
 
 The isolated [64-driver diagnostic](../scripts/room-64-README.md) is designed
 to collect synchronized sustained movement and input observations from four
