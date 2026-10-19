@@ -132,10 +132,10 @@ test('a fresh highway drive fills in traffic without stopping or visible spawns'
       const side=Math.abs(dx*Math.cos(car.yaw)-dz*Math.sin(car.yaw));
       if(ahead>0&&side<=ahead*Math.tan(35*Math.PI/180)&&Math.hypot(dx,dz)<=600)seen.add(other.id);
     }
-    assert.ok(active<=4,`the active highway fleet is bounded: ${active}`);
+    assert.ok(active<=12,`the active highway fleet is bounded: ${active}`);
   }
   assert.ok(distance>1400,`the car travels ${distance} m`);
-  // The game starts with two cars before morning demand rises. The drive
+  // The game starts with five cars before morning demand rises. The drive
   // should encounter traffic without exceeding the room's fleet budget.
   assert.ok(seen.size>=2,`${seen.size} cars enter the forward cone`);
   assert.equal(car.health,100);

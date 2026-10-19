@@ -496,8 +496,8 @@ function routeDistancePose(routeId:number,fraction:number){
 }
 
 type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
-const AMBIENT_MAX=4; // Alongside eight city cars and four police.
-const AMBIENT_POOL_MAX=12; // Also bounds taken and abandoned optional cars.
+const AMBIENT_MAX=12; // Alongside eight city cars and four police.
+const AMBIENT_POOL_MAX=20; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
 const HIDDEN_DISTANCE=1600; // Beyond both scene fog and the ambient snapshot radius.
 const NEAR_DISTANCE=3000, RECYCLE_DISTANCE=4000;
@@ -506,7 +506,7 @@ const NEAR_DISTANCE=3000, RECYCLE_DISTANCE=4000;
 const HIGHWAY_MIN_TOP_SPEED=20;
 const highwayVehicles=VEHICLE_IDS.filter(kind=>VEHICLES[kind].maxSpeed>=HIGHWAY_MIN_TOP_SPEED);
 
-function desiredAmbient(time:number):number{return Math.round(2+2*trafficDemand(time).intensity);}
+function desiredAmbient(time:number):number{return Math.round(3+9*trafficDemand(time).intensity);}
 function observers(world:World):Entity[]{
   return world.players.map(player=>world.entities.find(entity=>entity.id===player.entityId)).filter((entity):entity is Entity=>!!entity);
 }
@@ -588,7 +588,7 @@ function ambientCandidate(world:World,id:string,clockwise:boolean,make:EntityFac
     Math.hypot(entity.x-viewer.x,entity.z-viewer.z)<NEAR_DISTANCE).length);
   const first=viewers.length?Math.floor(world.time/(AMBIENT_INTERVAL*2))%viewers.length:0;
   const candidates:{pose:ReturnType<typeof routeDistancePose>;score:number;oncoming?:boolean}[]=[];
-  // Prefer up to two spaced oncoming cars on the active road. All such
+  // Prefer up to three spaced oncoming cars on the active road. All such
   // candidates use the same hidden-space and body checks as ordinary traffic.
   for(let i=0;i<viewers.length;i++){
     const viewer=viewers[i],forward={x:-Math.sin(viewer.yaw),z:-Math.cos(viewer.yaw)};
@@ -599,7 +599,7 @@ function ambientCandidate(world:World,id:string,clockwise:boolean,make:EntityFac
       const alignment=-Math.sin(entity.yaw)*forward.x-Math.cos(entity.yaw)*forward.z;
       return along>0&&along<2200&&side<300&&alignment<-.5;
     });
-    if(approaching.length>=2)continue;
+    if(approaching.length>=3)continue;
     const approach=oncomingApproach(viewer);if(!approach)continue;
     const {total}=highwayLengths.get(approach.routeId)!;
     for(const setback of [1605,1625,1650,1700,1750,1850,2000,2200,2500]){

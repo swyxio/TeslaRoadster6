@@ -41,7 +41,7 @@ test('highway fleet replenishes around separated drivers without appearing in ei
     }
   }
   const cars=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(cars.length,4);
+  assert.equal(cars.length,12);
   for(const viewer of [one,two])assert.ok(cars.some(car=>Math.hypot(car.x-viewer.x,car.z-viewer.z)<3000),'both separated drivers receive traffic');
 });
 
@@ -58,6 +58,7 @@ test('only an isolated, hidden, moving highway car is recycled',()=>{
   const queued=car('ambient-queued',1225,9000,20);
   const incident=car(TRAFFIC_INCIDENT.entityId,viewer.x+100,viewer.z,20);
   const taken=car('ambient-taken',1400,9000,20);taken.driver='other';taken.autopilot=false;
+  for(let i=0;i<8;i++)car(`ambient-near-${i}`,viewer.x+150+i*50,viewer.z+100,20);
   const previous=new Set(world.entities.map(entity=>entity.id));
   world.time=240;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(far),'a hidden free-flowing car was recycled');
@@ -77,7 +78,7 @@ test('recycling followed by a takeover replenishes with a unique ID',()=>{
     world.entities.push(car);return car;
   };
   const far=add('ambient-far',1000,9000);
-  const visible=Array.from({length:3},(_,i)=>add(`ambient-visible-${i}`,viewer.x+100+i*100,viewer.z));
+  const visible=Array.from({length:11},(_,i)=>add(`ambient-visible-${i}`,viewer.x+100+i*50,viewer.z+100));
   world.time=240;updateHighwayTraffic(world,5,makeEntity);
   assert.ok(!world.entities.includes(far));
   const replacement=world.entities.find(entity=>entity.id==='ambient-49');
@@ -91,8 +92,8 @@ test('recycling followed by a takeover replenishes with a unique ID',()=>{
 
   world.time=245;updateHighwayTraffic(world,5,makeEntity);
   const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
-  assert.equal(ambient.length,5);
-  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot).length,4);
+  assert.equal(ambient.length,13);
+  assert.equal(ambient.filter(entity=>!entity.driver&&entity.autopilot).length,12);
   assert.equal(new Set(ambient.map(entity=>entity.id)).size,ambient.length);
   assert.ok(world.entities.includes(replacement));
   assert.equal(target.driver,'take');

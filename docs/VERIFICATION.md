@@ -1,3 +1,11 @@
+## Integrated Bay release and highway traffic · protocol v53 · 2026-10-19 Pacific
+
+- Integrated the highway, intercity self-driving, scenery, storefronts, contact-shadow, recorder and Three.js branches on one release candidate. The shared highway budget starts at five cars, reaches twelve at rush hour, and retains a bounded pool of twenty including taken and abandoned ambient cars. Spawns remain outside every player’s 1,400 m ambient snapshot, and occupied, owned, stopped, queued and ferry-supported cars are protected from recycling.
+- `pnpm test` passed 1,323 tests; `pnpm build` passed with the existing Vite large-chunk warning. The local two-client Wrangler room integration, delivery journal integration, and luxury wallet integration passed. These are functional checks, not playable-capacity measurements.
+- A fixed-seed, untimed four-route comparison against the same integrated code with the former four-car maximum sampled proximity once per second for 240 simulated seconds per route. Mean ambient cars within 1,200 m rose from 1.33 / 1.37 / 0.92 / 1.65 to 3.53 / 2.57 / 2.77 / 3.32. The player retained full health on each route. Proximity does not establish screen visibility, every collision scenario, or performance.
+- A separate fixed-seed San Jose start near the Japanese Friendship Garden found the first ambient car in a forward 600 m cone after 77 simulated seconds. A live Chrome sandbox drive from the same area remained visually sparse during spot checks; this is still not dense rush-hour traffic. The result is sensitive to route bends and the deliberately hidden spawn distance. This local drive is not a production or physical-device check.
+- In local mobile emulation, concurrent Chromium/SwiftShader runs showed the controls but did not move when held; serial Chrome/Metal portrait and landscape retries both accelerated, with zero reported page or console errors. These results do not establish physical-device behavior or explain the initial emulation failure.
+
 # Verification · 2026-10-18 Pacific
 
 ## Bay scenery · current-base candidate · 2026-10-19 Pacific
