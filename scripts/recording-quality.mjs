@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // A diagnostic for one same-scenario recording-on/off pair, not a game performance gate.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createInterface } from 'node:readline';
 
 const execFileAsync = promisify(execFile);
 const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -104,9 +105,48 @@ export async function inspectCaptureTraces(manifest, manifestPath) {
           samples.some((frame, i) => !Array.isArray(frame) || frame.length !== 4 || !finite(frame[0]) || frame[0] <= 0 || !finite(frame[1]) || frame[1] < 0 ||
             !Number.isSafeInteger(frame[2]) || frame[2] <= 0 || !Number.isSafeInteger(frame[3]) || frame[3] <= 0 ||
             (i > 0 && (frame[0] <= samples[i - 1][0] || frame[1] < samples[i - 1][1])))) throw new Error('Missing, truncated or invalid frame timestamps.');
-      return { file: name, status: 'available', samples: samples.length };
+      return { file: name, status: 'available', samples: samples.length, spanMs: round(samples.at(-1)[0] - samples[0][0]) };
     } catch (error) { return { file: name, status: 'unavailable', reason: `Capture trace unavailable: ${error.message}` }; }
   }));
+}
+
+// Stream packet timestamps rather than buffering metadata for every frame in a long recording.
+async function packetDuration(path) {
+  const probe = spawn('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_packets',
+    '-show_entries', 'packet=pts_time,duration_time', '-of', 'compact=p=0', path]);
+  let stderr = '', timedOut = false;
+  probe.stderr.setEncoding('utf8');
+  probe.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-4096); });
+  const closed = new Promise(resolve => {
+    probe.once('error', error => resolve({ error }));
+    probe.once('close', code => resolve({ code }));
+  });
+  const timeout = setTimeout(() => { timedOut = true; probe.kill('SIGKILL'); }, 30000);
+  let packets = 0, invalid = 0, first = Infinity, lastEnd = -Infinity;
+  try {
+    const lines = createInterface({ input: probe.stdout });
+    for await (const line of lines) {
+      if (!line.trim()) continue;
+      const entries = new Map(line.split('|').map(entry => {
+        const at = entry.indexOf('=');
+        return at < 0 ? ['', ''] : [entry.slice(0, at), entry.slice(at + 1)];
+      }));
+      const pts = entries.get('pts_time'), duration = entries.get('duration_time');
+      packets++;
+      if (!present(pts) || pts === 'N/A' || !finite(Number(pts))) { invalid++; continue; }
+      const time = Number(pts);
+      const packetSeconds = present(duration) && duration !== 'N/A' && finite(Number(duration)) && Number(duration) >= 0 ? Number(duration) : 0;
+      first = Math.min(first, time);
+      lastEnd = Math.max(lastEnd, time + packetSeconds);
+    }
+    const outcome = await closed;
+    if (timedOut) throw new Error('Packet timestamp inspection timed out.');
+    if (outcome.error) throw outcome.error;
+    if (outcome.code !== 0) throw new Error(stderr || `ffprobe exited ${outcome.code}.`);
+    if (!packets || invalid || !finite(first) || !finite(lastEnd) || lastEnd <= first)
+      throw new Error('Video packet timestamps are missing or invalid.');
+    return { packets, durationMs: round((lastEnd - first) * 1000) };
+  } finally { clearTimeout(timeout); }
 }
 
 // Demux packet metadata without decoding the whole video. Packet count is not a count of unique visual frames.
@@ -121,7 +161,9 @@ export async function inspectVideos(manifest, manifestPath) {
       const { stdout } = await execFileAsync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=codec_name,width,height,r_frame_rate,avg_frame_rate,nb_read_packets', '-of', 'json', path], { timeout: 30000, maxBuffer: 1024 * 1024 });
       const stream = JSON.parse(stdout).streams?.[0], packets = Number(stream?.nb_read_packets);
       if (!present(stream?.codec_name) || !Number.isSafeInteger(packets) || packets <= 0 || !Number.isSafeInteger(stream.width) || !Number.isSafeInteger(stream.height)) throw new Error('No readable video stream or packets.');
-      return { file: name, status: 'available', bytes: file.size, codec: stream.codec_name, width: stream.width, height: stream.height, packetCount: packets, nominalRate: stream.r_frame_rate, averageRate: stream.avg_frame_rate };
+      const timing = await packetDuration(path);
+      if (timing.packets !== packets) throw new Error('Packet counts differ between stream and timestamp inspections.');
+      return { file: name, status: 'available', bytes: file.size, codec: stream.codec_name, width: stream.width, height: stream.height, packetCount: packets, packetDurationMs: timing.durationMs, nominalRate: stream.r_frame_rate, averageRate: stream.avg_frame_rate };
     } catch (error) { return { file: name, status: 'unavailable', reason: `Video or ffprobe unavailable: ${error.message}` }; }
   }));
 }
@@ -167,6 +209,17 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
   if (encodedVideos.some(video => video.status !== 'available')) reasons.push('Video files or ffprobe packet metadata unavailable.');
   if (captureTraces.some(trace => trace.status !== 'available')) reasons.push('Capture traces are missing, incomplete or invalid.');
   if (audioFiles.some(audio => audio.status !== 'available')) reasons.push('Audio files or ffprobe packet metadata unavailable.');
+  // Only reject video shorter than the observed trace. Allow at most 250 ms for
+  // short-clip boundaries, capped at 25% of the trace, or 2% for longer clips.
+  // This heuristic is not a motion or performance budget.
+  const durationChecks = encodedVideos.map((video, i) => {
+    const trace = captureTraces[i];
+    if (video.status !== 'available' || trace?.status !== 'available') return { file: video.file, status: 'unavailable' };
+    const toleranceMs = Math.min(Math.max(250, trace.spanMs * 0.02), trace.spanMs * 0.25);
+    const status = video.packetDurationMs + toleranceMs >= trace.spanMs ? 'available' : 'HOLD';
+    return { file: video.file, status, videoPacketDurationMs: video.packetDurationMs, traceSpanMs: trace.spanMs, toleranceMs: round(toleranceMs) };
+  });
+  if (durationChecks.some(check => check.status !== 'available')) reasons.push('A video packet duration is unavailable or materially shorter than its capture trace.');
   const frameIntervals = animation(manifest);
   if (frameIntervals?.p95Ms > 33.4) warnings.push(`Animation callback p95 was ${frameIntervals.p95Ms} ms; inspect this footage for stutter.`);
   if (Array.isArray(segments)) for (const segment of segments) {
@@ -175,7 +228,7 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
   return { artifact: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED',
-    playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles,
+    playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles, durationChecks,
     limitations: ['Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression.'] };
 }
 
@@ -184,10 +237,12 @@ async function main() {
   if (!controlPath || !recordedPath || rest.length) throw new Error('Usage: node scripts/recording-quality.mjs NO_VIDEO_MANIFEST RECORDED_MANIFEST');
   const [control, recorded] = await Promise.all([controlPath, recordedPath].map(async path => JSON.parse(await readFile(path, 'utf8'))));
   const result = compareRecording(control, recorded);
-  [result.encodedVideos, result.captureTraces, result.audioFiles] = await Promise.all([inspectVideos(recorded, recordedPath), inspectCaptureTraces(recorded, recordedPath), inspectAudio(recorded, recordedPath)]);
-  if (result.encodedVideos.some(video => video.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Encoded video files or ffprobe packet metadata unavailable.'); }
-  if (result.captureTraces.some(trace => trace.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Capture frame traces are missing, incomplete or invalid.'); }
-  if (result.audioFiles.some(audio => audio.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Audio files or ffprobe packet metadata unavailable.'); }
+  const inspected = await inspectRecordingArtifact(recorded, recordedPath);
+  result.encodedVideos = inspected.encodedVideos;
+  result.captureTraces = inspected.captureTraces;
+  result.audioFiles = inspected.audioFiles;
+  result.durationChecks = inspected.durationChecks;
+  if (inspected.artifact !== 'available') { result.comparison = 'HOLD'; result.reasons.push(...inspected.reasons); }
   if (result.reasons.length) result.recordingQuality = 'HOLD';
   console.log(JSON.stringify(result, null, 2));
   if (result.recordingQuality === 'HOLD') process.exitCode = 1;

@@ -116,7 +116,35 @@ test('each artifact segment requires finalized traces and readable encoded video
     assert.equal(valid.playerFidelity, 'UNVERIFIED');
     assert.equal(valid.encodedVideos.length, 2);
     assert.equal(valid.captureTraces.length, 2);
+    assert.equal(valid.durationChecks[0].status, 'available');
+    assert.equal(valid.durationChecks[0].videoPacketDurationMs, 200);
+    assert.equal(valid.durationChecks[0].traceSpanMs, 101);
+    assert.equal(valid.durationChecks[0].toleranceMs, 25.25);
     assert.match(valid.warnings.join(' '), /timestamp gaps/);
+
+    // The absolute boundary allowance cannot hide most of a short recording.
+    trace.samples[1][0] = 1600;
+    trace.samples[1][1] = 601;
+    writeFileSync(join(dir, segments[1].traceFile), JSON.stringify(trace));
+    const shortTruncated = await inspectRecordingArtifact(manifest, path);
+    assert.equal(shortTruncated.durationChecks[1].status, 'HOLD');
+    assert.equal(shortTruncated.durationChecks[1].toleranceMs, 150);
+
+    // A fully readable short file must not stand in for a multi-minute recording.
+    trace.samples[1][0] = 181000;
+    trace.samples[1][1] = 180001;
+    writeFileSync(join(dir, segments[1].traceFile), JSON.stringify(trace));
+    const truncated = await inspectRecordingArtifact(manifest, path);
+    assert.equal(truncated.encodedVideos[1].status, 'available');
+    assert.equal(truncated.captureTraces[1].status, 'available');
+    assert.equal(truncated.durationChecks[1].status, 'HOLD');
+    assert.equal(truncated.durationChecks[1].traceSpanMs, 180000);
+    assert.equal(truncated.durationChecks[1].toleranceMs, 3600);
+    assert.equal(truncated.artifact, 'HOLD');
+    assert.match(truncated.reasons.join(' '), /materially shorter/);
+    trace.samples[1][0] = 1101;
+    trace.samples[1][1] = 102;
+    writeFileSync(join(dir, segments[1].traceFile), JSON.stringify(trace));
 
     segments[1].status = 'incomplete';
     assert.equal((await inspectRecordingArtifact(manifest, path)).artifact, 'HOLD');
