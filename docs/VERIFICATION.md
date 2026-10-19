@@ -1501,6 +1501,7 @@ These observations and screenshots describe the former Alcatraz arena before the
 ## Performance workflow readiness trigger · 2026-10-18 Pacific
 
 - PR #104 integrated with production base `dacde0c` at `e953701`. All 1,026 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. Ten performance-report tests and workflow syntax/expression lint also passed. External shell and Python lint were disabled for the workflow lint. The only changes to that base are the workflow event list and documentation; no gameplay or protocol code changed. Production verification follows the merge.
+- After integrating the article and video release #116 at `8be55d4`, the combined candidate `ab15df2` again passed all 1,026 tests and the build. The game JavaScript and CSS hashes match the prior candidate.
 
 ## Hosted preview and alpha comparison · 2026-10-18 Pacific
 
