@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Higher-fidelity world and fleet · candidate · 2026-10-18 Pacific
+
+- Generic façades use framed, individually tinted windows with one shared material and one instanced batch per occupied map cell. Their window geometry has 10 triangles per instance, down from 12 for the previous boxes. Landmark glazing, layered redwood crowns, wheel spokes, rear lamps and NPC sensor bands also reuse existing material batches or shared geometry. Placement, map collision and simulation were not changed.
+- Focused window, vehicle and scenery tests passed. These are geometry and functional checks, not frame-time or GPU measurements. Desktop, portrait and landscape visual review and a paired route comparison are still required before release; touch emulation does not prove physical-device behavior.
+
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 
 - Based on main `1f722dd` (protocol 46), all 1,010 unit tests and the production build passed; the existing Vite large-chunk warning remains. A local Wrangler room integration at the configured 64-seat limit passed its two-client gameplay checks; global chat and Cybercab room-history integration passed separately. These are functional checks, not capacity evidence.

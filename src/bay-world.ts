@@ -7,6 +7,7 @@ import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 import { buildNorthBayScenery } from './north-bay-scenery';
 import { buildCaltrain } from './caltrain';
+import { addBuildingWindows, type BuildingWindow } from './building-windows';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
@@ -220,7 +221,7 @@ export function buildBay(scene:T.Scene) {
     const paint=new T.Mesh(labelGeometry,warningMaterial);paint.position.set(x-Math.cos(yaw)*16,.17,z+Math.sin(yaw)*16);paint.rotation.y=yaw+Math.PI;scene.add(paint);
   }
   // Distinct roofs and facade colors make districts less repetitive; windows share one draw call.
-  const buildings=palettes.map(()=>[] as BoxItem[]), windows:BoxItem[]=[], roofs:BoxItem[]=[];
+  const buildings=palettes.map(()=>[] as BoxItem[]), windows:BuildingWindow[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
     if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus')return;
@@ -302,19 +303,24 @@ export function buildBay(scene:T.Scene) {
     }else{
       roofs.push({x:b.x,y:b.h+.2,z:b.z,w:b.w+1,h:.4,d:b.d+1});
       const floorSpacing=b.h>24?4.1:3.4;
+      // A small, stable palette and different proportions distinguish office
+      // facades from houses without extra materials or animated effects.
+      const shades=b.h>24?[0x49676e,0x597a82,0x66838a,0x52717b]:[0x526e73,0x68828a,0x788b87,0x667c78];
+      const windowWidth=b.h>24?1.9:1.45,windowHeight=b.h>24?1.9:1.7;
+      const shade=(position:number,y:number)=>shades[Math.abs(i*29+Math.round(position*10)*3+Math.round(y*10)*13)%shades.length];
       for(let y=3;y<b.h-1;y+=floorSpacing)for(let x=-b.w/2+2;x<b.w/2-1;x+=3.8){
-        windows.push({x:b.x+x,y,z:b.z+b.d/2+.03,w:1.2,h:1.7,d:.07});
-        windows.push({x:b.x+x,y,z:b.z-b.d/2-.03,w:1.2,h:1.7,d:.07});
+        windows.push({x:b.x+x,y,z:b.z+b.d/2+.03,width:windowWidth,height:windowHeight,angle:0,color:shade(x,y)});
+        windows.push({x:b.x+x,y,z:b.z-b.d/2-.03,width:windowWidth,height:windowHeight,angle:Math.PI,color:shade(x,y)});
       }
       for(let y=3;y<b.h-1;y+=floorSpacing)for(let z=-b.d/2+2;z<b.d/2-1;z+=3.8){
-        windows.push({x:b.x+b.w/2+.03,y,z:b.z+z,w:.07,h:1.7,d:1.2});
-        windows.push({x:b.x-b.w/2-.03,y,z:b.z+z,w:.07,h:1.7,d:1.2});
+        windows.push({x:b.x+b.w/2+.03,y,z:b.z+z,width:windowWidth,height:windowHeight,angle:Math.PI/2,color:shade(z,y)});
+        windows.push({x:b.x-b.w/2-.03,y,z:b.z+z,width:windowWidth,height:windowHeight,angle:-Math.PI/2,color:shade(z,y)});
       }
     }
   });
   // Keep far-away district details in separate instanced meshes so frustum
   // culling remains effective as the world grows to the South Bay.
-  buildings.forEach((batch,i)=>localBatches(palettes[i],batch));localBatches(0xe5d9c5,roofs);localBatches(0x49676e,windows);
+  buildings.forEach((batch,i)=>localBatches(palettes[i],batch));localBatches(0xe5d9c5,roofs);addBuildingWindows(scene,windows);
   // Lower residential blocks have pitched roofs, while downtown retains flat roofs.
   const homes=BUILDINGS.filter(b=>b.style==='house');
   const gables=new T.InstancedMesh(new T.ConeGeometry(1,1,4),material(0x8b7770),homes.length),roofMatrix=new T.Matrix4();

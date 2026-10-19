@@ -14,6 +14,7 @@ const cube = new T.BoxGeometry(1, 1, 1);
 const tire = new T.CylinderGeometry(1, 1, 1, 32);
 const distantTire = new T.CylinderGeometry(1, 1, 1, 8);
 const hub = new T.CylinderGeometry(1, 1, 1, 24);
+const wheelRim = new T.TorusGeometry(.73, .065, 6, 20);
 const head = new T.SphereGeometry(.25, 8, 6);
 const nozzleRing = new T.TorusGeometry(.095,.018,8,20);
 const nozzleCore = new T.CylinderGeometry(.078,.078,.022,20);
@@ -31,7 +32,12 @@ const DARK = 0x17272f, GLASS = 0x284954, WHITE = 0xe6eeeb;
 
 export function material(color: number, metalness = .1) {
   const key = `${color}:${metalness}`;
-  if (!materials.has(key)) materials.set(key, new T.MeshStandardMaterial({ color, roughness: color === GLASS ? .19 : .38, metalness, flatShading: false }));
+  if (!materials.has(key)) materials.set(key, new T.MeshStandardMaterial({
+    color, roughness: color === GLASS ? .19 : .38, metalness, flatShading: false,
+    // Running lamps should remain legible against the car's paint in shadow;
+    // this is material emission, not an additional light or post-process pass.
+    ...(color === 0xe9483c ? {emissive: 0xe9483c, emissiveIntensity: .28} : {}),
+  }));
   return materials.get(key)!;
 }
 export function box(parent: T.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, color: number) {
@@ -149,11 +155,20 @@ function wheels(root: T.Group, spec: VehicleSpec, distant=false) {
     assembly.position.set(side * (spec.width / 2 - .09), radius, axle * spec.wheelbase / 2);
     const rubber = new T.Mesh(distant?distantTire:tire, material(DARK)); rubber.rotation.z = Math.PI / 2; rubber.scale.set(radius, .24, radius); assembly.add(rubber);
     if(distant){root.add(assembly);continue;}
-    const disk = new T.Mesh(hub, material(spec.id.includes('cybercab') ? spec.color : 0xa6b6b8, .5));
+    const disk = new T.Mesh(hub, material(spec.id.includes('cybercab') ? spec.color : 0x394950, .5));
     disk.rotation.z = Math.PI / 2; disk.scale.set(radius * .65, .255, radius * .65); assembly.add(disk);
-    const rim=new T.Mesh(new T.TorusGeometry(radius*.73,.025,6,32),material(0xc4cbd0,.7));rim.rotation.y=Math.PI/2;rim.position.x=side*.135;assembly.add(rim);
+    const polished=material(0xc4cbd0,.7);
+    const rim=new T.Mesh(wheelRim,polished);rim.rotation.y=Math.PI/2;rim.scale.setScalar(radius);rim.position.x=side*.135;assembly.add(rim);
     for(let j=0;j<5;j++){
-      const spoke=box(assembly,side*.14,0,0,.035,radius*1.22,.035,0x89949e);spoke.rotation.x=j*Math.PI/5;
+      const angle=j*Math.PI/5;
+      // Two fine ribs per spoke separate the metallic face from the dark hub.
+      // They batch with the rim within the articulated wheel template.
+      for(const offset of [-radius*.045,radius*.045]){
+        const spoke=new T.Mesh(cube,polished);
+        spoke.scale.set(.035,radius*1.22,.022);
+        spoke.position.set(side*.14,-Math.sin(angle)*offset,Math.cos(angle)*offset);
+        spoke.rotation.x=angle;assembly.add(spoke);
+      }
     }
     root.add(assembly);
   }
@@ -168,6 +183,7 @@ function sensors(root: T.Group, spec: VehicleSpec) {
   if (spec.sensorRig === 'roof') {
     box(root, 0, h + .06, 0, w * .72, .12, .5, DARK);
     const dome = new T.Mesh(hub, material(WHITE)); dome.scale.set(.24, .3, .24); dome.position.set(0, h + .25, 0); root.add(dome);
+    const lens = new T.Mesh(hub, material(DARK)); lens.scale.set(.245, .055, .245); lens.position.set(0, h + .25, 0); root.add(lens);
     for (const side of [-1, 1]) box(root, side * w * .37, h + .18, 0, .21, .25, .28, DARK);
   } else if (spec.sensorRig === 'corners') {
     for (const side of [-1, 1]) for (const end of [-1, 1]) {
@@ -419,9 +435,18 @@ function buildVehicle(kind: VehicleId | 'person', distant=false): T.Group {
     for (const side of [-1, 1]) for (const pixel of [-1, 1]) box(root, side * w * .31 + pixel * .09, belt, -l / 2 - .025, .13, .13, .03, WHITE);
   } else if (!firefly && shape !== 'pickup' && shape !== 'roadster') for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), -l / 2 - .025, w * .22, .09, .03, WHITE);
   if(id==='roadster'){
-    box(root,0,h*.56,l*.493,w*.78,.055,.035,0xe9483c);
+    if(distant)box(root,0,h*.56,l*.493,w*.78,.055,.035,0xe9483c);
+    else {
+      box(root,0,h*.56,l*.5+.014,w*.84,.14,.024,DARK);
+      // Sit the light bar just beyond the rear body face so it stays visible
+      // from the chase camera, even when the body color is also red.
+      box(root,0,h*.56,l*.5+.031,w*.78,.055,.012,0xe9483c);
+    }
     box(root,0,h*.72,l*.39,w*.84,.045,.28,DARK);
-  }else for (const side of [-1, 1]) box(root, side * w * .33, Math.max(.6, belt), l / 2 + .025, w * .23, .09, .03, 0xe9483c);
+  }else for (const side of [-1, 1]) {
+    if(!distant)box(root,side*w*.33,Math.max(.6,belt),l/2+.012,w*.27,.14,.02,DARK);
+    box(root, side * w * .33, Math.max(.6, belt), l / 2 + .025, w * .23, .09, .03, 0xe9483c);
+  }
   if(shape==='roadster'){
     for(const side of [-1,1]){
       const lamp=box(root,side*w*.25,h*.49,-l*.47,w*.18,.025,.1,WHITE);lamp.rotation.y=side*.24;

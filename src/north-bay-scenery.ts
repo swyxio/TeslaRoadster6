@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUILDINGS, REGIONS, ROADS, insidePolygon, terrainHeight } from '../shared/map';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
@@ -74,21 +75,34 @@ export function northBayScenery(){
 /** Low-poly redwoods, oaks and vineyard rows, chunked by region for culling. */
 export function buildNorthBayScenery(scene:T.Scene){
   const {trees,vines}=northBayScenery();
-  const matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion();
+  const matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
   const addPlants=(plants:Plant[],geometry:T.BufferGeometry,color:number,shape:(p:Plant)=>{y:number;xz:number;height:number})=>{
     if(!plants.length)return;
     const mesh=new T.InstancedMesh(geometry,material(color),plants.length);
-    plants.forEach((p,i)=>{const s=shape(p);mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y+s.y,p.z),rotation,scale.set(s.xz,s.height,s.xz)));});
+    plants.forEach((p,i)=>{
+      const s=shape(p);
+      rotation.setFromAxisAngle(up,p.x*.17+p.z*.11);
+      mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y+s.y,p.z),rotation,scale.set(s.xz,s.height,s.xz)));
+    });
     mesh.computeBoundingSphere();scene.add(mesh);
   };
+  // Two overlapping tiers give redwoods a less uniform outline while staying
+  // within the original canopy bounds. Merge once and instance both regions.
+  const lower=new T.ConeGeometry(1,.68,7).translate(0,-.16,0);
+  const upper=new T.ConeGeometry(.68,.68,7,1,true).translate(0,.16,0);
+  const redwoodCrown=mergeGeometries([lower,upper])!;
+  lower.dispose();upper.dispose();
+  const oakCrown=new T.IcosahedronGeometry(1,1);
+  const trunk=new T.CylinderGeometry(.38,.52,1,6);
   for(const group of Object.values(trees)){
-    addPlants(group,new T.CylinderGeometry(.38,.52,1,6),0x6e5841,p=>({y:3*p.size,xz:p.size,height:6*p.size}));
+    addPlants(group,trunk,0x6e5841,p=>({y:3*p.size,xz:p.size,height:6*p.size}));
     for(let shade=0;shade<3;shade++){
       const subset=group.filter(p=>p.shade===shade);
       // Taller, narrow redwoods alternate with broad coastal live oaks.
-      const crown=shade===1?new T.IcosahedronGeometry(1,1):new T.ConeGeometry(1,1,7);
+      const crown=shade===1?oakCrown:redwoodCrown;
       addPlants(subset,crown,[0x385e49,0x416f52,0x567b59][shade],p=>({y:(shade===1?8:10)*p.size,xz:(shade===1?5:4)*p.size,height:(shade===1?3.5:17)*p.size}));
     }
   }
-  for(let shade=0;shade<3;shade++)addPlants(vines.filter(p=>p.shade===shade),new T.IcosahedronGeometry(1,0),[0x668452,0x759455,0x8ca366][shade],()=>({y:.9,xz:1.7,height:.9}));
+  const vine=new T.IcosahedronGeometry(1,0);
+  for(let shade=0;shade<3;shade++)addPlants(vines.filter(p=>p.shade===shade),vine,[0x668452,0x759455,0x8ca366][shade],()=>({y:.9,xz:1.7,height:.9}));
 }

@@ -16,6 +16,28 @@ test('fleet meshes retain scale, bounded complexity and independent articulated 
   assert.ok(first.getObjectByName('jets'));
  }
 });
+test('close-up lamps and articulated wheels keep shared assets across vehicle clones',()=>{
+ for(const id of ['roadster','model-3','waymo-ipace'] as const){
+  const first=createVehicle(id),second=createVehicle(id),spec=VEHICLES[id];
+  const lamp=(root:Object3D)=>{
+   let found:Mesh|undefined;
+   root.traverse(o=>{if(o instanceof Mesh&&o.material instanceof MeshStandardMaterial&&o.material.color.getHex()===0xe9483c)found=o;});
+   assert.ok(found,`${id}: rear lamp`);return found;
+  };
+  const a=lamp(first),b=lamp(second);
+  assert.equal(a.geometry,b.geometry,`${id}: lamp geometry shared`);
+  assert.equal(a.material,b.material,`${id}: lamp material shared`);
+  assert.ok((a.material as MeshStandardMaterial).emissiveIntensity>0,`${id}: lamps retain contrast in shadow`);
+  assert.ok(new Box3().setFromObject(a).min.z>spec.length/2,`${id}: lamps sit outside the rear body face`);
+  const firstWheel=first.getObjectByName('wheel_fl')!,secondWheel=second.getObjectByName('wheel_fl')!;
+  const firstMeshes=firstWheel.children.filter((child):child is Mesh=>child instanceof Mesh);
+  const secondMeshes=secondWheel.children.filter((child):child is Mesh=>child instanceof Mesh);
+  assert.equal(firstMeshes.length,3,`${id}: tire, hub and batched rim detail`);
+  firstMeshes.forEach((mesh,i)=>assert.equal(mesh.geometry,secondMeshes[i]?.geometry,`${id}: wheel geometry shared`));
+  setVehicleStyle(first,id,{paint:'mint',decal:'none'});
+  assert.equal(lamp(first).material,b.material,`${id}: paint does not tint running lamps`);
+ }
+});
 test('luxury models have independent wheels and share cached mesh geometry',()=>{
  for(const id of LUXURY_VEHICLE_IDS){
   const first=createVehicle(id),second=createVehicle(id),spec=VEHICLES[id];
