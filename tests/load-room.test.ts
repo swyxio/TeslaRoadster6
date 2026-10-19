@@ -53,6 +53,19 @@ test('clustered moving snapshots cannot certify a sustained ten-second block',()
   assert.equal(second.maxGapMs,2200);assert.equal(second.complete,false);
 });
 
+test('a snapshot gap spanning two blocks invalidates both movement blocks',()=>{
+  const tracker=movementTracker(20_000);
+  for(let atMs=0;atMs<20_000;atMs+=50){
+    if(atMs>9050&&atMs<10950)continue;
+    tracker.observe({atMs,tick:atMs/50,poseRevision:1,vehicle:vehicle(atMs*.012)});
+  }
+  const {blocks}=tracker.summary();
+  assert.equal(blocks[0].lastAtMs,9050);
+  assert.equal(blocks[1].firstAtMs,10950);
+  assert.deepEqual(blocks.map(block=>block.maxGapMs),[1900,1900]);
+  assert.ok(blocks.every(block=>!block.complete));
+});
+
 test('input coverage rejects unacknowledged measurement inputs and any rejection',()=>{
   assert.deepEqual(inputCoverage([
     {lastSentBefore:50,applied:50,rejections:0},

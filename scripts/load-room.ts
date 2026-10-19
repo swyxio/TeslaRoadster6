@@ -18,7 +18,7 @@ export function movementTracker(durationMs:number) {
     startMs:i*10_000,durationMs:Math.min(10_000,durationMs-i*10_000),samples:0,movingSamples:0,
     distanceM:0,steps:0,discontinuities:0,invalidSamples:0,firstAtMs:null as number|null,lastAtMs:null as number|null,maxGapMs:0,
   }));
-  let previous:MotionSample|null=null,totalDistanceM=0,totalSteps=0;
+  let previous:MotionSample|null=null,lastValidAtMs:number|null=null,totalDistanceM=0,totalSteps=0;
   return {
     observe(sample:MotionSample) {
       const blockIndex=Math.floor(sample.atMs/10_000),block=blocks[blockIndex],car=sample.vehicle;
@@ -27,9 +27,17 @@ export function movementTracker(durationMs:number) {
         ![car.x,car.y,car.z,car.vx,car.vy,car.vz].every(Number.isFinite)){
         block.invalidSamples++;previous=null;return;
       }
+      if(lastValidAtMs!==null&&sample.atMs<lastValidAtMs){block.invalidSamples++;previous=null;return;}
+      if(lastValidAtMs!==null){
+        const gap=sample.atMs-lastValidAtMs;
+        // A gap can straddle a block boundary even when each block's first
+        // and last sample is less than one second from that boundary.
+        for(let i=Math.floor(lastValidAtMs/10_000);i<=blockIndex;i++)
+          blocks[i].maxGapMs=Math.max(blocks[i].maxGapMs,gap);
+      }
+      lastValidAtMs=sample.atMs;
       block.samples++;
       block.firstAtMs??=sample.atMs;
-      if(block.lastAtMs!==null)block.maxGapMs=Math.max(block.maxGapMs,sample.atMs-block.lastAtMs);
       block.lastAtMs=sample.atMs;
       if(Math.hypot(car.vx,car.vy,car.vz)>5)block.movingSamples++;
       if(previous&&previous.vehicle){

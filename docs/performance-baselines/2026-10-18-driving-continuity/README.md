@@ -267,11 +267,17 @@ shared simulation, identical in those paths to integrated `3b5be7c`. After
 15 seconds of wall-time warm-up, its 60.00-second sample had 20 disconnections
 and 6,588 rejected inputs including warm-up. The shortest observed snapshot
 span was 27.3 simulated seconds; an early disconnect can shorten that span,
-so it is not necessarily the room's total advancement. All 64 met the movement
-coverage criteria in each of the first two ten-second blocks, none did in the
-third or fourth, and 44 and 34 did in the last two. Zero sampled damage or
+so it is not necessarily the room's total advancement. The original checker
+reported all 64 meeting movement criteria in each of the first two ten-second
+blocks, none in the third or fourth, and 44 and 34 in the last two. It later
+proved capable of missing gaps across block boundaries, so true coverage could
+be lower. Zero sampled damage or
 impulse does not exclude between-snapshot contacts. The cause of the closes
 was not captured. This is an incomplete diagnostic, not a capacity pass.
+
+The movement checker now counts a gap across every block it spans; five focused
+tests passed, including a 1.9-second gap across the ten-second boundary. The
+archived historical reports retain their original measurements and checker.
 
 Observed snapshot-gap p95/max were 366/3,076 ms; applied-ack observation p95
 was 477 ms for the sequences observed in snapshots. Decoded JSON was
@@ -308,8 +314,9 @@ that condition from an expired accepted-control watchdog. Individual snapshot
 age at send and the server receive tick were not recorded, so the timing burst
 does not identify a room, network or client-clock cause.
 
-The movement workload was incomplete: only three drivers completed even one
-ten-second movement block, none completed all six, and 25 traveled under 1 m.
+The movement workload was incomplete: at most three drivers met the original
+checker for even one ten-second block, none met it for all six, and 25 traveled
+under 1 m. The original checker could miss gaps across block boundaries.
 Normal spawns and traffic were not staged or validated as unobstructed; 37
 drivers had sampled health decreases and 22 had sampled push impulses. These
 observations do not establish the cause of a particular stop. Per-runner p95
