@@ -198,54 +198,60 @@ async function stopRecording() {
       audioFailure = asError(error, 'Could not finalize audio recording.');
       failure ??= audioFailure;
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
-      try { await abandonBrowser(); } catch (cleanupError) { audioFailure = new AggregateError([audioFailure, cleanupError], 'Audio recording failed and its browser could not be closed.'); }
+      browserUnusable = true;
     } finally { pendingAudio = undefined; }
   }
   if (values['no-video']) { recording = false; pendingVideo = ''; if (audioFailure) throw audioFailure; return; }
-  const video = pendingVideo;
-  const stopRequestedAtRunMs = performance.now() - started;
-  let stopError: unknown;
-  const traceFile = video.replace(/\.webm$/, '.capture.json');
-  let partialRemovalFailed = false;
-  if (values['video-source'] === 'tab') {
-    const sink = pendingTab!;
-    const result = await finalizeTabCapture({
-      stop: async () => {
-        try {
-          const trace = await withDeadline(page!.evaluate('window.__teslandTabCapture.stop()'), CAPTURE_DEADLINE_MS, 'Tab recording stop timed out.') as { format: number; mode: string; chunks: number; bytes: number; startedAtBrowserMs: number; stoppedAtBrowserMs: number } | undefined;
-          if (!trace || trace.chunks !== sink.chunks || trace.bytes !== sink.bytes) throw new Error('Tab recording chunks are incomplete.');
-          return trace;
-        } catch (error) {
-          try { await abandonBrowser(); }
-          catch (cleanupError) {
-            (manifest.capture as Record<string, unknown>).browserCleanupFailed = true;
-            throw new AggregateError([error, cleanupError], 'Tab recording failed and its browser could not be closed.');
+  try {
+    const video = pendingVideo;
+    const stopRequestedAtRunMs = performance.now() - started;
+    let stopError: unknown;
+    const traceFile = video.replace(/\.webm$/, '.capture.json');
+    let partialRemovalFailed = false;
+    if (values['video-source'] === 'tab') {
+      const sink = pendingTab!;
+      const result = await finalizeTabCapture({
+        stop: async () => {
+          try {
+            const trace = await withDeadline(page!.evaluate('window.__teslandTabCapture.stop()'), CAPTURE_DEADLINE_MS, 'Tab recording stop timed out.') as { format: number; mode: string; chunks: number; bytes: number; startedAtBrowserMs: number; stoppedAtBrowserMs: number } | undefined;
+            if (!trace || trace.chunks !== sink.chunks || trace.bytes !== sink.bytes) throw new Error('Tab recording chunks are incomplete.');
+            return trace;
+          } catch (error) {
+            try { await abandonBrowser(); }
+            catch (cleanupError) {
+              (manifest.capture as Record<string, unknown>).browserCleanupFailed = true;
+              throw new AggregateError([error, cleanupError], 'Tab recording failed and its browser could not be closed.');
+            }
+            throw asError(error, 'Could not finalize tab recording.');
           }
-          throw asError(error, 'Could not finalize tab recording.');
-        }
-      },
-      close: async () => { pendingTab = undefined; await sink.close(); },
-      writeTrace: async trace => { await writeFile(join(out, traceFile), JSON.stringify(trace) + '\n'); },
-      publish: async () => { await rename(join(out, partialVideo(video)), join(out, video)); },
-      remove: async () => { await unlink(join(out, partialVideo(video))); },
-    });
-    stopError = result.error;
-    partialRemovalFailed = result.partialRemovalFailed;
-  } else {
-    try { await page!.screencast.stop(); } catch (error) { stopError = asError(error, 'Could not finalize screencast.'); }
+        },
+        close: async () => { pendingTab = undefined; await sink.close(); },
+        writeTrace: async trace => { await writeFile(join(out, traceFile), JSON.stringify(trace) + '\n'); },
+        publish: async () => { await rename(join(out, partialVideo(video)), join(out, video)); },
+        remove: async () => { await unlink(join(out, partialVideo(video))); },
+      });
+      stopError = result.error;
+      partialRemovalFailed = result.partialRemovalFailed;
+    } else {
+      try { await withDeadline(page!.screencast.stop(), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'); } catch (error) { stopError = asError(error, 'Could not finalize screencast.'); }
+    }
+    recording = false; pendingVideo = '';
+    if (values['video-source'] === 'tab') {
+      captureSegments.push({ video, traceFile, mode: 'tab', finalized: !stopError, status: stopError ? 'incomplete' : 'available', ...(partialRemovalFailed ? { partialRemovalFailed } : {}) });
+    } else {
+      const capture = pendingCapture!.finish(stopRequestedAtRunMs);
+      pendingCapture = undefined;
+      await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+      captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+    }
+    if (stopError) throw stopError;
+    recordings.push(video);
+    if (audioFailure) throw audioFailure;
+  } finally {
+    if (audioFailure) {
+      try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
+    }
   }
-  recording = false; pendingVideo = '';
-  if (values['video-source'] === 'tab') {
-    captureSegments.push({ video, traceFile, mode: 'tab', finalized: !stopError, status: stopError ? 'incomplete' : 'available', ...(partialRemovalFailed ? { partialRemovalFailed } : {}) });
-  } else {
-    const capture = pendingCapture!.finish(stopRequestedAtRunMs);
-    pendingCapture = undefined;
-    await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
-    captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
-  }
-  if (stopError) throw stopError;
-  recordings.push(video);
-  if (audioFailure) throw audioFailure;
 }
 async function releaseInputs() {
   for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
@@ -513,8 +519,9 @@ async function act(action: Action): Promise<unknown> {
               // must not leave a video running or list a partial as usable.
               const video = pendingVideo;
               failure ??= asError(error, 'Could not start audio recording.');
-              try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
+              browserUnusable = true;
               try { await stopRecording(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not stop recording.'); }
+              try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
               if (recordings.at(-1) === video) recordings.pop();
               const discarded = captureSegments.at(-1);
               if (discarded?.video === video) discarded.discarded = true;
