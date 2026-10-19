@@ -131,24 +131,17 @@ try {
     await startupFailure.action({type:'keyPress',key:'KeyA'});
     await startupFailure.action({type:'keyPress',key:'KeyD'});
     await startupFailure.action({type:'recordStart'}, 400);
-    const state = await fetch(startupFailure.endpoint, {headers:{authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(15000)});
-    assert.equal(state.status, 200);
-    assert.equal((await state.json()).recording, false, 'A MediaRecorder startup error must roll back the video recording.');
-    await startupFailure.action({type:'recordStart'});
-    await startupFailure.action({type:'wait',ms:500});
-    await startupFailure.action({type:'recordStop'});
+    await startupFailure.action({type:'recordStart'}, 400);
     await startupFailure.action({type:'finish'}, 202);
     assert.equal(await startupFailure.waitForExit(), 1, 'The failed action remains visible in the run status.');
     const manifest = JSON.parse(await readFile(join(startupFailure.run, 'manifest.json'), 'utf8'));
-    assert.equal(manifest.status, 'completed_with_errors');
-    assert.deepEqual(manifest.events.filter(event => event.type === 'recordStart').map(event => event.status), ['failed', 'ok']);
+    assert.equal(manifest.status, 'failed');
+    assert.deepEqual(manifest.events.filter(event => event.type === 'recordStart').map(event => event.status), ['failed', 'failed']);
     const discarded = manifest.capture.segments.find(segment => segment.video === 'segment-001.webm');
     assert.equal(discarded?.discarded, true, 'The partial segment must be marked discarded.');
-    assert.ok(!manifest.recordings.includes(discarded.video));
-    assert.ok(!manifest.audioRecordings.some(audio => audio.file === 'segment-001-audio.webm'));
-    assert.deepEqual(manifest.recordings, ['segment-002.webm']);
-    assert.deepEqual(manifest.audioRecordings.map(audio => audio.file), ['segment-002-audio.webm']);
-    console.log('A MediaRecorder startup failure rolled back video and allowed an interactive retry.');
+    assert.deepEqual(manifest.recordings, []);
+    assert.deepEqual(manifest.audioRecordings, []);
+    console.log('A MediaRecorder startup failure rolled back video and prevented browser reuse.');
   } finally { if (startupFailure.child.exitCode === null) startupFailure.child.kill('SIGTERM'); }
 
   const interactiveRun = await startInteractive('interactive-audio-failure');

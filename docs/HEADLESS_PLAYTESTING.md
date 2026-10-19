@@ -77,11 +77,40 @@ for an appropriately configured Linux host. `--gpu swiftshader` forces a
 software WebGL implementation for isolated, trusted CI runs. None of these
 flags proves hardware acceleration: inspect `runner.webgl.renderer` in the manifest. The default
 browser is the Playwright-pinned Chromium headless shell; `--browser chrome`
-uses installed Chrome and `--headed` opens a visible browser. Output uses the
-viewport's CSS dimensions, defaults to 1280 × 720 and 30 fps, and can be set
-with `--width`, `--height` and `--fps` (1–60). `--mobile` enables touch and a
-mobile viewport; use `scripts/playtests/touch-drive.json` for a held touch.
+uses installed Chrome and `--headed` opens a visible browser. The requested
+viewport defaults to 1280 × 720 CSS pixels and recording defaults to 30 fps;
+set these with `--width`, `--height` and `--fps` (1–60). Screencast requests
+the viewport size; actual tab-track dimensions can differ and must be checked.
+`--mobile` enables touch and a mobile viewport; use
+`scripts/playtests/touch-drive.json` for a held touch.
 These are browser emulations, not physical-device tests.
+
+For an experimental alternative to Playwright's JPEG screencast, add
+`--video-source tab --fps 60`. This launches the full Chromium browser in an
+isolated test profile and requests the uniquely titled test tab using Chromium
+tab capture plus MediaRecorder. Before recording, the page must still be on
+the configured target origin. It configures a fresh Capture Handle visible only
+to that origin and checks the selected track for that handle; unsupported or
+changed identity fails the segment. A failed tab
+segment's private `*.webm.partial` file is removed when possible. If the file
+cannot be closed, it stays private and its removal is reported incomplete. The CI
+uploads explicitly exclude partials. A timeout does not cancel a pending browser
+or file operation; inspect and remove remaining partials only after the process
+has ended. A failed audio capture also makes the disposable browser unusable,
+so a late operation cannot interfere with a later segment. A stalled OS request can also keep the process alive after the
+deadline; use an external supervisor if a hard process deadline is required. The
+mechanism still requires real-browser verification: same-origin
+code can spoof the handle, and a delayed source-change event can escape the
+checks. A match does not prove correct crop or pixels. Intended capture includes
+the game canvas and HTML HUD. The guard replaces and then clears the page's
+Capture Handle configuration inside the disposable browser.
+Chunks are written incrementally, with a bounded pending queue;
+start/stop and file integrity are checked separately from screencast frame
+timestamps. The matching `--no-video` control must also specify
+`--video-source tab` to use the same browser mode. Both modes still require
+real-game inspection and on/off timing on representative hardware: encoded
+packet cadence does not prove unique visual frames or player-visible fidelity.
+The manual performance workflow can select `tab` for its optional video pair.
 
 Each new output directory contains `manifest.json`, named screenshots and
 `segment-NNN.webm` files. Video is silent by default to keep performance
@@ -216,11 +245,14 @@ unset PLAYTEST_STAGE_SECRET
 ```
 
 Repeat the touch capture with a new room and output directory at `--width 844
---height 390` for landscape. The verifier requires a real video, screenshots,
-sustained grounded rear thrust, an upward jump burst followed by a landing,
-and an unchanged pose revision. Keep the trace and inspect the video too; a
-touch-emulated browser is not a physical phone. Compare matching viewports and
-fixtures across revisions, and measure frame times in separate no-video runs.
+--height 390` for landscape. The verifier checks that the recorded video and
+screenshot paths exist and that the trace shows sustained grounded rear thrust,
+an upward jump burst followed by a landing, and an unchanged pose revision.
+Its `trace-verified` result does not inspect image or video contents; recording
+quality and visual evidence remain `UNVERIFIED`. Run the separate recording
+quality checks below and inspect playback. A touch-emulated browser is not a
+physical phone. Compare matching viewports and fixtures across revisions, and
+measure frame times in separate no-video runs.
 
 For an opt-in hosted still-image check, add the `visual-proof` label to a PR.
 The workflow builds the exact PR base and head, stages the same city and Marin
@@ -256,9 +288,20 @@ The quality report requires `ffprobe` on the path and returns `HOLD` when the
 run, timestamps, video stream, enabled audio stream or matching configuration are incomplete. It
 compares animation callback intervals, describes long screencast gaps, and
 reports host load. Recording quality is `HOLD` for those gaps or other warnings;
-otherwise it remains `UNVERIFIED` until a person checks player fidelity. It
-checks metadata and video packets, not whether images
-are unique or look smooth. The frame callback transfers JPEG data and adds
+otherwise it remains `UNVERIFIED`. There is no automated approval path, even
+after manual review, so it always reports `qualityAcceptance: HOLD`. The diagnostic CLI exits
+1 for detected issues and 2 when its checks are clean but fidelity is still
+unverified; neither is an approval. The optional CI video run fails closed for
+both `HOLD` and `UNVERIFIED` while retaining the recording and diagnostic
+artifacts. Its automated checks do not approve player fidelity.
+For tab capture, the track and encoded video dimensions must each equal the
+manifest viewport dimensions multiplied by its explicitly recorded configured
+device scale factor; missing, non-integral or mismatched dimensions are `HOLD`.
+This check does not establish the correct crop. The recorded capture-handle
+match is an additional browser identity check, not proof of pixels or every
+source change. These checks inspect metadata and video packets, not whether
+images are unique or look smooth. The
+frame callback transfers JPEG data and adds
 recording overhead. Capture timestamps are not physical display or GPU timing;
 the full commit is an operator label and must be checked against the served
 build. Inspect the video and scenario trajectory, compare with real gameplay,
@@ -266,6 +309,17 @@ and repeat on quiet representative hardware before drawing performance
 conclusions. The comparison currently requires one recording segment enclosing
 one `frameStart` / `frameStop` interval; scenarios with other layouts need
 their own analysis. Keep the private capture traces with the video.
+
+For a fidelity investigation, inspect each recording by itself before using a
+side-by-side viewer: decoding two videos and periodically seeking one to keep
+them aligned can affect playback. Compare the same short, moving scenario on
+quiet representative hardware with capture off and on, repeating in alternating
+order and retaining browser, renderer, host load, callback and packet evidence.
+Separately compare the recording against the live game or an independent display
+reference. These checks can help locate capture or playback problems; they do
+not turn a single run, an emulated device, or callback timing into a GPU or
+physical-device result. A requested capture frame rate is not a guarantee of
+that many distinct rendered frames.
 
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
@@ -325,7 +379,17 @@ secret as a bearer token to `GET <endpoint>` for status,
 serialized; interactive waits and wait-for timeouts are limited to one second
 per request, and `recordStop` releases held inputs before encoding. `finish`
 returns HTTP 202 for acceptance, not completion: wait for the runner to exit
-and inspect `manifest.json`. `replay.json` saves successful commands and the
+and inspect `manifest.json`. A signal waits for accepted actions to finish. If
+they do not drain within a minute, the runner attempts to move the private run
+into a `.tesland-quarantine-*` directory, attempts to close the browser and exits without
+publishing a final manifest. If quarantine or browser close fails, its output
+and browser state remain uncertain. A failed screencast stop can also leave a
+private `.tesland-capture-stage-*` sibling or Playwright temporary files; a
+failed screenshot can leave a `.png.partial` file. Do
+not remove them until all writers are known to have stopped. A failed run may
+retain audio, so its files are not a completed recording. This repository is public, so CI uploads
+diagnostics but not video or screenshot files; retain media privately outside
+CI. `replay.json` saves successful commands and the
 elapsed time between them for reuse; this approximates command timing, not
 the exact moment an input reaches the game. A failed action marks it incomplete.
 include a `waitFor` command for any readiness needed by a fresh run. Replayed
@@ -383,6 +447,22 @@ start/stop recording and timestamped frame callbacks; it defaults to 25 fps,
 and the optional recording `fps` setting was added in 1.64. A video can contain
 only frames the browser produced. Pin the actual Playwright and browser
 versions, and verify installed features instead of assuming current docs apply.
+
+The tab path currently requests VP8 and a frame rate up to 60; Chromium can
+still [decimate or downscale the selected source](https://w3c.github.io/mediacapture-screen-share/),
+so check the actual track and decoded frames. If a matched capture still
+stutters, compare browser-default or H.264 MediaRecorder encoding on the same
+route before building a separate encoder. A WebCodecs pipeline adds queue and
+container handling and cannot recover frames the track never supplied; its
+hardware preference is a hint, not proof of hardware encoding. See Chrome's
+[WebCodecs guidance](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs/).
+
+On macOS, a separately measured [ScreenCaptureKit window recording](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos)
+could provide another view for comparison. Use an isolated game window and
+independent visible markers; a window is not a tab identity, recording access
+requires system permission, and simultaneous capture itself changes workload.
+Neither a matching Capture Handle nor agreement between recordings proves
+physical-display presentation or another player's device performance.
 
 [Keyboard down and up](https://playwright.dev/docs/api/class-keyboard) support
 held and simultaneous controls. This exercises the browser input path, although

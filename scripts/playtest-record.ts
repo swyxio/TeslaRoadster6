@@ -2,13 +2,13 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type WebSocket as PlaywrightWebSocket } from 'playwright';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
-import { ScreencastCapture } from './playtest-capture';
+import { abandonControlSession, captureError as asError, CaptureSession, finalizeTabCapture, publishScreencast, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline, writeCaptureScreenshot } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -25,11 +25,12 @@ const { values } = parseArgs({ options: {
   serve: { type: 'boolean', default: false }, port: { type: 'string', default: '0' },
   width: { type: 'string', default: '1280' }, height: { type: 'string', default: '720' },
   fps: { type: 'string', default: '30' }, 'no-video': { type: 'boolean', default: false },
+  'video-source': { type: 'string', default: 'screencast' },
   trajectory: { type: 'boolean', default: false }, audio: { type: 'boolean', default: false },
   mobile: { type: 'boolean', default: false }, help: { type: 'boolean', default: false },
 } });
 if (values.help) {
-  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--audio] [--gpu default|metal|vulkan|swiftshader]');
+  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--audio] [--video-source screencast|tab] [--gpu default|metal|vulkan|swiftshader]');
   process.exit(0);
 }
 if (values.audio && values['no-video']) throw new Error('--audio requires video capture.');
@@ -37,6 +38,7 @@ if (!values.url || !values['target-ref'] || (!!values.scenario === !!values.serv
 const target = new URL(values.url);
 if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('URL must be HTTP(S) without embedded credentials.');
 if (!['chromium', 'chrome'].includes(values.browser!)) throw new Error('Browser must be chromium or chrome.');
+if (!['screencast', 'tab'].includes(values['video-source']!)) throw new Error('Video source must be screencast or tab.');
 if (!['default', 'metal', 'vulkan', 'swiftshader'].includes(values.gpu!)) throw new Error('GPU must be default, metal, vulkan, or swiftshader.');
 const secret = process.env.TESLAND_PLAYTEST_SECRET;
 if (values.serve && (!secret || Buffer.byteLength(secret) < 32)) throw new Error('Set TESLAND_PLAYTEST_SECRET to at least 32 bytes for the local control server.');
@@ -46,7 +48,7 @@ const scenarioBytes = values.scenario ? await readFile(resolve(values.scenario))
 const scenario = scenarioBytes ? JSON.parse(scenarioBytes.toString()) as Scenario : { steps: [] };
 if (!Array.isArray(scenario.steps)) throw new Error('Scenario steps must be an array.');
 const sourceHash = async (file: string) => createHash('sha256').update(await readFile(new URL(file, import.meta.url))).digest('hex');
-const [recorderSourceSha256, captureSourceSha256, audioSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js')]);
+const [recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js'), sourceHash('./playtest-tab-capture.js')]);
 const view = scenario.viewport ?? { width: Number(values.width), height: Number(values.height), isMobile: values.mobile, hasTouch: values.mobile };
 if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width < 200 || view.width > 3840 || view.height < 200 || view.height > 2160 || (view.deviceScaleFactor !== undefined && (!(view.deviceScaleFactor > 0) || view.deviceScaleFactor > 4))) throw new Error('Invalid viewport.');
 const out = resolve(values.out ?? join('playtest-runs', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`));
@@ -60,17 +62,20 @@ const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
   target: { origin: target.origin, pathname: target.pathname, perf: target.searchParams.has('perf'), refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
-  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
-  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
+  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : values.headed ? 'chromium-headed' : 'chromium-headless-shell', gpuMode: values.gpu, headed: values.headed },
+  viewport: { ...view, deviceScaleFactor: view.deviceScaleFactor ?? 1 }, capture: { enabled: !values['no-video'], source: values['video-source'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: values['video-source'] === 'tab' ? 'Tab media start/stop timestamps are not captured-frame, animation-frame, GPU-completion or physical-display timing.' : 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
 const recordings = manifest.recordings as string[];
 const screenshots = manifest.screenshots as string[];
 const captureSegments = (manifest.capture as { segments: Record<string, unknown>[] }).segments;
+const CAPTURE_DEADLINE_MS = 15_000;
+const partialVideo = (video: string) => `${video}.partial`;
 const held = new Set<string>();
 let browser: Browser | undefined;
 let context: BrowserContext | undefined;
 let page: Page | undefined;
+const captureSession = new CaptureSession();
 let touchSession: CDPSession | undefined;
 const touches = new Map<number, { x: number; y: number; id: number }>();
 let pointerHeld = false;
@@ -78,6 +83,10 @@ let recording = false;
 let segment = 0;
 let pendingVideo = '';
 let pendingCapture: ScreencastCapture | undefined;
+let screencastStage: string | undefined;
+let pendingScreencast: string | undefined;
+let screencastStageUncertain = false;
+let pendingTab: TabChunkSink | undefined;
 let pendingAudio: { file: string; offsetMs: number; startCommandWindowMs: number } | undefined;
 const audioRecordings: { file: string; offsetMs: number; startCommandWindowMs: number }[] = [];
 if (values.audio) manifest.audioRecordings = audioRecordings;
@@ -167,46 +176,105 @@ function nameField(action: Action): string {
   return name;
 }
 async function sample() {
-  return await page!.evaluate(() => {
+  return await withDeadline(page!.evaluate(() => {
     let perf: unknown = null;
     try { perf = JSON.parse(document.body.dataset.teslandPerf || 'null'); } catch { /* diagnostics are optional */ }
     return { connection: document.querySelector('#connection')?.textContent?.trim() ?? null, speed: document.querySelector('#speed')?.textContent?.trim() ?? null, perf };
-  });
+  }), CAPTURE_DEADLINE_MS, 'Timed out sampling the page.');
+}
+// A timed-out page operation may resume later. Never reuse that context for
+// another recording, even if closing the context itself times out.
+async function abandonBrowser() {
+  captureSession.retire();
+  try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Recording browser close timed out.'); }
+  catch (error) { (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; throw asError(error, 'Could not close the recording browser.'); }
 }
 async function stopRecording() {
   if (!recording) throw new Error('No recording is active.');
   let audioFailure: unknown;
   if (pendingAudio) {
     try {
-      const encoded = await page!.evaluate('window.__teslandAudioCapture.stop()') as string;
+      const encoded = await withDeadline(page!.evaluate('window.__teslandAudioCapture.stop()'), CAPTURE_DEADLINE_MS, 'Audio recording stop timed out.') as string;
       await writeFile(join(out, pendingAudio.file), Buffer.from(encoded, 'base64'), { flag: 'wx' });
       audioRecordings.push(pendingAudio);
     } catch (error) {
-      audioFailure = error;
-      failure ??= error;
+      audioFailure = asError(error, 'Could not finalize audio recording.');
+      failure ??= audioFailure;
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
+      captureSession.retire();
     } finally { pendingAudio = undefined; }
   }
   if (values['no-video']) { recording = false; pendingVideo = ''; if (audioFailure) throw audioFailure; return; }
-  const video = pendingVideo;
-  const stopRequestedAtRunMs = performance.now() - started;
-  let stopError: unknown;
-  try { await page!.screencast.stop(); } catch (error) { stopError = error; }
-  recording = false; pendingVideo = '';
-  const capture = pendingCapture!.finish(stopRequestedAtRunMs);
-  pendingCapture = undefined;
-  const traceFile = video.replace(/\.webm$/, '.capture.json');
-  await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
-  captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
-  if (stopError) throw stopError;
-  recordings.push(video);
-  if (audioFailure) throw audioFailure;
+  try {
+    const video = pendingVideo;
+    const stopRequestedAtRunMs = performance.now() - started;
+    let stopError: unknown;
+    const traceFile = video.replace(/\.webm$/, '.capture.json');
+    let partialRemovalFailed = false;
+    if (values['video-source'] === 'tab') {
+      const sink = pendingTab!;
+      const result = await finalizeTabCapture({
+        stop: async () => {
+          try {
+            const trace = await withDeadline(page!.evaluate('window.__teslandTabCapture.stop()'), CAPTURE_DEADLINE_MS, 'Tab recording stop timed out.') as { format: number; mode: string; chunks: number; bytes: number; startedAtBrowserMs: number; stoppedAtBrowserMs: number } | undefined;
+            if (!trace || trace.chunks !== sink.chunks || trace.bytes !== sink.bytes) throw new Error('Tab recording chunks are incomplete.');
+            return trace;
+          } catch (error) {
+            try { await abandonBrowser(); }
+            catch (cleanupError) {
+              (manifest.capture as Record<string, unknown>).browserCleanupFailed = true;
+              throw new AggregateError([error, cleanupError], 'Tab recording failed and its browser could not be closed.');
+            }
+            throw asError(error, 'Could not finalize tab recording.');
+          }
+        },
+        close: async () => { pendingTab = undefined; await sink.close(); },
+        writeTrace: async trace => { await writeFile(join(out, traceFile), JSON.stringify(trace) + '\n'); },
+        publish: () => captureSession.publish(() => rename(join(out, partialVideo(video)), join(out, video))),
+        remove: async () => { await unlink(join(out, partialVideo(video))); },
+      });
+      stopError = result.error;
+      partialRemovalFailed = result.partialRemovalFailed;
+    } else {
+      try { await captureSession.stopOrRetire(withDeadline(Promise.resolve().then(() => page!.screencast.stop()), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'), abandonBrowser); }
+      catch (error) { screencastStageUncertain = true; stopError = asError(error, 'Could not finalize screencast.'); }
+    }
+    recording = false; pendingVideo = '';
+    if (values['video-source'] === 'tab') {
+      captureSegments.push({ video, traceFile, mode: 'tab', finalized: !stopError, status: stopError ? 'incomplete' : 'available', ...(partialRemovalFailed ? { partialRemovalFailed } : {}) });
+    } else {
+      const capture = pendingCapture!.finish(stopRequestedAtRunMs);
+      pendingCapture = undefined;
+      await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+      if (!stopError) {
+        try { await publishScreencast(captureSession, pendingScreencast!, join(out, video)); }
+        catch (error) { stopError = asError(error, 'Could not publish screencast.'); captureSession.retire(); }
+      }
+      if (stopError) screencastStageUncertain = true;
+      pendingScreencast = undefined;
+      captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+    }
+    if (stopError) throw stopError;
+    captureSession.requirePublishable();
+    recordings.push(video);
+    if (audioFailure) throw audioFailure;
+  } finally {
+    if (audioFailure) {
+      try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
+    }
+  }
 }
 async function releaseInputs() {
-  for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
-  held.clear();
-  if (touches.size) { try { await touchSession?.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); } catch { /* browser already closed */ } touches.clear(); }
-  if (pointerHeld) { try { await page!.mouse.up(); } catch { /* browser already closed */ } pointerHeld = false; }
+  try {
+    await releaseHeldControls(held, touches, pointerHeld, {
+      keyUp: key => page!.keyboard.up(key),
+      touchCancel: async () => {
+        if (!touchSession) throw new Error('Touch session is unavailable.');
+        await touchSession.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      },
+      pointerUp: () => page!.mouse.up(),
+    });
+  } finally { pointerHeld = false; }
 }
 function touchId(action: Action): number {
   const id = action.id ?? 0;
@@ -220,6 +288,7 @@ async function act(action: Action): Promise<unknown> {
   let key: string | undefined;
   let ok = false;
   try {
+    captureSession.requireUsable();
     switch (action.type) {
       case 'wait': await page!.waitForTimeout(duration(action, 'ms', 0, 60000)); break;
       case 'waitFor': {
@@ -297,7 +366,7 @@ async function act(action: Action): Promise<unknown> {
         if (action.type === 'waitForRoomReady') {
           const deadline = performance.now() + timeout(action, 30000, 120000);
           do {
-            const response = await fetch(new URL(`/api/playtest/status/${room}`, target), { headers });
+            const response = await fetch(new URL(`/api/playtest/status/${room}`, target), { headers, signal: AbortSignal.timeout(Math.max(1, Math.ceil(deadline - performance.now()))) });
             if (!response.ok) throw new Error(`Could not inspect the local playtest room (${response.status}).`);
             const status = await response.json() as { ready?: boolean; paused?: boolean; started?: boolean };
             if (status.ready && status.paused && !status.started) { result = status; break; }
@@ -333,7 +402,7 @@ async function act(action: Action): Promise<unknown> {
           if (!result) throw new Error('Timed out waiting for the staged order snapshot.');
           break;
         }
-        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers });
+        const response = await fetch(new URL(`/api/playtest/begin/${room}`, target), { method: 'POST', headers, signal: AbortSignal.timeout(CAPTURE_DEADLINE_MS) });
         if (!response.ok) throw new Error(`Could not start the local playtest room (${response.status}).`);
         result = await response.json(); break;
       }
@@ -358,7 +427,16 @@ async function act(action: Action): Promise<unknown> {
         break;
       }
       case 'pointerUp': await page!.mouse.up(); pointerHeld = false; break;
-      case 'releaseAll': await releaseInputs(); break;
+      case 'releaseAll': {
+        try { await captureSession.retireOnFailure(withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.')); }
+        catch (error) {
+          failure ??= asError(error, 'Could not release inputs.');
+          try { await captureSession.finishAndClose(async () => { if (recording) await stopRecording(); }, abandonBrowser); }
+          catch (cleanupError) { failure ??= asError(cleanupError, 'Could not finish the recording browser.'); }
+          throw error;
+        }
+        break;
+      }
       case 'touchDown': {
         if (!view.hasTouch) throw new Error('Touch input requires a touch-enabled viewport.');
         const id = touchId(action);
@@ -418,33 +496,67 @@ async function act(action: Action): Promise<unknown> {
       case 'screenshot': {
         const file = `${nameField(action)}.png`;
         if (screenshots.includes(file)) throw new Error('Screenshot name already used.');
-        await page!.screenshot({ path: join(out, file) }); screenshots.push(file); result = { file }; break;
+        await writeCaptureScreenshot(captureSession, () => page!.screenshot(), join(out, file)); screenshots.push(file); result = { file }; break;
       }
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');
-        if (values.audio && !await page!.evaluate('window.__teslandAudioCapture.ready()'))
+        if (values.audio && !await withDeadline(page!.evaluate('window.__teslandAudioCapture.ready()'), CAPTURE_DEADLINE_MS, 'Audio readiness check timed out.'))
           throw new PublicActionError('Trigger a game input to start audio before recording.');
         pendingVideo = `segment-${String(++segment).padStart(3, '0')}.webm`;
         if (!values['no-video']) {
-          const capture = new ScreencastCapture(performance.now() - started);
           const videoBefore = performance.now();
-          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
-            onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
+          if (values['video-source'] === 'tab') {
+            const oldTitle = await withDeadline(page!.title(), CAPTURE_DEADLINE_MS, 'Timed out reading tab title.');
+            pendingTab = new TabChunkSink(await open(join(out, partialVideo(pendingVideo)), 'wx'));
+            try {
+              await withDeadline(page!.evaluate(title => { document.title = title; }, `tesland-tab-${id}`), CAPTURE_DEADLINE_MS, 'Timed out preparing the capture tab.');
+              await withDeadline(page!.evaluate(({ fpsValue, origin }) => (window as any).__teslandTabCapture.start(fpsValue, origin), { fpsValue: fps, origin: target.origin }), CAPTURE_DEADLINE_MS, 'Tab recording start timed out.');
+            } catch (error) {
+              const partial = pendingTab; pendingTab = undefined;
+              let cleanupError: Error | undefined;
+              try { await abandonBrowser(); }
+              catch (failure) { cleanupError = asError(failure, 'Could not close the tab recording browser.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
+              let closeFailed = false;
+              try { await partial!.close(); }
+              catch (failure) { closeFailed = true; cleanupError ??= asError(failure, 'Could not close partial tab recording.'); (manifest.capture as Record<string, unknown>).partialRemovalFailed = true; }
+              if (!closeFailed) {
+                try { await unlink(join(out, partialVideo(pendingVideo))); }
+                catch (failure) { cleanupError ??= asError(failure, 'Could not remove partial tab recording.'); (manifest.capture as Record<string, unknown>).partialRemovalFailed = true; }
+              }
+              if (cleanupError) throw new AggregateError([error, cleanupError], 'Tab recording failed and its partial file could not be cleaned up.');
+              throw error;
+            } finally { try { await withDeadline(page!.evaluate(title => { document.title = title; }, oldTitle), CAPTURE_DEADLINE_MS, 'Timed out restoring tab title.'); } catch { /* a closed page is reported by the next action */ } }
+          } else {
+            const capture = new ScreencastCapture(performance.now() - started);
+            screencastStage ??= await mkdtemp(join(dirname(out), `.tesland-capture-stage-${id}-`));
+            pendingScreencast = join(screencastStage, pendingVideo);
+            try {
+              await withDeadline(page!.screencast.start({ path: pendingScreencast, size: { width: view.width, height: view.height }, fps,
+                onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) }), CAPTURE_DEADLINE_MS, 'Screencast start timed out.');
+            } catch (error) {
+              screencastStageUncertain = true;
+              try { await abandonBrowser(); }
+              catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Screencast start failed and its browser could not be closed.'); }
+              throw error;
+            }
+            pendingCapture = capture;
+          }
           const videoAfter = performance.now();
-          pendingCapture = capture;
           recording = true;
           if (values.audio) {
             try {
               const audioBefore = performance.now();
-              await page!.evaluate('window.__teslandAudioCapture.start()');
+              await withDeadline(page!.evaluate('window.__teslandAudioCapture.start()'), CAPTURE_DEADLINE_MS, 'Audio recording start timed out.');
               const audioAfter = performance.now();
               pendingAudio = { file: `segment-${String(segment).padStart(3, '0')}-audio.webm`, offsetMs: ((audioBefore + audioAfter) - (videoBefore + videoAfter)) / 2, startCommandWindowMs: ((videoAfter - videoBefore) + (audioAfter - audioBefore)) / 2 };
             } catch (error) {
               // Starting audio and video is one action. A rejected audio start
               // must not leave a video running or list a partial as usable.
               const video = pendingVideo;
-              try { await page!.evaluate('window.__teslandAudioCapture.cancel()'); } catch (cleanupError) { failure ??= cleanupError; }
-              try { await stopRecording(); } catch (cleanupError) { failure ??= cleanupError; }
+              failure ??= asError(error, 'Could not start audio recording.');
+              captureSession.retire();
+              try { await stopRecording(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not stop recording.'); }
+              try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
               if (recordings.at(-1) === video) recordings.pop();
               const discarded = captureSegments.at(-1);
               if (discarded?.video === video) discarded.discarded = true;
@@ -452,12 +564,31 @@ async function act(action: Action): Promise<unknown> {
             }
           }
         }
-        recording = true; result = await sample(); break;
+        recording = true;
+        try { result = await sample(); }
+        catch (error) {
+          try { await stopRecording(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not stop recording.'); }
+          throw error;
+        }
+        break;
       }
-      case 'recordStop':
-        result = await sample();
-        if (values.serve) await releaseInputs();
-        await stopRecording(); break;
+      case 'recordStop': {
+        let actionFailure: Error | undefined, releaseFailed = false;
+        try { result = await sample(); } catch (error) { actionFailure = asError(error, 'Could not sample the page.'); }
+        if (values.serve) {
+          try { await captureSession.retireOnFailure(withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.')); }
+          catch (error) { releaseFailed = true; actionFailure ??= asError(error, 'Could not release inputs.'); }
+        }
+        try {
+          await stopRecording();
+          if (actionFailure) throw actionFailure;
+        } finally {
+          if (releaseFailed) {
+            try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
+          }
+        }
+        break;
+      }
       default: throw new Error('Unknown action type.');
     }
     ok = true;
@@ -505,9 +636,21 @@ function json(res: ServerResponse, status: number, value: unknown) { res.writeHe
 
 try {
   const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : values.gpu === 'swiftshader' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
-  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : undefined, headless: !values.headed, args });
+  if (values['video-source'] === 'tab') args.push(`--auto-select-tab-capture-source-by-title=tesland-tab-${id}`);
+  // Interactive shutdown drains accepted actions before closing the browser.
+  // Playwright's default signal handlers would otherwise close it concurrently.
+  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : undefined,
+    headless: !values.headed, handleSIGINT: !values.serve, handleSIGTERM: !values.serve, args });
   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
   context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
+  if (values['video-source'] === 'tab') {
+    await context.addInitScript({ content: await readFile(new URL('./playtest-tab-capture.js', import.meta.url), 'utf8') });
+    await context.exposeBinding('__teslandTabChunk', async (source, chunk: number, encoded: string) => {
+      const sink = pendingTab;
+      if (source.page !== page || source.frame !== page.mainFrame() || !sink) throw new Error('Invalid tab recording chunk.');
+      await sink.append(chunk, encoded);
+    });
+  }
   if (values.audio) await context.addInitScript({ content: await readFile(new URL('./playtest-audio-capture.js', import.meta.url), 'utf8') });
   if (scenario.freshGuest) {
     // The normal default auto-saves a driver in chat. The repeatable scenario
@@ -568,25 +711,59 @@ try {
         json(res, 404, { error: 'Not found' });
       }).catch(error => { if (!res.headersSent) json(res, 400, { error: error instanceof PublicActionError ? error.message : 'Action failed' }); else res.end(); }).finally(() => { queued--; });
     });
+    const serverClosed = new Promise<void>(resolveClosed => { server.once('close', resolveClosed); });
     const port = Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port.');
     await new Promise<void>((resolveListen, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => resolveListen()); });
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('Server did not bind.');
     console.log(JSON.stringify({ id, endpoint: `http://127.0.0.1:${address.port}/v1/runs/${id}`, output: out }));
-    const stop = () => { replayFinishedAt = performance.now(); server.close(); close(); };
+    const stop = () => { accepting = false; replayFinishedAt = performance.now(); server.close(); close(); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     await done;
+    // Finish accepted actions before the outer cleanup touches inputs or video.
+    // A signal can arrive while an asynchronous recordStop is still running.
+    try { await withDeadline(queue, 60_000, 'Timed out draining accepted control actions.'); }
+    catch (error) {
+      failure ??= asError(error, 'Could not drain accepted control actions.');
+      // Move the entire private run out of the artifact path before forced
+      // abandonment. An already in-flight filesystem call cannot be canceled;
+      // if quarantine fails, callers must treat all output as incomplete.
+      const failedSteps = await abandonControlSession(captureSession, {
+        quarantine: () => withDeadline(rename(out, join(dirname(out), `.tesland-quarantine-${id}`)), CAPTURE_DEADLINE_MS, 'Run quarantine timed out.'),
+        closeContext: abandonBrowser,
+        closeBrowser: () => withDeadline(browser!.close(), CAPTURE_DEADLINE_MS, 'Browser close timed out.'),
+        drain: () => withDeadline(queue, CAPTURE_DEADLINE_MS, 'Control action remained pending after browser close.'),
+      });
+      for (const step of failedSteps) console.error(`Recorder shutdown ${step} failed; output or browser cleanup is uncertain.`);
+      console.error('Recorder shutdown abandoned the incomplete private run.');
+      process.exit(1);
+    }
+    // A client may still be trickling a request body that never entered the
+    // action queue. Give completed responses time to flush, then close it.
+    try { await withDeadline(serverClosed, 2000, 'Control connections did not close.'); }
+    catch {
+      server.closeAllConnections();
+      try { await withDeadline(serverClosed, CAPTURE_DEADLINE_MS, 'Control server close timed out.'); }
+      catch (error) { failure ??= asError(error, 'Could not close the control server.'); }
+    }
     process.off('SIGINT', stop); process.off('SIGTERM', stop);
   }
-} catch (error) { failure = error; }
+} catch (error) { failure = asError(error, 'Playtest failed.'); }
 finally {
   (manifest.runner as Record<string, unknown>).hostLoadAverageAtFinish = os.platform() === 'win32' ? null : os.loadavg();
   const endedAt = replayFinishedAt ?? performance.now();
   if (page) {
-    await releaseInputs();
+    try { await withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.'); } catch (error) { failure ??= asError(error, 'Could not release inputs.'); }
     if (recording) { try { await stopRecording(); } catch { failure ??= new Error('Could not finalize recording.'); } }
   }
-  try { await context?.close(); await browser?.close(); } catch { failure ??= new Error('Could not close browser.'); }
+  try { if (context) await withDeadline(context.close(), CAPTURE_DEADLINE_MS, 'Browser context close timed out.'); } catch { failure ??= new Error('Could not close browser context.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
+  try { if (browser) await withDeadline(browser.close(), CAPTURE_DEADLINE_MS, 'Browser close timed out.'); } catch { failure ??= new Error('Could not close browser.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
+  if (screencastStage && (manifest.capture as Record<string, unknown>).browserCleanupFailed) screencastStageUncertain = true;
+  if (screencastStage && !screencastStageUncertain) {
+    try { await rmdir(screencastStage); }
+    catch { screencastStageUncertain = true; failure ??= new Error('Could not remove the private screencast staging directory.'); }
+  }
+  if (screencastStageUncertain) (manifest.capture as Record<string, unknown>).screencastStagingUncertain = true;
   if (values.trajectory) {
     await writeFile(join(out, 'trajectory.json'), JSON.stringify(poses, null, 2) + '\n');
     await writeFile(join(out, 'input-events.json'), JSON.stringify(inputEvents, null, 2) + '\n');
