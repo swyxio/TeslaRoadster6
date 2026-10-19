@@ -19,6 +19,8 @@ test('performance CI ignores documentation and small runtime edits unless explic
   assert.equal(selectPerformance([{ path: 'scripts/recording-quality.mjs', added: 100, deleted: 0 }]).run, true);
   assert.equal(selectPerformance([{ path: 'tests/playtest-audio.integration.mjs', added: 100, deleted: 0 }]).run, true);
   assert.equal(selectPerformance([{ path: 'tests/playtest-tab-capture.integration.ts', added: 1, deleted: 0 }], ['performance-required']).run, true);
+  assert.equal(selectPerformance([{ path: 'tests/playtest-tab-capture.test.ts', added: 99, deleted: 0 }]).run, false);
+  assert.equal(selectPerformance([{ path: 'tests/playtest-tab-capture.test.ts', added: 100, deleted: 0 }]).run, true);
   assert.equal(selectPerformance(large).run, true);
   assert.equal(selectPerformance([{ path: 'public/assets/car.glb', binary: true, added: 0, deleted: 0 }]).run, true);
   for (const path of ['.nvmrc', 'vite.config.ts', 'wrangler.jsonc', 'index.html']) {
