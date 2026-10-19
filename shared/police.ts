@@ -237,12 +237,11 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
   const players=new Map(world.players.map(player=>[player.id,player]));
   redistributePatrol(world,dt,entities);
   const pursuits=new Set(world.entities.flatMap(entity=>entity.police?.targetId?[entity.police.targetId]:[]));
-  const racers=new Set(world.races.rounds.flatMap(round=>round.entrants.filter(entrant=>entrant.status==='entered').map(entrant=>entrant.playerId)));
   const suspects:{player:Player;entity:Entity;cause:'flight'|'speeding';speedKph:number}[]=[];
   for (const player of world.players) {
     const e=entities.get(player.entityId), flight=player.delivery.flight;
     // The fictional arena is a no-police playground, including its ceiling.
-    const protectedArea=!!e&&(e.inDome||islandProtected(e)||racers.has(player.id));
+    const protectedArea=!!e&&(e.inDome||islandProtected(e));
     const height=e&&!protectedArea?flightHeight(e):0;
     if(protectedArea){flight.seconds=0;flight.peakHeight=0;}
     if(height>.05){flight.seconds+=dt;flight.peakHeight=Math.max(flight.peakHeight,height);flight.lastAirborneAt=world.time;}
@@ -258,7 +257,7 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
     const state=cop.police;if(!state)continue;
     let player=state.targetId?players.get(state.targetId):undefined;
     let target=player?entities.get(player.entityId):undefined;
-    if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target)||racers.has(player.id))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
+    if(state.targetId&&(!player||!target||(target.inDome||islandProtected(target))||world.time<player.delivery.ticketGraceUntil)){resumePatrol(cop);player=undefined;target=undefined;}
     if(!target){
       // Select the nearest eligible suspect in player order; strict comparison
       // preserves the previous stable-sort tie break without repeated scans.
@@ -369,7 +368,7 @@ export function policeFlight(cop:Entity,world:World,groundInput:Input):{input:In
   if(!state?.airPatrol||cop.driver||state.cause!=='flight'||!state.targetId||!hasRockets(cop))return ground;
   if(cop.supportId!==null&&groundInput.brake)return ground;
   const player=world.players.find(p=>p.id===state.targetId),target=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!target||target.inDome||islandProtected(target)||world.races.rounds.some(round=>round.entrants.some(e=>e.playerId===player.id&&e.status==='entered')))return ground;
+  if(!player||!target||target.inDome||islandProtected(target))return ground;
   const dx=target.x-cop.x,dz=target.z-cop.z,d=Math.hypot(dx,dz);
   const heading=Math.atan2(-dx,-dz),angle=Math.atan2(Math.sin(heading-cop.yaw),Math.cos(heading-cop.yaw));
   if(cop.supportId===null){

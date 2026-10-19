@@ -12,7 +12,7 @@ export const RELEASES = [
       { title: 'On the road', items: [
         'Pass Bay-inspired buildings, trees and billboards along 101 and 880. Highway traffic uses multiple lanes, including marked HOV lanes open to every driver.',
         'Find directional skyways above stretches of the highways as you unlock the surrounding regions.',
-        'Highway patrols pursue drivers above 125 km/h; a rocket-equipped officer can take short hops. Keep an eye on the sky for rare visitors.'
+        'Highway patrols pursue drivers above 125 km/h; a rocket-equipped officer can take short hops. Keep an eye on the sky for occasional visitors.'
       ] }
     ]
   },

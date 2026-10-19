@@ -3,6 +3,7 @@
 ## Speeding ticket evidence · isolated candidate · 2026-10-19 Pacific
 
 - On base `e4b2412` plus the ticket fix, 14 focused police and flight tests passed. The prior-flight speeding-only and expired-pursuit cases failed before the fix; mixed pursuits, multiple officers, existing flight fines and the sight ceiling passed after it. The staged evidence and final fine were checked in shared simulation. No build, room integration, browser or performance check was run while the separate demo was active.
+- In the isolated follow-up, two mainland-racer assertions failed before removing the player-wide police exemption. All 23 highway-police tests passed afterward, covering island protection and mainland speeding and flight enforcement. The local demo remained on the earlier build. UFO sightings are occasional timed scenery, not randomized rare events.
 
 ## Bay highway life · local candidate · 2026-10-18 Pacific
 

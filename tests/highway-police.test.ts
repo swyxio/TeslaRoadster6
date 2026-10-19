@@ -49,7 +49,7 @@ test('fresh rooms seed exactly four police, with two on supported Bay highway ro
   }
 });
 
-test('highway speeding requires an officer nearby, a grounded road car, and no race or grace',()=>{
+test('highway speeding requires an officer nearby, a grounded road car, and no grace',()=>{
   const {world,player,car}=fixture(),cop=patrol(world,190);
   car.speed=HIGHWAY_SPEED_TRIGGER_KPH/3.6;updatePolice(world,.05);assert.equal(cop.police!.targetId,null);
   car.speed=(HIGHWAY_SPEED_TRIGGER_KPH+1)/3.6;
@@ -62,8 +62,17 @@ test('highway speeding requires an officer nearby, a grounded road car, and no r
   car.inDome=false;player.delivery.ticketGraceUntil=20;updatePolice(world,.05);assert.equal(cop.police!.targetId,null);
   player.delivery.ticketGraceUntil=0;
   world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:100,starterCount:1,entrants:[{playerId:player.id,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:car.x,y:car.y,z:car.z,time:0}}]});
-  updatePolice(world,.05);assert.equal(cop.police!.targetId,null,'active racers retain their protection');
-  world.races.rounds=[];updatePolice(world,.05);assert.equal(cop.police!.targetId,player.id);assert.equal(player.delivery.tickets,0,'seeing a violation does not issue a ticket');
+  updatePolice(world,.05);assert.equal(cop.police!.targetId,player.id,'an entered racer on the mainland is subject to highway policing');
+  assert.equal(player.delivery.tickets,0,'seeing a violation does not issue a ticket');
+});
+
+test('race-island protection ends when an entrant flies over the mainland',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190);
+  world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:100,starterCount:1,entrants:[{playerId:player.id,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:0,y:10,z:-1500,time:0}}]});
+  Object.assign(car,{x:0,z:-1500,y:10,supportId:null,speed:0});Object.assign(cop,{x:0,z:-1510,y:0});
+  updatePolice(world,.05);assert.equal(cop.police!.targetId,null,'flight on the island remains protected');
+  Object.assign(car,along(250),{y:10,supportId:null});Object.assign(cop,along(190),{y:0});
+  updatePolice(world,.05);assert.equal(cop.police!.targetId,player.id,'flight on the mainland is policed');
 });
 
 test('a speeding-only stop excludes flight before the pursuit from the staged evidence and fine',()=>{
@@ -281,9 +290,8 @@ test('only a tagged rocket officer may launch and protected players cannot trigg
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'island protection applies before launch');
   Object.assign(car,targetPosition);
   world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:100,starterCount:1,entrants:[{playerId:player.id,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:car.x,y:car.y,z:car.z,time:0}}]});
-  assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'racers remain protected');world.races.rounds=[];
   assert.equal(policeFlight(cop,world,{...NEUTRAL,brake:true}).jump,false,'braking for traffic cannot be overridden by a flight launch');
-  assert.equal(policeFlight(cop,world,NEUTRAL).jump,true);
+  assert.equal(policeFlight(cop,world,NEUTRAL).jump,true,'an entered racer flying over the mainland can be pursued');
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'launch has a bounded cooldown');
 });
 
