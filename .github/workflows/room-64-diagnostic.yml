@@ -1,4 +1,4 @@
-name: Historical 64-player room research
+name: Isolated 64-player room diagnostic
 
 # The target is deliberately unconfigured. A push to this one diagnostics
 # branch starts identity checks; an unapproved target fails before any load.
@@ -54,10 +54,9 @@ jobs:
         working-directory: candidate
         env:
           TARGET_SHA: ${{ steps.target.outputs.sha }}
-          BASE_SHA: ${{ steps.target.outputs.base }}
         run: |
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
-          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git merge-base --is-ancestor refs/remotes/origin/main HEAD
           pnpm install --frozen-lockfile
           pnpm exec vite build --manifest
       - name: Verify PR, preview isolation and served assets
@@ -109,6 +108,7 @@ jobs:
         run: |
           test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
           test "$(git -C base rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C candidate rev-parse refs/remotes/origin/main)" = "$BASE_SHA"
           git -C candidate merge-base --is-ancestor "$BASE_SHA" "$TARGET_SHA"
           test -f candidate/scripts/bench-snapshot-assembly.ts
           cp candidate/scripts/bench-snapshot-assembly.ts base/scripts/bench-snapshot-assembly.ts
@@ -166,11 +166,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ needs.identity.outputs.sha }}
-          BASE_SHA: ${{ needs.identity.outputs.base }}
         run: |
           mkdir -p "$RUNNER_TEMP/capacity-preview-diagnostic"
           test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
-          git -C candidate merge-base --is-ancestor "$BASE_SHA" HEAD
+          git -C candidate merge-base --is-ancestor refs/remotes/origin/main HEAD
           node diagnostic/scripts/room-64-target.mjs diagnostic/scripts/room-64-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/capacity-preview-diagnostic/identity-before.json"
           cp diagnostic/scripts/room-64-diagnostic.ts diagnostic/scripts/room-64-observations.ts diagnostic/scripts/room-64-observations.test.ts diagnostic/scripts/room-64-corridors.ts diagnostic/scripts/room-64-target.json candidate/scripts/
           cd candidate
@@ -213,7 +212,4 @@ jobs:
           pattern: room-64-${{ github.run_id }}-${{ github.run_attempt }}-group-*
           path: reports
       - name: Require one complete, coordinated room across all four runners
-        run: |
-          node scripts/room-64-aggregate.mjs reports
-          echo "Historical research only: current-main release verification is intentionally not satisfied."
-          exit 1
+        run: node scripts/room-64-aggregate.mjs reports

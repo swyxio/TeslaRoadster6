@@ -1,9 +1,9 @@
 {
   "repo": "swyxio/TeslaRoadster6",
   "approved": true,
-  "pullRequest": 117,
-  "sha": "59f2966ebfc7f9b0cb032a182d687b8175e41666",
-  "baseSha": "c5bd893f952d950df1451aee3d4ae9972865c1ee",
-  "preview": "https://9a511fb1-bay-drive.swyxio.workers.dev",
-  "protocol": 47
+  "pullRequest": 115,
+  "sha": "4dfd2612c834601b555f405e6fb050fd6b003cde",
+  "baseSha": "e07f0bec4e62737fedcfc72ab9714f4dd4e7a1bf",
+  "preview": "https://78d185cf-bay-drive.swyxio.workers.dev",
+  "protocol": 48
 }
