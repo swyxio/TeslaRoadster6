@@ -21,7 +21,8 @@ test('consecutive rewards each get a visible celebration and reset clears the qu
     assert.equal(label.textContent,'DELIVERY + AWARDS');assert.equal(amount.textContent,'+$800');
     advance();assert.equal(label.textContent,'ROCKET DOME REWARDS');assert.equal(amount.textContent,'+$750');
     advance();assert.equal(classes.has('celebrate'),false);
-    celebrateReward({id:3,kind:'pickup',amount:100});celebrateReward({id:4,kind:'research',amount:250});
+    celebrateReward({id:3,kind:'pickup',amount:100});assert.equal(label.textContent,'PICKUP BONUS');
+    celebrateReward({id:4,kind:'research',amount:250});
     resetCelebration();assert.equal(classes.has('celebrate'),false);assert.equal(timers.size,0);
   }finally{
     resetCelebration();Object.assign(globalThis,{document:originalDocument,window:originalWindow,clearTimeout:originalClear});
