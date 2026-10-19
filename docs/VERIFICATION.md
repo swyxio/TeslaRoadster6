@@ -4,6 +4,7 @@
 
 - Fremont has a raised, open flame channel with shared visible and physical walls and deflector; a 360-game-unit decorative radius is interrupted by roads and coastline. Trees, workyard, four dollar scales and a reflective hull follow the existing game art and confirmed earnings. The factory and boarding point remain within the playful radius.
 - On main base `53890176`, all 1,093 tests and `pnpm build` passed; the existing large-chunk warning remains. Local Wrangler room and prediction integrations passed with protocol v51, including two-client movement and action fencing. They are functional checks, not load or capacity evidence.
+- After integrating main `6742d826`, release 0.0.41 / protocol v52 passed all 1,107 tests, the build and local Wrangler room and prediction integrations. The integrated desktop launch view also rendered in Chrome. The earlier portrait and landscape checks used the same Starbase scene before integration; a repeat timed out while recovering the Chrome test tab. Production readback remains separate.
 - In isolated local Wrangler, Chrome displayed the site from the driving world and the launch viewer on desktop and emulated 390 × 844 portrait and 844 × 390 landscape; the viewer closed back to the game. No browser console errors were captured in the sandbox. Separate local-only viewer inputs showed the growing hull and scale at 50% and the reflective completed hull at 100%, with no launch animation. No production ledger was changed. Touch driving and physical devices were not tested.
 
 
