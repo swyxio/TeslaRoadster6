@@ -1,0 +1,55 @@
+{
+  "freshGuest": true,
+  "viewport": {
+    "width": 844,
+    "height": 390,
+    "hasTouch": true,
+    "isMobile": true
+  },
+  "steps": [
+    {
+      "type": "waitFor",
+      "selector": "#connection:has-text(\"LIVE\")",
+      "timeoutMs": 60000
+    },
+    {
+      "type": "waitForPoseRevision",
+      "value": 1,
+      "timeoutMs": 30000
+    },
+    {
+      "type": "wait",
+      "ms": 1200
+    },
+    {
+      "type": "screenshot",
+      "name": "before"
+    },
+    {
+      "type": "recordStart"
+    },
+    {
+      "type": "touchDown",
+      "selector": "#drive-control",
+      "id": 0
+    },
+    {
+      "type": "waitForTicks",
+      "count": 45
+    },
+    {
+      "type": "touchUp",
+      "id": 0
+    },
+    {
+      "type": "sample"
+    },
+    {
+      "type": "screenshot",
+      "name": "through-sutro"
+    },
+    {
+      "type": "recordStop"
+    }
+  ]
+}

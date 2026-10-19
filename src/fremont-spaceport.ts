@@ -2,19 +2,75 @@ import * as T from 'three';
 import { requiredLevelAt } from '../shared/delivery';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { FREMONT_SPACEPORT as site } from '../shared/map';
+import { spaceportStructureBoxes } from '../shared/spaceport-structures';
+import { STARSHIP_GOAL } from '../shared/starship';
 import { constructionFraction, constructionNoseRadius } from './starship-construction';
 import { createStarshipWorkyard } from './starship-workyard';
 import { box, material } from './vehicles';
 
+/** A shared scale on both visible sides of the tower, driven by confirmed income. */
+function createTowerProgress(tower:T.Group) {
+  const width=11.5,height=112,centerY=66,bottom=20,top=114,trackX=3.4,trackWidth=2;
+  const scaleCanvas=document.createElement('canvas');scaleCanvas.width=384;scaleCanvas.height=2048;
+  const scale=scaleCanvas.getContext('2d')!;
+  const canvasY=(y:number)=>(centerY+height/2-y)/height*scaleCanvas.height;
+  const canvasX=(x:number)=>(x+width/2)/width*scaleCanvas.width;
+  scale.fillStyle='#122d36';scale.fillRect(0,0,scaleCanvas.width,scaleCanvas.height);
+  scale.fillStyle='#35515a';scale.fillRect(canvasX(trackX-trackWidth/2),canvasY(top),canvasX(trackWidth)-canvasX(0),canvasY(bottom)-canvasY(top));
+  scale.textAlign='right';scale.textBaseline='middle';scale.font='bold 72px system-ui';
+  for(const fraction of [1,.75,.5,.25,0]){
+    const y=canvasY(bottom+(top-bottom)*fraction);
+    scale.fillStyle='#f4f0df';
+    scale.fillText('$'+new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:0}).format(STARSHIP_GOAL*fraction),canvasX(1.8),y);
+    scale.fillStyle='#c2d4ce';scale.fillRect(canvasX(2),y-3,canvasX(.35)-canvasX(0),6);
+  }
+  const scaleTexture=new T.CanvasTexture(scaleCanvas);scaleTexture.colorSpace=T.SRGBColorSpace;
+  const valueCanvas=document.createElement('canvas');valueCanvas.width=512;valueCanvas.height=256;
+  const valueContext=valueCanvas.getContext('2d')!;
+  const valueTexture=new T.CanvasTexture(valueCanvas);valueTexture.colorSpace=T.SRGBColorSpace;
+  const scaleMaterial=new T.MeshBasicMaterial({map:scaleTexture});
+  const valueMaterial=new T.MeshBasicMaterial({map:valueTexture});
+  const fillMaterial=new T.MeshBasicMaterial({color:0xf2b44d});
+  const markerMaterial=new T.MeshBasicMaterial({color:0xffe5a1});
+  const fills:T.Mesh[]=[],markers:T.Mesh[]=[];
+  for(const side of ['front','right'] as const){
+    const face=new T.Group();
+    if(side==='front')face.position.z=site.tower.d/2+.35;
+    else {face.position.x=site.tower.w/2+.35;face.rotation.y=Math.PI/2;}
+    tower.add(face);
+    const plate=new T.Mesh(new T.PlaneGeometry(width,height),scaleMaterial);plate.position.y=centerY;face.add(plate);
+    const value=new T.Mesh(new T.PlaneGeometry(width,7.5),valueMaterial);value.position.y=6;face.add(value);
+    const fill=new T.Mesh(new T.PlaneGeometry(trackWidth,1),fillMaterial);fill.position.set(trackX,bottom,.03);face.add(fill);fills.push(fill);
+    const marker=new T.Mesh(new T.PlaneGeometry(trackWidth+1,.8),markerMaterial);marker.position.set(trackX,bottom,.04);face.add(marker);markers.push(marker);
+  }
+  let lastTotal:number|null|undefined;
+  return (total:number|null)=>{
+    if(total===lastTotal)return;lastTotal=total;
+    const fraction=constructionFraction(total);
+    for(const fill of fills){
+      const filled=(top-bottom)*(fraction??0);fill.visible=filled>0;fill.scale.y=filled;fill.position.y=bottom+filled/2;
+    }
+    for(const marker of markers){marker.visible=fraction!==null;marker.position.y=bottom+(top-bottom)*(fraction??0);}
+    const c=valueContext;c.fillStyle='#122d36';c.fillRect(0,0,512,256);
+    c.textAlign='center';c.fillStyle='#c2d4ce';c.font='bold 30px system-ui';c.fillText('CONFIRMED EARNINGS',256,62);
+    const amount=fraction===null?'WAITING':`$${Math.floor(total!).toLocaleString('en-US')}`;
+    let size=72;c.font=`bold ${size}px system-ui`;
+    while(c.measureText(amount).width>475&&size>32)c.font=`bold ${--size}px system-ui`;
+    c.fillStyle='#ffe5a1';c.fillText(amount,256,170);valueTexture.needsUpdate=true;
+  };
+}
+
 /** Fictional Fremont complex. Factory, pad and tower match shared collision boxes. */
 export function buildFremontSpaceport(scene:T.Scene) {
+  const structure=(group:T.Group,kind:'factory'|'pad'|'tower')=>{
+    for(const p of spaceportStructureBoxes(kind,site[kind]))box(group,p.x,p.y,p.z,p.w,p.h,p.d,p.color);
+  };
   const factory=new T.Group();factory.position.set(site.factory.x,0,site.factory.z);scene.add(factory);
-  box(factory,0,site.factory.h/2,0,site.factory.w,site.factory.h,site.factory.d,0xd6dad9);
+  structure(factory,'factory');
   box(factory,0,17,site.factory.d/2+.12,site.factory.w,1.6,.25,0xb52c2d);
   box(factory,0,7,site.factory.d/2+.18,55,10,.35,0x31505a);
   for(let x=-60;x<=60;x+=12){
     box(factory,x,11,site.factory.d/2+.2,4,6,.2,0x557782);
-    box(factory,x,site.factory.h+.2,0,8,.4,site.factory.d-10,0x30515b);
   }
   const signCanvas=document.createElement('canvas');signCanvas.width=1024;signCanvas.height=128;
   const c=signCanvas.getContext('2d')!;c.fillStyle='#f2f3ed';c.fillRect(0,0,1024,128);c.fillStyle='#b42f2f';c.font='bold 65px system-ui';c.textAlign='center';c.fillText('TESLA × SPACEX  /  FREMONT',512,84);
@@ -27,20 +83,17 @@ export function buildFremontSpaceport(scene:T.Scene) {
   }
 
   const pad=new T.Group();pad.position.set(site.pad.x,0,site.pad.z);scene.add(pad);
-  box(pad,0,site.pad.h/2,0,site.pad.w,site.pad.h,site.pad.d,0x777e7b);
-  box(pad,0,site.pad.h+.05,0,25,.1,25,0x38454a);
+  structure(pad,'pad');
   for(const z of [-13,13])box(pad,0,site.pad.h+.12,z,27,.2,.5,0xe8b454);
 
   const tower=new T.Group();tower.position.set(site.tower.x,0,site.tower.z);scene.add(tower);
-  box(tower,0,site.tower.h/2,0,site.tower.w,site.tower.h,site.tower.d,0x687178);
+  structure(tower,'tower');
   for(const x of [-5,5])for(const z of [-5,5])box(tower,x,site.tower.h/2,z,1.4,site.tower.h,1.4,0x333f45);
   for(let y=8;y<125;y+=12){
     box(tower,0,y,6,12,1,.5,0xcbb59a);box(tower,0,y,-6,12,1,.5,0xcbb59a);
   }
-  // The fictional launch tower's arms extend toward the rocket.
-  const arms=new T.Group();tower.add(arms);
-  for(const z of [-5,5])box(arms,-15,93,z,26,2,2,0x454f54);
-  box(tower,-1,127,0,14,4,14,0x454f54);
+  const updateTowerProgress=createTowerProgress(tower);
+  updateTowerProgress(null);
   const workyard=createStarshipWorkyard(scene);
 
   // The site sign is deliberately beside, rather than inside, the boarding ring.
@@ -142,6 +195,7 @@ export function buildFremontSpaceport(scene:T.Scene) {
     const tileHeight=Math.max(0,Math.min(23,height-73.5));tiles.visible=tileHeight>0;tiles.scale.y=tileHeight;tiles.position.y=73.5+tileHeight/2;
     fins.visible=height>=84;flaps.visible=height>=106;engines.visible=height>=3;outline.visible=height<120;gantry.visible=height<120;
     updateBoard(total);
+    updateTowerProgress(total);
     workyard.update(ambientTime,!launching);
     rocket.position.y=site.pad.h+(launching?Math.max(0,elapsed-1)**2*3:0);
     flame.visible=launching;

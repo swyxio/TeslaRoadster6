@@ -111,7 +111,8 @@ test('Fremont and San Jose landmark visits pay once on stopped ground arrival',(
 // Exercise the actual Roadster's air budget and motion, not just the trigger coordinates.
 test('the Roadster can earn Bay Hopper with a continuous two-jump flight',()=>{
   const {world,player,car}=setup();player.delivery.cash=10_000;player.delivery.level=1;world.entities=[car];world.pickups=[];
-  Object.assign(car,{x:50,z:60,y:0,yaw:-Math.PI/2,speed:0,supportId:'ground'});
+  // Pass beside the bridge: its crossbeams now correctly block a low flight.
+  Object.assign(car,{x:50,z:78,y:0,yaw:-Math.PI/2,speed:0,supportId:'ground'});
   step(world,new Map([['p',NEUTRAL]]),.05);car.speed=68;
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
@@ -134,7 +135,7 @@ test('an immediate first-frame jump starts Bay Hopper after spawn, reset or vehi
 });
 
 test('a first-frame two-jump flight can unlock Bay Hopper without a neutral tick',()=>{
-  const {world,player,car}=setup();player.delivery.cash=10_000;player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.yaw=-Math.PI/2;car.speed=68;
+  const {world,player,car}=setup();player.delivery.cash=10_000;player.delivery.level=1;world.entities=[car];world.pickups=[];car.x=50;car.z=78;car.yaw=-Math.PI/2;car.speed=68;
   for(let i=0;i<100&&!player.achievements.unlocked.includes('bay-hopper');i++)
     step(world,new Map([['p',{...NEUTRAL,jump:i<24?1:2}]]),.05);
   assert.ok(player.achievements.unlocked.includes('bay-hopper'));
