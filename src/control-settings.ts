@@ -30,6 +30,7 @@ export function setupControlSettings(controls:Controls, open:()=>void, close:()=
       ['Enter / exit · unstuck · camera',`${label('interact')} · ${label('reset')} · ${label('camera')}`],
       ['Autopilot · fleet · shop · scores · awards',`${label('autopilot')} · ${label('fleet')} · ${label('shop')} · ${label('scores')} · ${label('awards')}`],
     ]){const p=document.createElement('p'),kbd=document.createElement('kbd');kbd.textContent=keys;p.append(kbd,` · ${text}`);guide.append(p);}
+    const shortcuts=document.createElement('p');shortcuts.textContent='Double-tap Shift to self-drive to a delivery; triple-tap Shift for a charger.';guide.append(shortcuts);
     const note=document.createElement('small');note.textContent='Blue sky lanes add speed and air; golden thermals lift and refill you. Edit bindings in Actions → Controls & gamepad.';guide.append(note);
     for(const [id,action,text] of [['recover','reset','Unstuck'],['fleet','fleet','Fleet'],['shop','shop','Shop'],['scores','scores','Scores'],['awards','awards','Awards']] as const)$(id).textContent=`${label(action)} · ${text}`;
   };

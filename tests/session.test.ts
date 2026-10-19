@@ -73,7 +73,7 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
 });
 
 test('an incompatible protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,56);
+  assert.equal(PROTOCOL_VERSION,57);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:52,capacity:64});
   assert.equal(socket.readyState,3);
@@ -212,6 +212,8 @@ test('offline navigation requests fail without starting a local session',()=>{
   assert.deepEqual(session.destinationResult,{requestId,ok:false});
   const deliveryRequest=session.setDeliveryDestination();
   assert.deepEqual(session.destinationResult,{requestId:deliveryRequest,ok:false});
+  const chargerRequest=session.setChargerDestination();
+  assert.deepEqual(session.destinationResult,{requestId:chargerRequest,ok:false});
   assert.equal(session.world.players.length,0);
 });
 
@@ -443,9 +445,14 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:2});
   socket.message({type:'destinationResult',requestId:deliveryRequest,ok:true});
   assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId:deliveryRequest,ok:true});
-  session.enterMinigame('park');
-  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:3,edgeBaseline:{jump:0,flip:0}});
+  const chargerRequest=session.setChargerDestination('road');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'chargerDestination',mode:'road',requestId:chargerRequest,actionSeq:3,edgeBaseline:{jump:0,flip:0}});
   assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:3});
+  socket.message({type:'destinationResult',requestId:chargerRequest,ok:true});
+  assert.deepEqual(session.destinationResult,{type:'destinationResult',requestId:chargerRequest,ok:true});
+  session.enterMinigame('park');
+  assert.deepEqual(JSON.parse(socket.sent.at(-2)!),{type:'minigame',game:'park',actionSeq:4,edgeBaseline:{jump:0,flip:0}});
+  assert.deepEqual(JSON.parse(socket.sent.at(-1)!),{type:'sync',token:4});
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
   session.disconnect();

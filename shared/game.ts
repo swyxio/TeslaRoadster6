@@ -2,6 +2,7 @@ import { BUILDINGS, DOME_PERIMETER, FERRY_DOCKS, MAP_BOUNDS, OVERPASS, ROCKET_IS
 import { DOME, DOME_CHARGE_RATE, chargingDomeWall } from './dome';
 export { BUILDINGS } from './map';
 import { refillStationFor } from './charging';
+import { STATIONS, stationStalls } from './stations';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions, verticalBounds } from './physics';
 import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
@@ -39,7 +40,7 @@ import { domeBodyContact } from './dome-body';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=56;
+export const PROTOCOL_VERSION=57;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -390,6 +391,28 @@ export function setDeliveryDestination(world:World,id:string,mode:DriveMode='roa
   if(player.delivery.order.search)return false;
   const target=orderTarget(player.delivery.order);
   return !target.rooftop&&navigate(world,id,target,mode,DELIVERY_DESTINATION_SNAP);
+}
+/** Route to the least-cost reachable, currently unoccupied refill bay. */
+export function setChargerDestination(world:World,id:string,mode:DriveMode='road'):boolean {
+  const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
+  if(!player||!car||car.driver!==id||car.kind==='person'||car.supportId!=='ground'||car.inDome||!isDriveMode(mode)||
+    (mode==='intercity'&&!hasIntercity(car.upgrades))||((mode==='jump'||mode==='sky')&&!hasRockets(car))||
+    (mode==='jump'&&!car.upgrades.autonomyJump)||(mode==='sky'&&!car.upgrades.autonomySky))return false;
+  let best:{route:Navigation;stationId:string;cost:number}|undefined;
+  const stalls=STATIONS.flatMap(station=>stationStalls(station).map(stall=>({station,stall,distance:Math.hypot(stall.x-car.x,stall.z-car.z)}))).sort((a,b)=>a.distance-b.distance);
+  for(const {station,stall,distance} of stalls){
+    if(best&&distance>=best.cost)break;
+    if(requiredLevelAt(stall.x,stall.z)>player.delivery.level)continue;
+    const y=terrainHeight(stall.x,stall.z);if(y===null)continue;
+    const route=planNavigation(car,stall,player.delivery.level,0,true);if(!route)continue;
+    const approach=route.path.at(-2)??{x:car.x,z:car.z};
+    const yaw=Math.atan2(-(stall.x-approach.x),-(stall.z-approach.z));
+    if(!fits(world,{...car,x:stall.x,y,z:stall.z,yaw,supportId:'ground'},car))continue;
+    const cost=route.path.reduce((sum,point,index)=>sum+Math.hypot(point.x-(index?route.path[index-1].x:car.x),point.z-(index?route.path[index-1].z:car.z)),0);
+    if(!best||cost<best.cost)best={route,stationId:station.id,cost};
+  }
+  if(!best)return false;
+  car.navigation=Object.assign(best.route,{mode,chargerStationId:best.stationId});car.autopilot=true;car.pauseUntil=0;return true;
 }
 export function resetPlayer(world:World,id:string):void {
   const player=world.players.find(p=>p.id===id),e=world.entities.find(e=>e.id===player?.entityId);if(!e||!player)return;
@@ -1199,7 +1222,12 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     }
     capFlightSpeed(e);
     if(chargingDomeWall(e,hasRockets(e))&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+DOME_CHARGE_RATE*dt);
-    if(refillStationFor(e)&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+28*dt);
+    const refill=refillStationFor(e);
+    if(refill&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver))){
+      e.air=Math.min(100,e.air+28*dt);
+      const nav=e.navigation;
+      if(nav?.status==='driving'&&nav.chargerStationId===refill.id&&Math.abs(e.speed)<.15&&Math.abs(e.x-nav.destination.x)<2.25&&Math.abs(e.z-nav.destination.z)<4.5){nav.status='arrived';e.autopilot=false;}
+    }
     // Fictional police compressor restores patrol air between pursuits, so a
     // long-lived room does not permanently lose its airborne response.
     if(e.police?.airPatrol&&!e.driver&&!e.police.targetId&&e.supportId==='ground')e.air=Math.min(100,e.air+dt);

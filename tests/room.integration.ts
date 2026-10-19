@@ -12,7 +12,7 @@ import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
 // Both clients must agree on finishes, self-drive modes and the tick/action contract.
-assert.equal(PROTOCOL_VERSION, 56);
+assert.equal(PROTOCOL_VERSION, 57);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.
@@ -270,6 +270,13 @@ try {
     return !!destination&&Math.hypot(destination.x-deliveryTarget.x,destination.z-deliveryTarget.z)<=DELIVERY_DESTINATION_SNAP&&two.state.world?.entities.find(e=>e.driver===id)?.navigation?.mode==='road';
   },'delivery route uses the authoritative order');
   assert.equal(two.state.destinationResults?.length??0,0,'delivery response goes only to the requester');
+  await delay(500);one.input.action({type:'chargerDestination',mode:'road',requestId:13});
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===13&&r.ok)??false,'charger route accepted by the room');
+  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&e.autopilot&&!!e.navigation?.chargerStationId)??false,'charger route replicated');
+  assert.equal(two.state.destinationResults?.length??0,0,'charger response goes only to the requester');
+  one.input.send({...NEUTRAL,throttle:1});
+  await eventually(()=>two.state.world?.entities.some(e=>e.driver===id&&!e.autopilot&&!e.navigation)??false,'manual driving takes over the charger trip');
+  one.input.send(NEUTRAL);
   await delay(500);one.input.action({type:'minigame',game:'short'});
   one.socket.send(JSON.stringify({type:'race',action:'start',courseId:'short'}));
   await eventually(()=>two.state.world?.races.rounds.some(r=>r.courseId==='short'&&r.phase==='countdown'&&r.entrants.some(e=>e.playerId===id))??false,'race starts immediately after direct entry');

@@ -273,7 +273,11 @@ export function trafficInput(e:Entity,world:World):Input {
   const progress=((e.x-previous.x)*incoming.x+(e.z-previous.z)*incoming.z)/(incoming.x*incoming.x+incoming.z*incoming.z||1);
   const lateral=Math.abs((e.x-previous.x)*incoming.z-(e.z-previous.z)*incoming.x)/(Math.hypot(incoming.x,incoming.z)||1);
   // On city corners, pause briefly; points along a straight road are not stops.
-  if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
+  const inChargerBay=!!navigation?.chargerStationId&&Math.abs(e.x-target.x)<2.25&&Math.abs(e.z-target.z)<4.5;
+  if(final&&(inChargerBay?Math.abs(e.speed)<.8:!navigation?.chargerStationId&&distance<4&&Math.abs(e.speed)<.15)){
+    if(!navigation!.chargerStationId){navigation!.status='arrived';e.autopilot=false;}
+    return {...neutral,brake:true};
+  }
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
     // A waypoint can also be passed with lateral offset, outside the radius
     // check below. Keep the local approach slow in either case.
@@ -335,7 +339,7 @@ export function trafficInput(e:Entity,world:World):Input {
     let along=distance;
     for(let i=waypoint;i<route.length;i++){
       if(i===route.length-1){
-        cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,along-3)));
+        cruise=Math.min(cruise,navigation.chargerStationId?Math.sqrt(2*Math.max(0,along-1.8)):Math.sqrt(3*Math.max(0,along-3)));
       }else{
         const from=i===waypoint?previous:route[i-1],at=route[i],after=route[i+1];
         const ax=at.x-from.x,az=at.z-from.z,bx=after.x-at.x,bz=after.z-at.z;
