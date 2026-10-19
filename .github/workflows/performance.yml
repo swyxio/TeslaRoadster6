@@ -24,6 +24,9 @@ on:
       - 'scripts/playtest*/**'
       - 'tests/fixtures/playtest-stage-worker.ts'
       - 'tests/fixtures/wrangler.playtest-stage.jsonc'
+      - 'tests/playtest-recorder.integration.ts'
+      - 'tests/playtest-capture.test.ts'
+      - 'tests/recording-quality.test.ts'
       - '.github/workflows/performance.yml'
   workflow_dispatch:
     inputs:

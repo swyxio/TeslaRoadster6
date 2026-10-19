@@ -4,7 +4,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const relevant = path => /^(src|shared|worker|public\/assets)\//.test(path) || /^(package\.json|pnpm-lock\.yaml|\.nvmrc|vite\.config\.ts|wrangler\.jsonc|index\.html)$/.test(path) || /^scripts\/(motion-|performance-|recording-|playtest)/.test(path) || /^tests\/fixtures\/(playtest-stage-worker\.ts|wrangler\.playtest-stage\.jsonc)$/.test(path) || path === '.github/workflows/performance.yml';
+const relevant = path => /^(src|shared|worker|public\/assets)\//.test(path) || /^(package\.json|pnpm-lock\.yaml|\.nvmrc|vite\.config\.ts|wrangler\.jsonc|index\.html)$/.test(path) || /^scripts\/(motion-|performance-|recording-|playtest)/.test(path) || /^tests\/(playtest-recorder\.integration|playtest-capture\.test|recording-quality\.test)\.ts$/.test(path) || /^tests\/fixtures\/(playtest-stage-worker\.ts|wrangler\.playtest-stage\.jsonc)$/.test(path) || path === '.github/workflows/performance.yml';
 
 // A cheap classifier runs on runtime-related PRs; the expensive browser job is
 // reserved for large diffs or an explicit label. Binary runtime assets count as
