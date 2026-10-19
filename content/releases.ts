@@ -16,6 +16,18 @@ export const RELEASES = [
     ]
   },
   {
+    version: '0.0.38-alpha',
+    label: '0.0.38 Alpha',
+    date: '2026-10-18',
+    title: 'Rocket pad tune-up',
+    intro: 'Rocket pads keep the same pickup behavior with lighter background processing.',
+    sections: [
+      { title: 'On the road', items: [
+        'Rocket pad pickup checks do less work when cars are far away.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.37-alpha',
     label: '0.0.37 Alpha',
     date: '2026-10-18',
