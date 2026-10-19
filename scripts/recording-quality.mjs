@@ -190,9 +190,14 @@ export function tabIntegrityReasons(video, trace, viewport) {
   const reasons = [];
   if (video.bytes !== trace.bytes) reasons.push(`${video.file}: video byte count differs from its capture trace.`);
   if (video.width !== trace.width || video.height !== trace.height) reasons.push(`${video.file}: video dimensions differ from its capture trace.`);
-  const width = viewport?.width * viewport?.deviceScaleFactor, height = viewport?.height * viewport?.deviceScaleFactor;
+  // Permit floating-point representation noise, not a fractional pixel policy.
+  const integerPixels = value => {
+    const nearest = Math.round(value);
+    return Number.isSafeInteger(nearest) && nearest > 0 && Math.abs(value - nearest) <= 2 * Number.EPSILON * Math.max(1, Math.abs(value)) ? nearest : null;
+  };
+  const width = integerPixels(viewport?.width * viewport?.deviceScaleFactor), height = integerPixels(viewport?.height * viewport?.deviceScaleFactor);
   if (!Number.isSafeInteger(viewport?.width) || viewport.width < 1 || !Number.isSafeInteger(viewport?.height) || viewport.height < 1 ||
-      !finite(viewport?.deviceScaleFactor) || viewport.deviceScaleFactor <= 0 || !Number.isSafeInteger(width) || width < 1 || !Number.isSafeInteger(height) || height < 1) {
+      !finite(viewport?.deviceScaleFactor) || viewport.deviceScaleFactor <= 0 || width === null || height === null) {
     reasons.push(`${video.file}: manifest viewport or explicit device scale factor cannot establish integer pixel dimensions.`);
   } else {
     if (trace.width !== width || trace.height !== height) reasons.push(`${video.file}: capture trace dimensions differ from the manifest viewport pixel dimensions (${width}x${height}).`);

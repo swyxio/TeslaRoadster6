@@ -40,6 +40,7 @@ test('tab integrity identifies packet ordering separately from bytes and dimensi
   ]);
   assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16, deviceScaleFactor: 1 }), []);
   assert.deepEqual(tabIntegrityReasons(smallVideo, smallTrace, { width: 8, height: 8, deviceScaleFactor: 2 }), []);
+  assert.deepEqual(tabIntegrityReasons({ ...smallVideo, width: 230, height: 230 }, { ...smallTrace, width: 230, height: 230 }, { width: 200, height: 200, deviceScaleFactor: 1.15 }), []);
   assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16 }).join(' '), /explicit device scale factor/);
   assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 15, height: 15, deviceScaleFactor: 1.5 }).join(' '), /integer pixel dimensions/);
 });
