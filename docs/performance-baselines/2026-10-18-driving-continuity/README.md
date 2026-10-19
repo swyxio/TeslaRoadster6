@@ -527,6 +527,17 @@ coverage is explicitly incomplete and its bounded buffer cannot retain the
 full 64-driver gate at eight substeps. It applies after the two prior diagnostic
 patches and is not enabled or deployed.
 
+A later [disabled e6 staged lab](hosted-stage-e6-readiness-20261019.tar.gz)
+(SHA-256 `a30da2b23f52dc21ab2554250da2a774549a8dc3b74ae9d894cd3333397003e1`)
+adds bounded packed substep traces and conservative sweep checks. Twelve trace
+and sweep tests, 27 ACK and movement tests, both lab typechecks, a 64-slot
+static preflight and a fresh two-Session local smoke passed. The packed trace
+held 768,000 synthetic poses in the test, but sweep inputs are not exported and
+contact coverage remains explicitly incomplete. Provider isolation, observer
+overhead, wire bytes and a validated per-tick CPU source remain unverified.
+Hosted execution stays disabled; no 64-player or throughput gate was run. The
+lab is based on runtime source from `e6ad3b7`, not a deployed artifact.
+
 ## Hosted comparison
 
 [Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
