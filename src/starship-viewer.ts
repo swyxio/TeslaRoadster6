@@ -1,5 +1,7 @@
 import * as T from 'three';
 import { FREMONT_SPACEPORT } from '../shared/map';
+import { STARSHIP_GOAL } from '../shared/starship';
+import { constructionFraction } from './starship-construction';
 import type { StarshipAnimation } from './starship-timeline';
 import { buildFremontSpaceport } from './fremont-spaceport';
 import './starship-viewer.css';
@@ -21,6 +23,7 @@ export function createStarshipViewer(options:{
   overlay.append(title,status,close);dialog.append(canvas,overlay);document.body.append(dialog);
   let renderer:T.WebGLRenderer|null=null,scene:T.Scene|null=null,camera:T.PerspectiveCamera|null=null;
   let spaceport:ReturnType<typeof buildFremontSpaceport>|null=null,frame=0;
+  let displayedTotal:number|null|undefined,displayedMessage='';
   function setup(){
     if(renderer)return;
     renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -38,10 +41,19 @@ export function createStarshipViewer(options:{
   function render(now:number){
     if(!dialog.open||!renderer||!scene||!camera||!spaceport)return;
     const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
-    if(canvas.width!==width||canvas.height!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
+    if(canvas.width!==width||canvas.height!==height){
+      renderer.setSize(width,height,false);camera.aspect=width/height;
+      const portrait=width<height,pad=FREMONT_SPACEPORT.pad;
+      camera.fov=portrait?58:48;camera.lookAt(pad.x+(portrait?4:-12),pad.h+62,pad.z);camera.updateProjectionMatrix();
+    }
     const animation=options.animation(now);
-    spaceport.update(animation?.elapsed??0,animation?0:null,options.total(),now/1000);
-    const message=options.message(now);if(status.textContent!==message)status.textContent=message;
+    const total=options.total();spaceport.update(animation?.elapsed??0,animation?0:null,total,now/1000);
+    const message=options.message(now);
+    if(total!==displayedTotal||message!==displayedMessage){
+      displayedTotal=total;displayedMessage=message;
+      const amount=constructionFraction(total)===null?'Waiting for confirmed earnings':`$${Math.floor(total!).toLocaleString('en-US')} / $${STARSHIP_GOAL.toLocaleString('en-US')} confirmed`;
+      status.textContent=`${message} · ${amount}`;
+    }
     renderer.render(scene,camera);frame=requestAnimationFrame(render);
   }
   dialog.addEventListener('close',()=>{cancelAnimationFrame(frame);options.onClose();});

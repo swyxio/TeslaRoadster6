@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { addPlayer, createEmptyWorld, createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
 import { advanceDeliverySearch, applyDeliveryStop, canAssignDeliveryRoof, captureDeliveryStop, CUSTOMERS, initialDelivery, rerouteInaccessibleOrder, type DeliveryState } from '../shared/delivery';
-import { BUILDINGS } from '../shared/map';
+import { BUILDINGS, buildingRoofHeight } from '../shared/map';
 import { currentAt } from '../shared/sky-currents';
 
 const roofCustomer=CUSTOMERS.findIndex(customer=>customer.rooftop);
@@ -87,7 +87,7 @@ test('roof repair waits for an unresolved delivery decision',()=>{
 
 test('a full Level 3 Roadster and Semi can land on each delivery roof in a controlled fixture',()=>{
   for(const roof of CUSTOMERS.filter(customer=>customer.rooftop))for(const kind of ['roadster','tesla-semi'] as const){
-    const building=BUILDINGS.find(b=>b.x===roof.x&&b.z===roof.z&&b.h===roof.y)!;
+    const building=BUILDINGS.find(b=>b.x===roof.x&&b.z===roof.z&&buildingRoofHeight(b,roof.x,roof.z)===roof.y)!;
     const world=createEmptyWorld(),car=makeEntity('car',kind,roof.x,roof.z+building.d/2+8,'p');
     car.upgrades.rocket=true;car.tankLevel=3;world.entities=[car];
     let jump=0,phase:'climb'|'cross'|'land'='climb';

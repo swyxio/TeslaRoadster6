@@ -78,4 +78,3 @@ export function movementTracker(durationMs:number) {
     },
   };
 }
-

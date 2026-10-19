@@ -1,4 +1,5 @@
-import { isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
+import { buildingBlocksPose } from './landmark-collision';
+import { terrainHeight, isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
 import { requiredLevelAt, type Level } from './delivery';
 import { ROUTES, type Point } from './traffic';
 import { VEHICLES } from './vehicles';
@@ -62,7 +63,7 @@ function cityLanes():Segment[] {
       const at=(along:number):Point=>axis==='x'?{x:along,z:center+offset}:{x:center+offset,z:along};
       const safe=(p:Point)=>isSurface(p.x,p.z)&&isSurface(p.x-2,p.z-2)&&isSurface(p.x-2,p.z+2)&&
         isSurface(p.x+2,p.z-2)&&isSurface(p.x+2,p.z+2)&&
-        !nearbyBuildings(p.x,p.z,4).some(b=>Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
+        !nearbyBuildings(p.x,p.z,4).some(b=>b.style==='structure'?buildingBlocksPose(b,{...p,kind:'model-3',y:terrainHeight(p.x,p.z)??0,yaw:axis==='x'?Math.PI/2:0,pitch:0,roll:0,supportId:'ground'}):Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
       let start:number|null=null,last=0;
       const finish=()=>{
         if(start!==null&&last-start>=6){
@@ -202,7 +203,8 @@ class NavigationQueue {
 }
 
 // Connect an off-road car to a lane without crossing a building, unsupported
-// ground, or a locked region. This small visibility search runs only when a
+// ground, or a locked region. Keep conservative building envelopes for turning
+// clearance; separately indexed bridge/arena beams use actual vertical clearance. This small visibility search runs only when a
 // destination is requested, never on the simulation tick.
 type NavigationVehicle = Pick<Entity,'x'|'z'|'yaw'|'kind'|'supportId'|'inDome'>;
 function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|null {
@@ -215,7 +217,7 @@ function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|nu
       const t=i/count,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
       if(!isSurface(x-radius,z-radius)||!isSurface(x-radius,z+radius)||
         !isSurface(x+radius,z-radius)||!isSurface(x+radius,z+radius)||
-        nearbyBuildings(x,z,radius).some(b=>Math.abs(x-b.x)<b.w/2+radius&&Math.abs(z-b.z)<b.d/2+radius))return false;
+        nearbyBuildings(x,z,radius).some(building=>building.style==='structure'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw:Math.atan2(a.x-b.x,a.z-b.z),pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
     }
     return true;
   };

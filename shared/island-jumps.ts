@@ -36,7 +36,8 @@ export function sweepIslandJump(a:Point,b:Point):({x:number;y:number;z:number;t:
 
 /** Sweep an oriented upright body against the actual bounded wedge faces.
  * Vertical offsets include the car's current pitch/roll bounds. */
-export function sweepIslandJumpWall(a:Point,b:Point,extent:{halfWidth:number;halfLength:number;yaw:number;minY:number;maxY:number}) {
+export function sweepIslandJumpWall(a:Point,b:Point,extent:{halfWidth:number;halfLength:number;yaw:number;minY:number;maxY:number},
+  jumps:readonly {start:number;end:number;z:number;width:number;height:number}[]=ISLAND_JUMPS) {
   type Hit = Point & {t:number;normal:Point;faceNormal:{x:number;z:number}};
   const c=Math.cos(extent.yaw),s=Math.sin(extent.yaw);
   const right={x:c,y:0,z:-s},forward={x:-s,y:0,z:-c};
@@ -46,7 +47,7 @@ export function sweepIslandJumpWall(a:Point,b:Point,extent:{halfWidth:number;hal
   const dot=(u:Point,v:Point)=>u.x*v.x+u.y*v.y+u.z*v.z;
   const cross=(u:Point,v:Point):Point=>({x:u.y*v.z-u.z*v.y,y:u.z*v.x-u.x*v.z,z:u.x*v.y-u.y*v.x});
   let best:Hit|null=null;
-  for(const jump of ISLAND_JUMPS){
+  for(const jump of jumps){
     // Cheap broad phase before the oriented box/face separating-axis sweep.
     if(Math.max(a.x,b.x)+halfX<jump.start||Math.min(a.x,b.x)-halfX>jump.end||
       Math.max(a.z,b.z)+halfZ<jump.z-jump.width/2||Math.min(a.z,b.z)-halfZ>jump.z+jump.width/2||
@@ -64,7 +65,7 @@ export function sweepIslandJumpWall(a:Point,b:Point,extent:{halfWidth:number;hal
       const faceNormal={x:face.axis==='x'?face.sign:0,z:face.axis==='z'?face.sign:0};
       const axes=[right,forward,up,{x:faceNormal.x,y:0,z:faceNormal.z}];
       if(face.axis==='z'){
-        const incline={x:1,y:islandJumpSlope(jump),z:0};
+        const incline={x:1,y:jump.height/(jump.end-jump.start),z:0};
         axes.push(cross(incline,right),cross(incline,forward));
       }
       let enter=-Infinity,exit=Infinity,normal:Point={x:faceNormal.x,y:0,z:faceNormal.z};
