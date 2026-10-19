@@ -63,6 +63,14 @@ test('turning around in place replans without treating a normal turn as a U-turn
   assert.equal(requests.length,2);
 });
 
+test('a nearby destination does not skip a remaining turn around an obstacle',()=>{
+  const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  const target={x:car.x+6,z:car.z},turn={x:car.x,z:car.z+20};
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[turn,target]});
+  assert.deepEqual(guide.update(car,target,player.delivery.level,100).waypoint,turn);
+});
+
 test('unreachable roads are labelled instead of falling back to a bearing through buildings',()=>{
   const {player,car,target}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
   guide.update(car,target,player.delivery.level,0);

@@ -80,7 +80,7 @@ export class DeliveryGuidance {
       this.request({id:++this.requestId,car:vehicle,destination:{x:destination.x,z:destination.z},level});
     }
     const waypoint=this.path[this.index];
-    return waypoint?{waypoint:distance(car,destination)<10?destination:waypoint,status:'ready'}:
+    return waypoint?{waypoint:this.index===this.path.length-1&&distance(car,destination)<10?destination:waypoint,status:'ready'}:
       {waypoint:null,status:this.failed&&!this.pending?'unavailable':'routing'};
   }
 }
