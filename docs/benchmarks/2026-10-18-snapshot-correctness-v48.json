@@ -1,0 +1,21 @@
+{
+  "kind": "snapshot-serialization-correctness",
+  "candidate": {
+    "commit": "837789ffdf224275bff26871e386dd2c6b5e7754",
+    "snapshotSha256": "c31e586748cc3ee09621d66227077bd915e3b450f24dec1b28c63aa641fcc0d6"
+  },
+  "baseline": {
+    "commit": "abaf712ca73a13d757c24c89f8c1da787a625d99",
+    "snapshotSha256": "f7352edbd880999b847aa70924252e1da9b22b34f329bd2eeb34d77707c27bce"
+  },
+  "scriptSha256": "23cecf3bcb33582e1b5229aa236721dd960dde246ca495b69302b2b49133837b",
+  "seeds": [
+    0,
+    1,
+    42
+  ],
+  "ticksPerSeed": 2,
+  "comparisons": 84,
+  "outputSha256": "18daf506ec72fc097a3c80463f971dbe6bd71a2f30012f170306ac6d383887fb",
+  "note": "Synthetic serialized-output comparison only; no performance, room or capacity measurement."
+}

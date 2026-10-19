@@ -35,6 +35,12 @@
 
 - After integrating main `8f468dd`, runtime candidate `4236c30` passed 1,086 tests, the build and sequential local Wrangler protocol-49 room and prediction checks. A [matched local browser/room pair](performance-baselines/2026-10-18-rocket-pickup-e2e/) observed active rocket pads and grounded cars on both builds; all three route legs aligned. Browser callback p95 was 16.7 → 16.8 ms and one-room simulation/wall was 0.956 → 0.957 on the recorded desktop, with unrelated host activity. The bunched synthetic model retained 39 rejected inputs on both. This one-player observation is not a GPU, mobile, driving-continuity or 64-player capacity result.
 
+## 64-player diagnostics extraction · 2026-10-18 Pacific
+
+- On main base `8f468dd` (protocol 49), four target and aggregation safeguard tests, four observation tests, and strict typechecks of the hosted harness, local trace worker and trace runner passed. The unconfigured hosted target rejected use. The one-client local Wrangler trace observed an accepted normal input, injected late inputs, future and epoch rejections, a processed jump and a rescheduled then processed flip; neither bounded trace ring dropped events. This was functional verification, not a 64-player load or production measurement.
+- The diagnostic is manual-only, requires a separately coordinated window and a review of the deployed nonproduction Worker Preview, and is unconfigured by default. The [historical investigation](PERFORMANCE_64_PLAYERS.md) retains the failed distributed-run observations and limitations. Late-input cause, normal-room throughput, rendered control and smooth play at 64 remain unresolved.
+- The legacy push-triggered diagnostic branch was disabled at `fbe8cd29e1114809aa061aad1e1bdcf4be0f8177`, retaining its history. GitHub readback showed an inert target and a workflow with no push trigger and only a failing manual job; no new load run appeared after the update.
+
 ## Manual delivery economy rebalance · 2026-10-18 Pacific
 
 - A fresh guest manually drove the production-matching v0.0.32 / protocol 46 build in local Chrome. At 5:01 active, five completed deliveries had raised cash from $2,500 to $8,660. The first, third and fifth deliveries respectively combined fare and achievement/checkpoint payments of $1,289, $1,323 and $1,419. The run included collisions and unstuck recoveries and lasted longer in wall time; it is one route rather than a typical-player measurement.
