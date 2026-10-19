@@ -2,6 +2,7 @@
 
 - Triple Shift and the Actions button request an authoritative route to the lowest-cost currently open, reachable charging bay in the selected self-driving mode. The request does not relocate the player; manual input cancels it. Arrival is reported only after the selected station's refill condition is met inside the target bay.
 - Shared-simulation checks cover all four drive modes, refill before arrival, an already-parked car, occupied bays, invalid and airborne requests, and manual takeover. From a South Bay starting point without traffic, all four modes reached the Palo Alto Stanford bay after 119–190 simulated seconds and began refilling; none needed to fly in that fixture. These are sampled routes, not proof of every location, obstacle or flight path.
+- On the v57 candidate, all 1,341 unit tests and the build passed; local Wrangler two-client room and prediction integrations passed, including charger request, replication, and manual takeover. Desktop Chrome accepted the Actions button and triple Shift; portrait and landscape layouts were inspected under touch emulation, not on a physical device.
 - A local 18-request routing sample at six positions on an active Apple M5 Pro host (one-minute load about 8) took 2.2–35.2 ms for warmed requests and 48.6 ms for the first request, including initial graph setup. The Worker prepares its navigation graph at room startup. These are local function timings, not Worker throughput or room-capacity results.
 
 ## Recurring queues and East Bay lanes · protocol v56 candidate · 2026-10-19 Pacific
