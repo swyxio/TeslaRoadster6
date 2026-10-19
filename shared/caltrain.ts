@@ -3,7 +3,7 @@
  * a timetable, or a simulation of railway service. X is east and Z is south.
  */
 export type CaltrainStop = {
-  id:string; name:string; x:number; z:number; level:0|2|3;
+  id:string; name:string; x:number; z:number; level:0|2|3|4|5|6;
   /** Four-bay playable lot and the nearby highway junction. */
   lot?:{x:number;z:number}; junction?:{x:number;z:number};
   /** The low, decorative platform sits beside the shared driving surface. */
@@ -12,12 +12,12 @@ export type CaltrainStop = {
 export const CALTRAIN_STOPS:readonly CaltrainStop[]=[
   {id:'san-francisco',name:'San Francisco · 4th & King',x:-205,z:260,level:0,platform:{x:-205,z:260}},
   {id:'south-san-francisco',name:'South San Francisco',x:-631,z:950,level:2,lot:{x:-631,z:950},junction:{x:-491,z:950},platform:{x:-631,z:995}},
-  {id:'burlingame',name:'Burlingame',x:-1020.2884954558479,z:1485.6436268884124,level:2,lot:{x:-1020,z:1436},junction:{x:-1079,z:1436},platform:{x:-1020,z:1505},existingLandmark:true},
-  {id:'redwood-city',name:'Redwood City',x:-987,z:2450,level:2,lot:{x:-987,z:2450},junction:{x:-1082,z:2450},platform:{x:-987,z:2495}},
-  {id:'palo-alto',name:'Palo Alto',x:-566,z:3960,level:2,lot:{x:-566,z:3960},junction:{x:-766,z:3960},platform:{x:-566,z:4005}},
-  {id:'mountain-view',name:'Mountain View',x:-165,z:5900,level:2,lot:{x:-165,z:5900},junction:{x:-70,z:5900},platform:{x:-165,z:5935}},
-  {id:'santa-clara',name:'Santa Clara',x:-65,z:6790,level:2,lot:{x:-65,z:6790},junction:{x:55,z:6790},platform:{x:-65,z:6835}},
-  {id:'san-jose-diridon',name:'San José Diridon',x:1986.5553212989137,z:7740.165105790462,level:3,lot:{x:1987,z:7690},junction:{x:1907,z:7690},platform:{x:1987,z:7759},existingLandmark:true},
+  {id:'burlingame',name:'Burlingame',x:-1020.2884954558479,z:1485.6436268884124,level:3,lot:{x:-1020,z:1436},junction:{x:-1079,z:1436},platform:{x:-1020,z:1505},existingLandmark:true},
+  {id:'redwood-city',name:'Redwood City',x:-987,z:2450,level:3,lot:{x:-987,z:2450},junction:{x:-1082,z:2450},platform:{x:-987,z:2495}},
+  {id:'palo-alto',name:'Palo Alto',x:-566,z:3960,level:4,lot:{x:-566,z:3960},junction:{x:-766,z:3960},platform:{x:-566,z:4005}},
+  {id:'mountain-view',name:'Mountain View',x:-165,z:5900,level:5,lot:{x:-165,z:5900},junction:{x:-70,z:5900},platform:{x:-165,z:5935}},
+  {id:'santa-clara',name:'Santa Clara',x:-65,z:6790,level:5,lot:{x:-65,z:6790},junction:{x:55,z:6790},platform:{x:-65,z:6835}},
+  {id:'san-jose-diridon',name:'San José Diridon',x:1986.5553212989137,z:7740.165105790462,level:6,lot:{x:1987,z:7690},junction:{x:1907,z:7690},platform:{x:1987,z:7759},existingLandmark:true},
 ];
 
 const STOPS_WITH_LOTS=CALTRAIN_STOPS.filter((stop):stop is CaltrainStop & {lot:{x:number;z:number};junction:{x:number;z:number}}=>!!stop.lot&&!!stop.junction);

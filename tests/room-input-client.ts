@@ -5,7 +5,7 @@ import type { ControlSnapshot, EdgeBaseline, EdgeOutcome } from '../shared/tick-
 
 type Rejection = {seq:number;targetTick:number;reason:string};
 type Options = {seq?:number;targetTick?:number;roomEpoch?:string;controlRevision?:number;actionSeq?:number;preserveCounters?:boolean};
-type FencedAction = {type:'interact'|'reset'|'autopilot'|'dome'}
+type FencedAction = {type:'teleport';x:number;z:number;requestId:number} | {type:'interact'|'reset'|'autopilot'|'dome'}
   | {type:'selectVehicle';kind:string}
   | {type:'minigame';game:'park'|'queue'|'short'|'oval'}
   | {type:'destination';x:number;z:number;mode:'road'|'jump'|'sky';requestId:number}

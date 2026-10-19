@@ -1,3 +1,6 @@
+import { playtestMode } from '../shared/playtest';
+import { MAX_PUBLIC_OVERFLOW, roomPath } from './room-address';
+export { validRoom } from './room-address';
 import type { VehicleId } from '../shared/vehicles';
 import { NEUTRAL, PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, createEmptyWorld, type World, type Input } from '../shared/game';
 import type { UpgradeId } from '../shared/upgrades';
@@ -5,6 +8,7 @@ import type { PaintId, StyleChoice } from '../shared/vehicle-style';
 import type { CybercabFleet } from '../shared/cybercabs';
 import type { AchievementId } from '../shared/achievements';
 import { isAchievementTierProgress, type AchievementTierProgress } from '../shared/achievement-tiers';
+import { isVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
 import type { LuxuryVehicleId } from '../shared/luxury';
 import { TickPrediction } from './tick-prediction';
 import { MotionClock } from './motion-clock';
@@ -16,11 +20,11 @@ import type { DriveMode } from '../shared/drive-mode';
 import type { DeliveryReward } from '../shared/delivery';
 type MarketClientRequest<T=MarketRequest> = T extends MarketRequest ? Omit<T,'type'|'requestId'> : never;
 export const DEFAULT_ROOM = 'bay';
-export const validRoom = (room:string) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(room);
 export type SessionStatus = 'connecting' | 'online' | 'disconnected';
 export type WalletStatus = 'guest' | 'connecting' | 'syncing' | 'ready' | 'failed';
 const WALLET_TIMEOUT_MS=15_000;
-export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];achievementTiers:AchievementTierProgress;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
+const NETWORK_ERROR='Could not reach the room server. Try again or choose another room.';
+export type WalletView = {cash:number;earned:number;eligibleIncome:number;level:number;unlocked:AchievementId[];achievementTiers:AchievementTierProgress;vehicleCollections:VehicleCollections;ownedLuxury:LuxuryVehicleId[];cybercabs:CybercabFleet};
 export type LuxuryResult = {requestId:number;action:'buy'|'collect';vehicle:LuxuryVehicleId;ok:boolean;reason?:string;awards?:AchievementId[]};
 export class Session {
   world: World = createEmptyWorld();
@@ -84,7 +88,12 @@ export class Session {
   error = '';
   room = '';
   roomFull = false;
+  findingRoom = false;
+  onRoomJoined?: (room:string)=>void;
   constructor(private now:()=>number=()=>performance.now(),private edgeCounters?:()=>Pick<Input,'jump'|'flip'>) {}
+  get playtest(){return playtestMode(this.room);}
+  get sandbox(){return this.playtest==='sandbox';}
+  teleportResult:{requestId:number;ok:boolean}|null=null;
   get walletBlocked():boolean {return this.walletStatus==='connecting'||this.walletStatus==='syncing'||this.walletStatus==='failed';}
   private waitForWallet(requestId:number):void {
     clearTimeout(this.walletTimeout);this.walletStatus='connecting';this.walletError='';this.prediction.reset();
@@ -95,7 +104,7 @@ export class Session {
       this.error=this.walletError;this.socket?.close();
     },WALLET_TIMEOUT_MS);
   }
-  join(room: string, name: string,kind?:VehicleId) {
+  join(room: string, name: string,kind?:VehicleId,automatic=false) {
     if (this.status === 'online' && this.room === room) {
       this.setName(name);
       const player = this.world.players.find(player => player.id === this.id);
@@ -104,12 +113,18 @@ export class Session {
       return;
     }
     kind ??= 'roadster';
+    automatic=automatic&&room===DEFAULT_ROOM;
     this.connectionGeneration++;
     this.name = name;
-    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.cabBuyResult=null;this.cabPaintResult=null;this.world = createEmptyWorld();
-    const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/room/${encodeURIComponent(room)}`);
+    this.disconnect(); this.room = room; this.roomFull = false; this.status = 'connecting'; this.error = ''; this.id = ''; this.capacity = 0;this.snapshotVersion=0;this.walletStatus=this.identityCode&&!this.playtest?'connecting':'guest';this.walletError='';this.startingVehicle=undefined; this.sendTime = 0; this.upgradeResult=null;this.vehicleStyleResult=null;this.otaResult=null;this.destinationResult=null;this.marsResult=null;this.identityResult=null;this.wallet=null;this.luxuryResult=null;this.cabBuyResult=null;this.cabPaintResult=null;this.world = createEmptyWorld();
+    const deadline=this.now()+20_000;
+    let candidate=0;
+    this.findingRoom=automatic;
+    const connect=(target:string)=>{
+    this.room=target;
+    const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${roomPath(target)}`);
     this.socket = socket;
-    const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, 10000);
+    const timeout = window.setTimeout(() => { if (this.socket === socket && this.status === 'connecting') { this.error = 'Connection timed out. Try again or choose another room.'; socket.close(); } }, Math.max(0,Math.min(10_000,deadline-this.now())));
     this.connectTimeout=timeout;
     socket.onmessage = event => {
       if (this.socket !== socket) return;
@@ -118,11 +133,11 @@ export class Session {
         if (message.type === 'welcome') {
           if (message.version !== PROTOCOL_VERSION) { this.error = 'Game updated. Reload to reconnect.'; socket.close(); return; }
           if(typeof message.roomEpoch!=='string'||!Number.isSafeInteger(message.tick)||!Number.isSafeInteger(message.poseRevision))throw new Error('Invalid room clock');
-          this.id = message.id; this.capacity = message.capacity; this.roomEpoch=message.roomEpoch;this.lastState = this.now();
+          this.id = message.id; this.capacity = message.capacity; this.roomEpoch=message.roomEpoch;this.lastState = this.now();this.findingRoom=false;this.onRoomJoined?.(target);
           socket.send(JSON.stringify({type:'name',name:this.name}));
           if(!this.identityRequestId)this.identityRequestId=++this.nextUpgradeRequest;
-          if(this.identityCode)this.waitForWallet(this.identityRequestId);
-          socket.send(JSON.stringify({type:'identity',code:this.identityCode??null,requestId:this.identityRequestId}));
+          if(this.identityCode&&!this.playtest)this.waitForWallet(this.identityRequestId);
+          socket.send(JSON.stringify({type:'identity',code:this.playtest?null:this.identityCode??null,requestId:this.identityRequestId}));
           if(kind!=='roadster'){if(this.walletBlocked)this.startingVehicle=kind;else this.actionWithBarrier({type:'selectVehicle',kind});}
         }
         if (message.type === 'state' && this.id) {
@@ -166,7 +181,7 @@ export class Session {
         if(message.type==='inputEdge'&&(message.kind==='jump'||message.kind==='flip')&&Number.isSafeInteger(message.id)&&
           Number.isSafeInteger(message.targetTick)&&['accepted','rescheduled','processed','expired','superseded'].includes(message.status))
           this.prediction.edgeOutcome(message.kind,message.id,message.status,message.targetTick);
-        if (message.type === 'identityResult' && message.requestId===this.identityRequestId && this.walletStatus!=='failed') {
+        if (message.type === 'identityResult' && message.requestId===this.identityRequestId && this.walletStatus!=='failed' && !this.playtest) {
           const levelBaseline=message.ok&&this.identityCode&&this.wallet?{level:this.wallet.level,eligibleIncome:this.wallet.eligibleIncome,afterSnapshot:this.snapshotVersion}:null;
           this.identityResult={requestId:message.requestId,ok:message.ok,message:message.message,levelBaseline};
           if(this.identityCode){
@@ -176,6 +191,7 @@ export class Session {
         }
         if (message.type === 'wallet') {
           if(!isAchievementTierProgress(message.achievementTiers))throw new Error('Invalid achievement tier progress');
+          if(!isVehicleCollections(message.vehicleCollections))throw new Error('Invalid vehicle collection progress');
           this.wallet = message;
         }
         if(message.type==='reward'){
@@ -192,6 +208,7 @@ export class Session {
         if (message.type === 'vehicleStyleResult') this.vehicleStyleResult = message;
         if (message.type === 'upgradeResult') this.upgradeResult = message;
         if (message.type === 'otaResult') this.otaResult = message;
+        if (message.type === 'teleportResult') this.teleportResult=message;
         if (message.type === 'destinationResult') this.destinationResult = message;
         if (message.type === 'marsResult') this.marsResult = message;
         if(message.type==='starshipStatus'&&message.requestId===this.starshipStatusRequest&&
@@ -209,8 +226,24 @@ export class Session {
         }
       } catch (error) { console.error('Room message processing failed:',error);this.error = 'Invalid server message. Please reconnect.'; socket.close(); }
     };
-    socket.onclose = event => { clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined; if (this.socket === socket) { clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status = 'disconnected';this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null; if(event.code === ROOM_FULL_CODE){this.roomFull = true; this.error = 'This room is full. Try another room.';} else if(event.code === ROOM_NO_SPAWN_CODE){this.error = 'No safe starting space is available right now. Try again or choose another room.';} else if((event.code===1011||event.code===1008)&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.','Property not found. Return to Bay.','Property service unavailable. Retry or return to Bay.'].includes(event.reason)){this.error=event.reason;} else this.error ||= 'Room disconnected. Rejoin or choose another room.'; } };
-    socket.onerror = () => { if(this.socket === socket) this.error ||= 'Could not reach the room server. Try again or choose another room.'; };
+    socket.onclose = event => {
+      clearTimeout(timeout);if(this.connectTimeout===timeout)this.connectTimeout=undefined;
+      if(this.socket!==socket)return;
+      if(automatic&&!this.id&&(!this.error||this.error===NETWORK_ERROR)&&event.code===ROOM_FULL_CODE&&candidate<MAX_PUBLIC_OVERFLOW&&this.now()<deadline){
+        this.error='';candidate++;console.info('Public Bay full; trying next room.',{candidate});connect(`public:${candidate}`);return;
+      }
+      clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.prediction.reset();this.status='disconnected';this.findingRoom=false;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
+      if(event.code===ROOM_FULL_CODE&&(!this.error||this.error===NETWORK_ERROR)){
+        this.roomFull=true;
+        this.error=automatic&&!this.id?'The Bay is busy. Try again or choose another room.':'This room is full. Try again or choose another room.';
+        if(automatic&&!this.id)console.warn('Public Bay placement exhausted.',{candidates:candidate+1});
+      } else if(event.code===ROOM_NO_SPAWN_CODE)this.error='No safe starting space is available right now. Try again or choose another room.';
+      else if((event.code===1011||event.code===1008)&&['Award could not be saved. Rejoin.','Wallet delayed. Rejoin to recover.','Economy interrupted. Rejoin to recover.','Property not found. Return to Bay.','Property service unavailable. Retry or return to Bay.'].includes(event.reason))this.error=event.reason;
+      else this.error ||= 'Room disconnected. Rejoin or choose another room.';
+    };
+    socket.onerror = () => { if(this.socket === socket) this.error ||= NETWORK_ERROR; };
+    };
+    connect(room);
   }
   queueEdge(kind:'jump'|'flip',id:number) {
     if(this.status!=='online'||this.walletBlocked)return;
@@ -298,7 +331,7 @@ export class Session {
     this.starshipContextVersion++;
     this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.earningsBonus=null;
     this.identityCode=code;this.identityRequestId=requestId;this.identityResult=null;
-    if(this.id&&this.socket?.readyState===WebSocket.OPEN){
+    if(!this.playtest&&this.id&&this.socket?.readyState===WebSocket.OPEN){
       if(code)this.waitForWallet(requestId);
       else if(this.walletStatus!=='guest'){clearTimeout(this.walletTimeout);this.walletTimeout=undefined;this.walletStatus='failed';this.walletError='Rejoin to start a new guest driver.';}
       this.send({type:'identity',code:code??null,requestId});
@@ -324,6 +357,11 @@ export class Session {
     const requestId=++this.nextUpgradeRequest;
     if(this.status!=='online'||this.walletStatus!=='ready')return null;
     try{return this.send({type:'market',...request,requestId})?requestId:null;}catch{return null;}
+  }
+  teleport(x:number,z:number){
+    const requestId=++this.nextUpgradeRequest;this.teleportResult=null;
+    if(!this.sandbox||!this.actionWithBarrier({type:'teleport',x,z,requestId}))this.teleportResult={requestId,ok:false};
+    return requestId;
   }
   buyUpgrade(upgrade:UpgradeId){
     const requestId=++this.nextUpgradeRequest;this.upgradeResult=null;
@@ -388,5 +426,5 @@ export class Session {
     this.prediction.input(command);return true;
   }
   private send(value: unknown):boolean { if (this.socket?.readyState !== WebSocket.OPEN)return false;this.socket.send(JSON.stringify(value));return true; }
-  disconnect() { const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.rewardId=0;this.rewards=[];this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
+  disconnect() { this.findingRoom=false;const socket = this.socket; this.socket = undefined;clearTimeout(this.connectTimeout);this.connectTimeout=undefined;clearTimeout(this.walletTimeout);this.walletTimeout=undefined; socket?.close(); this.prediction.reset();this.clock.reset();this.remote.reset();this.localPresentationActive=false;this.remotePresentationActive=false;this.roomEpoch='';this.controlRevision=0;this.lastTargetTick=0;this.lastSentInput=null;this.lastInput={...NEUTRAL};this.lastSentAt=-Infinity;this.sentAt.clear();this.inputSeq=0;this.actionSeq=0;this.syncToken=0;this.edgeQueue=[];this.sentEdges={jump:0,flip:0};this.droppedInputEdges=0;this.rewardId=0;this.rewards=[];this.pendingVehicle=undefined;this.startingVehicle=undefined;this.vehicleResult=null;this.wallet=null;this.luxuryResult=null;this.marketState=null;this.marketResult=null;this.starshipStatus=null;this.starshipNameResult=null;this.starshipStatusRequest=0;this.starshipContextVersion++;this.earningsBonus=null;this.sendTime=0;this.status='disconnected'; }
 }

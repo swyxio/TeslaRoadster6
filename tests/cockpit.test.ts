@@ -4,8 +4,39 @@ import * as T from 'three';
 import { addPlayer, createWorld, NEUTRAL, step } from '../shared/game';
 import { orderTarget } from '../shared/delivery';
 import { terrainHeight } from '../shared/map';
-import { cockpitPose } from '../src/camera';
+import { chaseLens, cockpitPose, viewLens } from '../src/camera';
 import { parseMessage } from '../worker/protocol';
+
+test('chase lens eases toward thrust and recovers independently of frame rate',()=>{
+  const run=(hz:number,thrusting:boolean,from:number)=>{
+    let fov=from;for(let i=0;i<hz;i++)fov=chaseLens(fov,thrusting,1/hz);return fov;
+  };
+  const fast=run(120,true,55),slow=run(30,true,55);
+  assert.ok(fast>55&&fast<60);assert.ok(Math.abs(fast-slow)<1e-9);
+  assert.ok(run(60,false,fast)<fast,'release returns toward the standard lens');
+  assert.equal(chaseLens(55,true,0),55);
+  assert.ok(chaseLens(55,true,10)<57,'a long stall cannot cause a sudden full lens kick');
+});
+
+test('reduced motion immediately restores the neutral chase lens',()=>{
+  const widened=chaseLens(55,true,.1);
+  assert.ok(widened>55);
+  assert.equal(chaseLens(widened,true,0,true),55,'preference change does not animate back');
+  assert.equal(chaseLens(55,true,.1,true),55,'thrust does not widen the lens');
+  assert.ok(chaseLens(55,true,.1,false)>55,'animation resumes when the preference is removed');
+});
+
+test('wide view stays neutral across camera and reduced-motion changes',()=>{
+  const widened=viewLens(55,'chase',false,true,.1,false);
+  assert.ok(widened>55,'chase responds to thrust');
+  assert.equal(viewLens(widened,'wide',false,true,0,false),55,'switching to Wide restores its lens immediately');
+  assert.equal(viewLens(55,'wide',false,true,.1,false),55,'thrust does not animate Wide');
+  assert.equal(viewLens(55,'wide',false,false,.1,true),55,'reduced motion retains the neutral Wide lens');
+  assert.ok(viewLens(55,'chase',false,true,.1,false)>55,'returning to chase restores its response');
+  assert.equal(viewLens(widened,'chase',false,true,.1,true),55,'reduced motion restores the chase lens');
+  assert.equal(viewLens(widened,'cockpit',true,true,.1,false),75,'cockpit keeps its own lens');
+  assert.ok(viewLens(55,'cockpit',false,true,.1,false)>55,'on-foot cockpit fallback retains chase semantics');
+});
 
 test('cockpit follows car position, pitch and roll instead of keeping the horizon upright',()=>{
   const rotation=new T.Quaternion().setFromEuler(new T.Euler(Math.PI/4,.7,Math.PI));
@@ -30,6 +61,8 @@ test('full active pickup and delivery must be in cockpit for a first-person run'
   const arrive=()=>{const t=orderTarget(player.delivery.order);Object.assign(car,{x:t.x,z:t.z,y:terrainHeight(t.x,t.z)??0,speed:0,vy:0,supportId:'ground'});};
   tick(true);arrive();tick(true);assert.equal(player.delivery.order.stage,'dropoff');
   arrive();tick(true);assert.equal(player.cockpit.deliveries,1);assert.equal(player.delivery.completed,1);
+  for(let i=0;player.delivery.order.search&&i<100;i++)tick(true);
+  assert.equal(player.delivery.order.search,undefined,'the next assignment becomes ready');
   tick(true);arrive();tick(false);player.delivery.order.customer=0;arrive();tick(true);
   assert.equal(player.delivery.completed,2);assert.equal(player.cockpit.deliveries,1,'mixed camera run is not credited');
   assert.ok(player.cockpit.activeSeconds>0);assert.equal(player.cockpit.active,true);

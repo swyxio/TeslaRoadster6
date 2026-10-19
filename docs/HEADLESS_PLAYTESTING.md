@@ -18,14 +18,15 @@ This builds the checkout, starts the staged fixture bound to loopback with
 fresh temporary storage, opens a fresh browser profile, drives the checked-in
 `scripts/playtests/blog-drive.json` scenario, and records WebGL pixels. A
 successful run must have exactly one finalized segment and an available room
-trajectory. It transcodes silent H.264 MP4, creates a poster, checks the output
-and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
+trajectory. It records the game’s synthesized music and effects, combines them
+with H.264 video as an MP4, creates a poster, checks for audible audio and
+valid output, and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
 different staged scenario, `--name NAME` for another clip, and `--gpu default`,
 `metal`, `vulkan` or `swiftshader` as supported. Existing files are never
 overwritten; choose a different `--name` for another clip. Video files are limited to 25,000,000 bytes,
 below the [Workers static asset limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets).
 
-The original WebM, manifest and trajectory stay in the gitignored
+The original video and audio WebMs, manifest and trajectory stay in the gitignored
 `playtest-runs/` directory. The helper labels a dirty checkout in the manifest;
 the revision is otherwise the local Git HEAD, not a remotely verified build.
 Review the captured frames and scenario for sensitive content before including
@@ -83,7 +84,15 @@ mobile viewport; use `scripts/playtests/touch-drive.json` for a held touch.
 These are browser emulations, not physical-device tests.
 
 Each new output directory contains `manifest.json`, named screenshots and
-silent `segment-NNN.webm` files. The manifest contains a hash of the scenario,
+`segment-NNN.webm` files. Video is silent by default to keep performance
+experiments unchanged. Add `--audio` to also record each segment’s Web Audio
+graph as `segment-NNN-audio.webm`. The scenario must send a game input before
+`recordStart` to unlock the graph. The manifest records an approximate audio
+offset based on the command times; it is not a frame-accurate synchronization
+measurement. The blog helper uses this offset when muxing. Run
+`node tests/playtest-audio.integration.mjs` to check the capture path against a
+simultaneous synthetic visual and audio cue. Audio capture does
+not include microphone, system sounds or the separate podcast radio player. The manifest contains a hash of the scenario,
 operator-supplied target ref, origin/path (query omitted), browser/OS/renderer,
 viewport, command start/duration intervals, safe HUD/performance samples and
 capture settings. Command intervals are not the instant a browser dispatched an
@@ -180,6 +189,32 @@ unset PLAYTEST_STAGE_SECRET
 
 Stop Wrangler when finished and remove the private temporary directory.
 
+For a shorter boost and landing visual check, use the same seeded, paused
+fixture and a fresh room for every capture. These scenarios do not replace the
+delivery/flight performance route. The desktop scenario holds W and Shift;
+the touch scenario holds Drive and Boost together while tapping Jump.
+
+```sh
+export PLAYTEST_STAGE_SECRET="$(cut -d = -f 2 "$stage_env")"
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=boost-desktop&perf' \
+  --target-ref YOUR_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/boost-desktop --trajectory --gpu metal
+node scripts/verify-boost-landing.mjs playtest-runs/boost-desktop
+
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=boost-touch&perf' \
+  --target-ref YOUR_COMMIT_SHA --scenario scripts/playtests/boost-landing-touch.json \
+  --out playtest-runs/boost-touch --trajectory --gpu metal --mobile --width 390 --height 844
+node scripts/verify-boost-landing.mjs playtest-runs/boost-touch
+unset PLAYTEST_STAGE_SECRET
+```
+
+Repeat the touch capture with a new room and output directory at `--width 844
+--height 390` for landscape. The verifier requires a real video, screenshots,
+sustained grounded rear thrust, an upward jump burst followed by a landing,
+and an unchanged pose revision. Keep the trace and inspect the video too; a
+touch-emulated browser is not a physical phone. Compare matching viewports and
+fixtures across revisions, and measure frame times in separate no-video runs.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged
@@ -194,8 +229,9 @@ the recording. These endpoints belong to the fixture, not the deployed game.
 Never expose or deploy this fixture.
 
 The script invokes the game's Street Pilot through keyboard input, waits for
-pickup and drop-off of two orders, then uses jump and hover controls. The saved
-trajectory and report must confirm the four delivery milestones, two separate
+pickup and drop-off of the initial order, then uses jump and hover controls.
+The saved trajectory and report must confirm that delivery, matching initial
+order IDs and coordinates across the pair, two separate
 jump bursts with upward movement and sustained airborne thrust. The scenario
 waits for the first landing, briefly accelerates during the second flight and
 waits to land again. A respawn invalidates the route. Identical setup and inputs do not ensure

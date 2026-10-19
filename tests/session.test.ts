@@ -5,6 +5,7 @@ import { DEFAULT_ROOM, Session, validRoom } from '../src/session';
 import { ScheduledInput } from '../shared/tick-input';
 import { connectDriverWallet, stageDriverRecovery, DRIVER_PENDING_KEY, DRIVER_RECOVERY_KEY } from '../src/driver-recovery';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
+import { emptyVehicleCollections } from '../shared/vehicle-collections';
 
 class Socket {
   static OPEN = 1;
@@ -19,7 +20,7 @@ class Socket {
   close() { this.readyState = 3; }
   message(value:unknown) {
     const message=value as Record<string,unknown>;
-    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[])}:
+    const defaults=message.type==='wallet'?{achievementTiers:normalizeAchievementTiers(undefined,0,[]),vehicleCollections:emptyVehicleCollections()}:
       message.type==='welcome'?{roomEpoch:'test-room',tick:0,poseRevision:0}:
       message.type==='state'?{roomEpoch:'test-room',tick:0,poseRevision:0,substeps:1,control:new ScheduledInput(NEUTRAL).snapshot()}:{};
     this.onmessage?.({data:JSON.stringify({...defaults,...message})});
@@ -48,6 +49,16 @@ test('committed reward messages queue in order without crossing identity changes
   session.disconnect();
 });
 
+test('owner wallet rejects malformed vehicle collections',()=>{
+  const session=new Session();session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'wallet',vehicleCollections:{driven:['roadster'],stolen:[]}});
+  assert.deepEqual(session.wallet?.vehicleCollections,{driven:['roadster'],stolen:[]});
+  const log=console.error;console.error=()=>{};
+  try{socket.message({type:'wallet',vehicleCollections:{driven:['bad-model'],stolen:[]}});}finally{console.error=log;}
+  assert.equal(socket.readyState,3);assert.equal(session.error,'Invalid server message. Please reconnect.');
+  session.disconnect();
+});
+
 test('owner wallet accepts valid tier progress and rejects malformed progress',()=>{
   const session=new Session();session.join('bay','Driver');const socket=Socket.last;
   const tiers=normalizeAchievementTiers(undefined,0,[]);
@@ -61,10 +72,10 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
   session.disconnect();
 });
 
-test('an incompatible flight-physics protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,44);
+test('an incompatible protocol closes before identity or driving',()=>{
+  assert.equal(PROTOCOL_VERSION,48);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:43,capacity:64});
+  socket.message({type:'welcome',id:'p',version:47,capacity:64});
   assert.equal(socket.readyState,3);
   assert.equal(session.error,'Game updated. Reload to reconnect.');
   assert.deepEqual(socket.sent,[]);
@@ -438,4 +449,75 @@ test('online destination and mini-game requests use ordered barriers and ignore 
   session.join('friends','Alex');assert.equal(session.destinationResult,null);
   socket.message({type:'destinationResult',requestId,ok:true});assert.equal(session.destinationResult,null);
   session.disconnect();
+});
+
+test('playtest rooms never send a remembered identity and returning to Bay restores it',()=>{
+  const session=new Session();session.setIdentity('private-saved-driver-code');
+  for(const room of ['sandbox','practice-fresh']){
+    session.join(room,'Driver');const socket=Socket.last;
+    socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+    assert.equal(session.walletStatus,'guest');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+    const identity=socket.sent.map(raw=>JSON.parse(raw)).find(m=>m.type==='identity');
+    assert.equal(identity.code,null);
+    socket.message({type:'identityResult',requestId:identity.requestId,ok:true,message:'Practice driver ready.'});
+    assert.equal(session.identityResult,null,'practice cannot confirm or overwrite a remembered driver');
+    session.setIdentity('private-saved-driver-code');
+    assert.ok(!socket.sent.join('').includes('private-saved-driver-code'));
+  }
+  session.join('bay','Driver');const socket=Socket.last;
+  socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:64});
+  assert.equal(session.walletStatus,'connecting');
+  assert.ok(socket.sent.map(raw=>JSON.parse(raw)).some(m=>m.type==='identity'&&m.code==='private-saved-driver-code'));
+  session.disconnect();
+});
+
+test('automatic Bay placement keeps driver choices and exact winning room while ignoring stale sockets',()=>{
+  const session=new Session();session.setIdentity('saved-driver');
+  const joins:string[]=[];session.onRoomJoined=room=>joins.push(room);
+  session.join('bay','Alex','model-3',true);const bay=Socket.last;
+  assert.match(bay.url,/\/api\/room\/bay$/);bay.closed(ROOM_FULL_CODE,'Room full');const first=Socket.last;
+  assert.notEqual(first,bay);assert.match(first.url,/\/api\/public-room\/1$/);assert.equal(session.status,'connecting');
+  bay.message({type:'welcome',id:'stale',version:PROTOCOL_VERSION,capacity:64});
+  bay.closed(ROOM_FULL_CODE,'Room full');assert.equal(Socket.last,first);assert.deepEqual(joins,[]);
+  first.closed(ROOM_FULL_CODE,'Room full');const second=Socket.last;assert.match(second.url,/\/api\/public-room\/2$/);
+  second.message({type:'welcome',id:'new',version:PROTOCOL_VERSION,capacity:64});
+  assert.equal(session.room,'public:2');assert.deepEqual(joins,['public:2']);
+  assert.deepEqual(second.sent.slice(0,2).map(raw=>JSON.parse(raw)),[
+    {type:'name',name:'Alex'},{type:'identity',code:'saved-driver',requestId:1},
+  ]);
+  const world=createWorld();addPlayer(world,'new','Alex');
+  second.message({type:'identityResult',requestId:1,ok:true,message:'connected'});
+  second.message({type:'state',world});
+  assert.equal(JSON.parse(second.sent.at(-2)!).kind,'model-3');
+  second.closed(ROOM_FULL_CODE,'Room full');assert.equal(Socket.last,second,'a post-welcome failure never moves the driver');
+  session.disconnect();
+});
+
+test('explicit rooms, non-full errors, cancellation and bounds never silently move a player',()=>{
+  for(const room of ['bay','friends','public:1']){
+    const session=new Session();session.join(room,'Alex');const socket=Socket.last;
+    socket.closed(ROOM_FULL_CODE,'Room full');assert.equal(Socket.last,socket);assert.equal(session.roomFull,true);session.disconnect();
+  }
+  for(const code of [ROOM_NO_SPAWN_CODE,1006]){
+    const session=new Session();session.join('bay','Alex',undefined,true);const socket=Socket.last;
+    socket.closed(code);assert.equal(Socket.last,socket);assert.equal(session.status,'disconnected');session.disconnect();
+  }
+  const cancelled=new Session();cancelled.join('bay','Alex',undefined,true);const old=Socket.last;
+  cancelled.disconnect();old.closed(ROOM_FULL_CODE);old.message({type:'welcome',id:'late',version:PROTOCOL_VERSION,capacity:64});
+  assert.equal(Socket.last,old);assert.equal(cancelled.status,'disconnected');assert.equal(cancelled.id,'');
+  let now=0;const timed=new Session(()=>now);timed.join('bay','Alex',undefined,true);const first=Socket.last;
+  now=20_000;first.closed(ROOM_FULL_CODE);assert.equal(Socket.last,first);assert.equal(timed.status,'disconnected');timed.disconnect();
+  const bounded=new Session();bounded.join('bay','Alex',undefined,true);
+  const oldInfo=console.info,oldWarn=console.warn;console.info=()=>{};console.warn=()=>{};
+  try{for(let i=0;i<17;i++){const socket=Socket.last;socket.closed(ROOM_FULL_CODE);if(i===16)assert.equal(Socket.last,socket);}}
+  finally{console.info=oldInfo;console.warn=oldWarn;}
+  assert.equal(bounded.status,'disconnected');assert.match(bounded.error,/Bay is busy/);bounded.disconnect();
+});
+
+test('full code wins over a generic socket error but never over an invalid welcome',()=>{
+  const session=new Session();session.join('bay','Driver',undefined,true);const first=Socket.last;
+  first.onerror?.();first.closed(ROOM_FULL_CODE);const next=Socket.last;assert.notEqual(next,first);assert.equal(session.error,'');
+  next.message({type:'welcome',id:'wrong',version:PROTOCOL_VERSION-1,capacity:64});
+  next.closed(ROOM_FULL_CODE);assert.equal(Socket.last,next);assert.match(session.error,/updated/i);session.disconnect();
 });

@@ -79,8 +79,12 @@ function pathSummary(poses) {
   return { lengthM: round(length), points };
 }
 
-export function deliveryRoute(poses) {
-  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']];
+export function deliveryRoute(poses, initialOrder) {
+  const restaurant = initialOrder?.restaurant, customer = initialOrder?.customer;
+  if (typeof restaurant?.id !== 'string' || !restaurant.id || ![restaurant.x, restaurant.z].every(number) ||
+      typeof customer?.id !== 'string' || !customer.id || ![customer.x, customer.y, customer.z].every(number) || typeof customer.rooftop !== 'boolean')
+    return { status: 'unavailable', reason: 'initial delivery identity or coordinates unavailable' };
+  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup']];
   const indices = [];
   let searchFrom = 0;
   for (const [completed, stage] of milestones) {
@@ -113,13 +117,14 @@ export function deliveryRoute(poses) {
   }
   const sustainedFlight = longest.length >= 5 && longest.at(-1).atMs - longest[0].atMs >= 400;
   const landedBetween = jumpChanges.some((jump, i) => jumpChanges.slice(i + 1).some(next => flight.slice(jump.index + 1, next.index).some(p => p.supported === true)));
+  const landedAfter = jumpChanges.length >= 2 && flight.some(p => p.supported === true && p.tick > jumpChanges.at(-1).liftTick);
   const forwardThrust = flight.some(p => p.supported === false && Number.isSafeInteger(p.thrusters) && (p.thrusters & 7) === 7);
   const horizontalTravel = Math.max(...flight.map(p => Math.hypot(p.x - flight[0].x, p.z - flight[0].z)));
-  if (!landedBetween || !sustainedFlight || !forwardThrust || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps with an intervening landing and sustained forward-powered flight were not observed', jumpCount: jumpChanges.length, flightSnapshots: longest.length };
+  if (!landedBetween || !landedAfter || !sustainedFlight || !forwardThrust || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight were not observed', jumpCount: jumpChanges.length, flightSnapshots: longest.length };
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
-  return { status: 'available', milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
+  return { status: 'available', initialOrder, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
 }
 
 function run(command, args, cwd) {
@@ -246,14 +251,14 @@ async function main() {
   const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
     ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
     : { status: 'unavailable', reason: 'room was not live for the measurement window' };
-  const route = deliveryRoute(inDrive);
+  const route = deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder);
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
     fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot follows two deliveries, then keyboard jump and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes the initial delivery, then keyboard jump and flight; the next assignment is not driven.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

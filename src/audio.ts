@@ -1,6 +1,6 @@
 import type { Entity, World } from '../shared/game';
 import { refillStationFor } from '../shared/charging';
-import { SoundEventTracker, type SoundCue } from './audio-events';
+import { SoundEventTracker, type SoundCue, type SoundEvent } from './audio-events';
 
 export type AudioSettings = { master: number; music: number; effects: number; muted: boolean };
 const DEFAULTS:AudioSettings={master:55,music:35,effects:70,muted:false};
@@ -129,6 +129,7 @@ export class GameAudio {
     switch(cue){
       case 'jump':tone(260,700,.2,.12,'triangle');this.hiss(t,.18,.09*s,1700);break;
       case 'land':tone(115,49,.22,.2,'sine');this.hiss(t,.11,.09*s,500);break;
+      case 'boost':tone(140,270,.12,.07,'triangle');this.hiss(t,.18,.10*s,2200);break;
       case 'crash':tone(110,42,.28,.27,'triangle');this.hiss(t,.22,.3*s,2600);break;
       case 'pickup':tone(523,523,.13,.13,'triangle');tone(659,659,.2,.13,'triangle',.10);break;
       case 'delivery':for(const [i,n] of [72,76,79,84].entries())tone(midi(n),midi(n),.24,.14,'triangle',i*.095);break;
@@ -154,13 +155,14 @@ export class GameAudio {
       this.beat++;this.nextNote+=60/108/2;
     }
   }
-  update(world:World,playerId:string,active:boolean):void {
+  update(world:World,playerId:string,active:boolean):SoundEvent[] {
     if(active!==this.active){this.active=active;this.applyVolumes();if(active&&this.ctx)this.nextNote=this.ctx.currentTime+.05;}
     const player=world.players.find(p=>p.id===playerId),entity=world.entities.find(e=>e.id===player?.entityId);
-    if(!active||!entity){this.tracker.reset();this.environment(undefined,world);return;}
+    if(!active||!entity){this.tracker.reset();this.environment(undefined,world);return [];}
     const atStation=!!refillStationFor(entity);
-    for(const event of this.tracker.update(world,playerId,atStation))this.play(event.cue,event.strength);
-    this.environment(entity,world);this.scheduleMusic();
+    const events=this.tracker.update(world,playerId,atStation);
+    for(const event of events)this.play(event.cue,event.strength);
+    this.environment(entity,world);this.scheduleMusic();return events;
   }
   private environment(e:Entity|undefined,world:World):void {
     if(!this.ctx||!this.windGain||!this.motorGain||!this.motor||!this.thrustGain||!this.sirenGain||!this.sirenPan)return;

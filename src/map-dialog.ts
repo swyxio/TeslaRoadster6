@@ -3,14 +3,16 @@ import { BRIDGES, DISTRICTS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS,
 import { TECH_CAMPUSES } from '../shared/tech-campuses';
 import { CALTRAIN_STOPS, CALTRAIN_TRACK } from '../shared/caltrain';
 import { EAST_SOUTH_ADDITIONS } from '../shared/east-south-additions';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
 import { requiredLevelAt, type Level } from '../shared/delivery';
 import { ISLAND_JUMPS } from '../shared/island-jumps';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
+import { drawLockedAreas } from './access-overlay';
 
 export type MapCab = { id: string; name: string; position: MapPoint | null };
 
 /** The dialog chooses a game-space point; routing and availability are decided by the session. */
-export function createMapDialog({ onDestination }: { onDestination: (point: MapPoint) => string | void }) {
+export function createMapDialog({ onDestination, onTeleport, canTeleport }: { onDestination: (point: MapPoint) => string | void; onTeleport?: (point: MapPoint) => string | void; canTeleport?: () => boolean }) {
   const dialog = document.createElement('dialog');
   dialog.className = 'map-lightbox';
   dialog.setAttribute('aria-labelledby', 'map-lightbox-title');
@@ -23,13 +25,14 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     </div>
     <div class="map-lightbox-cab" hidden><p class="map-cab-status" role="status" aria-live="polite"></p><button type="button" class="map-cab-follow" aria-pressed="false">Follow</button></div>
     <div class="map-drive-mode"></div>
-    <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
+    <footer class="map-lightbox-footer"><p class="map-lightbox-status" role="status" aria-live="polite">Choose a destination on the map.</p><button type="button" class="map-teleport" hidden disabled>Teleport here ↗</button><button type="button" class="map-drive" disabled>Drive here →</button></footer>`;
   document.body.append(dialog);
   const canvas = dialog.querySelector('canvas')!;
   const ctx = canvas.getContext('2d')!;
   const base = document.createElement('canvas');
   const baseCtx = base.getContext('2d')!;
   const drive = dialog.querySelector<HTMLButtonElement>('.map-drive')!;
+  const teleport = dialog.querySelector<HTMLButtonElement>('.map-teleport')!;
   const status = dialog.querySelector<HTMLElement>('.map-lightbox-status')!;
   const cabPanel = dialog.querySelector<HTMLElement>('.map-lightbox-cab')!;
   const cabStatus = dialog.querySelector<HTMLElement>('.map-cab-status')!;
@@ -44,8 +47,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   const copy = (point: MapPoint): MapPoint => ({ x: point.x, z: point.z });
   const screen = (point: MapPoint) => ({ x: width / 2 + (point.x - center.x) * scale, y: height / 2 + (point.z - center.z) * scale });
   const world = (x: number, y: number): MapPoint => ({ x: center.x + (x - width / 2) / scale, z: center.z + (y - height / 2) / scale });
-  // Keep the surrounding region visible if spending lowers access mid-trip.
-  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= Math.max(level,requiredLevelAt(player.x,player.z));
+  const visible = (point: MapPoint) => requiredLevelAt(point.x, point.z) <= level;
   const bounds = (point: MapPoint): MapPoint => ({ x: Math.max(MAP_BOUNDS.minX, Math.min(MAP_BOUNDS.maxX, point.x)), z: Math.max(MAP_BOUNDS.minZ, Math.min(MAP_BOUNDS.maxZ, point.z)) });
   const local = (event: PointerEvent | WheelEvent) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
   const cabPosition = (point: MapPoint | null): MapPoint | null => point && Number.isFinite(point.x) && Number.isFinite(point.z) ? copy(point) : null;
@@ -114,8 +116,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       c.fillRect(p.x-(jump.end-jump.start)*scale/2,p.y-jump.width*scale/2,(jump.end-jump.start)*scale,jump.width*scale);
     }
     // Keep locked regions subdued while retaining their coastline silhouettes.
-    c.fillStyle = '#193b48b8';
-    for (let y = 0; y < height; y += 10) for (let x = 0; x < width; x += 10) if (!visible(world(x + 5, y + 5))) c.fillRect(x, y, 10, 10);
+    drawLockedAreas(c,level,screen,'#193b48b8');
     const placed: { left: number; top: number; right: number; bottom: number }[] = [];
     const playerScreen = screen(player);
     // Label actual shared routes in the part of the map the player can reach.
@@ -192,6 +193,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
       c.fillStyle = '#e5b87a'; c.beginPath(); c.arc(p.x,p.y,3,0,Math.PI*2); c.fill();
       drawLabel(p,place.name,'600 10px system-ui',12);
     }
+    if (scale > .7) for (const place of NEW_LANDMARKS) {
+      if (!visible(place)) continue;
+      const p=screen(place); if(p.x<0||p.x>width||p.y<0||p.y>height)continue;
+      c.fillStyle='#e5b87a';c.beginPath();c.arc(p.x,p.y,2.5,0,Math.PI*2);c.fill();
+      drawLabel(p,place.name,'600 10px system-ui',12);
+    }
     for (const stop of CALTRAIN_STOPS) {
       if (!visible(stop)) continue;
       const p = screen(stop); if (p.x < -120 || p.x > width || p.y < -10 || p.y > height + 10) continue;
@@ -247,7 +254,7 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
   }
   function choose(point: MapPoint) {
     stopFollowing();
-    selected = copy(point); drive.disabled = false;
+    selected = copy(point); drive.disabled = teleport.disabled = false;
     status.textContent = `Pin placed · X ${Math.round(point.x)}, Z ${Math.round(point.z)} (game meters).`;
     draw();
   }
@@ -265,6 +272,12 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     dialog.close();
   }
   drive.onclick = start;
+  teleport.onclick = () => {
+    if(!selected||!canTeleport?.()||!onTeleport)return;
+    const error=onTeleport(copy(selected));
+    if(error){status.textContent=error;return;}
+    dialog.close();
+  };
   dialog.querySelector<HTMLButtonElement>('.map-close')!.onclick = () => dialog.close();
   function zoomTarget() {
     if (followingCab || !selected) return undefined;
@@ -342,6 +355,8 @@ export function createMapDialog({ onDestination }: { onDestination: (point: MapP
     cab = null; followingCab = false; renderCabControls();
     player = copy(position); center = copy(position); currentDestination = destination ? copy(destination) : null;
     selected = destination ? copy(destination) : null; level = nextLevel; scale = .6; dirty = true;
+    teleport.hidden=!canTeleport?.(); teleport.disabled=!selected;dialog.classList.toggle('map-playtest',!teleport.hidden);
+    dialog.querySelector('.map-lightbox-help')!.textContent=teleport.hidden?'Tap a place to drop a pin. Drag to move, pinch or use + / − to zoom. Shaded areas unlock as you play. The car stops at a connected road up to 100 m from your pin.':'Sandbox · tap to place a pin, then teleport to safe ground within 20 m. Water and occupied spots are rejected. Progress is not saved.';
     drive.disabled = !selected; status.textContent = selected ? 'Destination selected. Choose another place or start driving.' : 'Choose a destination on the map.';
     if (!dialog.open) dialog.showModal(); draw(); canvas.focus();
   }

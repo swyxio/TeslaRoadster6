@@ -1,0 +1,183 @@
+{
+  "format": 1,
+  "id": "9a7e483b-589e-4771-aa7a-f0968deae9ee",
+  "startedAt": "2026-10-18T23:41:04.628Z",
+  "status": "complete",
+  "target": {
+    "origin": "http://127.0.0.1:8893",
+    "pathname": "/",
+    "refProvidedByOperator": "15d23f3+structure-audit-uncommitted",
+    "httpStatus": 200
+  },
+  "scenarioSha256": "2d3f27d486bdf49efb1511251f8c422b22cc26cabb6bd966ff1664fac9a39842",
+  "runner": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "release": "25.4.0",
+    "cpu": "Apple M5 Pro",
+    "nodeVersion": "v22.22.2",
+    "playwrightVersion": "1.64.1",
+    "browserChannel": "chrome",
+    "gpuMode": "metal",
+    "headed": false,
+    "browserVersion": "155.0.8059.84",
+    "webgl": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+      "vendor": "Google Inc. (Apple)"
+    }
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "capture": {
+    "enabled": true,
+    "requestedFps": 30
+  },
+  "events": [
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 3300,
+      "commandDurationMs": 373,
+      "status": "ok"
+    },
+    {
+      "type": "waitForPoseRevision",
+      "commandStartedAtMs": 3672,
+      "commandDurationMs": 0,
+      "status": "ok",
+      "sample": {
+        "atMs": 3664,
+        "tick": 30,
+        "worldTime": 1.499999999999999,
+        "poseRevision": 1,
+        "x": -270,
+        "y": 0,
+        "z": -18,
+        "yaw": 0,
+        "speed": 0,
+        "vy": 0,
+        "supported": true,
+        "thrusters": 0,
+        "jumpBurstUntil": 0,
+        "lastJump": 0,
+        "deliveryCompleted": 0,
+        "deliveryStage": "pickup"
+      }
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 3672,
+      "commandDurationMs": 1201,
+      "status": "ok"
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 4873,
+      "commandDurationMs": 72,
+      "status": "ok",
+      "sample": {
+        "file": "before.png"
+      }
+    },
+    {
+      "type": "recordStart",
+      "commandStartedAtMs": 4944,
+      "commandDurationMs": 4,
+      "status": "ok",
+      "sample": {
+        "connection": "● LIVE / 1 DRIVER",
+        "speed": "000",
+        "perf": null
+      }
+    },
+    {
+      "type": "keyDown",
+      "commandStartedAtMs": 4948,
+      "commandDurationMs": 189,
+      "status": "ok",
+      "key": "KeyW"
+    },
+    {
+      "type": "waitForTicks",
+      "commandStartedAtMs": 5137,
+      "commandDurationMs": 2186,
+      "status": "ok",
+      "sample": {
+        "atMs": 7298,
+        "tick": 100,
+        "worldTime": 4.999999999999989,
+        "poseRevision": 1,
+        "x": -270,
+        "y": 0,
+        "z": -50.13973124999999,
+        "yaw": 0,
+        "speed": 32.68979999999997,
+        "vy": 0,
+        "supported": true,
+        "thrusters": 0,
+        "jumpBurstUntil": 0,
+        "lastJump": 0,
+        "deliveryCompleted": 0,
+        "deliveryStage": "pickup"
+      }
+    },
+    {
+      "type": "keyUp",
+      "commandStartedAtMs": 7324,
+      "commandDurationMs": 1,
+      "status": "ok",
+      "key": "KeyW"
+    },
+    {
+      "type": "sample",
+      "commandStartedAtMs": 7325,
+      "commandDurationMs": 1,
+      "status": "ok",
+      "sample": {
+        "connection": "● LIVE / 1 DRIVER",
+        "speed": "112",
+        "perf": null
+      }
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 7326,
+      "commandDurationMs": 71,
+      "status": "ok",
+      "sample": {
+        "file": "through-sutro.png"
+      }
+    },
+    {
+      "type": "recordStop",
+      "commandStartedAtMs": 7397,
+      "commandDurationMs": 221,
+      "status": "ok",
+      "sample": {
+        "connection": "● LIVE / 1 DRIVER",
+        "speed": "118",
+        "perf": null
+      }
+    }
+  ],
+  "recordings": [
+    "segment-001.webm"
+  ],
+  "screenshots": [
+    "before.png",
+    "through-sutro.png"
+  ],
+  "trajectory": {
+    "file": "trajectory.json",
+    "status": "available",
+    "samples": 54,
+    "source": "received authoritative room snapshots; not displayed-frame positions"
+  },
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "finishedAt": "2026-10-18T23:41:12.435Z",
+  "durationMs": 7807
+}

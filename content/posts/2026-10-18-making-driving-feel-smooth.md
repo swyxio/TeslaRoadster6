@@ -66,6 +66,8 @@ We recorded a manual drive in the older preview and another in the newer build. 
 
 *Two independent drives, shown at their recorded speed with matching crops.*
 
+We later recorded the older radio preview and the live alpha on [a matched street route with game audio](/blog/recording-webgl-playtests/#same-inputs), including a jump and first-person view.
+
 The older recording has a 150 ms gap between captured frames just after acceleration starts. The capture alone cannot tell us whether that gap came from the game or the recorder. The [capture notes](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/benchmarks/2026-10-18-manual-driving/README.md) include the timing audit.
 
 To compare the motion under the same inputs, we replayed the same scripted slalom with 150 ms of simulated round-trip delay, sampling modeled display positions 120 times a second. The test runs the shared simulation and emulates where the scene would draw the car; the two versions also had different background traffic.

@@ -24,9 +24,9 @@ export const ACHIEVEMENTS = {
   'deliveries-150': { name:'One Hundred Fifty on the Road', description:'Complete 150 deliveries. Reward: $7,500.' },
   'deliveries-200': { name:'Two Hundred on the Road', description:'Complete 200 deliveries. Reward: $12,000.' },
   'deliveries-250': { name:'Two Hundred Fifty on the Road', description:'Complete 250 deliveries. Reward: $20,000.' },
-  'region-oakland': { name:'Oakland and Berkeley', description:'Reach $10,000 to open Oakland and Berkeley. Reward: $500.' },
-  'region-peninsula': { name:'The Peninsula and East Bay', description:'Reach $50,000 to open the Peninsula and East Bay. Reward: $1,000.' },
-  'region-san-jose': { name:'San Jose', description:'Reach $250,000 to open San Jose. Reward: $2,500.' },
+  'region-oakland': { name:'Oakland, Berkeley and Emeryville', description:'Reach $10,000 to open Oakland, Berkeley and Emeryville. Reward: $500.' },
+  'region-peninsula': { name:'South San Francisco and SFO', description:'Reach $50,000 to open South San Francisco and SFO. Reward: $1,000.' },
+  'region-san-jose': { name:'San Mateo and Redwood City', description:'Reach $250,000 to open San Mateo and Redwood City. Reward: $2,500.' },
   'fremont-mission': { name:'Fremont · Mission San José', description:'Visit Mission San José. Reward: $500.' },
   'san-jose-city-hall': { name:'San José · City Hall', description:'Visit San José City Hall. Reward: $500.' },
   'coit-landing': { name:'Coit Tower Landing', description:'Land on Coit Tower. Reward: $1,000.' },
@@ -36,6 +36,19 @@ export const ACHIEVEMENTS = {
   'stanford-research': { name:'Stanford · Speed Lab', description:'Visit Hoover Tower. Earn $600 and 20% off sport motors.' },
   'sfo-ground-crew': { name:'SFO · Flight Lab', description:'Visit the SFO tower. Earn $600 and 20% off air tank upgrades.' },
   'sfo-express': { name:'SFO Express', description:'Complete a delivery to SFO. Reward: $1,000.' },
+  'tesla-drive-1': { name:'First Tesla Drive', description:'Drive one Tesla model for 100 m. Reward: $100.' },
+  'tesla-drive-5': { name:'Tesla Test Driver', description:'Drive five different Tesla models for 100 m each. Reward: $500.' },
+  'tesla-drive-11': { name:'Every Tesla', description:'Drive all 11 Tesla models for 100 m each. Reward: $2,000.' },
+  'npc-theft-1': { name:'First NPC Takeover', description:'Take an NPC or parked fleet car from the street. Reward: $100.' },
+  'npc-theft-5': { name:'Five-Finger Garage', description:'Take five different street fleet models. Reward: $500.' },
+  'npc-theft-10': { name:'Traffic Collector', description:'Take 10 different street fleet models. Reward: $2,000.' },
+  'npc-theft-26': { name:'Every Ride in Town', description:'Take all 26 different street fleet models. Reward: $5,000.' },
+  'vault-drive-panigale': { name:'Panigale V4 Drive', description:'Drive the Vault Panigale V4 for 100 m. Reward: $1,000.' },
+  'vault-drive-ninja': { name:'Ninja H2 Carbon Drive', description:'Drive the Vault Ninja H2 Carbon for 100 m. Reward: $1,000.' },
+  'vault-drive-temerario': { name:'Temerario Drive', description:'Drive the Vault Temerario for 100 m. Reward: $1,000.' },
+  'vault-drive-revuelto': { name:'Revuelto Drive', description:'Drive the Vault Revuelto for 100 m. Reward: $1,000.' },
+  'vault-drive-chiron': { name:'Chiron Drive', description:'Drive the Vault Chiron for 100 m. Reward: $1,000.' },
+  'vault-drive-tourbillon': { name:'Tourbillon Drive', description:'Drive the Vault Tourbillon for 100 m. Reward: $1,000.' },
   'luxury-visit': { name:'The Vault', description:'Discover the luxury showroom in Palo Alto. Reward: $1,000.' },
   'luxury-first': { name:'Keys to the Vault', description:'Buy your first luxury vehicle. Reward: $25,000.' },
   'luxury-panigale': { name:'Ducati Panigale V4', description:'Buy the Panigale V4 at the Vault. Reward: $20,000.' },
@@ -205,11 +218,11 @@ export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boole
   if(e.kind==='person'){state.groundShore=null;state.crossing=null;}
   else if(grounded){
     if(landed&&evidence){
-      const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
+      const style=BUILDINGS[parseInt(e.supportId!.slice('roof:'.length),10)]?.style;
       evidence.push({kind:'roof',roof:style==='coit'?'coit':style==='salesforce'?'salesforce':'ordinary'});
     }else if(roof&&!evidence&&unlock(state,'roof-rider'))researchCash+=500;
     if(roof&&!evidence){
-      const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
+      const style=BUILDINGS[parseInt(e.supportId!.slice('roof:'.length),10)]?.style;
       if(style==='coit'&&unlock(state,'coit-landing'))researchCash+=1_000;
       if(style==='salesforce'&&unlock(state,'salesforce-landing'))researchCash+=1_000;
     }

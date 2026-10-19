@@ -3,6 +3,7 @@
 import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent, MarketService } from '../../worker/index';
 import { MAP_BOUNDS, terrainHeight } from '../../shared/map';
 import { addPlayer, createEmptyWorld, createWorld, type World } from '../../shared/game';
+import { CUSTOMERS, RESTAURANTS } from '../../shared/delivery';
 import { roomSlug } from '../../worker/protocol';
 import { prepareSnapshots } from '../../worker/snapshot';
 import type { ScheduledInput } from '../../shared/tick-input';
@@ -99,6 +100,8 @@ export class GameRoom extends ProductionGameRoom {
     const connected = !!session && entries[0][0].readyState === 1;
     const fresh = !!player && player.delivery.level === 0 && player.delivery.completed === 0 &&
       player.delivery.earned === 0 && player.delivery.lifetimeIncome === 0 && player.delivery.order.stage === 'pickup';
+    const restaurant = player && RESTAURANTS[player.delivery.order.restaurant];
+    const customer = player && CUSTOMERS[player.delivery.order.customer];
     return {
       paused: this.pausedWorld === world,
       started: this.startedWorld === world,
@@ -108,6 +111,10 @@ export class GameRoom extends ProductionGameRoom {
       sessionCount: entries.length, connected, guest: session?.guest ?? false,
       attachPending: session?.attachPending ?? false, identitySequence: session?.identitySequence ?? 0,
       fresh,
+      initialOrder: restaurant && customer ? {
+        restaurant: { id: restaurant.id, x: restaurant.x, z: restaurant.z },
+        customer: { id: customer.id, x: customer.x, y: customer.y, z: customer.z, rooftop: customer.rooftop },
+      } : null,
     };
   }
 

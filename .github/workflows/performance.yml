@@ -2,7 +2,8 @@ name: Performance observations
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    # Draft PRs already run selection on open and pushes; readiness can restart the same measurement.
+    types: [opened, synchronize, reopened, labeled]
     # Keep these in sync with scripts/performance-select.mjs.
     paths:
       - 'src/**'
@@ -89,7 +90,7 @@ jobs:
       - name: Check out base game
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha || inputs.base_ref || 'main' }}
+          ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.base.ref) || inputs.base_ref || 'main' }}
           path: base
           persist-credentials: false
       - uses: pnpm/action-setup@v4

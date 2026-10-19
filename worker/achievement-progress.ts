@@ -2,6 +2,7 @@ import { applyAchievementTierEvent, type AchievementTierId, type AchievementTier
 import { evaluateAchievementEvidence, type AchievementEvidence } from '../shared/achievement-evidence';
 import { applyAchievementAwards, applyDeliveryAwards, type AchievementState } from '../shared/achievements';
 import { updateLevel, type DeliveryReward, type DeliveryState, type Order } from '../shared/delivery';
+import { applyVehicleCollection, emptyVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
 
 /** The observation is produced by the room, never by a client claim. */
 export function achievementTierFamilies(evidence:AchievementEvidence):AchievementTierId[] {
@@ -19,7 +20,7 @@ export function achievementTierFamilies(evidence:AchievementEvidence):Achievemen
       return touched ? evidence.won&&Object.values(evidence.goals).some(n=>n>0)
         ? ['dome-matches','dome-wins'] : ['dome-matches'] : [];
     }
-    case 'site': return [];
+    case 'site':case 'vehicle-driven':case 'npc-stolen': return [];
   }
 }
 
@@ -74,11 +75,12 @@ export function applyAcceptedDelivery(delivery:DeliveryState,state:AchievementSt
 }
 
 /** Apply one already validated, server-observed physical or match event. */
-export function applyObservedAchievement(delivery:DeliveryState,state:AchievementState,progress:AchievementTierProgress,evidence:AchievementEvidence){
+export function applyObservedAchievement(delivery:DeliveryState,state:AchievementState,progress:AchievementTierProgress,evidence:AchievementEvidence,collections:VehicleCollections=emptyVehicleCollections()){
   const before=state.unlocked.length,rewardBefore=delivery.lastReward,cashBefore=delivery.cash;
-  applyAchievementAwards(delivery,state,evaluateAchievementEvidence(state.unlocked,evidence));
+  const collection=applyVehicleCollection(collections,evidence);
+  applyAchievementAwards(delivery,state,[...evaluateAchievementEvidence(state.unlocked,evidence),...collection.awards]);
   const next=applyTierProgress(delivery,progress,achievementTierFamilies(evidence));
   applyAchievementAwards(delivery,state,[]);
   coalesceEventRewards(delivery,rewardBefore,cashBefore);
-  return {progress:next,awards:state.unlocked.slice(before)};
+  return {progress:next,awards:state.unlocked.slice(before),collections:collection.progress};
 }

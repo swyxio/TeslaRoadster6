@@ -2,7 +2,12 @@ import type { Entity, Input, World } from './game';
 import { BAY_CIRCUIT, isSurface, nearbyBuildings } from './map';
 import { ALTERNATE_ROADS, PENINSULA_CROSS_STREETS } from './alternate-roads';
 import { CALTRAIN_ACCESS_ROUTES } from './caltrain';
+import { MARIN_ROUTES } from './marin-roads';
+import { TOWN_DELIVERY_ROUTES } from './town-delivery-roads';
+import { SFO_DELIVERY_ROUTES } from './sfo-delivery-road';
+import { LANDMARK_ACCESS_ROUTES } from './landmark-access-roads';
 import { body, contact } from './physics';
+import { buildingBlocksPose } from './landmark-collision';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
@@ -11,7 +16,10 @@ export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
 // large district loops let NPCs tour more than a single block.
 function loop(left:number,top:number,right:number,bottom:number):Point[]{return [{x:left+3,z:top+3},{x:right-3,z:top+3},{x:right-3,z:bottom-3},{x:left+3,z:bottom-3}];}
-export const ROUTES:Point[][]=[loop(-240,-180,0,120),loop(-180,-120,60,120),loop(-120,-60,0,60),loop(330,-180,510,180),loop(390,-120,570,120),loop(330,-60,450,60)];
+// Turn north before the Oakland stunt loop and ramp, then rejoin the city loop.
+const oaklandLoop:Point[]=[{x:333,z:-177},{x:507,z:-177},{x:507,z:177},
+  {x:453,z:177},{x:453,z:117},{x:333,z:117}];
+export const ROUTES:Point[][]=[loop(-240,-180,0,120),loop(-180,-120,60,120),loop(-120,-60,0,60),oaklandLoop,loop(390,-120,570,120),loop(330,-60,450,60)];
 for(let x=-240;x<0;x+=60)for(let z=-180;z<180;z+=60){
   if(x>=-180&&z>=120)continue; // The China Basin stadium replaces these blocks.
   ROUTES.push(loop(x,z,x+60,z+60));
@@ -60,6 +68,10 @@ for(const cross of PENINSULA_CROSS_STREETS)ROUTES.push([
 ]);
 // Local two-way streets extend the same directed graph to the station lots.
 ROUTES.push(...CALTRAIN_ACCESS_ROUTES);
+ROUTES.push(...MARIN_ROUTES);
+ROUTES.push(...TOWN_DELIVERY_ROUTES,...SFO_DELIVERY_ROUTES,...LANDMARK_ACCESS_ROUTES);
+// Existing Berkeley street tiles reach the preserved Campanile delivery marker.
+ROUTES.push([{x:393,z:-237},{x:507,z:-237},{x:507,z:-123},{x:393,z:-123}]);
 
 /** A fictional disabled-car vignette; timing uses real room seconds. */
 export const TRAFFIC_INCIDENT={entityId:'ambient-seed-0',cycleSeconds:360,startSeconds:180,endSeconds:240} as const;
@@ -82,7 +94,7 @@ function clearBehind(e:Entity,world:World):boolean {
     const x=e.x-forward.x*d,z=e.z-forward.z*d;
     if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
     const pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return false;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
     for(const other of world.entities){
       if(other===e)continue;
       const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
@@ -97,14 +109,14 @@ function wallAhead(e:Entity):boolean {
   const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
   for(let d=1;d<=3;d++){
     const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return true;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
   }
   return false;
 }
 export function routePose(index:number,count:number) {
-  const routeId=index%6,route=ROUTES[routeId],side=(index*4/count)%4,segment=Math.floor(side),t=side-segment;
-  const a=route[segment],b=route[(segment+1)%4];
-  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),routeId,waypoint:(segment+1)%4};
+  const routeId=index%6,route=ROUTES[routeId],side=(index*route.length/count)%route.length,segment=Math.floor(side),t=side-segment;
+  const a=route[segment],b=route[(segment+1)%route.length];
+  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:Math.atan2(-(b.x-a.x),-(b.z-a.z)),routeId,waypoint:(segment+1)%route.length};
 }
 export function engageAutopilot(e:Entity):boolean {
   // All current routes follow ground; an overlapping deck or roof is not a route.
@@ -313,7 +325,7 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
     if(!isSurface(pose.x,pose.z)||!hidden(pose.x,pose.z,viewers))continue;
     if(world.entities.some(other=>Math.hypot(other.x-pose.x,other.z-pose.z)<30))continue;
     const car=make(id,kind,pose.x,pose.z);Object.assign(car,pose,{npc:true,autopilot:true});
-    if(nearbyBuildings(car.x,car.z,10).some(building=>contact(body(car),{...building,yaw:0})))continue;
+    if(nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)))continue;
     world.entities.push(car);return true;
   }
   return false;

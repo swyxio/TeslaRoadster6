@@ -12,7 +12,7 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Research tour:** Find the blue rings at UCSF Parnassus in SF, the Berkeley Campanile, Stanford’s Hoover Tower and SFO’s control tower; the map labels each landmark. Stop in each ring for a one-time award: UCSF pays $250; Berkeley pays $400 and gives 20% off efficient nozzles; Stanford pays $600 and gives 20% off sport motors; SFO pays $600 and gives 20% off air tanks. Complete a delivery to SFO for an additional $1,000 achievement. Open **Actions → Awards** to see each goal.
 
-**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 2, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
+**Mars mission:** Open 🚀 Mars mission to see the global $1 billion goal. Eligible earnings count automatically across drivers and rooms without spending cash. At the fictional Fremont spaceport, the Starship hull grows with confirmed global earnings, with a working construction yard and a sign explaining the mission. Once funded, reach level 5, stop in the gold ring and board for the To Mars achievement and victory. You can keep exploring afterwards.
 
 **Sound and radio:** Use **♫** to choose the original 8-bit soundtrack or a random episode from the last two months of Latent Space or ThursdAI. Play, pause and skip episodes while driving; master, music/radio and effects levels are separate. The station and sound preferences stay on this browser. Podcast audio streams from the publisher. See [audio design](docs/AUDIO.md).
 
@@ -24,9 +24,11 @@ See [verification](docs/VERIFICATION.md) for observed checks and known limitatio
 
 **Scores and awards:** Scores show delivery milestones, room standings and current or recently observed mini-game results. Results last for the drive. Awards show your progress and save status; confirmed awards follow a saved driver across drives and devices.
 
+**Vehicle collections:** Drive each Tesla and Vault model for 100 m in one ride to add it to your collection. Take different NPC or seeded parked fleet models from the street for takeover milestones. Actions → Awards shows the model lists and cash rewards; other players' cars and Cybercabs do not count as takeovers. Earlier drives and takeovers were not recorded, so the new collections begin empty.
+
 **Tesland in 2050:** Cross the Golden Gate to the wooded Marin headlands, where the fictional First Delivery Monument celebrates the Bay’s most important cargo. Its base is solid and landable. See [the setting](content/lore.md).
 
-**Bay sights:** Explore 100 additional low-poly landmarks around San Francisco, Marin, Oakland, Berkeley, the Peninsula, Fremont and San Jose, plus Twin Peaks and Mount Tamalpais. Three small, drivable hills evoke those summits and Mission Peak. Locations, sizes and slopes are playful approximations. Roadside billboards advertise fictional parody tech companies. See [map details](docs/MAP.md) and the [northern](docs/BAY_LANDMARKS_NORTH.md) and [southern](docs/BAY_LANDMARKS_SOUTH.md) place references.
+**Bay sights:** Explore 200 additional low-poly landmarks around San Francisco, Marin, Oakland, Berkeley, the Peninsula, Fremont and San Jose, plus Twin Peaks and Mount Tamalpais. Three small, drivable hills evoke those summits and Mission Peak. Locations, sizes and slopes are playful approximations. Roadside billboards advertise fictional parody tech companies. See [map details](docs/MAP.md), the [original northern](docs/BAY_LANDMARKS_NORTH.md) and [southern](docs/BAY_LANDMARKS_SOUTH.md) references, and [100 further places](docs/BAY_LANDMARKS_ADDITIONAL.md).
 
 **Fleet:** Choose from 11 Teslas. Waymo, Cruise and Zoox vehicles join the Teslas in parked and NPC traffic; exit your car and take one from the street. All 26 families are drivable. Published versus estimated values are documented in [fleet research](docs/FLEET_RESEARCH.md).
 
@@ -94,7 +96,7 @@ The trigger layout follows familiar racing conventions ([Forza Motorsport access
 - At the north SF dock, drive onto the stationary ferry and stop completely on deck. Cars are secured during a crossing; drive off on arrival. The HUD and dock signs show ferry status and countdown; painted walking lanes, visual gates and a nearby horn mark the crossing.
 - Drive over a purple Rocket pickup in a car to refill air and grant that vehicle fictional Rocket moves for the session. Pads return after 20 seconds. Permanently equipped cars only collect them when they need air; a full car leaves the pad for others.
 - Choose Park It or Cut the Queue under **Actions → Mini-games**. At a parking playground, charging lot or Caltrain lot, the game uses that lot; otherwise it takes you to a playground. Races are in the same menu. Cars can bump during races. Keyboard users can reach these actions with Tab and Enter.
-- Opening the game joins the shared `bay` room, or the room named by an invite link. Use **Invite** to copy the current link; the menu also offers another room. A full or disconnected room offers retry or another room.
+- Opening the game joins the shared Bay. If it is full, the game finds an open Bay room automatically. Use **Invite** to copy a link to your exact room; an invited or manually chosen room stays exact and offers retry or another room if full.
 
 ## Boundaries
 
@@ -102,7 +104,7 @@ This is a working foundation, not GTA-scale content or a persistent MMO. Twenty 
 
 Rooms are public-by-code. Room simulation resets on deployment, runtime restart, or last disconnect; saved driver progress and the global Mars goal persist. Room codes are not access control, and room labels are self-asserted. Global chat retains a recent, transient history, which disappears on server restart. Traffic is deterministic arcade driving; shooting and death/respawn are not implemented.
 
-Rooms default to **64 players**, with retry or another named room when full. Automatic overflow is not implemented; see the [overflow plan](docs/ROOM_OVERFLOW_PLAN.md). This limit is provisional, not validated playable capacity: a previous same-host 64-client test showed substantial simulation slowdown. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
+Rooms default to **64 players**. Automatic Bay entry tries available overflow rooms when the main Bay is full; exact room links never silently redirect. See [room placement](docs/ROOM_OVERFLOW_PLAN.md). This limit is provisional, not validated playable capacity: a previous same-host 64-client test showed substantial simulation slowdown. `MAX_PLAYERS` remains configurable up to 128 for explicit, bounded experiments. Active real-time rooms incur Durable Object duration and request usage; they do not hibernate while physics runs. Never advertise a connection limit as tested gameplay concurrency. See [verification](docs/VERIFICATION.md).
 
 To investigate capacity, `pnpm exec tsx scripts/load-room.ts http://localhost:8787 8 60` opens synthetic clients in a new disposable room, sends game inputs and reports snapshot rate, gaps, volume and simulated time. The script accepts only local servers because it generates substantial network and Worker usage; choose a client count up to the configured room limit. This is a synthetic check, not proof of player experience or sustained production capacity.
 
@@ -169,3 +171,9 @@ No framework is needed for this small HUD. Keep the simulation independent from 
 ## License and attribution
 
 First-party source, documentation and original procedural assets are [MIT licensed](LICENSE). The highway source extract and generated traces are © OpenStreetMap contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); see [map provenance and the reproducible bake](docs/MAP.md). Third-party dependencies have their own licenses; the bundled three.js notice is in [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). Restaurant names identify real places, with fictional in-game locations and no affiliation. Tesla, Waymo, Cruise, Zoox and SpaceX names are used for fictional game content; they do not imply endorsement, and the MIT license does not grant trademark rights.
+
+For a fresh balance test, use **Room settings → Playtest → Fresh driver**. For
+maximum upgrades, all vehicles, unlimited spending and map teleport, join
+[`sandbox`](https://tesland.swyx.io/?room=sandbox) or share a `sandbox-*` code.
+These multiplayer rooms leave your saved driver untouched and do not save
+progress. [Playtest modes and boundaries](docs/PLAYTEST_ROOMS.md).

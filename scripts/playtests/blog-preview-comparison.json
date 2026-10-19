@@ -1,0 +1,25 @@
+{
+ "freshGuest":true,
+ "viewport":{"width":1280,"height":720,"deviceScaleFactor":1},
+ "steps":[
+ {"type":"waitFor","selector":"#connection:has-text(\"LIVE\")","timeoutMs":60000},
+ {"type":"wait","ms":2000},
+ {"type":"keyPress","key":"KeyW"},
+ {"type":"wait","ms":500},
+ {"type":"recordStart"},
+ {"type":"keyDown","key":"KeyW"},
+ {"type":"wait","ms":2200},
+ {"type":"keyDown","key":"KeyE"},
+ {"type":"wait","ms":1000},
+ {"type":"keyUp","key":"KeyE"},
+ {"type":"wait","ms":700},
+ {"type":"keyUp","key":"KeyW"},
+ {"type":"keyDown","key":"Space"},
+ {"type":"wait","ms":2000},
+ {"type":"keyUp","key":"Space"},
+ {"type":"wait","ms":700},
+ {"type":"keyPress","key":"KeyC"},
+ {"type":"wait","ms":1800},
+ {"type":"recordStop"}
+ ]
+}

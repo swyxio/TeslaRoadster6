@@ -1,4 +1,5 @@
-import { isSurface, nearbyBuildings, ROADS } from './map';
+import { buildingBlocksPose } from './landmark-collision';
+import { terrainHeight, isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
 import { requiredLevelAt, type Level } from './delivery';
 import { ROUTES, type Point } from './traffic';
 import { VEHICLES } from './vehicles';
@@ -17,7 +18,7 @@ export type Navigation = {
 // the nine-metre pickup/dropoff marker even after the endpoint is snapped.
 export const DELIVERY_DESTINATION_SNAP = 4.5;
 type Segment = {a:Point;b:Point;cuts:number[]};
-type Edge = {to:number;distance:number};
+type Edge = {to:number;distance:number;accessChecked:number;accessAllowed:number};
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
 const point=(s:Segment,t:number):Point=>({x:s.a.x+(s.b.x-s.a.x)*t,z:s.a.z+(s.b.z-s.a.z)*t});
 const cross=(ax:number,az:number,bx:number,bz:number)=>ax*bz-az*bx;
@@ -62,7 +63,7 @@ function cityLanes():Segment[] {
       const at=(along:number):Point=>axis==='x'?{x:along,z:center+offset}:{x:center+offset,z:along};
       const safe=(p:Point)=>isSurface(p.x,p.z)&&isSurface(p.x-2,p.z-2)&&isSurface(p.x-2,p.z+2)&&
         isSurface(p.x+2,p.z-2)&&isSurface(p.x+2,p.z+2)&&
-        !nearbyBuildings(p.x,p.z,4).some(b=>Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
+        !nearbyBuildings(p.x,p.z,4).some(b=>b.style==='structure'?buildingBlocksPose(b,{...p,kind:'model-3',y:terrainHeight(p.x,p.z)??0,yaw:axis==='x'?Math.PI/2:0,pitch:0,roll:0,supportId:'ground'}):Math.abs(p.x-b.x)<b.w/2+2&&Math.abs(p.z-b.z)<b.d/2+2);
       let start:number|null=null,last=0;
       const finish=()=>{
         if(start!==null&&last-start>=6){
@@ -110,12 +111,45 @@ function navigationGraph():RoadGraph {
   for(let i=0;i<segments.length;i++){
     const cuts=segmentNodes[i];
     for(let j=0;j<cuts.length-1;j++){
-      const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to])});
+      const from=cuts[j].id,to=cuts[j+1].id;if(from!==to)edges[from].push({to,distance:distance(nodes[from],nodes[to]),accessChecked:0,accessAllowed:0});
     }
   }
   return roadGraph={segments,nodes,edges,nodeIds,segmentNodes};
 }
+
+/** Prepare the shared graph before a room starts its simulation timer. */
+export function prepareNavigationGraph():void {
+  navigationGraph();
+}
+
+/** A necessary, inexpensive test before planning a delivery route. */
+export function canSnapDeliveryDestination(destination:Point,level:Level):boolean {
+  if(!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return false;
+  return navigationGraph().segments.some(segment=>distance(destination,projection(destination,segment).point)<=DELIVERY_DESTINATION_SNAP);
+}
+
+/** Nearest supported road lane for localizing a job, not a route or teleport. */
+export function nearestNavigationAnchor(origin:Point,level:Level):{point:Point;distance:number}|null {
+  const ceiling=Math.max(level,requiredLevelAt(origin.x,origin.z));
+  let best:{point:Point;distance:number}|null=null;
+  for(const segment of navigationGraph().segments){
+    const candidate=projection(origin,segment).point,d=distance(origin,candidate);
+    if((!best||d<best.distance)&&isSurface(candidate.x,candidate.z)&&requiredLevelAt(candidate.x,candidate.z)<=ceiling)
+      best={point:candidate,distance:d};
+  }
+  return best;
+}
 function allowed(a:Point,b:Point,level:Level):boolean{
+  // Road navigation must not enter the loop, drive up the ramp, or try to
+  // pass through its high end. Manual driving still uses the stunt surfaces.
+  const crosses=(x:number,z:number,width:number)=>{
+    const dx=b.x-a.x;if(!dx)return false;
+    const t=(x-a.x)/dx;
+    return t>=0&&t<=1&&Math.abs(a.z+(b.z-a.z)*t-z)<width/2;
+  };
+  if(crosses(STUNT_LOOP.x,STUNT_LOOP.z,STUNT_LOOP.width)||
+    (a.x<=STUNT_RAMP.start&&b.x>STUNT_RAMP.start&&crosses(STUNT_RAMP.start,STUNT_RAMP.z,STUNT_RAMP.width))||
+    (a.x>=STUNT_RAMP.end&&b.x<STUNT_RAMP.end&&crosses(STUNT_RAMP.end,STUNT_RAMP.z,STUNT_RAMP.width)))return false;
   const count=Math.max(1,Math.ceil(distance(a,b)/30));
   // A purchase may lower a driver's level while they are in a locked area.
   // Permit egress, but never let a route climb back into a higher tier.
@@ -128,10 +162,52 @@ function allowed(a:Point,b:Point,level:Level):boolean{
   return true;
 }
 
+// Graph edges and access boundaries are static. Cache the directed edge check
+// independently for each level, including the existing locked-area exit rule.
+function allowedEdge(a:Point,b:Point,edge:Edge,level:Level):boolean {
+  const bit=1<<level;
+  if(!(edge.accessChecked&bit)){
+    edge.accessChecked|=bit;
+    if(allowed(a,b,level))edge.accessAllowed|=bit;
+  }
+  return !!(edge.accessAllowed&bit);
+}
+
+// Order equal costs by node id, matching the previous ascending-node scan.
+class NavigationQueue {
+  private items:{id:number;cost:number}[]=[];
+  private before(a:{id:number;cost:number},b:{id:number;cost:number}):boolean {
+    return a.cost<b.cost||(a.cost===b.cost&&a.id<b.id);
+  }
+  push(id:number,cost:number):void {
+    const item={id,cost},items=this.items;let index=items.length;
+    items.push(item);
+    while(index>0){
+      const parent=(index-1)>>1;if(!this.before(item,items[parent]))break;
+      items[index]=items[parent];index=parent;
+    }
+    items[index]=item;
+  }
+  pop():{id:number;cost:number}|undefined {
+    const items=this.items,first=items[0],last=items.pop();
+    if(!first||!last||!items.length)return first;
+    let index=0;
+    while(true){
+      const left=index*2+1;if(left>=items.length)break;
+      const right=left+1,child=right<items.length&&this.before(items[right],items[left])?right:left;
+      if(!this.before(items[child],last))break;
+      items[index]=items[child];index=child;
+    }
+    items[index]=last;return first;
+  }
+}
+
 // Connect an off-road car to a lane without crossing a building, unsupported
-// ground, or a locked region. This small visibility search runs only when a
+// ground, or a locked region. Keep conservative building envelopes for turning
+// clearance; separately indexed bridge/arena beams use actual vertical clearance. This small visibility search runs only when a
 // destination is requested, never on the simulation tick.
-function offRoadApproach(car:Entity,end:Point,level:Level):Point[]|null {
+type NavigationVehicle = Pick<Entity,'x'|'z'|'yaw'|'kind'|'supportId'|'inDome'>;
+function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|null {
   if(car.kind==='person')return null;
   const radius=Math.max(2,VEHICLES[car.kind].width/2+1);
   const clear=(a:Point,b:Point)=>{
@@ -141,7 +217,7 @@ function offRoadApproach(car:Entity,end:Point,level:Level):Point[]|null {
       const t=i/count,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
       if(!isSurface(x-radius,z-radius)||!isSurface(x-radius,z+radius)||
         !isSurface(x+radius,z-radius)||!isSurface(x+radius,z+radius)||
-        nearbyBuildings(x,z,radius).some(b=>Math.abs(x-b.x)<b.w/2+radius&&Math.abs(z-b.z)<b.d/2+radius))return false;
+        nearbyBuildings(x,z,radius).some(building=>building.style==='structure'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw:Math.atan2(a.x-b.x,a.z-b.z),pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
     }
     return true;
   };
@@ -167,7 +243,7 @@ function offRoadApproach(car:Entity,end:Point,level:Level):Point[]|null {
 }
 
 /** Find a directed route to the nearest connected lane, respecting progress. */
-export function planNavigation(car:Entity,destination:Point,level:Level,maxDestinationSnap=100):Navigation|null {
+export function planNavigation(car:NavigationVehicle,destination:Point,level:Level,maxDestinationSnap=100):Navigation|null {
   if(car.kind==='person'||car.supportId!=='ground'||car.inDome||!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return null;
   const {segments,nodes,edges,nodeIds,segmentNodes}=navigationGraph();
   const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);
@@ -196,28 +272,30 @@ export function planNavigation(car:Entity,destination:Point,level:Level,maxDesti
     });
   if(!closeStarts.length)return null;
   const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
-  const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,typeof closeStarts[number]>(),used=new Set<number>();
+  const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,typeof closeStarts[number]>(),used=new Set<number>(),queue=new NavigationQueue();
   const ahead=(p:Point)=>(p.x-car.x)*-Math.sin(car.yaw)+(p.z-car.z)*-Math.cos(car.yaw)>=-.5;
   for(const start of closeStarts){
     const heading=alignment(start)*(start.reverse?-1:1);
     const cuts=segmentNodes[start.i];
     const next=start.reverse?[...cuts].reverse().find(c=>c.t<=start.t+1e-7):cuts.find(c=>c.t>=start.t-1e-7);
-    if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||!allowed(car,nodes[next.id],level))continue;
+    if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||
+      !allowed(car,nodes[next.id],level)||!allowed(start.point,nodes[next.id],level))continue;
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
     const cost=(onRoad?start.distance*2:approachLength)+(1-heading)*8+distance(start.point,nodes[next.id]);
-    if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);}
+    if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);queue.push(next.id,cost);}
   }
   let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
   // Direct travel on a single segment need not pass through an intersection.
   let direct:Point[]|undefined,directStart:typeof closeStarts[number]|undefined;
-  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)){
+  for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)&&allowed(start.point,end.point,level)){
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
     const cost=(onRoad?start.distance*2:approachLength)+distance(start.point,end.point)+end.distance*2;
     if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[...start.approach,end.point];directStart=start;}
   }
-  while(used.size<nodes.length){
-    let at=-1;for(let i=0;i<nodes.length;i++)if(!used.has(i)&&(at<0||dist[i]<dist[at]))at=i;
-    if(at<0||!Number.isFinite(dist[at])||dist[at]>bestCost)break;
+  while(true){
+    const next=queue.pop();if(!next)break;
+    const at=next.id;if(used.has(at)||next.cost!==dist[at])continue;
+    if(next.cost>bestCost)break;
     used.add(at);
     for(const end of closeEnds){
       const cuts=segmentNodes[end.i],before=[...cuts].reverse().find(c=>c.t<=end.t+1e-7);
@@ -225,9 +303,9 @@ export function planNavigation(car:Entity,destination:Point,level:Level,maxDesti
       const cost=dist[at]+distance(nodes[at],end.point)+end.distance*2;
       if(cost<bestCost){bestCost=cost;bestNode=at;bestEnd=end.point;direct=undefined;directStart=undefined;}
     }
-    for(const edge of edges[at])if(allowed(nodes[at],nodes[edge.to],level)){
+    for(const edge of edges[at])if(allowedEdge(nodes[at],nodes[edge.to],edge,level)){
       const cost=dist[at]+edge.distance;
-      if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;}
+      if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;queue.push(edge.to,cost);}
     }
   }
   // A one-way loop can technically connect nearby streets by routing around

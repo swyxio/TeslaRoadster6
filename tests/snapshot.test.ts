@@ -4,6 +4,9 @@ import { addPlayer, createWorld, makeEntity, NEUTRAL } from '../shared/game';
 import { ScheduledInput } from '../shared/tick-input';
 import { supportNormal } from '../shared/map';
 import { ovalBankSurface } from '../shared/oval-bank';
+import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
+import { isVehicleCollectionAward } from '../shared/vehicle-collections';
+import { AchievementEventTracker } from '../src/achievement-events';
 import { AMBIENT_INTEREST_METERS, prepareSnapshots, snapshotFor } from '../worker/snapshot';
 
 test('snapshots retain players and owned cars, while ambient traffic follows the viewer', () => {
@@ -55,6 +58,51 @@ test('cached snapshot serialization matches the recipient-specific world',()=>{
     assert.deepEqual(JSON.parse(prepare(id,control,1)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),tick,roomEpoch,substeps,poseRevision:1,control})));
     assert.deepEqual(JSON.parse(prepare(id,control,1,4)),JSON.parse(JSON.stringify({type:'state',world:snapshotFor(world,id),tick,roomEpoch,substeps,poseRevision:1,control,sync:4})));
   }
+});
+
+test('collection awards and their events are visible only to their owner',()=>{
+  const world=createWorld(),one=addPlayer(world,'one','🚗 One'),two=addPlayer(world,'two','Two');
+  const collectionIds=(Object.keys(ACHIEVEMENTS) as AchievementId[]).filter(isVehicleCollectionAward);
+  assert.equal(collectionIds.length,13);
+  one.achievements.unlocked=['roadster-champion',...collectionIds];
+  one.achievements.lastUnlock={id:collectionIds.length,achievement:collectionIds.at(-1)!};
+  two.achievements.unlocked=['park-it','vault-drive-chiron'];
+  two.achievements.lastUnlock={id:1,achievement:'vault-drive-chiron'};
+  const control=new ScheduledInput(NEUTRAL).snapshot(),prepare=prepareSnapshots(world,12,'epoch',3);
+  for(const id of [one.id,two.id,'missing']){
+    const wire=JSON.parse(prepare(id,control,1));
+    assert.deepEqual(wire.world,JSON.parse(JSON.stringify(snapshotFor(world,id))),`cached and direct projections agree for ${id}`);
+    const visibleOne=wire.world.players.find((player:{id:string})=>player.id===one.id);
+    const visibleTwo=wire.world.players.find((player:{id:string})=>player.id===two.id);
+    assert.deepEqual(visibleOne.achievements.unlocked,id===one.id?one.achievements.unlocked:['roadster-champion']);
+    assert.deepEqual(visibleTwo.achievements.unlocked,id===two.id?two.achievements.unlocked:['park-it']);
+    if(id!==one.id)assert.equal(visibleOne.achievements.lastUnlock,null);
+    if(id!==two.id)assert.equal(visibleTwo.achievements.lastUnlock,null);
+    if(id===one.id)assert.deepEqual(new AchievementEventTracker().update(visibleOne.achievements),collectionIds,'owner toasts preserve all ordered events');
+  }
+  assert.equal(one.achievements.unlocked.length,14,'projection leaves authoritative awards unchanged');
+});
+
+test('owner receives interleaved public and collection events once across recovery',()=>{
+  const world=createWorld(),owner=addPlayer(world,'owner','Owner'),observer=addPlayer(world,'observer','Observer');
+  const tracker=new AchievementEventTracker(),control=new ScheduledInput(NEUTRAL).snapshot();
+  const project=(viewer:string)=>JSON.parse(prepareSnapshots(world,0,'epoch',1)(viewer,control,0)).world.players.find((p:{id:string})=>p.id===owner.id).achievements;
+  owner.achievements.unlocked=['luxury-visit'];
+  assert.deepEqual(tracker.update(project(owner.id)),[],'restored awards remain silent');
+  owner.achievements.unlocked.push('park-it');owner.achievements.lastUnlock={id:1,achievement:'park-it'};
+  assert.deepEqual(tracker.update(project(owner.id)),['park-it']);
+  owner.achievements.unlocked.push('vault-drive-chiron');owner.achievements.lastUnlock={id:2,achievement:'vault-drive-chiron'};
+  assert.deepEqual(tracker.update(project(owner.id)),['vault-drive-chiron']);
+  assert.equal(project(observer.id).lastUnlock,null);
+  owner.achievements.unlocked.push('roof-rider');owner.achievements.lastUnlock={id:3,achievement:'roof-rider'};
+  assert.deepEqual(tracker.update(project(owner.id)),['roof-rider']);
+  assert.deepEqual(tracker.update(project(owner.id)),[],'repeated snapshot does not repeat the toast');
+  assert.deepEqual(project(observer.id).unlocked,['luxury-visit','park-it','roof-rider']);
+  tracker.reset();owner.achievements.lastUnlock=null;
+  assert.deepEqual(tracker.update(project(owner.id)),[],'recovered awards remain silent in a new room');
+  owner.achievements.unlocked.push('tesla-drive-1');owner.achievements.lastUnlock={id:1,achievement:'tesla-drive-1'};
+  assert.deepEqual(tracker.update(project(owner.id)),['tesla-drive-1']);
+  assert.deepEqual(tracker.update(project(owner.id)),[]);
 });
 
 test('cached snapshots retain a distant dome player and ferry passenger',()=>{

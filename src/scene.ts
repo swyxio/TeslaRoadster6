@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { VEHICLES } from '../shared/vehicles';
-import { type World } from '../shared/game';
+import { THRUSTER_REAR, type World } from '../shared/game';
 import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
@@ -10,7 +10,7 @@ import { buildBay } from './bay-world';
 import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
-import { orderTarget } from '../shared/delivery';
+import { canAssignDeliveryRoof, isOrderAccessible, orderTarget } from '../shared/delivery';
 import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
@@ -20,13 +20,15 @@ import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrust
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
-import { cockpitPose } from './camera';
+import { cockpitPose, viewLens, type CameraMode } from './camera';
+import { LandingPulse } from './landing-pulse';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
 import { DOME } from '../shared/dome';
 import { createSkyCurrents } from './sky-currents';
 import { buildNorthLandmarks } from './north-landmarks';
 import { buildSouthLandmarks } from './south-landmarks';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
 import { buildTechCampuses } from './tech-campuses';
 import { buildEastSouthAdditions } from './east-south-additions';
 import { buildBillboards } from './billboards';
@@ -38,14 +40,15 @@ import { RESEARCH_SITES, researchArrival } from '../shared/research';
 import { createPropertyScene } from './property-scene';
 import { marketPaintColor } from '../shared/market-catalog';
 
-export type CameraMode = 'chase' | 'wide' | 'cockpit';
-
 export class GameScene {
   private renderer: T.WebGLRenderer;
   private scene = new T.Scene();
   private sky = new T.Color();
   private nightSky = new T.Color(0x334b62);
   private daySky = new T.Color(0xa8cbd0);
+  private twilightSky = new T.Color(0xe7b59c);
+  private daylightSun = new T.Color(0xffdfb5);
+  private twilightSun = new T.Color(0xffbb87);
   private hemisphere = new T.HemisphereLight(0xe9f5ff,0x626953,1.4);
   private sun = new T.DirectionalLight(0xffdfb5,2.2);
   private signalRed = new T.MeshBasicMaterial({color:0x551b19});
@@ -92,10 +95,13 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  private landingPulse = new LandingPulse();
   private predictedEntity?:string;
   cameraMode:CameraMode = 'chase';
   private renderedCockpit=false;
   private marker = new T.Vector3();
+  landed(strength:number){this.landingPulse.trigger(strength);}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'wide':'chase';this.cameraReady=false;}
   objectiveScreen(){
     this.marker.copy(this.objective.position);this.marker.y+=3;this.marker.project(this.camera);
@@ -126,6 +132,13 @@ export class GameScene {
     const scene=this.scene;
     buildBay(scene);
     buildNorthLandmarks(scene);
+    // Local batches keep distant parts cullable; each atlas holds at most 48 labels.
+    const landmarkCells=new Map<string,typeof NEW_LANDMARKS>();
+    for(const place of NEW_LANDMARKS){
+      const key=`${Math.floor(place.x/600)},${Math.floor(place.z/800)}`;
+      const cell=landmarkCells.get(key)??[];cell.push(place);landmarkCells.set(key,cell);
+    }
+    for(const cell of landmarkCells.values())for(let i=0;i<cell.length;i+=48)buildNorthLandmarks(scene,cell.slice(i,i+48),[]);
     buildSouthLandmarks(scene);
     buildTechCampuses(scene);
     buildEastSouthAdditions(scene);
@@ -189,7 +202,10 @@ export class GameScene {
         }
         scene.add(claim);this.parkingClaims.set(stall.id,claim);
       }
-      const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      // Charger lots have physical pylons; the floating name would cover them.
+      if(!lot.id.startsWith('charger-')){
+        const label=this.label(lot.name.toUpperCase());label.position.set(lot.area.x,8,lot.area.z);scene.add(label);
+      }
     }
     this.raceGate.visible=false;this.raceGate.scale.y=.52;scene.add(this.raceGate);
     for(const course of RACE_COURSES){
@@ -260,11 +276,16 @@ export class GameScene {
     // The shared clock advances the sky; vehicle physics always use real simulation seconds.
     const phase=(dayMinute(world.time)-360)/1440*Math.PI*2;
     const daylight=Math.max(0,Math.min(1,(Math.sin(phase)+.22)/.55));
+    const twilight=Math.max(0,1-Math.abs(Math.sin(phase))/.3);
     this.sky.copy(this.nightSky).lerp(this.daySky,daylight);
+    // A slight warm coastal horizon at sunrise/sunset, with the existing
+    // sky and fog sharing one color and no extra post-processing pass.
+    this.sky.lerp(this.twilightSky,twilight*.18);
     (this.scene.background as T.Color).copy(this.sky);
     (this.scene.fog as T.Fog).color.copy(this.sky);
     this.hemisphere.intensity=.8+daylight*.6;
     this.sun.intensity=.5+daylight*1.7;
+    this.sun.color.copy(this.daylightSun).lerp(this.twilightSun,twilight);
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
     this.ferryMotion.copy(this.ferry.position).multiplyScalar(-1);
@@ -299,12 +320,17 @@ export class GameScene {
     if(gate){this.raceGate.position.set(gate.x,(gate.minY+gate.maxY)/2,gate.z);this.raceGate.rotation.y=gate.yaw;}
     const player=world.players.find(p=>p.id===playerId);
     for(const [id,marker] of this.researchMarkers)marker.visible=!!player&&!menu&&!player.achievements.unlocked.includes(id as typeof RESEARCH_SITES[number]['achievement']);
-    for(const level of [1,2,3] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
+    for(const level of [1,2,3,4,5,6] as const)this.progressionGates[level].visible=(player?.delivery.level??0)<level;
     const controlled=world.entities.find(e=>e.id===player?.entityId);
     this.skyCurrents.group.visible=!controlled?.inDome;
     this.skyCurrents.update(world.time,controlled);
     const cockpit=!menu&&this.cameraMode==='cockpit'&&controlled?.kind!==undefined&&controlled.kind!=='person';
+    const landingScale=this.landingPulse.update(controlled?.id,!!controlled&&controlled.supportId!==null,menu||cockpit,snapLocal||snapCamera,this.reducedMotion.matches,dt);
     if(cockpit!==this.renderedCockpit){this.cameraReady=false;this.renderedCockpit=cockpit;this.camera.fov=cockpit?75:55;this.camera.updateProjectionMatrix();}
+    // Rear thrust includes boost and powered flight; Wide and cockpit keep
+    // their chosen lenses while chase eases back when thrust ends.
+    const fov=viewLens(this.camera.fov,this.cameraMode,cockpit,!!controlled&&!menu&&!!(controlled.thrusters&THRUSTER_REAR),dt,this.reducedMotion.matches);
+    if(fov!==this.camera.fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
     const ids=new Set(world.entities.map(e=>e.id));
     for(const [id,mesh] of this.entities) if(!ids.has(id)){this.scene.remove(mesh);this.entities.delete(id);}
     const alpha=1-Math.exp(-14*dt);
@@ -318,6 +344,8 @@ export class GameScene {
         const blue=box(mesh,.23,h+.15,0,.4,.15,.28,0x3caaff);blue.name='police-blue';
         for(const side of [-1,1])box(mesh,side*(VEHICLES['model-3'].width/2+.01),.67,0,.035,.22,1.4,0x172832);
       }mesh.position.set(e.x,e.y,e.z);this.entities.set(e.id,mesh);this.scene.add(mesh);}
+      const scale=e.id===controlled?.id?landingScale:1;
+      if(mesh.scale.y!==scale)mesh.scale.y=scale;
       mesh.visible=!(cockpit&&e.id===controlled?.id);
       const interpolatedRemote=remoteSampled&&e.id!==controlled?.id&&e.supportId!=='ferry';
       const ahead=e.id===controlled?.id||e.supportId==='ferry'||interpolatedRemote?0:elapsed;
@@ -394,7 +422,7 @@ export class GameScene {
     this.dome.update(this.ballPosition);
     const e=controlled;
     const target=player?orderTarget(player.delivery.order):undefined;
-    this.objective.visible=!!player&&!menu&&!e?.inDome;if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
+    this.objective.visible=!!player&&!menu&&!e?.inDome&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!e||e.kind==='person'||canAssignDeliveryRoof(e)));if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
     if(menu){
@@ -446,7 +474,7 @@ export class GameScene {
       if(detailed&&e.kind!=='person'){
         setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
-        setThrusterEffects(mesh,e.thrusters,world.time,hasRockets(e));
+        setThrusterEffects(mesh,e.thrusters,world.time+elapsed,hasRockets(e),this.reducedMotion.matches);
         const spec=VEHICLES[e.kind];
         if(spec.shape==='motorcycle'){
           const rider=mesh.getObjectByName('rider');if(rider)rider.visible=!!e.driver;

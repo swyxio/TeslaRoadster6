@@ -13,17 +13,17 @@ const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check:()=>boolean|Promise<boolean>,label:string,timeout=20_000){
   const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await wait(50);}throw new Error(`Timed out: ${label}`);
 }
-async function port(){
+async function port(exclude?:number):Promise<number>{
   const server=createServer();await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
   const address=server.address();assert.ok(address&&typeof address!=='string');
-  await new Promise<void>(resolve=>server.close(()=>resolve()));return address.port;
+  await new Promise<void>(resolve=>server.close(()=>resolve()));return address.port===exclude?port(exclude):address.port;
 }
 type Result={initial:DriverProgress;speculative:Order;draft:{delivery:{completed:number}};saved:DriverProgress;writes:EconomyIntent[];expectedFare:number};
-const dir=await mkdtemp(join(tmpdir(),'tesland-delivery-recovery-')),p=await port(),base=`http://127.0.0.1:${p}`,config=join(dir,'wrangler.json');
+const dir=await mkdtemp(join(tmpdir(),'tesland-delivery-recovery-')),p=await port(),inspector=await port(p),base=`http://127.0.0.1:${p}`,config=join(dir,'wrangler.json');
 await writeFile(config,JSON.stringify({name:'tesland-delivery-recovery-test',main:resolve('tests/fixtures/delivery-recovery-worker.ts'),compatibility_date:'2026-10-17'}));
 let child:ChildProcess|undefined,logs='';
 try{
-  child=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(p),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
+  child=spawn(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'dev','--config',config,'--local','--ip','127.0.0.1','--port',String(p),'--inspector-port',String(inspector),'--show-interactive-dev-session','false'],{cwd:process.cwd(),detached:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CI:'true',BROWSER:'none'}});
   const append=(data:Buffer)=>{logs=(logs+data.toString()).slice(-25_000);};child.stdout?.on('data',append);child.stderr?.on('data',append);
   let committed:Result|undefined;
   await until(async()=>{if(child?.exitCode!==null)throw new Error(`Wrangler exited: ${logs}`);let response:Response;
@@ -35,6 +35,7 @@ try{
   if(!response.ok)throw new Error(`${await response.text()}\n${logs}`);
   const speculative=await response.json() as Result;
   assert.equal(speculative.draft.delivery.completed,1,'the speculative target was actually visited');
+  assert.equal(speculative.writes.some(item=>item.action.kind==='delivery'),true,'the physical visit is retained for replay');
   assert.equal(speculative.saved.completed,0,'a visit that does not match the restored order is a no-op');
   assert.equal(speculative.saved.cash,speculative.initial.cash);
   assert.equal(speculative.saved.achievementTiers?.deliveries.count,0,'an unmatched stop does not advance tiers');
@@ -64,14 +65,40 @@ try{
   assert.equal(unknown.driverMoved,true,'the affected driver continues moving while the rate is held');
   assert.equal(unknown.otherMoved,true,'another player continues moving independently');
   assert.equal(unknown.health,100,'a supply pickup observed during the hold still applies after settlement');
+  const knownResponse=await fetch(base+'/known',{signal:AbortSignal.timeout(5_000)});
+  if(!knownResponse.ok)throw new Error(`${await knownResponse.text()}\n${logs}`);
+  const known=await knownResponse.json() as typeof unknown;
+  assert.deepEqual(known.writes.map(item=>item.action.kind),['delivery','supply','delivery']);
+  assert.equal(known.writes[0].action.kind==='delivery'&&known.writes[0].action.multiplier,2);
+  assert.equal(known.writes[2].action.kind==='delivery'&&known.writes[2].action.atMs,2_000,'later stop retains its observation time');
+  assert.equal(known.saved.completed,1);
+  assert.equal(known.saved.order.stage,'dropoff','a stop observed during assignment is replayed after the final target exists');
+  assert.equal(known.saved.earned,known.expectedFare+known.expectedPickup);
+  assert.equal(known.saved.achievementTiers?.pickups.count,1);
+  assert.equal(known.deferredSpend,true);
+  assert.equal(known.driverMoved&&known.otherMoved,true);
   const backlogResponse=await fetch(base+'/backlog',{signal:AbortSignal.timeout(5_000)});
   if(!backlogResponse.ok)throw new Error(`${await backlogResponse.text()}\n${logs}`);
   const backlog=await backlogResponse.json() as {closed:boolean;queued:number};
   assert.equal(backlog.closed,true,'a stalled wallet eventually closes only the affected driver');
   assert.equal(backlog.queued,32,'physical evidence backlog is bounded before closing');
+  const retryResponse=await fetch(base+'/unavailable-retry',{signal:AbortSignal.timeout(10_000)});
+  if(!retryResponse.ok)throw new Error(`${await retryResponse.text()}\n${logs}`);
+  const retry=await retryResponse.json() as {initial:DriverProgress;saved:DriverProgress;writes:EconomyIntent[];
+    whileLocked:{order:Order;reason:string;clock:number;writes:number};whileHeld:{order:Order;reason:string};live:{order:Order;reason?:string}};
+  assert.equal(retry.whileLocked.reason,'unavailable');assert.equal(retry.whileLocked.writes,0);
+  assert.equal(retry.whileLocked.order.elapsed,12);assert.equal(retry.whileLocked.clock,0,'the unavailable order clock stays paused');
+  assert.deepEqual(retry.whileHeld.order,retry.initial.order,'the old job remains visible while its replacement write is held');
+  assert.equal(retry.whileHeld.reason,'unavailable');
+  assert.equal(retry.writes.length,1);assert.equal(retry.writes[0].action.kind,'progress');
+  assert.equal(retry.saved.order.stage,'dropoff');assert.equal(retry.saved.order.elapsed,12);
+  assert.notEqual(retry.saved.order.customer,retry.initial.order.customer);
+  assert.equal(retry.saved.cash,retry.initial.cash);assert.deepEqual(retry.live.order,retry.saved.order);
+  assert.notEqual(retry.live.reason,'unavailable');
   console.log('PASS: rejected predecessor preserves only matching physical arrivals and their event-time fare.');
   console.log('PASS: historical-rate arrival reprojects a later stop and rejects uncertain spending.');
   console.log('PASS: both drivers continue moving and a stalled evidence backlog is bounded.');
+  console.log('PASS: an unavailable collected job pauses and retries on open ground without reconnecting or duplicating a write.');
 }finally{
   if(child&&child.exitCode===null&&child.signalCode===null){try{process.kill(-child.pid!,'SIGKILL');}catch{}await until(()=>child!.exitCode!==null||child!.signalCode!==null,'Wrangler shutdown');}
   await rm(dir,{recursive:true,force:true});

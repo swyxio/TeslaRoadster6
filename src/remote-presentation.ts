@@ -108,6 +108,7 @@ function clearPath(a:Pose,b:Pick<Entity,'x'|'y'|'z'>&Partial<Pick<Entity,'yaw'|'
   const midX=(a.x+b.x)/2,midZ=(a.z+b.z)/2;
   const target={...a,...b,yaw:b.yaw??NaN,pitch:b.pitch??NaN,roll:b.roll??NaN,supportId:b.supportId??null};
   if(nearbyBuildings(midX,midZ,Math.hypot(maxX-minX,maxZ-minZ)/2).some(building=>{
+    if(building.parts)return buildingSweepBlocked(a,target,building);
     const roof=building.style==='rotunda'?Math.max(building.h,23):
       building.style==='salesforce'||building.style==='coit'?building.h+building.w*.46*.38:building.h;
     return minY<roof&&maxY>0&&buildingSweepBlocked(a,target,building);

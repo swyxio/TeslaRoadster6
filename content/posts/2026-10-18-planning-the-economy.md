@@ -6,11 +6,11 @@ Deliveries, cash-based levels, saved vehicles, income-producing Cybercabs and a 
 
 A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The new tuning brings the first delivery award to $500, makes every third delivery worth a $350 checkpoint, and prices the remote OTA shop at $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
 
-The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes four deliveries and earns $4,816 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $6,266 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $12,172 in five minutes; route travel and driving skill will change these results.
+The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes three deliveries and earns $3,281 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $4,731 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $9,088 in five minutes; route travel and driving skill will change these results.
 
 <figure>
 <img src="/blog/economy/opening-wallet.svg" alt="Five modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">
-<figcaption>Minute-by-minute wallet snapshots using the current delivery and award rules. Task times are assumptions; events, travel to a shop, landmarks and fines are excluded.</figcaption>
+<figcaption>Minute-by-minute wallet snapshots using the current delivery and award rules. One driver's assignment search runs at 20 ticks per second, rounded up to a whole second before pickup travel. Task times are assumptions; events, travel to a shop, landmarks and fines are excluded.</figcaption>
 </figure>
 
 The 40-hour and property simulations later in this post use the earlier design's fares and awards. They remain useful for comparing the choices in that design; the revised economy needs new long-run playtests before those home and Mars estimates can be applied to it.
@@ -128,14 +128,14 @@ That fee, a city-sold plot, a construction bill and a shop cosmetic are *money s
 <figcaption>The Bay opens from San Francisco toward the East Bay and down the Peninsula. This map follows the game's compressed coastlines, roads and landmark positions; the dashed Caltrain tracks are scenery. Road traces © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.</figcaption>
 </figure>
 
-<ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li><li>Redwood City station, redwoods &amp; downtown</li><li>Chabot Space &amp; Science Center</li><li>Oakland Zoo</li><li>NASA Ames</li><li>Levi’s Stadium</li><li>Apple Park</li></ol>
+<ol class="map-mobile-list" aria-label="Map landmarks"><li>North Bay Playground</li><li>Golden Gate Bridge</li><li>UCSF · Homes Lab</li><li>Coit Tower</li><li>Salesforce Tower</li><li>SFO · Flight Lab</li><li>Stanford · Speed Lab</li><li>UC Berkeley · Energy Lab</li><li>Oakland Tribune Tower</li><li>Bay Bridge</li><li>Ferry Building</li><li>Rocket Dome</li><li>Fremont Spaceport</li><li>San José City Hall</li><li>Redwood City station, redwoods &amp; downtown</li><li>Chabot Space &amp; Science Center</li><li>Oakland Zoo</li><li>NASA Ames</li><li>Levi’s Stadium</li><li>Apple Park</li><li>Muir Woods</li><li>USS Hornet Museum</li></ol>
 
 <figure>
 <img src="/blog/economy/bay-landmarks-concept.webp" alt="An illustrated Bay Area panorama with the Golden Gate and Bay bridges, downtown towers, a colorful Rocket Dome and a rocket launch pad." loading="lazy">
 <figcaption>A postcard from the Bay: bridges, towers, the Rocket Dome and a Fremont launch. Concept art.</figcaption>
 </figure>
 
-The next delivery can take you somewhere new, and the place should give you a reason to come back. Down the Peninsula, Redwood City has a clock-tower station, redwoods and a little downtown; farther south are NASA Ames, Levi’s Stadium and Apple Park’s ring. Across the Bay, you can find Chabot in the Oakland hills and the Oakland Zoo. These are small, stylized versions of familiar places in the world you can drive today.
+The next delivery can take you somewhere new, and the place should give you a reason to come back. Down the Peninsula, Redwood City has a clock-tower station, redwoods and a little downtown; farther south are NASA Ames, Levi’s Stadium and Apple Park’s ring. Across the Bay, you can find Chabot, the Oakland Zoo and a miniature USS Hornet. A Muir Woods-inspired grove joins a hundred more sights around the Bay. These are small, stylized versions on our compressed map: for example, the Hornet is placed on the East Bay mainland and the grove in the Marin headlands.
 
 The blue research rings pay for a visit: UCSF's Homes Lab gives $1,000 and a badge; Berkeley's Energy Lab gives $1,500 and a discount on efficient nozzles; Stanford's Speed Lab gives $2,000 and a motor discount; SFO's Flight Lab gives $2,000 and an air-tank discount. Your first delivery to SFO earns an extra $2,500. The candidate saves these rewards and discounts with your driver.
 

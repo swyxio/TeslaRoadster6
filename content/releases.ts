@@ -6,6 +6,106 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Hit what you can see',
+    intro: 'Buildings, roofs and curved structures have a more faithful physical shape.',
+    sections: [
+      { title: 'Clear gaps, solid walls', items: [
+        'Drive between open tower posts and beneath raised beams. Bridge legs and stadium masonry now stop cars where the visible structures stand.',
+        'Land on pitched and curved roofs, including the Stanford dish and NASA Ames tube. Contact checks include the car’s edges, so a clear center no longer lets the body sink into a roof or underside.',
+        'The Oakland ramp blocks approaches through its sides, and the Rocket Dome catches the airborne car’s body before it crosses the ceiling.',
+        'This remains arcade physics: small decorative details are not obstacles, and slight corner grazes and Dome attachment transitions still need polish.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.35-alpha',
+    label: '0.0.35 Alpha',
+    date: '2026-10-18',
+    title: 'Watch Starship rise',
+    intro: 'See the mission grow as drivers earn across Tesland.',
+    sections: [
+      { title: 'A tower that tracks the mission', items: [
+        'The Fremont tower now shows dollar milestones and a rising bar for confirmed game-wide earnings.',
+        'Open the Starship launch view to see the exact total and watch the construction take shape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.34-alpha',
+    label: '0.0.34 Alpha',
+    date: '2026-10-18',
+    title: 'More of the Bay',
+    intro: 'Find 100 more Bay-inspired places across the map.',
+    sections: [
+      { title: 'New landmarks', items: [
+        'Explore miniature landmarks from Marin and San Francisco to Berkeley, the Peninsula and San Jose.',
+        'The Bay is playfully compressed: landmarks are original interpretations, and some have been moved to fit the world.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.33-alpha',
+    label: '0.0.33 Alpha',
+    date: '2026-10-18',
+    title: 'Find your Bay',
+    intro: 'Keep driving when the Bay fills up.',
+    sections: [
+      { title: 'Room for another drive', items: [
+        'When the public Bay is full, the game finds another open Bay room automatically.',
+        'Invite links take friends to your exact room. If it is full, you can retry or choose another room.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.32-alpha',
+    label: '0.0.32 Alpha',
+    date: '2026-10-18',
+    title: 'A little more lift',
+    intro: 'Boosts and landings bring more of the drive to life.',
+    sections: [
+      { title: 'Feel the ride', items: [
+        'Boosting brings a responsive chase view, fresh rocket vapor and a new sound. Look for lift-off and touchdown cues as you jump and land.',
+        'The Bay warms at sunrise and sunset. Reduced-motion settings keep the trail still and the camera steady.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.31-alpha',
+    label: '0.0.31 Alpha',
+    date: '2026-10-18',
+    title: 'A playground for every car',
+    intro: 'Try the fleet freely, or collect driving and takeover awards in your regular game.',
+    sections: [
+      { title: 'Try it out', items: [
+        'Join the sandbox for unlimited cash, vehicle upgrades and map teleporting. Start a fresh practice room to try the early game. Progress in both modes is temporary.'
+      ] },
+      { title: 'Collect your favorites', items: [
+        'In a regular room, drive Tesla and Vault models and take over different street vehicles to earn new collection awards.',
+        'Saved drivers keep their completed collections; earlier drives and takeovers do not count retroactively.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.30-alpha',
+    label: '0.0.30 Alpha',
+    date: '2026-10-18',
+    title: 'The Bay opens up',
+    intro: 'Explore more neighborhoods and take deliveries across the Bay.',
+    sections: [
+      { title: 'More places to drive', items: [
+        'Unlock service areas with your current cash balance and find new fictional customers in 17 Bay towns.',
+        'Oakland traffic and navigation work around the stunt ramp and loop. Look for the new Hegenberger station signs.'
+      ] },
+      { title: 'Deliveries that keep moving', items: [
+        'Job searches run in small batches. If spending locks a destination, a replacement keeps your pickup progress.',
+        'Rooftop jobs require rockets and a Level 3 air tank. Leaving your car on foot keeps an accessible rooftop job.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.29-alpha',
+    label: '0.0.29 Alpha',
+    date: '2026-10-18',
     title: 'A little more gravity',
     intro: 'Flight takes more planning, especially in heavier vehicles.',
     sections: [

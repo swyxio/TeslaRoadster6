@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { addPlayer, createEmptyWorld, createWorld, makeEntity, NEUTRAL, step } from '../shared/game';
-import { applyDeliveryStop, canAssignDeliveryRoof, captureDeliveryStop, CUSTOMERS, initialDelivery, rerouteInaccessibleOrder } from '../shared/delivery';
-import { BUILDINGS } from '../shared/map';
+import { advanceDeliverySearch, applyDeliveryStop, canAssignDeliveryRoof, captureDeliveryStop, CUSTOMERS, initialDelivery, rerouteInaccessibleOrder, type DeliveryState } from '../shared/delivery';
+import { BUILDINGS, buildingRoofHeight } from '../shared/map';
 import { currentAt } from '../shared/sky-currents';
 
 const roofCustomer=CUSTOMERS.findIndex(customer=>customer.rooftop);
+function finishSearch(delivery:DeliveryState){
+  for(let i=0;i<10_000&&delivery.order.search;i++)advanceDeliverySearch(delivery,delivery.order.search.roofEligible);
+  assert.equal(delivery.order.search,undefined,'the bounded assignment finishes');
+}
 
 test('roof jobs require rockets and a Level 3 tank at the recorded stop',()=>{
   for(const kind of ['roadster','tesla-semi'] as const)for(const tankLevel of [1,2,3] as const){
@@ -17,6 +21,7 @@ test('roof jobs require rockets and a Level 3 tank at the recorded stop',()=>{
     car.tankLevel=tankLevel===3?1:3;
     assert.equal(stop.roofEligible,tankLevel===3);
     assert.ok(applyDeliveryStop(delivery,stop));
+    finishSearch(delivery);
     assert.equal(CUSTOMERS[delivery.order.customer].rooftop,tankLevel===3,`${kind} level ${tankLevel}`);
   }
   const car=makeEntity('car','model-3',0,0);car.tankLevel=3;
@@ -25,6 +30,7 @@ test('roof jobs require rockets and a Level 3 tank at the recorded stop',()=>{
   const oldStop={...captureDeliveryStop(car),canFly:true};delete oldStop.roofEligible;
   const oldDelivery=initialDelivery(oldStop);Object.assign(oldDelivery,{cash:10_000,level:1,completed:6});oldDelivery.order={...oldDelivery.order,stage:'dropoff',customer:0};
   assert.ok(applyDeliveryStop(oldDelivery,oldStop));
+  finishSearch(oldDelivery);
   assert.equal(CUSTOMERS[oldDelivery.order.customer].rooftop,false,'older staged evidence does not imply a Level 3 tank');
 });
 
@@ -44,9 +50,11 @@ test('an inaccessible saved rooftop order reroutes without a second pickup payme
     // On entering a less capable vehicle, the same simulation path repairs it.
     car.kind='tesla-semi';car.upgrades.rocket=true;car.tankLevel=1;
     step(world,new Map([['p',NEUTRAL]]),.05);
+    assert.ok(player.delivery.order.search,'repair starts an incremental search');
+    finishSearch(player.delivery);
     assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,false);
     assert.equal(player.delivery.order.stage,stage);assert.equal(player.delivery.completed,7);
-    assert.equal(player.delivery.cash,cashBeforeRepair);assert.equal(player.delivery.lastReroute?.id,1);
+    assert.equal(player.delivery.cash,cashBeforeRepair);assert.equal(player.delivery.lastReroute?.id,2);
     if(stage==='dropoff'){
       assert.equal(player.delivery.order.elapsed,old.elapsed);assert.ok(player.delivery.order.base<=old.base);
     }
@@ -59,6 +67,8 @@ test('on foot, a geographically locked roof is rerouted without requiring a vehi
   const oaklandRoof=CUSTOMERS.findIndex(customer=>customer.rooftop&&customer.id.includes('oakland'));
   player.delivery.order={...player.delivery.order,stage:'dropoff',customer:oaklandRoof,elapsed:37,base:900};
   person.kind='person';step(world,new Map([['p',NEUTRAL]]),.05);
+  assert.ok(player.delivery.order.search,'a locked region starts a bounded search');
+  finishSearch(player.delivery);
   assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,false);
   assert.equal(player.delivery.order.stage,'dropoff');assert.equal(player.delivery.order.elapsed,37);
 });
@@ -71,12 +81,13 @@ test('roof repair waits for an unresolved delivery decision',()=>{
   step(world,new Map([['p',NEUTRAL]]),.05,{economy:{update:(_player,apply)=>{apply();},decisionsAvailable:()=>false}});
   assert.equal(player.delivery.order.customer,roofCustomer);
   step(world,new Map([['p',NEUTRAL]]),.05);
+  finishSearch(player.delivery);
   assert.equal(CUSTOMERS[player.delivery.order.customer].rooftop,false);
 });
 
 test('a full Level 3 Roadster and Semi can land on each delivery roof in a controlled fixture',()=>{
   for(const roof of CUSTOMERS.filter(customer=>customer.rooftop))for(const kind of ['roadster','tesla-semi'] as const){
-    const building=BUILDINGS.find(b=>b.x===roof.x&&b.z===roof.z&&b.h===roof.y)!;
+    const building=BUILDINGS.find(b=>b.x===roof.x&&b.z===roof.z&&buildingRoofHeight(b,roof.x,roof.z)===roof.y)!;
     const world=createEmptyWorld(),car=makeEntity('car',kind,roof.x,roof.z+building.d/2+8,'p');
     car.upgrades.rocket=true;car.tankLevel=3;world.entities=[car];
     let jump=0,phase:'climb'|'cross'|'land'='climb';
