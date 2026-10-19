@@ -66,6 +66,23 @@ the raw 10 Hz fallback still stepped 2 m. The [patches, notes and raw traces](te
 have SHA-256 `86b9e1a9b51fa01b28be3bdff0fdf12fdd005b8a71ec82667377dfd468f0599d`.
 This is not an applied fix or live-room evidence.
 
+## Ferry membership and interval proof
+
+The [membership experiment and failing regressions](ferry-membership-evidence-20261018.tar.gz)
+have SHA-256 `28a3558b7a9f548d15073d59ede0c8ec967fca626677c7b5c20b170363e99384`.
+Using the actual recipient snapshot filter, a nearby undriven body can be
+missing, causing the experimental component to certify an unsafe candidate.
+Full roster membership alone does not establish intermediate swept paths,
+support changes or ferry phase timing. Room snapshots occur every two ticks;
+the available packet does not preserve those intervening events, and market
+holds can change which bodies participated in simulation. The six strict ferry
+tests remain failing. The experiment is retained for diagnosis, not applied.
+
+In one constructed snapshot with 64 synthetic cars placed at two shared
+coordinates, sending the full roster increased raw JSON from 7,282,528 to
+7,820,864 bytes per broadcast. This is an exact count for that fixture, not a
+realistic occupancy, compressed-wire measurement or throughput estimate.
+
 ## Updated staged throughput observer
 
 The [isolated `38f56a0` observer and preflight lab](tesland-stage-38f-readiness.tar.gz)
@@ -75,6 +92,16 @@ two-Session loopback smoke, but sustained ACK, complete substep contact
 coverage, deployed tick CPU, real wire bytes, provider isolation and observer
 overhead remain open. Hosted load is deliberately disabled in that lab; it is
 not a room-throughput or capacity result.
+
+The separate [raw sweep segment prototype](raw-sweep-segment-evidence-20261019.tar.gz)
+has SHA-256 `94d9f1e8c4c19d250b8aad76cf3e59d316b7b14fd8ba9648ef1a1c84468a29ea`.
+Five focused tests and the lab client typecheck passed. An in-memory mock
+consumer reconstructed 1,310,720 records for 128 identities across 64
+simulated seconds; missing, partial or overflowing data failed closed. Packed
+raw arrays peaked at 6,799,360 bytes, excluding other allocations. The
+prototype is not integrated into the Worker or driver; durable collection,
+complete contact hooks, provider isolation, total memory and observer overhead
+remain unverified. This is not a live load or throughput result.
 
 ## Rocket-pad scan optimization
 
