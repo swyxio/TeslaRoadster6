@@ -82,7 +82,7 @@ test('progression checkpoint and ramp wall are recorded without changing gamepla
   assert.ok(compare(gate.world, 1).has('progression-gate'));
   const ramp = setup();
   Object.assign(ramp.car, { x: STUNT_RAMP.end + .2, z: STUNT_RAMP.z, y: 0, yaw: Math.PI / 2, speed: 12, supportId: 'ground' });
-  assert.ok(compare(ramp.world, 1).has('stunt-ramp-wall'));
+  assert.ok(compare(ramp.world, 1).has('ramp-wall'));
 });
 
 test('full ferry and airborne paths are never mistaken for clear ground travel', () => {
