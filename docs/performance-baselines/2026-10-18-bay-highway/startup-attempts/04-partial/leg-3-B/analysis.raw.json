@@ -1,0 +1,137 @@
+{
+  "status": "censored",
+  "reasons": [
+    "trusted KeyV cannot be clock-bounded to the command before its action"
+  ],
+  "target": {
+    "origin": "http://127.0.0.1:55280",
+    "pathname": "/",
+    "perf": true,
+    "refProvidedByOperator": "a1358fe83147eb2657bd815d4d437b86eacb9eb1",
+    "httpStatus": 200
+  },
+  "startedAt": "2026-10-19T04:45:54.959Z",
+  "command": {
+    "startAtMs": 2790.649542,
+    "outcome": {
+      "kind": "key-command-outcome",
+      "atMs": 3080.436375,
+      "status": "completed",
+      "error": null
+    },
+    "durationMs": 289.7868330000001
+  },
+  "page": {
+    "firstGesture": {
+      "type": "keydown",
+      "atMs": 2477.5,
+      "code": "KeyV",
+      "trusted": true
+    },
+    "firstGestureCold": true,
+    "keyNodeTimeRangeMs": [
+      2786.692541809265,
+      2795.842082809265
+    ],
+    "events": [
+      {
+        "type": "keydown",
+        "atMs": 2477.5,
+        "code": "KeyV",
+        "trusted": true
+      },
+      {
+        "type": "autopilotSendStart",
+        "atMs": 2758.300000190735
+      },
+      {
+        "type": "autopilotSendEnd",
+        "atMs": 2758.4000000953674
+      },
+      {
+        "type": "syncSendStart",
+        "atMs": 2758.4000000953674
+      },
+      {
+        "type": "syncSendEnd",
+        "atMs": 2758.4000000953674
+      },
+      {
+        "type": "keyup",
+        "atMs": 2762.600000143051,
+        "code": "KeyV",
+        "trusted": true
+      }
+    ],
+    "displayedMotion": "unmeasured"
+  },
+  "action": {
+    "autopilotSentAtMs": 3075.359875,
+    "syncSentAtMs": 3075.4205,
+    "syncToken": 1,
+    "syncAcknowledgedAtMs": 3127.2688749999998
+  },
+  "snapshot": {
+    "window": [
+      2790.649542,
+      12790.649542
+    ],
+    "count": 95,
+    "preEdgeAtMs": 2692.6698749999996,
+    "postEdgeAtMs": 12857.053333,
+    "maxWindowGapMs": 295.1070829999999,
+    "monotonicTicks": true,
+    "revisions": [
+      1
+    ],
+    "coalescedWindows": 0,
+    "throughput": "unavailable: 10-second startup probe"
+  },
+  "motion": {
+    "initial": {
+      "kind": "controlled-pose",
+      "atMs": 2692.8120419999996,
+      "receivedAtMs": 2692.6698749999996,
+      "tick": 26,
+      "poseRevision": 1,
+      "controlledIdMatches": true,
+      "x": -798,
+      "y": 0,
+      "z": 3300,
+      "yaw": 0.053,
+      "speed": 0
+    },
+    "firstAtOrBeyondQuarterMeter": {
+      "kind": "controlled-pose",
+      "atMs": 3656.166833,
+      "receivedAtMs": 3656.039208,
+      "tick": 44,
+      "poseRevision": 1,
+      "controlledIdMatches": true,
+      "x": -798.0183317070395,
+      "y": 0,
+      "z": 3299.6536627766964,
+      "yaw": 0.05275304608810366,
+      "speed": 1.2063185538970669
+    },
+    "gestureToFirstReceivedMotionMs": 865.389666
+  },
+  "frame": {
+    "maxObservedGapMs": 291.30000019073486,
+    "longFrameCountOver50": 1,
+    "clockOffsetRangeMs": [
+      309.1925418092651,
+      318.34208280926487
+    ],
+    "firstEdgeGapRangeMs": [
+      1.3074591907352442,
+      10.457000190735016
+    ],
+    "lastEdgeGapRangeMs": [
+      5.042999809265893,
+      14.192540809264756
+    ],
+    "note": "Full callback gaps intersecting the clock-uncertain window are reported, including pre/post boundary; may include a small amount outside it."
+  },
+  "limits": "Unreviewed, single-leg diagnostics. Authoritative pose is not displayed motion; no GPU, capacity, real-device or regression conclusion."
+}
