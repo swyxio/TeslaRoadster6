@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A clearer way to deliver',
+    intro: 'Delivery guidance follows the road, with more time to stop at pickups.',
+    sections: [
+      { title: 'On the road', items: [
+        'Delivery arrows guide you along roads when a road route is available.',
+        'Pickup bonuses taper more gently near the estimate, with up to 15 seconds afterward to stop.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.39-alpha',
+    label: '0.0.39 Alpha',
+    date: '2026-10-18',
     title: 'Rocket Dome rewards',
     intro: 'Play Rocket Dome to earn cash and unlock new abilities.',
     sections: [

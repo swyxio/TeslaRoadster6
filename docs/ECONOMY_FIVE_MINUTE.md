@@ -10,13 +10,13 @@ Run `pnpm exec tsx scripts/economy-opening.ts --write-chart` to regenerate the [
 
 | Path | Pickup / drop-off | Gross by 1 minute | Gross by 5 minutes | Deliveries / badges / tiers by 5 minutes | Cash after 5 minutes |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Quick | 10 s / 30 s | $1,557 | $7,189 | 7 / 3 / 4 | $9,689 |
-| Steady | 20 s / 55 s | $279 | $2,796 | 3 / 2 / 4 | $5,296 |
-| Steady, paint and OTA | 20 s / 55 s | $279 | $2,796 | 3 / 2 / 4 | $4,246 |
-| Leisurely | 30 s / 90 s | $243 | $1,312 | 2 / 1 / 3 | $3,812 |
-| Slow | 45 s / 150 s | $100 | $750 | 1 / 1 / 2 | $3,250 |
+| Quick | 10 s / 30 s | $1,563 | $7,237 | 7 / 3 / 4 | $9,737 |
+| Steady | 20 s / 55 s | $279 | $2,874 | 3 / 2 / 4 | $5,374 |
+| Steady, paint and OTA | 20 s / 55 s | $279 | $2,874 | 3 / 2 / 4 | $4,324 |
+| Leisurely | 30 s / 90 s | $248 | $1,375 | 2 / 1 / 3 | $3,875 |
+| Slow | 45 s / 150 s | $121 | $771 | 1 / 1 / 2 | $3,271 |
 
-Gross excludes the starting $2,500 and includes one-off awards. Badge and tier counts are separate; a tier can have a $0 cash award. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
+Gross excludes the starting $2,500 and includes one-off awards. Badge and tier counts are separate; a tier can have a $0 cash award. The latest pickup curve softens the final 15 seconds before the estimate and expires at most 15 seconds afterward; the quick model rises $48 from the previous $7,189. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
 
 ### Five active minutes in the game
 
@@ -32,7 +32,7 @@ In a separate fresh v0.0.33 game, the first manually completed delivery raised c
 
 On 2026-10-18, before the achievement-tier update, a fresh local driver used Street Pilot for three deliveries, reopening the route at each pickup and drop-off. At 5:01 active, the wallet showed $2,539 and the room's lifetime-earnings counter showed $3,539. The driver started with $2,500 and spent $3,500: $750 paint, $450 decal, a $2,000 sport motor and three $100 OTA charges. The first delivery paid $613 plus a $500 First Delivery award; the second paid $564 plus location rewards; the third paid $691 plus the $350 checkpoint and Neighborhood Regular award. The locked level-1 paint and decal options were visible, and the driver remained at level 0.
 
-This was one self-driving route with shop visits on a busy development machine, and took longer than five wall-clock minutes. It does not establish typical manual-driving income. A slow completed delivery previously could pay nothing; the current rules retain at least half its distance-adjusted base fare. In the 45/150-second scenario that raises the first fare from $32 to $300. With the $100 pickup tier and revised first-delivery award, five-minute gross is $750.
+This was one self-driving route with shop visits on a busy development machine, and took longer than five wall-clock minutes. It does not establish typical manual-driving income. A slow completed delivery previously could pay nothing; the current rules retain at least half its distance-adjusted base fare. In the 45/150-second scenario that raises the first fare from $32 to $300. With the stopping allowance, $100 pickup tier and revised first-delivery award, five-minute gross is $771.
 
 The pacing target is at most a 25-minute P90 longest gap between one-off achievements during the first two active hours, and two to four one-off achievements in each 30-minute block. These are diagnostics for comparing ideas, not a proven measure of fun. We count individual awards separately from notifications grouped when one action earns several awards. Repeatable checkpoints and progress indicators are separate from both.
 
