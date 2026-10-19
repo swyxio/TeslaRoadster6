@@ -1,0 +1,32 @@
+--- scripts/performance-report.mjs	2026-10-18 19:41:15
++++ /private/tmp/tesland-highway-timing-harness/scripts/performance-report.mjs	2026-10-18 19:43:39
+@@ -275,7 +275,7 @@
+     // Wrangler loads only this 0600 per-run secret as a secret_text binding;
+     // the recorder receives it via its environment, never command arguments.
+     await writeFile(secretFile, `PLAYTEST_STAGE_SECRET=${stageSecret}\n`, { mode: 0o600, flag: 'wx' });
+-    worker = spawn(process.execPath, [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', stageConfigFile, '--env-file', secretFile, '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspectorPort), '--var', 'PLAYTEST_X:-190', '--var', 'PLAYTEST_Z:120', '--var', 'PLAYTEST_YAW:-1.5707963267948966', '--var', 'PLAYTEST_SEED:0', '--var', 'PLAYTEST_PAUSE:1', '--persist-to', join(localState, 'storage')], { cwd: root, env: { ...process.env, CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'true', CLOUDFLARE_INCLUDE_PROCESS_ENV: 'false' }, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
++    worker = spawn(process.execPath, [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--config', stageConfigFile, '--env-file', secretFile, '--local', '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', String(inspectorPort), '--var', 'PLAYTEST_X:-798', '--var', 'PLAYTEST_Z:3300', '--var', 'PLAYTEST_YAW:0.053', '--var', 'PLAYTEST_SEED:0', '--var', 'PLAYTEST_PAUSE:1', '--persist-to', join(localState, 'storage')], { cwd: root, env: { ...process.env, CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'true', CLOUDFLARE_INCLUDE_PROCESS_ENV: 'false' }, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+     worker.on('error', error => { workerError = error; });
+     worker.on('exit', () => { exited = true; });
+     worker.stdout.on('data', chunk => serverLog.push(String(chunk)));
+@@ -317,15 +317,16 @@
+   const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
+     ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
+     : { status: 'unavailable', reason: 'room was not live for the measurement window' };
+-  const stageRepeat = event('stageRepeatDelivery');
+-  const route = withStagingDuration(deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, stageRepeat?.sample), stageRepeat);
++  const validRoute = inDrive.length >= 200 && inDrive.every((p, i) => [p.atMs,p.x,p.y,p.z].every(number) && Number.isSafeInteger(p.tick) && p.poseRevision === inDrive[0].poseRevision && (!i || (p.atMs >= inDrive[i-1].atMs && p.tick >= inDrive[i-1].tick)));
++  const path = validRoute ? pathSummary(inDrive) : null;
++  const route = path && path.lengthM > 50 ? { status: 'available', ...path } : { status: 'unavailable', reason: 'missing continuous moving highway path' };
+   const report = {
+     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
+     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: { ...manifest.viewport, deviceScaleFactor: manifest.viewport?.deviceScaleFactor ?? 1, isMobile: manifest.viewport?.isMobile ?? false, hasTouch: manifest.viewport?.hasTouch ?? false } },
+-    fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
++    fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -798, z: 3300, yaw: 0.053 }, captureVideo: !!values.video },
+     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
+     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
+-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation. It includes the mostly stationary second-delivery staging wait; distance-based path matching does not control elapsed time.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
++    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic, starts at a staged highway pose beyond normal region gates, pauses at readiness, then runs the ordinary room tick and uses KeyV lane following for 64 seconds.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
+   };
+   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+   console.log(JSON.stringify(report, null, 2));
