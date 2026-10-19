@@ -12,7 +12,7 @@ import { DELIVERY_DESTINATION_SNAP } from '../shared/navigation';
 const base = process.argv[2] ?? 'http://localhost:8787';
 assert.ok(['127.0.0.1','localhost','[::1]'].includes(new URL(base).hostname),'run only against local Wrangler');
 // Both clients must agree on finishes, self-drive modes and the tick/action contract.
-assert.equal(PROTOCOL_VERSION, 55);
+assert.equal(PROTOCOL_VERSION, 56);
 const url = base.replace(/^http/, 'ws') + `/api/room/test-${Date.now()}`;
 // A stale server would simulate a different map, so health and room handshakes
 // must both advertise the same version as this client's static terrain data.

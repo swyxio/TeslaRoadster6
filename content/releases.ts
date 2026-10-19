@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A busier East Bay',
+    intro: 'Slow traffic now fills the East Bay freeway in both directions.',
+    sections: [
+      { title: 'On the road', items: [
+        'New rooms start with a slow three-lane crawl in each direction on the East Bay highway.',
+        'Unattended queues can return to their starting areas when everyone is too far away to see them.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.45-alpha',
+    label: '0.0.45 Alpha',
+    date: '2026-10-19',
     title: 'Traffic by the airport',
     intro: 'Look for slow traffic near SFO and clearer pickup markers.',
     sections: [

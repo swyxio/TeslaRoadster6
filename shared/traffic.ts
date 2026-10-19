@@ -212,17 +212,18 @@ for(const routeId of HIGHWAY_ROUTE_IDS){
 function generalLaneTarget(e:Entity,world:World,waypoint:number):{target:Point;blocked:boolean}|null {
   // Keep the scripted incident on its original route for its entire cycle so
   // its gradual stop and the following queue are not changed by a lane merge.
-  if(e.kind==='person'||e.driver||!e.npc||!e.id.startsWith('ambient-')||e.id===TRAFFIC_INCIDENT.entityId||e.navigation)return null;
+  const jamLane=/^jam-3-[01]-([12])-/.exec(e.id);
+  if(e.kind==='person'||e.driver||!e.npc||(!e.id.startsWith('ambient-')&&!jamLane)||e.id===TRAFFIC_INCIDENT.entityId||e.navigation)return null;
   const segment=generalLanes.get(`${e.routeId}:${waypoint}`);if(!segment)return null;
   const {a,ux,uz,length,cuts}=segment,rx=-uz,rz=ux;
   const x=e.x-a.x,z=e.z-a.z,s=x*ux+z*uz,side=x*rx+z*rz;
-  if(s<0||s>length||side< -3||side>10)return null;
+  if(s<0||s>length||side< -3||side>(jamLane?13:10))return null;
   const lookahead=Math.max(30,Math.min(45,Math.abs(e.speed)*1.8));
   const at=Math.min(length,s+lookahead);
   let clearance=Math.min(at-20,length-20-at);
   for(const cut of cuts)clearance=Math.min(clearance,Math.abs(at-cut.at)-cut.radius);
   const factor=Math.max(0,Math.min(1,clearance/140));
-  const offset=GENERAL_LANE_OFFSET*factor*factor*(3-2*factor);
+  const offset=(jamLane?Number(jamLane[1])*5:GENERAL_LANE_OFFSET)*factor*factor*(3-2*factor);
   const movingSide=Math.abs(offset-side)>.4;
   let blocked=false;
   if(movingSide){
@@ -660,11 +661,27 @@ export function seedHighwayTraffic(world:World,make:EntityFactory):void {
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
 }
 
-/** Seed slow queues in both directions at supported Bay highway sections. */
-export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number):void {
-  const sites=[{x:-300,z:550},{x:-790,z:3550},{x:-698,z:1107},{x:1430,z:4050}];
-  for(const [siteIndex,site] of sites.entries())for(let direction=0;direction<2;direction++){
-    if(siteIndex===2)continue; // The SFO approach bends; sample the route below.
+const jamSites=[{x:-300,z:550},{x:-790,z:3550},{x:-698,z:1107},{x:1430,z:4050},{x:2013,z:8162}];
+type JamPose={id:string;x:number;z:number;yaw:number;routeId:number;waypoint:number};
+// Immutable spawn positions are derived from the same road geometry as traffic.
+// They also let a room restore an unseen queue after it has drifted away.
+const jamGroups:JamPose[][]=[];
+for(const siteIndex of [0,1,3,2,4])for(let direction=0;direction<2;direction++){
+    const site=jamSites[siteIndex],group:JamPose[]=[];
+    if(siteIndex===2||siteIndex===4){
+      const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
+      let traveled=0,bestDistance=Infinity,at=0;
+      for(let i=0;i<route.length;i++){
+        const a=route[i],b=route[(i+1)%route.length],length=lengths[i];if(!length)continue;
+        const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
+        const t=Math.max(0,Math.min(length,(site.x-a.x)*dx+(site.z-a.z)*dz));
+        const distance=Math.hypot(a.x+dx*t-site.x,a.z+dz*t-site.z);
+        if(distance<bestDistance){bestDistance=distance;at=traveled+t;}
+        traveled+=length;
+      }
+      for(let row=0;row<6;row++)group.push({id:`jam-${siteIndex}-${direction}-0-${row}`, ...routeDistancePose(routeId,(at-row*11)/total)});
+      jamGroups.push(group);continue;
+    }
     const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId];
     let best:{segment:GeneralLane;waypoint:number;at:number;distance:number}|null=null;
     for(let i=0;i<route.length;i++){
@@ -676,44 +693,31 @@ export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number)
     }
     if(!best||best.distance>400)continue;
     const {segment,waypoint,at}=best,{a,ux,uz}=segment;
-    // A single lane per direction avoids opposing merge deadlocks while
-    // keeping another lane available for manual drivers.
-    for(let row=0;row<6;row++){
-      const along=at-row*11,x=a.x+ux*along,z=a.z+uz*along;
-      const id=`jam-${siteIndex}-${direction}-0-${row}`,kind=highwayVehicles[hash(id)%highwayVehicles.length];
-      const car=make(id,kind,x,z);Object.assign(car,{yaw:Math.atan2(-ux,-uz),npc:true,autopilot:true,routeId,waypoint});
-      if(car.supportId!=='ground'||nearbyBuildings(x,z,10).some(building=>buildingBlocksPose(building,car))||
-        world.entities.some(other=>contact(body(car),body(other))))continue;
-      world.entities.push(car);
+    // Long, clear straights carry a short, three-lane crawl. Elsewhere use
+    // one lane per direction to leave room through junctions and curves.
+    for(let slot=0;slot<6;slot++){
+      const multiLane=siteIndex===3;
+      const lane=multiLane?Math.floor(slot/2):0,row=multiLane?slot%2:slot;
+      const along=at-row*(multiLane?8.5:11),x=a.x+ux*along-uz*lane*5,z=a.z+uz*along+ux*lane*5;
+      group.push({id:`jam-${siteIndex}-${direction}-${lane}-${row}`,x,z,yaw:Math.atan2(-ux,-uz),routeId,waypoint});
     }
-  }
-  // At SFO and San Jose, sample the actual curved route so the queue stays on
-  // the supported inner lane through the bends.
-  for(const [siteIndex,site] of [[2,sites[2]],[4,{x:2013,z:8162}]] as const)for(let direction=0;direction<2;direction++){
-    const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
-    let traveled=0,bestDistance=Infinity,at=0;
-    for(let i=0;i<route.length;i++){
-      const a=route[i],b=route[(i+1)%route.length],length=lengths[i];if(!length)continue;
-      const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
-      const t=Math.max(0,Math.min(length,(site.x-a.x)*dx+(site.z-a.z)*dz));
-      const distance=Math.hypot(a.x+dx*t-site.x,a.z+dz*t-site.z);
-      if(distance<bestDistance){bestDistance=distance;at=traveled+t;}
-      traveled+=length;
-    }
-    for(let row=0;row<6;row++){
-      const pose=routeDistancePose(routeId,(at-row*11)/total),id=`jam-${siteIndex}-${direction}-0-${row}`;
-      const kind=highwayVehicles[hash(id)%highwayVehicles.length],car=make(id,kind,pose.x,pose.z);
-      Object.assign(car,pose,{npc:true,autopilot:true});
-      if(car.supportId!=='ground'||nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car))||
-        world.entities.some(other=>contact(body(car),body(other))))continue;
-      world.entities.push(car);
-    }
+    jamGroups.push(group);
+}
+
+/** Seed slow queues in both directions at supported Bay highway sections. */
+export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number):void {
+  for(const group of jamGroups)for(const pose of group){
+    const kind=highwayVehicles[hash(pose.id)%highwayVehicles.length],car=make(pose.id,kind,pose.x,pose.z);
+    Object.assign(car,pose,{npc:true,autopilot:true});
+    if(car.supportId!=='ground'||nearbyBuildings(pose.x,pose.z,10).some(building=>buildingBlocksPose(building,car))||
+      world.entities.some(other=>contact(body(car),body(other))))continue;
+    world.entities.push(car);
   }
   // A few rooms start with one cow crossing ahead of a queue; it walks to the
   // shoulder and remains there instead of popping into or out of a player's view.
   const seed=Math.abs(Math.trunc(fleetSeed));
   if(seed%4===1){
-    const site=Math.floor(seed/4)%sites.length,direction=Math.floor(seed/16)%2;
+    const site=Math.floor(seed/4)%4,direction=Math.floor(seed/16)%2;
     const leader=world.entities.find(e=>e.id===`jam-${site}-${direction}-0-0`);
     if(leader){
       const fx=-Math.sin(leader.yaw),fz=-Math.cos(leader.yaw);
@@ -724,11 +728,33 @@ export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number)
   }
 }
 
+// Recycle at most one cohort per interval. No player can see either end, and
+// taken, owned or obstructed cars are left untouched. Cars remain real shared
+// entities; a refreshed queue moves normally and can disperse again.
+function refreshUnseenQueue(world:World,tick:number,make:EntityFactory):void {
+  const group=jamGroups[tick%jamGroups.length],viewers=observers(world);
+  if(!group?.length||!viewers.length)return;
+  const members=group.map(pose=>({pose,car:world.entities.find(e=>e.id===pose.id)})).filter((entry):entry is {pose:JamPose;car:Entity}=>!!entry.car);
+  if(members.length<4||members.some(({pose,car})=>car.driver||car.owner||!car.npc||!car.autopilot||car.navigation||car.supportId!=='ground'||
+    !hidden(car.x,car.z,viewers)||!hidden(pose.x,pose.z,viewers)))return;
+  if(members.every(({pose,car})=>Math.hypot(car.x-pose.x,car.z-pose.z)<90))return;
+  const cars=new Set(members.map(({car})=>car));
+  const placements=members.map(({pose,car})=>({car,pose,placed:Object.assign(make(car.id,car.kind,pose.x,pose.z),pose)}));
+  if(placements.some(({placed})=>placed.supportId!=='ground'||
+    nearbyBuildings(placed.x,placed.z,10).some(building=>buildingBlocksPose(building,placed))||
+    world.entities.some(other=>!cars.has(other)&&contact(body(placed),body(other)))))return;
+  for(const {car,pose,placed} of placements)Object.assign(car,pose,{
+    y:placed.y,speed:0,vx:0,vy:0,vz:0,pushX:0,pushZ:0,steering:0,
+    pitch:0,roll:0,pitchRate:0,yawRate:0,rollRate:0,pauseUntil:0,
+  });
+}
+
 /** Reconcile one optional highway car every five real seconds, never an occupied or visible car. */
 export function updateHighwayTraffic(world:World,dt:number,make:EntityFactory):void {
   if(!world.players.length)return;
   const tick=Math.floor((world.time+1e-7)/AMBIENT_INTERVAL);
   if(tick<=0||tick===Math.floor((world.time-dt+1e-7)/AMBIENT_INTERVAL))return;
+  refreshUnseenQueue(world,tick,make);
   const ambient=world.entities.filter(entity=>entity.id.startsWith('ambient-'));
   const onHighway=(entity:Entity)=>HIGHWAY_ROUTE_IDS.includes(entity.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const unattended=ambient.filter(entity=>!entity.driver&&entity.autopilot&&onHighway(entity));
