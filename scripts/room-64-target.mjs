@@ -64,7 +64,7 @@ export async function verifyRemote(config) {
     api(`pulls/${config.pullRequest}`), api(`issues/${config.pullRequest}/comments?per_page=100`),
     api(`commits/${config.sha}/check-runs`), api('git/ref/heads/main'),
   ]);
-  verifyMain(config,main.object?.sha);
+  if (!/^[0-9a-f]{40}$/.test(main.object?.sha ?? '')) throw new Error('Could not identify current main');
   if (pr.state !== 'open' || pr.head?.sha !== config.sha || pr.head?.repo?.full_name !== config.repo ||
       pr.base?.ref !== 'main' || pr.head?.ref === 'main') throw new Error('PR head, repository or base changed');
   const successful = (checks.check_runs ?? []).filter(check => check.name === 'Workers Builds: bay-drive' &&
@@ -79,7 +79,7 @@ export async function verifyRemote(config) {
   if (!health.ok || health.version !== config.protocol || health.capacity !== 64)
     throw new Error(`Unexpected preview health ${JSON.stringify(health)}`);
   return {checkedAt:new Date().toISOString(), sha:config.sha, baseSha:config.baseSha, preview:config.preview, protocol:config.protocol,
-    pr:config.pullRequest, health, buildIds:successful.map(check => check.external_id), commentId:bots[0].id};
+    currentMainSha:main.object.sha, researchOnly:true, pr:config.pullRequest, health, buildIds:successful.map(check => check.external_id), commentId:bots[0].id};
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
