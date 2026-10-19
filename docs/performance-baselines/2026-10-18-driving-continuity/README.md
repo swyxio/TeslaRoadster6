@@ -195,6 +195,18 @@ near the end. No production CPU, WAN, device, or isolated 64-player throughput
 claim follows. The [raw report](load64-d05.json.gz) SHA-256 is
 `33a4cd6259d387ed3017704f13c3fad12e3a91c6c6929089757f446e58e4e652`.
 
+A separate [room-load lab](room-load-lab.tar.gz) (SHA-256
+`a9993a80c18bbd6ac4a518e0491ee53d229ef661c0e3fbd4bfe35e4cc9c1a853`)
+contains a loopback-only staging wrapper over the `d05d6f4` ordinary room and
+sampled candidate corridors for 64 drivers. It retains the ambient entities
+and normal identity/economy hooks. A short two-client functional pilot, not a
+capacity measurement, staged both drivers and observed 49.82 m of movement
+each in 8.00 wall seconds, acknowledgements through sequence 151 of 155 sent,
+and no rejections. The 64-driver runner has not been validated: sampled static
+clearance, a nominal speed controller and the short pilot do not establish
+60 seconds of obstacle-free movement, dynamic-contact coverage, isolated
+load generation, queue peaks or representative city traffic.
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's
