@@ -8,6 +8,12 @@ approximately real time, but rejected inputs and did not establish sustained
 movement for most drivers. See [verification](VERIFICATION.md) and the
 [performance release gates](PERFORMANCE_RELEASE_GATES.md).
 
+The five linked hosted runs' per-group reports, identity observations and
+assembly results are retained in [the evidence archive](benchmarks/2026-10-18-room-64/README.md).
+Their original Actions artifacts expire; the retained copies redact preview URLs.
+Four post-run identity files from the first run were empty, so that run does
+not establish post-run identity.
+
 ## State and transport
 
 One synthetic v47 world with 64 drivers after 30 simulation steps produced a
