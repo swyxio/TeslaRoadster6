@@ -4,6 +4,8 @@
     { "type": "waitFor", "selector": "#connection:has-text(\"LIVE\")", "timeoutMs": 60000 },
     { "type": "waitForPoseRevision", "value": 1, "timeoutMs": 30000 },
     { "type": "wait", "ms": 2000 },
+    { "type": "keyPress", "key": "KeyW" },
+    { "type": "wait", "ms": 500 },
     { "type": "recordStart" },
     { "type": "keyDown", "key": "KeyW" },
     { "type": "wait", "ms": 4000 },

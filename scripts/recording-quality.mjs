@@ -38,12 +38,12 @@ function identity(manifest) {
   const target = manifest?.target, r = manifest?.runner, v = manifest?.viewport;
   if (!/^[0-9a-f]{40}$/i.test(target?.refProvidedByOperator ?? '') || !present(target?.origin) || !present(target?.pathname) || !hash(manifest?.scenarioSha256) ||
       ![r?.platform, r?.architecture, r?.release, r?.cpu, r?.nodeVersion, r?.playwrightVersion, r?.browserChannel, r?.browserVersion, r?.gpuMode, r?.webgl?.renderer, r?.webgl?.vendor].every(present) ||
-      !hash(r?.recorderSourceSha256) || !hash(r?.captureSourceSha256) || !Number.isSafeInteger(r?.logicalCpuCount) || r.logicalCpuCount < 1 || typeof r?.headed !== 'boolean' ||
+      !hash(r?.recorderSourceSha256) || !hash(r?.captureSourceSha256) || !hash(r?.audioSourceSha256) || !Number.isSafeInteger(r?.logicalCpuCount) || r.logicalCpuCount < 1 || typeof r?.headed !== 'boolean' ||
       !Number.isSafeInteger(v?.width) || v.width < 1 || !Number.isSafeInteger(v?.height) || v.height < 1 || !finite(v?.deviceScaleFactor ?? 1) || (v?.deviceScaleFactor ?? 1) <= 0 ||
       (v?.isMobile !== undefined && typeof v.isMobile !== 'boolean') || (v?.hasTouch !== undefined && typeof v.hasTouch !== 'boolean')) return null;
   return JSON.stringify([target.refProvidedByOperator.toLowerCase(), target.origin, target.pathname, manifest.scenarioSha256, r.platform, r.architecture, r.release, r.cpu, r.logicalCpuCount,
     r.nodeVersion, r.playwrightVersion, r.browserChannel, r.browserVersion, r.gpuMode, r.headed, r.webgl.renderer, r.webgl.vendor,
-    r.recorderSourceSha256, r.captureSourceSha256, v.width, v.height, v.deviceScaleFactor ?? 1, v.isMobile ?? false, v.hasTouch ?? false]);
+    r.recorderSourceSha256, r.captureSourceSha256, r.audioSourceSha256, v.width, v.height, v.deviceScaleFactor ?? 1, v.isMobile ?? false, v.hasTouch ?? false]);
 }
 
 const load = manifest => {
@@ -58,6 +58,7 @@ export function compareRecording(control, recorded) {
   if (!controlIdentity || !recordedIdentity || controlIdentity !== recordedIdentity) reasons.push('Target, scenario, recorder, browser, renderer, host or viewport identity is missing or differs.');
   if (control?.status !== 'complete' || recorded?.status !== 'complete') reasons.push('A run did not complete.');
   if (control?.capture?.enabled !== false || recorded?.capture?.enabled !== true) reasons.push('The first run must have video off and the second video on.');
+  if (control?.capture?.audio !== false || typeof recorded?.capture?.audio !== 'boolean') reasons.push('Audio capture configuration is missing or invalid.');
   if ([control, recorded].some(m => m?.browserErrors?.pageErrors !== 0 || m?.browserErrors?.consoleErrors !== 0)) reasons.push('Browser errors are present or unreported.');
   const withoutVideo = animation(control), withVideo = animation(recorded);
   if (!withoutVideo || !withVideo) reasons.push('Animation callback measurements are missing, too short, invalid or truncated.');
@@ -65,6 +66,10 @@ export function compareRecording(control, recorded) {
   if (!Array.isArray(segments) || !segments.length || !Array.isArray(recorded?.recordings) || segments.length !== recorded.recordings.length ||
       segments.some((segment, i) => segment?.video !== recorded.recordings[i] || segment.status !== 'available' || segment.finalized !== true))
     reasons.push('Video segments lack finalized, complete screencast timestamp evidence.');
+  if (recorded?.capture?.audio === true && (!Array.isArray(recorded.audioRecordings) || !Array.isArray(recorded.recordings) ||
+      recorded.audioRecordings.length !== recorded.recordings.length || recorded.audioRecordings.some((audio, i) =>
+        typeof recorded.recordings[i] !== 'string' || audio?.file !== recorded.recordings[i].replace(/\.webm$/, '-audio.webm') || !finite(audio?.offsetMs) || !finite(audio?.startCommandWindowMs) || audio.startCommandWindowMs < 0)))
+    reasons.push('Audio segments or their start timing metadata are missing or invalid.');
   if (!load(control) || !load(recorded)) warnings.push('Host load context is unavailable.');
   if (withVideo?.p95Ms > 33.4) warnings.push(`Animation callback p95 was ${withVideo.p95Ms} ms while recording, above two 60 Hz intervals; inspect this footage for stutter. This is a diagnostic flag, not a game performance budget.`);
   if (Array.isArray(segments)) for (const segment of segments) {
@@ -73,12 +78,13 @@ export function compareRecording(control, recorded) {
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
   return { comparison: reasons.length ? 'HOLD' : 'available', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
-    capture: { requestedFps: recorded?.capture?.requestedFps ?? null, segments: Array.isArray(segments) ? segments : [] },
+    capture: { requestedFps: recorded?.capture?.requestedFps ?? null, audio: recorded?.capture?.audio ?? null, segments: Array.isArray(segments) ? segments : [] },
     hostLoadAverage: { withoutVideo: load(control), withVideo: load(recorded) },
     limitations: [
       'The revision is an operator-provided label; verify it against the served build. The same input script does not by itself prove identical paths or workload.',
       'Animation intervals are browser callbacks. Screencast timestamps are browser capture observations; neither measures physical display presentation or GPU completion.',
       'The frame callback sends JPEG data to the recorder and adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.',
+      'When audio is enabled, the recorded run includes audio capture overhead, and its separate audio files are not proof of audible synchronization.',
       'Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay.'
     ] };
 }
@@ -120,14 +126,33 @@ export async function inspectVideos(manifest, manifestPath) {
   }));
 }
 
+export async function inspectAudio(manifest, manifestPath) {
+  if (manifest?.capture?.audio === false) return [];
+  if (manifest?.capture?.audio !== true || !Array.isArray(manifest?.audioRecordings) || !manifest.audioRecordings.length)
+    return [{ status: 'unavailable', reason: 'Audio configuration or recordings are missing.' }];
+  return Promise.all(manifest.audioRecordings.map(async audio => {
+    const name = audio?.file;
+    if (typeof name !== 'string' || basename(name) !== name || name === '.' || name === '..') return { file: name, status: 'unavailable', reason: 'Invalid audio filename.' };
+    try {
+      const path = join(dirname(resolve(manifestPath)), name), file = await stat(path);
+      if (!file.isFile() || file.size === 0) throw new Error('Empty or missing audio file.');
+      const { stdout } = await execFileAsync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-count_packets', '-show_entries', 'stream=codec_name,nb_read_packets', '-of', 'json', path], { timeout: 30000, maxBuffer: 1024 * 1024 });
+      const stream = JSON.parse(stdout).streams?.[0], packets = Number(stream?.nb_read_packets);
+      if (!present(stream?.codec_name) || !Number.isSafeInteger(packets) || packets <= 0) throw new Error('No readable audio stream or packets.');
+      return { file: name, status: 'available', bytes: file.size, codec: stream.codec_name, packetCount: packets };
+    } catch (error) { return { file: name, status: 'unavailable', reason: `Audio or ffprobe unavailable: ${error.message}` }; }
+  }));
+}
+
 async function main() {
   const [controlPath, recordedPath, ...rest] = process.argv.slice(2);
   if (!controlPath || !recordedPath || rest.length) throw new Error('Usage: node scripts/recording-quality.mjs NO_VIDEO_MANIFEST RECORDED_MANIFEST');
   const [control, recorded] = await Promise.all([controlPath, recordedPath].map(async path => JSON.parse(await readFile(path, 'utf8'))));
   const result = compareRecording(control, recorded);
-  [result.encodedVideos, result.captureTraces] = await Promise.all([inspectVideos(recorded, recordedPath), inspectCaptureTraces(recorded, recordedPath)]);
+  [result.encodedVideos, result.captureTraces, result.audioFiles] = await Promise.all([inspectVideos(recorded, recordedPath), inspectCaptureTraces(recorded, recordedPath), inspectAudio(recorded, recordedPath)]);
   if (result.encodedVideos.some(video => video.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Encoded video files or ffprobe packet metadata unavailable.'); }
   if (result.captureTraces.some(trace => trace.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Capture frame traces are missing, incomplete or invalid.'); }
+  if (result.audioFiles.some(audio => audio.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Audio files or ffprobe packet metadata unavailable.'); }
   console.log(JSON.stringify(result, null, 2));
   if (result.comparison === 'HOLD') process.exitCode = 1;
 }

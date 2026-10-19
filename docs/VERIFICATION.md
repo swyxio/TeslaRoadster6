@@ -2,7 +2,7 @@
 
 ## Recording diagnostics · 2026-10-18 Pacific
 
-- The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks the encoded video stream. Six focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
+- The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks encoded streams. Seventeen focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
 - A new desktop physical-GPU comparison was interrupted when a concurrent 64-client probe was reported; it produced no usable comparison. Real-browser integration and a new recording-on/off pair still need verification. These diagnostics do not measure physical display presentation.
 
 ## Production 0.0.32 readback and smoke · 2026-10-18 Pacific
@@ -1460,3 +1460,9 @@ These observations and screenshots describe the former Alcatraz arena before the
 - `pnpm test` passed 160/160 and `pnpm build` passed both typechecks and the production build after rebasing onto the shop fixes. Vite still warns about the 710 kB main JavaScript chunk (199 kB gzip). Shared-simulation tests cover both walls, charge eligibility, retrofit rockets, the ceiling, boost and the tank cap.
 - Local Wrangler two-client room integration passed, including driving from the floor onto a wall and observing the air increase in both clients' snapshots. This is not a load test.
 - Chrome desktop solo showed the stadium and drove a Rocket up a wall to 27 m with the field and ball visible before the shop-fix rebase. After rebasing, Chrome desktop and 390×844 portrait and 844×390 landscape emulation showed the stadium, car, controls, score and wall-charge guidance. Simulated touch and mouse presses on Drive did not register in this browser session; touch driving, physical devices, frame rate and motion comfort remain unverified. No deployment was performed for this change. Screenshots: [desktop](screenshots/rocket-dome/desktop-before-chat.jpg), [portrait](screenshots/rocket-dome/portrait-before-chat.jpg), [landscape](screenshots/rocket-dome/landscape-before-chat.jpg).
+
+## Audio in automated playtest videos · 2026-10-18 Pacific
+
+- The automated blog helper built game revision `1f722dd` with uncommitted recording-tool changes and captured a fresh local room in Chromium on Apple M5 Pro / ANGLE Metal. The 1280×720 MP4 is 9.21 seconds, 1,733,062 bytes, and has H.264 video and stereo AAC game audio. FFmpeg reported a −12.2 dB peak; the room supplied 151 trajectory samples, with zero recorded page or console errors. The footage and local room HUD were inspected; this is not a human or physical-device playtest.
+- A separate synthetic calibration fired a white-frame cue and a 440 Hz tone from the same key event; in four muxed tests, the detected starts differed by 0–57 ms at the test’s 30 fps / 10 ms measurement resolution. A simulated audio-finalization failure left scripted and interactive runs failed but preserved their finalized video. Start-command timing is approximate and this is not proof of frame-accurate synchronization in every run. The audio capture excludes the separate podcast player, microphone and system audio.
+- The full unit suite passed 1,006 tests; the production build and the audio calibration passed. The existing Vite large-chunk warning remains.

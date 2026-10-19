@@ -18,14 +18,15 @@ This builds the checkout, starts the staged fixture bound to loopback with
 fresh temporary storage, opens a fresh browser profile, drives the checked-in
 `scripts/playtests/blog-drive.json` scenario, and records WebGL pixels. A
 successful run must have exactly one finalized segment and an available room
-trajectory. It transcodes silent H.264 MP4, creates a poster, checks the output
-and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
+trajectory. It records the game’s synthesized music and effects, combines them
+with H.264 video as an MP4, creates a poster, checks for audible audio and
+valid output, and writes both to `public/blog/my-playtest/`. Use `--scenario PATH` for a
 different staged scenario, `--name NAME` for another clip, and `--gpu default`,
 `metal`, `vulkan` or `swiftshader` as supported. Existing files are never
 overwritten; choose a different `--name` for another clip. Video files are limited to 25,000,000 bytes,
 below the [Workers static asset limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets).
 
-The original WebM, manifest and trajectory stay in the gitignored
+The original video and audio WebMs, manifest and trajectory stay in the gitignored
 `playtest-runs/` directory. The helper labels a dirty checkout in the manifest;
 the revision is otherwise the local Git HEAD, not a remotely verified build.
 Review the captured frames and scenario for sensitive content before including
@@ -83,7 +84,15 @@ mobile viewport; use `scripts/playtests/touch-drive.json` for a held touch.
 These are browser emulations, not physical-device tests.
 
 Each new output directory contains `manifest.json`, named screenshots and
-silent `segment-NNN.webm` files. The manifest contains a hash of the scenario,
+`segment-NNN.webm` files. Video is silent by default to keep performance
+experiments unchanged. Add `--audio` to also record each segment’s Web Audio
+graph as `segment-NNN-audio.webm`. The scenario must send a game input before
+`recordStart` to unlock the graph. The manifest records an approximate audio
+offset based on the command times; it is not a frame-accurate synchronization
+measurement. The blog helper uses this offset when muxing. Run
+`node tests/playtest-audio.integration.mjs` to check the capture path against a
+simultaneous synthetic visual and audio cue. Audio capture does
+not include microphone, system sounds or the separate podcast radio player. The manifest contains a hash of the scenario,
 operator-supplied target ref, origin/path (query omitted), browser/OS/renderer,
 viewport, command start/duration intervals, safe HUD/performance samples and
 capture settings. Command intervals are not the instant a browser dispatched an
@@ -237,7 +246,7 @@ unset PLAYTEST_STAGE_SECRET
 ```
 
 The quality report requires `ffprobe` on the path and returns `HOLD` when the
-run, timestamps, video stream or matching configuration are incomplete. It
+run, timestamps, video stream, enabled audio stream or matching configuration are incomplete. It
 compares animation callback intervals, describes long screencast gaps, and
 reports host load. It checks metadata and video packets, not whether images
 are unique or look smooth. The frame callback transfers JPEG data and adds

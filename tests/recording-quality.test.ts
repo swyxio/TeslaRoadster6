@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { compareRecording, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectAudio, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
@@ -11,9 +11,9 @@ const run = (video: boolean) => ({
   runner: { platform: 'darwin', architecture: 'arm64', release: '24', cpu: 'Apple', logicalCpuCount: 10,
     nodeVersion: 'v22', playwrightVersion: '1.64.1', browserChannel: 'chrome', browserVersion: '155',
     gpuMode: 'metal', headed: false, webgl: { renderer: 'Metal', vendor: 'Apple' }, recorderSourceSha256: hash,
-    captureSourceSha256: hash, hostLoadAverageAtStart: [2, 3, 4], hostLoadAverageAtFinish: [3, 4, 5] },
+    captureSourceSha256: hash, audioSourceSha256: hash, hostLoadAverageAtStart: [2, 3, 4], hostLoadAverageAtFinish: [3, 4, 5] },
   viewport: { width: 1280, height: 720 }, browserErrors: { pageErrors: 0, consoleErrors: 0 },
-  capture: { enabled: video, requestedFps: 30, segments: video ? [{ video: 'segment-001.webm', status: 'available', finalized: true, intervalMs: { gapsAtLeast100Ms: 1 } }] : [] },
+  capture: { enabled: video, audio: false, requestedFps: 30, segments: video ? [{ video: 'segment-001.webm', status: 'available', finalized: true, intervalMs: { gapsAtLeast100Ms: 1 } }] : [] },
   recordings: video ? ['segment-001.webm'] : [],
   events: [{ type: 'recordStart', status: 'ok', commandStartedAtMs: 90 }, { type: 'frameStart', status: 'ok', commandStartedAtMs: 100 }, { type: 'frameStop', status: 'ok', commandStartedAtMs: 4000,
     sample: { intervalsMs: [...Array(98).fill(16.7), 40, 120], truncated: false } }, { type: 'recordStop', status: 'ok', commandStartedAtMs: 4010 }],
@@ -38,6 +38,9 @@ test('recording comparison holds missing, mixed or incomplete evidence', () => {
   assert.equal(compareRecording(run(true), video).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, scenarioSha256: 'different' }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, browserVersion: 'other' } }).comparison, 'HOLD');
+  assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, audioSourceSha256: 'c'.repeat(64) } }).comparison, 'HOLD');
+  assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true } }).comparison, 'HOLD');
+  assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true }, audioRecordings: [{ file: 'segment-001-audio.webm', offsetMs: 2, startCommandWindowMs: 1 }] }).comparison, 'available');
   assert.equal(compareRecording(control, { ...video, target: { ...video.target, origin: 'https://example.com' } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, target: { ...video.target, refProvidedByOperator: 'main' } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, browserErrors: { pageErrors: 1, consoleErrors: 0 } }).comparison, 'HOLD');
@@ -58,6 +61,9 @@ test('video inspection rejects missing or unsafe paths', async () => {
   assert.equal(unsafe[0].status, 'unavailable');
   const missingTrace = await inspectCaptureTraces({ capture: { segments: [{ traceFile: 'no-such-trace.json' }] } }, '/tmp/run/manifest.json');
   assert.equal(missingTrace[0].status, 'unavailable');
+  assert.equal((await inspectAudio({ capture: { audio: false } }, '/tmp/run/manifest.json')).length, 0);
+  assert.equal((await inspectAudio({ capture: { audio: true }, audioRecordings: [{ file: '../outside.webm' }] }, '/tmp/run/manifest.json'))[0].status, 'unavailable');
+  assert.equal((await inspectAudio({ capture: { audio: true }, audioRecordings: [{ file: 'missing.webm' }] }, '/tmp/run/manifest.json'))[0].status, 'unavailable');
 });
 
 test('capture inspection rejects truncated and non-monotonic trace files', async () => {
