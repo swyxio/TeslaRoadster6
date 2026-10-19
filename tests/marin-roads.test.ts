@@ -1,3 +1,4 @@
+import { buildingBlocksPose } from '../shared/landmark-collision';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, addPlayer, makeEntity, step } from '../shared/game';
@@ -63,7 +64,7 @@ test('Marin lanes stay clear and connect every authored arrival in either town',
     for(let d=0;d<=length;d+=2){
       const x=a.x+(b.x-a.x)*d/length,z=a.z+(b.z-a.z)*d/length;
       for(const dx of [-2,2])for(const dz of [-2,2])assert.ok(isSurface(x+dx,z+dz),`route ${i} supported`);
-      assert.ok(!nearbyBuildings(x,z,7).some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2),`route ${i} clear`);
+      assert.ok(!nearbyBuildings(x,z,7).some(building=>buildingBlocksPose(building,{kind:'model-3',x,z,y:terrainHeight(x,z)??0,yaw:Math.atan2(a.x-b.x,a.z-b.z),pitch:0,roll:0,supportId:'ground'})),`route ${i} clear`);
     }
   }
   const places=Object.values(MARIN_ARRIVAL_POINTS).flat();

@@ -182,7 +182,7 @@ test('rooftop customers use flat physical roofs and require an actual landing',(
   const {world,player,car}=setup();
   player.delivery.cash=10_000;player.delivery.level=1;car.tankLevel=3;
   for(const target of CUSTOMERS.filter(c=>c.rooftop)){
-    assert.ok(BUILDINGS.some(b=>b.x===target.x&&b.z===target.z&&b.h===target.y&&b.style==='midrise'),target.name);
+    assert.ok(BUILDINGS.some(b=>b.x===target.x&&b.z===target.z&&buildingRoofHeight(b,target.x,target.z)===target.y&&b.style==='midrise'),target.name);
   }
   const customer=CUSTOMERS.findIndex(c=>c.rooftop),target=CUSTOMERS[customer];
   player.delivery.order={...player.delivery.order,stage:'dropoff',customer};

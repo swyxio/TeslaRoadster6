@@ -63,7 +63,7 @@ test('a real jump and landing on a rooftop produces one room observation',()=>{
   Object.assign(car,{x:building.x,y:building.h,z:building.z,supportId:`roof:${i}`,speed:0,vx:0,vy:0,vz:0});
   step(world,new Map([[player.id,NEUTRAL]]),.05,{economy:hooks(events)});
   for(let n=0;n<100;n++)step(world,new Map([[player.id,{...NEUTRAL,jump:1}]]),.05,{economy:hooks(events)});
-  assert.equal(car.supportId,`roof:${i}`);
+  assert.equal(car.supportId,`roof:${i}:1`);
   assert.deepEqual(events.filter(item=>item.evidence.kind==='roof'),[{player:player.id,evidence:{kind:'roof',roof:'ordinary'}}]);
 });
 

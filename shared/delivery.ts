@@ -1,5 +1,5 @@
 import type { Entity, Input, Player, World } from './game';
-import { BUILDINGS, LANDMARKS, isRocketIsland, terrainHeight } from './map';
+import { BUILDINGS, LANDMARKS, buildingRoofHeight, isRocketIsland, terrainHeight } from './map';
 import { requiredAccessLevelAt } from './service-areas';
 export { ACCESS_BOUNDARIES } from './service-areas';
 import { hasRockets } from './upgrades';
@@ -69,7 +69,7 @@ for (const {x,z,district,name} of [
   const building = BUILDINGS.filter(b=>b.district===district&&b.style==='midrise'&&b.w>=15&&b.d>=20&&b.h<=30)
     .sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
   if (!building) throw new Error(`No flat rooftop in ${district}`);
-  historicCustomers.push({ id:`roof-${district}-${x}-${z}`, name, x:building.x, z:building.z, y:building.h, rooftop:true });
+  historicCustomers.push({ id:`roof-${district}-${x}-${z}`, name, x:building.x, z:building.z, y:buildingRoofHeight(building,building.x,building.z), rooftop:true });
 }
 export const CUSTOMERS: Customer[] = [
   ...historicCustomers.map(place=>{

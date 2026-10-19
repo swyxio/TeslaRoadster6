@@ -65,3 +65,7 @@ The 24 charging lots use compressed fictional placements and shared footprints. 
 - Building envelopes are physical; trees, visual piers outside the shared ferry aprons, cranes, rails, cables, distant hill backdrops, billboard posts and charger posts are decorative. Do not create barriers on a playable road without matching shared collisions. Trees must stay clear of road segments.
 - Any expansion of coastline, slopes, bridge ramps or obstacles must update shared geometry, minimap, simulation tests, and client/server together. Bump `PROTOCOL_VERSION` for incompatible world interpretation so stale clients reconnect. Preserve both crossings, charge sites, parked and NPC fleet, accessible spawn points, and mobile performance.
 - Model artists may replace `src/bay-world.ts` visuals, but must keep those contracts and provide license/provenance plus desktop and touch playtests. Do not use a downloaded map or copyrighted texture without its license and attribution.
+
+### Existing structure audit
+
+The unreleased structure-collision candidate extends authored collision parts to existing northern/southern landmarks, ordinary roofs, round/tapered towers, bridge supports and stadium masonry. See [STRUCTURE_COLLISION_AUDIT.md](STRUCTURE_COLLISION_AUDIT.md) for reproduced defects, current verification and remaining limits. Avoid adding bounding boxes around open structures or replacing faceted curved surfaces with an unrelated analytic cap.
