@@ -8,7 +8,10 @@ const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'))
 const poses = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
 if (manifest.status !== 'complete' || manifest.browserErrors?.pageErrors !== 0 || manifest.browserErrors?.consoleErrors !== 0) throw new Error('Recording did not complete with explicit zero browser errors.');
 if (!manifest.capture?.enabled || !Array.isArray(manifest.recordings) || !manifest.recordings.length) throw new Error('A recording entry in the manifest is required.');
-if (!Array.isArray(poses) || poses.length === 0 || manifest.trajectory?.status !== 'available') throw new Error('Complete authoritative pose trace is required.');
+if (!Array.isArray(poses) || poses.length === 0 || manifest.trajectory?.status !== 'available' || manifest.trajectory.samples !== poses.length ||
+    !poses.every((pose, index) => pose && Number.isFinite(pose.atMs) && pose.atMs >= 0 && (index === 0 || pose.atMs >= poses[index - 1].atMs))) {
+  throw new Error('A complete authoritative pose trace with ordered timestamps is required.');
+}
 const events = manifest.events;
 const touch = events.some(event => event.type === 'touchDown');
 const touches = events.filter(event => event.type === 'touchDown');
