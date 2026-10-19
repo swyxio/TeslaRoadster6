@@ -1,15 +1,17 @@
 import * as T from 'three';
 import type { Entity } from '../shared/game';
 import { HILL, NATURAL_HILLS, isSurface } from '../shared/map';
+import { PARKING_LOTS } from '../shared/parking-lots';
 import { VEHICLES } from '../shared/vehicles';
 
 const MAX_SHADOWS=32;
 const MAX_DISTANCE_SQUARED=60**2;
-// Roads and parking approaches sit above the shared ground surface. Keep the
-// patch above their rendered tops (approaches reach .18), below lot markings,
-// and separate from the authoritative physics height.
-const GROUND_OFFSET=.20;
+// Above ordinary asphalt and lot pavement, below road markings and low cars.
+// Raised approaches are excluded below; this is not a physics height.
+const GROUND_OFFSET=.145;
 const HILLS=[HILL,...NATURAL_HILLS];
+// Approaches are rendered as axis-aligned boxes in scene.ts.
+const APPROACHES=PARKING_LOTS.map(({approach:a})=>({minX:a.x-a.width/2,maxX:a.x+a.width/2,minZ:a.z-a.length/2,maxZ:a.z+a.length/2}));
 
 /** One bounded batch of soft contact patches; these never alter world state. */
 export class ContactShadows {
@@ -68,6 +70,11 @@ export class ContactShadows {
     // Skip entire hill bounds, including their flat edges. This avoids
     // per-corner height sampling and keeps the plane away from sloped ground.
     const radius=Math.hypot(width,length)/2;
+    // A single flat patch would be cut by a raised approach (top .18). Skip
+    // the entire footprint near that edge instead of drawing through cars.
+    for(const approach of APPROACHES){
+      if(x+radius>=approach.minX&&x-radius<=approach.maxX&&z+radius>=approach.minZ&&z-radius<=approach.maxZ)return;
+    }
     for(const hill of HILLS){
       if(x+radius>=hill.minX&&x-radius<=hill.maxX&&z+radius>=hill.minZ&&z-radius<=hill.maxZ)return;
     }

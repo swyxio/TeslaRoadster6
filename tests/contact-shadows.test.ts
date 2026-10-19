@@ -18,7 +18,7 @@ test('contact patches follow rendered cars and clear stale instances',()=>{
   assert.equal(scene.children.filter(child=>child instanceof T.InstancedMesh).length,1);
   const matrix=new T.Matrix4();shadows.mesh.getMatrixAt(0,matrix);
   const position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();matrix.decompose(position,rotation,scale);
-  assert.ok(position.distanceTo(new T.Vector3(-120,.20,-120))<.00001);
+  assert.ok(position.distanceTo(new T.Vector3(-120,.145,-120))<.00001);
   assert.ok(Math.abs(new T.Euler().setFromQuaternion(rotation).y-.7)<.00001);
   mesh.position.set(-115,0,-120);shadows.update([car],meshes,camera,car);
   shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
@@ -27,19 +27,26 @@ test('contact patches follow rendered cars and clear stale instances',()=>{
   assert.equal(shadows.mesh.count,0);assert.equal(shadows.mesh.visible,false);
 });
 
-test('grounded cars remain visible over parking surfaces',()=>{
+test('parking patches clear the lot and avoid raised approaches',()=>{
   const lot=PARKING_LOTS.find(item=>item.id==='sf-playground')!;
   const shadows=new ContactShadows(new T.Scene()),car=entity('car');
-  // In scene.ts the parking area top is .14 and the approach top is .18.
-  for(const [surface,top] of [[lot.area,.14],[lot.approach,.18]] as const){
-    const mesh=vehicle(surface.x,0,surface.z),camera=mesh.position.clone().add(new T.Vector3(0,4,5));
-    shadows.update([car],new Map([[car.id,mesh]]),camera,car);
-    assert.equal(shadows.mesh.count,1);
-    const matrix=new T.Matrix4(),position=new T.Vector3();
-    shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
-    assert.ok(position.y>top,`patch must be above rendered parking surface ${top}`);
-    assert.ok(position.y<.21,'patch must remain below the lot markings');
-  }
+  const mesh=vehicle(lot.area.x,0,lot.area.z),camera=mesh.position.clone().add(new T.Vector3(0,4,5));
+  const meshes=new Map([[car.id,mesh]]);
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,1);
+  const matrix=new T.Matrix4(),position=new T.Vector3();
+  shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
+  // scene.ts puts the lot top at .14; road paint starts at .149 and the
+  // luxury undertray at .18. All three remain clear of the patch.
+  assert.ok(position.y>.14 && position.y<.149 && position.y<.18);
+  mesh.position.set(lot.approach.x,0,lot.approach.z);
+  camera.copy(mesh.position).add(new T.Vector3(0,4,5));
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,0);
+  // Also omit a car straddling the near edge, not just its center.
+  mesh.position.z=lot.approach.z+lot.approach.length/2+1;
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,0);
 });
 
 test('unsupported, airborne, hidden and non-flat positions do not cast a patch',()=>{
