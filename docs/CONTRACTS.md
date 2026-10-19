@@ -91,7 +91,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:51, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:52, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
