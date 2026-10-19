@@ -17,6 +17,32 @@ export const RELEASES = [
     ]
   },
   {
+    version: '0.0.41-alpha',
+    label: '0.0.41 Alpha',
+    date: '2026-10-18',
+    title: 'Starbase takes shape',
+    intro: 'Visit a growing Starship and launch complex in Fremont.',
+    sections: [
+      { title: 'The mission to Mars', items: [
+        'A reflective Starship rises as drivers earn together, alongside a dollar-marked progress tower.',
+        'Explore the landscaped site, construction yard and flame channel. The painted perimeter is a playful site marker.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.40-alpha',
+    label: '0.0.40 Alpha',
+    date: '2026-10-18',
+    title: 'A clearer way to deliver',
+    intro: 'Delivery guidance follows the road, with more time to stop at pickups.',
+    sections: [
+      { title: 'On the road', items: [
+        'Delivery arrows guide you along roads when a road route is available.',
+        'Pickup bonuses taper more gently near the estimate, with up to 15 seconds afterward to stop.'
+      ] }
+    ]
+  },
+  {
     version: '0.0.39-alpha',
     label: '0.0.39 Alpha',
     date: '2026-10-18',

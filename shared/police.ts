@@ -6,7 +6,7 @@ import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
 import { canAssignDeliveryRoof, updateLevel, type DeliveryState } from './delivery';
 import { hasRockets } from './upgrades';
-import { dimensions } from './physics';
+import { contact, dimensions } from './physics';
 import { primitiveExtent, sampleLandmarkPrimitive } from './new-landmark-surfaces';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[]; highwayPatrol?:true; airPatrol?:true; nextFlightAt?:number; cause?:'flight'|'speeding'; peakSpeedKph?:number };
@@ -34,8 +34,26 @@ for(const x of [-360,-300,-240,-180,-120,-60,0,60,330,390,450,510,570]) for(cons
   if(isSurface(x,z)&&clear(x,z))points.push({x,z});
 function clear(x:number,z:number,yaw=0){return !nearbyBuildings(x,z,5).some(b=>buildingBlocksPose(b,{kind:'model-s',x,z,y:terrainHeight(x,z)??0,yaw,pitch:0,roll:0,supportId:'ground'}));}
 function lineClear(a:Point,b:Point){
-  const n=Math.ceil(Math.hypot(a.x-b.x,a.z-b.z)/8);
-  for(let i=0;i<=n;i++){const t=n?i/n:0,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;if(!isSurface(x,z)||!clear(x,z,Math.atan2(a.x-b.x,a.z-b.z)))return false;}
+  const length=Math.hypot(a.x-b.x,a.z-b.z),n=Math.ceil(length/8),yaw=Math.atan2(a.x-b.x,a.z-b.z);
+  const vehicle=dimensions('model-s');
+  for(let i=0;i<=n;i++){
+    const t=n?i/n:0,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+    if(!isSurface(x,z)||!clear(x,z,yaw))return false;
+    if(i===0)continue;
+    // Sweep the conservative police body between samples so a thin spaceport
+    // channel wall cannot slip through the clearance check between poses.
+    const before=(i-1)/n,px=a.x+(b.x-a.x)*before,pz=a.z+(b.z-a.z)*before;
+    const midX=(px+x)/2,midZ=(pz+z)/2,sweptLength=vehicle.length+length/n;
+    const swept={x:midX,z:midZ,w:vehicle.width,d:sweptLength,yaw};
+    if(nearbyBuildings(midX,midZ,Math.hypot(vehicle.width,sweptLength)/2).some(building=>
+      building.style==='spaceport'&&building.parts?.some(part=>{
+        const e=primitiveExtent(part),base=building.landmarkBase??0;
+        if(!contact(swept,{x:building.x+part.x,z:building.z+part.z,w:e.w,d:e.d,yaw:e.yaw}))return false;
+        const low=Math.min(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0);
+        const high=Math.max(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0)+vehicle.height;
+        return low<base+e.top-.001&&high>base+e.bottom+.001;
+      })))return false;
+  }
   return true;
 }
 const edges=points.map((a,i)=>points.map((b,j)=>({b,j})).filter(({b,j})=>j!==i&&(a.x===b.x||a.z===b.z)&&!points.some((p,k)=>k!==i&&k!==j&&((p.x===a.x&&p.x===b.x&&p.z>Math.min(a.z,b.z)&&p.z<Math.max(a.z,b.z))||(p.z===a.z&&p.z===b.z&&p.x>Math.min(a.x,b.x)&&p.x<Math.max(a.x,b.x))))&&lineClear(a,b)).map(({j})=>j));

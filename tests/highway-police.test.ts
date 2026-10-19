@@ -236,3 +236,22 @@ test('a rocket officer flies after a moving airborne driver, lands, and complete
   assert.equal(player.delivery.tickets,1);assert.equal(player.delivery.lastTicket?.cause,'flight');
   assert.equal(car.supportId,'ground');assert.ok(player.delivery.ticketGraceUntil>world.time);
 });
+
+
+test('rocket police sweep the spaceport channel walls before launching',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,220);
+  Object.assign(cop,{x:1964.25,z:6232,y:0,yaw:-Math.PI/2,speed:0,supportId:'ground'});
+  Object.assign(car,{x:1994.25,z:6232,y:6,supportId:null});
+  cop.police!.airPatrol=true;cop.police!.targetId=player.id;cop.police!.cause='flight';cop.upgrades.rocket=true;
+  const blocked=(x:number,z:number)=>nearbyBuildings(x,z,5).some(building=>buildingBlocksPose(building,
+    {kind:'model-s',x,z,y:terrainHeight(x,z)??0,yaw:-Math.PI/2,pitch:0,roll:0,supportId:'ground'}));
+  for(const x of [1964.25,1971.75,1979.25,1986.75,1994.25]){
+    assert.equal(isSurface(x,6232),true,`sample ${x} is supported`);
+    assert.equal(blocked(x,6232),false,`sample ${x} is clear`);
+  }
+  assert.equal(blocked(1968,6232),true,'the body crosses a wall between sampled poses');
+  assert.equal(policeFlight(cop,world,NEUTRAL).jump,false,'the wall prevents launch');
+  Object.assign(cop,{x:1960,z:6218,yaw:Math.PI});
+  Object.assign(car,{x:1960,z:6248});
+  assert.equal(policeFlight(cop,world,NEUTRAL).jump,true,'a clear hop along the channel remains available');
+});

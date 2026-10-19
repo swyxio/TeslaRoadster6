@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
 import type { AchievementId } from '../shared/achievements';
-import { CUSTOMERS, initialDelivery, isOrderAccessible, type DeliveryStop } from '../shared/delivery';
+import { CUSTOMERS, initialDelivery, isOrderAccessible, RESTAURANTS, type DeliveryStop } from '../shared/delivery';
 import type { EarningsEvents } from '../shared/earnings-events';
 import { terrainHeight } from '../shared/map';
 import type { DriverOutcome, DriverProgress, EconomyIntent } from '../worker/driver-profile';
@@ -60,6 +60,11 @@ function stage(e:Entry,multiplier:1|null=1):DeliveryStage {
 function intent(s:DeliveryStage):EconomyIntent {
   return {eventId:s.eventId,driverId:s.driverId,fence:s.fence,roomId:s.roomId,revision:0,sequence:1,clock:s.clock,action:s.action};
 }
+function pickupStage(e:Entry):DeliveryStage {
+  const {x,z}=RESTAURANTS[0],y=terrainHeight(x,z);assert.notEqual(y,null);
+  return {eventId:randomUUID(),driverId:e.driverId,fence:e.fence,roomId:e.room,walletOrder:1,clock:0,
+    action:{kind:'delivery',stop:{x,y:y!,z,vy:0,speed:0,supportId:'ground',kind:'model-3',canFly:false},atMs:Date.now()-2_000,multiplier:1}};
+}
 
 const dir=await mkdtemp(join(tmpdir(),'tesland-delivery-upgrade-'));
 const legacy=join(dir,'legacy'),persist=join(dir,'storage'),p=await port(),base=`http://127.0.0.1:${p}`;
@@ -92,6 +97,14 @@ async function prepare(e:Entry,s:Scenario,multiplier:1|null=1,initialCash=9_000)
   assert.equal(await rpc('stage',{...e,stage:observed}),'accepted');
   return {observed,submitted};
 }
+async function preparePickup(e:Entry){
+  await rpc('persistent-producer',{...e,active:true});
+  const order={...initialDelivery({x:0,z:0}).order,stage:'pickup' as const,elapsed:35,pickupEstimate:40,base:600};
+  await rpc('acquire',{...e,progress:{cash:2_500,level:0,completed:0,order,deliveryClock:0,unlocked:[]}});
+  const staged=pickupStage(e),submitted=intent(staged);
+  assert.equal(await rpc('stage',{...e,stage:staged}),'accepted');
+  return submitted;
+}
 
 try {
   // Keep this fixture independent of Git history and fail loudly if the
@@ -107,6 +120,7 @@ try {
   const deliveryPath=join(legacy,'shared/delivery.ts');
   let delivery=await readFile(deliveryPath,'utf8');
   delivery=replaceOnce(delivery,'order.base * .25 * Math.max','order.base * .4 * Math.max');
+  delivery=replaceOnce(delivery,'const adjusted=remaining>taper?remaining:(remaining+taper)/2;','const adjusted=remaining;');
   delivery=replaceOnce(delivery,'order.base * .35 * Math.min','order.base * .75 * Math.min');
   await writeFile(deliveryPath,delivery);
   const achievementsPath=join(legacy,'shared/achievements.ts');
@@ -129,6 +143,30 @@ try {
     symlink(resolve('shared'),join(current,'shared'),'dir'),symlink(resolve('worker'),join(current,'worker'),'dir'),
     symlink(resolve('node_modules'),join(current,'node_modules'),'dir'),cp(resolve('package.json'),join(current,'package.json')),
   ]);
+  // The immediately previous release used a 25% pickup cap with no stopping
+  // allowance. Use the same storage through all three worker restarts.
+  const recent=join(dir,'recent');
+  await mkdir(join(recent,'tests/fixtures'),{recursive:true});
+  await Promise.all([
+    cp(resolve('shared'),join(recent,'shared'),{recursive:true}),
+    cp(resolve('worker'),join(recent,'worker'),{recursive:true}),
+    symlink(resolve('node_modules'),join(recent,'node_modules'),'dir'),
+    cp(resolve('package.json'),join(recent,'package.json')),
+    writeFile(join(recent,'tests/fixtures/delivery-journal-worker.ts'),fixture),
+    cp(resolve('tests/fixtures/cybercab-events-worker.ts'),join(recent,'tests/fixtures/cybercab-events-worker.ts')),
+  ]);
+  const recentDeliveryPath=join(recent,'shared/delivery.ts');
+  const recentDelivery=replaceOnce(await readFile(recentDeliveryPath,'utf8'),
+    'const adjusted=remaining>taper?remaining:(remaining+taper)/2;','const adjusted=remaining;');
+  await writeFile(recentDeliveryPath,recentDelivery);
+  await writeConfig(join(recent,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
+  const pendingPickupEntry=entry(),pendingPickup=await preparePickup(pendingPickupEntry);
+  const paidPickupEntry=entry(),paidPickup=await preparePickup(paidPickupEntry);
+  const oldPickup=await rpc<DriverOutcome>('submit',{...paidPickupEntry,intent:paidPickup},30_000);success(oldPickup);
+  assert.equal(oldPickup.delivery?.earnings[0].amount,19,'the preceding release pays the original pickup bonus');
+  assert.deepEqual(await rpc('sources',pendingPickupEntry),[],'a staged pickup has not yet been credited');
+  await stop(child);child=undefined;
+
   await writeConfig(join(legacy,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
 
   const pending:Array<{scenario:Scenario;e:Entry;submitted:EconomyIntent}>=[];
@@ -184,6 +222,15 @@ try {
   paid.push({scenario:historyScenario,e:historyEntry,submitted:historyIntent,result:historyResult,events:historyRecord.cabEvents});
   await stop(child);child=undefined;
   await writeConfig(join(current,'tests/fixtures/delivery-journal-worker.ts'));child=start();await ready();
+
+  const pickup=await rpc<DriverOutcome>('submit',{...pendingPickupEntry,intent:pendingPickup},30_000);success(pickup);
+  assert.equal(pickup.delivery?.earnings[0].amount,38,'a pending pickup uses the stopping allowance');
+  assert.equal(pickup.progress.order.stage,'dropoff');
+  assert.deepEqual(await rpc('submit',{...pendingPickupEntry,intent:pendingPickup}),pickup);
+  assert.deepEqual(await rpc('commit',{...pendingPickupEntry,intent:pendingPickup}),pickup);
+  assert.deepEqual(await rpc('sources',pendingPickupEntry),['earned-source:delivery:1:pickup']);
+  assert.deepEqual(await rpc('commit',{...paidPickupEntry,intent:paidPickup}),oldPickup,'the committed previous bonus is unchanged');
+  assert.deepEqual(await rpc('sources',paidPickupEntry),['earned-source:delivery:1:pickup']);
 
   const boosted=await rpc<DriverOutcome>('submit',{...boostedEntry,intent:boostedIntent},40_000);success(boosted);
   assert.equal(boosted.delivery?.earnings[0].amount,1_215,'the revised fare keeps the 1.5x room boost');
@@ -267,6 +314,7 @@ try {
   console.log('PASS: old-rule assignment checkpoints replay under new fare and achievement rules across the $10k boundary.');
   console.log('PASS: upgraded profiles preserve committed old-rule receipts and reject changed intents or event histories.');
   console.log('PASS: a completed assignment with an unknown, boosted rate replays using its saved event history.');
+  console.log('PASS: staged and committed pickups survive the 15-second allowance change exactly once.');
   console.log('PASS: accepted stops, committed receipts, source IDs and new-fence recovery remain exactly once.');
 } finally {
   if(child)await stop(child);

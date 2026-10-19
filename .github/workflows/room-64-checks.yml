@@ -1,0 +1,45 @@
+name: Room diagnostic checks (no load)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  no-load-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - name: Test safeguards and observations without connecting to any room
+        run: |
+          node --test scripts/room-64-target.test.mjs
+          pnpm exec tsx --test scripts/room-64-observations.test.ts
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {verifyConfig} from './scripts/room-64-target.mjs';
+          assert.throws(() => verifyConfig(JSON.parse(readFileSync('./scripts/room-64-target.json', 'utf8'))));
+          NODE
+      - name: Strictly typecheck the hosted harness and the local trace separately
+        run: |
+          pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --esModuleInterop --types node scripts/room-64-diagnostic.ts scripts/room-64-observations.test.ts
+          pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022 --types @cloudflare/workers-types tests/fixtures/input-trace-worker.ts
+          pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --esModuleInterop --types node tests/input-trace.integration.ts
+      - name: Exercise one Session against its self-started localhost Wrangler fixture
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          pnpm exec tsx tests/input-trace.integration.ts > "$RUNNER_TEMP/input-trace.json" || { cat "$RUNNER_TEMP/input-trace.json"; exit 1; }

@@ -206,8 +206,14 @@ export function rerouteInaccessibleOrder(delivery:DeliveryState,origin:{x:number
   beginDeliverySearch(delivery,'reroute',origin,roofEligible===true);
   return true;
 }
+// Soften the final approach and allow time to position at the pickup. The
+// calculation uses active time, so wallet replay needs no extra state.
+export const PICKUP_STOP_ALLOWANCE = 15;
 export function pickupBonusFor(order: Order): number {
-  return Math.round(order.base * .25 * Math.max(0, 1 - order.elapsed / order.pickupEstimate));
+  const remaining=order.pickupEstimate-order.elapsed;
+  const taper=Math.min(PICKUP_STOP_ALLOWANCE,order.pickupEstimate);
+  const adjusted=remaining>taper?remaining:(remaining+taper)/2;
+  return Math.round(order.base * .25 * Math.max(0, adjusted/order.pickupEstimate));
 }
 export function payoutFor(order: Order): number {
   const difference = order.estimate - order.elapsed;
