@@ -1,0 +1,223 @@
+name: Snapshot serialization gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'worker/snapshot.ts'
+      - 'tests/snapshot.test.ts'
+      - 'tests/snapshot-assembly-gate.test.ts'
+      - 'scripts/bench-snapshot-assembly.ts'
+      - 'scripts/compare-snapshot-serialization.ts'
+      - 'scripts/evaluate-snapshot-assembly.mjs'
+      - '.github/workflows/snapshot-serialization.yml'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: snapshot-serialization-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Unit tests and build
+    # This temporary gate is scoped to the isolated serializer proposal. Other
+    # changes to shared gameplay need their own comparison and release gates.
+    if: ${{ github.event.pull_request.head.ref == 'codex/snapshot-serialization-review' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
+      - name: Run the local room integration
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --ip 127.0.0.1 --port 18987 \
+            --persist-to "$RUNNER_TEMP/snapshot-room-state" --show-interactive-dev-session false \
+            > "$RUNNER_TEMP/snapshot-wrangler.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 300); do
+            if curl --fail --silent http://127.0.0.1:18987/api/health > "$RUNNER_TEMP/snapshot-room-health.json"; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$server" 2>/dev/null; then break; fi
+            sleep 0.2
+          done
+          if [ "$ready" != 1 ]; then cat "$RUNNER_TEMP/snapshot-wrangler.log"; exit 1; fi
+          pnpm exec tsx tests/room.integration.ts http://127.0.0.1:18987 \
+            2>&1 | tee "$RUNNER_TEMP/snapshot-room-integration.log"
+      - name: Retain local room integration logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-room-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/snapshot-wrangler.log
+            ${{ runner.temp }}/snapshot-room-health.json
+            ${{ runner.temp }}/snapshot-room-integration.log
+          if-no-files-found: warn
+          retention-days: 90
+
+  microbenchmark:
+    name: Matched serializer correctness and CPU assembly
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Prepare artifact directory
+        run: |
+          raw_dir="$RUNNER_TEMP/snapshot-serialization"
+          mkdir -p "$raw_dir"
+          printf 'RAW_DIR=%s\n' "$raw_dir" >> "$GITHUB_ENV"
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out exact PR base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Verify current main and PR head before measurement
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')"
+          printf 'time_utc=%s\nexpected_main=%s\nactual_main=%s\nexpected_head=%s\nactual_head=%s\n' \
+            "$(date -u +%FT%TZ)" "$BASE_SHA" "$main" "$HEAD_SHA" "$head" > "$RAW_DIR/identity-before.txt"
+          test "$main" = "$BASE_SHA" || { echo '::error::Main moved; rebase and repeat the gate.'; exit 1; }
+          test "$head" = "$HEAD_SHA" || { echo '::error::PR head moved; repeat the gate.'; exit 1; }
+          test "$(git -C candidate rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(git -C base rev-parse HEAD)" = "$BASE_SHA"
+          git -C candidate merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" || { echo '::error::PR head is not based on exact current main.'; exit 1; }
+          git -C candidate diff --quiet "$BASE_SHA" "$HEAD_SHA" -- shared || { echo '::error::Shared simulation changed; this isolated serializer gate is not comparable.'; exit 1; }
+          changed_worker="$(git -C candidate diff --name-only "$BASE_SHA" "$HEAD_SHA" -- worker)"
+          test "$changed_worker" = 'worker/snapshot.ts' || { echo '::error::Worker changes exceed the isolated serializer.'; exit 1; }
+          for file in package.json pnpm-lock.yaml .nvmrc; do
+            cmp "candidate/$file" "base/$file" || { echo "::error::$file differs between revisions."; exit 1; }
+          done
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install one identical dependency tree
+        working-directory: candidate
+        run: pnpm install --frozen-lockfile
+      - name: Prepare and identify identical benchmark harnesses
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE/candidate/node_modules" base/node_modules
+          cp candidate/scripts/bench-snapshot-assembly.ts base/scripts/bench-snapshot-assembly.ts
+          cmp candidate/scripts/bench-snapshot-assembly.ts base/scripts/bench-snapshot-assembly.ts
+          {
+            date -u +%FT%TZ
+            node --version
+            pnpm --version
+            uname -a
+            lscpu
+            sha256sum candidate/scripts/bench-snapshot-assembly.ts base/scripts/bench-snapshot-assembly.ts \
+              candidate/scripts/compare-snapshot-serialization.ts candidate/scripts/evaluate-snapshot-assembly.mjs \
+              candidate/pnpm-lock.yaml candidate/worker/snapshot.ts base/worker/snapshot.ts
+          } > "$RAW_DIR/environment.txt"
+      - name: Compare complete serialized snapshots
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/compare-snapshot-serialization.ts "$GITHUB_WORKSPACE/base" \
+            > "$RAW_DIR/correctness.json" 2> "$RAW_DIR/correctness.stderr"
+          node - "$RAW_DIR/correctness.json" "$BASE_SHA" "$HEAD_SHA" <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const [file, base, head] = process.argv.slice(2);
+          const result = JSON.parse(fs.readFileSync(file, 'utf8'));
+          assert.equal(result.kind, 'snapshot-serialization-correctness');
+          assert.equal(result.baseline.commit, base);
+          assert.equal(result.candidate.commit, head);
+          assert.deepEqual(result.seeds, [0, 1, 42]);
+          assert.equal(result.ticksPerSeed, 2);
+          assert.equal(result.comparisons, 84);
+          assert.match(result.outputSha256, /^[a-f0-9]{64}$/);
+          NODE
+      - name: Collect five alternating base and candidate pairs
+        run: |
+          set -euo pipefail
+          for pair in 1 2 3 4 5; do
+            if (( pair % 2 )); then sides=(base candidate); else sides=(candidate base); fi
+            for side in "${sides[@]}"; do
+              printf '%s pair=%s side=%s start\n' "$(date -u +%FT%TZ)" "$pair" "$side" >> "$RAW_DIR/timeline.txt"
+              pnpm --dir "$GITHUB_WORKSPACE/$side" exec tsx scripts/bench-snapshot-assembly.ts 50 \
+                > "$RAW_DIR/$side-$pair.jsonl" 2> "$RAW_DIR/$side-$pair.stderr"
+              printf '%s pair=%s side=%s complete\n' "$(date -u +%FT%TZ)" "$pair" "$side" >> "$RAW_DIR/timeline.txt"
+            done
+          done
+      - name: Enforce predeclared median paired CPU ratios
+        run: node candidate/scripts/evaluate-snapshot-assembly.mjs "$RAW_DIR" > "$RAW_DIR/report.json"
+      - name: Verify current main and PR head after measurement
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RAW_DIR"
+          main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')"
+          printf 'time_utc=%s\nexpected_main=%s\nactual_main=%s\nexpected_head=%s\nactual_head=%s\n' \
+            "$(date -u +%FT%TZ)" "$BASE_SHA" "$main" "$HEAD_SHA" "$head" > "$RAW_DIR/identity-after.txt"
+          test "$main" = "$BASE_SHA" || { echo '::error::Main moved during the run; rebase and repeat the gate.'; exit 1; }
+          test "$head" = "$HEAD_SHA" || { echo '::error::PR head moved during the run; repeat the gate.'; exit 1; }
+      - name: Explain scope and result
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo '### Snapshot serialization microbenchmark'
+            echo "Job status: $JOB_STATUS. Failed, missing, or mismatched evidence is HOLD."
+            echo 'The gate requires median paired CPU ratios clustered < 1.0, spread < 1.0, owned <= 1.10, with matching decoded bytes.'
+            echo 'This is synthetic serialization work on one hosted runner. It is not end-to-end performance, motion, network, or a 64-player capacity measurement.'
+            if [ -f "$RAW_DIR/report.json" ]; then
+              echo '```json'
+              cat "$RAW_DIR/report.json"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain raw observations even on failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-serialization-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/snapshot-serialization/
+          if-no-files-found: warn
+          retention-days: 90
