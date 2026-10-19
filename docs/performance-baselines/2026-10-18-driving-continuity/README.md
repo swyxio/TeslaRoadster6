@@ -549,6 +549,15 @@ lasts only 51.2 simulated seconds. Special surfaces and full collision coverage,
 provider isolation and instrumentation overhead remain unverified. Hosted
 execution stays disabled, and this is not a 64-player result.
 
+The extended [two-Session raw-sweep smoke](hosted-stage-raw-sweeps-smoke-20261019.tar.gz)
+(SHA-256 `1a5a18279b00a965f324532f90d52057a4e60fd83b4763b41002a9b4a4233045`)
+then passed twice. The retained second run exported 384 raw records over 16
+frames with no partial, overflow or invalid records, and each session moved
+and observed an exact ACK. Collection was complete for this short sample,
+while collision coverage remained explicitly unproved. Memory and observer
+overhead, full-scale export, provider isolation, wire bytes and per-tick CPU
+are still unmeasured; the hosted driver remains disabled.
+
 ## Hosted comparison
 
 [Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
