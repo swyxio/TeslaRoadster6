@@ -44,6 +44,26 @@ test('Pulse Shot strengthens a real car hit, cools down, and is capped',()=>{
   assert.deepEqual(state.pulseShots,[],'departed drivers do not leave cooldown state behind');
 });
 
+test('Pulse Shot waits for identity attachment without consuming its cooldown',()=>{
+  const world=createEmptyWorld(),player=addPlayer(world,'driver','Driver');
+  const car=makeEntity('striker','model-3',DOME.x-3.8,DOME.z,player.id);
+  Object.assign(car,{y:0,vx:30,vy:0,vz:0,yaw:-Math.PI/2,inDome:true});
+  const state=initialSoccer();
+  const shoot=(time:number,canCollect:(id:string)=>boolean)=>{
+    Object.assign(state.ball,{x:DOME.x,y:DOME.ballRadius,z:DOME.z,vx:0,vy:0,vz:0});
+    stepSoccer(state,[car],.05,time,[player],canCollect);
+    return state.ball.vx;
+  };
+  const ordinary=shoot(1,()=>true);
+  player.achievements.unlocked.push('dome-debut');
+  const pending=shoot(2,id=>{assert.equal(id,player.id);return false;});
+  assert.ok(Math.abs(pending-ordinary)<1e-6,'pending identity still gets an ordinary physical hit');
+  assert.ok(state.participants.some(participant=>participant.playerId===player.id),'the contact remains recorded');
+  assert.equal(state.pulseShots.length,0,'pending identity cannot consume a Pulse Shot');
+  assert.ok(shoot(3,()=>true)>ordinary+15,'the shot is available after identity attachment');
+  assert.equal(pulseShotRemaining(state,player.id,3),DOME_PULSE_COOLDOWN);
+});
+
 test('Champion Charge applies only to a present rocket-equipped credited scorer and caps air',()=>{
   for(const [unlocked,kind,retrofit,present,start,expected,allow] of [
     [false,'roadster',false,true,10,10,true],

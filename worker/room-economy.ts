@@ -184,7 +184,11 @@ export class RoomEconomy extends DurableObject<Env> {
   async stageAchievement(stage:AchievementStage):Promise<'accepted'|'superseded'|'conflict'> {
     if(stage.action?.kind!=='achievement'||!isAchievementEvidence(stage.action.evidence))return 'conflict';
     const dome=stage.action.dome;
-    if(dome&&(stage.action.evidence.kind!=='dome'||typeof dome.matchId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(dome.matchId)||!Number.isSafeInteger(dome.atMs)||dome.atMs<0||dome.atMs>Date.now()))return 'conflict';
+    if(dome&&(stage.action.evidence.kind!=='dome'||typeof dome.matchId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(dome.matchId)||!Number.isSafeInteger(dome.atMs)||dome.atMs<0))return 'conflict';
+    // Another Durable Object may have recorded the result on a slightly
+    // faster clock. Defer it through the existing retry path, not a conflict
+    // that would disconnect the driver and discard its live wallet session.
+    if(dome&&dome.atMs>Date.now())throw new Error('Dome result time has not arrived');
     return this.stageObservation(stage,achievementKey(stage));
   }
 

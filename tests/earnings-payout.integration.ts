@@ -183,6 +183,21 @@ try{
   await delay(1100);
   assert.deepEqual((await profile(stageDriver)).driver.progress,stageRecovered.driver.progress,'stage replay remains idempotent');
 
+  // A match can reach an economy object whose clock is slightly behind the
+  // room. The transient rejection must not close the player's wallet socket.
+  const skewRoom='stage-clock-skew',skewScorer=connect(skewRoom);
+  await until(()=>!!skewScorer.last('welcome')&&!!skewScorer.last('wallet'),'clock skew guest connected');
+  const skewId=skewScorer.last('welcome')!.id as string,skewDriver=(await rpc<{driver:string}>('player',{room:skewRoom,player:skewId})).driver;
+  const skewBefore=await profile(skewDriver);
+  await rpc('skew-stage',{room:skewRoom});await rpc('win',{room:skewRoom,player:skewId});
+  await until(async()=>(await rpc<{observed:boolean}>('skew-observed',{room:skewRoom})).observed,'ahead-of-receiver match observed');
+  await until(async()=>(await rpc<unknown[]>('wins',{room:skewRoom})).length===1,'clock skew match settles');
+  assert.equal(skewScorer.socket.readyState,WebSocket.OPEN,'clock skew cannot disconnect the player');
+  const skewAfter=await profile(skewDriver);
+  assert.equal(skewAfter.driver.progress.cash-skewBefore.driver.progress.cash,2_700,'the original match settles exactly once');
+  await delay(1100);
+  assert.deepEqual((await profile(skewDriver)).driver.progress,skewAfter.driver.progress,'clock skew retry cannot duplicate rewards');
+
   const uncreditedRoom='uncredited',uncredited=connect(uncreditedRoom);
   await until(()=>!!uncredited.last('welcome')&&!!uncredited.last('wallet'),'uncredited match guest connected');
   const uncreditedId=uncredited.last('welcome')!.id as string,uncreditedDriver=(await rpc<{driver:string}>('player',{room:uncreditedRoom,player:uncreditedId})).driver;

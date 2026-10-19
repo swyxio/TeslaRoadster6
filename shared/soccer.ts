@@ -182,7 +182,7 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],players:readon
       recordTouch(state,hit.car);
       const impulse=-(1+RESTITUTION)*relative;ball.vx+=impulse*hit.nx;ball.vy+=impulse*hit.ny;ball.vz+=impulse*hit.nz;limitSpeed(ball);
       const driver=hit.car.driver?players.find(player=>player.id===hit.car.driver):undefined;
-      if(driver?.achievements.unlocked.includes('dome-debut')&&pulseShotRemaining(state,driver.id,time)===0){
+      if(driver?.achievements.unlocked.includes('dome-debut')&&(!canCollect||canCollect(driver.id))&&pulseShotRemaining(state,driver.id,time)===0){
         ball.vx+=DOME_PULSE_IMPULSE*hit.nx;ball.vy+=DOME_PULSE_IMPULSE*hit.ny;ball.vz+=DOME_PULSE_IMPULSE*hit.nz;limitSpeed(ball);
         const active=state.pulseShots.find(shot=>shot.playerId===driver.id);
         if(active)active.readyAt=time+DOME_PULSE_COOLDOWN;

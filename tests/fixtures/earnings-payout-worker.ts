@@ -73,6 +73,8 @@ export class RoomEconomy extends ProductionRoomEconomy {
   private heldWin=false;
   private holdStage=false;
   private heldStage=false;
+  private skewStage=false;
+  private skewObserved=false;
   override commitEarningsWin(eventId:string){
     const result=super.commitEarningsWin(eventId);
     // DO RPC permits a Promise return; the cast adapts the synchronous base
@@ -84,8 +86,19 @@ export class RoomEconomy extends ProductionRoomEconomy {
   fixtureWinFault(){return {held:this.heldWin};}
   fixtureHoldStage(){this.holdStage=true;}
   fixtureStageFault(){return {held:this.heldStage};}
+  fixtureSkewStage(){this.skewStage=true;}
+  fixtureSkewObserved(){return {observed:this.skewObserved};}
   override async stageAchievement(stage:import('../../worker/room-economy').AchievementStage){
     if(this.holdStage&&stage.action.dome){this.heldStage=true;await new Promise<void>(()=>{});}
+    if(this.skewStage&&stage.action.dome){
+      this.skewStage=false;this.skewObserved=true;
+      const actualNow=Date.now;
+      try{
+        // Simulate the receiving object being behind only during validation.
+        Date.now=()=>stage.action.dome!.atMs-500;
+        return super.stageAchievement(stage);
+      }finally{Date.now=actualNow;}
+    }
     return super.stageAchievement(stage);
   }
   fixtureWins(){return this.ctx.storage.sql.exec('SELECT event_id,requested_at,won_at,ends_at FROM room_earnings_wins').toArray();}
@@ -187,6 +200,8 @@ export default {
         case 'win-fault':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureWinFault());
         case 'hold-stage':await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureHoldStage();return Response.json({ok:true});
         case 'stage-fault':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureStageFault());
+        case 'skew-stage':await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureSkewStage();return Response.json({ok:true});
+        case 'skew-observed':return Response.json(await env.ECONOMIES.get(env.ECONOMIES.idFromName(data.room??'earnings')).fixtureSkewObserved());
         case 'profile':return Response.json(await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureState());
         case 'cap-dome':await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureCapDome();return Response.json({ok:true});
         case 'lose-delivery':await env.DRIVERS.get(env.DRIVERS.idFromName(data.driver!)).fixtureLoseDelivery();return Response.json({ok:true});
