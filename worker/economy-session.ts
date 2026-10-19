@@ -14,7 +14,8 @@ import type { UpgradeId } from '../shared/upgrades';
 import type { PaintId, StyleChoice } from '../shared/vehicle-style';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
 import { DriverProfile, progressFrom, type DriverAction, type DriverOutcome, type DriverProgress, type EconomyIntent, type SavedVehicles } from './driver-profile';
-import { RoomEconomy, type CabIncomeStage } from './room-economy';
+import { RoomEconomy, type AchievementStage, type CabIncomeStage } from './room-economy';
+import type { DomeParticipant } from '../shared/soccer';
 import type { EarningsEvents, SettledDeliveryEarning } from '../shared/earnings-events';
 import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../shared/police';
 import type { MarketPaint } from '../shared/market-protocol';
@@ -121,6 +122,8 @@ export class EconomySession {
   get unstarted(){return this.submitted===0&&this.draft.delivery.earned===0&&this.draft.delivery.lifetimeIncome===0&&this.draft.achievements.unlocked.length===0;}
   get walletId(){return this.driverId;}
   get currentFence(){return this.fence;}
+  get canProduceWalletWork(){return !this.closed&&!this.failed&&!this.marketPaused;}
+  get canFinishWalletWork(){return !this.failed||this.processing||this.queue.length>0||this.staging.size>0;}
   get cabFleet(){return this.committed.cybercabs??emptyCybercabFleet();}
   close(){this.closed=true;}
   finish(){
@@ -432,6 +435,21 @@ export class EconomySession {
     const onApplied=item.onApplied;
     item.onApplied=outcome=>{onApplied?.(outcome);if(!repeatable&&outcome.ok)this.pendingAchievements.delete(key);};
   }
+  /** Reserve wallet order synchronously; the room journals this descriptor before yielding. */
+  domeMatch(participant:DomeParticipant,won:boolean,matchId:string,atMs:number):AchievementStage{
+    const evidence:AchievementEvidence={kind:'dome',touches:structuredClone(participant.touches),goals:structuredClone(participant.goals),won};
+    const action:AchievementStage['action']={kind:'achievement',evidence,dome:{matchId,atMs}};
+    if(!this.canProduceWalletWork){
+      // The room still records physical evidence after a wallet has failed or
+      // disconnected. Recovery stages it before that fence can be replaced.
+      return {eventId:crypto.randomUUID(),driverId:this.driverId,fence:this.fence,roomId:this.roomId,
+        walletOrder:this.nextSequence++,clock:this.deliveryClock,action};
+    }
+    this.uncertainDeliveries++;
+    const item=this.enqueue(action);
+    return {eventId:item.intent.eventId,driverId:item.intent.driverId,fence:item.intent.fence,roomId:item.intent.roomId,
+      walletOrder:item.intent.sequence,clock:item.intent.clock!,action:item.intent.action as AchievementStage['action']};
+  }
   private enqueue(action:DriverAction,pickup?:{id:string;generation:number},onApplied?:(outcome:DriverOutcome)=>void,view?:Draft){
     const ordinal=++this.submitted;
     const intent:EconomyIntent={eventId:crypto.randomUUID(),driverId:this.driverId,fence:this.fence,roomId:this.roomId,revision:this.nextRevision++,sequence:this.nextSequence++,clock:this.replayClock??this.deliveryClock,action,...(pickup?{pickup}:{})};
@@ -610,7 +628,7 @@ export class EconomySession {
           const level=this.draft.delivery.level;applyTicketEvidence(this.draft.delivery,action.evidence);
           if(this.draft.delivery.level<level)rerouteInaccessibleOrder(this.draft.delivery,action.evidence,ticketRoofAccess(action.evidence));
         }else if(action.kind==='delivery')valid=this.projectDelivery(action);
-        else if(action.kind==='achievement')this.projectAchievement(action.evidence);
+        else if(action.kind==='achievement'){if(!action.dome)this.projectAchievement(action.evidence);}
         else this.projectSupply(action.type);
         if(!valid){this.failed=true;this.closed=true;try{this.socket.close(1011,'Economy interrupted. Please rejoin.');}catch{}return;}
         item.intent.revision=this.nextRevision++;item.intent.sequence=this.nextSequence++;
@@ -711,7 +729,7 @@ export class EconomySession {
             }
             if(discarded.intent.action.kind==='achievement'&&!this.failed){
               advanceClock(discarded.intent.clock);
-              this.projectAchievement(discarded.intent.action.evidence);
+              if(!discarded.intent.action.dome)this.projectAchievement(discarded.intent.action.evidence);
               discarded.intent.revision=this.nextRevision++;discarded.intent.sequence=this.nextSequence++;
               discarded.view=structuredClone(this.draft);this.queue.push(discarded);continue;
             }
@@ -731,12 +749,14 @@ export class EconomySession {
           // committed order and its still-valid elapsed time.
           if(this.closed&&!this.failed&&this.timersChanged())this.enqueue({kind:'progress',progress:this.progress()});
         }else{
-          const historical=item.intent.action.kind==='delivery'&&item.intent.action.multiplier===null;
+          const historicalDelivery=item.intent.action.kind==='delivery'&&item.intent.action.multiplier===null;
+          const historicalDome=item.intent.action.kind==='achievement'&&!!item.intent.action.dome;
+          const historical=historicalDelivery||historicalDome;
           if((!!item.view.delivery.order.search&&!outcome.assignment)||
             (item.intent.action.kind==='cab-income'&&!this.rebaseCabIncome(item,outcome.progress))||
             (item.intent.action.kind==='ticket'&&!this.rebaseTicket(item,outcome.progress))||
             (item.intent.action.kind==='delivery'&&!historical&&!this.rebaseDelivery(item,outcome.progress))||
-            (item.intent.action.kind==='achievement'&&!this.rebaseAchievement(item,outcome.progress))||
+            (item.intent.action.kind==='achievement'&&!historicalDome&&!this.rebaseAchievement(item,outcome.progress))||
             (item.intent.action.kind==='supply'&&!this.rebaseSupply(item,outcome.progress))){
             // The committed receipt remains in the journal for fenced recovery.
             this.failed=true;this.closed=true;try{this.socket.close(1011,'Economy interrupted. Please rejoin.');}catch{}
@@ -750,10 +770,10 @@ export class EconomySession {
             const rewardId=this.player.delivery.lastReward?.id??0;
             this.install(outcome.progress);
             this.restoreCommittedOta();
-            if(historical&&outcome.delivery?.lastReward){
-              const reward=outcome.delivery.lastReward;
+            if(historical&&(outcome.delivery?.lastReward||outcome.achievement?.lastReward)){
+              const reward=(outcome.delivery?.lastReward??outcome.achievement!.lastReward)!;
               this.player.delivery.lastReward={...reward,id:(this.player.delivery.lastReward?.id??0)+1};
-              this.player.delivery.lastPayout=outcome.delivery.lastPayout;
+              if(outcome.delivery)this.player.delivery.lastPayout=outcome.delivery.lastPayout;
             }else {
               this.player.delivery.lastReward=item.view.delivery.lastReward;
               this.player.delivery.lastPayout=item.view.delivery.lastPayout;
@@ -761,7 +781,8 @@ export class EconomySession {
             this.player.delivery.lastTicket=item.view.delivery.lastTicket;
             this.player.delivery.lastReroute=outcome.assignment?
               {id:(this.player.delivery.lastReroute?.id??0)+1,...outcome.assignment}:item.view.delivery.lastReroute;
-            this.player.achievements.lastUnlock=item.view.achievements.lastUnlock;
+            if(historicalDome&&outcome.awards.length)this.player.achievements.lastUnlock={id:(this.player.achievements.lastUnlock?.id??0)+1,achievement:outcome.awards.at(-1)!};
+            else this.player.achievements.lastUnlock=item.view.achievements.lastUnlock;
             Object.assign(this.player.cockpit,item.view.cockpit);
             this.wallet();
             const reward=this.player.delivery.lastReward;

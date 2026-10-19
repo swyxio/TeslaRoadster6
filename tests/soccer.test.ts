@@ -8,7 +8,7 @@ import { dimensions } from '../shared/physics';
 import { initialSoccer, stepSoccer } from '../shared/soccer';
 import { createRocketDome } from '../src/rocket-dome';
 
-const advance=(state:ReturnType<typeof initialSoccer>,time:number)=>stepSoccer(state,[],.05,time);
+const advance=(state:ReturnType<typeof initialSoccer>,time:number)=>stepSoccer(state,[],.05,time,[]);
 
 test('goal frame colors match the score awarded at each end',()=>{
   const {group}=createRocketDome(),matrix=new THREE.Matrix4();
@@ -92,7 +92,7 @@ test('a fast car sweeps through and strikes the ball, including in midair',()=>{
     const state=initialSoccer();state.ball.y=y+DOME.ballRadius;
     const car=makeEntity('striker','roadster',DOME.x+5,DOME.z);
     Object.assign(car,{y,vx:400,vy:0,vz:0,yaw:-Math.PI/2,inDome:true});
-    stepSoccer(state,[car],.05,.05);
+    stepSoccer(state,[car],.05,.05,[]);
     assert.ok(state.ball.vx>20,`car at height ${y} hit the ball`);
     assert.ok(state.ball.x>DOME.x);
     assert.ok(Math.hypot(state.ball.vx,state.ball.vy,state.ball.vz)<=120+1e-6);
@@ -106,7 +106,7 @@ test('a car on the dome wall or ceiling strikes on its inward-facing body',()=>{
     const gap=dimensions('roadster').height+DOME.ballRadius-.25;
     Object.assign(car,{y:surface.y,vx:400,vy:0,vz:0,yaw:-Math.PI/2,inDome:true,supportId:'dome',domeS:arc});
     Object.assign(state.ball,{y:surface.y+surface.normalY*gap,z:surface.z+surface.normalZ*gap});
-    stepSoccer(state,[car],.05,.05);
+    stepSoccer(state,[car],.05,.05,[]);
     assert.ok(state.ball.vx>20,`surface contact at arc ${arc}`);
     assert.ok(state.ball.x>DOME.x);
   }
@@ -117,7 +117,7 @@ test('simultaneous car contacts remain bounded and deterministic',()=>{
   const right=makeEntity('right','roadster',DOME.x-5,DOME.z);
   Object.assign(left,{vx:400,yaw:-Math.PI/2,inDome:true});Object.assign(right,{vx:-400,yaw:Math.PI/2,inDome:true});
   const first=initialSoccer(),second=initialSoccer();
-  stepSoccer(first,[left,right],.05,.05);stepSoccer(second,[left,right],.05,.05);
+  stepSoccer(first,[left,right],.05,.05,[]);stepSoccer(second,[left,right],.05,.05,[]);
   assert.deepEqual(first,second);
   assert.ok(Object.values(first.ball).every(Number.isFinite));
   assert.ok(Math.hypot(first.ball.vx,first.ball.vy,first.ball.vz)<=120+1e-6);
@@ -127,6 +127,6 @@ test('simultaneous car contacts remain bounded and deterministic',()=>{
 test('cars outside the arena cannot strike its separate ball',()=>{
   const state=initialSoccer(),car=makeEntity('outside','roadster',DOME.x+5,DOME.z);
   Object.assign(car,{vx:400,yaw:-Math.PI/2,inDome:false});
-  stepSoccer(state,[car],.05,.05);
+  stepSoccer(state,[car],.05,.05,[]);
   assert.equal(state.ball.vx,0);assert.equal(state.ball.x,DOME.x);
 });
