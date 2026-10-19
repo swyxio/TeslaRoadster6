@@ -1,0 +1,187 @@
+name: Isolated 64-player room diagnostic
+
+# The target is deliberately unconfigured. A push never starts a load test.
+# Every run requires a separately coordinated manual dispatch and preview review.
+on:
+  workflow_dispatch:
+    inputs:
+      coordination:
+        description: 'Coordinated timing window and coordinator (12-160 characters)'
+        required: true
+        type: string
+      window_start:
+        description: 'Coordinated window start in UTC (YYYY-MM-DDTHH:MM:SSZ)'
+        required: true
+        type: string
+      window_end:
+        description: 'Coordinated window end in UTC (YYYY-MM-DDTHH:MM:SSZ)'
+        required: true
+        type: string
+      preview_reviewed:
+        description: 'I verified this is a Worker Preview, not a Version URL, and reviewed its deployed bindings'
+        type: boolean
+        required: true
+        default: false
+      confirmed:
+        description: 'I confirm this separately coordinated 64-client preview load'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: room-64-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      base: ${{ steps.target.outputs.base }}
+      preview: ${{ steps.target.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostic
+          persist-credentials: false
+      - id: target
+        name: Validate the explicitly approved immutable preview
+        run: |
+          test "$(git -C diagnostic rev-parse HEAD)" = "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import {readFileSync,appendFileSync,mkdirSync,writeFileSync} from 'node:fs';
+          import {verifyConfig,verifyInvocation} from './diagnostic/scripts/room-64-target.mjs';
+          const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'));
+          verifyInvocation(process.env, event);
+          const target=JSON.parse(readFileSync('diagnostic/scripts/room-64-target.json','utf8'));
+          verifyConfig(target);
+          mkdirSync(`${process.env.RUNNER_TEMP}/room-64-identity`,{recursive:true});
+          writeFileSync(`${process.env.RUNNER_TEMP}/room-64-identity/coordination.json`,JSON.stringify({
+            diagnosticSha:process.env.GITHUB_SHA,coordination:event.inputs.coordination,
+            windowStart:event.inputs.window_start,windowEnd:event.inputs.window_end,
+            previewReviewed:event.inputs.preview_reviewed,confirmed:event.inputs.confirmed,
+          },null,2));
+          appendFileSync(process.env.GITHUB_OUTPUT,`sha=${target.sha}\nbase=${target.baseSha}\npreview=${target.preview}\n`);
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify source and build matching static assets
+        working-directory: candidate
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor refs/remotes/origin/main HEAD
+          pnpm install --frozen-lockfile
+          pnpm exec vite build --manifest
+      - name: Verify PR, preview isolation and served assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_PREVIEW: ${{ steps.target.outputs.preview }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/room-64-identity"
+          node diagnostic/scripts/room-64-target.mjs diagnostic/scripts/room-64-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/room-64-identity/target.json"
+          node --test diagnostic/scripts/room-64-target.test.mjs
+          cd candidate
+          node --input-type=module -e 'import {measureGraph} from "./scripts/performance-baseline-assets.mjs"; import {writeFileSync} from "node:fs"; writeFileSync(process.env.RUNNER_TEMP+"/room-64-identity/assets.json",JSON.stringify({initialStaticJavaScript:measureGraph("dist","dist")},null,2));'
+          node scripts/performance-transfer.mjs "$TARGET_PREVIEW" "$RUNNER_TEMP/room-64-identity/assets.json" 1 > "$RUNNER_TEMP/room-64-identity/served-assets.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: room-64-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/room-64-identity/
+          if-no-files-found: warn
+          retention-days: 14
+
+  sample:
+    needs: identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostic
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Recheck exact target and prepare harness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ needs.identity.outputs.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/capacity-preview-diagnostic"
+          test "$(git -C diagnostic rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
+          git -C candidate merge-base --is-ancestor refs/remotes/origin/main HEAD
+          node diagnostic/scripts/room-64-target.mjs diagnostic/scripts/room-64-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/capacity-preview-diagnostic/identity-before.json"
+          cp diagnostic/scripts/room-64-diagnostic.ts diagnostic/scripts/room-64-observations.ts diagnostic/scripts/room-64-observations.test.ts diagnostic/scripts/room-64-corridors.ts diagnostic/scripts/room-64-target.mjs diagnostic/scripts/room-64-target.json candidate/scripts/
+          cd candidate
+          pnpm install --frozen-lockfile
+          pnpm exec tsx --test scripts/room-64-observations.test.ts
+      - name: Run one bounded sandbox sample
+        working-directory: candidate
+        env:
+          TARGET_SOURCE_SHA: ${{ needs.identity.outputs.sha }}
+          TARGET_PREVIEW_URL: ${{ needs.identity.outputs.preview }}
+          CAPACITY_GROUP: ${{ matrix.group }}
+        run: pnpm exec tsx scripts/room-64-diagnostic.ts
+      - name: Recheck exact target after sampling
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if test -f candidate/wrangler.jsonc; then
+            node diagnostic/scripts/room-64-target.mjs diagnostic/scripts/room-64-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/capacity-preview-diagnostic/identity-after.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: room-64-${{ github.run_id }}-${{ github.run_attempt }}-group-${{ matrix.group }}
+          path: ${{ runner.temp }}/capacity-preview-diagnostic/
+          if-no-files-found: warn
+          retention-days: 14
+
+  aggregate:
+    needs: sample
+    if: always() && needs.sample.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: room-64-${{ github.run_id }}-${{ github.run_attempt }}-group-*
+          path: reports
+      - name: Require one complete, coordinated room across all four runners
+        run: node scripts/room-64-aggregate.mjs reports
