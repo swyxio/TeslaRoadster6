@@ -43,6 +43,7 @@ test('tab integrity identifies packet ordering separately from bytes and dimensi
   assert.deepEqual(tabIntegrityReasons({ ...smallVideo, width: 230, height: 230 }, { ...smallTrace, width: 230, height: 230 }, { width: 200, height: 200, deviceScaleFactor: 1.15 }), []);
   assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 16, height: 16 }).join(' '), /explicit device scale factor/);
   assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 15, height: 15, deviceScaleFactor: 1.5 }).join(' '), /integer pixel dimensions/);
+  assert.match(tabIntegrityReasons(smallVideo, smallTrace, { width: 1, height: 1, deviceScaleFactor: 2251799813685248.5 }).join(' '), /integer pixel dimensions/);
 });
 
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {

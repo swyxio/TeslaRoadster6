@@ -193,7 +193,8 @@ export function tabIntegrityReasons(video, trace, viewport) {
   // Permit floating-point representation noise, not a fractional pixel policy.
   const integerPixels = value => {
     const nearest = Math.round(value);
-    return Number.isSafeInteger(nearest) && nearest > 0 && Math.abs(value - nearest) <= 2 * Number.EPSILON * Math.max(1, Math.abs(value)) ? nearest : null;
+    const tolerance = Math.min(1e-7, 2 * Number.EPSILON * Math.max(1, Math.abs(value)));
+    return Number.isSafeInteger(nearest) && nearest > 0 && Math.abs(value - nearest) <= tolerance ? nearest : null;
   };
   const width = integerPixels(viewport?.width * viewport?.deviceScaleFactor), height = integerPixels(viewport?.height * viewport?.deviceScaleFactor);
   if (!Number.isSafeInteger(viewport?.width) || viewport.width < 1 || !Number.isSafeInteger(viewport?.height) || viewport.height < 1 ||
