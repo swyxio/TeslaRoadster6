@@ -4,7 +4,7 @@ import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type Entity, type Wo
 import { isSurface, nearbyBuildings, terrainHeight } from '../shared/map';
 import { body, contact, dimensions } from '../shared/physics';
 import { buildingBlocksPose } from '../shared/landmark-collision';
-import { HIGHWAY_SPEED_TRIGGER_KPH, newPolice, onHighway, policeFlight, policeInput, updatePolice } from '../shared/police';
+import { HIGHWAY_SPEED_TRIGGER_KPH, newPolice, onHighway, policeFlight, policeInput, updatePolice, type TicketEvidence } from '../shared/police';
 import { HIGHWAY_ROUTE_IDS, ROUTES, trafficInput } from '../shared/traffic';
 
 const distance=(a:{x:number;z:number},b:{x:number;z:number})=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -64,6 +64,74 @@ test('highway speeding requires an officer nearby, a grounded road car, and no r
   world.races.rounds.push({courseId:'short',phase:'active',hostId:player.id,openedAt:0,startedAt:0,endsAt:100,starterCount:1,entrants:[{playerId:player.id,entityId:car.id,status:'entered',nextGate:0,finishedAt:null,elapsed:null,rank:null,feedback:null,feedbackUntil:0,previous:{x:car.x,y:car.y,z:car.z,time:0}}]});
   updatePolice(world,.05);assert.equal(cop.police!.targetId,null,'active racers retain their protection');
   world.races.rounds=[];updatePolice(world,.05);assert.equal(cop.police!.targetId,player.id);assert.equal(player.delivery.tickets,0,'seeing a violation does not issue a ticket');
+});
+
+test('a speeding-only stop excludes flight before the pursuit from the staged evidence and fine',()=>{
+  const {world,player,car}=fixture(),ground=terrainHeight(car.x,car.z)??0;
+  Object.assign(car,{y:ground+50,supportId:null,speed:0});world.time=4;
+  updatePolice(world,4);
+  assert.ok(player.delivery.flight.seconds>=4&&player.delivery.flight.peakHeight>=40);
+  Object.assign(car,{y:ground,supportId:'ground',speed:36});const cop=patrol(world,190);
+  world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police!.cause,'speeding');
+  Object.assign(cop,along(245));car.speed=0;
+  const staged:TicketEvidence[]=[];
+  world.time+=.05;updatePolice(world,.05,(_player,apply,evidence)=>{staged.push(evidence);apply();});
+  assert.equal(player.delivery.tickets,1);assert.equal(staged.length,1);assert.equal(staged[0].cause,'speeding');
+  assert.equal(staged[0].seconds,0);assert.equal(staged[0].peakHeight,0);
+  const ticket=player.delivery.lastTicket!;
+  assert.equal(ticket.flightSeconds,0);assert.equal(ticket.peakHeight,0);
+  assert.equal(ticket.durationFine,0);assert.equal(ticket.heightFine,0);
+  assert.equal(ticket.speedKph,130);assert.equal(ticket.speedFine,20);assert.equal(ticket.amount,80);
+});
+
+test('flight during a speeding pursuit contributes to the same ticket',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190),ground=terrainHeight(car.x,car.z)??0;
+  player.delivery.flight={seconds:4,peakHeight:50,lastAirborneAt:world.time};
+  updatePolice(world,.05);assert.equal(cop.police!.cause,'speeding');
+  Object.assign(car,{y:ground+20,supportId:null,speed:0});
+  for(let i=0;i<45;i++){world.time+=.05;updatePolice(world,.05);}
+  assert.equal(cop.police!.targetId,player.id);
+  Object.assign(car,{y:ground,supportId:'ground'});Object.assign(cop,along(245));
+  world.time+=.05;updatePolice(world,.05);
+  const ticket=player.delivery.lastTicket!;
+  assert.equal(ticket.cause,'speeding');assert.equal(ticket.flightSeconds,2);
+  assert.equal(ticket.peakHeight,20);assert.equal(ticket.durationFine,8);assert.equal(ticket.heightFine,20);
+  assert.equal(ticket.speedKph,130);assert.equal(ticket.speedFine,20);assert.equal(ticket.amount,108);
+});
+
+test('a flight-first pursuit still charges its flight evidence after speeding on the highway',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,190),ground=terrainHeight(car.x,car.z)??0;
+  Object.assign(car,{y:ground+20,supportId:null,speed:0});
+  for(let i=0;i<45;i++){world.time+=.05;updatePolice(world,.05);}
+  assert.equal(cop.police!.cause,'flight');
+  Object.assign(car,{y:ground,supportId:'ground',speed:36});world.time+=.05;updatePolice(world,.05);
+  assert.equal(cop.police!.cause,'flight');
+  Object.assign(cop,along(245));car.speed=0;world.time+=.05;updatePolice(world,.05);
+  const ticket=player.delivery.lastTicket!;
+  assert.equal(ticket.cause,'flight');assert.equal(ticket.flightSeconds,2);assert.equal(ticket.peakHeight,20);
+  assert.equal(ticket.durationFine,8);assert.equal(ticket.heightFine,20);assert.equal(ticket.amount,88);
+});
+
+for(const cause of ['flight','speeding'] as const)test(`a second speeding patrol preserves evidence from an existing ${cause} pursuit`,()=>{
+  const {world,player,car}=fixture(),active=patrol(world,160),second=patrol(world,190);
+  active.police!.targetId=player.id;active.police!.cause=cause;active.police!.lastSeen=world.time;
+  player.delivery.flight={seconds:4,peakHeight:50,lastAirborneAt:world.time};
+  updatePolice(world,.05);
+  assert.equal(second.police!.cause,'speeding');assert.equal(player.delivery.flight.seconds,4);
+  Object.assign(second,along(245));car.speed=0;world.time+=.05;updatePolice(world,.05);
+  const ticket=player.delivery.lastTicket!;
+  assert.equal(ticket.cause,'speeding');assert.equal(ticket.durationFine,16);assert.equal(ticket.heightFine,50);
+  assert.equal(ticket.speedFine,20);assert.equal(ticket.amount,146);
+});
+
+test('an expired pursuit cannot carry old flight evidence into a new speeding chase',()=>{
+  const {world,player}=fixture(),fresh=patrol(world,190),expired=patrol(world,-250);
+  world.time=50;expired.police!.targetId=player.id;expired.police!.cause='flight';expired.police!.lastSeen=0;
+  player.delivery.flight={seconds:4,peakHeight:50,lastAirborneAt:49};
+  updatePolice(world,.05);
+  assert.equal(fresh.police!.cause,'speeding');assert.equal(expired.police!.targetId,null);
+  assert.equal(player.delivery.flight.seconds,0);assert.equal(player.delivery.flight.peakHeight,0);
 });
 
 test('hidden relocation preserves visible and pursuing officers',()=>{

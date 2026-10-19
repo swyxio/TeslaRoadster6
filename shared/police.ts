@@ -59,6 +59,10 @@ function lineClear(a:Point,b:Point){
 const edges=points.map((a,i)=>points.map((b,j)=>({b,j})).filter(({b,j})=>j!==i&&(a.x===b.x||a.z===b.z)&&!points.some((p,k)=>k!==i&&k!==j&&((p.x===a.x&&p.x===b.x&&p.z>Math.min(a.z,b.z)&&p.z<Math.max(a.z,b.z))||(p.z===a.z&&p.z===b.z&&p.x>Math.min(a.x,b.x)&&p.x<Math.max(a.x,b.x))))&&lineClear(a,b)).map(({j})=>j));
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
 const separation=(a:Entity,b:Entity)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+function pursuitActive(state:PoliceState,d:number,now:number){
+  const speeding=state.cause==='speeding';
+  return d<(speeding?300:PURSUIT_RANGE)||now-state.lastSeen<=(speeding?20:ESCAPE_SECONDS);
+}
 function nearest(p:Point){let best=0;for(let i=1;i<points.length;i++)if(distance(p,points[i])<distance(p,points[best]))best=i;return best;}
 function route(from:Point,to:Point):Point[]{
   if(lineClear(from,to))return [{x:to.x,z:to.z}];
@@ -264,7 +268,17 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
         const distance=separation(cop,candidate.entity);
         if(distance<nearest){nearest=distance;chosen=candidate;player=candidate.player;target=candidate.entity;}
       }
-      if(player&&target&&chosen){state.targetId=player.id;state.cause=chosen.cause;state.peakSpeedKph=chosen.cause==='speeding'?chosen.speedKph:undefined;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;}
+      if(player&&target&&chosen){
+        const suspect=chosen;
+        // A new speeding chase starts its own flight evidence. Keep evidence
+        // from any live pursuit, including flight later in a speeding chase;
+        // an expired officer waiting for its update does not keep it alive.
+        if(suspect.cause==='speeding'&&!world.entities.some(other=>other.police?.targetId===suspect.player.id&&
+          pursuitActive(other.police,separation(other,suspect.entity),world.time))){
+          player.delivery.flight.seconds=0;player.delivery.flight.peakHeight=0;
+        }
+        state.targetId=player.id;state.cause=chosen.cause;state.peakSpeedKph=chosen.cause==='speeding'?chosen.speedKph:undefined;state.lastSeen=world.time;state.nextPlan=0;cop.autopilot=true;
+      }
     }
     if(!player||!target){
       if(state.path.length&&cop.supportId==='ground'&&engageAutopilot(cop))state.path=[];
@@ -274,9 +288,8 @@ export function updatePolice(world:World,dt:number,onTicket?:(player:Player,appl
     // The closing distance on a highway is much larger than in a city. Keep
     // the same time and distance limits for the original airborne pursuit.
     const pursuitRange=state.cause==='speeding'?300:PURSUIT_RANGE;
-    const escapeSeconds=state.cause==='speeding'?20:ESCAPE_SECONDS;
+    if(!pursuitActive(state,d,world.time)){resumePatrol(cop);continue;}
     if(d<pursuitRange)state.lastSeen=world.time;
-    if(world.time-state.lastSeen>escapeSeconds){resumePatrol(cop);continue;}
     if(state.cause==='speeding'&&target.supportId==='ground'&&onHighway(target.x,target.z))state.peakSpeedKph=Math.max(state.peakSpeedKph??0,Math.abs(target.speed)*3.6);
     if(cop.supportId!==null&&target.supportId===cop.supportId&&d<12){
       target.speed*=Math.exp(-2.2*dt);

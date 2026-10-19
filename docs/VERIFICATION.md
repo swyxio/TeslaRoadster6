@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Speeding ticket evidence · isolated candidate · 2026-10-19 Pacific
+
+- On base `e4b2412` plus the ticket fix, 14 focused police and flight tests passed. The prior-flight speeding-only and expired-pursuit cases failed before the fix; mixed pursuits, multiple officers, existing flight fines and the sight ceiling passed after it. The staged evidence and final fine were checked in shared simulation. No build, room integration, browser or performance check was run while the separate demo was active.
+
 ## Bay highway life · local candidate · 2026-10-18 Pacific
 
 - Same-stage local [portrait captures](benchmarks/2026-10-18-highway-final-main/visual-pair/) on actual main `1b7b18bf` and candidate `f40a86ed` both show the Level 4 world gate label overlapping the header at the out-of-region Level 0 spawn; that overlap predates this change. The [64-second staged drives](benchmarks/2026-10-18-highway-final-main/visual-pair/) traveled approximately 1,365 / 1,310 m without recorded page or console errors. In 16 video frames sampled every four seconds, production showed no other car; candidate stills showed a red and a light-colored approaching car. Much of the candidate drive still looked sparse. Both video segments were marked incomplete because callback timestamps were non-increasing and each had a callback gap of at least 100 ms; the sampled stills do not establish continuous playback or precise timing. The referenced callback traces are retained as gzip files beside each video. Different driver IDs and traffic mean these are visual observations, not a controlled density comparison; no physical phone was tested. The first baseline portrait attempt timed out before a room request because the local fixture used an uppercase room slug; the retained manifest has no snapshots, and the lowercase fresh-room retry completed.
