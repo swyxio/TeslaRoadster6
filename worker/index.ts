@@ -37,6 +37,17 @@ type PendingRoomWin = {event_id:string;requested_at:number;room_id:string};
 type RoomEarningsSnapshot = {observedAt:number;events:EarningsEvents;lease:GlobalEventLease};
 const ROOM_EARNINGS_STALE_MS=5_000;
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
+// Public overflow rooms cannot collide with existing player-chosen slugs.
+function roomIdentity(path:string):string|null {
+  const named=roomSlug(path);
+  if(named)return named;
+  const publicRoom=/^\/api\/public-room\/([1-9]|1[0-6])$/.exec(path);
+  return publicRoom?`public:${publicRoom[1]}`:null;
+}
+function validRoomIdentity(id:string):boolean {
+  return roomSlug(`/api/room/${id}`)===id ||
+    (id.startsWith('public:') && roomIdentity(`/api/public-room/${id.slice(7)}`)===id);
+}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -58,16 +69,16 @@ export default {
         return reply('Starship service unavailable',503);
       }
     }
-    const slug = roomSlug(url.pathname);
+    const roomId = roomIdentity(url.pathname);
     const chat = url.pathname === '/api/chat';
-    if (!slug && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
+    if (!roomId && !chat) return reply('Unknown API route. Room names use 1–32 lowercase letters, digits, or hyphens.', 404);
     if (request.method !== 'GET') return reply('GET required', 405);
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return reply('WebSocket upgrade required', 426);
     const origin = request.headers.get('Origin');
     // Non-browser clients may omit Origin. This is a public sandbox, not authentication.
     if (origin && origin !== url.origin) return reply('Cross-origin connections are not allowed', 403);
     if (chat) return env.CHAT.get(env.CHAT.idFromName('global')).fetch(request);
-    return env.ROOMS.get(env.ROOMS.idFromName(slug!)).fetch(request);
+    return env.ROOMS.get(env.ROOMS.idFromName(roomId!)).fetch(request);
   },
 } satisfies ExportedHandler<Env>;
 
@@ -111,7 +122,7 @@ export class GameRoom extends DurableObject<Env> {
    * than consuming a history page which could precede a journalled win.
    */
   async cabEarningsHistory(roomId:string,fromMs:number,toMs:number):Promise<EarningsWindow[]>{
-    if(roomSlug(`/api/room/${roomId}`)!==roomId || !this.ctx.id.equals(this.env.ROOMS.idFromName(roomId)))
+    if(!validRoomIdentity(roomId) || !this.ctx.id.equals(this.env.ROOMS.idFromName(roomId)))
       throw new Error('Room history identity mismatch');
     if(!Number.isSafeInteger(fromMs)||!Number.isSafeInteger(toMs)||fromMs<0||toMs<fromMs||toMs>Date.now())
       throw new RangeError('Room history must be a past interval');
@@ -295,17 +306,18 @@ export class GameRoom extends DurableObject<Env> {
     const pair=new WebSocketPair();const [client,server]=Object.values(pair);
     server.accept();
     const close=(code:number,reason:string)=>{server.close(code,reason);return new Response(null,{status:101,webSocket:client});};
-    if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
-    const slug=roomSlug(new URL(request.url).pathname);
-    if(!slug)return close(1008,'Invalid room');
+    const roomId=roomIdentity(new URL(request.url).pathname);
+    const full=()=>{console.info('room_full',{kind:roomId==='bay'?'bay':roomId?.startsWith('public:')?'public-overflow':'named',overflow:roomId?.startsWith('public:')?Number(roomId.slice(7)):undefined});return close(ROOM_FULL_CODE,'Room full');};
+    if(this.sessions.size>=capacity)return full();
+    if(!roomId)return close(1008,'Invalid room');
     let property:Awaited<ReturnType<GameRoom['property']>>|null=null;
-    const assetId=propertyRoomAssetId(slug);
+    const assetId=propertyRoomAssetId(roomId);
     if(assetId){
       try{property=await this.property(assetId);}catch{return close(1011,'Property service unavailable. Retry or return to Bay.');}
       if(property.status==='unavailable')return close(1011,'Property service unavailable. Retry or return to Bay.');
       if(property.status!=='available'||!property.property.completedHome)return close(1008,'Property not found. Return to Bay.');
     }
-    this.roomId=slug;this.playtest=playtestMode(slug);
+    this.roomId=roomId;this.playtest=playtestMode(roomId);
     const world=this.world;
     if(property?.status==='available'&&property.property.revision>=this.propertyRevision){
       this.propertyRevision=property.property.revision;world.property={assetId:property.property.assetId,ownerName:property.property.ownerName};
@@ -316,17 +328,17 @@ export class GameRoom extends DurableObject<Env> {
     let acquired:Awaited<ReturnType<DriverProfile['acquire']>>|null=null;
     try{
       if(!this.playtest)[acquired]=await Promise.all([
-        this.env.DRIVERS.get(this.env.DRIVERS.idFromName(walletId)).acquire(walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),slug),
+        this.env.DRIVERS.get(this.env.DRIVERS.idFromName(walletId)).acquire(walletId,fence,progressFrom(initial,[],{},[],0,initial.lifetimeIncome),roomId),
         this.ready,
       ]);
     }catch{this.ready=null;return close(1011,'Wallet unavailable. Rejoin to retry.');}
     if(this.world!==world){this.ready=null;try{await(this.ready=this.initializeRoom(this.world));}catch{this.ready=null;return close(1011,'Room unavailable');}}
-    if(this.sessions.size>=capacity)return close(ROOM_FULL_CODE,'Room full');
+    if(this.sessions.size>=capacity)return full();
     const id=crypto.randomUUID(),now=Date.now();
     let player;
     try{player=addPlayer(this.world,id,chooseAvailableName('Driver',this.world.players.map(p=>p.name)),property?.status==='available'?PROPERTY_HOME_SPAWNS:undefined);}
     catch(error){if(!(error instanceof NoSpawnError))throw error;return close(ROOM_NO_SPAWN_CODE,'No safe starting space');}
-    const economy=acquired?new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,slug,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups,acquired.marketPaint):null;
+    const economy=acquired?new EconomySession(this.env,this.ledger(),this.world,player,server,walletId,fence,roomId,acquired.revision,acquired.sequence,acquired.progress,this.pickupGenerations,this.pendingPickups,acquired.marketPaint):null;
     if(this.playtest==='sandbox')prepareSandboxDriver(this.world,id);
     const control=new ScheduledInput({...NEUTRAL});
     const session:Session={id,lastMessage:now,windowStart:now,count:0,lastAction:0,control,poseRevision:0,economy,syncToken:0,identityTail:Promise.resolve(),attachPending:!!economy,guest:!economy,identitySequence:0,pendingBind:null,cabHighWater:0,cabRequests:new Map(),marketHold:null};
