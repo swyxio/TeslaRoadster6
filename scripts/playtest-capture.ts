@@ -1,3 +1,5 @@
+import { link, rename, stat, unlink, writeFile } from 'node:fs/promises';
+
 /** Metadata from Playwright's screencast callbacks, not display or video timing. */
 type Frame = { timestamp: number; viewportWidth: number; viewportHeight: number };
 type Sample = [presentedAtUnixMs: number | null, receivedAtRunMs: number, viewportWidth: number, viewportHeight: number];
@@ -53,6 +55,27 @@ export class CaptureSession {
     try { await close(); } catch (error) { errors.push(error); }
     if (errors.length) throw new AggregateError(errors, 'Could not finish and close the recording browser.');
   }
+}
+
+/** A delayed screenshot must never recreate a quarantined output directory. */
+export async function writeCaptureScreenshot(session: CaptureSession, screenshot: () => Promise<Uint8Array>, path: string): Promise<void> {
+  const bytes = await screenshot();
+  const partial = `${path}.partial`;
+  // Neither operation creates parent folders. A hard link publishes only fully
+  // written bytes and refuses to replace a screenshot that already exists.
+  await session.publish(async () => {
+    await writeFile(partial, bytes, { flag: 'wx' });
+    session.requirePublishable();
+    await link(partial, path);
+    await unlink(partial);
+  });
+}
+
+/** Publish a stopped screencast only from its private staging directory. */
+export async function publishScreencast(session: CaptureSession, staged: string, output: string): Promise<void> {
+  const file = await stat(staged);
+  if (!file.isFile() || !file.size) throw new Error('Screencast output is empty or unavailable.');
+  await session.publish(() => rename(staged, output));
 }
 
 /** Forced shutdown always attempts each cleanup step and reports uncertainty. */

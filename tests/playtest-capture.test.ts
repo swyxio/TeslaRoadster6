@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { abandonControlSession, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
+import { abandonControlSession, CaptureSession, finalizeTabCapture, publishScreencast, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline, writeCaptureScreenshot } from '../scripts/playtest-capture';
 
 const frame = (timestamp: number) => ({ timestamp, viewportWidth: 1280, viewportHeight: 720 });
 
@@ -193,6 +193,66 @@ test('successful quarantine moves an incomplete run outside its normal output pa
     assert.deepEqual(failed, []);
     await assert.rejects(access(output), { code: 'ENOENT' });
     assert.equal(await readFile(join(quarantine, 'segment-001.webm.partial'), 'utf8'), 'incomplete');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a delayed screenshot cannot recreate an abandoned run directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-screenshot-test-'));
+  const output = join(root, 'run'), quarantine = join(root, '.tesland-quarantine-test');
+  const session = new CaptureSession();
+  let release!: (bytes: Uint8Array) => void;
+  const pending = new Promise<Uint8Array>(resolve => { release = resolve; });
+  try {
+    await mkdir(output);
+    const rejected = assert.rejects(writeCaptureScreenshot(session, () => pending, join(output, 'shot.png')), /shutdown abandoned/);
+    const failed = await abandonControlSession(session, {
+      quarantine: () => rename(output, quarantine), closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    release(Buffer.from('image'));
+    await rejected;
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    await assert.rejects(access(join(quarantine, 'shot.png')), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('completed screenshots and nonempty screencasts are published once', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-publish-test-'));
+  const output = join(root, 'run'), stage = join(root, 'stage');
+  const session = new CaptureSession();
+  try {
+    await mkdir(output); await mkdir(stage);
+    const screenshot = join(output, 'shot.png');
+    await writeCaptureScreenshot(session, async () => Buffer.from('image'), screenshot);
+    assert.equal(await readFile(screenshot, 'utf8'), 'image');
+    await assert.rejects(writeCaptureScreenshot(session, async () => Buffer.from('replacement'), screenshot), { code: 'EEXIST' });
+    assert.equal(await readFile(screenshot, 'utf8'), 'image');
+    const staged = join(stage, 'segment.webm'), video = join(output, 'segment.webm');
+    await writeFile(staged, '');
+    await assert.rejects(publishScreencast(session, staged, video), /empty or unavailable/);
+    await writeFile(staged, 'video');
+    await publishScreencast(session, staged, video);
+    assert.equal(await readFile(video, 'utf8'), 'video');
+    await assert.rejects(access(staged), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a late screencast save stays in its private stage after abandonment', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tesland-screencast-test-'));
+  const output = join(root, 'run'), quarantine = join(root, '.tesland-quarantine-test'), stage = join(root, '.tesland-capture-stage-test');
+  const session = new CaptureSession();
+  try {
+    await mkdir(output); await mkdir(stage);
+    const failed = await abandonControlSession(session, {
+      quarantine: () => rename(output, quarantine), closeContext: async () => {}, closeBrowser: async () => {}, drain: async () => {},
+    });
+    assert.deepEqual(failed, []);
+    // Simulate Playwright's delayed mkdir/copy after its stop timed out.
+    await mkdir(stage, { recursive: true });
+    await writeFile(join(stage, 'segment.webm'), 'late video');
+    await assert.rejects(publishScreencast(session, join(stage, 'segment.webm'), join(output, 'segment.webm')), /shutdown abandoned/);
+    await assert.rejects(access(output), { code: 'ENOENT' });
+    assert.equal(await readFile(join(stage, 'segment.webm'), 'utf8'), 'late video');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

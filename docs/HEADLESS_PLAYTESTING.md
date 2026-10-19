@@ -376,8 +376,13 @@ and inspect `manifest.json`. A signal waits for accepted actions to finish. If
 they do not drain within a minute, the runner attempts to move the private run
 into a `.tesland-quarantine-*` directory, attempts to close the browser and exits without
 publishing a final manifest. If quarantine or browser close fails, its output
-and browser state remain uncertain; the CI uploads recordings only for two
-successfully completed recorded runs. `replay.json` saves successful commands and the
+and browser state remain uncertain. A failed screencast stop can also leave a
+private `.tesland-capture-stage-*` sibling or Playwright temporary files; a
+failed screenshot can leave a `.png.partial` file. Do
+not remove them until all writers are known to have stopped. A failed run may
+retain audio, so its files are not a completed recording. This repository is public, so CI uploads
+diagnostics but not video or screenshot files; retain media privately outside
+CI. `replay.json` saves successful commands and the
 elapsed time between them for reuse; this approximates command timing, not
 the exact moment an input reaches the game. A failed action marks it incomplete.
 include a `waitFor` command for any readiness needed by a fresh run. Replayed

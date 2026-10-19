@@ -2,13 +2,13 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type WebSocket as PlaywrightWebSocket } from 'playwright';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
-import { abandonControlSession, captureError as asError, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from './playtest-capture';
+import { abandonControlSession, captureError as asError, CaptureSession, finalizeTabCapture, publishScreencast, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline, writeCaptureScreenshot } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -83,6 +83,9 @@ let recording = false;
 let segment = 0;
 let pendingVideo = '';
 let pendingCapture: ScreencastCapture | undefined;
+let screencastStage: string | undefined;
+let pendingScreencast: string | undefined;
+let screencastStageUncertain = false;
 let pendingTab: TabChunkSink | undefined;
 let pendingAudio: { file: string; offsetMs: number; startCommandWindowMs: number } | undefined;
 const audioRecordings: { file: string; offsetMs: number; startCommandWindowMs: number }[] = [];
@@ -183,7 +186,7 @@ async function sample() {
 // another recording, even if closing the context itself times out.
 async function abandonBrowser() {
   captureSession.retire();
-  try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Tab recording browser close timed out.'); }
+  try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Recording browser close timed out.'); }
   catch (error) { (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; throw asError(error, 'Could not close the recording browser.'); }
 }
 async function stopRecording() {
@@ -233,7 +236,8 @@ async function stopRecording() {
       stopError = result.error;
       partialRemovalFailed = result.partialRemovalFailed;
     } else {
-      try { await captureSession.stopOrRetire(withDeadline(Promise.resolve().then(() => page!.screencast.stop()), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'), abandonBrowser); } catch (error) { stopError = asError(error, 'Could not finalize screencast.'); }
+      try { await captureSession.stopOrRetire(withDeadline(Promise.resolve().then(() => page!.screencast.stop()), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'), abandonBrowser); }
+      catch (error) { screencastStageUncertain = true; stopError = asError(error, 'Could not finalize screencast.'); }
     }
     recording = false; pendingVideo = '';
     if (values['video-source'] === 'tab') {
@@ -242,6 +246,12 @@ async function stopRecording() {
       const capture = pendingCapture!.finish(stopRequestedAtRunMs);
       pendingCapture = undefined;
       await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+      if (!stopError) {
+        try { await publishScreencast(captureSession, pendingScreencast!, join(out, video)); }
+        catch (error) { stopError = asError(error, 'Could not publish screencast.'); captureSession.retire(); }
+      }
+      if (stopError) screencastStageUncertain = true;
+      pendingScreencast = undefined;
       captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
     }
     if (stopError) throw stopError;
@@ -486,7 +496,7 @@ async function act(action: Action): Promise<unknown> {
       case 'screenshot': {
         const file = `${nameField(action)}.png`;
         if (screenshots.includes(file)) throw new Error('Screenshot name already used.');
-        await page!.screenshot({ path: join(out, file) }); screenshots.push(file); result = { file }; break;
+        await writeCaptureScreenshot(captureSession, () => page!.screenshot(), join(out, file)); screenshots.push(file); result = { file }; break;
       }
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');
@@ -518,8 +528,17 @@ async function act(action: Action): Promise<unknown> {
             } finally { try { await withDeadline(page!.evaluate(title => { document.title = title; }, oldTitle), CAPTURE_DEADLINE_MS, 'Timed out restoring tab title.'); } catch { /* a closed page is reported by the next action */ } }
           } else {
             const capture = new ScreencastCapture(performance.now() - started);
-            await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
-              onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
+            screencastStage ??= await mkdtemp(join(dirname(out), `.tesland-capture-stage-${id}-`));
+            pendingScreencast = join(screencastStage, pendingVideo);
+            try {
+              await withDeadline(page!.screencast.start({ path: pendingScreencast, size: { width: view.width, height: view.height }, fps,
+                onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) }), CAPTURE_DEADLINE_MS, 'Screencast start timed out.');
+            } catch (error) {
+              screencastStageUncertain = true;
+              try { await abandonBrowser(); }
+              catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Screencast start failed and its browser could not be closed.'); }
+              throw error;
+            }
             pendingCapture = capture;
           }
           const videoAfter = performance.now();
@@ -739,6 +758,12 @@ finally {
   }
   try { if (context) await withDeadline(context.close(), CAPTURE_DEADLINE_MS, 'Browser context close timed out.'); } catch { failure ??= new Error('Could not close browser context.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
   try { if (browser) await withDeadline(browser.close(), CAPTURE_DEADLINE_MS, 'Browser close timed out.'); } catch { failure ??= new Error('Could not close browser.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
+  if (screencastStage && (manifest.capture as Record<string, unknown>).browserCleanupFailed) screencastStageUncertain = true;
+  if (screencastStage && !screencastStageUncertain) {
+    try { await rmdir(screencastStage); }
+    catch { screencastStageUncertain = true; failure ??= new Error('Could not remove the private screencast staging directory.'); }
+  }
+  if (screencastStageUncertain) (manifest.capture as Record<string, unknown>).screencastStagingUncertain = true;
   if (values.trajectory) {
     await writeFile(join(out, 'trajectory.json'), JSON.stringify(poses, null, 2) + '\n');
     await writeFile(join(out, 'input-events.json'), JSON.stringify(inputEvents, null, 2) + '\n');
