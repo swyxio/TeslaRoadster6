@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { finalizeTabCapture, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
+import { CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
 
 const frame = (timestamp: number) => ({ timestamp, viewportWidth: 1280, viewportHeight: 720 });
 
@@ -100,6 +100,60 @@ test('timeouts leave a stalled segment private and do not pretend to cancel work
   assert.equal(removed, false);
   assert.equal(published, false);
   release();
+});
+
+test('a timed-out screencast stop retires the browser before a retry, even if the stop later resolves', async () => {
+  let release!: () => void, closed = false;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const session = new CaptureSession();
+  await assert.rejects(session.stopOrRetire(withDeadline(pending, 10, 'stop timed out'), async () => { closed = true; }), /stop timed out/);
+  assert.equal(closed, true);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  release();
+  await pending;
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  const failedClose = new CaptureSession();
+  await assert.rejects(failedClose.stopOrRetire(Promise.reject(new Error('stop failed')), async () => { throw new Error('close failed'); }), AggregateError);
+  assert.throws(() => failedClose.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('a timed-out input release blocks retries even if the old release later finishes', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const session = new CaptureSession();
+  await assert.rejects(session.retireOnFailure(withDeadline(pending, 10, 'release timed out')), /release timed out/);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  release();
+  await pending;
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
+  const failedRelease = new CaptureSession();
+  await assert.rejects(failedRelease.retireOnFailure(Promise.reject(new Error('input release failed'))), /input release failed/);
+  assert.throws(() => failedRelease.requireUsable(), /unavailable after a capture failure/);
+});
+
+test('failed input releases still attempt every held control and report the errors', async () => {
+  const keys = new Set(['W', 'A']);
+  const touches = new Map([[0, { x: 1, y: 2 }]]);
+  const calls: string[] = [];
+  await assert.rejects(releaseHeldControls(keys, touches, true, {
+    keyUp: async key => { calls.push(key); if (key === 'W') throw new Error('key failed'); },
+    touchCancel: async () => { calls.push('touch'); throw new Error('touch failed'); },
+    pointerUp: async () => { calls.push('pointer'); },
+  }), error => error instanceof AggregateError && error.errors.length === 2);
+  assert.deepEqual(calls, ['W', 'A', 'touch', 'pointer']);
+  assert.equal(keys.size, 0);
+  assert.equal(touches.size, 0);
+});
+
+test('a failed release finalizes the active capture before closing even if finalization fails', async () => {
+  const session = new CaptureSession();
+  const calls: string[] = [];
+  await assert.rejects(session.finishAndClose(
+    async () => { calls.push('finish'); throw new Error('finish failed'); },
+    async () => { calls.push('close'); },
+  ), AggregateError);
+  assert.deepEqual(calls, ['finish', 'close']);
+  assert.throws(() => session.requireUsable(), /unavailable after a capture failure/);
 });
 
 test('a delayed chunk cannot update another segment after its sink closes', async () => {

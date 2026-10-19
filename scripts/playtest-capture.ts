@@ -16,6 +16,49 @@ export async function withDeadline<T>(operation: Promise<T>, ms: number, message
   } finally { if (timer) clearTimeout(timer); }
 }
 
+/** A failed capture cannot reuse a browser while an old operation may resume. */
+export class CaptureSession {
+  private usable = true;
+  requireUsable() {
+    if (!this.usable) throw new Error('The recording browser is unavailable after a capture failure.');
+  }
+  retire() { this.usable = false; }
+  async retireOnFailure<T>(operation: Promise<T>): Promise<T> {
+    try { return await operation; }
+    catch (error) { this.retire(); throw error; }
+  }
+  async stopOrRetire<T>(operation: Promise<T>, close: () => Promise<void>): Promise<T> {
+    try { return await this.retireOnFailure(operation); }
+    catch (failure) {
+      const error = captureError(failure, 'Could not stop capture.');
+      try { await close(); }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Capture failed and its browser could not be closed.'); }
+      throw error;
+    }
+  }
+  async finishAndClose(finish: () => Promise<void>, close: () => Promise<void>): Promise<void> {
+    this.retire();
+    const errors: unknown[] = [];
+    try { await finish(); } catch (error) { errors.push(error); }
+    try { await close(); } catch (error) { errors.push(error); }
+    if (errors.length) throw new AggregateError(errors, 'Could not finish and close the recording browser.');
+  }
+}
+
+/** Attempt every held input even if one dispatch fails, and report failures. */
+export async function releaseHeldControls<T>(held: Set<string>, touches: Map<number, T>, pointerHeld: boolean, operations: {
+  keyUp(key: string): Promise<void>;
+  touchCancel(): Promise<void>;
+  pointerUp(): Promise<void>;
+}): Promise<void> {
+  const errors: unknown[] = [];
+  for (const key of held) { try { await operations.keyUp(key); } catch (error) { errors.push(error); } }
+  held.clear();
+  if (touches.size) { try { await operations.touchCancel(); } catch (error) { errors.push(error); } touches.clear(); }
+  if (pointerHeld) { try { await operations.pointerUp(); } catch (error) { errors.push(error); } }
+  if (errors.length) throw new AggregateError(errors, 'Could not release all held inputs.');
+}
+
 /** Publish only a completely closed, verified segment; keep uncertain partials private. */
 export async function finalizeTabCapture<T>(operations: {
   stop(): Promise<T>;

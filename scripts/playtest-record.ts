@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
-import { captureError as asError, finalizeTabCapture, ScreencastCapture, TabChunkSink, withDeadline } from './playtest-capture';
+import { captureError as asError, CaptureSession, finalizeTabCapture, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -75,7 +75,7 @@ const held = new Set<string>();
 let browser: Browser | undefined;
 let context: BrowserContext | undefined;
 let page: Page | undefined;
-let browserUnusable = false;
+const captureSession = new CaptureSession();
 let touchSession: CDPSession | undefined;
 const touches = new Map<number, { x: number; y: number; id: number }>();
 let pointerHeld = false;
@@ -182,7 +182,7 @@ async function sample() {
 // A timed-out page operation may resume later. Never reuse that context for
 // another recording, even if closing the context itself times out.
 async function abandonBrowser() {
-  browserUnusable = true;
+  captureSession.retire();
   try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Tab recording browser close timed out.'); }
   catch (error) { (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; throw asError(error, 'Could not close the recording browser.'); }
 }
@@ -198,7 +198,7 @@ async function stopRecording() {
       audioFailure = asError(error, 'Could not finalize audio recording.');
       failure ??= audioFailure;
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
-      browserUnusable = true;
+      captureSession.retire();
     } finally { pendingAudio = undefined; }
   }
   if (values['no-video']) { recording = false; pendingVideo = ''; if (audioFailure) throw audioFailure; return; }
@@ -233,7 +233,7 @@ async function stopRecording() {
       stopError = result.error;
       partialRemovalFailed = result.partialRemovalFailed;
     } else {
-      try { await withDeadline(page!.screencast.stop(), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'); } catch (error) { stopError = asError(error, 'Could not finalize screencast.'); }
+      try { await captureSession.stopOrRetire(withDeadline(Promise.resolve().then(() => page!.screencast.stop()), CAPTURE_DEADLINE_MS, 'Screencast stop timed out.'), abandonBrowser); } catch (error) { stopError = asError(error, 'Could not finalize screencast.'); }
     }
     recording = false; pendingVideo = '';
     if (values['video-source'] === 'tab') {
@@ -254,10 +254,16 @@ async function stopRecording() {
   }
 }
 async function releaseInputs() {
-  for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
-  held.clear();
-  if (touches.size) { try { await touchSession?.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); } catch { /* browser already closed */ } touches.clear(); }
-  if (pointerHeld) { try { await page!.mouse.up(); } catch { /* browser already closed */ } pointerHeld = false; }
+  try {
+    await releaseHeldControls(held, touches, pointerHeld, {
+      keyUp: key => page!.keyboard.up(key),
+      touchCancel: async () => {
+        if (!touchSession) throw new Error('Touch session is unavailable.');
+        await touchSession.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      },
+      pointerUp: () => page!.mouse.up(),
+    });
+  } finally { pointerHeld = false; }
 }
 function touchId(action: Action): number {
   const id = action.id ?? 0;
@@ -271,7 +277,7 @@ async function act(action: Action): Promise<unknown> {
   let key: string | undefined;
   let ok = false;
   try {
-    if (browserUnusable) throw new Error('The recording browser is unavailable after a capture failure.');
+    captureSession.requireUsable();
     switch (action.type) {
       case 'wait': await page!.waitForTimeout(duration(action, 'ms', 0, 60000)); break;
       case 'waitFor': {
@@ -410,7 +416,16 @@ async function act(action: Action): Promise<unknown> {
         break;
       }
       case 'pointerUp': await page!.mouse.up(); pointerHeld = false; break;
-      case 'releaseAll': await withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.'); break;
+      case 'releaseAll': {
+        try { await captureSession.retireOnFailure(withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.')); }
+        catch (error) {
+          failure ??= asError(error, 'Could not release inputs.');
+          try { await captureSession.finishAndClose(async () => { if (recording) await stopRecording(); }, abandonBrowser); }
+          catch (cleanupError) { failure ??= asError(cleanupError, 'Could not finish the recording browser.'); }
+          throw error;
+        }
+        break;
+      }
       case 'touchDown': {
         if (!view.hasTouch) throw new Error('Touch input requires a touch-enabled viewport.');
         const id = touchId(action);
@@ -519,7 +534,7 @@ async function act(action: Action): Promise<unknown> {
               // must not leave a video running or list a partial as usable.
               const video = pendingVideo;
               failure ??= asError(error, 'Could not start audio recording.');
-              browserUnusable = true;
+              captureSession.retire();
               try { await stopRecording(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not stop recording.'); }
               try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
               if (recordings.at(-1) === video) recordings.pop();
@@ -538,14 +553,20 @@ async function act(action: Action): Promise<unknown> {
         break;
       }
       case 'recordStop': {
-        let actionFailure: Error | undefined;
+        let actionFailure: Error | undefined, releaseFailed = false;
         try { result = await sample(); } catch (error) { actionFailure = asError(error, 'Could not sample the page.'); }
         if (values.serve) {
-          try { await withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.'); }
-          catch (error) { actionFailure ??= asError(error, 'Could not release inputs.'); }
+          try { await captureSession.retireOnFailure(withDeadline(releaseInputs(), CAPTURE_DEADLINE_MS, 'Timed out releasing inputs.')); }
+          catch (error) { releaseFailed = true; actionFailure ??= asError(error, 'Could not release inputs.'); }
         }
-        await stopRecording();
-        if (actionFailure) throw actionFailure;
+        try {
+          await stopRecording();
+          if (actionFailure) throw actionFailure;
+        } finally {
+          if (releaseFailed) {
+            try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
+          }
+        }
         break;
       }
       default: throw new Error('Unknown action type.');
