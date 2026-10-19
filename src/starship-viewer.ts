@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FREMONT_SPACEPORT } from '../shared/map';
 import { STARSHIP_GOAL } from '../shared/starship';
 import { constructionFraction } from './starship-construction';
@@ -30,6 +31,8 @@ export function createStarshipViewer(options:{
     renderer.setPixelRatio(Math.min(devicePixelRatio,1));renderer.outputColorSpace=T.SRGBColorSpace;
     renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.82;
     scene=new T.Scene();scene.background=new T.Color(0x9dbfc7);scene.fog=new T.Fog(0x9dbfc7,450,1200);
+    const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();
+    scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     scene.add(new T.HemisphereLight(0xe9f5ff,0x626953,1.4));
     const sun=new T.DirectionalLight(0xffdfb5,2.2);sun.position.set(-100,160,80);scene.add(sun);
     const pad=FREMONT_SPACEPORT.pad;
