@@ -4,6 +4,7 @@
 
 - A v47 snapshot assembly candidate preserves recipient projections while reusing identical entity arrays within one broadcast. Focused equivalence tests cover owners, collection privacy, ferry passengers, more than 32 optional entities, cache reuse and a later tick. A short paired synthetic CPU experiment and a separate preview WebSocket compression handshake are documented in [the investigation](PERFORMANCE_64_PLAYERS.md); neither establishes a room-throughput or smooth-play gain. The full distributed sustained-movement, browser and device gates remain open.
 - The candidate passed 1,027 unit tests and `pnpm build`; Vite retained its existing large-chunk warning. The diagnostic's targeted safety, observation and type checks also passed. These checks do not measure room capacity.
+- Local v47 Wrangler room and prediction integrations passed. Chrome desktop and emulated portrait and landscape touch controls moved one driver; no physical device or rendering-performance claim follows. In a [hosted sandbox run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39185379789), 64 sessions moved for a minute and advanced at least 59.8 simulated seconds, but 374 measured input replies were late and the post-run main identity changed. The run failed its gates; see [the investigation](PERFORMANCE_64_PLAYERS.md) for scope and the corrected cross-block gap check.
 
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
 

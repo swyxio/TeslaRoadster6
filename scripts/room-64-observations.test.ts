@@ -25,6 +25,17 @@ test('movement coverage cannot be faked by teleports or stationary snapshots',()
     vehicle:{id:'car',x:0,y:0,z:0,vx:0,vy:0,vz:0}});
   assert.equal(stationary.summary().blocks[0].complete,false);
 });
+test('a stall spanning two movement blocks fails both blocks',()=>{
+  const tracker=movementTracker(20_000);
+  for(let at=0;at<20_000;at+=50){
+    if(at>9050&&at<10950)continue;
+    tracker.observe({atMs:at,tick:at/50+1,poseRevision:0,
+      vehicle:{id:'car',x:0,y:0,z:-at/100,vx:0,vy:0,vz:-10}});
+  }
+  const blocks=tracker.summary().blocks;
+  assert.deepEqual(blocks.map(block=>block.maxGapMs),[1900,1900]);
+  assert.deepEqual(blocks.map(block=>block.complete),[false,false]);
+});
 test('controller refuses bad staging and stops when snapshots are stale',()=>{
   const car=makeEntity('driver','roadster',-1000,4100);
   const lane={x:-1000,z:4100};
