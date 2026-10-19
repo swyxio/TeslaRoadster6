@@ -211,6 +211,13 @@ unverified. A later review found that the room-settings action clears the frozen
 state before reconnecting; that lifecycle path remains broken in this archive.
 The archive preserves both the before and after patches.
 
+A subsequent [lifecycle revision](presentation-combined-lifecycle-20261018.tar.gz)
+(SHA-256 `002a4628bc78e08e80ea0cd6ca949b59b2d50808a1e6c9b518c8f7fac5aabb8f`)
+adds fixes and focused checks for the room-settings, ordinary-close, stale-input
+and reconnect-generation paths. All 209 focused tests and client typecheck
+passed. It still disconnects on the 1.8-second burst and requires browser,
+ferry, peer-contact, live-room and performance verification.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -240,8 +247,9 @@ These include WebSocket frame headers, exclude TCP/IP and describe a different,
 two-client idle fixture. They are not a throughput comparison; in particular,
 the 3,231.37 MiB above is decoded client data, not bytes on the wire.
 
-No driver satisfied all six ten-second movement blocks; all 64 had at least
-one covered block with less than one metre of movement and no moving samples.
+No driver satisfied all six ten-second movement blocks; the original checker
+reported all 64 had at least one covered block with less than one metre of
+movement and no moving samples. Its coverage can be overstated as noted below.
 The fixed control/spawn fixture does not ensure an unobstructed route. This is
 an incomplete workload, not a sustained-driving capacity test. The client
 generator and server shared the host; one-minute host load rose from 13.51 to
@@ -270,14 +278,20 @@ span was 27.3 simulated seconds; an early disconnect can shorten that span,
 so it is not necessarily the room's total advancement. The original checker
 reported all 64 meeting movement criteria in each of the first two ten-second
 blocks, none in the third or fourth, and 44 and 34 in the last two. It later
-proved capable of missing gaps across block boundaries, so true coverage could
-be lower. Zero sampled damage or
+proved capable of missing gaps across block boundaries and overstating time
+coverage, so true coverage could be lower. Zero sampled damage or
 impulse does not exclude between-snapshot contacts. The cause of the closes
 was not captured. This is an incomplete diagnostic, not a capacity pass.
 
-The movement checker now counts a gap across every block it spans; five focused
-tests passed, including a 1.9-second gap across the ten-second boundary. The
-archived historical reports retain their original measurements and checker.
+The movement checker now counts a gap across every block it spans and requires
+short moving sample pairs to cover 80% of a block in both receipt and simulation
+time. Eight focused tests passed, including a 1.9-second cross-boundary gap,
+sparse stops, lost ticks, slow simulation and malformed states. This is still
+a sampled proxy, not proof of continuous travel between samples. The archived
+historical reports retain their original measurements and checker; their movement
+coverage counts are upper bounds. The local checker marks sustained input
+acknowledgement unmeasured because a single post-warm-up acknowledgement cannot
+prove continued progress.
 
 Observed snapshot-gap p95/max were 366/3,076 ms; applied-ack observation p95
 was 477 ms for the sequences observed in snapshots. Decoded JSON was
@@ -316,7 +330,8 @@ does not identify a room, network or client-clock cause.
 
 The movement workload was incomplete: at most three drivers met the original
 checker for even one ten-second block, none met it for all six, and 25 traveled
-under 1 m. The original checker could miss gaps across block boundaries.
+under 1 m. The original checker could miss gaps across block boundaries and
+overstate time coverage, so these coverage counts are upper bounds.
 Normal spawns and traffic were not staged or validated as unobstructed; 37
 drivers had sampled health decreases and 22 had sampled push impulses. These
 observations do not establish the cause of a particular stop. Per-runner p95

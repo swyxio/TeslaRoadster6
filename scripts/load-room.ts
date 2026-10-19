@@ -16,14 +16,15 @@ type MotionSample={atMs:number;tick:number;poseRevision:number;vehicle:Pose|null
 export function movementTracker(durationMs:number) {
   const blocks=Array.from({length:Math.ceil(durationMs/10_000)},(_,i)=>({
     startMs:i*10_000,durationMs:Math.min(10_000,durationMs-i*10_000),samples:0,movingSamples:0,
-    distanceM:0,steps:0,discontinuities:0,invalidSamples:0,firstAtMs:null as number|null,lastAtMs:null as number|null,maxGapMs:0,
+    movingTimeMs:0,distanceM:0,steps:0,discontinuities:0,invalidSamples:0,firstAtMs:null as number|null,lastAtMs:null as number|null,maxGapMs:0,
   }));
   let previous:MotionSample|null=null,lastValidAtMs:number|null=null,totalDistanceM=0,totalSteps=0;
   return {
     observe(sample:MotionSample) {
       const blockIndex=Math.floor(sample.atMs/10_000),block=blocks[blockIndex],car=sample.vehicle;
       if(!block||sample.atMs<0||sample.atMs>=durationMs)return;
-      if(!car||typeof car.id!=='string'||!Number.isSafeInteger(sample.tick)||!Number.isSafeInteger(sample.poseRevision)||
+      if(!car||typeof car.id!=='string'||!car.id||!Number.isSafeInteger(sample.tick)||sample.tick<0||
+        !Number.isSafeInteger(sample.poseRevision)||sample.poseRevision<0||
         ![car.x,car.y,car.z,car.vx,car.vy,car.vz].every(Number.isFinite)){
         block.invalidSamples++;previous=null;return;
       }
@@ -46,7 +47,15 @@ export function movementTracker(durationMs:number) {
         else {
           totalDistanceM+=delta;
           totalSteps++;
-          if(Math.floor(previous.atMs/10_000)===blockIndex){block.distanceM+=delta;block.steps++;}
+          if(Math.floor(previous.atMs/10_000)===blockIndex){
+            block.distanceM+=delta;block.steps++;
+            const elapsed=sample.atMs-previous.atMs;
+            const tickElapsed=(sample.tick-previous.tick)*50;
+            // Credit only short intervals in both clocks, bounded by the
+            // smaller elapsed time. This remains a sampled movement proxy.
+            if(elapsed>0&&elapsed<=250&&tickElapsed<=250&&Math.hypot(old.vx,old.vy,old.vz)>5&&Math.hypot(car.vx,car.vy,car.vz)>5)
+              block.movingTimeMs+=Math.min(elapsed,tickElapsed);
+          }
         }
       }
       previous=sample;
@@ -54,15 +63,27 @@ export function movementTracker(durationMs:number) {
     summary() {
       return {distanceM:totalSteps?totalDistanceM:null,blocks:blocks.map(block=>{
         const movingFraction=block.samples?block.movingSamples/block.samples:null;
+        const movingTimeFraction=block.movingTimeMs/block.durationMs;
         const distanceM=block.steps?block.distanceM:null;
         const complete=block.durationMs===10_000&&block.samples>=50&&block.invalidSamples===0&&block.discontinuities===0&&
           block.firstAtMs!==null&&block.firstAtMs-block.startMs<=1000&&block.lastAtMs!==null&&
           block.startMs+block.durationMs-block.lastAtMs<=1000&&block.maxGapMs<=1000&&
-          distanceM!==null&&distanceM>=75&&movingFraction!==null&&movingFraction>=.8;
-        return {...block,distanceM,movingFraction,complete};
+          distanceM!==null&&distanceM>=75&&movingFraction!==null&&movingFraction>=.8&&movingTimeFraction>=.8;
+        return {...block,distanceM,movingFraction,movingTimeFraction,complete};
       })};
     },
   };
+}
+
+// Validate the world shape before extracting the driver's pose. Even an
+// otherwise ignorable malformed state must invalidate its measurement block.
+export function movementSample(atMs:number,playerId:string,message:{tick:number;poseRevision:number;world?:World}):MotionSample {
+  const world=message.world;
+  if(!playerId||!world||!Array.isArray(world.players)||!Array.isArray(world.entities))
+    return {atMs,tick:message.tick,poseRevision:message.poseRevision,vehicle:null};
+  const player=world.players.find(item=>item&&item.id===playerId);
+  const vehicle=world.entities.find(item=>item&&item.id===player?.entityId&&item.driver===playerId)??null;
+  return {atMs,tick:message.tick,poseRevision:message.poseRevision,vehicle};
 }
 
 // A warm-up acknowledgement alone cannot prove that measured inputs applied.
@@ -101,13 +122,12 @@ try {
       input.observe(message);
       if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}playerIds[i]=message.id??'';socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
       if(!joined&&input.active){joined=true;resolve();}
-      if(message.type==='state'&&message.world&&measuring){
+      if(message.type==='state'&&measuring){
         const now=performance.now();if(lastSnapshot[i])gaps.push(now-lastSnapshot[i]);lastSnapshot[i]=now;
-        snapshots++;snapshotCounts[i]++;bytes+=Buffer.byteLength(raw);seenPlayers[i]=message.world.players.length;
-        firstTime[i]??=message.world.time;lastTime[i]=message.world.time;
-        const player=message.world.players.find(item=>item.id===playerIds[i]);
-        const vehicle=message.world.entities.find(item=>item.id===player?.entityId&&item.driver===playerIds[i])??null;
-        movement[i].observe({atMs:now-measurementStart,tick:message.tick,poseRevision:message.poseRevision,vehicle});
+        snapshots++;snapshotCounts[i]++;bytes+=Buffer.byteLength(raw);
+        if(message.world&&Array.isArray(message.world.players))seenPlayers[i]=message.world.players.length;
+        if(message.world&&Number.isFinite(message.world.time)){firstTime[i]??=message.world.time;lastTime[i]=message.world.time;}
+        movement[i].observe(movementSample(now-measurementStart,playerIds[i],message));
         const control=input.control;
         if(control&&Array.isArray(control.queued)&&Array.isArray(control.jump?.pending)&&Array.isArray(control.flip?.pending)){
           const queue=queues[i];queue.samples++;queue.levels=Math.max(queue.levels,control.queued.length);
@@ -145,6 +165,8 @@ try {
   if(queues.some(queue=>queue.levels>FUTURE_TICKS||queue.jumpEdges>FUTURE_TICKS||queue.flipEdges>FUTURE_TICKS))incomplete.push('sampled-control-queue-bound-exceeded');
   if(coverage.rejectedClients.length)incomplete.push('input-rejected');
   if(coverage.clientsWithoutAppliedInput.length)incomplete.push('missing-applied-input');
+  // A single acknowledgement after warm-up cannot prove sustained progress.
+  incomplete.push('sustained-input-acknowledgements-unmeasured');
   if(closed)incomplete.push('client-disconnected');
   if(seenPlayers.some(players=>players!==count))incomplete.push('not-all-clients-observed');
   console.log(JSON.stringify({clients:count,elapsedSeconds:+elapsed.toFixed(2),closed,sentInputs:sent,inputRejections:rejectionCounts.reduce((sum,n)=>sum+n,0),rejectionCounts,...coverage,
@@ -155,7 +177,7 @@ try {
     clientEventLoopP95Ms:+(loopDelay.percentile(95)/1e6).toFixed(1),movement:motion,stationaryClients,
     controlQueues:queues.map(queue=>queue.samples?queue:{samples:0,levels:null,jumpEdges:null,flipEdges:null}),
     diagnosticCoverageComplete:incomplete.length===0,incomplete,
-    note:'Local same-host synthetic clients send input at 20 Hz and parse all received JSON. Movement blocks require 50 valid snapshots spanning the block with gaps at most 1 s, 75 m and speed above 5 m/s in 80% of samples; jumps over 24 m, identity changes and relocations do not count as driving. Input rejection counts include warm-up; applied input must advance beyond the last pre-measurement sequence. Queue maxima are sampled from owner snapshots and do not establish peaks between snapshots or client history bounds. No worker CPU, WAN, device or production capacity claim.'},null,2));
+    note:'Local same-host synthetic clients send input at 20 Hz and parse all received JSON. Movement blocks require 50 valid snapshots spanning the block with gaps at most 1 s, 75 m, speed above 5 m/s in 80% of samples and short moving sample pairs covering at least 80% of both receipt and simulation time. This is a sampled proxy; jumps over 24 m, identity changes and relocations do not count as driving. Input rejection counts include warm-up; a post-warm-up applied sequence alone does not prove sustained acknowledgement. Queue maxima are sampled from owner snapshots and do not establish peaks between snapshots or client history bounds. No worker CPU, WAN, device or production capacity claim.'},null,2));
 } finally {if(timer)clearInterval(timer);for(const socket of sockets)if(socket.readyState===WebSocket.OPEN)socket.close();}
 }
 
