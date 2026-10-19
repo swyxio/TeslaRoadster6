@@ -80,6 +80,10 @@ export const TESLAND_MONUMENTS=[
 ] as const;
 // A fictional 2050 expansion near the compressed Fremont/I-880 corridor.
 // These shared envelopes are solid; the rocket above the pad is decorative.
+// The full stack is 120 game metres tall; the three-height perimeter is a
+// decorative site cue, not a collision barrier or a real-world safety zone.
+export const STARSHIP_STACK_HEIGHT=120;
+export const STARBASE_PERIMETER_RADIUS=3*STARSHIP_STACK_HEIGHT;
 export const FREMONT_SPACEPORT={
  factory:{x:1825,z:6190,w:130,d:80,h:24},
  pad:{x:1960,z:6190,w:34,d:34,h:4},
