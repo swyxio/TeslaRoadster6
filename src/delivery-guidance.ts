@@ -72,7 +72,10 @@ export class DeliveryGuidance {
     while(this.index<this.path.length-1){
       const waypoint=this.path[this.index],next=this.path[this.index+1],start=this.index?this.path[this.index-1]:this.origin;
       const passed=(car.x-waypoint.x)*(waypoint.x-start.x)+(car.z-waypoint.z)*(waypoint.z-start.z)>=0;
-      if(distance(car,waypoint)>8&&(segmentDistance(car,waypoint,next)>7||(distance(car,destination)<10&&!passed)))break;
+      const nextLength=distance(waypoint,next);
+      const alongNext=((car.x-waypoint.x)*(next.x-waypoint.x)+(car.z-waypoint.z)*(next.z-waypoint.z))/(nextLength||1);
+      const joinedNext=alongNext>=3&&segmentDistance(car,waypoint,next)<=3;
+      if((!passed&&!joinedNext)||(distance(car,waypoint)>8&&segmentDistance(car,waypoint,next)>7))break;
       this.index++;
     }
     if(this.path.length){

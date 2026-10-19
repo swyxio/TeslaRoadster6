@@ -79,6 +79,22 @@ test('a nearby destination does not skip a remaining turn around an obstacle',()
   assert.deepEqual(guide.update(car,target,player.delivery.level,100).waypoint,turn);
 });
 
+test('a turn less than eight metres away is not skipped before it is reached',()=>{
+  const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  const target={x:car.x+20,z:car.z},turn={x:car.x,z:car.z+7};
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[turn,target]});
+  assert.deepEqual(guide.update(car,target,player.delivery.level,100).waypoint,turn);
+});
+
+test('a rounded turn advances once the car has joined the next road',()=>{
+  const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  const turn={x:car.x,z:car.z+20},target={x:car.x+30,z:car.z+20};
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[turn,target]});
+  assert.deepEqual(guide.update({...car,x:car.x+4,z:car.z+18},target,player.delivery.level,100).waypoint,target);
+});
+
 test('a turn already passed stays behind when approaching a nearby destination',()=>{
   const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
   const turn={x:car.x,z:car.z+20},target={x:car.x+20,z:car.z+20};
