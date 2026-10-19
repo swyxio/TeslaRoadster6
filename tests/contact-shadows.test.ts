@@ -1,0 +1,97 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import type { Entity } from '../shared/game';
+import { terrainHeight } from '../shared/map';
+import { PARKING_LOTS } from '../shared/parking-lots';
+import { ContactShadows } from '../src/contact-shadows';
+
+const entity=(id:string,fields:Partial<Entity>={}):Entity=>({id,kind:'roadster',supportId:'ground',inDome:false,...fields} as Entity);
+const vehicle=(x:number,y:number,z:number)=>{const group=new T.Group();group.position.set(x,y,z);return group;};
+
+test('contact patches follow rendered cars and clear stale instances',()=>{
+  const scene=new T.Scene(),shadows=new ContactShadows(scene),car=entity('car');
+  const mesh=vehicle(-120,0,-120);mesh.rotation.y=.7;
+  const meshes=new Map([[car.id,mesh]]),camera=new T.Vector3(-120,4,-115);
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,1);assert.equal(shadows.mesh.visible,true);
+  assert.equal(scene.children.filter(child=>child instanceof T.InstancedMesh).length,1);
+  const matrix=new T.Matrix4();shadows.mesh.getMatrixAt(0,matrix);
+  const position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();matrix.decompose(position,rotation,scale);
+  assert.ok(position.distanceTo(new T.Vector3(-120,.145,-120))<.00001);
+  assert.ok(Math.abs(new T.Euler().setFromQuaternion(rotation).y-.7)<.00001);
+  mesh.position.set(-115,0,-120);shadows.update([car],meshes,camera,car);
+  shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
+  assert.ok(Math.abs(position.x-(-115))<.00001);
+  shadows.update([],new Map(),camera);
+  assert.equal(shadows.mesh.count,0);assert.equal(shadows.mesh.visible,false);
+});
+
+test('parking patches clear the lot and avoid raised approaches',()=>{
+  const lot=PARKING_LOTS.find(item=>item.id==='sf-playground')!;
+  const shadows=new ContactShadows(new T.Scene()),car=entity('car');
+  const mesh=vehicle(lot.area.x,0,lot.area.z),camera=mesh.position.clone().add(new T.Vector3(0,4,5));
+  const meshes=new Map([[car.id,mesh]]);
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,1);
+  const matrix=new T.Matrix4(),position=new T.Vector3();
+  shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
+  // The lot top is .14 and the luxury undertray begins at .18. Some road
+  // paint boxes span the patch height; visual inspection remains necessary.
+  assert.ok(position.y>.14 && position.y<.18);
+  mesh.position.set(lot.approach.x,0,lot.approach.z);
+  camera.copy(mesh.position).add(new T.Vector3(0,4,5));
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,0);
+  // Also omit a car straddling the near edge, not just its center.
+  mesh.position.z=lot.approach.z+lot.approach.length/2+1;
+  shadows.update([car],meshes,camera,car);
+  assert.equal(shadows.mesh.count,0);
+});
+
+test('unsupported, airborne, hidden and non-flat positions do not cast a patch',()=>{
+  const shadows=new ContactShadows(new T.Scene()),camera=new T.Vector3(-120,4,-115);
+  const cases=[
+    entity('air',{supportId:null}),entity('dome',{inDome:true}),entity('wall',{supportId:'dome'}),
+    entity('ferry',{supportId:'ferry'}),entity('roof',{supportId:'roof:0'}),entity('person',{kind:'person'}),
+    entity('far'),entity('hidden'),entity('render-air'),entity('unsupported'),entity('edge'),entity('hill'),
+  ];
+  const meshes=new Map(cases.map(e=>[e.id,vehicle(-120,0,-120)]));
+  meshes.get('far')!.position.x=-220;
+  meshes.get('hidden')!.visible=false;
+  meshes.get('render-air')!.position.y=2;
+  meshes.get('unsupported')!.position.set(200,0,-100);
+  // The center is on the Bay Bridge but the car footprint extends past its edge.
+  assert.equal(terrainHeight(110,71.8),0);
+  meshes.get('edge')!.position.set(110,0,71.8);
+  assert.ok((terrainHeight(-100,630)??0)>0);
+  meshes.get('hill')!.position.set(-100,0,630);
+  assert.equal(terrainHeight(200,-100),null);
+  for(const item of cases){
+    const itemCamera=item.id==='far'?camera:meshes.get(item.id)!.position.clone().add(new T.Vector3(0,4,5));
+    shadows.update([item],meshes,itemCamera);
+    assert.equal(shadows.mesh.count,0,item.id);assert.equal(shadows.mesh.visible,false,item.id);
+  }
+});
+
+test('a motorcycle retains its contact patch while leaning into a turn',()=>{
+  const shadows=new ContactShadows(new T.Scene());
+  const bike=entity('bike',{kind:'ducati-panigale-v4',driver:'rider',steering:1,speed:18});
+  const mesh=vehicle(-120,0,-120);mesh.rotation.z=.32;
+  shadows.update([bike],new Map([[bike.id,mesh]]),new T.Vector3(-120,4,-115),bike);
+  assert.equal(shadows.mesh.count,1);
+});
+
+test('the bounded batch keeps the controlled car and favors nearby traffic',()=>{
+  const shadows=new ContactShadows(new T.Scene()),camera=new T.Vector3(-118.44,4,-115);
+  const entities=Array.from({length:40},(_,i)=>entity(String(i)));
+  const meshes=new Map(entities.map((e,i)=>[e.id,vehicle(-120+i*.04,0,-120)]));
+  const controlled=entities[0];
+  shadows.update(entities,meshes,camera,controlled);
+  assert.equal(shadows.mesh.count,32);
+  const matrix=new T.Matrix4(),position=new T.Vector3();shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
+  assert.ok(Math.abs(position.x-meshes.get(controlled.id)!.position.x)<.00001);
+  const selected=Array.from({length:shadows.mesh.count},(_,i)=>{shadows.mesh.getMatrixAt(i,matrix);return position.setFromMatrixPosition(matrix).x;});
+  assert.ok(selected.some(x=>Math.abs(x-meshes.get('39')!.position.x)<.00001));
+  assert.ok(!selected.some(x=>Math.abs(x-meshes.get('1')!.position.x)<.00001));
+});
