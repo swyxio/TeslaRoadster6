@@ -66,12 +66,13 @@ export function compareRecording(control, recorded) {
       segments.some((segment, i) => segment?.video !== recorded.recordings[i] || segment.status !== 'available' || segment.finalized !== true))
     reasons.push('Video segments lack finalized, complete screencast timestamp evidence.');
   if (!load(control) || !load(recorded)) warnings.push('Host load context is unavailable.');
+  if (withVideo?.p95Ms > 33.4) warnings.push(`Animation callback p95 was ${withVideo.p95Ms} ms while recording, above two 60 Hz intervals; inspect this footage for stutter. This is a diagnostic flag, not a game performance budget.`);
   if (Array.isArray(segments)) for (const segment of segments) {
     if (segment?.intervalMs?.gapsAtLeast100Ms > 0) warnings.push(`${segment.video}: ${segment.intervalMs.gapsAtLeast100Ms} browser screencast timestamp gaps of at least 100 ms; check motion in the footage.`);
     if (segment?.firstCallbackDelayMs >= 100) warnings.push(`${segment.video}: first screencast callback arrived ${round(segment.firstCallbackDelayMs)} ms after starting.`);
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
-  return { comparison: reasons.length ? 'HOLD' : 'available', reasons, warnings, withoutVideo, withVideo,
+  return { comparison: reasons.length ? 'HOLD' : 'available', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
     capture: { requestedFps: recorded?.capture?.requestedFps ?? null, segments: Array.isArray(segments) ? segments : [] },
     hostLoadAverage: { withoutVideo: load(control), withVideo: load(recorded) },
     limitations: [

@@ -2,7 +2,7 @@
 
 ## Recording diagnostics · 2026-10-18 Pacific
 
-- The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks the encoded video stream. Five focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
+- The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks the encoded video stream. Six focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
 - A new desktop physical-GPU comparison was interrupted when a concurrent 64-client probe was reported; it produced no usable comparison. Real-browser integration and a new recording-on/off pair still need verification. These diagnostics do not measure physical display presentation.
 
 ## Production 0.0.32 readback and smoke · 2026-10-18 Pacific

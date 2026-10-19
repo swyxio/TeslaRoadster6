@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { compareRecording, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
 
@@ -19,11 +22,15 @@ const run = (video: boolean) => ({
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {
   const result = compareRecording(run(false), run(true));
   assert.equal(result.comparison, 'available');
+  assert.equal(result.playerFidelity, 'UNVERIFIED');
   assert.equal(result.withVideo?.p95Ms, 16.7);
   assert.equal(result.withVideo?.over33_4MsPercent, 2);
   assert.equal(result.withVideo?.over100MsPercent, 1);
   assert.match(result.warnings[0], /1 browser screencast timestamp gaps/);
   assert.match(result.limitations.join(' '), /physical display presentation/);
+  const slow = run(true);
+  slow.events[2].sample!.intervalsMs = Array(100).fill(116.7);
+  assert.match(compareRecording(run(false), slow).warnings.join(' '), /callback p95 was 116.7 ms/);
 });
 
 test('recording comparison holds missing, mixed or incomplete evidence', () => {
@@ -51,4 +58,23 @@ test('video inspection rejects missing or unsafe paths', async () => {
   assert.equal(unsafe[0].status, 'unavailable');
   const missingTrace = await inspectCaptureTraces({ capture: { segments: [{ traceFile: 'no-such-trace.json' }] } }, '/tmp/run/manifest.json');
   assert.equal(missingTrace[0].status, 'unavailable');
+});
+
+test('capture inspection rejects truncated and non-monotonic trace files', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-capture-check-'));
+  try {
+    const file = join(dir, 'segment-001.capture.json');
+    const trace = { format: 1, columns: ['browserPresentedAtUnixMs', 'callbackReceivedAtRunMs', 'viewportWidth', 'viewportHeight'],
+      samples: [[1000, 1, 1280, 720], [1017, 18, 1280, 720], [1034, 35, 1280, 720]] };
+    const manifest = { capture: { segments: [{ traceFile: 'segment-001.capture.json', samplesRetained: 3, callbacksReceived: 3, truncated: false }] } };
+    writeFileSync(file, JSON.stringify(trace));
+    assert.equal((await inspectCaptureTraces(manifest, join(dir, 'manifest.json')))[0].status, 'available');
+    trace.samples[2][0] = 1017;
+    writeFileSync(file, JSON.stringify(trace));
+    assert.equal((await inspectCaptureTraces(manifest, join(dir, 'manifest.json')))[0].status, 'unavailable');
+    trace.samples[2][0] = 1034;
+    writeFileSync(file, JSON.stringify(trace));
+    manifest.capture.segments[0].callbacksReceived = 4;
+    assert.equal((await inspectCaptureTraces(manifest, join(dir, 'manifest.json')))[0].status, 'unavailable');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
