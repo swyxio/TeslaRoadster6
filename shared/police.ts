@@ -6,7 +6,7 @@ import { engageAutopilot, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
 import { canAssignDeliveryRoof, updateLevel, type DeliveryState } from './delivery';
 import { hasRockets } from './upgrades';
-import { sampleLandmarkPrimitive } from './new-landmark-surfaces';
+import { primitiveExtent, sampleLandmarkPrimitive } from './new-landmark-surfaces';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[] };
 type Point = { x:number; z:number };
@@ -61,9 +61,12 @@ function heightAboveSurface(e:Entity){
   const dome=domeRoofHeight(e.x,e.z);if(dome!==null&&dome<=e.y)floor=Math.max(floor,dome);
   for(const b of nearbyBuildings(e.x,e.z,0))if(b.parts||(Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2)){
     if(b.parts){
+      const base=b.landmarkBase??0;
       for(const part of b.parts){
+        const extent=primitiveExtent(part);
+        if(base+extent.top<=floor||base+extent.bottom>e.y)continue;
         const surface=sampleLandmarkPrimitive(part,e.x-b.x,e.z-b.z);
-        if(surface){const roof=(b.landmarkBase??0)+surface.top;if(roof<=e.y)floor=Math.max(floor,roof);}
+        if(surface){const roof=base+surface.top;if(roof<=e.y)floor=Math.max(floor,roof);}
       }
     }else{const roof=buildingRoofHeight(b,e.x,e.z);if(roof<=e.y)floor=Math.max(floor,roof);}
   }

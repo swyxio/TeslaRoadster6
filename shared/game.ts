@@ -758,13 +758,21 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   // An elevated roof or deck has a real underside: upward motion stops there
   // without filling the air below it with an invisible building.
   if(e.supportId===null&&e.vy>0){
-    const previousVertical=verticalBounds({...e,x:old.x,z:old.z,y:old.y,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
+    const previousPose={...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId};
+    const previousVertical=oldLandmarkVertical??verticalBounds(previousPose);
+    let current=landmarkVertical??verticalBounds(e);
     for(const b of nearby){
       if(!b.parts)continue;
+      const base=b.landmarkBase??0;
       for(const part of b.parts){
-        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
-        const current=verticalBounds(e);
-        if(surface&&previous&&previousVertical.max<=previous.bottom+.001&&current.max>surface.bottom){e.y=surface.bottom-(current.max-e.y);e.vy=0;}
+        const extent=primitiveExtent(part);
+        if(current.max<=base+extent.bottom||previousVertical.max>base+extent.top+.001)continue;
+        const surface=landmarkPartContact(b,part,e);
+        if(!surface||current.max<=surface.bottom)continue;
+        const previous=landmarkPartContact(b,part,previousPose);
+        if(previous&&previousVertical.max<=previous.bottom+.001){
+          e.y=surface.bottom-(current.max-e.y);e.vy=0;current=verticalBounds(e);
+        }
       }
     }
   }
