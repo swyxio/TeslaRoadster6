@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
+
+- Based on main `1f722dd` (protocol 46), all 1,010 unit tests and the production build passed; the existing Vite large-chunk warning remains. A local Wrangler room integration at the configured 64-seat limit passed its two-client gameplay checks; global chat and Cybercab room-history integration passed separately. These are functional checks, not capacity evidence.
+- Against isolated Wrangler at capacity two, simultaneous last-seat attempts admitted one player and rejected the rest, kept named and public room identities separate, and reused an available seat. The actual client `Session` filled the Bay and its first overflow, joined the next overflow and then backfilled the Bay. Single same-host handoff observations were 100 ms, 56 ms and 21 ms respectively; they are not production latency measurements. Explicit full-room invites stayed exact. Wrangler also logged `Network connection lost` on full-room closes; the same log was reproduced against unchanged main and its existing full-room test.
+- In Chrome, a fresh local game entered Bay 2 when Bay was full and Bay 3 when both earlier rooms were full; an exact full invite reported the full room, and reload retained Bay 3. Emulated 390 × 844 portrait and 844 × 390 landscape touch controls held Drive, moved the car and cleared on release. No physical device was tested.
+- A [60-second local synthetic 64-client run](benchmarks/2026-10-18-public-overflow/local-64.txt) kept all clients connected, but advanced only 12.2 simulated seconds per client, below the 57-second throughput target. It measured 2.06 snapshots/client/second, 1,447 ms p95 snapshot gaps, and 3,744 input rejections including warmup. The clients decoded 1,055.59 MiB of JSON, not measured wire bytes. The Worker and load generator shared the host; one-minute load rose from 16.49 to 34.81 on 18 logical CPUs. This is a failed, contended observation, not a paired regression verdict or a playable-capacity result. A matched current-main/candidate comparison with distributed generators and tick, acknowledgement, queue and wire-byte measurements remains needed at the intended occupancy.
+
 ## Boost and landing feedback candidate · 2026-10-18 Pacific
 
 - After integrating sandbox main `26fc934`, all 1,006 tests and `pnpm build` passed on `0f9b494`; the existing large-chunk warning remains. These are functional checks, not a performance verdict.
