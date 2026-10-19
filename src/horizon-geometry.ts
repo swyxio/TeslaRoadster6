@@ -22,7 +22,7 @@ export function createHorizonGeometryData() {
   const perimeter=2*((maxX-minX)+(maxZ-minZ));
   // An even number of mirrored repeats makes both the tile seams and the final
   // closure continuous, even when the original image edges are not identical.
-  const repeats=Math.ceil(perimeter/9000)*2;
+  const repeats=Math.max(2,Math.round(perimeter/12000)*2);
   let distance=0;
   for (const [x0,z0,x1,z1,height0,height1] of edges) {
     const length = Math.hypot(x1-x0,z1-z0);
