@@ -178,6 +178,28 @@ passed 148 of 152 focused checks; the remaining failures were short teleport,
 pinned-wall holding, jump playback exhaustion and ferry interpolation. It did
 not implement a token or establish swept-contact safety.
 
+An unapplied [identity prototype](presentation-identity-lab-20261018.tar.gz)
+(SHA-256 `4210393b241925403344419a62879a20c182126ea04e25a4d0c57ca5d9c917c5`)
+adds per-entity incarnation and pose tokens. Its focused checks cover the
+short teleport, ID reuse, snapshot parity, unattended ferry moves, failed
+relocations and prediction fences. Typecheck passed and 177 of 180 tests passed;
+wall, jump and ferry failures remain, including a 7.40 m cut on a roster change.
+Live integration, allocation and payload costs, and all performance gates
+remain unverified. This older-base lab is not a release change.
+
+A separate [contact follow-up](playback-contact-followup-20261018.tar.gz)
+(SHA-256 `b0e2b36a9fa96627c4b520c01c594843f3b5e9daf62053e2bc4900115d47e81a`)
+passes the pinned-wall and jump fixtures and adds dock-contact and multi-rider
+ferry tests. It remains experimental: hull and passenger state can still mix
+different times, and real scene transitions and swept peer contacts are not
+established. A standalone [planar peer-sweep experiment](peer-sweep-proof-20261018.tar.gz)
+(SHA-256 `0512992032cdec430c935c06fdf89af7c2851f6c33099a82df953b683c96dfd9`)
+passed six focused tests but is not wired into playback; dome and changing
+ferry state are unavailable, and numerical bounds, response and cost remain
+unverified. A [second version](peer-sweep-proof-20261018-v2.tar.gz) adds a
+three-body unavailability regression and passes seven focused tests; SHA-256
+`e9615fc8be21a2c91716d5454f5442e2808878b4cc571bf6ae9a3e0a66eefa53`.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -307,6 +329,15 @@ schema, complete asset graph and workflow wiring are unverified; the workflow
 remains disabled. No remote diagnostic Worker or load was started. The source
 predates current main, and observer overhead is unmeasured. SHA-256:
 `28742c3cc8ae7136500a0e51a7cdd094b8612b4c2cea2e2b8bf8ee98d1df8d60`.
+
+A [disabled staged-fixture prototype](hosted-stage-fixture-20261018.tar.gz)
+uses real Sessions and passed five focused tests, typechecks and a two-client
+loopback smoke, including unique slots and advancing warmup. Its whole-tick
+contact samples are explicitly incomplete; provider isolation, authoritative
+substep tracing, the four-runner barrier and observer cost remain unverified.
+No remote diagnostic or 64-driver run was started. The archive includes an
+earlier readiness assessment and has SHA-256
+`27971eca577e78ca7c6cd016cf233dbe64e9518b3795787b9dabaff4975b15e6`.
 
 ## Hosted comparison
 
