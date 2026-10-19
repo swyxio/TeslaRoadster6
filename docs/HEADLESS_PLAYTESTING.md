@@ -215,6 +215,13 @@ and an unchanged pose revision. Keep the trace and inspect the video too; a
 touch-emulated browser is not a physical phone. Compare matching viewports and
 fixtures across revisions, and measure frame times in separate no-video runs.
 
+For an opt-in hosted still-image check, add the `visual-proof` label to a PR.
+The workflow builds the exact PR base and head, stages the same city and Marin
+starts, and uploads desktop, portrait and landscape screenshots with browser
+errors and approximate authoritative poses. It exercises keyboard or emulated
+touch inputs; the result is neither a physical-device check nor a video or
+frame-time comparison. Inspect the images and pose differences in the artifact.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged

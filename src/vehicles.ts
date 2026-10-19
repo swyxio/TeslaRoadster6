@@ -359,6 +359,14 @@ function buildVehicle(kind: VehicleId | 'person', distant=false): T.Group {
     box(root, 0, 1, 0, .65, 1, .4, 0xf5b94b);
     const face = new T.Mesh(head, material(0xd5a786)); face.position.y = 1.75; root.add(face);
     box(root, -.18, .3, 0, .22, .6, .25, 0x253544); box(root, .18, .3, 0, .22, .6, .25, 0x253544);
+    for(const side of [-1,1]){
+      // Static details batch with the shirt, skin and trouser materials below.
+      box(root,side*.41,.995,0,.17,.69,.28,0xf5b94b);
+      box(root,side*.41,.61,0,.15,.17,.16,0xd5a786);
+      box(root,side*.18,.085,-.085,.26,.17,.4,0x253544);
+      box(root,side*.085,1.77,-.239,.05,.045,.02,0x253544);
+    }
+    box(root,0,1.46,-.204,.25,.07,.02,0x253544);
     return root;
   }
   const spec = VEHICLES[kind];

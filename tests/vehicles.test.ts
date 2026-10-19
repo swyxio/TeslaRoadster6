@@ -16,6 +16,28 @@ test('fleet meshes retain scale, bounded complexity and independent articulated 
   assert.ok(first.getObjectByName('jets'));
  }
 });
+test('pedestrians have a readable silhouette and share their batched assets',()=>{
+ const first=createVehicle('person'),second=createVehicle('person');
+ const meshes=(root:Object3D)=>root.children.filter((child):child is Mesh=>child instanceof Mesh);
+ const a=meshes(first),b=meshes(second);
+ assert.equal(a.length,3,'shirt, skin and trousers remain three draws');
+ assert.equal(b.length,3);
+ const byColor=(list:Mesh[],color:number)=>{
+  const mesh=list.find(item=>item.material instanceof MeshStandardMaterial&&item.material.color.getHex()===color);
+  assert.ok(mesh);return mesh;
+ };
+ for(const color of [0xf5b94b,0xd5a786,0x253544]){
+  const one=byColor(a,color),two=byColor(b,color);
+  assert.equal(one.geometry,two.geometry);
+  assert.equal(one.material,two.material);
+ }
+ const shirt=new Box3().setFromObject(byColor(a,0xf5b94b));
+ const skin=new Box3().setFromObject(byColor(a,0xd5a786));
+ const trousers=new Box3().setFromObject(byColor(a,0x253544));
+ assert.ok(shirt.min.x<-.45&&shirt.max.x>.45,'sleeves extend to both sides');
+ assert.ok(skin.min.x<-.4&&skin.max.x>.4,'hands extend beyond the head');
+ assert.ok(trousers.min.z<-.25,'shoes project in the forward direction');
+});
 test('close-up lamps and articulated wheels keep shared assets across vehicle clones',()=>{
  for(const id of ['roadster','model-3','waymo-ipace'] as const){
   const first=createVehicle(id),second=createVehicle(id),spec=VEHICLES[id];

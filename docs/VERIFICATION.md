@@ -2,7 +2,7 @@
 
 ## Higher-fidelity world and fleet · candidate · 2026-10-18 Pacific
 
-- Generic façades use framed, individually tinted windows with one shared material and one instanced batch per occupied map cell. Their window geometry has 10 triangles per instance, down from 12 for the previous boxes. Landmark glazing, layered redwood crowns, wheel spokes, rear lamps and NPC sensor bands also reuse existing material batches or shared geometry. Placement, map collision and simulation were not changed.
+- Generic façades use framed, individually tinted windows with one shared material and one instanced batch per occupied map cell. Across 12,150 windows, geometry falls from 145,800 to 121,500 triangles before culling. Landmark glazing, layered redwood crowns, wheel spokes, rear lamps, NPC sensor bands and a more complete human silhouette also reuse existing material batches or shared geometry. The human has three mesh submissions as before, with 224 triangles instead of 116. Placement, map collision and simulation were not changed.
 - Focused window, vehicle and scenery tests passed. These are geometry and functional checks, not frame-time or GPU measurements. Desktop, portrait and landscape visual review and a paired route comparison are still required before release; touch emulation does not prove physical-device behavior.
 
 ## Automatic Bay overflow candidate · 0.0.33-alpha · 2026-10-18 Pacific
