@@ -27,13 +27,15 @@ const viewports = {
   portrait: { width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
   landscape: { width: 844, height: 390, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
   forest: { width: 1280, height: 720, deviceScaleFactor: 1 },
+  'on-foot': { width: 1280, height: 720, deviceScaleFactor: 1 },
 };
 const stages = [
-  { name: 'city', x: -190, z: 120, yaw: -Math.PI / 2, views: ['desktop', 'portrait', 'landscape'] },
+  { name: 'city', x: -190, z: 120, yaw: -Math.PI / 2, views: ['desktop', 'portrait', 'landscape', 'on-foot'] },
   // A collision-checked Marin road point aimed at the seeded redwood grove.
   { name: 'forest', x: -265, z: -485, yaw: 0.7, views: ['forest'] },
 ];
-function scenario(viewport, stillOnly) {
+const imagesFor = name => name === 'forest' || name === 'on-foot' ? [name] : ['staged', 'boost', 'jump'];
+function scenario(viewport, name) {
   const touch = !!viewport.hasTouch;
   const steps = [
     { type: 'waitFor', selector: '#connection:has-text("LIVE")', timeoutMs: 60000 },
@@ -42,7 +44,16 @@ function scenario(viewport, stillOnly) {
     { type: 'waitForRoomReady', timeoutMs: 30000 },
     { type: 'wait', ms: 1500 },
   ];
-  if (stillOnly) return { freshGuest: true, viewport, steps: [...steps, { type: 'screenshot', name: 'forest' }] };
+  if (name === 'forest') return { freshGuest: true, viewport, steps: [...steps, { type: 'screenshot', name: 'forest' }] };
+  if (name === 'on-foot') return { freshGuest: true, viewport, steps: [...steps,
+    { type: 'beginRoom' },
+    { type: 'waitForTicks', count: 4 },
+    { type: 'keyPress', key: 'KeyF' },
+    { type: 'waitFor', selector: '#vehicle:has-text("ON FOOT")', timeoutMs: 30000 },
+    { type: 'wait', ms: 1200 },
+    { type: 'screenshot', name: 'on-foot' },
+    { type: 'sample' },
+  ] };
   return { freshGuest: true, viewport, steps: [...steps,
     { type: 'screenshot', name: 'staged' },
     { type: 'beginRoom' },
@@ -92,7 +103,7 @@ async function freePort() {
 const scenarioFiles = {};
 for (const [name, viewport] of Object.entries(viewports)) {
   scenarioFiles[name] = join(out, `${name}-scenario.json`);
-  await writeFile(scenarioFiles[name], JSON.stringify(scenario(viewport, name === 'forest'), null, 2) + '\n');
+  await writeFile(scenarioFiles[name], JSON.stringify(scenario(viewport, name), null, 2) + '\n');
 }
 const stageSource = await readFile(join(harness, 'tests/fixtures/playtest-stage-worker.ts'), 'utf8');
 const stageConfig = await readFile(join(harness, 'tests/fixtures/wrangler.playtest-stage.jsonc'), 'utf8');
@@ -153,7 +164,7 @@ for (const [label, root] of Object.entries(roots)) {
           const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8'));
           const trajectory = JSON.parse(await readFile(join(dir, 'trajectory.json'), 'utf8'));
           const screenshots = {};
-          for (const image of name === 'forest' ? ['forest'] : ['staged', 'boost', 'jump']) {
+          for (const image of imagesFor(name)) {
             const event = manifest.events.find(e => e.type === 'screenshot' && e.sample?.file === `${image}.png` && e.status === 'ok');
             const pose = event && trajectory.filter(p => p.atMs <= event.commandStartedAtMs).at(-1);
             screenshots[image] = pose ? { tick: pose.tick, x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw } : null;
@@ -163,14 +174,17 @@ for (const [label, root] of Object.entries(roots)) {
             ? manifest.events.find(e => e.type === 'jumpUntilAirborne' && e.status === 'ok')
             : manifest.events.filter(e => e.type === 'touchDown' && e.status === 'ok').at(-1);
           const jumpScreenshot = manifest.events.find(e => e.type === 'screenshot' && e.sample?.file === 'jump.png' && e.status === 'ok');
-          const jumpObserved = name === 'forest' ? null : (!!ground && !!jump && !!jumpScreenshot && trajectory.some(p =>
+          const jumpObserved = name === 'forest' || name === 'on-foot' ? null : (!!ground && !!jump && !!jumpScreenshot && trajectory.some(p =>
             p.atMs >= jump.commandStartedAtMs && p.atMs <= jumpScreenshot.commandStartedAtMs && p.supported === false &&
             p.vy > 0.1 && p.jumpBurstUntil > ground.sample?.jumpBurstUntil));
+          const onFootKey = manifest.events.findIndex(e => e.type === 'keyPress' && e.key === 'KeyF' && e.status === 'ok');
+          const onFootObserved = name === 'on-foot' ? onFootKey >= 0 && manifest.events.slice(onFootKey + 1).some(e => e.type === 'waitFor' && e.status === 'ok') : null;
           const ok = run.code === 0 && manifest.status === 'complete' && manifest.browserErrors?.pageErrors === 0 &&
-            manifest.browserErrors?.consoleErrors === 0 && manifest.trajectory?.status === 'available' && (name === 'forest' || jumpObserved) &&
+            manifest.browserErrors?.consoleErrors === 0 && manifest.trajectory?.status === 'available' &&
+            (name === 'forest' || (name === 'on-foot' ? onFootObserved : jumpObserved)) &&
             !!manifest.runner?.webgl?.renderer && Object.values(screenshots).every(Boolean);
           results[label].viewports[name] = { ok, viewport: manifest.viewport, renderer: manifest.runner?.webgl?.renderer ?? null,
-            browserErrors: manifest.browserErrors, jumpObserved, screenshots };
+            browserErrors: manifest.browserErrors, jumpObserved, onFootObserved, screenshots };
         } catch (error) { results[label].viewports[name] = { ok: false, error: String(error) }; }
       }
     } finally {
@@ -190,7 +204,7 @@ for (const [label, root] of Object.entries(roots)) {
 const comparison = {};
 for (const name of Object.keys(viewports)) {
   comparison[name] = {};
-  for (const image of name === 'forest' ? ['forest'] : ['staged', 'boost', 'jump']) {
+  for (const image of imagesFor(name)) {
     const a = results.base.viewports[name]?.screenshots?.[image];
     const b = results.candidate.viewports[name]?.screenshots?.[image];
     comparison[name][image] = a && b ? { distanceM: Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), tickDifference: b.tick - a.tick } : null;
