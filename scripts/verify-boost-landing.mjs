@@ -7,7 +7,7 @@ const root = resolve(directory);
 const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
 const poses = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
 if (manifest.status !== 'complete' || manifest.browserErrors?.pageErrors || manifest.browserErrors?.consoleErrors) throw new Error('Recording did not complete without browser errors.');
-if (!manifest.capture?.enabled || !Array.isArray(manifest.recordings) || !manifest.recordings.length) throw new Error('A video recording is required.');
+if (!manifest.capture?.enabled || !Array.isArray(manifest.recordings) || !manifest.recordings.length) throw new Error('A recording entry in the manifest is required.');
 if (!Array.isArray(poses) || poses.length === 0 || manifest.trajectory?.status !== 'available') throw new Error('Complete authoritative pose trace is required.');
 const events = manifest.events;
 const touch = events.some(event => event.type === 'touchDown');
@@ -27,4 +27,4 @@ const revisions = new Set(poses.filter(pose => pose.atMs >= boostStart.commandSt
 if (revisions.size !== 1 || revisions.has(null)) throw new Error('The controlled vehicle was relocated during the capture.');
 for (const screenshot of ['boost.png', 'jump.png', 'landing.png']) await access(join(root, screenshot));
 for (const recording of manifest.recordings) await access(join(root, recording));
-console.log(JSON.stringify({ status: 'verified', input: touch ? 'touch emulation' : 'keyboard', viewport: manifest.viewport, boostGroundedSeconds: (boost.at(-1).atMs - boost[0].atMs) / 1000, observedJumpSamples: inFlight.length, landingTick: landing.tick, poseRevision: landing.poseRevision, browserErrors: manifest.browserErrors }, null, 2));
+console.log(JSON.stringify({ status: 'trace-verified', recordingQuality: 'UNVERIFIED', visualEvidence: 'UNVERIFIED', input: touch ? 'touch emulation' : 'keyboard', viewport: manifest.viewport, boostGroundedSeconds: (boost.at(-1).atMs - boost[0].atMs) / 1000, observedJumpSamples: inFlight.length, landingTick: landing.tick, poseRevision: landing.poseRevision, browserErrors: manifest.browserErrors }, null, 2));

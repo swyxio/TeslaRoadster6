@@ -171,6 +171,8 @@ jobs:
           pnpm exec playwright install chromium
       - name: Verify recorder against a disposable game
         working-directory: candidate
+        env:
+          TAB_VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video && inputs.video_source == 'tab' }}
         run: |
           if ! command -v ffprobe > /dev/null || ! command -v ffmpeg > /dev/null; then brew install ffmpeg; fi
           pnpm exec wrangler dev --local --ip 127.0.0.1 --port 18787 \
@@ -184,7 +186,9 @@ jobs:
             sleep 1
           done
           TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-recorder.integration.ts http://127.0.0.1:18787
-          TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-tab-capture.integration.ts http://127.0.0.1:18787
+          if [ "$TAB_VIDEO_REQUESTED" = true ]; then
+            TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-tab-capture.integration.ts http://127.0.0.1:18787
+          fi
           node tests/playtest-audio.integration.mjs
       - name: Upload recorder diagnostics
         if: ${{ always() }}

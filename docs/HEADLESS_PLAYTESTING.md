@@ -228,11 +228,14 @@ unset PLAYTEST_STAGE_SECRET
 ```
 
 Repeat the touch capture with a new room and output directory at `--width 844
---height 390` for landscape. The verifier requires a real video, screenshots,
-sustained grounded rear thrust, an upward jump burst followed by a landing,
-and an unchanged pose revision. Keep the trace and inspect the video too; a
-touch-emulated browser is not a physical phone. Compare matching viewports and
-fixtures across revisions, and measure frame times in separate no-video runs.
+--height 390` for landscape. The verifier checks that the recorded video and
+screenshot paths exist and that the trace shows sustained grounded rear thrust,
+an upward jump burst followed by a landing, and an unchanged pose revision.
+Its `trace-verified` result does not inspect image or video contents; recording
+quality and visual evidence remain `UNVERIFIED`. Run the separate recording
+quality checks below and inspect playback. A touch-emulated browser is not a
+physical phone. Compare matching viewports and fixtures across revisions, and
+measure frame times in separate no-video runs.
 
 ### Check recording quality
 
