@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
+import { inspectGroundedBoost } from './visual-proof-checks.mjs';
 
 const harness = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { values } = parseArgs({ options: {
@@ -179,12 +180,13 @@ for (const [label, root] of Object.entries(roots)) {
             p.vy > 0.1 && p.jumpBurstUntil > ground.sample?.jumpBurstUntil));
           const onFootKey = manifest.events.findIndex(e => e.type === 'keyPress' && e.key === 'KeyF' && e.status === 'ok');
           const onFootObserved = name === 'on-foot' ? onFootKey >= 0 && manifest.events.slice(onFootKey + 1).some(e => e.type === 'waitFor' && e.status === 'ok') : null;
+          const boost = name === 'forest' || name === 'on-foot' ? null : inspectGroundedBoost(manifest, trajectory, !!viewports[name].hasTouch);
           const ok = run.code === 0 && manifest.status === 'complete' && manifest.browserErrors?.pageErrors === 0 &&
             manifest.browserErrors?.consoleErrors === 0 && manifest.trajectory?.status === 'available' &&
-            (name === 'forest' || (name === 'on-foot' ? onFootObserved : jumpObserved)) &&
+            (name === 'forest' || (name === 'on-foot' ? onFootObserved : jumpObserved && boost?.status === 'observed')) &&
             !!manifest.runner?.webgl?.renderer && Object.values(screenshots).every(Boolean);
           results[label].viewports[name] = { ok, viewport: manifest.viewport, renderer: manifest.runner?.webgl?.renderer ?? null,
-            browserErrors: manifest.browserErrors, jumpObserved, onFootObserved, screenshots };
+            browserErrors: manifest.browserErrors, boost, jumpObserved, onFootObserved, screenshots };
         } catch (error) { results[label].viewports[name] = { ok: false, error: String(error) }; }
       }
     } finally {
