@@ -120,6 +120,58 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
           pnpm install --frozen-lockfile
           pnpm test
+  room-integration:
+    name: Local Wrangler room and wallet integrations
+    needs: select
+    if: ${{ needs.select.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.candidate_sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install and build candidate
+        working-directory: candidate
+        env:
+          EXPECTED_CANDIDATE: ${{ needs.select.outputs.candidate_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Exercise a two-client local room and prediction
+        working-directory: candidate
+        env:
+          CLOUDFLARE_SEND_METRICS: 'false'
+        run: |
+          pnpm exec wrangler dev --local --ip 127.0.0.1 --port 18787 \
+            --persist-to "$RUNNER_TEMP/tesland-room-state" --show-interactive-dev-session false \
+            > "$RUNNER_TEMP/tesland-room-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:18787/api/health > /dev/null; then ready=true; break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then cat "$RUNNER_TEMP/tesland-room-server.log"; exit 1; fi
+          pnpm exec tsx tests/room.integration.ts http://127.0.0.1:18787
+          pnpm exec tsx tests/prediction.integration.ts http://127.0.0.1:18787
+      - name: Exercise delivery checkpoint recovery and upgrade wallet
+        working-directory: candidate
+        env:
+          CLOUDFLARE_SEND_METRICS: 'false'
+        run: |
+          pnpm exec tsx tests/delivery-journal.integration.ts
+          pnpm exec tsx tests/luxury-wallet.integration.ts
   measure:
     name: Paired local performance observation
     needs: [select, test]
