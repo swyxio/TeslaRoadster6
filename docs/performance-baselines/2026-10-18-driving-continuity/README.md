@@ -207,6 +207,26 @@ clearance, a nominal speed controller and the short pilot do not establish
 60 seconds of obstacle-free movement, dynamic-contact coverage, isolated
 load generation, queue peaks or representative city traffic.
 
+The full staged runner was then attempted locally on the `d05d6f4` Worker and
+shared simulation, identical in those paths to integrated `3b5be7c`. After
+15 seconds of wall-time warm-up, its 60.00-second sample had 20 disconnections
+and 6,588 rejected inputs including warm-up. The shortest observed snapshot
+span was 27.3 simulated seconds; an early disconnect can shorten that span,
+so it is not necessarily the room's total advancement. All 64 met the movement
+coverage criteria in each of the first two ten-second blocks, none did in the
+third or fourth, and 44 and 34 did in the last two. Zero sampled damage or
+impulse does not exclude between-snapshot contacts. The cause of the closes
+was not captured. This is an incomplete diagnostic, not a capacity pass.
+
+Observed snapshot-gap p95/max were 366/3,076 ms; applied-ack observation p95
+was 477 ms for the sequences observed in snapshots. Decoded JSON was
+2,596.82 MiB, and sampled owner queues reached three level inputs. The local
+client generator and Worker shared an Apple M5 Pro with 18 logical CPUs;
+one-minute host load was 20.73 before and 19.52 after. No Worker CPU or wire
+byte measurement was obtained. The [report](staged-load64-d05.json.gz) omits
+the disposable room and driver IDs (SHA-256
+`7d525b52dae098ef8810c3aaa70cf05c3a9f8f01a5312aee174747ee08e2e0c7`).
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's
