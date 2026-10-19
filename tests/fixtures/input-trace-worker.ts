@@ -14,6 +14,8 @@ export class GameRoom extends BaseRoom {
   private holdNext=false;
   private releaseHold:(()=>void)|null=null;
   private delayed:Promise<void>|null=null;
+  private armedJump:number|null=null;
+  private skippedTicks=0;
 
   private record(event:Event) {
     if(this.events.length===512){this.events.shift();this.dropped++;}
@@ -21,6 +23,11 @@ export class GameRoom extends BaseRoom {
   }
   constructor(ctx:DurableObjectState,env:unknown){
     super(ctx,env);
+    const tick=Reflect.get(this,'tick') as ()=>void;
+    Reflect.set(this,'tick',()=>{
+      if(this.skippedTicks>0){this.skippedTicks--;this.record({kind:'tick-skipped',tick:Reflect.get(this,'tickCount'),at:performance.now()});return;}
+      return Reflect.apply(tick,this,[]);
+    });
     const onMessage=Reflect.get(this,'onMessage') as (socket:WebSocket,raw:string|ArrayBuffer)=>Promise<void>;
     const reject=Reflect.get(this,'rejectInput') as (socket:WebSocket,message:{seq:number;targetTick:number},reason:string)=>void;
     Reflect.set(this,'rejectInput',(socket:WebSocket,message:{seq:number;targetTick:number},reason:string)=>{
@@ -59,6 +66,10 @@ export class GameRoom extends BaseRoom {
       const control=session.control,receive=control.receive.bind(control),advance=control.advance.bind(control);
       control.receive=(command:InputCommand,tick:number,now:number)=>{
         const result=receive(command,tick,now),state=control.snapshot(),event=this.active.get(socket);
+        if(this.armedJump!==null&&!result.rejection&&command.input.jump===this.armedJump&&
+          state.jump.pending.some(edge=>edge.id===this.armedJump)){
+          this.skippedTicks=4;this.armedJump=null;
+        }
         if(event)Object.assign(event,{schedulerCalled:true,receiptTick:tick,receiptTime:performance.now(),
           result:result.rejection??'accepted',revision:state.revision,receivedSeq:state.receivedSeq,
           appliedSeq:state.appliedSeq,heldUntilTick:state.heldUntilTick,
@@ -89,6 +100,7 @@ export class GameRoom extends BaseRoom {
     return response;
   }
   async trace(){return {events:this.events,dropped:this.dropped};}
+  async delayTicksForJump(id:number){if(!Number.isSafeInteger(id)||id<1||this.armedJump!==null||this.skippedTicks)throw new Error('Invalid jump delay');this.armedJump=id;}
   async holdDispatch(){if(this.holdNext||this.releaseHold)throw new Error('Dispatch already held');this.holdNext=true;}
   async releaseDispatch(){if(!this.releaseHold)throw new Error('No held dispatch');const release=this.releaseHold;this.releaseHold=null;release();}
 }
@@ -97,11 +109,12 @@ export default {async fetch(request:Request,env:{ROOMS:DurableObjectNamespace<Ga
   const url=new URL(request.url);
   if(!['127.0.0.1','localhost'].includes(url.hostname))return new Response('Local only',{status:403});
   if(url.pathname==='/health')return new Response('ok');
-  if(!['/api/room/sandbox-trace','/__trace','/__hold','/__release'].includes(url.pathname))return new Response('Not found',{status:404});
+  if(!['/api/room/sandbox-trace','/__trace','/__hold','/__release','/__delay-jump'].includes(url.pathname))return new Response('Not found',{status:404});
   const room=env.ROOMS.get(env.ROOMS.idFromName('sandbox-trace'));
   if(url.pathname==='/__trace'&&request.method==='GET')return Response.json(await room.trace());
   if(url.pathname==='/__hold'&&request.method==='POST'){await room.holdDispatch();return new Response('ok');}
   if(url.pathname==='/__release'&&request.method==='POST'){await room.releaseDispatch();return new Response('ok');}
+  if(url.pathname==='/__delay-jump'&&request.method==='POST'){await room.delayTicksForJump(Number(url.searchParams.get('id')));return new Response('ok');}
   if(url.pathname==='/api/room/sandbox-trace')return room.fetch(request);
   return new Response('Method not allowed',{status:405});
 }};

@@ -6,6 +6,18 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A more responsive takeoff',
+    intro: 'Jump and flip presses have more time to reach their scheduled moment while you are driving.',
+    sections: [
+      { title: 'Flight controls', items: [
+        'A live jump or flip is less likely to be lost while the room catches up.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.43-alpha',
+    label: '0.0.43 Alpha',
+    date: '2026-10-19',
     title: 'A livelier Bay',
     intro: 'Discover more detail and activity around the Bay.',
     sections: [

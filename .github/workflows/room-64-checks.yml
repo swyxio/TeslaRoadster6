@@ -37,9 +37,10 @@ jobs:
         run: |
           pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --esModuleInterop --types node scripts/room-64-diagnostic.ts scripts/room-64-observations.test.ts
           pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022 --types @cloudflare/workers-types tests/fixtures/input-trace-worker.ts
-          pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --esModuleInterop --types node tests/input-trace.integration.ts
+          pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM --esModuleInterop --types node tests/input-trace.integration.ts tests/delayed-jump.integration.ts
       - name: Exercise one Session against its self-started localhost Wrangler fixture
         env:
           WRANGLER_SEND_METRICS: 'false'
         run: |
           pnpm exec tsx tests/input-trace.integration.ts > "$RUNNER_TEMP/input-trace.json" || { cat "$RUNNER_TEMP/input-trace.json"; exit 1; }
+          pnpm exec tsx tests/delayed-jump.integration.ts > "$RUNNER_TEMP/delayed-jump.json" || { cat "$RUNNER_TEMP/delayed-jump.json"; exit 1; }

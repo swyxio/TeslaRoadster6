@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { NEUTRAL, type Input } from '../shared/game';
-import { EDGE_LATE_TICKS, FUTURE_TICKS, HOLD_TICKS, INPUT_TIMEOUT_MS, ScheduledInput, type InputCommand } from '../shared/tick-input';
+import { EDGE_LATE_TICKS, EDGE_TIMEOUT_MS, FUTURE_TICKS, HOLD_TICKS, INPUT_TIMEOUT_MS, ScheduledInput, type InputCommand } from '../shared/tick-input';
 
 const input=(value:Partial<Input>={}):Input=>({...NEUTRAL,...value});
 const command=(seq:number,targetTick:number,value:Partial<Input>={},controlRevision=0,actionSeq=0):InputCommand=>({seq,targetTick,controlRevision,actionSeq,input:input(value)});
@@ -54,6 +54,24 @@ test('bounded tick window rejects continuous late or far-future input; near-late
   assert.equal(scheduler.snapshot().jump.seen,2,'repeated sequence cannot inject an edge');
   assert.deepEqual(scheduler.receive(command(5,21,{jump:2,flip:1}),20,50),{outcomes:[]});
   assert.deepEqual(scheduler.snapshot().jump.pending,[]);assert.deepEqual(scheduler.snapshot().flip.pending,[]);
+});
+
+test('active controls preserve an eight-tick jump and flip through the scheduled tick',()=>{
+  const scheduler=new ScheduledInput(input());
+  scheduler.receive(command(1,8,{jump:1,flip:1,throttle:1}),0,0);
+  for(let tick=1;tick<=7;tick++){
+    const at=tick*50;
+    const step=scheduler.advance(tick,at);
+    assert.deepEqual(step.outcomes,[],`no edge expires before tick ${tick+1}`);
+    scheduler.receive(command(tick+1,8,{jump:1,flip:1,throttle:1}),tick,at);
+  }
+  const due=scheduler.advance(8,400);
+  assert.deepEqual(due.outcomes,[
+    {kind:'jump',id:1,targetTick:8,status:'processed'},
+    {kind:'flip',id:1,targetTick:8,status:'processed'},
+  ]);
+  assert.equal(due.input.jump,1);assert.equal(due.input.flip,1);
+  assert.deepEqual(scheduler.advance(9,450).outcomes,[],'each press fires once');
 });
 
 test('counter ordering handles duplicates, older values, wrap, and the ambiguous half range',()=>{
@@ -290,8 +308,22 @@ test('each queued edge has a bounded age even while duplicate level frames arriv
   scheduler.receive(command(1,5,{jump:1}),0,0);
   scheduler.receive(command(2,5,{jump:1,throttle:1}),0,200);
   const result=scheduler.receive(command(3,5,{jump:1,throttle:1}),0,301);
-  assert.deepEqual(result.outcomes,[{kind:'jump',id:1,targetTick:5,status:'expired'}]);
+  assert.deepEqual(result.outcomes,[],'live controls allow the accepted edge to reach its target');
+  scheduler.receive(command(4,5,{jump:1,throttle:1}),0,500);
+  scheduler.receive(command(5,5,{jump:1,throttle:1}),0,EDGE_TIMEOUT_MS);
+  const expired=scheduler.receive(command(6,5,{jump:1,throttle:1}),0,EDGE_TIMEOUT_MS+1);
+  assert.deepEqual(expired.outcomes,[{kind:'jump',id:1,targetTick:5,status:'expired'}]);
   assert.equal(scheduler.snapshot().jump.pending.length,0);
+});
+
+test('rejected stale controls cannot keep a pending edge alive',()=>{
+  const scheduler=new ScheduledInput(input());
+  scheduler.invalidate(input(),{type:'relocation'});
+  scheduler.receive(command(1,5,{jump:1},1),0,0);
+  assert.equal(scheduler.receive(command(2,5,{jump:1},0),0,200).rejection,'revision');
+  const expired=scheduler.advance(1,INPUT_TIMEOUT_MS+1);
+  assert.deepEqual(expired.outcomes,[{kind:'jump',id:1,targetTick:5,status:'expired'}]);
+  assert.equal(expired.input.jump,0);
 });
 
 test('same-tick edge bursts reserve at most eight ticks and expire overflow',()=>{
