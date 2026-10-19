@@ -169,6 +169,15 @@ have SHA-256 `a02302184a3507dcb0199b8116c6db0b9429b8449bd268b8d02f49a2d36d6882`.
 Its single local 64-player clone-cost probe is an implementation indicator,
 not a frame, room-capacity or production measurement.
 
+A later [token and contact audit](presentation-token-audit-20261018.tar.gz)
+(SHA-256 `22d1bb880b4c6ee4658c8a8a92b7303c786ee7b61e51106cb388913c1ea9c8eb`)
+preserves two additional real regressions. A 0.5 m sandbox teleport was
+indistinguishable from ordinary movement, and an unattended ferry car moved
+without the driver-only relocation callback reporting it. The isolated lab
+passed 148 of 152 focused checks; the remaining failures were short teleport,
+pinned-wall holding, jump playback exhaustion and ferry interpolation. It did
+not implement a token or establish swept-contact safety.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -290,6 +299,14 @@ metadata need verification before use, and observer cost needs a matched
 study. A watchdog already disarmed before receipt still has an ambiguous cause.
 The existing normal-spawn fixture remains insufficient for sustained movement.
 The archive has SHA-256 `e318b5742eccc260a8723232ccd05bbaa2cd42bee826ddd87c2631e1be2794e9`.
+
+The [second diagnostic revision](input-rejection-preview-v2.tar.gz) adds a
+fail-closed identity checker and passed three checker tests and a one-client
+loopback Wrangler smoke for applied and rejected inputs. Its provider response
+schema, complete asset graph and workflow wiring are unverified; the workflow
+remains disabled. No remote diagnostic Worker or load was started. The source
+predates current main, and observer overhead is unmeasured. SHA-256:
+`28742c3cc8ae7136500a0e51a7cdd094b8612b4c2cea2e2b8bf8ee98d1df8d60`.
 
 ## Hosted comparison
 
