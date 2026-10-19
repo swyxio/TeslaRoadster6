@@ -3,6 +3,30 @@
 **HOLD:** these checks do not establish the steady-motion release gate or
 playable capacity. The candidate was not merged or deployed on this evidence.
 
+## Matched inherited peer-contact defect
+
+The [matched trace archive](matched-main-candidate-20261018.tar.gz) (SHA-256
+`801b0ddf40a7827b30eb39bb26b7ec1440f8e7f2db5bb662509352a52e1a1b10`)
+replays identical authority states, state packets, input schedules and delivery
+times through main `e07f0be` and integrated candidate `020f25b`. Their welcome
+messages differ only in the required protocol number (48/49). Both snap at
+frame 228 of a 481-frame FIFO bunched peer-contact trace: local displayed steps
+are 19.500/19.701 m, peer steps 39.578/39.578 m, and both have approximately
+0.234 m sampled endpoint overlap. The preceding authoritative tick moved the
+peer 2.8 m and impact occurs on a later tick; neither a single large authority
+step nor a differing input schedule explains the cut. This is an inherited
+presentation failure, with a 0.201 m larger local step in this one trace, not
+a general regression estimate. The trace is a synthetic component replay with
+directly driven throttle, not real scheduler, browser, WAN, swept-contact or
+capacity proof.
+
+A second retained sparse-gap fixture produces 13.968/14.187 m cuts, but it
+advances 600 ms of simulation over 301 ms of wall time; it is an extreme
+tick-jump detector, not a synchronized 300 ms blackout. After main integration,
+`81ea259` passed 1,153 tests and local v49 room and prediction integrations;
+the `020f25b` build passed with the existing Vite chunk warning. These do not
+clear the performance gates.
+
 The local baseline was `1f722ddc8fe9e2950b2af8d866691d78af49bf4a` (protocol
 46). The timing and prediction candidate was `ef7dc05f15fc7da626f16aa7739102afe14c6e58`
 (protocol 47); `465633902f824f5feeb147738504f9ddb8ce5dcd` additionally
