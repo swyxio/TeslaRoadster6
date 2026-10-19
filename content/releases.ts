@@ -5,7 +5,7 @@ export { CURRENT_RELEASE } from './version';
 export const RELEASES = [
   {
     ...CURRENT_RELEASE,
-    date: '2026-10-18',
+    date: '2026-10-19',
     title: 'The long way around the Bay',
     intro: 'There is more to see and do on the Bay highways.',
     sections: [
