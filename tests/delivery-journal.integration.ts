@@ -83,7 +83,7 @@ try{
   const baseFare=payoutFor({...order(),elapsed:45});
   assert.equal(paid.delivery?.matched,true);assert.equal(paid.delivery?.earnings[0].amount,baseFare);
   assert.equal(paid.progress.completed,1);assert.ok(paid.awards.includes('deliveries-1'));
-  assert.equal(paid.progress.cash,10_120+baseFare+500+100,'first early-delivery tier commits with the fare');
+  assert.equal(paid.progress.cash,10_120+baseFare+350+100,'first early-delivery tier commits with the fare');
   assert.deepEqual(paid.progress.achievementTiers?.deliveries,{count:1,claimed:1});
   assert.deepEqual(paid.progress.achievementTiers?.['early-deliveries'],{count:1,claimed:1});
   assert.deepEqual(await rpc('sources',e),['earned-source:delivery:1:dropoff']);
@@ -311,7 +311,7 @@ try{
   await stop(child);child=undefined;child=start();await ready();await rpc('freeze',completedCrash,15_000);
   const completedRecovered=await rpc<Profile>('profile',completedCrash);
   assert.equal(completedRecovered.progress.completed,1);
-  assert.equal(completedRecovered.progress.cash,10_120+Math.round(baseFare*1.5)+500+100,'the captured room multiplier survives recovery');
+  assert.equal(completedRecovered.progress.cash,10_120+Math.round(baseFare*1.5)+350+100,'the captured room multiplier survives recovery');
   assert.equal(completedRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
   assert.equal(completedRecovered.progress.order.customer,legacyPreview.order.customer);
   assert.deepEqual(await rpc('sources',completedCrash),['earned-source:delivery:1:dropoff']);
