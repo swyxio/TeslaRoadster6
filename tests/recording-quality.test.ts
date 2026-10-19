@@ -144,6 +144,15 @@ test('each artifact segment requires finalized traces and readable encoded video
     assert.equal(truncated.artifact, 'HOLD');
     assert.match(truncated.reasons.join(' '), /materially shorter/);
     assert.doesNotMatch(truncated.reasons.join(' '), /duration comparison is unavailable/);
+    const apparentlyClean = run(true);
+    apparentlyClean.capture.segments[0].intervalMs.gapsAtLeast100Ms = 0;
+    const comparison = compareRecording(run(false), apparentlyClean);
+    assert.equal(comparison.comparison, 'available');
+    assert.equal(comparison.recordingQuality, 'UNVERIFIED');
+    const mergedTruncation = mergeRecordingInspection(comparison, truncated);
+    assert.equal(mergedTruncation.comparison, 'HOLD');
+    assert.equal(mergedTruncation.recordingQuality, 'HOLD');
+    assert.match(mergedTruncation.reasons.join(' '), /materially shorter/);
 
     // Out-of-order capture timestamps prevent the duration comparison; they do not
     // establish that the otherwise readable video was actually truncated.

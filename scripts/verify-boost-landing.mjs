@@ -6,7 +6,7 @@ if (!directory || process.argv.length !== 3) throw new Error('Usage: node script
 const root = resolve(directory);
 const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
 const poses = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
-if (manifest.status !== 'complete' || manifest.browserErrors?.pageErrors || manifest.browserErrors?.consoleErrors) throw new Error('Recording did not complete without browser errors.');
+if (manifest.status !== 'complete' || manifest.browserErrors?.pageErrors !== 0 || manifest.browserErrors?.consoleErrors !== 0) throw new Error('Recording did not complete with explicit zero browser errors.');
 if (!manifest.capture?.enabled || !Array.isArray(manifest.recordings) || !manifest.recordings.length) throw new Error('A recording entry in the manifest is required.');
 if (!Array.isArray(poses) || poses.length === 0 || manifest.trajectory?.status !== 'available') throw new Error('Complete authoritative pose trace is required.');
 const events = manifest.events;
@@ -24,7 +24,7 @@ if (!inFlight.length) throw new Error('An upward jump burst was not observed.');
 const landing = poses.find(pose => pose.atMs > inFlight.at(-1).atMs && pose.atMs <= stop.commandStartedAtMs && pose.supported === true);
 if (!landing) throw new Error('A landing after the jump was not observed.');
 const revisions = new Set(poses.filter(pose => pose.atMs >= boostStart.commandStartedAtMs && pose.atMs <= stop.commandStartedAtMs).map(pose => pose.poseRevision));
-if (revisions.size !== 1 || revisions.has(null)) throw new Error('The controlled vehicle was relocated during the capture.');
+if (revisions.size !== 1 || ![...revisions].every(revision => Number.isInteger(revision) && revision >= 0)) throw new Error('A single nonnegative pose revision is required throughout the capture.');
 for (const screenshot of ['boost.png', 'jump.png', 'landing.png']) await access(join(root, screenshot));
 for (const recording of manifest.recordings) await access(join(root, recording));
 console.log(JSON.stringify({ status: 'trace-verified', recordingQuality: 'UNVERIFIED', visualEvidence: 'UNVERIFIED', input: touch ? 'touch emulation' : 'keyboard', viewport: manifest.viewport, boostGroundedSeconds: (boost.at(-1).atMs - boost[0].atMs) / 1000, observedJumpSamples: inFlight.length, landingTick: landing.tick, poseRevision: landing.poseRevision, browserErrors: manifest.browserErrors }, null, 2));

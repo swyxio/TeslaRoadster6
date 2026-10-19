@@ -9,7 +9,7 @@ import { createInterface } from 'node:readline';
 import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 // @ts-expect-error The standalone JavaScript diagnostic has no TypeScript declarations.
-import { compareRecording, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectRecordingArtifact, mergeRecordingInspection } from '../scripts/recording-quality.mjs';
 
 const origin = new URL(process.argv[2] ?? 'http://127.0.0.1:8787');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname)) throw new Error('Use a local disposable game only.');
@@ -117,21 +117,15 @@ try {
   controlChild.stderr.on('data', chunk => { controlError += chunk; });
   assert.equal(await new Promise<number | null>(resolve => controlChild.once('exit', resolve)), 0, controlError);
   const controlManifest = JSON.parse(await readFile(join(controlOutput, 'manifest.json'), 'utf8'));
-  const quality = compareRecording(controlManifest, replayManifest);
-  const traces = await inspectCaptureTraces(replayManifest, join(replayOutput, 'manifest.json'));
-  const videos = await inspectVideos(replayManifest, join(replayOutput, 'manifest.json'));
+  const comparison = compareRecording(controlManifest, replayManifest);
+  const inspected = await inspectRecordingArtifact(replayManifest, join(replayOutput, 'manifest.json'));
+  const quality = mergeRecordingInspection(comparison, inspected);
+  await writeFile(join(dirname(output), 'quality.json'), JSON.stringify(quality, null, 2) + '\n');
   assert.equal(quality.playerFidelity, 'UNVERIFIED');
   // Slow software rendering may leave too few intervals for a statistical
   // comparison; it must HOLD, not turn this functional check into a budget.
-  assert.ok(quality.reasons.every((reason: string) => reason.startsWith('Animation callback measurements') || reason.startsWith('Video segments lack')), quality.reasons.join(' '));
-  if (traces.some((trace: { status: string }) => trace.status !== 'available')) {
-    quality.comparison = 'HOLD';
-    quality.recordingQuality = 'HOLD';
-    quality.reasons.push('Capture frame traces are missing, incomplete or invalid.');
-  }
-  assert.equal(quality.recordingQuality, quality.reasons.length || quality.warnings.length ? 'HOLD' : 'UNVERIFIED');
-  assert.ok(videos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(videos));
-  await writeFile(join(dirname(output), 'quality.json'), JSON.stringify({ ...quality, captureTraces: traces, encodedVideos: videos }, null, 2) + '\n');
+  assert.ok(comparison.reasons.every((reason: string) => reason.startsWith('Animation callback measurements') || reason.startsWith('Video segments lack')), comparison.reasons.join(' '));
+  assert.ok(inspected.encodedVideos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(inspected.encodedVideos));
 
   // Observe real DOM touch events so releasing either finger is checked
   // independently of the runner's own bookkeeping.

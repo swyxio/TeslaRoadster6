@@ -35,6 +35,17 @@ test('a valid physics trace with empty media does not verify visual evidence', (
       (({ status, recordingQuality, visualEvidence }) => ({ status, recordingQuality, visualEvidence }))(JSON.parse(checked.stdout)),
       { status: 'trace-verified', recordingQuality: 'UNVERIFIED', visualEvidence: 'UNVERIFIED' }
     );
+    for (const browserErrors of [undefined, {}, { pageErrors: 0 }, { consoleErrors: 0 }, { pageErrors: 1, consoleErrors: 0 }]) {
+      writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, browserErrors }));
+      assert.notEqual(run().status, 0, `invalid browser errors must fail: ${JSON.stringify(browserErrors)}`);
+    }
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
+    for (const revision of [undefined, null, -1, 1.5]) {
+      writeFileSync(join(dir, 'trajectory.json'), JSON.stringify(poses.map(pose => ({ ...pose, poseRevision: revision }))));
+      assert.notEqual(run().status, 0, `invalid pose revision must fail: ${revision}`);
+    }
+    writeFileSync(join(dir, 'trajectory.json'), JSON.stringify(poses.map((pose, index) => ({ ...pose, poseRevision: index === 0 ? 2 : 1 }))));
+    assert.notEqual(run().status, 0, 'a changed pose revision must fail');
     writeFileSync(join(dir, 'trajectory.json'), JSON.stringify(poses.filter(pose => pose.supported)));
     assert.notEqual(run().status, 0, 'a trace without the jump must fail');
   } finally {
