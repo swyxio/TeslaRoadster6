@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Rocket-pad scan · candidate · 2026-10-18 Pacific
+
+- The scan skips a full distance calculation only when both coordinate deltas are finite and at least one is four metres or more; nearby and nonfinite coordinates retain the original check. Eligibility callbacks, winner ordering and cooldown behavior remain unchanged. This does not establish room throughput or driving-continuity acceptance.
+
 ## Manual delivery economy rebalance · 2026-10-18 Pacific
 
 - A fresh guest manually drove the production-matching v0.0.32 / protocol 46 build in local Chrome. At 5:01 active, five completed deliveries had raised cash from $2,500 to $8,660. The first, third and fifth deliveries respectively combined fare and achievement/checkpoint payments of $1,289, $1,323 and $1,419. The run included collisions and unstuck recoveries and lasted longer in wall time; it is one route rather than a typical-player measurement.
