@@ -156,6 +156,14 @@ was 3,231.37 MiB. Snapshot gap p95 was 531 ms, maximum 3,269 ms, and the
 client event-loop delay p95 was 34.3 ms. Sampled owner control queues reached
 three level inputs and zero jump or flip edges; sampling does not prove peaks.
 
+A separate two-client idle handshake against the same local Worker verified
+that Node's WebSocket offered and negotiated `permessage-deflate`. The existing
+raw-frame probe observed compression on 46/46 requested-compression frames;
+median frame size was 698 bytes versus 24,186 bytes without the extension.
+These include WebSocket frame headers, exclude TCP/IP and describe a different,
+two-client idle fixture. They are not a throughput comparison; in particular,
+the 3,231.37 MiB above is decoded client data, not bytes on the wire.
+
 No driver satisfied all six ten-second movement blocks; all 64 had at least
 one covered block with less than one metre of movement and no moving samples.
 The fixed control/spawn fixture does not ensure an unobstructed route. This is
