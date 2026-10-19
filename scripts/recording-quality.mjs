@@ -219,7 +219,8 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
     const status = video.packetDurationMs + toleranceMs >= trace.spanMs ? 'available' : 'HOLD';
     return { file: video.file, status, videoPacketDurationMs: video.packetDurationMs, traceSpanMs: trace.spanMs, toleranceMs: round(toleranceMs) };
   });
-  if (durationChecks.some(check => check.status !== 'available')) reasons.push('A video packet duration is unavailable or materially shorter than its capture trace.');
+  if (durationChecks.some(check => check.status === 'unavailable')) reasons.push('A video duration comparison is unavailable because packet timing or capture trace evidence is unavailable.');
+  if (durationChecks.some(check => check.status === 'HOLD')) reasons.push('A video packet duration is materially shorter than its capture trace.');
   const frameIntervals = animation(manifest);
   if (frameIntervals?.p95Ms > 33.4) warnings.push(`Animation callback p95 was ${frameIntervals.p95Ms} ms; inspect this footage for stutter.`);
   if (Array.isArray(segments)) for (const segment of segments) {

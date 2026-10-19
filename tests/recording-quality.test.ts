@@ -142,6 +142,19 @@ test('each artifact segment requires finalized traces and readable encoded video
     assert.equal(truncated.durationChecks[1].toleranceMs, 3600);
     assert.equal(truncated.artifact, 'HOLD');
     assert.match(truncated.reasons.join(' '), /materially shorter/);
+    assert.doesNotMatch(truncated.reasons.join(' '), /duration comparison is unavailable/);
+
+    // Out-of-order capture timestamps prevent the duration comparison; they do not
+    // establish that the otherwise readable video was actually truncated.
+    trace.samples[1][0] = 999;
+    trace.samples[1][1] = 102;
+    writeFileSync(join(dir, segments[1].traceFile), JSON.stringify(trace));
+    const reordered = await inspectRecordingArtifact(manifest, path);
+    assert.equal(reordered.artifact, 'HOLD');
+    assert.equal(reordered.captureTraces[1].status, 'unavailable');
+    assert.equal(reordered.durationChecks[1].status, 'unavailable');
+    assert.match(reordered.reasons.join(' '), /duration comparison is unavailable/);
+    assert.doesNotMatch(reordered.reasons.join(' '), /materially shorter/);
     trace.samples[1][0] = 1101;
     trace.samples[1][1] = 102;
     writeFileSync(join(dir, segments[1].traceFile), JSON.stringify(trace));
