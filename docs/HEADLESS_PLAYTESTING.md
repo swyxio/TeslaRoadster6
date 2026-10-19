@@ -213,6 +213,42 @@ and an unchanged pose revision. Keep the trace and inspect the video too; a
 touch-emulated browser is not a physical phone. Compare matching viewports and
 fixtures across revisions, and measure frame times in separate no-video runs.
 
+### Check recording quality
+
+The older 0.0.31/0.0.32 delivery videos were recorded on a contended virtual
+GPU and are evidence of the route, not of smooth player experience. Before
+using new footage for visual comparison, run the same scenario once without
+video and once with video, on the same machine and browser, against the same
+origin and verified build. Use a fresh seeded room for each run. On macOS with
+Metal, for example, after starting the staged fixture above:
+
+```sh
+export PLAYTEST_STAGE_SECRET="$(cut -d = -f 2 "$stage_env")"
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=quality-control&perf' \
+  --target-ref YOUR_FULL_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/quality-control --trajectory --browser chrome --gpu metal --fps 60 --no-video
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=quality-video&perf' \
+  --target-ref YOUR_FULL_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/quality-video --trajectory --browser chrome --gpu metal --fps 60
+node scripts/verify-boost-landing.mjs playtest-runs/quality-video
+node scripts/recording-quality.mjs playtest-runs/quality-control/manifest.json \
+  playtest-runs/quality-video/manifest.json > playtest-runs/quality-report.json
+unset PLAYTEST_STAGE_SECRET
+```
+
+The quality report requires `ffprobe` on the path and returns `HOLD` when the
+run, timestamps, video stream or matching configuration are incomplete. It
+compares animation callback intervals, describes long screencast gaps, and
+reports host load. It checks metadata and video packets, not whether images
+are unique or look smooth. The frame callback transfers JPEG data and adds
+recording overhead. Capture timestamps are not physical display or GPU timing;
+the full commit is an operator label and must be checked against the served
+build. Inspect the video and scenario trajectory, compare with real gameplay,
+and repeat on quiet representative hardware before drawing performance
+conclusions. The comparison currently requires one recording segment enclosing
+one `frameStart` / `frameStop` interval; scenarios with other layouts need
+their own analysis. Keep the private capture traces with the video.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged

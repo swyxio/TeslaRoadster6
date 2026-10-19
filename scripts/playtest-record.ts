@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
+import { ScreencastCapture } from './playtest-capture';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -42,6 +43,8 @@ if (!Number.isInteger(fps) || fps < 1 || fps > 60) throw new Error('FPS must be 
 const scenarioBytes = values.scenario ? await readFile(resolve(values.scenario)) : null;
 const scenario = scenarioBytes ? JSON.parse(scenarioBytes.toString()) as Scenario : { steps: [] };
 if (!Array.isArray(scenario.steps)) throw new Error('Scenario steps must be an array.');
+const sourceHash = async (file: string) => createHash('sha256').update(await readFile(new URL(file, import.meta.url))).digest('hex');
+const [recorderSourceSha256, captureSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts')]);
 const view = scenario.viewport ?? { width: Number(values.width), height: Number(values.height), isMobile: values.mobile, hasTouch: values.mobile };
 if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width < 200 || view.width > 3840 || view.height < 200 || view.height > 2160 || (view.deviceScaleFactor !== undefined && (!(view.deviceScaleFactor > 0) || view.deviceScaleFactor > 4))) throw new Error('Invalid viewport.');
 const out = resolve(values.out ?? join('playtest-runs', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`));
@@ -55,12 +58,13 @@ const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
   target: { origin: target.origin, pathname: target.pathname, refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
-  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
-  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
+  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
+  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, segments: [] as Record<string, unknown>[], note: 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
 const recordings = manifest.recordings as string[];
 const screenshots = manifest.screenshots as string[];
+const captureSegments = (manifest.capture as { segments: Record<string, unknown>[] }).segments;
 const held = new Set<string>();
 let browser: Browser | undefined;
 let context: BrowserContext | undefined;
@@ -71,6 +75,7 @@ let pointerHeld = false;
 let recording = false;
 let segment = 0;
 let pendingVideo = '';
+let pendingCapture: ScreencastCapture | undefined;
 let failure: unknown;
 let actionErrors = 0;
 let pageErrors = 0;
@@ -165,10 +170,19 @@ async function sample() {
 }
 async function stopRecording() {
   if (!recording) throw new Error('No recording is active.');
-  if (!values['no-video']) await page!.screencast.stop();
-  recording = false;
-  if (!values['no-video']) recordings.push(pendingVideo);
-  pendingVideo = '';
+  if (values['no-video']) { recording = false; pendingVideo = ''; return; }
+  const video = pendingVideo;
+  const stopRequestedAtRunMs = performance.now() - started;
+  let stopError: unknown;
+  try { await page!.screencast.stop(); } catch (error) { stopError = error; }
+  recording = false; pendingVideo = '';
+  const capture = pendingCapture!.finish(stopRequestedAtRunMs);
+  pendingCapture = undefined;
+  const traceFile = video.replace(/\.webm$/, '.capture.json');
+  await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+  captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+  if (stopError) throw stopError;
+  recordings.push(video);
 }
 async function releaseInputs() {
   for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
@@ -391,7 +405,12 @@ async function act(action: Action): Promise<unknown> {
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');
         pendingVideo = `segment-${String(++segment).padStart(3, '0')}.webm`;
-        if (!values['no-video']) await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps });
+        if (!values['no-video']) {
+          const capture = new ScreencastCapture(performance.now() - started);
+          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
+            onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
+          pendingCapture = capture;
+        }
         recording = true; result = await sample(); break;
       }
       case 'recordStop':
@@ -519,6 +538,7 @@ try {
   }
 } catch (error) { failure = error; }
 finally {
+  (manifest.runner as Record<string, unknown>).hostLoadAverageAtFinish = os.platform() === 'win32' ? null : os.loadavg();
   const endedAt = replayFinishedAt ?? performance.now();
   if (page) {
     await releaseInputs();

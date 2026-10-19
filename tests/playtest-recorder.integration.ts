@@ -83,6 +83,16 @@ try {
   assert.ok(replay.steps.slice(downIndex + 1, sampleIndex).some((step: { type: string; ms?: number }) => step.type === 'wait' && (step.ms ?? 0) >= 1000), 'Replay must preserve the hold between requests.');
   assert.ok(!manifestText.includes(secret) && !replayText.includes(secret));
   assert.ok((await stat(join(output, 'segment-001.webm'))).size > 1000);
+  assert.equal(manifest.capture.requestedFps, 30);
+  assert.equal(manifest.capture.segments.length, 1);
+  const capture = manifest.capture.segments[0];
+  assert.equal(capture.video, 'segment-001.webm');
+  assert.equal(capture.finalized, true);
+  assert.equal(capture.status, 'available');
+  assert.ok(capture.callbacksReceived > 1 && capture.observedCallbackFps > 0);
+  const captureTrace = JSON.parse(await readFile(join(output, capture.traceFile), 'utf8'));
+  assert.equal(captureTrace.samples.length, capture.callbacksReceived);
+  assert.ok(captureTrace.samples.every((frame: number[]) => frame.length === 4 && frame[0] > 0));
   if (process.platform !== 'win32') assert.equal((await stat(output)).mode & 0o077, 0);
   const replayTarget = new URL(origin);
   replayTarget.searchParams.set('room', `replay-${randomBytes(6).toString('hex')}`);

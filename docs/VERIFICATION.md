@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Recording diagnostics · 2026-10-18 Pacific
+
+- The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks the encoded video stream. Five focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
+- A new desktop physical-GPU comparison was interrupted when a concurrent 64-client probe was reported; it produced no usable comparison. Real-browser integration and a new recording-on/off pair still need verification. These diagnostics do not measure physical display presentation.
+
 ## Production 0.0.32 readback and smoke · 2026-10-18 Pacific
 
 - Cloudflare [production build e4983c05-6e72-46fd-a8cd-a846d65fcffc](https://dash.cloudflare.com/2d017c943ff16e4c52783635ef05e535/workers/services/view/bay-drive/production/builds/e4983c05-6e72-46fd-a8cd-a846d65fcffc) is merge `1f722ddc8fe9e2950b2af8d866691d78af49bf4a`. The live entry bundle SHA-256 was `d50c340ce91e5de9db57a6ac405e6185270d3347087050f3295745847e364f13`; health reported protocol 46 and configured admission capacity 64, not measured capacity.
