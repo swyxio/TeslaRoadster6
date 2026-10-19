@@ -104,9 +104,9 @@ export async function inspectCaptureTraces(manifest, manifestPath) {
     try {
       const trace = JSON.parse(await readFile(join(dirname(resolve(manifestPath)), name), 'utf8'));
       if (segment.mode === 'tab') {
-        if (trace.format !== 2 || trace.mode !== 'tab' || !finite(trace.startedAtBrowserMs) || !finite(trace.stoppedAtBrowserMs) || trace.stoppedAtBrowserMs <= trace.startedAtBrowserMs ||
+        if (trace.format !== 3 || trace.mode !== 'tab' || trace.captureHandleCheck !== 'matched' || !finite(trace.startedAtBrowserMs) || !finite(trace.stoppedAtBrowserMs) || trace.stoppedAtBrowserMs <= trace.startedAtBrowserMs ||
             !Number.isSafeInteger(trace.chunks) || trace.chunks < 1 || !Number.isSafeInteger(trace.bytes) || trace.bytes < 1 || trace.settings?.displaySurface !== 'browser' ||
-            !Number.isSafeInteger(trace.settings?.width) || trace.settings.width < 1 || !Number.isSafeInteger(trace.settings?.height) || trace.settings.height < 1) throw new Error('Invalid tab recording metadata.');
+            !Number.isSafeInteger(trace.settings?.width) || trace.settings.width < 1 || !Number.isSafeInteger(trace.settings?.height) || trace.settings.height < 1) throw new Error('Invalid tab recording metadata or missing capture-handle match.');
         return { file: name, status: 'available', mode: 'tab', bytes: trace.bytes, width: trace.settings.width, height: trace.settings.height, spanMs: round(trace.stoppedAtBrowserMs - trace.startedAtBrowserMs) };
       }
       const columns = ['browserPresentedAtUnixMs', 'callbackReceivedAtRunMs', 'viewportWidth', 'viewportHeight'];

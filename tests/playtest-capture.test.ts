@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ScreencastCapture } from '../scripts/playtest-capture';
+import { finalizeTabCapture, ScreencastCapture, TabChunkSink, withDeadline } from '../scripts/playtest-capture';
 
 const frame = (timestamp: number) => ({ timestamp, viewportWidth: 1280, viewportHeight: 720 });
 
@@ -50,4 +50,73 @@ test('missing, invalid, and truncated callbacks do not produce a usable cadence'
   assert.equal(limitedResult.samplesRetained, 2);
   assert.equal(limitedResult.callbackSilenceAtStopMs, 1);
   assert.ok(limitedResult.flags.includes('trace_truncated'));
+});
+
+test('tab finalization publishes only after stop, close and trace writing succeed', async () => {
+  for (const failing of ['stop', 'close', 'trace', 'publish'] as const) {
+    const calls: string[] = [];
+    const result = await finalizeTabCapture({
+      stop: async () => { calls.push('stop'); if (failing === 'stop') throw null; return { chunks: 1 }; },
+      close: async () => { calls.push('close'); if (failing === 'close') throw false; },
+      writeTrace: async () => { calls.push('trace'); if (failing === 'trace') throw undefined; },
+      publish: async () => { calls.push('publish'); if (failing === 'publish') throw null; },
+      remove: async () => { calls.push('remove'); },
+    });
+    assert.ok(result.error instanceof Error);
+    assert.equal(result.partialRemovalFailed, failing === 'close');
+    assert.deepEqual(calls, {
+      stop: ['stop', 'close', 'remove'], close: ['stop', 'close'],
+      trace: ['stop', 'close', 'trace', 'remove'], publish: ['stop', 'close', 'trace', 'publish', 'remove'],
+    }[failing]);
+  }
+  const failedRemoval = await finalizeTabCapture({
+    stop: async () => { throw new Error('stop failed'); }, close: async () => {},
+    writeTrace: async () => {}, publish: async () => {}, remove: async () => { throw null; },
+  });
+  assert.equal(failedRemoval.partialRemovalFailed, true);
+  assert.ok(failedRemoval.error instanceof AggregateError);
+  const calls: string[] = [];
+  const success = await finalizeTabCapture({
+    stop: async () => { calls.push('stop'); return { chunks: 1 }; }, close: async () => { calls.push('close'); },
+    writeTrace: async () => { calls.push('trace'); }, publish: async () => { calls.push('publish'); },
+    remove: async () => { throw new Error('successful segments must not be removed'); },
+  });
+  assert.equal(success.error, undefined);
+  assert.deepEqual(calls, ['stop', 'close', 'trace', 'publish']);
+});
+
+test('timeouts leave a stalled segment private and do not pretend to cancel work', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const sink = new TabChunkSink({ writeFile: async () => {}, close: async () => { await pending; } }, 10);
+  let removed = false, published = false;
+  const result = await finalizeTabCapture({
+    stop: async () => { await withDeadline(new Promise<void>(() => {}), 10, 'page timed out'); },
+    close: async () => { await sink.close(); }, writeTrace: async () => {},
+    publish: async () => { published = true; }, remove: async () => { removed = true; },
+  });
+  assert.ok(result.error instanceof AggregateError);
+  assert.equal(result.partialRemovalFailed, true);
+  assert.equal(removed, false);
+  assert.equal(published, false);
+  release();
+});
+
+test('a delayed chunk cannot update another segment after its sink closes', async () => {
+  let signalStart!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { signalStart = resolve; });
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const first = new TabChunkSink({ writeFile: async () => { signalStart(); await pending; }, close: async () => { await pending; } });
+  const writing = first.append(0, 'YQ==');
+  await started;
+  const closing = first.close();
+  await assert.rejects(first.append(0, 'Yg=='), /Invalid tab recording chunk/);
+  const second = new TabChunkSink({ writeFile: async () => {}, close: async () => {} });
+  await second.append(0, 'Yg==');
+  const rejected = assert.rejects(writing, /closed while writing/);
+  release();
+  await rejected;
+  await closing;
+  assert.deepEqual([first.chunks, first.bytes, second.chunks, second.bytes], [0, 0, 1, 1]);
+  await second.close();
 });

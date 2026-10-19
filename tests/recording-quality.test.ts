@@ -219,7 +219,7 @@ test('tab capture verifies source, bytes and timing while preserving gap warning
     const video = join(dir, 'segment-001.webm');
     const encode = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=5:d=1', '-c:v', 'libvpx', '-an', video]);
     assert.equal(encode.status, 0, encode.stderr.toString());
-    const trace = { format: 2, mode: 'tab', startedAtBrowserMs: 10, stoppedAtBrowserMs: 1010, chunks: 1, bytes: statSync(video).size,
+    const trace = { format: 3, mode: 'tab', captureHandleCheck: 'matched', startedAtBrowserMs: 10, stoppedAtBrowserMs: 1010, chunks: 1, bytes: statSync(video).size,
       settings: { displaySurface: 'browser', width: 16, height: 16, frameRate: 5 } };
     const segment = { video: 'segment-001.webm', traceFile: 'segment-001.capture.json', mode: 'tab', status: 'available', finalized: true };
     const rawControl = run(false), rawRecorded = run(true);
@@ -229,6 +229,11 @@ test('tab capture verifies source, bytes and timing while preserving gap warning
     const controlPath = join(dir, 'control.json'), recordedPath = join(dir, 'manifest.json'), tracePath = join(dir, segment.traceFile);
     writeFileSync(controlPath, JSON.stringify(control)); writeFileSync(recordedPath, JSON.stringify(recorded)); writeFileSync(tracePath, JSON.stringify(trace));
     assert.equal(compareRecording(control, recorded).comparison, 'available');
+    writeFileSync(tracePath, JSON.stringify({ ...trace, captureHandleCheck: undefined }));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    writeFileSync(tracePath, JSON.stringify({ ...trace, format: 2 }));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    writeFileSync(tracePath, JSON.stringify(trace));
     const mismatch = await inspectRecordingArtifact({ ...recorded, viewport: rawRecorded.viewport }, recordedPath);
     assert.equal(mismatch.artifact, 'HOLD');
     assert.match(mismatch.reasons.join(' '), /capture trace dimensions differ from the manifest viewport pixel dimensions/);

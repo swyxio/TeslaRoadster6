@@ -88,9 +88,21 @@ These are browser emulations, not physical-device tests.
 For an experimental alternative to Playwright's JPEG screencast, add
 `--video-source tab --fps 60`. This launches the full Chromium browser in an
 isolated test profile and requests the uniquely titled test tab using Chromium
-tab capture plus MediaRecorder. The browser's selection and resulting pixels
-must be verified; a browser surface and matching dimensions do not prove tab
-identity or crop. Intended capture includes the game canvas and HTML HUD.
+tab capture plus MediaRecorder. Before recording, the page must still be on
+the configured target origin. It configures a fresh Capture Handle visible only
+to that origin and checks the selected track for that handle; unsupported or
+changed identity fails the segment. A failed tab
+segment's private `*.webm.partial` file is removed when possible. If the file
+cannot be closed, it stays private and its removal is reported incomplete. The CI
+uploads explicitly exclude partials. A timeout does not cancel a pending browser
+or file operation; inspect and remove remaining partials only after the process
+has ended. A stalled OS request can also keep the process alive after the
+deadline; use an external supervisor if a hard process deadline is required. The
+mechanism still requires real-browser verification: same-origin
+code can spoof the handle, and a delayed source-change event can escape the
+checks. A match does not prove correct crop or pixels. Intended capture includes
+the game canvas and HTML HUD. The guard replaces and then clears the page's
+Capture Handle configuration inside the disposable browser.
 Chunks are written incrementally, with a bounded pending queue;
 start/stop and file integrity are checked separately from screencast frame
 timestamps. The matching `--no-video` control must also specify
@@ -277,8 +289,10 @@ artifacts. Its automated checks do not approve player fidelity.
 For tab capture, the track and encoded video dimensions must each equal the
 manifest viewport dimensions multiplied by its explicitly recorded configured
 device scale factor; missing, non-integral or mismatched dimensions are `HOLD`.
-This check does not establish the captured tab identity or crop. It checks
-metadata and video packets, not whether images are unique or look smooth. The
+This check does not establish the correct crop. The recorded capture-handle
+match is an additional browser identity check, not proof of pixels or every
+source change. These checks inspect metadata and video packets, not whether
+images are unique or look smooth. The
 frame callback transfers JPEG data and adds
 recording overhead. Capture timestamps are not physical display or GPU timing;
 the full commit is an operator label and must be checked against the served

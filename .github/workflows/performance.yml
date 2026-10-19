@@ -29,6 +29,7 @@ on:
       - 'tests/playtest-tab-capture.integration.ts'
       - 'tests/playtest-audio.integration.mjs'
       - 'tests/playtest-capture.test.ts'
+      - 'tests/playtest-tab-capture.test.ts'
       - 'tests/recording-quality.test.ts'
       - '.github/workflows/performance.yml'
   workflow_dispatch:
@@ -195,7 +196,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tesland-recorder-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/tesland-recorder-test-*/
+          path: |
+            ${{ runner.temp }}/tesland-recorder-test-*/
+            !${{ runner.temp }}/tesland-recorder-test-*/**/*.webm.partial
           if-no-files-found: warn
           retention-days: 7
       - name: Install and build base
@@ -326,7 +329,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tesland-performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/tesland-performance/
+          path: |
+            ${{ runner.temp }}/tesland-performance/
+            !${{ runner.temp }}/tesland-performance/**/*.webm.partial
           if-no-files-found: warn
           retention-days: 90
       - name: Require complete collections (not quality approval)

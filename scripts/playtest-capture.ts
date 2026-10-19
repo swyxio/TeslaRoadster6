@@ -6,6 +6,75 @@ const MAX_SAMPLES = 120_000;
 // A descriptive bucket for investigating long gaps, not a performance budget.
 const LONG_GAP_MS = 100;
 
+export const captureError = (error: unknown, message: string): Error => error instanceof Error ? error : new Error(message, { cause: error });
+
+/** Bound the wait, not the underlying operation; it may still be in flight. */
+export async function withDeadline<T>(operation: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([operation, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+/** Publish only a completely closed, verified segment; keep uncertain partials private. */
+export async function finalizeTabCapture<T>(operations: {
+  stop(): Promise<T>;
+  close(): Promise<void>;
+  writeTrace(trace: T): Promise<void>;
+  publish(): Promise<void>;
+  remove(): Promise<void>;
+}): Promise<{ trace?: T; error?: Error; partialRemovalFailed: boolean }> {
+  let trace: T | undefined, error: Error | undefined, closeFailed = false;
+  try { trace = await operations.stop(); }
+  catch (failure) { error = captureError(failure, 'Could not finalize tab recording.'); }
+  try { await operations.close(); }
+  catch (failure) {
+    closeFailed = true;
+    const closeError = captureError(failure, 'Could not close tab recording.');
+    error = error ? new AggregateError([error, closeError], 'Tab recording failed and its file could not be closed.') : closeError;
+  }
+  if (!error) {
+    try { await operations.writeTrace(trace as T); await operations.publish(); }
+    catch (failure) { error = captureError(failure, 'Could not publish tab recording and trace.'); }
+  }
+  let partialRemovalFailed = closeFailed;
+  if (error && !closeFailed) {
+    try { await operations.remove(); }
+    catch (failure) {
+      partialRemovalFailed = true;
+      error = new AggregateError([error, failure], 'Tab recording failed and its partial file could not be removed.');
+    }
+  }
+  return { trace, error, partialRemovalFailed };
+}
+
+/** Serializes chunks to one segment and rejects writes once it is closing. */
+export class TabChunkSink {
+  private closing = false;
+  private writing = false;
+  chunks = 0;
+  bytes = 0;
+
+  constructor(private readonly file: { writeFile(data: Buffer): Promise<void>; close(): Promise<void> }, private readonly closeTimeoutMs = 10_000) {}
+
+  async append(chunk: number, encoded: string) {
+    if (this.closing || this.writing || chunk !== this.chunks || typeof encoded !== 'string' || encoded.length > 90_000_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) throw new Error('Invalid tab recording chunk.');
+    const bytes = Buffer.from(encoded, 'base64');
+    if (!bytes.length || this.bytes + bytes.length > 2_000_000_000) throw new Error('Tab recording exceeds its size limit.');
+    this.writing = true;
+    try {
+      await this.file.writeFile(bytes);
+      if (this.closing) throw new Error('Tab recording closed while writing a chunk.');
+      this.chunks++; this.bytes += bytes.length;
+    } finally { this.writing = false; }
+  }
+
+  async close() {
+    this.closing = true;
+    await withDeadline(this.file.close(), this.closeTimeoutMs, 'Tab recording file close timed out; the partial file remains private.');
+  }
+}
+
 export class ScreencastCapture {
   private samples: Sample[] = [];
   private received = 0;
