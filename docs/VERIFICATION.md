@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Street-level storefront candidate · 2026-10-18 Pacific
+
+- Forty-four generic midrises and towers replace their original first row of small windows with non-interactive storefront glass, entrances and colored fascia on their existing walls. Houses and landmark models are unchanged; authoritative collision geometry is unchanged.
+- Counting the generated window instances across the map gives 12,150 → 12,274 instances and 121,500 → 122,740 triangles: 1,056 new storefront instances replace 932 ground-floor windows. The same 17 per-cell window batches and shared material are used. These are static geometry counts, not a performance verdict.
+- Ten focused window and collision-surface tests and `pnpm build` passed. The existing Vite large-chunk warning remains. Visual comparison, physical-device behavior and a controlled performance comparison remain open.
+
 ## Higher-fidelity world and fleet · candidate · 2026-10-18 Pacific
 
 - Generic façades use framed, individually tinted windows with one shared material and one instanced batch per occupied map cell. Across 12,150 windows, geometry falls from 145,800 to 121,500 triangles before culling. Landmark glazing, layered redwood crowns, wheel spokes, rear lamps, NPC sensor bands and a more complete human silhouette also reuse existing material batches or shared geometry. The human has three mesh submissions as before, with 224 triangles instead of 116. The fidelity changes did not alter placement, map collision or simulation; the integrated collision audit is described below.
