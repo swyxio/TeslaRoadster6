@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -172,5 +172,40 @@ test('each artifact segment requires finalized traces and readable encoded video
     const badVideo = await inspectRecordingArtifact(manifest, path);
     assert.equal(badVideo.artifact, 'HOLD');
     assert.equal(badVideo.encodedVideos[1].status, 'unavailable');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('tab capture verifies source, bytes and timing while preserving gap warnings', {
+  skip: ffmpegEncoders.status !== 0 || !/\blibvpx\b/.test(ffmpegEncoders.stdout ?? '') || spawnSync('ffprobe', ['-version']).status !== 0,
+}, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tesland-tab-check-'));
+  try {
+    const video = join(dir, 'segment-001.webm');
+    const encode = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=5:d=1', '-c:v', 'libvpx', '-an', video]);
+    assert.equal(encode.status, 0, encode.stderr.toString());
+    const trace = { format: 2, mode: 'tab', startedAtBrowserMs: 10, stoppedAtBrowserMs: 1010, chunks: 1, bytes: statSync(video).size,
+      settings: { displaySurface: 'browser', width: 16, height: 16, frameRate: 5 } };
+    const segment = { video: 'segment-001.webm', traceFile: 'segment-001.capture.json', mode: 'tab', status: 'available', finalized: true };
+    const rawControl = run(false), rawRecorded = run(true);
+    const control = { ...rawControl, runner: { ...rawControl.runner, tabCaptureSourceSha256: hash }, capture: { ...rawControl.capture, source: 'tab' } };
+    const recorded = { ...rawRecorded, runner: { ...rawRecorded.runner, tabCaptureSourceSha256: hash }, capture: { ...rawRecorded.capture, source: 'tab', segments: [segment] } };
+    const controlPath = join(dir, 'control.json'), recordedPath = join(dir, 'manifest.json'), tracePath = join(dir, segment.traceFile);
+    writeFileSync(controlPath, JSON.stringify(control)); writeFileSync(recordedPath, JSON.stringify(recorded)); writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal(compareRecording(control, recorded).comparison, 'available');
+    const checked = await inspectRecordingArtifact(recorded, recordedPath);
+    assert.equal(checked.artifact, 'available');
+    assert.equal(checked.playerFidelity, 'UNVERIFIED');
+    assert.match(checked.warnings.join(' '), /packet gaps/);
+    assert.equal((await inspectRecordingArtifact({ ...recorded, capture: { ...recorded.capture, source: 'unknown' } }, recordedPath)).artifact, 'HOLD');
+    const cli = spawnSync(process.execPath, ['scripts/recording-quality.mjs', controlPath, recordedPath], { encoding: 'utf8' });
+    assert.equal(cli.status, 1);
+    assert.match(JSON.parse(cli.stdout).warnings.join(' '), /packet gaps/);
+    assert.equal(compareRecording({ ...control, capture: { ...control.capture, source: 'screencast' } }, recorded).comparison, 'HOLD');
+    trace.bytes++;
+    writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
+    trace.bytes--; trace.settings.displaySurface = 'monitor';
+    writeFileSync(tracePath, JSON.stringify(trace));
+    assert.equal((await inspectRecordingArtifact(recorded, recordedPath)).artifact, 'HOLD');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

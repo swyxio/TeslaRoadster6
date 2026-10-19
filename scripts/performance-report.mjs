@@ -217,7 +217,9 @@ async function command(command, args, cwd, env = process.env) {
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { 'target-root': { type: 'string', default: harness }, out: { type: 'string' }, gpu: { type: 'string', default: 'default' }, video: { type: 'boolean', default: false } } });
+  const { values } = parseArgs({ options: { 'target-root': { type: 'string', default: harness }, out: { type: 'string' }, gpu: { type: 'string', default: 'default' }, video: { type: 'boolean', default: false }, 'video-source': { type: 'string', default: 'screencast' }, port: { type: 'string' } } });
+  if (!['screencast', 'tab'].includes(values['video-source'])) throw new Error('Video source must be screencast or tab.');
+  if (values.port !== undefined && (!/^\d+$/.test(values.port) || Number(values.port) < 1 || Number(values.port) > 65535)) throw new Error('Port must be an integer from 1 to 65535.');
   if (!values.out) throw new Error('Specify a new --out directory');
   if (!['default', 'metal', 'vulkan', 'swiftshader'].includes(values.gpu)) throw new Error('Unknown GPU mode');
   const root = resolve(values['target-root']), out = resolve(values.out);
@@ -248,7 +250,7 @@ async function main() {
     await writeFile(join(out, `motion-${profile}.json`), output);
     motion[profile] = motionMetrics(JSON.parse(output));
   }
-  const port = await freePort();
+  const port = values.port === undefined ? await freePort() : Number(values.port);
   let inspectorPort = await freePort();
   while (inspectorPort === port) inspectorPort = await freePort();
   const roomName = performanceRoomName();
@@ -292,7 +294,7 @@ async function main() {
       if (!health) await delay(500);
     }
     if (!health) throw new Error('Local Worker did not become ready');
-    const recorderOutput = await command(process.execPath, [join(harness, 'node_modules/tsx/dist/cli.mjs'), join(harness, 'scripts/playtest-record.ts'), '--url', `http://127.0.0.1:${port}/?room=${roomName}&perf`, '--target-ref', revision, '--scenario', scenario, '--out', join(out, 'browser'), '--gpu', values.gpu, ...(values.video ? [] : ['--no-video']), '--trajectory'], harness, { ...process.env, PLAYTEST_STAGE_SECRET: stageSecret });
+    const recorderOutput = await command(process.execPath, [join(harness, 'node_modules/tsx/dist/cli.mjs'), join(harness, 'scripts/playtest-record.ts'), '--url', `http://127.0.0.1:${port}/?room=${roomName}&perf`, '--target-ref', revision, '--scenario', scenario, '--out', join(out, 'browser'), '--gpu', values.gpu, '--video-source', values['video-source'], ...(values['video-source'] === 'tab' ? ['--fps', '60'] : []), ...(values.video ? [] : ['--no-video']), '--trajectory'], harness, { ...process.env, PLAYTEST_STAGE_SECRET: stageSecret });
     await writeFile(join(out, 'recorder.log'), recorderOutput);
   } finally {
     if (worker && !exited && worker.pid) {
@@ -322,7 +324,7 @@ async function main() {
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
     environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: { ...manifest.viewport, deviceScaleFactor: manifest.viewport?.deviceScaleFactor ?? 1, isMobile: manifest.viewport?.isMobile ?? false, hasTouch: manifest.viewport?.hasTouch ?? false } },
-    fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
+    fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video, captureSource: values['video-source'] },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
     notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation. It includes the mostly stationary second-delivery staging wait; distance-based path matching does not control elapsed time.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],

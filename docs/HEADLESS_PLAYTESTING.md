@@ -83,6 +83,18 @@ with `--width`, `--height` and `--fps` (1–60). `--mobile` enables touch and a
 mobile viewport; use `scripts/playtests/touch-drive.json` for a held touch.
 These are browser emulations, not physical-device tests.
 
+For an experimental alternative to Playwright's JPEG screencast, add
+`--video-source tab --fps 60`. This launches the full Chromium browser in an
+isolated test profile, selects only the uniquely titled test tab, and uses
+Chromium tab capture plus MediaRecorder. It records the game canvas and HTML
+HUD together. Chunks are written incrementally, with a bounded pending queue;
+start/stop and file integrity are checked separately from screencast frame
+timestamps. The matching `--no-video` control must also specify
+`--video-source tab` to use the same browser mode. Both modes still require
+real-game inspection and on/off timing on representative hardware: encoded
+packet cadence does not prove unique visual frames or player-visible fidelity.
+The manual performance workflow can select `tab` for its optional video pair.
+
 Each new output directory contains `manifest.json`, named screenshots and
 `segment-NNN.webm` files. Video is silent by default to keep performance
 experiments unchanged. Add `--audio` to also record each segment’s Web Audio

@@ -37,6 +37,8 @@ function animation(manifest) {
 
 function identity(manifest) {
   const target = manifest?.target, r = manifest?.runner, v = manifest?.viewport;
+  const source = manifest?.capture?.source ?? 'screencast';
+  if (!['screencast', 'tab'].includes(source) || (source === 'tab' && !hash(r?.tabCaptureSourceSha256))) return null;
   if (!/^[0-9a-f]{40}$/i.test(target?.refProvidedByOperator ?? '') || !present(target?.origin) || !present(target?.pathname) || typeof target?.perf !== 'boolean' || !hash(manifest?.scenarioSha256) ||
       ![r?.platform, r?.architecture, r?.release, r?.cpu, r?.nodeVersion, r?.playwrightVersion, r?.browserChannel, r?.browserVersion, r?.gpuMode, r?.webgl?.renderer, r?.webgl?.vendor].every(present) ||
       !hash(r?.recorderSourceSha256) || !hash(r?.captureSourceSha256) || !hash(r?.audioSourceSha256) || !Number.isSafeInteger(r?.logicalCpuCount) || r.logicalCpuCount < 1 || typeof r?.headed !== 'boolean' ||
@@ -44,7 +46,7 @@ function identity(manifest) {
       (v?.isMobile !== undefined && typeof v.isMobile !== 'boolean') || (v?.hasTouch !== undefined && typeof v.hasTouch !== 'boolean')) return null;
   return JSON.stringify([target.refProvidedByOperator.toLowerCase(), target.origin, target.pathname, target.perf, manifest.scenarioSha256, r.platform, r.architecture, r.release, r.cpu, r.logicalCpuCount,
     r.nodeVersion, r.playwrightVersion, r.browserChannel, r.browserVersion, r.gpuMode, r.headed, r.webgl.renderer, r.webgl.vendor,
-    r.recorderSourceSha256, r.captureSourceSha256, r.audioSourceSha256, v.width, v.height, v.deviceScaleFactor ?? 1, v.isMobile ?? false, v.hasTouch ?? false]);
+    r.recorderSourceSha256, r.captureSourceSha256, r.audioSourceSha256, source, source === 'tab' ? r.tabCaptureSourceSha256 : null, v.width, v.height, v.deviceScaleFactor ?? 1, v.isMobile ?? false, v.hasTouch ?? false]);
 }
 
 const load = manifest => {
@@ -65,8 +67,9 @@ export function compareRecording(control, recorded) {
   if (!withoutVideo || !withVideo) reasons.push('Animation callback measurements are missing, too short, invalid or truncated.');
   const segments = recorded?.capture?.segments;
   if (!Array.isArray(segments) || !segments.length || !Array.isArray(recorded?.recordings) || segments.length !== recorded.recordings.length ||
-      segments.some((segment, i) => segment?.video !== recorded.recordings[i] || segment.status !== 'available' || segment.finalized !== true))
-    reasons.push('Video segments lack finalized, complete screencast timestamp evidence.');
+      segments.some((segment, i) => segment?.video !== recorded.recordings[i] || segment.status !== 'available' || segment.finalized !== true ||
+        ((recorded.capture.source ?? 'screencast') === 'tab') !== (segment.mode === 'tab')))
+    reasons.push('Video segments lack finalized, complete capture evidence.');
   if (recorded?.capture?.audio === true && (!Array.isArray(recorded.audioRecordings) || !Array.isArray(recorded.recordings) ||
       recorded.audioRecordings.length !== recorded.recordings.length || recorded.audioRecordings.some((audio, i) =>
         typeof recorded.recordings[i] !== 'string' || audio?.file !== recorded.recordings[i].replace(/\.webm$/, '-audio.webm') || !finite(audio?.offsetMs) || !finite(audio?.startCommandWindowMs) || audio.startCommandWindowMs < 0)))
@@ -83,8 +86,8 @@ export function compareRecording(control, recorded) {
     hostLoadAverage: { withoutVideo: load(control), withVideo: load(recorded) },
     limitations: [
       'The revision is an operator-provided label; verify it against the served build. The same input script does not by itself prove identical paths or workload.',
-      'Animation intervals are browser callbacks. Screencast timestamps are browser capture observations; neither measures physical display presentation or GPU completion.',
-      'The frame callback sends JPEG data to the recorder and adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.',
+      'Animation intervals are browser callbacks. Screencast frame timestamps and tab recording start/stop times are different capture observations; neither measures physical display presentation or GPU completion.',
+      'Capture adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.',
       'When audio is enabled, the recorded run includes audio capture overhead, and its separate audio files are not proof of audible synchronization.',
       'Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay.'
     ] };
@@ -98,6 +101,12 @@ export async function inspectCaptureTraces(manifest, manifestPath) {
     if (typeof name !== 'string' || basename(name) !== name || name === '.' || name === '..') return { file: name, status: 'unavailable', reason: 'Invalid capture trace filename.' };
     try {
       const trace = JSON.parse(await readFile(join(dirname(resolve(manifestPath)), name), 'utf8'));
+      if (segment.mode === 'tab') {
+        if (trace.format !== 2 || trace.mode !== 'tab' || !finite(trace.startedAtBrowserMs) || !finite(trace.stoppedAtBrowserMs) || trace.stoppedAtBrowserMs <= trace.startedAtBrowserMs ||
+            !Number.isSafeInteger(trace.chunks) || trace.chunks < 1 || !Number.isSafeInteger(trace.bytes) || trace.bytes < 1 || trace.settings?.displaySurface !== 'browser' ||
+            !Number.isSafeInteger(trace.settings?.width) || trace.settings.width < 1 || !Number.isSafeInteger(trace.settings?.height) || trace.settings.height < 1) throw new Error('Invalid tab recording metadata.');
+        return { file: name, status: 'available', mode: 'tab', bytes: trace.bytes, width: trace.settings.width, height: trace.settings.height, spanMs: round(trace.stoppedAtBrowserMs - trace.startedAtBrowserMs) };
+      }
       const columns = ['browserPresentedAtUnixMs', 'callbackReceivedAtRunMs', 'viewportWidth', 'viewportHeight'];
       const samples = trace?.samples;
       if (trace.format !== 1 || JSON.stringify(trace.columns) !== JSON.stringify(columns) || !Array.isArray(samples) || samples.length < 2 ||
@@ -122,7 +131,7 @@ async function packetDuration(path) {
     probe.once('close', code => resolve({ code }));
   });
   const timeout = setTimeout(() => { timedOut = true; probe.kill('SIGKILL'); }, 30000);
-  let packets = 0, invalid = 0, first = Infinity, lastEnd = -Infinity;
+  let packets = 0, invalid = 0, first = Infinity, lastEnd = -Infinity, previous = null, nonIncreasing = 0, gapsAtLeast100Ms = 0;
   try {
     const lines = createInterface({ input: probe.stdout });
     for await (const line of lines) {
@@ -135,6 +144,11 @@ async function packetDuration(path) {
       packets++;
       if (!present(pts) || pts === 'N/A' || !finite(Number(pts))) { invalid++; continue; }
       const time = Number(pts);
+      if (previous !== null) {
+        if (time <= previous) nonIncreasing++;
+        else if ((time - previous) * 1000 >= 100) gapsAtLeast100Ms++;
+      }
+      previous = time;
       const packetSeconds = present(duration) && duration !== 'N/A' && finite(Number(duration)) && Number(duration) >= 0 ? Number(duration) : 0;
       first = Math.min(first, time);
       lastEnd = Math.max(lastEnd, time + packetSeconds);
@@ -145,7 +159,7 @@ async function packetDuration(path) {
     if (outcome.code !== 0) throw new Error(stderr || `ffprobe exited ${outcome.code}.`);
     if (!packets || invalid || !finite(first) || !finite(lastEnd) || lastEnd <= first)
       throw new Error('Video packet timestamps are missing or invalid.');
-    return { packets, durationMs: round((lastEnd - first) * 1000) };
+    return { packets, durationMs: round((lastEnd - first) * 1000), nonIncreasing, gapsAtLeast100Ms };
   } finally { clearTimeout(timeout); }
 }
 
@@ -163,7 +177,7 @@ export async function inspectVideos(manifest, manifestPath) {
       if (!present(stream?.codec_name) || !Number.isSafeInteger(packets) || packets <= 0 || !Number.isSafeInteger(stream.width) || !Number.isSafeInteger(stream.height)) throw new Error('No readable video stream or packets.');
       const timing = await packetDuration(path);
       if (timing.packets !== packets) throw new Error('Packet counts differ between stream and timestamp inspections.');
-      return { file: name, status: 'available', bytes: file.size, codec: stream.codec_name, width: stream.width, height: stream.height, packetCount: packets, packetDurationMs: timing.durationMs, nominalRate: stream.r_frame_rate, averageRate: stream.avg_frame_rate };
+      return { file: name, status: 'available', bytes: file.size, codec: stream.codec_name, width: stream.width, height: stream.height, packetCount: packets, packetDurationMs: timing.durationMs, packetNonIncreasing: timing.nonIncreasing, packetGapsAtLeast100Ms: timing.gapsAtLeast100Ms, nominalRate: stream.r_frame_rate, averageRate: stream.avg_frame_rate };
     } catch (error) { return { file: name, status: 'unavailable', reason: `Video or ffprobe unavailable: ${error.message}` }; }
   }));
 }
@@ -190,13 +204,16 @@ export async function inspectAudio(manifest, manifestPath) {
 export async function inspectRecordingArtifact(manifest, manifestPath) {
   const reasons = [], warnings = [];
   const files = manifest?.recordings, segments = manifest?.capture?.segments;
+  if (!['screencast', 'tab'].includes(manifest?.capture?.source ?? 'screencast'))
+    reasons.push('Recording source is invalid.');
   if (manifest?.status !== 'complete' || manifest?.capture?.enabled !== true)
     reasons.push('Run did not complete with video capture enabled.');
   if (!Array.isArray(files) || !files.length || new Set(files).size !== files.length ||
       files.some(name => typeof name !== 'string' || !/^segment-\d{3}\.webm$/.test(name)) ||
       !Array.isArray(segments) || segments.length !== files.length || segments.some((segment, i) =>
         segment?.video !== files[i] || segment.traceFile !== files[i].replace(/\.webm$/, '.capture.json') ||
-        segment.status !== 'available' || segment.finalized !== true))
+        segment.status !== 'available' || segment.finalized !== true ||
+        ((manifest.capture.source ?? 'screencast') === 'tab') !== (segment.mode === 'tab')))
     reasons.push('Recording segments or their finalized capture metadata are missing or inconsistent.');
   if (manifest?.capture?.audio === true && (!Array.isArray(files) || !Array.isArray(manifest?.audioRecordings) ||
       manifest.audioRecordings.length !== files.length || manifest.audioRecordings.some((audio, i) =>
@@ -209,6 +226,12 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
   if (encodedVideos.some(video => video.status !== 'available')) reasons.push('Video files or ffprobe packet metadata unavailable.');
   if (captureTraces.some(trace => trace.status !== 'available')) reasons.push('Capture traces are missing, incomplete or invalid.');
   if (audioFiles.some(audio => audio.status !== 'available')) reasons.push('Audio files or ffprobe packet metadata unavailable.');
+  for (let i = 0; i < encodedVideos.length; i++) {
+    const video = encodedVideos[i], trace = captureTraces[i];
+    if (trace?.mode !== 'tab' || video?.status !== 'available') continue;
+    if (video.bytes !== trace.bytes || video.width !== trace.width || video.height !== trace.height || video.packetNonIncreasing) reasons.push('Tab video bytes, dimensions or packet timestamps do not match its capture metadata.');
+    if (video.packetGapsAtLeast100Ms) warnings.push(`${video.file}: ${video.packetGapsAtLeast100Ms} encoded packet gaps of at least 100 ms; inspect the footage.`);
+  }
   // Only reject video shorter than the observed trace. Allow at most 250 ms for
   // short-clip boundaries, capped at 25% of the trace, or 2% for longer clips.
   // This heuristic is not a motion or performance budget.
@@ -243,8 +266,9 @@ async function main() {
   result.captureTraces = inspected.captureTraces;
   result.audioFiles = inspected.audioFiles;
   result.durationChecks = inspected.durationChecks;
+  result.warnings = [...new Set([...result.warnings, ...inspected.warnings])];
   if (inspected.artifact !== 'available') { result.comparison = 'HOLD'; result.reasons.push(...inspected.reasons); }
-  if (result.reasons.length) result.recordingQuality = 'HOLD';
+  if (result.reasons.length || result.warnings.length) result.recordingQuality = 'HOLD';
   console.log(JSON.stringify(result, null, 2));
   if (result.recordingQuality === 'HOLD') process.exitCode = 1;
 }

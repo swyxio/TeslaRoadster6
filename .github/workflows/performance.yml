@@ -26,6 +26,7 @@ on:
       - 'tests/fixtures/playtest-stage-worker.ts'
       - 'tests/fixtures/wrangler.playtest-stage.jsonc'
       - 'tests/playtest-recorder.integration.ts'
+      - 'tests/playtest-tab-capture.integration.ts'
       - 'tests/playtest-audio.integration.mjs'
       - 'tests/playtest-capture.test.ts'
       - 'tests/recording-quality.test.ts'
@@ -44,6 +45,11 @@ on:
         type: boolean
         required: false
         default: false
+      video_source:
+        description: Capture source for the optional video pair
+        type: choice
+        options: [screencast, tab]
+        default: screencast
 
 permissions:
   contents: read
@@ -178,6 +184,7 @@ jobs:
             sleep 1
           done
           TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-recorder.integration.ts http://127.0.0.1:18787
+          TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-tab-capture.integration.ts http://127.0.0.1:18787
           node tests/playtest-audio.integration.mjs
       - name: Upload recorder diagnostics
         if: ${{ always() }}
@@ -197,36 +204,44 @@ jobs:
       - id: base
         name: Measure base
         continue-on-error: true
+        env:
+          VIDEO_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video && inputs.video_source || 'screencast' }}
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/base" \
-            --out "$RUNNER_TEMP/tesland-performance/base" --gpu metal \
+            --out "$RUNNER_TEMP/tesland-performance/base" --gpu metal --port 18789 --video-source "$VIDEO_SOURCE" \
             > "$RUNNER_TEMP/tesland-performance/base.log" 2>&1
       - id: candidate
         name: Measure candidate
         continue-on-error: true
+        env:
+          VIDEO_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video && inputs.video_source || 'screencast' }}
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/candidate" \
-            --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu metal \
+            --out "$RUNNER_TEMP/tesland-performance/candidate" --gpu metal --port 18789 --video-source "$VIDEO_SOURCE" \
             > "$RUNNER_TEMP/tesland-performance/candidate.log" 2>&1
       - id: video_base
         name: Record separate base playtest
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         continue-on-error: true
+        env:
+          VIDEO_SOURCE: ${{ inputs.video_source }}
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/base" \
-            --out "$RUNNER_TEMP/tesland-performance/base-video" --gpu metal --video \
+            --out "$RUNNER_TEMP/tesland-performance/base-video" --gpu metal --port 18789 --video --video-source "$VIDEO_SOURCE" \
             > "$RUNNER_TEMP/tesland-performance/base-video.log" 2>&1
       - id: video_candidate
         name: Record separate candidate playtest
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         continue-on-error: true
+        env:
+          VIDEO_SOURCE: ${{ inputs.video_source }}
         run: |
           node candidate/scripts/performance-report.mjs \
             --target-root "$GITHUB_WORKSPACE/candidate" \
-            --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --video \
+            --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --port 18789 --video --video-source "$VIDEO_SOURCE" \
             > "$RUNNER_TEMP/tesland-performance/candidate-video.log" 2>&1
       - id: video_inspection
         name: Inspect each recorded artifact
@@ -236,7 +251,7 @@ jobs:
           node --input-type=module - "$RUNNER_TEMP/tesland-performance/base-video" "$RUNNER_TEMP/tesland-performance/candidate-video" <<'NODE'
           import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
           import { join } from 'node:path';
-          import { inspectRecordingArtifact } from './candidate/scripts/recording-quality.mjs';
+          import { compareRecording, inspectRecordingArtifact } from './candidate/scripts/recording-quality.mjs';
           let failed = false;
           await appendFile(process.env.GITHUB_STEP_SUMMARY, '### Recording artifacts\n');
           for (const dir of process.argv.slice(2)) {
@@ -252,7 +267,19 @@ jobs:
             await writeFile(join(dir, 'recording-inspection.json'), JSON.stringify(result, null, 2) + '\n');
             await appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${dir.split('/').at(-1)}: trace and video packets ${result.artifact}; recording quality ${result.recordingQuality}; player fidelity ${result.playerFidelity}.\n`);
             for (const item of [...result.reasons, ...result.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - ${item}\n`);
-            if (result.artifact !== 'available') failed = true;
+            if (result.artifact !== 'available' || result.recordingQuality === 'HOLD') failed = true;
+            try {
+              const control = JSON.parse(await readFile(join(dir.replace(/-video$/, ''), 'browser', 'manifest.json'), 'utf8'));
+              const recorded = JSON.parse(await readFile(manifestPath, 'utf8'));
+              const comparison = compareRecording(control, recorded);
+              await writeFile(join(dir, 'recording-comparison.json'), JSON.stringify(comparison, null, 2) + '\n');
+              await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - Video on/off comparison: ${comparison.comparison}; quality ${comparison.recordingQuality}.\n`);
+              for (const item of [...comparison.reasons, ...comparison.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `    - ${item}\n`);
+              if (comparison.recordingQuality === 'HOLD') failed = true;
+            } catch (error) {
+              await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - Video on/off comparison: HOLD (${error.message}).\n`);
+              failed = true;
+            }
           }
           await appendFile(process.env.GITHUB_STEP_SUMMARY, 'Packet inspection does not decode video or verify playback. Capture quality is diagnostic; jitter on a shared host is not a game regression.\n');
           if (failed) process.exitCode = 1;
@@ -355,6 +382,12 @@ jobs:
               echo 'A requested recording failed artifact inspection; inspect recording-inspection.json.'
               exit 1
             fi
+            node candidate/scripts/performance-compare.mjs \
+              "$RUNNER_TEMP/tesland-performance/base/report.json" \
+              "$RUNNER_TEMP/tesland-performance/base-video/report.json" --require-route
+            node candidate/scripts/performance-compare.mjs \
+              "$RUNNER_TEMP/tesland-performance/candidate/report.json" \
+              "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" --require-route
             node candidate/scripts/performance-compare.mjs \
               "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
               "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" --require-route

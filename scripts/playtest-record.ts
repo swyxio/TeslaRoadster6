@@ -2,7 +2,7 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type WebSocket as PlaywrightWebSocket } from 'playwright';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, unlink, writeFile, type FileHandle } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
@@ -25,11 +25,12 @@ const { values } = parseArgs({ options: {
   serve: { type: 'boolean', default: false }, port: { type: 'string', default: '0' },
   width: { type: 'string', default: '1280' }, height: { type: 'string', default: '720' },
   fps: { type: 'string', default: '30' }, 'no-video': { type: 'boolean', default: false },
+  'video-source': { type: 'string', default: 'screencast' },
   trajectory: { type: 'boolean', default: false }, audio: { type: 'boolean', default: false },
   mobile: { type: 'boolean', default: false }, help: { type: 'boolean', default: false },
 } });
 if (values.help) {
-  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--audio] [--gpu default|metal|vulkan|swiftshader]');
+  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--audio] [--video-source screencast|tab] [--gpu default|metal|vulkan|swiftshader]');
   process.exit(0);
 }
 if (values.audio && values['no-video']) throw new Error('--audio requires video capture.');
@@ -37,6 +38,7 @@ if (!values.url || !values['target-ref'] || (!!values.scenario === !!values.serv
 const target = new URL(values.url);
 if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('URL must be HTTP(S) without embedded credentials.');
 if (!['chromium', 'chrome'].includes(values.browser!)) throw new Error('Browser must be chromium or chrome.');
+if (!['screencast', 'tab'].includes(values['video-source']!)) throw new Error('Video source must be screencast or tab.');
 if (!['default', 'metal', 'vulkan', 'swiftshader'].includes(values.gpu!)) throw new Error('GPU must be default, metal, vulkan, or swiftshader.');
 const secret = process.env.TESLAND_PLAYTEST_SECRET;
 if (values.serve && (!secret || Buffer.byteLength(secret) < 32)) throw new Error('Set TESLAND_PLAYTEST_SECRET to at least 32 bytes for the local control server.');
@@ -46,7 +48,7 @@ const scenarioBytes = values.scenario ? await readFile(resolve(values.scenario))
 const scenario = scenarioBytes ? JSON.parse(scenarioBytes.toString()) as Scenario : { steps: [] };
 if (!Array.isArray(scenario.steps)) throw new Error('Scenario steps must be an array.');
 const sourceHash = async (file: string) => createHash('sha256').update(await readFile(new URL(file, import.meta.url))).digest('hex');
-const [recorderSourceSha256, captureSourceSha256, audioSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js')]);
+const [recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js'), sourceHash('./playtest-tab-capture.js')]);
 const view = scenario.viewport ?? { width: Number(values.width), height: Number(values.height), isMobile: values.mobile, hasTouch: values.mobile };
 if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width < 200 || view.width > 3840 || view.height < 200 || view.height > 2160 || (view.deviceScaleFactor !== undefined && (!(view.deviceScaleFactor > 0) || view.deviceScaleFactor > 4))) throw new Error('Invalid viewport.');
 const out = resolve(values.out ?? join('playtest-runs', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`));
@@ -60,8 +62,8 @@ const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
   target: { origin: target.origin, pathname: target.pathname, perf: target.searchParams.has('perf'), refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
-  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
-  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
+  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : values.headed ? 'chromium-headed' : 'chromium-headless-shell', gpuMode: values.gpu, headed: values.headed },
+  viewport: view, capture: { enabled: !values['no-video'], source: values['video-source'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: values['video-source'] === 'tab' ? 'Tab media start/stop timestamps are not captured-frame, animation-frame, GPU-completion or physical-display timing.' : 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
 const recordings = manifest.recordings as string[];
@@ -78,6 +80,7 @@ let recording = false;
 let segment = 0;
 let pendingVideo = '';
 let pendingCapture: ScreencastCapture | undefined;
+let pendingTab: { file: FileHandle; chunks: number; bytes: number } | undefined;
 let pendingAudio: { file: string; offsetMs: number; startCommandWindowMs: number } | undefined;
 const audioRecordings: { file: string; offsetMs: number; startCommandWindowMs: number }[] = [];
 if (values.audio) manifest.audioRecordings = audioRecordings;
@@ -191,13 +194,30 @@ async function stopRecording() {
   const video = pendingVideo;
   const stopRequestedAtRunMs = performance.now() - started;
   let stopError: unknown;
-  try { await page!.screencast.stop(); } catch (error) { stopError = error; }
+  let tabTrace: { format: number; mode: string; chunks: number; bytes: number; startedAtBrowserMs: number; stoppedAtBrowserMs: number } | undefined;
+  if (values['video-source'] === 'tab') {
+    try {
+      tabTrace = await page!.evaluate('window.__teslandTabCapture.stop()') as typeof tabTrace;
+      if (!tabTrace || tabTrace.chunks !== pendingTab!.chunks || tabTrace.bytes !== pendingTab!.bytes) throw new Error('Tab recording chunks are incomplete.');
+    } catch (error) { stopError = error; }
+    finally {
+      try { await pendingTab!.file.close(); } catch (error) { stopError ??= error; }
+      pendingTab = undefined;
+    }
+  } else {
+    try { await page!.screencast.stop(); } catch (error) { stopError = error; }
+  }
   recording = false; pendingVideo = '';
-  const capture = pendingCapture!.finish(stopRequestedAtRunMs);
-  pendingCapture = undefined;
   const traceFile = video.replace(/\.webm$/, '.capture.json');
-  await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
-  captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+  if (values['video-source'] === 'tab') {
+    if (tabTrace) await writeFile(join(out, traceFile), JSON.stringify(tabTrace) + '\n');
+    captureSegments.push({ video, traceFile, mode: 'tab', finalized: !stopError, status: stopError ? 'incomplete' : 'available' });
+  } else {
+    const capture = pendingCapture!.finish(stopRequestedAtRunMs);
+    pendingCapture = undefined;
+    await writeFile(join(out, traceFile), JSON.stringify(capture.trace) + '\n');
+    captureSegments.push({ video, traceFile, finalized: !stopError, ...capture.summary });
+  }
   if (stopError) throw stopError;
   recordings.push(video);
   if (audioFailure) throw audioFailure;
@@ -426,12 +446,25 @@ async function act(action: Action): Promise<unknown> {
           throw new PublicActionError('Trigger a game input to start audio before recording.');
         pendingVideo = `segment-${String(++segment).padStart(3, '0')}.webm`;
         if (!values['no-video']) {
-          const capture = new ScreencastCapture(performance.now() - started);
           const videoBefore = performance.now();
-          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
-            onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
+          if (values['video-source'] === 'tab') {
+            const oldTitle = await page!.title();
+            pendingTab = { file: await open(join(out, pendingVideo), 'wx'), chunks: 0, bytes: 0 };
+            try {
+              await page!.evaluate(title => { document.title = title; }, `tesland-tab-${id}`);
+              await page!.evaluate(fpsValue => (window as any).__teslandTabCapture.start(fpsValue), fps);
+            } catch (error) {
+              await pendingTab.file.close(); pendingTab = undefined;
+              await unlink(join(out, pendingVideo));
+              throw error;
+            } finally { try { await page!.evaluate(title => { document.title = title; }, oldTitle); } catch { /* a closed page is reported by the next action */ } }
+          } else {
+            const capture = new ScreencastCapture(performance.now() - started);
+            await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps,
+              onFrame: ({ timestamp, viewportWidth, viewportHeight }) => capture.observe({ timestamp, viewportWidth, viewportHeight }, performance.now() - started) });
+            pendingCapture = capture;
+          }
           const videoAfter = performance.now();
-          pendingCapture = capture;
           recording = true;
           if (values.audio) {
             try {
@@ -505,9 +538,20 @@ function json(res: ServerResponse, status: number, value: unknown) { res.writeHe
 
 try {
   const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : values.gpu === 'swiftshader' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
-  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : undefined, headless: !values.headed, args });
+  if (values['video-source'] === 'tab') args.push(`--auto-select-tab-capture-source-by-title=tesland-tab-${id}`);
+  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : undefined, headless: !values.headed, args });
   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
   context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
+  if (values['video-source'] === 'tab') {
+    await context.addInitScript({ content: await readFile(new URL('./playtest-tab-capture.js', import.meta.url), 'utf8') });
+    await context.exposeBinding('__teslandTabChunk', async (source, chunk: number, encoded: string) => {
+      if (source.page !== page || source.frame !== page.mainFrame() || !pendingTab || chunk !== pendingTab.chunks || typeof encoded !== 'string' || encoded.length > 90_000_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) throw new Error('Invalid tab recording chunk.');
+      const bytes = Buffer.from(encoded, 'base64');
+      if (!bytes.length || pendingTab.bytes + bytes.length > 2_000_000_000) throw new Error('Tab recording exceeds its size limit.');
+      await pendingTab.file.writeFile(bytes);
+      pendingTab.chunks++; pendingTab.bytes += bytes.length;
+    });
+  }
   if (values.audio) await context.addInitScript({ content: await readFile(new URL('./playtest-audio-capture.js', import.meta.url), 'utf8') });
   if (scenario.freshGuest) {
     // The normal default auto-saves a driver in chat. The repeatable scenario

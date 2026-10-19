@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+## Experimental tab capture · 2026-10-18 Pacific
+
+- In a disposable local `94e5c7d` game room, full headless Chromium on Apple M5 Pro / ANGLE Metal captured a short drive with the canvas and HTML HUD visible. An early two-segment recorder prototype wrote playable VP8 files and completed its functional checks; one segment had an encoded packet gap of at least 100 ms. One-minute host load was 16.99 → 18.67 on 18 logical CPUs.
+- A later two-segment run completed its controls and encoded both files, but capture-duration inspection held both segments: packet spans were 1,995 / 782 ms against recording windows of 2,544.5 / 1,211.2 ms. It also recorded 3 / 1 packet gaps of at least 100 ms. One-minute load was 23.18 → 29.03. These were different intermediate recorder source hashes, both on a busy host; neither is evidence of player-visible smoothness. A matched long-route pair, on/off controls, physical-device checks and human comparison remain open.
+- A subsequent two-segment functional run produced readable, full-duration files with no non-increasing packet timestamps, but one encoded packet gap of at least 100 ms in each segment, so recording quality remains HOLD. Packet timing alone cannot establish playback smoothness or player fidelity.
+
 ## Structure collision audit: bounded comparison and release integration · 2026-10-18 Pacific
 
 - The optimized `6495086` candidate and actual-main runtime `dacde0c` completed a sequential, candidate-first local delivery/flight pair at 1280×720 / DPR1 on Apple M5 Pro / Metal. All three route legs were comparable (0.937 m p95 difference; the two delivery legs matched exactly). Baseline/candidate frame-interval p95 was **16.8/16.7 ms**, and room simulated/wall ratios were **0.954/0.955** over about 74 seconds. Maximum snapshot gaps were 219/215 ms. One-minute host load was about 4–6 on 18 logical CPUs after other known game workloads paused; earlier long-window load remained high. No recorded browser errors. Both tracked trees were clean; report dirty flags came only from untracked dependency symlinks.
