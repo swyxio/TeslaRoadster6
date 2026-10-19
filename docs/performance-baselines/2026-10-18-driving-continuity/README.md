@@ -37,6 +37,17 @@ None of these changes is applied. The [tests, source variants and traces](wire-c
 have SHA-256 `f668e7d0ca596692c91e8dcc827c0d83f9cb7650cbec2eaab545ad4f31844da5`.
 They are synthetic, not a Worker, browser or WAN result.
 
+An isolated [server-issued nonce experiment](nonce-input-evidence-20261019.tar.gz)
+(SHA-256 `4cd765f250126ced86567b01a15e6d2fdcd1c18c925e4351fcdf4090682c3081`)
+is also unshippable. Its receipt-only variant passed 45 focused scheduler tests
+and strict typechecking, but failed the blackout case and the pinned contact
+trace. It left 0.0855 m peer overlap and 31 presentation snaps in that trace.
+Its receipt-age and pending-edge timeouts can allow 599 ms from nonce issue
+to edge processing, and an owner snapshot omits the server-only deadline used
+to neutralize input. Server clock guarantees, a prediction contract and real
+wire behavior remain unproved. These are synthetic functional results, not
+runtime, WAN or performance evidence.
+
 ## Airborne wall-contact follow-up
 
 An isolated [solid-contact signal experiment](airborne-solid-signal-followup-20261018.tar.gz)
