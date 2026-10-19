@@ -146,6 +146,30 @@ test('traffic beyond a wall does not suppress wall recovery',()=>{
   assert.ok(trafficInput(car,world).throttle<0);
 });
 
+test('a paused wall recovery restarts its straight clearance before turning',()=>{
+  const {world,car}=fixture();world.time=0;
+  Object.assign(car,{x:-225,z:40,yaw:0,speed:0,autopilot:false,navigation:null});
+  assert.equal(setDeliveryDestination(world,'driver','road'),true);
+  assert.equal(car.navigation?.mode,'road');assert.ok(car.navigation?.join);
+  car.navigation.recovery={index:car.navigation.index,distance:120,at:world.time,attempts:1,reverseUntil:world.time+4};
+  const rear=makeEntity('rear-approach','model-3',car.x,car.z+25);
+  for(let i=0;i<80;i++){
+    // Restage the moving follower each tick to isolate the interrupted maneuver.
+    Object.assign(rear,{x:car.x,z:car.z+25,y:car.y,yaw:car.yaw,speed:10,pushX:0,pushZ:0});
+    world.entities=[car,rear];step(world,new Map(),.05);
+  }
+  assert.ok(car.navigation?.recovery&&world.time-car.navigation.recovery.at<.2,'straight clearance is still available');
+  assert.equal(car.health,100);world.entities=[car];
+  let resumed=false;
+  for(let i=0;i<1800&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    if(i<20&&car.speed<-.1)resumed=true;
+  }
+  assert.ok(resumed,'the maneuver resumes within a second');
+  assert.equal(car.health,100);assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.navigation?.mode,'road');
+});
+
 test('an away-facing road join still reverses away from a leader',()=>{
   const {world,car}=fixture();
   Object.assign(car,{x:-225,z:50,yaw:0,speed:0,autopilot:false,navigation:null});
