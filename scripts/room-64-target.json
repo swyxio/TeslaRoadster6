@@ -1,9 +1,9 @@
 {
   "repo": "swyxio/TeslaRoadster6",
-  "approved": false,
-  "pullRequest": 0,
-  "sha": "",
-  "baseSha": "",
-  "preview": "",
-  "protocol": 0
+  "approved": true,
+  "pullRequest": 115,
+  "sha": "28a633cdf95e7c9ceff58ffb91d85a4451c85995",
+  "baseSha": "dacde0c68be8b48efaaf36f80c0b58b011df594c",
+  "preview": "https://d140c400-bay-drive.swyxio.workers.dev",
+  "protocol": 47
 }
