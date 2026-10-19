@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input } from '../shared/game';
+import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, setChargerDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input } from '../shared/game';
 import { planCybercabDispatch } from '../shared/cybercabs';
 import { ScheduledInput, type EdgeBaseline, type EdgeOutcome } from '../shared/tick-input';
 import { parseMessage, roomCapacity, roomSlug, type ClientMessage } from './protocol';
@@ -675,7 +675,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination'||message.type==='chargerDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'unavailable'}));
       return;
@@ -695,7 +695,7 @@ export class GameRoom extends DurableObject<Env> {
       if(message.type==='upgrade')socket.send(JSON.stringify({type:'upgradeResult',requestId:message.requestId,upgrade:message.upgrade,ok:false}));
       if(message.type==='vehicleStyle')socket.send(JSON.stringify({type:'vehicleStyleResult',requestId:message.requestId,category:message.category,choice:message.choice,ok:false}));
       if(message.type==='ota')socket.send(JSON.stringify({type:'otaResult',requestId:message.requestId,enabled:message.enabled,ok:false}));
-      if(message.type==='destination'||message.type==='deliveryDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
+      if(message.type==='destination'||message.type==='deliveryDestination'||message.type==='chargerDestination')socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok:false}));
       if(message.type==='mars')socket.send(JSON.stringify({type:'marsResult',requestId:message.requestId,action:message.action,ok:false,amount:0}));
       if(message.type==='luxury')socket.send(JSON.stringify({type:'luxuryResult',requestId:message.requestId,action:message.action,vehicle:message.vehicle,ok:false,reason:'cooldown'}));
       return;
@@ -720,8 +720,8 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='selectVehicle'&&chooseVehicle(this.world,session.id,message.kind,this.playtest==='sandbox')){session.economy?.restoreCurrentVehicle();if(this.playtest==='sandbox')prepareSandboxDriver(this.world,session.id);this.invalidate(socket,session,true,message.edgeBaseline);}
     if(message.type==='parking')parkingAction(this.world,session.id,message.action);
     if(message.type==='race'){const before=this.pose(session);if(message.action==='join'&&raceAction(this.world,session.id,message.action,message.courseId))this.invalidate(socket,session,this.poseChanged(before,this.pose(session)),message.edgeBaseline);}
-    if(message.type==='destination'||message.type==='deliveryDestination'){
-      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z},message.mode):setDeliveryDestination(this.world,session.id,message.mode);
+    if(message.type==='destination'||message.type==='deliveryDestination'||message.type==='chargerDestination'){
+      const ok=message.type==='destination'?setDestination(this.world,session.id,{x:message.x,z:message.z},message.mode):message.type==='deliveryDestination'?setDeliveryDestination(this.world,session.id,message.mode):setChargerDestination(this.world,session.id,message.mode);
       if(ok)this.invalidate(socket,session,false,message.edgeBaseline);
       socket.send(JSON.stringify({type:'destinationResult',requestId:message.requestId,ok}));
     }

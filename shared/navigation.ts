@@ -12,6 +12,7 @@ import type { AutonomousFlightState } from './autonomous-flight';
 export type Navigation = {
   destination:Point; path:Point[]; index:number; status:'driving'|'arrived'|'failed';
   mode?:DriveMode; flight?:AutonomousFlightState;
+  chargerStationId?:string;
   // The off-road join is planned once, then followed with slower manoeuvres.
   join?:Point; joinReached?:boolean;
   // Advanced driving can leave a connected lane for a checked delivery marker.
