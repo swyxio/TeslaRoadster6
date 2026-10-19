@@ -145,6 +145,17 @@ separate deterministic burst case on the experimental clock exposed a 14.19 m
 presentation cut in one frame. Clock convergence near traffic and recovery
 after such a burst are not established; the experiment remains on hold.
 
+A later bounded presentation-history prototype is **not applied**. It removed
+the large local burst cut in its deterministic case, but a supported head-on
+peer contact under a 400 ms delivery gap exhausted playback history and closed
+the session. Wall and existing convoy cases passed; peer-to-peer safety and
+full-world clone cost remain unproven. The [prototype patch and failing test](presentation-history-prototype.patch.gz)
+(SHA-256 `b317fcc1f1485d21483abc296f7ce001100356a8917f424b823b19b6a41725c1`)
+were saved against `af836da`; do not treat this experiment as a fix. After
+applying it to that revision, reproduce with `pnpm exec tsx --test
+--test-name-pattern 'head-on peer contact remains|wall strike remains|braking
+convoy remains' tests/session-motion.test.ts`.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
