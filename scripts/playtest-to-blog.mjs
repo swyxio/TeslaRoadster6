@@ -1,5 +1,5 @@
 // Record a disposable local room and prepare a browser-playable publication asset.
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -63,15 +63,20 @@ try {
     await new Promise(ok => setTimeout(ok, 500));
   }
   if (!ready) throw new Error(`Local Worker did not start: ${serverLog}`);
-  await command('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${port}/?room=blog-playtest`, '--target-ref', ref + (dirty ? '+working-tree-changes' : ''), '--scenario', scenario, '--out', run, '--gpu', values.gpu, '--fps', '30', '--trajectory']);
+  await command('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${port}/?room=blog-playtest`, '--target-ref', ref + (dirty ? '+working-tree-changes' : ''), '--scenario', scenario, '--out', run, '--gpu', values.gpu, '--fps', '30', '--trajectory', '--audio']);
   const manifest = JSON.parse(await readFile(join(run, 'manifest.json'), 'utf8'));
-  if (manifest.status !== 'complete' || manifest.recordings?.length !== 1 || manifest.trajectory?.status !== 'available') throw new Error(`Recording did not complete with one video and a trajectory: ${run}`);
+  if (manifest.status !== 'complete' || manifest.recordings?.length !== 1 || manifest.trajectory?.status !== 'available' || manifest.audioRecordings?.length !== 1) throw new Error(`Recording did not complete with one video, one audio track and a trajectory: ${run}`);
   const output = join(scratch, 'video.mp4');
   const image = join(scratch, 'poster.jpg');
-  await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', join(run, manifest.recordings[0]), '-an', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', 'medium', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output]);
+  const capturedAudio = manifest.audioRecordings[0];
+  await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', join(run, manifest.recordings[0]), '-itsoffset', String(capturedAudio.offsetMs / 1000), '-i', join(run, capturedAudio.file), '-map', '0:v:0', '-map', '1:a:0', '-c:a', 'aac', '-b:a', '128k', '-shortest', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', 'medium', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output]);
   await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', '1', '-i', output, '-frames:v', '1', '-q:v', '2', image]);
   const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration,size:stream=codec_name,width,height', '-of', 'json', output], { encoding: 'utf8' }));
   const stream = probe.streams?.find(item => item.codec_name === 'h264');
+  const audio = probe.streams?.find(item => item.codec_name === 'aac');
+  const levelCheck = spawnSync('ffmpeg', ['-hide_banner', '-i', output, '-vn', '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' });
+  const peak = Number(levelCheck.stderr?.match(/max_volume: (-?[0-9.]+) dB/)?.[1]);
+  if (!audio || levelCheck.status !== 0 || !Number.isFinite(peak) || peak < -55) throw new Error('Output is missing audible game audio.');
   if (!stream || !stream.width || !stream.height || Number(probe.format?.duration) < 1 || Number(probe.format?.size) > 25_000_000) throw new Error('Invalid or oversized browser video.');
   await mkdir(target, { recursive: true });
   let posterCreated = false;
@@ -83,7 +88,7 @@ try {
     if (posterCreated) await rm(poster, { force: true });
     throw error;
   }
-  console.log(JSON.stringify({ video: `/${video.replace(/^public\//, '')}`, poster: `/${poster.replace(/^public\//, '')}`, run, seconds: Number(probe.format.duration), width: stream.width, height: stream.height, bytes: Number(probe.format.size) }));
+  console.log(JSON.stringify({ video: `/${video.replace(/^public\//, '')}`, poster: `/${poster.replace(/^public\//, '')}`, run, seconds: Number(probe.format.duration), width: stream.width, height: stream.height, bytes: Number(probe.format.size), audioPeakDb: peak, audioOffsetMs: capturedAudio.offsetMs, audioStartCommandWindowMs: capturedAudio.startCommandWindowMs }));
 } finally {
   stopWorker();
   process.off('SIGINT', interrupt);
