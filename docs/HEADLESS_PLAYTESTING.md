@@ -141,8 +141,11 @@ on the target version's snapshot shape; a
 zero sample count means unavailable, not zero movement. Capturing and parsing
 snapshots also has overhead. Use `--no-video` with the same scenario for a
 separate control run; do not infer an overhead percentage from one contended
-pair. `input-events.json` contains only jump counter/hover fields and the room's
-jump acknowledgments, for diagnosing expired or processed controls.
+pair. `input-events.json` contains jump/hover counters, control sequence and
+revision numbers, jump acknowledgments and the room's input-rejection reasons.
+It does not retain identity data. The manifest marks a trace truncated when it
+exceeds 5,000 events; incomplete traces cannot prove a single jump. An expired edge without a corresponding
+rejection can still require server-side timing evidence to identify the cause.
 
 Scenarios are local JSON files containing an ordered `steps` array; the checked
 in examples are starting points. Actions include `waitFor`, `wait`, `keyDown`,

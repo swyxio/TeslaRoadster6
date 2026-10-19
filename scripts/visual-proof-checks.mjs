@@ -22,7 +22,7 @@ export function inspectGroundedBoost(manifest, poses, touch) {
 // A later successful retry must not hide a missed first jump.
 export function inspectSingleJump(manifest, inputEvents, touch) {
   const actions = manifest?.events;
-  if (!Array.isArray(actions) || !Array.isArray(inputEvents))
+  if (!Array.isArray(actions) || !Array.isArray(inputEvents) || manifest?.inputEvents?.status === 'truncated')
     return { status: 'unavailable', reason: 'Missing actions or input-event trace' };
   const action = touch ? actions.filter(event => event.type === 'touchDown')[2]
     : actions.find(event => event.type === 'jumpUntilAirborne');

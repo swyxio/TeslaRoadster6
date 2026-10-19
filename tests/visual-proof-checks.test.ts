@@ -31,6 +31,7 @@ test('a single processed jump is required for keyboard and touch', () => {
   const single = [{ atMs: 120, type: 'sent', jump: 1 }, { atMs: 240, type: 'edge', id: 1, status: 'processed', targetTick: 17 }];
   for (const [manifest, simulatedTouch] of [[keyManifest, false], [touchManifest, true]] as const) {
     assert.equal(inspectSingleJump(manifest, single, simulatedTouch).status, 'observed');
+    assert.equal(inspectSingleJump({ ...manifest, inputEvents: { status: 'truncated' } }, single, simulatedTouch).status, 'unavailable');
     assert.equal(inspectSingleJump(manifest, [single[0]], simulatedTouch).status, 'unavailable');
     assert.equal(inspectSingleJump(manifest, [single[0], { ...single[1], status: 'expired' }], simulatedTouch).status, 'not_observed');
     assert.equal(inspectSingleJump(manifest, [single[0], { ...single[1], status: 'superseded' }], simulatedTouch).status, 'not_observed');
