@@ -20,10 +20,15 @@ on:
       - 'scripts/motion-*/**'
       - 'scripts/performance-*'
       - 'scripts/performance-*/**'
+      - 'scripts/recording-*'
       - 'scripts/playtest*'
       - 'scripts/playtest*/**'
       - 'tests/fixtures/playtest-stage-worker.ts'
       - 'tests/fixtures/wrangler.playtest-stage.jsonc'
+      - 'tests/playtest-recorder.integration.ts'
+      - 'tests/playtest-audio.integration.mjs'
+      - 'tests/playtest-capture.test.ts'
+      - 'tests/recording-quality.test.ts'
       - '.github/workflows/performance.yml'
   workflow_dispatch:
     inputs:
@@ -50,10 +55,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       run: ${{ steps.select.outputs.run }}
+      candidate_sha: ${{ steps.revisions.outputs.candidate_sha }}
+      base_sha: ${{ steps.revisions.outputs.base_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref || github.sha }}
           path: candidate
           fetch-depth: 0
           persist-credentials: false
@@ -64,6 +71,22 @@ jobs:
         name: Classify changed files and size
         working-directory: candidate
         run: node scripts/performance-select.mjs
+      - name: Resolve base revision
+        if: ${{ steps.select.outputs.run == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base_ref || 'main' }}
+          path: base
+          persist-credentials: false
+      - id: revisions
+        name: Pin candidate and base revisions
+        if: ${{ steps.select.outputs.run == 'true' }}
+        run: |
+          candidate_sha=$(git -C candidate rev-parse HEAD)
+          base_sha=$(git -C base rev-parse HEAD)
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "Selected revisions: base $base_sha, candidate $candidate_sha." >> "$GITHUB_STEP_SUMMARY"
       - name: Explain selection
         env:
           REASON: ${{ steps.select.outputs.reason }}
@@ -71,9 +94,35 @@ jobs:
         run: |
           echo "Performance run: $SELECTED ($REASON)." >> "$GITHUB_STEP_SUMMARY"
 
+  test:
+    name: Test candidate
+    needs: select
+    if: ${{ needs.select.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.candidate_sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.nvmrc
+      - name: Install and test candidate
+        working-directory: candidate
+        env:
+          EXPECTED_CANDIDATE: ${{ needs.select.outputs.candidate_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          pnpm install --frozen-lockfile
+          pnpm test
   measure:
     name: Paired local performance observation
-    needs: select
+    needs: [select, test]
     if: ${{ needs.select.outputs.run == 'true' }}
     runs-on: macos-15
     concurrency:
@@ -84,27 +133,60 @@ jobs:
       - name: Check out candidate and measurement harness
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || inputs.candidate_ref || github.sha }}
+          ref: ${{ needs.select.outputs.candidate_sha }}
           path: candidate
           persist-credentials: false
       - name: Check out base game
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.base.ref) || inputs.base_ref || 'main' }}
+          ref: ${{ needs.select.outputs.base_sha }}
           path: base
           persist-credentials: false
+      - name: Verify selected revisions
+        env:
+          EXPECTED_CANDIDATE: ${{ needs.select.outputs.candidate_sha }}
+          EXPECTED_BASE: ${{ needs.select.outputs.base_sha }}
+        run: |
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          test "$(git -C base rev-parse HEAD)" = "$EXPECTED_BASE"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.1
       - uses: actions/setup-node@v4
         with:
           node-version-file: candidate/.nvmrc
-      - name: Install and build candidate
+      - name: Install candidate dependencies
+        working-directory: candidate
+        run: pnpm install --frozen-lockfile
+      - name: Build candidate
         working-directory: candidate
         run: |
-          pnpm install --frozen-lockfile
           pnpm build
           pnpm exec playwright install chromium
+      - name: Verify recorder against a disposable game
+        working-directory: candidate
+        run: |
+          if ! command -v ffprobe > /dev/null || ! command -v ffmpeg > /dev/null; then brew install ffmpeg; fi
+          pnpm exec wrangler dev --local --ip 127.0.0.1 --port 18787 \
+            --persist-to "$RUNNER_TEMP/tesland-recorder-state" --show-interactive-dev-session false \
+            > "$RUNNER_TEMP/tesland-recorder-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:18787/ > /dev/null; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat "$RUNNER_TEMP/tesland-recorder-server.log"; exit 1; fi
+            sleep 1
+          done
+          TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=metal pnpm exec tsx tests/playtest-recorder.integration.ts http://127.0.0.1:18787
+          node tests/playtest-audio.integration.mjs
+      - name: Upload recorder diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-recorder-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tesland-recorder-test-*/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Install and build base
         working-directory: base
         run: |
@@ -146,6 +228,35 @@ jobs:
             --target-root "$GITHUB_WORKSPACE/candidate" \
             --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --video \
             > "$RUNNER_TEMP/tesland-performance/candidate-video.log" 2>&1
+      - id: video_inspection
+        name: Inspect each recorded artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
+        continue-on-error: true
+        run: |
+          node --input-type=module - "$RUNNER_TEMP/tesland-performance/base-video" "$RUNNER_TEMP/tesland-performance/candidate-video" <<'NODE'
+          import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { inspectRecordingArtifact } from './candidate/scripts/recording-quality.mjs';
+          let failed = false;
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, '### Recording artifacts\n');
+          for (const dir of process.argv.slice(2)) {
+            const manifestPath = join(dir, 'browser', 'manifest.json');
+            let result;
+            try {
+              const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+              result = await inspectRecordingArtifact(manifest, manifestPath);
+            } catch (error) {
+              result = { artifact: 'HOLD', recordingQuality: 'HOLD', playerFidelity: 'UNVERIFIED', reasons: [`Manifest unavailable: ${error.message}`], warnings: [] };
+            }
+            await mkdir(dir, { recursive: true });
+            await writeFile(join(dir, 'recording-inspection.json'), JSON.stringify(result, null, 2) + '\n');
+            await appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${dir.split('/').at(-1)}: trace and video packets ${result.artifact}; recording quality ${result.recordingQuality}; player fidelity ${result.playerFidelity}.\n`);
+            for (const item of [...result.reasons, ...result.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - ${item}\n`);
+            if (result.artifact !== 'available') failed = true;
+          }
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, 'Packet inspection does not decode video or verify playback. Capture quality is diagnostic; jitter on a shared host is not a game regression.\n');
+          if (failed) process.exitCode = 1;
+          NODE
       - name: Summarize available observations
         if: ${{ always() }}
         env:
@@ -184,6 +295,7 @@ jobs:
           VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
           VIDEO_BASE_OUTCOME: ${{ steps.video_base.outcome }}
           VIDEO_CANDIDATE_OUTCOME: ${{ steps.video_candidate.outcome }}
+          VIDEO_INSPECTION_OUTCOME: ${{ steps.video_inspection.outcome }}
         run: |
           if [ "$BASE_OUTCOME" != success ] || [ "$CANDIDATE_OUTCOME" != success ]; then
             echo 'A measurement did not finish; inspect the artifact and HOLD summary.'
@@ -228,12 +340,8 @@ jobs:
           for (const dir of process.argv.slice(2)) {
             try {
               const report = JSON.parse(fs.readFileSync(path.join(dir, 'report.json'), 'utf8'));
-              const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'browser', 'manifest.json'), 'utf8'));
-              const files = manifest.recordings;
-              if (!report.fixture?.captureVideo || report.route?.status !== 'available' || manifest.status !== 'complete' ||
-                  !Array.isArray(files) || !files.length || files.some(name => typeof name !== 'string' ||
-                    !/^segment-\d{3}\.webm$/.test(name) || fs.statSync(path.join(dir, 'browser', name)).size === 0)) {
-                console.error(`${dir}: missing completed route or recording`);
+              if (!report.fixture?.captureVideo || report.route?.status !== 'available') {
+                console.error(`${dir}: missing completed recorded route`);
                 missing = true;
               }
             } catch (error) {
@@ -243,6 +351,10 @@ jobs:
           }
           if (missing) process.exitCode = 1;
           NODE
+            if [ "$VIDEO_INSPECTION_OUTCOME" != success ]; then
+              echo 'A requested recording failed artifact inspection; inspect recording-inspection.json.'
+              exit 1
+            fi
             node candidate/scripts/performance-compare.mjs \
               "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
               "$RUNNER_TEMP/tesland-performance/candidate-video/report.json" --require-route

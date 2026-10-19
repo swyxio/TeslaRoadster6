@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,13 @@ window.addEventListener('keydown', async event => {
   }
   if (event.code === 'KeyB') { document.body.style.background = '#fff'; gain.gain.value = 0.4; }
   if (event.code === 'KeyC') window.__teslandAudioCapture.stop = () => { throw new Error('Simulated audio failure'); };
+  if (event.code === 'KeyD') {
+    const start = MediaRecorder.prototype.start;
+    MediaRecorder.prototype.start = function(...args) {
+      MediaRecorder.prototype.start = start;
+      throw new Error('Simulated audio start failure');
+    };
+  }
 });</script>`;
 const server = createServer((request, response) => { response.writeHead(200, {'content-type': 'text/html'}); response.end(html); });
 try {
@@ -60,12 +67,13 @@ try {
   execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', join(failureRun, failed.recordings[0])]);
   console.log('Audio finalization failure retained the finalized video and failed the run.');
 
-  const interactiveRun = join(temp, 'interactive-failed-run');
   const secret = 'test-only-audio-calibration-secret-0000';
-  const child = spawn('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${server.address().port}/`, '--target-ref', 'interactive-audio-failure', '--serve', '--out', interactiveRun, '--audio'], {env:{...process.env,TESLAND_PLAYTEST_SECRET:secret}, stdio:['ignore','pipe','pipe']});
-  const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
-  try {
-    const endpoint = await new Promise((resolve, reject) => {
+  const startInteractive = async name => {
+    const run = join(temp, name);
+    const child = spawn('pnpm', ['playtest:record', '--url', `http://127.0.0.1:${server.address().port}/`, '--target-ref', name, '--serve', '--out', run, '--audio'], {env:{...process.env,TESLAND_PLAYTEST_SECRET:secret}, stdio:['ignore','pipe','pipe']});
+    const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+    let endpoint;
+    try { endpoint = await new Promise((resolve, reject) => {
       let output = '';
       const timer = setTimeout(() => reject(new Error('Interactive runner did not start')), 60000);
       child.stdout.on('data', data => {
@@ -75,28 +83,89 @@ try {
         }
       });
       child.once('exit', () => { clearTimeout(timer); reject(new Error('Interactive runner exited before starting')); });
-    });
+    }); } catch (error) { child.kill('SIGTERM'); throw error; }
     const action = async (body, status = 200) => {
       const response = await fetch(`${endpoint}/actions`, {method:'POST', headers:{authorization:`Bearer ${secret}`, 'content-type':'application/json'}, body:JSON.stringify(body), signal:AbortSignal.timeout(15000)});
       assert.equal(response.status, status);
+      return response.json();
     };
-    await action({type:'keyPress',key:'KeyA'});
-    await action({type:'recordStart'});
-    await action({type:'wait',ms:500});
-    await action({type:'keyPress',key:'KeyC'});
-    await action({type:'recordStop'}, 400);
-    await action({type:'finish'}, 202);
-    const exitCode = await new Promise((resolve, reject) => {
+    const waitForExit = () => new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Interactive runner did not finish')), 15000);
       exited.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
     });
-    assert.equal(exitCode, 1);
-    const interactive = JSON.parse(await readFile(join(interactiveRun, 'manifest.json'), 'utf8'));
+    return {run, child, endpoint, action, waitForExit};
+  };
+
+  const retry = await startInteractive('interactive-audio-retry');
+  try {
+    const rejection = await retry.action({type:'recordStart'}, 400);
+    assert.match(rejection.error, /input|unlock/i, 'The rejection should explain how to unlock audio.');
+    const state = await fetch(retry.endpoint, {headers:{authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(15000)});
+    assert.equal(state.status, 200);
+    assert.equal((await state.json()).recording, false, 'A failed audio start must not leave video recording active.');
+    assert.deepEqual((await readdir(retry.run)).filter(file => /^segment-\d+\.webm$/.test(file)), [], 'Preflight rejection must not create a partial video.');
+    await retry.action({type:'keyPress',key:'KeyA'});
+    await retry.action({type:'recordStart'});
+    await retry.action({type:'wait',ms:500});
+    await retry.action({type:'recordStop'});
+    await retry.action({type:'finish'}, 202);
+    assert.equal(await retry.waitForExit(), 1, 'The failed action remains visible in the run status.');
+    const manifest = JSON.parse(await readFile(join(retry.run, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.status, 'completed_with_errors');
+    assert.deepEqual(manifest.events.filter(event => event.type === 'recordStart').map(event => event.status), ['failed', 'ok']);
+    assert.deepEqual(manifest.recordings, ['segment-001.webm']);
+    assert.equal(manifest.audioRecordings.length, 1);
+    assert.equal(manifest.audioRecordings[0].file, 'segment-001-audio.webm');
+    for (const discarded of manifest.capture.segments.filter(segment => segment.discarded === true)) {
+      assert.ok(!manifest.recordings.includes(discarded.video), 'Discarded partial video must not be listed as a successful recording.');
+    }
+    const videoProbe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', join(retry.run, manifest.recordings[0])], {encoding:'utf8'});
+    const audioProbe = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', join(retry.run, manifest.audioRecordings[0].file)], {encoding:'utf8'});
+    assert.match(videoProbe, /codec_type=video/);
+    assert.match(audioProbe, /codec_type=audio/);
+    console.log('An audio start before unlock was rejected and the interactive retry recorded both tracks.');
+  } finally { if (retry.child.exitCode === null) retry.child.kill('SIGTERM'); }
+
+  const startupFailure = await startInteractive('interactive-audio-start-failure');
+  try {
+    await startupFailure.action({type:'keyPress',key:'KeyA'});
+    await startupFailure.action({type:'keyPress',key:'KeyD'});
+    await startupFailure.action({type:'recordStart'}, 400);
+    const state = await fetch(startupFailure.endpoint, {headers:{authorization:`Bearer ${secret}`}, signal:AbortSignal.timeout(15000)});
+    assert.equal(state.status, 200);
+    assert.equal((await state.json()).recording, false, 'A MediaRecorder startup error must roll back the video recording.');
+    await startupFailure.action({type:'recordStart'});
+    await startupFailure.action({type:'wait',ms:500});
+    await startupFailure.action({type:'recordStop'});
+    await startupFailure.action({type:'finish'}, 202);
+    assert.equal(await startupFailure.waitForExit(), 1, 'The failed action remains visible in the run status.');
+    const manifest = JSON.parse(await readFile(join(startupFailure.run, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.status, 'completed_with_errors');
+    assert.deepEqual(manifest.events.filter(event => event.type === 'recordStart').map(event => event.status), ['failed', 'ok']);
+    const discarded = manifest.capture.segments.find(segment => segment.video === 'segment-001.webm');
+    assert.equal(discarded?.discarded, true, 'The partial segment must be marked discarded.');
+    assert.ok(!manifest.recordings.includes(discarded.video));
+    assert.ok(!manifest.audioRecordings.some(audio => audio.file === 'segment-001-audio.webm'));
+    assert.deepEqual(manifest.recordings, ['segment-002.webm']);
+    assert.deepEqual(manifest.audioRecordings.map(audio => audio.file), ['segment-002-audio.webm']);
+    console.log('A MediaRecorder startup failure rolled back video and allowed an interactive retry.');
+  } finally { if (startupFailure.child.exitCode === null) startupFailure.child.kill('SIGTERM'); }
+
+  const interactiveRun = await startInteractive('interactive-audio-failure');
+  try {
+    await interactiveRun.action({type:'keyPress',key:'KeyA'});
+    await interactiveRun.action({type:'recordStart'});
+    await interactiveRun.action({type:'wait',ms:500});
+    await interactiveRun.action({type:'keyPress',key:'KeyC'});
+    await interactiveRun.action({type:'recordStop'}, 400);
+    await interactiveRun.action({type:'finish'}, 202);
+    assert.equal(await interactiveRun.waitForExit(), 1);
+    const interactive = JSON.parse(await readFile(join(interactiveRun.run, 'manifest.json'), 'utf8'));
     assert.equal(interactive.status, 'failed');
     assert.equal(interactive.capture.audioFinalizationFailed, true);
     assert.equal(interactive.recordings.length, 1);
     console.log('Interactive audio failure also fails the run and preserves video.');
-  } finally { if (child.exitCode === null) child.kill('SIGTERM'); }
+  } finally { if (interactiveRun.child.exitCode === null) interactiveRun.child.kill('SIGTERM'); }
 } finally {
   await new Promise(resolve => server.close(resolve));
   await rm(temp, {recursive:true, force:true});
