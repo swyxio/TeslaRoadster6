@@ -22,12 +22,16 @@ const run = (video: boolean) => ({
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {
   const result = compareRecording(run(false), run(true));
   assert.equal(result.comparison, 'available');
+  assert.equal(result.recordingQuality, 'HOLD');
   assert.equal(result.playerFidelity, 'UNVERIFIED');
   assert.equal(result.withVideo?.p95Ms, 16.7);
   assert.equal(result.withVideo?.over33_4MsPercent, 2);
   assert.equal(result.withVideo?.over100MsPercent, 1);
   assert.match(result.warnings[0], /1 browser screencast timestamp gaps/);
   assert.match(result.limitations.join(' '), /physical display presentation/);
+  const noGaps = run(true);
+  noGaps.capture.segments[0].intervalMs.gapsAtLeast100Ms = 0;
+  assert.equal(compareRecording(run(false), noGaps).recordingQuality, 'UNVERIFIED');
   const slow = run(true);
   slow.events[2].sample!.intervalsMs = Array(100).fill(116.7);
   assert.match(compareRecording(run(false), slow).warnings.join(' '), /callback p95 was 116.7 ms/);
@@ -37,6 +41,7 @@ test('recording comparison holds missing, mixed or incomplete evidence', () => {
   const control = run(false), video = run(true);
   assert.equal(compareRecording(run(true), video).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, scenarioSha256: 'different' }).comparison, 'HOLD');
+  assert.equal(compareRecording(control, { ...video, scenarioSha256: 'different' }).recordingQuality, 'HOLD');
   assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, browserVersion: 'other' } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, audioSourceSha256: 'c'.repeat(64) } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true } }).comparison, 'HOLD');

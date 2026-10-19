@@ -3,7 +3,8 @@
 ## Recording diagnostics · 2026-10-18 Pacific
 
 - The recorder now preserves bounded screencast timestamp traces and host context; the recording-on/off diagnostic holds mismatched or incomplete evidence and checks encoded streams. Seventeen focused tests passed locally. The existing recorded delivery pair was captured on a heavily loaded virtual GPU and must not be used to judge player-perceived smoothness.
-- A new desktop physical-GPU comparison was interrupted when a concurrent 64-client probe was reported; it produced no usable comparison. Real-browser integration and a new recording-on/off pair still need verification. These diagnostics do not measure physical display presentation.
+- A new desktop physical-GPU comparison was interrupted when a concurrent 64-client probe was reported; it produced no usable comparison. A representative recording-on/off pair and player-fidelity inspection still need verification. These diagnostics do not measure physical display presentation.
+- [Hosted recorder integration](https://github.com/swyxio/TeslaRoadster6/actions/runs/39179718880) passed on `ad9e8bc`, including interactive recording, replay and synthetic audio calibration. Its short same-scenario test had 133.2 ms no-video and 116.6 ms video callback p95 (47 and 75 intervals), with six screencast gaps of at least 100 ms. The three-CPU Apple paravirtual VM's one-minute load was 10.6–11.4; its source ref was a test fixture label. This is functional evidence and a recording-quality HOLD, not a physical-device result or a performance baseline.
 
 ## Production 0.0.32 readback and smoke · 2026-10-18 Pacific
 

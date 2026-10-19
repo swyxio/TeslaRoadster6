@@ -126,8 +126,10 @@ try {
   assert.ok(quality.reasons.every((reason: string) => reason.startsWith('Animation callback measurements') || reason.startsWith('Video segments lack')), quality.reasons.join(' '));
   if (traces.some((trace: { status: string }) => trace.status !== 'available')) {
     quality.comparison = 'HOLD';
+    quality.recordingQuality = 'HOLD';
     quality.reasons.push('Capture frame traces are missing, incomplete or invalid.');
   }
+  assert.equal(quality.recordingQuality, quality.reasons.length || quality.warnings.length ? 'HOLD' : 'UNVERIFIED');
   assert.ok(videos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(videos));
   await writeFile(join(dirname(output), 'quality.json'), JSON.stringify({ ...quality, captureTraces: traces, encodedVideos: videos }, null, 2) + '\n');
 

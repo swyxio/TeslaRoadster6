@@ -77,7 +77,7 @@ export function compareRecording(control, recorded) {
     if (segment?.firstCallbackDelayMs >= 100) warnings.push(`${segment.video}: first screencast callback arrived ${round(segment.firstCallbackDelayMs)} ms after starting.`);
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
-  return { comparison: reasons.length ? 'HOLD' : 'available', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
+  return { comparison: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
     capture: { requestedFps: recorded?.capture?.requestedFps ?? null, audio: recorded?.capture?.audio ?? null, segments: Array.isArray(segments) ? segments : [] },
     hostLoadAverage: { withoutVideo: load(control), withVideo: load(recorded) },
     limitations: [
@@ -153,7 +153,8 @@ async function main() {
   if (result.encodedVideos.some(video => video.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Encoded video files or ffprobe packet metadata unavailable.'); }
   if (result.captureTraces.some(trace => trace.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Capture frame traces are missing, incomplete or invalid.'); }
   if (result.audioFiles.some(audio => audio.status !== 'available')) { result.comparison = 'HOLD'; result.reasons.push('Audio files or ffprobe packet metadata unavailable.'); }
+  if (result.reasons.length) result.recordingQuality = 'HOLD';
   console.log(JSON.stringify(result, null, 2));
-  if (result.comparison === 'HOLD') process.exitCode = 1;
+  if (result.recordingQuality === 'HOLD') process.exitCode = 1;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });
