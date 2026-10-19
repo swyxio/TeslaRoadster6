@@ -1,4 +1,4 @@
-# Implementation contracts · v53 candidate
+# Implementation contracts · v55 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,11 +35,13 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v54
+## Wire protocol v55
+
+Protocol v55 fences the relocated SFO traffic seed from older clients. Each new room seeds one slow queue per direction near SFO; the cars move and do not form a permanent roadblock. The total queue budget is unchanged.
 
 Protocol v53 fences the shared highway scenery, currents, traffic and police changes and adds intercity self-driving and delivery routing. Protocol v52 fences the Fremont pad's raised flame channel and its shared collision geometry from older clients. Protocol v51 fences the revised pickup-bonus curve and introduces road-guided delivery arrows. Protocol v50 adds Dome match reward notifications and earned abilities, including the replicated Pulse Shot cooldown. Protocol v49 fences rebalanced delivery and achievement rewards. Protocol v48 fences legacy structural profiles, footprint-based roof and underside contact, bridge and stadium solids, ramp walls and Dome body containment from v47 clients. Protocol v47 fenced the shared landmark structural collision and building identities from v46 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Public overflow uses `GET /api/public-room/{n}` with canonical integers 1–16 and the distinct internal room identity `public:{n}`; `/api/room/public-1` remains a separate named room. Health: `GET /api/health` returns `{ok:true,version:54,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Public overflow uses `GET /api/public-room/{n}` with canonical integers 1–16 and the distinct internal room identity `public:{n}`; `/api/room/public-1` remains a separate named room. Health: `GET /api/health` returns `{ok:true,version:55,capacity:number}`.
 
 Client messages:
 

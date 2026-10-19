@@ -20,6 +20,20 @@ test('Bay highway queues start bumper-to-bumper in both directions and remain st
   assert.ok(jams.filter(e=>e.speed<5).length>=50,'the traffic stays slow');
 });
 
+test('both SFO queues begin near US 101 and keep moving without damage',()=>{
+  const world=createWorld(),site={x:-698,z:1107};
+  const queues=[0,1].map(direction=>world.entities.filter(e=>e.id.startsWith(`jam-2-${direction}-0-`)));
+  for(const queue of queues){
+    assert.ok(queue.length>=5);
+    assert.ok(queue.every(car=>Math.hypot(car.x-site.x,car.z-site.z)<70));
+  }
+  for(let i=0;i<1200;i++)step(world,new Map(),.05);
+  for(const queue of queues){
+    assert.ok(queue.every(car=>car.health===100&&car.supportId==='ground'));
+    assert.ok(queue.every(car=>car.speed>1&&car.speed<5));
+  }
+});
+
 test('an occasional cow walks across a highway lane to the shoulder',()=>{
   assert.ok(!createWorld(0).entities.some(e=>e.id==='cow-crossing'));
   const world=createWorld(1),cow=world.entities.find(e=>e.id==='cow-crossing');

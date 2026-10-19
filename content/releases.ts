@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'Traffic by the airport',
+    intro: 'Look for slow traffic near SFO and clearer pickup markers.',
+    sections: [
+      { title: 'On the road', items: [
+        'New rooms start with slow-moving traffic in both directions on US 101 near SFO.',
+        'Pickup bags now show the cuisine of the active restaurant.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.44-alpha',
+    label: '0.0.44 Alpha',
+    date: '2026-10-19',
     title: 'A more responsive takeoff',
     intro: 'Jump and flip presses have more time to reach their scheduled moment while you are driving.',
     sections: [

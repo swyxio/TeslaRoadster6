@@ -13,7 +13,7 @@ import { createProgressionGates } from './progression-gates';
 import { STATIONS } from '../shared/stations';
 import { addStationArt } from './station-art';
 import { canAssignDeliveryRoof, isOrderAccessible, orderTarget } from '../shared/delivery';
-import { createGoalArt, goalArtKind, goalArtNearby } from './goal-art';
+import { createGoalArt, goalArtCuisine, goalArtKind, goalArtNearby } from './goal-art';
 import { FERRY_DECK, type FerrySide } from '../shared/ferry';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
@@ -474,7 +474,7 @@ export class GameScene {
     }
     this.predictedEntity=localPredicted?controlled?.id:undefined;
     this.camera.updateMatrixWorld();
-    if(player&&target)this.goalArt.update(goalArtKind(player.delivery.order.stage,target.rooftop),goalArtNearby(target,e,menu),world.time,this.camera);
+    if(player&&target)this.goalArt.update(goalArtKind(player.delivery.order.stage,target.rooftop),goalArtNearby(target,e,menu),world.time,this.camera,goalArtCuisine(player.delivery.order));
     else this.goalArt.mesh.visible=false;
     // Choose detail against the final camera pose, including reset/cockpit cuts.
     for(const e of world.entities){

@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ADDED_CUSTOMERS, ADDED_RESTAURANTS, HISTORIC_CUSTOMER_AREAS, HISTORIC_RESTAURANT_DETAILS, type DeliveryCityId} from '../shared/delivery-locations';
+import {RESTAURANT_RESEARCH} from '../shared/delivery-restaurant-research';
 import {CUSTOMERS, RESTAURANTS, requiredLevelAt, type Level} from '../shared/delivery';
 import {MARIN_ARRIVAL_POINTS} from '../shared/marin-roads';
 import {inDomePlaza, isBridge, isRocketIsland, isSurface, nearbyBuildings, terrainHeight} from '../shared/map';
@@ -52,12 +53,20 @@ test('new places have stable unique IDs, source-backed food details, and distinc
  assert.equal(new Set(ids).size,ids.length);
  assert.equal(new Set(ADDED_CUSTOMERS.map(place=>place.name)).size,ADDED_CUSTOMERS.length);
  const icons=new Set(['pizza','burger','sandwich','noodles','taco','bakery','bowl','plate']);
- for(const place of ADDED_RESTAURANTS){
-  assert.ok(place.address&&place.cuisine&&place.signatureDish,place.id);
+ assert.deepEqual(Object.keys(RESTAURANT_RESEARCH).sort(),RESTAURANTS.map(place=>place.id).sort());
+ for(const place of RESTAURANTS){
+  const research=RESTAURANT_RESEARCH[place.id];
+  assert.ok(research.address&&research.cuisine&&research.signatureDish,place.id);
   assert.ok(icons.has(place.cuisineIcon),place.id);
-  assert.equal(new URL(place.sourceUrl).protocol,'https:',place.id);
-  if(place.menuUrl)assert.equal(new URL(place.menuUrl).protocol,'https:',place.id);
+  assert.equal(new URL(research.sourceUrl).protocol,'https:',place.id);
+  if(research.menuUrl)assert.equal(new URL(research.menuUrl).protocol,'https:',place.id);
  }
+});
+
+test('restaurant indices and gameplay data remain unchanged after separating research',()=>{
+ const places=RESTAURANTS.map(({id,name,cityId,areaId,cuisineIcon,x,z})=>({id,name,cityId,areaId,cuisineIcon,x,z}));
+ assert.equal(createHash('sha256').update(JSON.stringify(places)).digest('hex'),
+  '7c94086ae682a3aebb10c534591909a79517881dc82c61eb0a1219f625ab9ef4');
 });
 
 test('new handoffs fit supported land, clear geometry and do not overlap other stops',()=>{

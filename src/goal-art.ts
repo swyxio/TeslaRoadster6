@@ -1,8 +1,13 @@
 import * as T from 'three';
+import { RESTAURANTS, type Order } from '../shared/delivery';
 
 export type GoalArtKind = 'pickup' | 'doorstep' | 'rooftop';
 export const CUISINE_ICONS=['pizza','burger','sandwich','noodles','taco','bakery','bowl','plate'] as const;
 export type CuisineIcon = typeof CUISINE_ICONS[number];
+
+export function goalArtCuisine(order:Order):CuisineIcon|undefined {
+  return order.stage==='pickup'?RESTAURANTS[order.restaurant]?.cuisineIcon:undefined;
+}
 
 // Keep the beacon visible at distance; detailed art is only needed nearby.
 const ART_DISTANCE = 150;
