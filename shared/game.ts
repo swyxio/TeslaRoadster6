@@ -5,6 +5,7 @@ import { refillStationFor } from './charging';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions, verticalBounds } from './physics';
 import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
+import { buildingBoundsOverlap } from './building-bounds';
 import { primitiveExtent } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
@@ -720,7 +721,9 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
-  const nearby=nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width));
+  const size=dimensions(e.kind),radius=Math.hypot(size.length,size.width)/2;
+  const nearby=nearbyBuildings(e.x,e.z,Math.max(size.length,size.width))
+    .filter(b=>buildingBoundsOverlap(b,e.x-radius,e.x+radius,e.z-radius,e.z+radius));
   let landmarkVertical:ReturnType<typeof verticalBounds>|undefined,oldLandmarkVertical:ReturnType<typeof verticalBounds>|undefined;
   for(const b of nearby){
     if(b.parts){

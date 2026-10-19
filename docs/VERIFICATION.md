@@ -1,5 +1,12 @@
 # Verification · 2026-10-18 Pacific
 
+## Structure collision audit: performance hold and aggregate rejection · 2026-10-18 Pacific
+
+- PR111 remains unreleased. Final hosted run39184296226 repeated the slower callback/room-progress observation on a contended virtual Mac:66.7→116.7 ms and0.930→0.912, with three comparable route legs. Full conditions and limitations are retained in [the collision audit](STRUCTURE_COLLISION_AUDIT.md). No performance or capacity pass is claimed.
+- Added cached whole-building rejection shared with the spatial index, including rotated parts and overhangs. The narrow-phase result is unchanged across8,000+ catalog poses. `pnpm test` passed1,074 tests; `pnpm build` and all typechecks passed, retaining the existing large-chunk warning. Local browser/room comparison is pending. Prior mesh, touch and network observations retain their recorded revision scope.
+- The release slot has been handed to independent tooling104, then tower visuals114, while this collision candidate is investigated. The candidate's provisional0.0.35 metadata is not a production claim or reserved release number.
+
+
 ## Existing structures, roofs and curved surfaces · unreleased audit · 2026-10-18 Pacific
 
 - Isolated `codex/structure-collision-audit` builds on corrected landmark candidate `15d23f3`, not the older remote PR92 head. The published v0.0.27 trace reproduces an invisible Sutro envelope impact: speed 53.6448 → −10.3333 m/s before the visible post. [Audit and remaining boundaries](STRUCTURE_COLLISION_AUDIT.md).

@@ -1,4 +1,5 @@
 import type { Building } from './map';
+import { buildingBoundsOverlap } from './building-bounds';
 import { body, contact, verticalBounds, type OrientedPose, type Pose } from './physics';
 import { sampleLandmarkPrimitive, primitiveExtent, type StructuralPrimitive } from './new-landmark-surfaces';
 
@@ -118,6 +119,8 @@ export function landmarkPartContact(building:Building,part:StructuralPrimitive,e
 }
 export function landmarkBlocksPose(building:Building,e:OrientedPose):boolean {
   if(!building.parts)return false;
+  const vehicle=body(e),radius=Math.hypot(vehicle.w,vehicle.d)/2;
+  if(!buildingBoundsOverlap(building,e.x-radius,e.x+radius,e.z-radius,e.z+radius))return false;
   const vertical=verticalBounds(e),base=building.landmarkBase??0;
   for(const part of building.parts){
     const envelope=primitiveExtent(part);

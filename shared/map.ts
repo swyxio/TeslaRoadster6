@@ -13,7 +13,8 @@ import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
 import { NEW_LANDMARKS } from './new-landmarks';
 import { existingBuildingParts } from './building-structures';
-import { newLandmarkPrimitives, sampleLandmarkPrimitive, primitiveExtent, type StructuralPrimitive } from './new-landmark-surfaces';
+import { buildingBounds } from './building-bounds';
+import { newLandmarkPrimitives, sampleLandmarkPrimitive, type StructuralPrimitive } from './new-landmark-surfaces';
 import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
@@ -429,15 +430,7 @@ for(const b of BUILDINGS){b.parts??=b.landmarkId?newLandmarkPrimitives(b.landmar
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){
- let minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
- // Coping, tilted pieces and pitched eaves can extend beyond the authored
- // main body. Include them in the index without changing rendering dimensions.
- for(const part of b.parts??[]){
-  const e=primitiveExtent(part),c=Math.abs(Math.cos(e.yaw)),s=Math.abs(Math.sin(e.yaw));
-  const rx=(e.w*c+e.d*s)/2,rz=(e.w*s+e.d*c)/2;
-  minX=Math.min(minX,b.x+part.x-rx);maxX=Math.max(maxX,b.x+part.x+rx);
-  minZ=Math.min(minZ,b.z+part.z-rz);maxZ=Math.max(maxZ,b.z+part.z+rz);
- }
+ const {minX,maxX,minZ,maxZ}=buildingBounds(b);
  for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let z=Math.floor(minZ/CELL);z<=Math.floor(maxZ/CELL);z++){
   const key=`${x},${z}`,cell=buildingCells.get(key)??[];cell.push(b);buildingCells.set(key,cell);
  }
