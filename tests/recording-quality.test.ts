@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos, mergeRecordingInspection, recordingQualityApproved } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos, mergeRecordingInspection, recordingQualityApproved, tabIntegrityReasons } from '../scripts/recording-quality.mjs';
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
@@ -18,6 +18,18 @@ const run = (video: boolean) => ({
   recordings: video ? ['segment-001.webm'] : [],
   events: [{ type: 'recordStart', status: 'ok', commandStartedAtMs: 90 }, { type: 'frameStart', status: 'ok', commandStartedAtMs: 100 }, { type: 'frameStop', status: 'ok', commandStartedAtMs: 4000,
     sample: { intervalsMs: [...Array(98).fill(16.7), 40, 120], truncated: false } }, { type: 'recordStop', status: 'ok', commandStartedAtMs: 4010 }],
+});
+
+test('tab integrity identifies packet ordering separately from bytes and dimensions', () => {
+  const video = { file: 'segment-001.webm', bytes: 60348559, width: 1280, height: 720, packetNonIncreasing: 2 };
+  const trace = { bytes: 60348559, width: 1280, height: 720 };
+  assert.deepEqual(tabIntegrityReasons(video, trace), ['segment-001.webm: 2 non-increasing video packet timestamps.']);
+  assert.deepEqual(tabIntegrityReasons({ ...video, packetNonIncreasing: 0 }, trace), []);
+  assert.deepEqual(tabIntegrityReasons({ ...video, bytes: 1, width: 640, packetNonIncreasing: 1 }, trace), [
+    'segment-001.webm: video byte count differs from its capture trace.',
+    'segment-001.webm: video dimensions differ from its capture trace.',
+    'segment-001.webm: 1 non-increasing video packet timestamp.',
+  ]);
 });
 
 test('recording comparison describes long callback gaps without claiming player fidelity', () => {

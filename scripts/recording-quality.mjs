@@ -182,6 +182,16 @@ export async function inspectVideos(manifest, manifestPath) {
   }));
 }
 
+// Keep file-integrity failures distinct: an invalid packet timestamp is not
+// evidence that the encoder produced the wrong dimensions or lost bytes.
+export function tabIntegrityReasons(video, trace) {
+  const reasons = [];
+  if (video.bytes !== trace.bytes) reasons.push(`${video.file}: video byte count differs from its capture trace.`);
+  if (video.width !== trace.width || video.height !== trace.height) reasons.push(`${video.file}: video dimensions differ from its capture trace.`);
+  if (video.packetNonIncreasing) reasons.push(`${video.file}: ${video.packetNonIncreasing} non-increasing video packet timestamp${video.packetNonIncreasing === 1 ? '' : 's'}.`);
+  return reasons;
+}
+
 export async function inspectAudio(manifest, manifestPath) {
   if (manifest?.capture?.audio === false) return [];
   if (manifest?.capture?.audio !== true || !Array.isArray(manifest?.audioRecordings) || !manifest.audioRecordings.length)
@@ -229,7 +239,7 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
   for (let i = 0; i < encodedVideos.length; i++) {
     const video = encodedVideos[i], trace = captureTraces[i];
     if (trace?.mode !== 'tab' || video?.status !== 'available') continue;
-    if (video.bytes !== trace.bytes || video.width !== trace.width || video.height !== trace.height || video.packetNonIncreasing) reasons.push('Tab video bytes, dimensions or packet timestamps do not match its capture metadata.');
+    reasons.push(...tabIntegrityReasons(video, trace));
     if (video.packetGapsAtLeast100Ms) warnings.push(`${video.file}: ${video.packetGapsAtLeast100Ms} encoded packet gaps of at least 100 ms; inspect the footage.`);
   }
   // Only reject video shorter than the observed trace. Allow at most 250 ms for

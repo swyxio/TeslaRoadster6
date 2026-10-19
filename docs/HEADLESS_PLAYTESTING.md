@@ -280,6 +280,17 @@ conclusions. The comparison currently requires one recording segment enclosing
 one `frameStart` / `frameStop` interval; scenarios with other layouts need
 their own analysis. Keep the private capture traces with the video.
 
+For a fidelity investigation, inspect each recording by itself before using a
+side-by-side viewer: decoding two videos and periodically seeking one to keep
+them aligned can affect playback. Compare the same short, moving scenario on
+quiet representative hardware with capture off and on, repeating in alternating
+order and retaining browser, renderer, host load, callback and packet evidence.
+Separately compare the recording against the live game or an independent display
+reference. These checks can help locate capture or playback problems; they do
+not turn a single run, an emulated device, or callback timing into a GPU or
+physical-device result. A requested capture frame rate is not a guarantee of
+that many distinct rendered frames.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged
