@@ -12,7 +12,8 @@ export const RELEASES = [
       { title: 'On the road', items: [
         'Highway traffic uses multiple lanes, including marked HOV lanes open to every driver.',
         'Find directional skyways and highway patrols as you explore the Bay.',
-        'Look for framed windows, detailed redwoods, vehicles and landmark facades.'
+        'Look for framed windows, detailed redwoods, vehicles and landmark facades.',
+        'Buy Hyperloop Pilot in a workshop for longer self-driving trips.'
       ] }
     ]
   },

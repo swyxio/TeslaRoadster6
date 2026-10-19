@@ -10,6 +10,13 @@
 
 - On `47dd085a` against main `1b7b18bf`, the [hosted run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39216903944) passed 1,141 tests (one skipped), the build and two-client Wrangler room integration. It matched 84 complete snapshot bytes and checked exact base/head before and after five alternating CPU pairs. Median candidate/base ratios were 0.8601 clustered, 0.8201 spread and 0.9893 owned. This is synthetic serializer assembly, not an end-to-end game or room-capacity result.
 
+
+## Intercity self-driving · independent provisional candidate · 2026-10-19 Pacific
+
+- Reconstructed on main `1b7b18bf` and integrated snapshot serialization main `85621f2d`, with provisional release 0.0.44 and protocol 53. Integrate actual main again if release ordering changes.
+- This integration has not yet run tests, build, Wrangler, visual playtests or performance checks. Earlier checks on differently integrated revisions do not verify this combination.
+## Snapshot serialization · unreleased candidate · 2026-10-18 Pacific
+
 - On then-current main `a3bde95` (protocol 49), serializer runtime `6dea768` passed 1,075 tests and the build, with the existing Vite chunk-size warning. Before adding the gate tests, 84 complete synthetic snapshots matched the same base byte for byte across private awards, ownership, interest boundaries and fresh ticks. The source hashes and output digest are produced by `scripts/compare-snapshot-serialization.ts`.
 - A local two-client `room.integration.ts` run was interrupted to avoid overlapping another graphics measurement; it is not a pass. The [hosted functional check](https://github.com/swyxio/TeslaRoadster6/actions/runs/39190441748) on `15b0dc2` subsequently passed 1,078 tests, the build and the normal local Wrangler room integration. The five-pair assembly gate remains required and fails closed until a fresh window is coordinated and marked by `snapshot-timing-coordinated`. Earlier v48 timing observations on `e07f0be` are historical, not a current-main performance result. No end-to-end speedup or 64-player smoothness is claimed.
 - Main later advanced to `8f468dd` with playtest and verification tooling. On integrated head `0c40742`, the [hosted functional check](https://github.com/swyxio/TeslaRoadster6/actions/runs/39191145488) completed 1,087 tests (1,086 passed, one skipped), the build and the normal local Wrangler room integration. The matched timing run remains required.

@@ -19,11 +19,14 @@ The shop can also be opened from Actions anywhere to subscribe to the SpaceX / T
 | Air tank levels 2–5 | $1,500 / $3,000 / $6,000 / $12,000 | Each doubles capacity and refills; requires rockets |
 | Sport motor | $2,000 | 25% more acceleration and 10% higher road top speed |
 | Impact armor | $1,500 | Half collision and hard-landing damage |
-| Ludicrous Leap | $6,000 | Self-driving can hop a stopped car; requires rockets |
+| Hyperloop Pilot | $3,000 | Ground self-driving up to 72 km/h between Bay cities; no rockets required |
+| Ludicrous Leap | $6,000 | Self-driving up to 86 km/h can hop a stopped car; requires Hyperloop Pilot and rockets |
 | Maximum Plaid | $12,000 | Self-driving can fly and use useful air currents; requires rockets and Ludicrous Leap |
 | Repair & refill | $200 | Restore condition and refill air; available when needed |
 
 Every vehicle starts with a Level 1 tank of 50 fictional air units; Levels 2–5 hold 100, 200, 400 and 800 units. Each upgrade doubles capacity and refills the tank. Air is shown as a percentage of the installed tank. For the Roadster, a jump costs 12 units and stationary hover uses 18 units per second; efficient nozzles reduce consumption by 25%. Heavier vehicles have a bounded fictional flight load and use more air in flight. A vehicle cannot buy a one-time upgrade twice, and the Rocket Roadster cannot buy a redundant kit. The candidate wallet stores paid upgrades, tank level, paint and decals by personal vehicle model; restoring a saved driver can restore that configuration. Free pickup kits, vehicle position, damage and air remain room state. The current room transaction adapter requires a personal vehicle for workshop purchases; taken NPC cars remain drivable. Cash purchases can lower the player's level and affect the room leaderboard. Persistence and the interaction with borrowed cars remain under review.
+
+Drivers who owned Ludicrous Leap or Maximum Plaid before Hyperloop Pilot was added receive Hyperloop access for that vehicle without another purchase. Street Pilot targets up to 50 km/h on clear roads, and Maximum Plaid up to 101 km/h. Vehicle speed limits may be lower; all modes slow for corners, traffic and blocked routes.
 
 ## Paint and decals
 

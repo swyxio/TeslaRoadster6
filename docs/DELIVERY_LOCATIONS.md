@@ -12,7 +12,7 @@ The catalog is integrated with geographic scheduling. Do not offer a destination
 
 ## Catalog coverage
 
-The catalog has 171 pickups, 174 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. Every town has ten fictional ground customers; San Francisco has two additional rooftops and Oakland has one. The route fixture exercises every ordered pair of new stops within each area from one sampled road-aligned heading at the area's intended unlock level. It does not cover every vehicle, heading, traffic state, or route to unchanged historic stops.
+The catalog has 171 pickups, 175 fictional customers and six additional historical landmark arrivals. Counts include the existing six pickups, seven ground customers and three supported rooftop customers; the six landmark arrivals are shown separately. Every town has at least ten fictional ground customers; San Francisco has two additional rooftops and Oakland has one. The route fixture exercises every ordered pair of the original new stops within each area from one sampled road-aligned heading at the area's intended unlock level. An appended fictional South San Francisco picnic stop is off the lane and has separate assignment and driving coverage. The fixtures do not cover every vehicle, heading, traffic state, or route to unchanged historic stops.
 
 | Town or subarea | Pickups | Fictional customers | Additional landmark arrivals |
 | --- | ---: | ---: | ---: |
@@ -22,7 +22,7 @@ The catalog has 171 pickups, 174 fictional customers and six additional historic
 | Emeryville | 10 | 10 | 0 |
 | Mill Valley | 10 | 10 | 0 |
 | Corte Madera | 10 | 10 | 0 |
-| South San Francisco | 10 | 10 | 0 |
+| South San Francisco | 10 | 11 | 0 |
 | SFO subarea | 1 | 1 | 1 |
 | San Mateo | 10 | 10 | 0 |
 | Redwood City | 10 | 10 | 0 |

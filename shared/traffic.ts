@@ -84,6 +84,8 @@ export function isTrafficIncident(e:Entity,time:number):boolean {
 }
 
 const wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v));
+// Clear-road targets in metres per second; vehicle and route limits still apply.
+const DRIVE_SPEED={road:14,intercity:20,jump:24,sky:28} as const;
 // Reverse only through currently supported, unlocked space with clearance for
 // the whole car. Recovery is local and does not relocate or phase through cars.
 function clearBehind(e:Entity,world:World):boolean {
@@ -94,7 +96,7 @@ function clearBehind(e:Entity,world:World):boolean {
     const x=e.x-forward.x*d,z=e.z-forward.z*d;
     if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
     const pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
     for(const other of world.entities){
       if(other===e)continue;
       const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
@@ -134,7 +136,7 @@ function wallAhead(e:Entity):boolean {
   const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
   for(let d=1;d<=3;d++){
     const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
   }
   return false;
 }
@@ -272,6 +274,9 @@ export function trafficInput(e:Entity,world:World):Input {
   // On city corners, pause briefly; points along a straight road are not stops.
   if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
+    // A waypoint can also be passed with lateral offset, outside the radius
+    // check below. Keep the local approach slow in either case.
+    if(navigation?.exit&&Math.hypot(target.x-navigation.exit.x,target.z-navigation.exit.z)<.1)navigation.exitReached=true;
     waypoint=(waypoint+1)%route.length;
     if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;
     if(!e.driver&&cosine<.75)e.pauseUntil=world.time+.7;
@@ -306,14 +311,43 @@ export function trafficInput(e:Entity,world:World):Input {
   }
   const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  // A mix of slower and faster highway cars gives drivers something to pass.
-  // Only unattended highway traffic uses this tuning: a player taking one of
-  // these cars, a cop, or a cab keeps its existing cruise behavior.
+  // Purchased modes are quicker on clear straights, but still share the same
+  // turn, following-distance and arrival limits below. These are game speeds.
   const ambientCruise=e.id.startsWith('ambient-')&&!e.driver?15+hash(e.id)%9:26*variety;
-  let cruise=navigation?(navigation.join?4.5:12):highway?Math.min(spec.maxSpeed*.92,ambientCruise):8;
-  if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
-  // Start braking before bends; the approach length uses real-time speed.
-  if(e.driver&&!final&&cosine<.95){
+  let cruise=navigation?(navigation.join?4.5:Math.min(DRIVE_SPEED[navigation.mode??'road'],spec.maxSpeed*(e.upgrades.motor?1.1:1))):highway?Math.min(spec.maxSpeed*.92,ambientCruise):8;
+  if(navigation?.exit){
+    const exitIndex=route.findIndex(point=>Math.hypot(point.x-navigation.exit!.x,point.z-navigation.exit!.z)<.1);
+    if(exitIndex>=0&&(waypoint>exitIndex||(waypoint===exitIndex&&distance<8)))navigation.exitReached=true;
+    // Measure along the route: the car may be physically close to an exit on
+    // another lane long before the planned route actually reaches that exit.
+    if(navigation.exitReached)cruise=Math.min(cruise,4.5);
+    else if(exitIndex>=waypoint){
+      let remaining=distance;
+      for(let i=waypoint;i<exitIndex;i++)remaining+=Math.hypot(route[i+1].x-route[i].x,route[i+1].z-route[i].z);
+      cruise=Math.min(cruise,Math.sqrt(4.5**2+4*Math.max(0,remaining-12)));
+    }
+  }
+  if(navigation&&e.driver){
+    // A short segment can hide a stop or bend until it is too late to brake.
+    // Look ahead along the route and apply each upcoming speed limit early.
+    let along=distance;
+    for(let i=waypoint;i<route.length;i++){
+      if(i===route.length-1){
+        cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,along-3)));
+      }else{
+        const from=i===waypoint?previous:route[i-1],at=route[i],after=route[i+1];
+        const ax=at.x-from.x,az=at.z-from.z,bx=after.x-at.x,bz=after.z-at.z;
+        const bend=(ax*bx+az*bz)/(Math.hypot(ax,az)*Math.hypot(bx,bz)||1);
+        if(bend<.95){
+          const turnSpeed=Math.max(4.5,6+8*Math.max(0,bend));
+          cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,along-7)));
+        }
+        along+=Math.hypot(after.x-at.x,after.z-at.z);
+      }
+      if(along>300)break;
+    }
+  }else if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
+  else if(e.driver&&cosine<.95){
     const turnSpeed=Math.max(4.5,6+8*Math.max(0,cosine));
     cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,distance-7)));
   }else if(!e.driver&&cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
@@ -357,6 +391,8 @@ export function trafficInput(e:Entity,world:World):Input {
         !!(other.driver||other.autopilot)&&e.speed<.5&&
         (followingSpeed<.3||(recoveringFromStall&&followingSpeed<1.5));
     }else if(gap===hazardGap&&waitingForTraffic&&(other.kind==='person'||(!other.driver&&!other.autopilot))){
+      // An unattended obstacle at the same distance takes precedence even
+      // when an active vehicle happens to appear earlier in the entity list.
       waitingForTraffic=false;
     }
   }
@@ -379,15 +415,19 @@ export function trafficInput(e:Entity,world:World):Input {
       recovery.at=world.time;recovery.attempts=0;recovery.reverseUntil=0;
       if(e.speed<-.15)return {...neutral,brake:true,steer};
     }
-    // A red light can last longer than the recovery timeout.
+    // A red light can last longer than the recovery timeout; waiting in its
+    // queue is expected and should never trigger a reverse manoeuvre.
     if(waitingAtSignal&&!wall)recovery.at=world.time;
     if(!queued&&(joinRequiresReverse||world.time<recovery.reverseUntil||wall||world.time-recovery.at>12)&&
       approachingFromBehind(e,world)){
-      // Restart straight clearance after an interrupted wall recovery.
+      // Keep a pending attempt ready. Restart the straight-clearance phase of
+      // an interrupted attempt so it cannot turn against the wall on resume.
       if(world.time<recovery.reverseUntil){recovery.at=world.time;recovery.reverseUntil=world.time+4;}
       return {...neutral,brake:true,steer};
     }
     if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
+      // Three bounded attempts, then return control and expose a failure to
+      // the driver instead of sitting indefinitely against an obstruction.
       if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
       recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
     }

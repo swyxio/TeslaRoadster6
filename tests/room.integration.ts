@@ -73,6 +73,7 @@ try {
     assert.ok(state.world!.pickups.some(p=>p.id==='rocket-island'&&p.kind==='rocket'),'island Rocket kit is replicated');
     assert.ok(state.world!.pickups.some(p=>p.id==='rocket-0'&&p.kind==='rocket'),'city Rocket kit is replicated');
     assert.ok(state.world!.entities.every(e=>Object.hasOwn(e,'upgrades')),'vehicle upgrades are present in room snapshots');
+    assert.ok(state.world!.entities.every(e=>typeof e.upgrades.autonomyIntercity==='boolean'),'intercity ownership is replicated');
     assert.ok(state.world!.entities.every(e=>e.style.paint==='stock'&&e.style.decal==='none'),'initial finishes are replicated');
     assert.ok(state.world!.entities.every(e=>e.tankLevel===1),'starter tank level is replicated');
     assert.ok(state.world!.mars.fund>=0&&state.world!.mars.fund<=1_000_000_000);assert.equal(state.world!.mars.launchAt,null);
@@ -260,6 +261,8 @@ try {
   const deliveryTarget=orderTarget(two.state.world!.players.find(player=>player.id===id)!.delivery.order);
   one.input.action({type:'deliveryDestination',mode:'sky',requestId:10});
   await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===10&&!r.ok)??false,'sky mode is rejected without a rocket');
+  await delay(500);one.input.action({type:'deliveryDestination',mode:'intercity',requestId:12});
+  await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===12&&!r.ok)??false,'intercity mode is rejected without its upgrade');
   await delay(500);one.input.action({type:'deliveryDestination',mode:'road',requestId:11});
   await eventually(()=>one.state.destinationResults?.some(r=>r.requestId===11&&r.ok)??false,'current delivery route is accepted by the room');
   await eventually(()=>{
