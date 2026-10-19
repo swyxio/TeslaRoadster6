@@ -6,7 +6,7 @@ import { BUILDINGS, EXTRA_LANDMARKS, LANDMARKS, ROADS, isLand, isBridge, terrain
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { RESTAURANTS, CUSTOMERS } from '../shared/delivery';
 import { SHOPS } from '../shared/upgrades';
-import { contact } from '../shared/physics';
+import { contact, dimensions } from '../shared/physics';
 import { buildNorthLandmarks } from '../src/north-landmarks';
 import { addPlayer, createWorld, step } from '../shared/game';
 
@@ -111,7 +111,20 @@ test('vehicles land on the rendered ship, fields, terraces and curved roofs',()=
    for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
    const prefix=`roof:${BUILDINGS.indexOf(building)}:`;
    assert.ok(car.supportId?.startsWith(prefix),`${id} ${dx}, ${dz}: support ${car.supportId}`);
-   assert.ok(Math.abs(car.y-hit.point.y)<.12,`${id} ${dx}, ${dz}: landed at ${car.y}, rendered ${hit.point.y}`);
+   // A level car rests on the highest mesh point under its body, not only
+   // under the pivot. Sampling the actual rendered footprint catches curved
+   // roofs that previously let an edge sink while the center looked correct.
+   let contactHeight=hit.point.y;
+   if(id==='new-oakland-arena'||id==='new-tilden-merry-go-round'){
+     const size=dimensions(car.kind),c=Math.cos(car.yaw),s=Math.sin(car.yaw);
+     for(let ix=-10;ix<=10;ix++)for(let iz=-10;iz<=10;iz++){
+       const dx=ix*size.width/20,dz=iz*size.length/20;
+       ray.set(new THREE.Vector3(x+dx*c+dz*s,place.h+2,z-dx*s+dz*c),new THREE.Vector3(0,-1,0));
+       const bodyHit=ray.intersectObjects(surfaces)[0];
+       if(bodyHit)contactHeight=Math.max(contactHeight,bodyHit.point.y);
+     }
+   }
+   assert.ok(Math.abs(car.y-contactHeight)<.12,`${id} ${dx}, ${dz}: landed at ${car.y}, rendered body contact ${contactHeight}`);
    const landing=car.y,landingId=car.supportId!;
    landingIds.set(`${id}:${dx}:${dz}`,landingId);
    for(let i=0;i<5;i++)step(world,new Map(),.05);

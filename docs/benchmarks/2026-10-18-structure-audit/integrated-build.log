@@ -1,0 +1,27 @@
+
+> tesland@0.0.35-alpha build /private/tmp/tesland-structure-collision-audit
+> pnpm typecheck && vite build --manifest && node scripts/cache-fingerprinted-assets.mjs && tsx scripts/build-public-pages.ts
+
+
+> tesland@0.0.35-alpha typecheck /private/tmp/tesland-structure-collision-audit
+> tsc --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.playtest.json --noEmit && tsc -p tsconfig.playtest-worker.json --noEmit
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 184 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/.vite/manifest.json                        0.75 kB │ gzip:   0.27 kB
+dist/index.html                                 1.25 kB │ gzip:   0.52 kB
+dist/assets/bay-highway-traces-DPQHfpbL.ts      2.12 kB
+dist/assets/bake-bay-highways-BHFiZCKk.py       4.20 kB
+dist/assets/bay-route-source-lYfJDBns.json     68.78 kB │ gzip:  22.02 kB
+dist/assets/index-PyiE2M2I.css                 97.59 kB │ gzip:  20.81 kB
+dist/assets/index-CqQQawPL.js               1,303.48 kB │ gzip: 386.59 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.47s
+Generated 4 post(s), the blog index and 35 release note(s).

@@ -6,6 +6,34 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Hit what you can see',
+    intro: 'Buildings, roofs and curved structures have a more faithful physical shape.',
+    sections: [
+      { title: 'Clear gaps, solid walls', items: [
+        'Drive between open tower posts and beneath raised beams. Bridge legs and stadium masonry now stop cars where the visible structures stand.',
+        'Land on pitched and curved roofs, including the Stanford dish and NASA Ames tube. Contact checks include the car’s edges, so a clear center no longer lets the body sink into a roof or underside.',
+        'The Oakland ramp blocks approaches through its sides, and the Rocket Dome catches the airborne car’s body before it crosses the ceiling.',
+        'This remains arcade physics: small decorative details are not obstacles, and slight corner grazes and Dome attachment transitions still need polish.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.35-alpha',
+    label: '0.0.35 Alpha',
+    date: '2026-10-18',
+    title: 'Watch Starship rise',
+    intro: 'See the mission grow as drivers earn across Tesland.',
+    sections: [
+      { title: 'A tower that tracks the mission', items: [
+        'The Fremont tower now shows dollar milestones and a rising bar for confirmed game-wide earnings.',
+        'Open the Starship launch view to see the exact total and watch the construction take shape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.34-alpha',
+    label: '0.0.34 Alpha',
+    date: '2026-10-18',
     title: 'More of the Bay',
     intro: 'Find 100 more Bay-inspired places across the map.',
     sections: [

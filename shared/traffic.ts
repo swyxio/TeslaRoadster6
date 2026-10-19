@@ -7,6 +7,7 @@ import { TOWN_DELIVERY_ROUTES } from './town-delivery-roads';
 import { SFO_DELIVERY_ROUTES } from './sfo-delivery-road';
 import { LANDMARK_ACCESS_ROUTES } from './landmark-access-roads';
 import { body, contact } from './physics';
+import { buildingBlocksPose } from './landmark-collision';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
@@ -93,7 +94,7 @@ function clearBehind(e:Entity,world:World):boolean {
     const x=e.x-forward.x*d,z=e.z-forward.z*d;
     if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
     const pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return false;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
     for(const other of world.entities){
       if(other===e)continue;
       const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
@@ -108,7 +109,7 @@ function wallAhead(e:Entity):boolean {
   const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
   for(let d=1;d<=3;d++){
     const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>contact(pose,{...b,yaw:0})))return true;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
   }
   return false;
 }
@@ -324,7 +325,7 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
     if(!isSurface(pose.x,pose.z)||!hidden(pose.x,pose.z,viewers))continue;
     if(world.entities.some(other=>Math.hypot(other.x-pose.x,other.z-pose.z)<30))continue;
     const car=make(id,kind,pose.x,pose.z);Object.assign(car,pose,{npc:true,autopilot:true});
-    if(nearbyBuildings(car.x,car.z,10).some(building=>contact(body(car),{...building,yaw:0})))continue;
+    if(nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)))continue;
     world.entities.push(car);return true;
   }
   return false;
