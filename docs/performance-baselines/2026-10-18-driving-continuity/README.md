@@ -234,6 +234,41 @@ but it did not record close codes or reasons. The lab's updated runner adds
 those details, first/last state timing and rejection reasons; five focused
 controller/diagnostic tests pass, but that updated runner has not been loaded.
 
+### Distributed preview diagnostic
+
+[Run 39180414284](https://github.com/swyxio/TeslaRoadster6/actions/runs/39180414284)
+used four independent hosted runners, each with 16 normal guest Sessions, in
+one disposable room on the verified `6238845` preview. Identity and before/after
+checks passed. All 64 stayed connected, saw all players and applied measured
+input. Each runner observed 60.003–60.015 wall seconds and at least 59.9
+simulation seconds; reported windows overlapped for about 59.947 seconds.
+Of 76,785 measured sends, at least 1,334 were rejected (1,326 late, eight
+revision); the one-second drain may miss delayed replies.
+
+Of the 1,326 late rejections, 915 were sent in the first ten measurement
+seconds. For 134, the last snapshot observed before the rejection reply was
+already at least three ticks beyond the target, which exceeds the server's
+two-tick retiming allowance. For the rest, the captured data cannot distinguish
+that condition from an expired accepted-control watchdog. Individual snapshot
+age at send and the server receive tick were not recorded, so the timing burst
+does not identify a room, network or client-clock cause.
+
+The movement workload was incomplete: only three drivers completed even one
+ten-second movement block, none completed all six, and 25 traveled under 1 m.
+Normal spawns and traffic were not staged or validated as unobstructed; 37
+drivers had sampled health decreases and 22 had sampled push impulses. These
+observations do not establish the cause of a particular stop. Per-runner p95
+snapshot gaps were 130–138 ms, exact-sequence applied observations were
+338–425 ms, and client event-loop delays were 21–23 ms. The latter acknowledgement
+measure includes observation delay. Sampled queue/history maxima were six and
+20, with no observed overflow; between-snapshot maxima and server tick CPU
+were not measured. The four four-CPU hosts sampled one-minute load of
+0.45–1.14. Aggregate decoded JSON was 5,082.41 MiB, not measured wire bytes.
+This is not a playable-capacity or full throughput-gate result.
+
+The [sanitized reports, identity evidence and exact harness](hosted-6238845-39180414284.tar.gz)
+have SHA-256 `45543e6638307f8e644d3411f429037fa9794634f06e002d046cb71342bcf9d3`.
+
 ## Hosted comparison
 
 [Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
@@ -251,7 +286,19 @@ The fixture now detects and pauses either the baseline's direct interval or
 the candidate's start/stop scheduler, rejecting an unknown scheduler. The same
 local Wrangler integration passed against built baseline `1f722dd` and
 candidate `2a2c7db`, including paused snapshots and resumed inputs. This is a
-functional fixture check; a new hosted comparison is still required.
+functional fixture check; it did not itself supply a hosted comparison.
+
+The [new hosted pair](https://github.com/swyxio/TeslaRoadster6/actions/runs/39180171425)
+completed on base `333a3cc` and candidate `6238845`. Its three route legs
+aligned with 3.678 m p95 path separation. Browser callback interval p95 was
+66.7 / 116.7 ms and room simulation/wall was 0.927 / 1.000. One-minute host
+load was 16.10 → 6.17 for base and 14.98 → 12.88 for candidate on an Apple M1
+three-CPU virtual host. This single unevenly loaded pair is descriptive; the
+callbacks do not measure GPU completion, and the synthetic modeled-speed
+ratios do not establish the same-instant continuity gate. The workflow's
+successful comparability check is not a release-gate pass. [Selected reports
+and logs](hosted-39180171425-summary.tar.gz) have SHA-256
+`d18ba62623c62b3ed5a1816ce72ed99e89fdbb40fe568808a5b24ae845c94c43`.
 
 ## Functional verification
 
