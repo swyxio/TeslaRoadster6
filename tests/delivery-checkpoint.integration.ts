@@ -112,7 +112,7 @@ try {
   const after=(await inspect()).progress;
   const added=after.unlocked.filter(id=>!before.unlocked.includes(id));
   assert.ok(added.includes('regular'),'the third-delivery milestone also commits');
-  const awards:Record<string,number>={regular:400,'region-oakland':500,'stanford-research':600,'berkeley-research':400,'roof-rider':500,'sky-delivery':1_000};
+  const awards:Record<string,number>={regular:200,'region-oakland':500,'stanford-research':600,'berkeley-research':400,'roof-rider':500,'sky-delivery':1_000};
   for(const award of added)assert.ok(award in awards,`unexpected award ${award}`);
   const awardCash=added.reduce((total,id)=>total+awards[id],0),fare=after.earned-before.earned;
   assert.ok(fare>=0);
@@ -182,12 +182,12 @@ try {
   assert.equal(ucsfAfter.unlocked.filter(award=>award==='ucsf-research').length,1);
   assert.ok(ucsfAfter.unlocked.includes('regular'));
   assert.equal(ucsfAfter.achievementTiers!['early-deliveries'].count,1);
-  assert.equal(ucsfAfter.cash-ucsfBefore.cash,ucsfFare+350+400+100+250,'fare, checkpoint, milestone, early tier and real UCSF reward are credited once');
-  assert.equal(ucsfAfter.eligibleIncome-ucsfBefore.eligibleIncome,ucsfFare+350+400+100+250);
+  assert.equal(ucsfAfter.cash-ucsfBefore.cash,ucsfFare+350+200+100+250,'fare, checkpoint, milestone, early tier and real UCSF reward are credited once');
+  assert.equal(ucsfAfter.eligibleIncome-ucsfBefore.eligibleIncome,ucsfFare+350+200+100+250);
   assert.ok((await wallet<{started:number}>('fault-state',{driverId:ucsfDriverId})).started>=ucsfArmed.started+2,'UCSF delivery commit was retried');
   const ucsfRewards=ucsf.messages.slice(ucsfRewardStart).filter(message=>message.type==='reward').map(message=>message.reward);
   assert.deepEqual(ucsfRewards.map(reward=>reward.kind),['delivery-research','research']);
-  assert.deepEqual(ucsfRewards.map(reward=>reward.amount),[ucsfFare+350+400+100,250]);
+  assert.deepEqual(ucsfRewards.map(reward=>reward.amount),[ucsfFare+350+200+100,250]);
   ucsf.socket.close();await until(()=>ucsf.socket.readyState===WebSocket.CLOSED,'UCSF driver disconnects');
   await until(async()=>(await wallet<Array<{playerId:string}>>('players',{room:ucsfRoom})).every(entry=>entry.playerId!==ucsfId),'UCSF driver removed');
   const ucsfRecovered=await joinRoom(ucsfRoom,ucsfCode);await barrier(ucsfRecovered);

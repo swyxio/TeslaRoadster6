@@ -67,17 +67,17 @@ test('a room multiplier applies to the late fare floor but not the checkpoint',(
 test('a checkpoint, delivery milestone and region unlock can be grouped in one completion',()=>{
   const {world,player}=readyDropoff(2);
   const delivery=player.delivery as typeof player.delivery & {lifetimeIncome:number};
-  delivery.cash=8_250;
+  delivery.cash=8_450;
   player.achievements.unlocked.push('deliveries-1');
   step(world,new Map([['driver',NEUTRAL]]),.05);
   assert.equal(delivery.completed,3);
   assert.equal(delivery.lastPayout,1_000);
   assert.equal(delivery.cash,10_500);
-  assert.equal(delivery.lifetimeIncome,2_250);
+  assert.equal(delivery.lifetimeIncome,2_050);
   assert.equal(delivery.earned,1_000);
   assert.ok(player.achievements.unlocked.includes('regular'));
   assert.ok(player.achievements.unlocked.includes('region-oakland'));
-  assert.equal(delivery.lastReward?.amount,2_250);
+  assert.equal(delivery.lastReward?.amount,2_050);
 });
 
 test('the authoritative resolver applies to fare before level and award cascades, not the checkpoint',()=>{
@@ -92,10 +92,10 @@ test('the authoritative resolver applies to fare before level and award cascades
   assert.equal(player.delivery.cash,10_600);
   assert.equal(player.delivery.level,1,'resolved pay determines the level before the next order');
   updateAchievements(player,car,false,undefined,true);
-  assert.equal(player.delivery.cash,11_500);
+  assert.equal(player.delivery.cash,11_300);
   assert.equal(player.delivery.earned,2_000);
-  assert.equal(player.delivery.lifetimeIncome,3_250);
-  assert.equal(player.delivery.lastReward?.amount,3_250);
+  assert.equal(player.delivery.lifetimeIncome,3_050);
+  assert.equal(player.delivery.lastReward?.amount,3_050);
 });
 
 test('rerouting the single accepted job does not change its completion source ID',()=>{
@@ -149,7 +149,7 @@ for(const stage of ['pickup','dropoff'] as const)test(`a deferred ${stage} retri
     assert.equal(player.delivery.completed,3);
     assert.ok(player.achievements.unlocked.includes('regular'));
     assert.ok(player.achievements.unlocked.includes('region-oakland'));
-    assert.equal(player.delivery.lastReward?.amount,3_250);
+    assert.equal(player.delivery.lastReward?.amount,3_050);
   }else assert.equal(player.delivery.order.stage,'dropoff');
   step(world,new Map([[player.id,input]]),.05,{economy:hooks,substeps:1});
   assert.equal(settled.filter(item=>item.playerId===player.id).length,1,'settled arrival cannot pay twice');
