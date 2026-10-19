@@ -39,10 +39,12 @@ import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { RESEARCH_SITES, researchArrival } from '../shared/research';
 import { createPropertyScene } from './property-scene';
 import { marketPaintColor } from '../shared/market-catalog';
+import { createHorizon } from './horizon';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
   private scene = new T.Scene();
+  private horizon = createHorizon(this.scene);
   private sky = new T.Color();
   private nightSky = new T.Color(0x334b62);
   private daySky = new T.Color(0xa8cbd0);
@@ -482,7 +484,9 @@ export class GameScene {
         }else for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=mesh.getObjectByName(name);if(wheel)wheel.rotation.y=e.steering*spec.steerAngle*(name.startsWith('wheel_r')?(spec.fourWheelSteering?-.55*Math.max(0,1-Math.abs(e.speed)/25):0):1);}
       }
     }
-    for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;this.renderer.render(this.scene,this.camera);
+    for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;
+    this.horizon.update(this.camera,daylight);
+    this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){
     let last=performance.now();
