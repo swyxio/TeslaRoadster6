@@ -20,13 +20,16 @@ export const UPGRADES = {
   tank: {name:'Air tank', price:1_500, description:'Double capacity and refill. Level 3 and rockets unlock rooftop jobs.'},
   motor: {name:'Sport motor', price:2_000, description:'25% quicker acceleration and 10% higher road speed.'},
   armor: {name:'Impact armor', price:1_500, description:'Halves crash and hard-landing damage.'},
-  autonomyJump: {name:'Ludicrous Leap', price:6_000, description:'Self-driving can hop past stopped traffic. Requires rockets.'},
-  autonomySky: {name:'Maximum Plaid', price:12_000, description:'Self-driving can fly and use helpful air currents. Requires Ludicrous Leap and rockets.'},
+  autonomyIntercity: {name:'Hyperloop Pilot', price:3_000, description:'Up to 72 km/h on Bay trips. No rockets needed.'},
+  autonomyJump: {name:'Ludicrous Leap', price:6_000, description:'Up to 86 km/h and hops past stopped traffic. Requires Hyperloop Pilot and rockets.'},
+  autonomySky: {name:'Maximum Plaid', price:12_000, description:'Up to 101 km/h; can fly and use helpful air currents. Requires Ludicrous Leap and rockets.'},
   service: {name:'Repair & refill', price:200, description:'Restore condition and fill your air tank.'},
 } as const;
 export type UpgradeId=keyof typeof UPGRADES;
-export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean;autonomyJump:boolean;autonomySky:boolean};
-export function initialVehicleUpgrades():VehicleUpgrades{return {rocket:false,economy:false,motor:false,armor:false,autonomyJump:false,autonomySky:false};}
+export type VehicleUpgrades={rocket:boolean;economy:boolean;motor:boolean;armor:boolean;autonomyIntercity:boolean;autonomyJump:boolean;autonomySky:boolean};
+export function initialVehicleUpgrades():VehicleUpgrades{return {rocket:false,economy:false,motor:false,armor:false,autonomyIntercity:false,autonomyJump:false,autonomySky:false};}
+/** Owners of the previously available higher tiers keep the newly added lower tier. */
+export function hasIntercity(upgrades:VehicleUpgrades):boolean{return upgrades.autonomyIntercity||upgrades.autonomyJump||upgrades.autonomySky;}
 export function hasRockets(e:Entity):boolean{return e.kind!=='person'&&(VEHICLES[e.kind].airThrusters||e.upgrades.rocket);}
 export function shopFor(e:Entity){
   if(e.kind==='person'||e.supportId!=='ground'||Math.abs(e.speed)>=1||Math.hypot(e.pushX,e.pushZ)>=1||Math.abs(e.vy)>=1)return undefined;

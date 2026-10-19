@@ -4,7 +4,7 @@ import {addPlayer, buyUpgrade, createWorld, interact, makeEntity, NEUTRAL, step}
 import {nearbyBuildings, terrainHeight} from '../shared/map';
 import {contact,body} from '../shared/physics';
 import {VEHICLE_IDS, VEHICLES} from '../shared/vehicles';
-import {SHOPS, UPGRADES, hasRockets} from '../shared/upgrades';
+import {SHOPS, UPGRADES, hasIntercity, hasRockets} from '../shared/upgrades';
 import {parseMessage} from '../worker/protocol';
 import {cliffPose} from '../shared/island-stunts';
 import type {TankLevel} from '../shared/air-tank';
@@ -78,18 +78,30 @@ test('upgrades stay with a taken vehicle when its driver exits and returns',()=>
   const {world,player,car}=setup('zoox');car.upgrades.rocket=true;car.upgrades.armor=true;
   interact(world,'p');assert.notEqual(player.entityId,car.id);interact(world,'p');assert.equal(player.entityId,car.id);assert.ok(car.upgrades.rocket&&car.upgrades.armor);
 });
-test('self-driving tiers require rockets and are bought in order, once each',()=>{
-  const {world,player,car}=setup('model-3');player.delivery.cash=20_000;
+test('self-driving tiers are bought in order, and only flight tiers require rockets',()=>{
+  const {world,player,car}=setup('model-3');player.delivery.cash=30_000;
   assert.equal(buyUpgrade(world,'p','autonomyJump'),false);
   assert.equal(buyUpgrade(world,'p','autonomySky'),false);
+  assert.equal(buyUpgrade(world,'p','autonomyIntercity'),true,'ground-only tier needs no rockets');
+  assert.equal(buyUpgrade(world,'p','autonomyIntercity'),false,'no duplicate charge');
+  assert.equal(buyUpgrade(world,'p','autonomyJump'),false,'Leap requires rockets');
   car.upgrades.rocket=true;
   assert.equal(buyUpgrade(world,'p','autonomySky'),false,'Leap comes first');
   assert.equal(buyUpgrade(world,'p','autonomyJump'),true);
   assert.equal(buyUpgrade(world,'p','autonomyJump'),false,'no duplicate charge');
   assert.equal(buyUpgrade(world,'p','autonomySky'),true);
   assert.equal(buyUpgrade(world,'p','autonomySky'),false,'no duplicate charge');
-  assert.equal(player.delivery.cash,20_000-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
-  assert.equal(car.upgrades.autonomyJump,true);assert.equal(car.upgrades.autonomySky,true);
+  assert.equal(player.delivery.cash,30_000-UPGRADES.autonomyIntercity.price-UPGRADES.autonomyJump.price-UPGRADES.autonomySky.price);
+  assert.equal(car.upgrades.autonomyIntercity,true);assert.equal(car.upgrades.autonomyJump,true);assert.equal(car.upgrades.autonomySky,true);
+});
+test('drivers who already purchased a higher tier receive intercity access without paying again',()=>{
+  for(const tier of ['autonomyJump','autonomySky'] as const){
+    const {world,player,car}=setup('model-3');player.delivery.cash=10_000;
+    car.upgrades[tier]=true;
+    assert.equal(hasIntercity(car.upgrades),true,tier);
+    assert.equal(buyUpgrade(world,'p','autonomyIntercity'),false,tier);
+    assert.equal(player.delivery.cash,10_000,tier);
+  }
 });
 test('tank upgrades charge escalating prices, refill, and double usable flight each level',()=>{
   const {world,player,car}=setup();player.delivery.cash=30_000;

@@ -142,7 +142,7 @@ function flightPlan(car:Entity,direction:{x:number;z:number},available:number,mo
 export function autonomousFlight(car:Entity,world:World,level:Level,mode:DriveMode,groundInput:Input,state:AutonomousFlightState):AutonomousFlightControl {
   const ground={input:groundInput,jump:false,active:false};
   const nav=car.navigation;
-  if(mode==='road'||!nav||nav.status!=='driving'||!hasRockets(car)||car.inDome||car.loopAngle!==null){state.phase='ground';return ground;}
+  if((mode!=='jump'&&mode!=='sky')||!nav||nav.status!=='driving'||!hasRockets(car)||car.inDome||car.loopAngle!==null){state.phase='ground';return ground;}
   const airUse=flightLoad(dimensions(car.kind).massKg)*(car.upgrades.economy?.75:1);
   if(state.phase==='air'){
     if(car.supportId!==null){state.phase='ground';state.target=null;return ground;}

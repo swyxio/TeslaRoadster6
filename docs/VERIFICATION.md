@@ -1,5 +1,11 @@
 # Verification · 2026-10-18 Pacific
 
+
+## Intercity self-driving · independent provisional candidate · 2026-10-19 Pacific
+
+- Reconstructed on main `1b7b18bf`, with provisional release 0.0.43 and protocol 53. If another release takes these numbers first, integrate actual main and advance both together.
+- This independent candidate has not yet run tests, build, Wrangler, visual playtests or performance checks. Earlier checks on differently integrated revisions do not verify this reconstruction.
+
 ## Bay horizon · integrated candidate · 2026-10-18 Pacific
 
 - Candidate `9b7982f1` incorporates released main `f922e213` and assigns 0.0.42 / protocol v52. All 1,138 tests and the build/typechecks passed locally; the existing Vite large-chunk warning remains. The horizon is decorative: it does not change authoritative terrain, collisions or simulation.

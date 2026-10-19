@@ -467,4 +467,5 @@ export const ADDED_CUSTOMERS:readonly AddedCustomer[] = [
   {"id":"customer-san-francisco-05","name":"Market Street Printmakers · San Francisco","cityId":"san-francisco","areaId":"san-francisco","x":-181,"y":0,"z":-177,"rooftop":false},
   {"id":"customer-san-francisco-06","name":"Fog City Music Room · San Francisco","cityId":"san-francisco","areaId":"san-francisco","x":-157,"y":0,"z":-177,"rooftop":false},
   {"id":"customer-oakland-07","name":"Grand Avenue Makers · Oakland","cityId":"oakland","areaId":"oakland","x":487,"y":0,"z":117,"rooftop":false},
+  {"id":"customer-south-san-francisco-11","name":"Hillside Picnic Club · South San Francisco","cityId":"south-san-francisco","areaId":"south-san-francisco","x":-530,"y":0,"z":918,"rooftop":false},
 ];

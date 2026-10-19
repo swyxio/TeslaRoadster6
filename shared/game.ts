@@ -22,7 +22,7 @@ import type { AchievementEvidence } from './achievement-evidence';
 import { newPolice, policeInput, updatePolice, type PoliceState, type TicketEvidence } from './police';
 import { createFerry, FERRY_DECK, ferryDocked, ferrySecured, islandProtected, onFerryDeck, removeFerryPassenger, updateFerry, type Ferry, type FerrySide } from './ferry';
 import { updateRocketPickup } from './rocket';
-import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, initialVehicleUpgrades, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
+import { SHOPS, SHOP_RADIUS, UPGRADES, hasIntercity, hasRockets, initialVehicleUpgrades, shopFor, type UpgradeId, type VehicleUpgrades } from './upgrades';
 import { PAINTS, DECALS, initialVehicleStyle, isStyleChoice, type VehicleStyle, type StyleChoice } from './vehicle-style';
 import { createParking, insideParkingArea, joinParking, leaveParking, startQueue, updateParking, type ParkingMode, type ParkingState } from './parking';
 import { PARKING_LOTS } from './parking-lots';
@@ -39,7 +39,7 @@ import { domeBodyContact } from './dome-body';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=52;
+export const PROTOCOL_VERSION=53;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -328,6 +328,8 @@ export function buyUpgrade(world:World,id:string,upgrade:UpgradeId):boolean {
   if(player.delivery.cash<price)return false;
   if(upgrade==='rocket'&&hasRockets(car))return false;
   if((upgrade==='economy'||upgrade==='tank'||upgrade==='autonomyJump'||upgrade==='autonomySky')&&!hasRockets(car))return false;
+  if(upgrade==='autonomyIntercity'&&hasIntercity(car.upgrades))return false;
+  if(upgrade==='autonomyJump'&&!hasIntercity(car.upgrades))return false;
   if(upgrade==='autonomySky'&&!car.upgrades.autonomyJump)return false;
   if(upgrade==='service'){
     if(car.health>=100&&car.air>=100)return false;
@@ -373,8 +375,8 @@ export function toggleAutopilot(world:World,id:string):boolean {
 }
 function navigate(world:World,id:string,destination:{x:number;z:number},mode:DriveMode,maxDestinationSnap?:number):boolean {
   const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!car||car.driver!==id||!isDriveMode(mode)||!Number.isFinite(destination.x)||!Number.isFinite(destination.z)||(mode!=='road'&&!hasRockets(car))||(mode==='jump'&&!car.upgrades.autonomyJump)||(mode==='sky'&&!car.upgrades.autonomySky))return false;
-  const route=planNavigation(car,destination,player.delivery.level,maxDestinationSnap);if(!route)return false;
+  if(!player||!car||car.driver!==id||!isDriveMode(mode)||!Number.isFinite(destination.x)||!Number.isFinite(destination.z)||(mode==='intercity'&&!hasIntercity(car.upgrades))||((mode==='jump'||mode==='sky')&&!hasRockets(car))||(mode==='jump'&&!car.upgrades.autonomyJump)||(mode==='sky'&&!car.upgrades.autonomySky))return false;
+  const route=planNavigation(car,destination,player.delivery.level,maxDestinationSnap,maxDestinationSnap!==undefined);if(!route)return false;
   car.navigation=Object.assign(route,{mode});car.autopilot=true;car.pauseUntil=0;return true;
 }
 export function setDestination(world:World,id:string,destination:{x:number;z:number},mode:DriveMode='road'):boolean {
@@ -923,7 +925,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     if(e.police&&(e.police.targetId||e.police.path.length))input=policeInput(e,world);
     else if(e.autopilot){
       const nav=e.navigation,player=e.driver?world.players.find(p=>p.id===e.driver):undefined;
-      if(nav&&player&&nav.mode&&nav.mode!=='road'){
+      if(nav&&player&&(nav.mode==='jump'||nav.mode==='sky')){
         const state=nav.flight??(nav.flight=initialAutonomousFlight());
         // The road follower must not advance a ground path while in flight.
         const groundInput=state.phase==='air'&&e.supportId===null?NEUTRAL:trafficInput(e,world);

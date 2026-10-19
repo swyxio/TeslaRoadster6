@@ -14,11 +14,14 @@ export type Navigation = {
   mode?:DriveMode; flight?:AutonomousFlightState;
   // The off-road join is planned once, then followed with slower manoeuvres.
   join?:Point; joinReached?:boolean;
+  // Advanced driving can leave a connected lane for a checked delivery marker.
+  exit?:Point; exitReached?:boolean;
   recovery?:{index:number;distance:number;at:number;attempts:number;reverseUntil:number};
 };
 // With traffic stopping within four metres, this keeps delivery arrival within
 // the nine-metre pickup/dropoff marker even after the endpoint is snapped.
 export const DELIVERY_DESTINATION_SNAP = 4.5;
+const DELIVERY_APPROACH_RADIUS = 150;
 type Segment = {a:Point;b:Point;cuts:number[]};
 type Edge = {to:number;distance:number;accessChecked:number;accessAllowed:number};
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -125,9 +128,9 @@ export function prepareNavigationGraph():void {
 }
 
 /** A necessary, inexpensive test before planning a delivery route. */
-export function canSnapDeliveryDestination(destination:Point,level:Level):boolean {
+export function canApproachDeliveryDestination(destination:Point,level:Level):boolean {
   if(!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return false;
-  return navigationGraph().segments.some(segment=>distance(destination,projection(destination,segment).point)<=DELIVERY_DESTINATION_SNAP);
+  return navigationGraph().segments.some(segment=>distance(destination,projection(destination,segment).point)<=DELIVERY_APPROACH_RADIUS);
 }
 
 /** Nearest supported road lane for localizing a job, not a route or teleport. */
@@ -263,11 +266,20 @@ function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|nu
 }
 
 /** Find a directed route to the nearest connected lane, respecting progress. */
-export function planNavigation(car:NavigationVehicle,destination:Point,level:Level,maxDestinationSnap=100):Navigation|null {
+export function planNavigation(car:NavigationVehicle,destination:Point,level:Level,maxDestinationSnap=100,allowOffRoadDestination=false):Navigation|null {
   if(car.kind==='person'||car.supportId!=='ground'||car.inDome||!isSurface(destination.x,destination.z)||requiredLevelAt(destination.x,destination.z)>level)return null;
   const {segments,nodes,edges,nodeIds,segmentNodes}=navigationGraph();
   const candidates=(p:Point,max:number)=>segments.map((s,i)=>({i,...projection(p,s)})).map(c=>({...c,distance:distance(p,c.point)})).filter(c=>c.distance<=max).sort((a,b)=>a.distance-b.distance);
-  const starts=candidates(car,150),ends=candidates(destination,maxDestinationSnap);
+  const starts=candidates(car,150),snappedEnds=candidates(destination,maxDestinationSnap);
+  // Delivery markers need not sit on a lane. Every driving mode can make a
+  // short, checked approach on supported ground after leaving one.
+  const nearbyEnds=snappedEnds.length?snappedEnds:allowOffRoadDestination?candidates(destination,DELIVERY_APPROACH_RADIUS):[];
+  const ends=nearbyEnds.filter(c=>c.distance<=nearbyEnds[0].distance+35).slice(0,18).flatMap(c=>{
+    if(snappedEnds.length)return [{...c,approach:[] as Point[]}];
+    const approach=offRoadApproach({...car,x:c.point.x,z:c.point.z},{x:destination.x,z:destination.z},level);
+    const s=segments[c.i];
+    return approach&&canTurn(s.a,c.point,approach[0])?[{...c,approach}]:[];
+  });
   if(!starts.length||!ends.length)return null;
   const alignment=(c:typeof starts[number])=>{
     const s=segments[c.i],length=distance(s.a,s.b)||1;
@@ -291,7 +303,10 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
       return approach?[{...c,reverse:false,approach}]:[];
     });
   if(!closeStarts.length)return null;
-  const closeEnds=ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16);
+  // For a checked approach every candidate reaches the exact same marker;
+  // allow both lanes so a slightly nearer opposite lane does not force a
+  // many-kilometre detour around the Bay.
+  const closeEnds=snappedEnds.length?ends.filter(c=>c.distance<=ends[0].distance+6).slice(0,16):ends;
   const dist=nodes.map(()=>Infinity),previous=nodes.map(()=>-1),origins=new Map<number,typeof closeStarts[number]>(),used=new Set<number>(),queue=new NavigationQueue();
   const ahead=(p:Point)=>(p.x-car.x)*-Math.sin(car.yaw)+(p.z-car.z)*-Math.cos(car.yaw)>=-.5;
   for(const start of closeStarts){
@@ -301,16 +316,19 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     if(!next||(start.reverse&&(distance(start.point,nodes[next.id])>120||!ahead(nodes[next.id])))||
       !allowed(car,nodes[next.id],level)||!allowed(start.point,nodes[next.id],level))continue;
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
-    const cost=(onRoad?start.distance*2:approachLength)+(1-heading)*8+distance(start.point,nodes[next.id]);
+    // A checked off-road join must select the same route for any parked
+    // heading: delivery assignment does not persist the car's yaw.
+    const cost=(onRoad?start.distance*2+(1-heading)*8:approachLength)+distance(start.point,nodes[next.id]);
     if(cost<dist[next.id]){dist[next.id]=cost;origins.set(next.id,start);queue.push(next.id,cost);}
   }
-  let bestCost=Infinity,bestNode=-1,bestEnd:Point|undefined;
+  let bestCost=Infinity,bestNode=-1,bestEnd:typeof ends[number]|undefined;
   // Direct travel on a single segment need not pass through an intersection.
   let direct:Point[]|undefined,directStart:typeof closeStarts[number]|undefined;
   for(const start of closeStarts)for(const end of closeEnds)if(start.i===end.i&&(start.reverse?end.t<=start.t&&distance(start.point,end.point)<=120&&ahead(end.point):end.t>=start.t)&&allowed(car,end.point,level)&&allowed(start.point,end.point,level)){
     const approachLength=start.approach.reduce((sum,p,i)=>sum+distance(i?start.approach[i-1]:car,p),0);
-    const cost=(onRoad?start.distance*2:approachLength)+distance(start.point,end.point)+end.distance*2;
-    if(cost<bestCost){bestCost=cost;bestEnd=end.point;direct=[...start.approach,end.point];directStart=start;}
+    const exitLength=end.approach.reduce((sum,p,i)=>sum+distance(i?end.approach[i-1]:end.point,p),0);
+    const cost=(onRoad?start.distance*2:approachLength)+distance(start.point,end.point)+(end.approach.length?exitLength+end.distance:end.distance*2);
+    if(cost<bestCost){bestCost=cost;bestEnd=end;direct=[...start.approach,end.point,...end.approach];directStart=start;}
   }
   while(true){
     const next=queue.pop();if(!next)break;
@@ -320,24 +338,30 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     for(const end of closeEnds){
       const cuts=segmentNodes[end.i],before=[...cuts].reverse().find(c=>c.t<=end.t+1e-7);
       if(before?.id!==at||!allowed(nodes[at],end.point,level))continue;
-      const cost=dist[at]+distance(nodes[at],end.point)+end.distance*2;
-      if(cost<bestCost){bestCost=cost;bestNode=at;bestEnd=end.point;direct=undefined;directStart=undefined;}
+      const exitLength=end.approach.reduce((sum,p,i)=>sum+distance(i?end.approach[i-1]:end.point,p),0);
+      const cost=dist[at]+distance(nodes[at],end.point)+(end.approach.length?exitLength+end.distance:end.distance*2);
+      if(cost<bestCost){bestCost=cost;bestNode=at;bestEnd=end;direct=undefined;directStart=undefined;}
     }
     for(const edge of edges[at])if(allowedEdge(nodes[at],nodes[edge.to],edge,level)){
+      // Reject point turnarounds while searching so a longer drivable route
+      // can be selected instead of rejecting the shortest route afterwards.
+      let past=previous[at];
+      while(past>=0&&distance(nodes[past],nodes[at])<7)past=previous[past];
+      if(past>=0&&!canTurn(nodes[past],nodes[at],nodes[edge.to]))continue;
       const cost=dist[at]+edge.distance;
       if(cost<dist[edge.to]){dist[edge.to]=cost;previous[edge.to]=at;queue.push(edge.to,cost);}
     }
   }
   // A one-way loop can technically connect nearby streets by routing around
   // the entire region. Reject those routes instead of promising a local trip.
-  if(!bestEnd||bestCost>Math.max(1200,distance(car,bestEnd)*5))return null;
+  if(!bestEnd||bestCost>Math.max(1200,distance(car,bestEnd.approach.length?destination:bestEnd.point)*5))return null;
   const path:Point[]=direct??[];let origin=directStart;
   if(!direct){
     for(let at=bestNode;at!==-1;at=previous[at])path.unshift(nodes[at]);
     origin=origins.get(path.length?nodeIds.get(`${Math.round(path[0].x*100)},${Math.round(path[0].z*100)}`)!:-1);
     if(origin?.approach.length)path.unshift(...origin.approach);
     else if(origin&&distance(car,origin.point)>3)path.unshift(origin.point);
-    path.push(bestEnd);
+    path.push(bestEnd.point,...bestEnd.approach);
   }
   // Remove redundant collinear cuts, but retain actual turns and the destination.
   const clean:Point[]=[];
@@ -345,7 +369,7 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     if(clean.length&&distance(clean[clean.length-1],p)<.1)continue;
     while(clean.length>=2){const a=clean[clean.length-2],b=clean[clean.length-1];
       const ab={x:b.x-a.x,z:b.z-a.z},bc={x:p.x-b.x,z:p.z-b.z};
-      if(Math.abs(cross(ab.x,ab.z,bc.x,bc.z))>.01*(Math.hypot(ab.x,ab.z)*Math.hypot(bc.x,bc.z))||ab.x*bc.x+ab.z*bc.z<=0)break;
+      if((bestEnd.approach.length&&distance(b,bestEnd.point)<.1)||Math.abs(cross(ab.x,ab.z,bc.x,bc.z))>.01*(Math.hypot(ab.x,ab.z)*Math.hypot(bc.x,bc.z))||ab.x*bc.x+ab.z*bc.z<=0)break;
       clean.pop();
     }
     clean.push(p);
@@ -362,5 +386,5 @@ export function planNavigation(car:NavigationVehicle,destination:Point,level:Lev
     // up with the lane; retain the existing rejection for road-only routes.
     if(!canTurn(turns[i-1],turns[i],turns[i+1])&&(!origin?.approach.length||distance(turns[i],origin.point)>8))return null;
   }
-  return {destination:bestEnd,path:clean,index:0,status:'driving',...(origin?.approach.length?{join:origin.point}:{})};
+  return {destination:bestEnd.approach.length?{x:destination.x,z:destination.z}:bestEnd.point,path:clean,index:0,status:'driving',...(origin?.approach.length?{join:origin.point}:{}),...(bestEnd.approach.length?{exit:bestEnd.point}:{})};
 }

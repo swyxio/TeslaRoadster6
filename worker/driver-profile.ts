@@ -5,6 +5,7 @@ import { normalizeAchievementTiers, type AchievementTierProgress } from '../shar
 import { normalizeVehicleCollections, type VehicleCollections } from '../shared/vehicle-collections';
 import { applyAcceptedDelivery, applyObservedAchievement, applyTierProgress } from './achievement-progress';
 import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, levelForCash, orderTarget, rerouteInaccessibleOrder, type DeliveryState, type DeliveryStop, type Level, type Order } from '../shared/delivery';
+import { DELIVERY_SEARCH_VERSION } from '../shared/delivery-scheduler';
 import { applyTicketEvidence, ticketRoofAccess, type TicketEvidence } from '../shared/police';
 import { luxuryPurchaseAwards, luxuryVehicle, type LuxuryVehicleId } from '../shared/luxury';
 import { emptyCybercabFleet, paintCybercab, purchaseCybercab, settleCybercabIntervals, type CybercabFleet, type CybercabInterval } from '../shared/cybercabs';
@@ -50,7 +51,7 @@ export type DriverOutcome =
 type DriverRecord = {driverId:string;fence:string;roomId:string;revision:number;sequence:number;sealed:boolean;progress:DriverProgress;incomeActivated:boolean;marketPaint?:import('../shared/market-protocol').MarketPaint|null};
 type Receipt = {payload:string;outcome:DriverOutcome;cabEvents?:EarningsEvents};
 type AssignmentRequest = {kind:'assignment';context:string;delivery:DeliveryState};
-type AssignmentCheckpoint = AssignmentRequest & {payload:string;cabEvents?:EarningsEvents;done:boolean;version:number};
+type AssignmentCheckpoint = AssignmentRequest & {payload:string;cabEvents?:EarningsEvents;done:boolean;version:number;searchVersion?:number};
 type PrivacyPending = {revision:number;name:string|null};
 type OutboxRetry = {attempts:number;next:number};
 
@@ -199,9 +200,11 @@ export class DriverProfile extends DurableObject<Env> {
       const current=await txn.get<AssignmentCheckpoint>(key);
       if(current){
         if(current.payload!==payload||JSON.stringify(current.cabEvents)!==JSON.stringify(cabEvents)||current.context!==request.context)return null;
-        return current;
+        if(current.searchVersion===DELIVERY_SEARCH_VERSION)return current;
       }
-      const created:AssignmentCheckpoint={...request,payload,...(cabEvents?{cabEvents}:{}),done:false,version:0};
+      // Routing changes invalidate completed and unfinished uncommitted assignments.
+      const created:AssignmentCheckpoint={...request,payload,...(cabEvents?{cabEvents}:{}),done:false,
+        version:current?current.version+1:0,searchVersion:DELIVERY_SEARCH_VERSION};
       await txn.put(key,created);
       return created;
     });
@@ -212,7 +215,8 @@ export class DriverProfile extends DurableObject<Env> {
     const done=advanceDeliverySearch(delivery,search.roofEligible);
     const saved=await this.ctx.storage.transaction(async txn=>{
       const current=await txn.get<AssignmentCheckpoint>(key),record=await txn.get<DriverRecord>('driver');
-      if(!current||current.payload!==payload||current.context!==request.context||current.version!==checkpoint.version)return false;
+      if(!current||current.payload!==payload||current.context!==request.context||current.version!==checkpoint.version||
+        current.searchVersion!==checkpoint.searchVersion)return false;
       if(!record||record.driverId!==intent.driverId||record.fence!==intent.fence||record.roomId!==intent.roomId||record.sealed||
         record.revision!==intent.revision||intent.sequence<=record.sequence||await txn.get<Receipt>(`receipt:${intent.eventId}`)){
         await txn.delete(key);
@@ -422,7 +426,7 @@ export class DriverProfile extends DurableObject<Env> {
               await txn.delete(assignmentKey);
               matchingCheckpoint=undefined;
             }
-            if(!matchingCheckpoint?.done){
+            if(!matchingCheckpoint?.done||matchingCheckpoint.searchVersion!==DELIVERY_SEARCH_VERSION){
               const delivery=initialDelivery(next.order.search.origin);
               Object.assign(delivery,{level:next.level,completed:next.completed,order:structuredClone(next.order)});
               return {kind:'assignment',context,delivery};

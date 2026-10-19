@@ -84,6 +84,8 @@ export function isTrafficIncident(e:Entity,time:number):boolean {
 }
 
 const wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v));
+// Clear-road targets in metres per second; vehicle and route limits still apply.
+const DRIVE_SPEED={road:14,intercity:20,jump:24,sky:28} as const;
 // Reverse only through currently supported, unlocked space with clearance for
 // the whole car. Recovery is local and does not relocate or phase through cars.
 function clearBehind(e:Entity,world:World):boolean {
@@ -103,6 +105,31 @@ function clearBehind(e:Entity,world:World):boolean {
     }
   }
   return true;
+}
+// A static clearance alone can become unsafe while a faster following car
+// closes on a reversing driver. Pause recovery for a same-lane approach;
+// normal collision handling still applies to crossing or unpredictable cars.
+function approachingFromBehind(e:Entity,world:World):boolean {
+  if(e.kind==='person')return false;
+  const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
+  for(const other of world.entities){
+    if(other===e)continue;
+    const size=other.kind==='person'?{length:.7,width:.7,height:1.9}:VEHICLES[other.kind];
+    if(e.y>=other.y+size.height||other.y>=e.y+spec.height)continue;
+    const dx=other.x-e.x,dz=other.z-e.z,along=dx*forward.x+dz*forward.z;
+    if(along>=0)continue;
+    const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
+    const alignment=forward.x*otherForward.x+forward.z*otherForward.z;
+    const crosswise=forward.x*otherForward.z-forward.z*otherForward.x;
+    const side=Math.abs(dx*forward.z-dz*forward.x);
+    const lateralReach=(spec.width+size.width*Math.abs(alignment)+size.length*Math.abs(crosswise))/2+.35;
+    if(side>lateralReach)continue;
+    const gap=-along-(spec.length+size.length*Math.abs(alignment)+size.width*Math.abs(crosswise))/2;
+    const incoming=other.speed*alignment+other.pushX*forward.x+other.pushZ*forward.z;
+    const reversing=Math.max(0,-e.speed-e.pushX*forward.x-e.pushZ*forward.z);
+    if(incoming>.5&&gap<5+(incoming+reversing)*2.5)return true;
+  }
+  return false;
 }
 function wallAhead(e:Entity):boolean {
   if(e.kind==='person')return false;
@@ -158,6 +185,9 @@ export function trafficInput(e:Entity,world:World):Input {
   // On city corners, pause briefly; points along a straight road are not stops.
   if(final&&distance<4&&Math.abs(e.speed)<.15){navigation!.status='arrived';e.autopilot=false;return {...neutral,brake:true};}
   if(!final&&(distance<7||(progress>=1&&lateral<10))){
+    // A waypoint can also be passed with lateral offset, outside the radius
+    // check below. Keep the local approach slow in either case.
+    if(navigation?.exit&&Math.hypot(target.x-navigation.exit.x,target.z-navigation.exit.z)<.1)navigation.exitReached=true;
     waypoint=(waypoint+1)%route.length;
     if(navigation)navigation.index=waypoint;else e.waypoint=waypoint;
     if(!e.driver&&cosine<.75)e.pauseUntil=world.time+.7;
@@ -186,52 +216,52 @@ export function trafficInput(e:Entity,world:World):Input {
         delete navigation.join;delete navigation.joinReached;
       }
     }
-    let recovery=navigation.recovery;
-    if(!recovery||recovery.index!==waypoint){
-      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
-    }else if(distance<recovery.distance-2){
-      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
-    }
-    const wall=!!navigation.join&&e.speed>=0&&wallAhead(e);
-    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
-    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
-      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
-    // A red light can last longer than the recovery timeout; waiting in its
-    // queue is expected and should never trigger a reverse manoeuvre.
-    if(waitingAtSignal&&!wall)recovery.at=world.time;
-    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
-      // Three bounded attempts, then return control and expose a failure to
-      // the driver instead of sitting indefinitely against a wall or queue.
-      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
-      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
-    }
-    const reversing=world.time<recovery.reverseUntil||(!!navigation.join&&Math.abs(angle)>2.1);
-    if(reversing&&clearBehind(e,world)){
-      if(e.speed>1)return {...neutral,brake:true,steer};
-      const recovering=world.time<recovery.reverseUntil;
-      // Clear the nose from a wall before rotating, or the physics correctly
-      // rejects the turn even though the straight line behind is open.
-      const straight=recovering&&world.time-recovery.at<2;
-      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
-      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
-      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
-      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
-      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
-      return {...neutral,throttle,steer:reverseSteer};
-    }
   }
   const highway=!navigation&&HIGHWAY_ROUTE_IDS.includes(e.routeId as typeof HIGHWAY_ROUTE_IDS[number]);
   const variety=.92+(hash(e.id)%17)/100;
-  let cruise=navigation?(navigation.join?4.5:12):highway?Math.min(spec.maxSpeed*.92,26*variety):8;
-  if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
-  // Start braking before bends; the approach length uses real-time speed.
-  if(e.driver&&!final&&cosine<.95){
+  // Purchased modes are quicker on clear straights, but still share the same
+  // turn, following-distance and arrival limits below. These are game speeds.
+  let cruise=navigation?(navigation.join?4.5:Math.min(DRIVE_SPEED[navigation.mode??'road'],spec.maxSpeed*(e.upgrades.motor?1.1:1))):highway?Math.min(spec.maxSpeed*.92,26*variety):8;
+  if(navigation?.exit){
+    const exitIndex=route.findIndex(point=>Math.hypot(point.x-navigation.exit!.x,point.z-navigation.exit!.z)<.1);
+    if(exitIndex>=0&&(waypoint>exitIndex||(waypoint===exitIndex&&distance<8)))navigation.exitReached=true;
+    // Measure along the route: the car may be physically close to an exit on
+    // another lane long before the planned route actually reaches that exit.
+    if(navigation.exitReached)cruise=Math.min(cruise,4.5);
+    else if(exitIndex>=waypoint){
+      let remaining=distance;
+      for(let i=waypoint;i<exitIndex;i++)remaining+=Math.hypot(route[i+1].x-route[i].x,route[i+1].z-route[i].z);
+      cruise=Math.min(cruise,Math.sqrt(4.5**2+4*Math.max(0,remaining-12)));
+    }
+  }
+  if(navigation&&e.driver){
+    // A short segment can hide a stop or bend until it is too late to brake.
+    // Look ahead along the route and apply each upcoming speed limit early.
+    let along=distance;
+    for(let i=waypoint;i<route.length;i++){
+      if(i===route.length-1){
+        cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,along-3)));
+      }else{
+        const from=i===waypoint?previous:route[i-1],at=route[i],after=route[i+1];
+        const ax=at.x-from.x,az=at.z-from.z,bx=after.x-at.x,bz=after.z-at.z;
+        const bend=(ax*bx+az*bz)/(Math.hypot(ax,az)*Math.hypot(bx,bz)||1);
+        if(bend<.95){
+          const turnSpeed=Math.max(4.5,6+8*Math.max(0,bend));
+          cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,along-7)));
+        }
+        along+=Math.hypot(after.x-at.x,after.z-at.z);
+      }
+      if(along>300)break;
+    }
+  }else if(final)cruise=Math.min(cruise,Math.sqrt(3*Math.max(0,distance-3)));
+  else if(e.driver&&cosine<.95){
     const turnSpeed=Math.max(4.5,6+8*Math.max(0,cosine));
     cruise=Math.min(cruise,Math.sqrt(turnSpeed*turnSpeed+4*Math.max(0,distance-7)));
   }else if(!e.driver&&cosine<.95&&distance<Math.max(16,Math.abs(e.speed)*2))cruise=Math.min(cruise,Math.max(4.5,6+20*Math.max(0,cosine)));
   if(Math.abs(angle)>.5)cruise=Math.min(cruise,4.5);
   const forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
-  let safeSpeed=cruise,hazardGap=Infinity,hazardClosingSpeed=0;
+  const recoveringFromStall=!!navigation&&world.time<(navigation.recovery?.reverseUntil??0);
+  let safeSpeed=cruise,hazardGap=Infinity,hazardClosingSpeed=0,waitingForTraffic=false;
   // The meter is a virtual stopped leader on the eastbound approach. Cars that
   // have already crossed the stop line continue, including on a phase change.
   if(bayBridgeSignal(world.time).state==='red'&&forward.x>.8&&Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth){
@@ -249,11 +279,76 @@ export function trafficInput(e:Entity,world:World):Input {
     const gap=along-(spec.length+size.length)/2;
     const otherForward={x:-Math.sin(other.yaw),z:-Math.cos(other.yaw)};
     const leaderSpeed=Math.max(0,other.speed*(forward.x*otherForward.x+forward.z*otherForward.z));
-    if(gap<hazardGap){hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);}
     // Occupied cars start slowing earlier, leaving room to follow smoothly.
     // Ambient traffic retains its existing 1.5-second headway.
     const followingSpeed=Math.max(0,leaderSpeed+(gap-(e.driver?3:2)-Math.max(0,e.speed)*(e.driver?2.2:1.5))*.55);
     safeSpeed=Math.min(safeSpeed,followingSpeed);
+    if(gap<hazardGap){
+      hazardGap=gap;hazardClosingSpeed=Math.max(0,e.speed-leaderSpeed);
+      // Only the nearest hazard can explain a queue. An occupied or active
+      // traffic vehicle can wait indefinitely; a parked car needs recovery.
+      // During a reverse recovery, also stop for a slow leader with a little
+      // more clearance instead of waiting until its target speed is near zero.
+      waitingForTraffic=!!navigation&&!!e.driver&&other.kind!=='person'&&
+        !!(other.driver||other.autopilot)&&e.speed<.5&&
+        (followingSpeed<.3||(recoveringFromStall&&followingSpeed<1.5));
+    }else if(gap===hazardGap&&waitingForTraffic&&(other.kind==='person'||(!other.driver&&!other.autopilot))){
+      // An unattended obstacle at the same distance takes precedence even
+      // when an active vehicle happens to appear earlier in the entity list.
+      waitingForTraffic=false;
+    }
+  }
+  if(navigation&&e.driver){
+    let recovery=navigation.recovery;
+    if(!recovery||recovery.index!==waypoint){
+      recovery=navigation.recovery={index:waypoint,distance,at:world.time,attempts:0,reverseUntil:0};
+    }else if(distance<recovery.distance-2){
+      recovery.distance=distance;recovery.at=world.time;recovery.attempts=0;
+    }
+    const checkedWall=!!navigation.join&&e.speed>=0;
+    const wall=checkedWall&&wallAhead(e);
+    const signalDistance=BAY_BRIDGE_SIGNAL.stopX-e.x-spec.length/2;
+    const waitingAtSignal=bayBridgeSignal(world.time).state==='red'&&-Math.sin(e.yaw)>.8&&
+      Math.abs(e.z-BAY_BRIDGE_SIGNAL.centerZ)<BAY_BRIDGE_SIGNAL.halfWidth&&signalDistance>=0&&signalDistance<150;
+    // Fence the stall timer throughout a genuine queue, including if traffic
+    // enters during a reverse. A wall or an away-facing road join still needs
+    // the existing checked reverse manoeuvre.
+    const joinRequiresReverse=!!navigation.join&&Math.abs(angle)>2.1;
+    const queued=waitingForTraffic&&!joinRequiresReverse&&!wall&&(checkedWall||!wallAhead(e));
+    if(queued){
+      recovery.at=world.time;recovery.attempts=0;recovery.reverseUntil=0;
+      if(e.speed<-.15)return {...neutral,brake:true,steer};
+    }
+    // A red light can last longer than the recovery timeout; waiting in its
+    // queue is expected and should never trigger a reverse manoeuvre.
+    if(waitingAtSignal&&!wall)recovery.at=world.time;
+    if(!queued&&(joinRequiresReverse||world.time<recovery.reverseUntil||wall||world.time-recovery.at>12)&&
+      approachingFromBehind(e,world)){
+      // Keep a pending attempt ready. Restart the straight-clearance phase of
+      // an interrupted attempt so it cannot turn against the wall on resume.
+      if(world.time<recovery.reverseUntil){recovery.at=world.time;recovery.reverseUntil=world.time+4;}
+      return {...neutral,brake:true,steer};
+    }
+    if(world.time>=recovery.reverseUntil&&(wall||world.time-recovery.at>12)){
+      // Three bounded attempts, then return control and expose a failure to
+      // the driver instead of sitting indefinitely against an obstruction.
+      if(recovery.attempts>=3){navigation.status='failed';e.autopilot=false;return {...neutral,brake:true};}
+      recovery.attempts++;recovery.at=world.time;recovery.reverseUntil=world.time+4;
+    }
+    const reversing=!queued&&(world.time<recovery.reverseUntil||joinRequiresReverse);
+    if(reversing&&clearBehind(e,world)){
+      if(e.speed>1)return {...neutral,brake:true,steer};
+      const recovering=world.time<recovery.reverseUntil;
+      // Clear the nose from a wall before rotating, or the physics correctly
+      // rejects the turn even though the straight line behind is open.
+      const straight=recovering&&world.time-recovery.at<2;
+      if(straight&&Math.abs(e.speed)<.3&&Math.abs(e.steering)>.1)return {...neutral,brake:true,steer:0};
+      const reverseAngle=recovering?angle:wrap(angle-Math.PI);
+      const reverseSteer=straight?0:-Math.max(-1,Math.min(1,reverseAngle*1.8));
+      const acceleration=Math.max(-2.2,Math.min(2.2,(-2.5-e.speed)*.9));
+      const throttle=Math.max(-1,Math.min(0,acceleration/(spec.acceleration*(e.upgrades.motor?1.25:1))));
+      return {...neutral,throttle,steer:reverseSteer};
+    }
   }
   if(world.time<e.pauseUntil)safeSpeed=0;
   if(isTrafficIncident(e,world.time)&&safeSpeed>=e.speed-1){

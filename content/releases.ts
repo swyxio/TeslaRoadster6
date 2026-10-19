@@ -5,6 +5,19 @@ export { CURRENT_RELEASE } from './version';
 export const RELEASES = [
   {
     ...CURRENT_RELEASE,
+    date: '2026-10-19',
+    title: 'Intercity self-driving',
+    intro: 'Take longer deliveries with an upgraded self-driving mode.',
+    sections: [
+      { title: 'On the road', items: [
+        'Buy Hyperloop Pilot in the workshop and choose it from Actions for longer trips.',
+        'Street Pilot and paid modes can approach more ground-level delivery stops, and self-driving waits for traffic ahead.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.42-alpha',
+    label: '0.0.42 Alpha',
     date: '2026-10-18',
     title: 'A wider Bay',
     intro: 'Look out toward the hills as you drive and fly around the Bay.',

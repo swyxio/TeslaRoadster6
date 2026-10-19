@@ -145,7 +145,7 @@ test('a disconnected catalog resumes candidate and route work without dropping p
     for(let z=origin.z-300;z<=origin.z+300&&destinations.length<60;z+=19){
       const point={x,z};
       if(isSurface(x,z)&&requiredLevelAt(x,z)===5&&metres(point,pickups[0])>=60&&
-        (nearestNavigationAnchor(point,5)?.distance??0)>7)destinations.push({id:`offroad-${destinations.length}`,x,z,rooftop:false});
+        (nearestNavigationAnchor(point,5)?.distance??0)>150)destinations.push({id:`offroad-${destinations.length}`,x,z,rooftop:false});
     }
   }
   assert.equal(destinations.length,60);

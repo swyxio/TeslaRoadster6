@@ -67,7 +67,7 @@ import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
 import { createEarningsBonusBadge } from './earnings-bonus-ui';
 import './earnings-bonus-ui.css';
-import { SHOPS, SHOP_RADIUS, UPGRADES, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
+import { SHOPS, SHOP_RADIUS, UPGRADES, hasIntercity, hasRockets, shopFor, type UpgradeId } from '../shared/upgrades';
 import { currentAt, currentBlockedByProgression, JET_STREAMS, THERMALS } from '../shared/sky-currents';
 import { drawLockedAreas } from './access-overlay';
 import { MAX_TANK_LEVEL, tankUpgradePrice } from '../shared/air-tank';
@@ -573,7 +573,7 @@ const mapDialog=createMapDialog({canTeleport:()=>session.sandbox,onTeleport(poin
   pendingDestination={requestId,expires:performance.now()+5000,success:`${driveModes.label(mode)} self-driving to your destination. Use the controls to take over.`,failure:'No route found. Choose an unlocked nearby destination or move to a clearer starting point.'};notice('Finding a route…');
 }});
 const driveModes=createDriveModes([$<HTMLElement>('delivery-drive-mode'),mapDialog.element.querySelector<HTMLElement>('.map-drive-mode')!],reason=>notice(`Street Pilot selected. ${reason}`),()=>controls.clear(),()=>{if(mapDialog.isOpen())mapDialog.close();setDrawer(null);openShop(true);});
-function updateDriveModes(car:Entity){driveModes.update({rocket:hasRockets(car),jump:car.upgrades.autonomyJump,sky:car.upgrades.autonomySky});}
+function updateDriveModes(car:Entity){driveModes.update({rocket:hasRockets(car),intercity:hasIntercity(car.upgrades),jump:car.upgrades.autonomyJump,sky:car.upgrades.autonomySky});}
 function driveToDelivery(){
   if(session.status!=='online'||session.walletBlocked){notice('Connect your driver before starting self-driving.');return;}
   const player=session.world.players.find(p=>p.id===session.id),car=session.world.entities.find(e=>e.id===player?.entityId);
@@ -586,7 +586,8 @@ function driveToDelivery(){
   if(requiredLevelAt(target.x,target.z)>player.delivery.level){notice('That delivery is in a locked area.');return;}
   updateDriveModes(car);const mode=driveModes.mode();
   controls.clear();const requestId=session.setDeliveryDestination(mode);
-  pendingDestination={requestId,expires:performance.now()+5000,success:`${driveModes.label(mode)} self-driving toward your delivery. Use the controls to take over.`,failure:'No safe route to this delivery from here. Move to a clearer starting point or drive manually.'};
+  const failure='No safe route to this delivery from here. Move to a clearer starting point or drive manually.';
+  pendingDestination={requestId,expires:performance.now()+5000,success:`${driveModes.label(mode)} self-driving toward your delivery. Use the controls to take over.`,failure};
   notice('Finding a route to your delivery…');
 }
 $('delivery-drive').onclick=()=>{setDrawer(null);driveToDelivery();};
@@ -978,7 +979,7 @@ $('ota-toggle').onclick=()=>{
 const upgradePresentation:Record<UpgradeId,{group:string;icon:string}>={
   rocket:{group:'Flight',icon:'↗'},economy:{group:'Flight',icon:'≋'},tank:{group:'Flight',icon:'◒'},
   motor:{group:'Driving',icon:'⚡'},armor:{group:'Driving',icon:'⬡'},
-  autonomyJump:{group:'Self-driving',icon:'↟'},autonomySky:{group:'Self-driving',icon:'✦'},
+  autonomyIntercity:{group:'Self-driving',icon:'⇢'},autonomyJump:{group:'Self-driving',icon:'↟'},autonomySky:{group:'Self-driving',icon:'✦'},
   service:{group:'Service',icon:'✚'}
 };
 let previousUpgradeGroup='';
@@ -1083,16 +1084,18 @@ function updateShop(){
   otaButton.disabled=session.sandbox||!!pendingOta||!!pendingShop||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
   for(const id of Object.keys(UPGRADES) as UpgradeId[]){
     const button=document.querySelector<HTMLButtonElement>(`[data-upgrade="${id}"]`)!;
-    const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:car.upgrades[id];
+    const installed=id==='rocket'?rocket:id==='service'?car.health>=100&&car.air>=100:id==='tank'?car.tankLevel>=MAX_TANK_LEVEL:id==='autonomyIntercity'?hasIntercity(car.upgrades):car.upgrades[id];
     const needsRocket=(id==='economy'||id==='tank'||id==='autonomyJump'||id==='autonomySky')&&!rocket;
     const needsLeap=id==='autonomySky'&&!car.upgrades.autonomyJump;
+    const needsIntercity=id==='autonomyJump'&&!hasIntercity(car.upgrades);
     const price=upgradePrice(player,car,id);
     const name=id==='tank'?`Air tank · Level ${car.tankLevel}${installed?' (max)':` → ${car.tankLevel+1}`}`:UPGRADES[id].name;
     document.querySelector<HTMLElement>(`[data-upgrade-title="${id}"]`)!.textContent=name;
     const fullPrice=id==='tank'?tankUpgradePrice(car.tankLevel):UPGRADES[id].price;
-    button.textContent=installed?(id==='service'?'Full':id==='tank'?'Max':'Installed'):needsRocket||needsLeap?`${money(price)} · Needs ${needsRocket&&needsLeap?'rocket & Leap':needsRocket?'rockets':'Leap'}`:player.delivery.cash<price?`${money(price)} · Need cash`:`Add · ${money(price)}${price<fullPrice?' · Research':''}${levelDrop(price)}`;
+    const requirements=[needsIntercity?'Hyperloop':null,needsLeap?'Leap':null,needsRocket?'rockets':null].filter(Boolean).join(' & ');
+    button.textContent=installed?(id==='service'?'Full':id==='tank'?'Max':'Installed'):requirements?`${money(price)} · Needs ${requirements}`:player.delivery.cash<price?`${money(price)} · Need cash`:`Add · ${money(price)}${price<fullPrice?' · Research':''}${levelDrop(price)}`;
     button.setAttribute('aria-label',`${name}: ${button.textContent}`);
-    button.disabled=!available||installed||needsRocket||needsLeap||player.delivery.cash<price||!!pendingShop||!!pendingOta||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
+    button.disabled=!available||installed||!!requirements||player.delivery.cash<price||!!pendingShop||!!pendingOta||!!pendingStyle||!!pendingLuxury||performance.now()<shopBusyUntil;
   }
 }
 function openShop(preferSpaceX=false){
