@@ -48,7 +48,7 @@ import { playerRace } from '../shared/race';
 import { PAINTS, DECALS, type StyleChoice, type PaintId, type DecalId } from '../shared/vehicle-style';
 import { OTA_FEE } from '../shared/ota';
 import { marketPaintColor } from '../shared/market-catalog';
-import { canAssignDeliveryRoof, LEVELS, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
+import { canAssignDeliveryRoof, LEVELS, PICKUP_STOP_ALLOWANCE, isOrderAccessible, levelForCash, orderTarget, payoutFor, pickupBonusFor, requiredLevelAt, type Level } from '../shared/delivery';
 import { DELIVERY_CHECKPOINT_INTERVAL, DELIVERY_CHECKPOINT_REWARD, deliveriesUntilCheckpoint } from '../shared/delivery-checkpoint';
 import { celebrateReward, resetCelebration } from './rewards';
 import { upgradePrice } from '../shared/research';
@@ -56,9 +56,12 @@ import { ACHIEVEMENTS, type AchievementId } from '../shared/achievements';
 import { selectAchievementTiers, type AchievementTierId, type AchievementTierRow } from '../shared/achievement-tiers';
 import { AchievementEventTracker } from './achievement-events';
 import { LevelEventTracker } from './level-events';
+import { DeliveryGuidance, type GuidanceResponse } from './delivery-guidance';
 import type { Ticket } from '../shared/delivery';
 import { dayMinute } from '../shared/day';
 import { DOME, chargingDomeWall } from '../shared/dome';
+import { DOME_MATCH_CASH, DOME_WIN_CASH } from '../shared/earnings-events';
+import { pulseShotRemaining } from '../shared/soccer';
 import { BRIDGES, DISTRICTS, FERRY_DOCKS, FREMONT_SPACEPORT, HIGHWAYS, LANDMARKS, MAP_BOUNDS, REGIONS, ROADS, STUNT_LOOP, TESLAND_MONUMENTS } from '../shared/map';
 import { createMarsUI } from './mars-ui';
 import { StarshipClient } from './starship-client';
@@ -74,6 +77,20 @@ import { readDriverRecovery, stageDriverRecovery, confirmDriverRecovery, setDriv
 
 document.title=`Tesland · v${CURRENT_RELEASE.label}`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+let deliveryGuide:DeliveryGuidance|undefined;
+function roadGuidance():DeliveryGuidance {
+  if(!deliveryGuide){
+    let worker:Worker|undefined;
+    deliveryGuide=new DeliveryGuidance(request=>worker?.postMessage(request));
+    try {
+      worker=new Worker(new URL('./delivery-guidance.worker.ts',import.meta.url),{type:'module'});
+      worker.onmessage=(event:MessageEvent<GuidanceResponse>)=>deliveryGuide!.receive(event.data);
+      worker.onerror=()=>deliveryGuide!.workerFailed();
+      worker.onmessageerror=()=>deliveryGuide!.workerFailed();
+    } catch {deliveryGuide.workerFailed();}
+  }
+  return deliveryGuide;
+}
 document.querySelector('#app')!.innerHTML = `
 <canvas id="world" aria-label="Tesland 3D driving world"></canvas>
 <div class="vignette"></div>
@@ -99,7 +116,7 @@ document.querySelector('#app')!.innerHTML = `
  <div id="reward" class="reward" role="status" aria-live="polite" aria-atomic="true"><div class="confetti" aria-hidden="true"></div><div class="reward-card"><span id="reward-label"></span><strong id="reward-amount"></strong></div></div>
  <div id="achievement-toast" class="achievement-toast hidden" role="status" aria-live="polite"></div>
  <div class="mission" id="mission-panel" aria-live="polite"><span id="property-name" hidden></span><div class="mission-head"><span class="eyebrow" id="mission-label">PICK UP</span><strong id="mission">Find your first restaurant.</strong><button type="button" id="mission-panel-toggle" class="mobile-panel-toggle" aria-controls="mission-panel" aria-expanded="true">Details −</button></div><button type="button" id="mars-quick" class="mission-link" hidden>🚀 Fremont mission sign</button><span id="hint">Stop at the glowing marker.</span><span id="delivery-stats"></span><span id="region-progress"></span><span id="police-status"></span><span id="ferry-status"></span><button type="button" id="route-goal" class="mission-link" hidden></button><span id="route-advice" class="mission-advice" hidden></span><button type="button" id="next-award" class="mission-link" hidden></button><span id="parking-status"></span><span id="race-status"></span></div>
- <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small>Last touch scores · gold walls refill air</small></div>
+ <div id="dome-score" class="dome-score hidden" role="status" aria-live="polite"><span class="eyebrow">CHINA BASIN / ROCKET DOME · GOAL RACE</span><strong><span id="dome-blue">BLUE 0</span><span aria-hidden="true"> — </span><span id="dome-orange">0 ORANGE</span></strong><span id="dome-status">Either goal counts · first color to 5 ends match</span><span id="dome-standings">Your goals: 0 · No leader yet</span><small id="dome-powerups" aria-live="off">Touch the ball and finish to unlock Pulse Shot · Win to unlock Champion Charge</small><small>Touch + finish: $${DOME_MATCH_CASH} · Win: +$${DOME_WIN_CASH} · Bonuses apply</small><small>Last touch scores · gold walls refill air</small></div>
  <div class="action-drawer"><button id="actions-toggle" class="hud-toggle" aria-expanded="false" aria-controls="drive-actions">Actions <span aria-hidden="true">⌄</span></button><div id="drive-actions" class="drive-actions" hidden><button id="control-settings">⌨ Controls &amp; gamepad</button><button id="minigames">🎮 Mini-games</button><button id="delivery-drive">🚘 Self-drive to delivery</button><div id="delivery-drive-mode"></div><button id="mars-action">🚀 Mars mission</button><button id="identity-action">◉ Driver identity</button><button id="invite">↗ Invite</button><button id="return-bay" hidden>↩ Return to Bay</button><button id="camera" aria-label="Camera: chase. Switch view">C · Chase</button><button id="interact">F · Exit car</button><button id="recover">K · Unstuck</button><button id="autopilot" aria-pressed="false">V · AV off</button><button id="fleet">G · Fleet</button><button id="cybercabs">🚕 Cybercabs</button><button id="market">◈ Market</button><button id="shop">B · Shop</button><button id="scores">L · Scores</button><button id="awards">T · Awards</button></div></div>
  <button id="shop-prompt" class="shop-prompt" hidden></button>
  <div id="cockpit-trim" class="cockpit-trim" hidden aria-hidden="true"></div>
@@ -1246,6 +1263,12 @@ scene.start(dt=>{
     if($('dome-orange').textContent!==orange)$('dome-orange').textContent=orange;
     if($('dome-status').textContent!==status)$('dome-status').textContent=status;
     if($('dome-standings').textContent!==standings)$('dome-standings').textContent=standings;
+    const unlocked=player?.achievements.unlocked??[];
+    const remaining=Math.ceil(pulseShotRemaining(soccer,session.id,session.world.time));
+    const pulse=unlocked.includes('dome-debut')?(remaining?`Pulse Shot ${remaining}s`:'Pulse Shot ready · stronger hit'):'Touch + finish to unlock Pulse Shot';
+    const charge=unlocked.includes('dome-champion')?'Goal: +25 rocket air':'Win to unlock Champion Charge';
+    const powerups=`${pulse} · ${charge}`;
+    if($('dome-powerups').textContent!==powerups)$('dome-powerups').textContent=powerups;
   }
   const minute=Math.floor(dayMinute(session.world.time));$('day-clock').textContent=`${Math.floor(minute/60).toString().padStart(2,'0')}:${(minute%60).toString().padStart(2,'0')}`;
   $('speed').textContent=Math.round(Math.abs(e.speed)*3.6).toString().padStart(3,'0');$('altitude').textContent=`${Math.round(e.y)} M ALT`;
@@ -1310,12 +1333,16 @@ scene.start(dt=>{
     awardButton.hidden=!nextAwardTarget;if(awardButton.textContent!==awardLabel)awardButton.textContent=awardLabel;
     awardButton.title=guestAward?ACHIEVEMENTS[guestAward].description:'View this award';
     $('mission-label').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP / FOOD RUN':target.rooftop?'DELIVER / ROOFTOP':'DELIVER / FOOD RUN';
-    const bearing=Math.atan2(-(target.x-e.x),-(target.z-e.z))-e.yaw;
+    const guidance=searching||unavailable?null:roadGuidance().update(e,target,d.level,performance.now());
+    const waypoint=guidance?.waypoint;
+    const bearing=waypoint?Math.atan2(-(waypoint.x-e.x),-(waypoint.z-e.z))-e.yaw:0;
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
-    $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':`${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m`;
+    $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':
+      !waypoint?`${guidance?.status==='unavailable'?'No road route':'Finding road route'} · ${target.name} · ${distance} m`:
+      `${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m · ${guidance?.status==='flight'?'fly direct':guidance?.status==='overpass'?'exit overpass':'via road'}`;
     const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
-    $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`fast pickup +${money(pickupBonus)}`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
+    $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`pickup bonus +${money(pickupBonus)} · up to ${PICKUP_STOP_ALLOWANCE}s past estimate`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);
     $('cockpit-phase').textContent=searching?'FINDING DELIVERY':unavailable?'DELIVERY UNAVAILABLE':order.stage==='pickup'?'PICK UP':target.rooftop?'ROOFTOP DELIVERY':'DELIVER';
     $('cockpit-target').textContent=$('mission').textContent;$('cockpit-estimate').textContent=$('hint').textContent;
     $('objective-phase').textContent=$('cockpit-phase').textContent;$('objective-name').textContent=searching?'Finding a safe route':unavailable?'Delivery unavailable':target.name;$('objective-distance').textContent=searching||unavailable?'':`${distance} m`;

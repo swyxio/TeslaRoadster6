@@ -1,0 +1,26 @@
+--- scripts/playtest-record.ts
++++ scripts/playtest-record.ts
+@@ -83,7 +83,7 @@
+ const replaySteps: Record<string, unknown>[] = [];
+ let replayLastActionEnd: number | undefined;
+ let replayFinishedAt: number | undefined;
+-type Pose = { atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null };
++type Pose = { activeRocketPads: number | null; groundDriven: number; distantRocketPairs: number | null; atMs: number; tick: number | null; worldTime: number | null; poseRevision: number | null; x: number; y: number; z: number; yaw: number; speed: number; vy: number | null; supported: boolean | null; thrusters: number | null; jumpBurstUntil: number | null; lastJump: number | null; deliveryCompleted: number | null; deliveryStage: 'pickup' | 'dropoff' | null };
+ const poses: Pose[] = [];
+ const inputEvents: Record<string, unknown>[] = [];
+ let posesTruncated = false;
+@@ -119,7 +119,13 @@
+       const car = message.world.entities.find((candidate: { id?: unknown }) => candidate.id === player?.entityId);
+       if (!car || !['x', 'y', 'z', 'yaw', 'speed'].every(key => typeof car[key] === 'number' && Number.isFinite(car[key]))) return;
+       const order = player?.delivery?.order;
+-      latestPose = { atMs: Math.round(performance.now() - started), tick: Number.isSafeInteger(message.tick) ? message.tick : null, worldTime: typeof message.world.time === 'number' && Number.isFinite(message.world.time) ? message.world.time : null, poseRevision: Number.isSafeInteger(message.poseRevision) ? message.poseRevision : null, x: car.x, y: car.y, z: car.z, yaw: car.yaw, speed: car.speed,
++      // Coverage metadata only: counts in authoritative snapshots, not timing
++      // or proof of each internal scan. The same recorder observes both builds.
++      const pads = Array.isArray(message.world.pickups) ? message.world.pickups.filter((p: any) => p.kind === 'rocket' && p.active === true) : null;
++      const groundCars = message.world.entities.filter((e: any) => e.kind !== 'person' && e.driver && e.supportId === 'ground');
++      const completePositions = pads?.every((p: any) => Number.isFinite(p.x) && Number.isFinite(p.z)) && groundCars.every((e: any) => Number.isFinite(e.x) && Number.isFinite(e.z));
++      const distantRocketPairs = pads && completePositions ? pads.reduce((n: number, p: any) => n + groundCars.filter((e: any) => Math.abs(e.x-p.x) >= 4 || Math.abs(e.z-p.z) >= 4).length, 0) : null;
++      latestPose = { activeRocketPads: pads?.length ?? null, groundDriven: groundCars.length, distantRocketPairs, atMs: Math.round(performance.now() - started), tick: Number.isSafeInteger(message.tick) ? message.tick : null, worldTime: typeof message.world.time === 'number' && Number.isFinite(message.world.time) ? message.world.time : null, poseRevision: Number.isSafeInteger(message.poseRevision) ? message.poseRevision : null, x: car.x, y: car.y, z: car.z, yaw: car.yaw, speed: car.speed,
+         vy: typeof car.vy === 'number' && Number.isFinite(car.vy) ? car.vy : null,
+         supported: car.supportId === null ? false : typeof car.supportId === 'string' ? true : null,
+         thrusters: Number.isSafeInteger(car.thrusters) ? car.thrusters : null,

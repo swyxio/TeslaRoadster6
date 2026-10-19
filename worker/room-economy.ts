@@ -5,7 +5,7 @@ import { MARS_GOAL } from '../shared/mars';
 import type { CybercabInterval } from '../shared/cybercabs';
 import { RoomEarningsEvents, type RoomEventCursor } from './room-earnings-events';
 import type { GlobalEarningsEvent } from './global-earnings-event';
-import type { EarningsEvents, EarningsWindow } from '../shared/earnings-events';
+import { ROOM_WIN_DURATION_MS, type EarningsEvents, type EarningsWindow } from '../shared/earnings-events';
 import { isAchievementEvidence } from '../shared/achievement-evidence';
 
 type Env={DRIVERS:DurableObjectNamespace<DriverProfile>;ROOMS:DurableObjectNamespace<GameRoom>;GLOBAL_EVENTS:DurableObjectNamespace<GlobalEarningsEvent>};
@@ -64,6 +64,7 @@ export class RoomEconomy extends DurableObject<Env> {
   prepareEarningsWin(eventId:string,atMs:number){return this.earningsEvents.prepareWin(eventId,atMs);}
   recordEarningsWinWithoutPayout(eventId:string,atMs:number){return this.earningsEvents.recordWinWithoutPayout(eventId,atMs);}
   commitEarningsWin(eventId:string){return this.earningsEvents.commitWin(eventId);}
+  abortEarningsWin(eventId:string){return this.earningsEvents.abortWin(eventId);}
   pendingEarningsWin(){return this.earningsEvents.pendingWin();}
   earningsAt(atMs:number){return this.earningsEvents.activeUntil(atMs);}
   earningsHistory(fromMs:number,toMs:number,cursor?:RoomEventCursor){return this.earningsEvents.history(fromMs,toMs,cursor);}
@@ -182,7 +183,21 @@ export class RoomEconomy extends DurableObject<Env> {
   /** Journal immutable room-verified physical or match achievement evidence. */
   async stageAchievement(stage:AchievementStage):Promise<'accepted'|'superseded'|'conflict'> {
     if(stage.action?.kind!=='achievement'||!isAchievementEvidence(stage.action.evidence))return 'conflict';
+    const dome=stage.action.dome;
+    if(dome&&(stage.action.evidence.kind!=='dome'||typeof dome.matchId!=='string'||!/^[a-zA-Z0-9._:-]{1,128}$/.test(dome.matchId)||!Number.isSafeInteger(dome.atMs)||dome.atMs<0))return 'conflict';
+    // Another Durable Object may have recorded the result on a slightly
+    // faster clock. Defer it through the existing retry path, not a conflict
+    // that would disconnect the driver and discard its live wallet session.
+    if(dome&&dome.atMs>Date.now())throw new Error('Dome result time has not arrived');
     return this.stageObservation(stage,achievementKey(stage));
+  }
+
+  /** Kept until the room has durably recorded that every payout settled. */
+  async domePaid(stage:AchievementStage):Promise<boolean>{
+    return JSON.stringify(await this.ctx.storage.get(`dome-paid:${stage.eventId}`))===JSON.stringify(stage);
+  }
+  async clearDomePaid(stages:AchievementStage[]):Promise<void>{
+    await this.ctx.storage.delete(stages.map(stage=>`dome-paid:${stage.eventId}`));
   }
   private async stageObservation(stage:DeliveryStage|AchievementStage,stageKey:string):Promise<'accepted'|'superseded'|'conflict'> {
     if(!stage.eventId||!stage.driverId||!stage.fence||!stage.roomId||!Number.isSafeInteger(stage.walletOrder)||stage.walletOrder<1||
@@ -463,6 +478,30 @@ export class RoomEconomy extends DurableObject<Env> {
         await txn.put(key,updated);return updated;
       });
     }
+    if(intent.action.kind==='achievement'&&intent.action.dome&&!record.cabEvents){
+      // This result itself fences GameRoom's normal historical RPC. Its
+      // prepared reservation supplies the pre-win room rate directly.
+      const {matchId,atMs}=intent.action.dome,prepared=this.earningsEvents.pendingWin();
+      if(!prepared||prepared.eventId!==matchId||prepared.requestedAtMs!==atMs)throw new Error('Dome result is not prepared');
+      const room=prepared.priorActiveUntilMs===null?[]:[{startsAtMs:prepared.priorActiveUntilMs-ROOM_WIN_DURATION_MS,endsAtMs:prepared.priorActiveUntilMs}];
+      const global:EarningsWindow[]=[];
+      const service=this.env.GLOBAL_EVENTS.get(this.env.GLOBAL_EVENTS.idFromName('global'));
+      let cursor:number|undefined;
+      do{
+        const page=await service.history(atMs,atMs+1,cursor);global.push(...page.windows);
+        if(page.next===null)break;
+        if(!Number.isSafeInteger(page.next)||(cursor!==undefined&&page.next<=cursor)||page.next>=atMs+1)throw new Error('Invalid global history cursor');
+        cursor=page.next;
+      }while(true);
+      const events={room,global};
+      record=await this.ctx.storage.transaction(async txn=>{
+        const current=await txn.get<IntentRecord>(key);
+        if(!current||JSON.stringify(current.intent)!==JSON.stringify(intent))throw new Error('Missing economy intent');
+        if(current.cabEvents)return current;
+        const updated={...current,cabEvents:events} satisfies IntentRecord;
+        await txn.put(key,updated);return updated;
+      });
+    }
     const outcome=await this.profile(intent.driverId).commit(intent,record.cabEvents);
     if(!outcome.ok && outcome.reason==='not-ready')return outcome;
     return this.ctx.storage.transaction(async txn=>{
@@ -478,6 +517,11 @@ export class RoomEconomy extends DurableObject<Env> {
         if(outcome.ok)result={...outcome,roomFund:balance};
       }
       await txn.put(key,{...record,outcome:result} satisfies IntentRecord);
+      if(result.ok&&intent.action.kind==='achievement'&&intent.action.dome){
+        const stage:AchievementStage={eventId:intent.eventId,driverId:intent.driverId,fence:intent.fence,roomId:intent.roomId,
+          walletOrder:record.walletOrder??intent.sequence,clock:intent.clock!,action:intent.action};
+        await txn.put(`dome-paid:${intent.eventId}`,stage);
+      }
       await txn.delete(`pending:${intent.driverId}:${intent.eventId}`);
       await txn.put(`unacked:${intent.driverId}:${intent.eventId}`,intent);
       const alarm=await txn.getAlarm(),next=Date.now()+RETRY_MS;

@@ -33,7 +33,7 @@ test('committed reward messages queue in order without crossing identity changes
   const session=new Session();session.join('bay','Driver');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:PROTOCOL_VERSION,capacity:8});
   const world=createWorld();addPlayer(world,'p','Driver');socket.message({type:'state',world});
-  const delivery={id:1,kind:'delivery-research' as const,amount:800},research={id:2,kind:'research' as const,amount:250};
+  const delivery={id:1,kind:'delivery-research' as const,amount:800},research={id:2,kind:'dome-match' as const,amount:750};
   socket.message({type:'reward',reward:delivery});socket.message({type:'reward',reward:research});
   socket.message({type:'reward',reward:delivery});
   world.players[0].delivery.lastReward=research;
@@ -73,9 +73,9 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
 });
 
 test('an incompatible protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,49);
+  assert.equal(PROTOCOL_VERSION,51);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
-  socket.message({type:'welcome',id:'p',version:48,capacity:64});
+  socket.message({type:'welcome',id:'p',version:50,capacity:64});
   assert.equal(socket.readyState,3);
   assert.equal(session.error,'Game updated. Reload to reconnect.');
   assert.deepEqual(socket.sent,[]);

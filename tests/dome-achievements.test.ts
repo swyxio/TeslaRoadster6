@@ -10,7 +10,7 @@ function touchCar(state:SoccerState,car:Entity):void {
   Object.assign(car,{y:0,vx:400,vy:0,vz:0,yaw:-Math.PI/2,inDome:true});
   car.x=DOME.x+5;car.z=DOME.z;
   Object.assign(state.ball,{x:DOME.x,y:DOME.ballRadius,z:DOME.z,vx:0,vy:0,vz:0});
-  stepSoccer(state,[car],.05,.05);
+  stepSoccer(state,[car],.05,.05,[]);
   assert.ok(state.ball.vx>0,'an actual collision moved the ball');
 }
 function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false):void {
@@ -20,7 +20,7 @@ function touch(state:SoccerState,id:string|null,kind:VehicleId,retrofit=false):v
 }
 function goal(state:SoccerState,direction:1|-1,time:number,entities:readonly Entity[]=[]):void {
   Object.assign(state.ball,{x:DOME.x+direction*(DOME.halfLength-2),y:3,z:DOME.z,vx:direction*90,vy:0,vz:0});
-  stepSoccer(state,entities,.05,time);
+  stepSoccer(state,entities,.05,time,[]);
   assert.notEqual(state.phase,'play');
 }
 function playerCar(world:ReturnType<typeof createWorld>,id:string):Entity {
@@ -56,12 +56,12 @@ test('either goal credits the last driver and the top scorers share a tied match
     ['b','model-3',true,1],['a','roadster',false,1],['b','model-3',true,1]] as const;
   shots.forEach(([id,kind,retrofit,direction],i)=>{
     touch(state,id,kind,retrofit);goal(state,direction,10+i*4,players);
-    if(state.phase==='goal')stepSoccer(state,[],.05,13+i*4);
+    if(state.phase==='goal')stepSoccer(state,[],.05,13+i*4,[]);
   });
   assert.equal(state.phase,'win');assert.equal(state.blueScore,5);assert.equal(state.orangeScore,1);
   assert.deepEqual(state.winningPlayers,['a','b']);
   assert.equal(state.participants[0].goals.roadster,3);assert.equal(state.participants[1].goals.retrofit,3);
-  stepSoccer(state,[],.05,state.phaseUntil);
+  stepSoccer(state,[],.05,state.phaseUntil,[]);
   assert.deepEqual(state.participants,[]);assert.deepEqual(state.winningPlayers,[]);assert.equal(state.lastTouch,null);
 });
 
@@ -79,18 +79,20 @@ test('completed matches award only participating players still in the dome',()=>
   touch(world.soccer,stock.id,'model-3');
   assert.equal(travelDome(world,gone.id),true,'participant leaves before the match finishes');
   assert.deepEqual(roadster.achievements.unlocked,[],'touches do not unlock until match completion');
-  const roadsterCash=roadster.delivery.cash,roadsterIncome=roadster.delivery.lifetimeIncome;
+  const roadsterCash=roadster.delivery.cash,roadsterIncome=roadster.delivery.lifetimeIncome,stockCash=stock.delivery.cash,spectatorCash=spectator.delivery.cash;
   finish(world);
   assert.deepEqual(world.soccer.winningPlayers,[stock.id]);
   assert.ok(roadster.achievements.unlocked.includes('rocket-rookie'));
-  assert.equal(roadster.delivery.cash,roadsterCash+500);assert.equal(roadster.delivery.lifetimeIncome,roadsterIncome+500);
+  assert.equal(roadster.delivery.cash,roadsterCash+750);assert.equal(roadster.delivery.lifetimeIncome,roadsterIncome+750);
   assert.ok(!roadster.achievements.unlocked.includes('roadster-champion'));
   assert.ok(stock.achievements.unlocked.includes('no-rockets-needed'));
+  assert.equal(stock.delivery.cash,stockCash+1250,'practice winner receives base match cash, winner cash and the stock-car award');
+  assert.equal(spectator.delivery.cash,spectatorCash,'spectators receive no match cash');
   assert.deepEqual(spectator.achievements.unlocked,[]);
   assert.deepEqual(gone.achievements.unlocked,[]);
   const seq=stock.achievements.lastUnlock?.id;step(world,new Map(),.05);
   assert.equal(stock.achievements.lastUnlock?.id,seq,'win display does not award twice');
-  assert.equal(roadster.delivery.cash,roadsterCash+500,'the one-off award is not paid again');
+  assert.equal(roadster.delivery.cash,roadsterCash+750,'the match and one-off awards are not paid again');
 });
 
 test('a departed leading scorer does not prevent a present player winning',()=>{
@@ -98,7 +100,7 @@ test('a departed leading scorer does not prevent a present player winning',()=>{
   for(const player of [gone,active])assert.equal(travelDome(world,player.id),true);
   for(const [i,id] of ['gone','gone','gone','active'].entries()){
     touch(world.soccer,id,'roadster');goal(world.soccer,1,10+i*4,world.entities);
-    stepSoccer(world.soccer,world.entities,.05,13+i*4);
+    stepSoccer(world.soccer,world.entities,.05,13+i*4,world.players);
   }
   assert.equal(travelDome(world,gone.id),true,'the leader leaves the dome but stays connected');
   touch(world.soccer,active.id,'roadster');finish(world);
@@ -111,7 +113,7 @@ test('a scorer who returns before the finish keeps their goals and can win',()=>
   const world=createWorld(),returning=addPlayer(world,'returning','Returning'),active=addPlayer(world,'active','Active');
   for(const player of [returning,active])assert.equal(travelDome(world,player.id),true);
   touch(world.soccer,returning.id,'roadster');goal(world.soccer,1,10,world.entities);
-  stepSoccer(world.soccer,world.entities,.05,13);
+  stepSoccer(world.soccer,world.entities,.05,13,world.players);
   assert.equal(travelDome(world,returning.id),true);
   assert.equal(travelDome(world,returning.id),true);
   touch(world.soccer,active.id,'roadster');finish(world);

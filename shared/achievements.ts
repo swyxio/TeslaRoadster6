@@ -60,6 +60,8 @@ export const ACHIEVEMENTS = {
   'luxury-collection-2': { name:'The Collection · 2', description:'Own two different Vault vehicles. Reward: $50,000.' },
   'luxury-collection-4': { name:'The Collection · 4', description:'Own four different Vault vehicles. Reward: $100,000.' },
   'luxury-collection-6': { name:'The Collection · 6', description:'Own all six Vault vehicles. Reward: $250,000.' },
+  'dome-debut': { name:'Pulse Shot', description:'Touch the ball and finish a Rocket Dome match to unlock a stronger hit every 15 seconds in the Dome.' },
+  'dome-champion': { name:'Champion Charge', description:'Win a Rocket Dome match with a credited goal to unlock 25 air per goal in a rocket-equipped car.' },
   'rocket-rookie': { name:'Rocket Rookie', description:'Touch the ball in Roadster · Rocket and finish a Rocket Dome match. Reward: $500.' },
   'roadster-champion': { name:'Roadster Champion', description:'Win a Rocket Dome match with a goal credited to your Roadster · Rocket. Reward: $500.' },
   'built-to-fly': { name:'Built to Fly', description:'Touch the ball in a rocket-retrofitted car and finish a Rocket Dome match. Reward: $500.' },
@@ -150,6 +152,9 @@ export function awardMarsAchievement(player:Player):void { if(unlock(player.achi
 export function awardDomeMatchAchievements(player:Player,participant:DomeParticipant,won:boolean):void {
   const state=player.achievements;
   let cash=0;
+  const touched=Object.values(participant.touches).some(Boolean);
+  if(touched)unlock(state,'dome-debut');
+  if(touched&&won&&Object.values(participant.goals).some(goal=>goal>0))unlock(state,'dome-champion');
   if(participant.touches.roadster&&unlock(state,'rocket-rookie'))cash+=500;
   if(participant.touches.retrofit&&unlock(state,'built-to-fly'))cash+=500;
   if(won&&participant.touches.roadster&&participant.goals.roadster>0&&unlock(state,'roadster-champion'))cash+=500;

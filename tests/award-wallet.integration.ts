@@ -289,10 +289,10 @@ try {
   assert.equal(afterReplay.unlocked.filter(id=>id==='roadster-champion').length,1,'Dome win survives rollback exactly once');
   assert.equal(afterReplay.achievementTiers?.['dome-matches'].count,1);
   assert.equal(afterReplay.achievementTiers?.['dome-wins'].count,1);
-  assert.equal(afterReplay.cash,baseline.cash+1_200,'replay credits the two game awards and first Dome tiers');
-  assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+1_200,'rejected and speculative income are not replayed');
+  assert.equal(afterReplay.cash,baseline.cash+1_950,'replay credits match cash, two game awards and first Dome tiers');
+  assert.equal(afterReplay.eligibleIncome,baseline.eligibleIncome+1_950,'rejected and speculative income are not replayed');
   assert.deepEqual(replay.client.messages.filter(message=>message.type==='reward').map(message=>message.reward),
-    [{id:1,kind:'research',amount:1_200}],'one private celebration includes every award in the replayed transaction');
+    [{id:1,kind:'dome-match',amount:1_950}],'one private celebration includes every award in the replayed transaction');
   let starshipRequest=700;
   await until(async()=>{
     const requestId=starshipRequest++;
@@ -317,7 +317,7 @@ try {
     await until(async()=>(await faultState(lost.driverId)).held,'committed receipt held before reply');
     const first=await faultState(lost.driverId);assertDomeEvidence(first.heldAction);
     const committed=(await inspect(lost.driverId)).progress;
-    assert.equal(committed.cash,lostBefore.cash+1_200);
+    assert.equal(committed.cash,lostBefore.cash+1_950);
     send(lost.client,{type:'sync',token:211});
     await pause(100);
     assert.ok(!lost.client.messages.some(message=>message.type==='state'&&message.sync===211),'barrier waits for the lost reply');
@@ -333,10 +333,10 @@ try {
   assert.equal(lostRecovered.unlocked.filter(id=>id==='roadster-champion').length,1);
   assert.equal(lostRecovered.achievementTiers?.['dome-matches'].count,1);
   assert.equal(lostRecovered.achievementTiers?.['dome-wins'].count,1);
-  assert.equal(lostRecovered.cash,lostBefore.cash+1_200,'receipt retry does not credit twice');
-  assert.equal(lostRecovered.eligibleIncome,lostBefore.eligibleIncome+1_200);
+  assert.equal(lostRecovered.cash,lostBefore.cash+1_950,'receipt retry does not credit twice');
+  assert.equal(lostRecovered.eligibleIncome,lostBefore.eligibleIncome+1_950);
   assert.deepEqual(lost.client.messages.filter(message=>message.type==='reward').map(message=>message.reward),
-    [{id:1,kind:'research',amount:1_200}],'a lost reply produces one complete celebration after retry');
+    [{id:1,kind:'dome-match',amount:1_950}],'a lost reply produces one complete celebration after retry');
 
   // A rejected physical evidence write fails closed without acknowledging the
   // barrier or allowing later speculative income to become committed.

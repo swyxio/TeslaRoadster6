@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type World } from '../shared/game';
-import { CUSTOMERS, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
+import { CUSTOMERS, PICKUP_STOP_ALLOWANCE, RESTAURANTS, initialDelivery, orderTarget, payoutFor, pickupBonusFor, updateDelivery } from '../shared/delivery';
 import { updateAchievements } from '../shared/achievements';
 import { newPolice, updatePolice } from '../shared/police';
 import { BUILDINGS, HILL, OVERPASS, STUNT_LOOP, STUNT_RAMP, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from '../shared/map';
@@ -53,20 +53,51 @@ test('the minimum fare rounds up for odd-dollar quotes',()=>{
   assert.equal(payoutFor({...order,elapsed:175}),301);
   assert.equal(payoutFor({...order,elapsed:500}),301);
 });
-test('pickup bonus decreases with active time and expires at the estimate',()=>{
-  const order=initialDelivery({x:40,z:60}).order;
-  const early=pickupBonusFor(order),later=pickupBonusFor({...order,elapsed:order.pickupEstimate/2});
-  assert.equal(early,150);assert.equal(later,75);
-  assert.ok(early>later&&later>0);assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate}),0);
-  assert.equal(pickupBonusFor({...order,elapsed:order.pickupEstimate*2}),0);
+test('pickup bonus includes a 15-second stopping allowance and remains bounded',()=>{
+  const order={...initialDelivery({x:40,z:60}).order,base:600,pickupEstimate:100};
+  assert.equal(pickupBonusFor({...order,elapsed:0}),150);
+  assert.equal(pickupBonusFor({...order,elapsed:PICKUP_STOP_ALLOWANCE}),128);
+  assert.equal(pickupBonusFor({...order,elapsed:65}),53);
+  assert.equal(pickupBonusFor({...order,elapsed:85}),23);
+  assert.equal(pickupBonusFor({...order,elapsed:100}),11);
+  assert.equal(pickupBonusFor({...order,elapsed:114}),1);
+  assert.equal(pickupBonusFor({...order,elapsed:115}),0);
+  assert.equal(pickupBonusFor({...order,elapsed:200}),0);
+});
+test('the pickup bonus is monotone and continuous at the approach and expiry',()=>{
+  for(const estimate of [20,40,100,400]){
+    const order={...initialDelivery({x:40,z:60}).order,base:600,pickupEstimate:estimate};
+    let previous=pickupBonusFor({...order,elapsed:0});
+    for(let time=.05;time<=estimate+PICKUP_STOP_ALLOWANCE+1;time+=.05){
+      const current=pickupBonusFor({...order,elapsed:time});
+      assert.ok(current<=previous&&current>=0,`estimate ${estimate}, time ${time}`);previous=current;
+    }
+    for(const boundary of [estimate-PICKUP_STOP_ALLOWANCE,estimate+PICKUP_STOP_ALLOWANCE]){
+      const before=pickupBonusFor({...order,elapsed:boundary-.001}),after=pickupBonusFor({...order,elapsed:boundary+.001});
+      assert.ok(before-after<=1,`no jump at ${boundary}`);
+    }
+  }
 });
 test('pickup time pauses while idle and a late pickup awards no bonus',()=>{
   const {world,player,car}=setup(),order=player.delivery.order;
   tick(world,{...NEUTRAL,steer:1},20);tick(world,NEUTRAL,160);
   const elapsed=order.elapsed;tick(world,NEUTRAL,100);assert.equal(order.elapsed,elapsed);
-  order.elapsed=order.pickupEstimate+1;
+  order.elapsed=order.pickupEstimate+PICKUP_STOP_ALLOWANCE+1;
   const target=orderTarget(order);Object.assign(car,{x:target.x,z:target.z,y:0,speed:0});tick(world);
   assert.equal(order.stage,'dropoff');assert.equal(player.delivery.cash,0);assert.equal(player.delivery.lastReward,null);
+});
+test('braking through the pickup estimate preserves a smaller bonus without collecting too fast',()=>{
+  const {world,player,car}=setup(),order=player.delivery.order,target=orderTarget(order);
+  order.elapsed=order.pickupEstimate-3;
+  Object.assign(car,{x:target.x,z:target.z,y:0,vy:0,speed:8,supportId:'ground'});
+  world.time+=12;updateDelivery(world,player,car,{...NEUTRAL,brake:true},12);
+  assert.equal(order.stage,'pickup','the stop still requires a low speed');
+  assert.ok(order.elapsed>order.pickupEstimate,'the estimate still uses active time');
+  const bonus=pickupBonusFor(order);assert.ok(bonus>0&&bonus<order.base*.25);
+  Object.assign(car,{speed:0});world.time+=.05;updateDelivery(world,player,car,NEUTRAL,.05);
+  assert.equal(order.stage,'dropoff');assert.ok(player.delivery.cash>0);
+  assert.equal(player.delivery.lastReward?.kind,'pickup');
+  assert.ok(player.delivery.cash<=bonus,'active parking time can reduce the bonus');
 });
 test('pickup and delivery require stopping on the ground; payment occurs exactly once',()=>{
   const {world,player,car}=setup(),order=player.delivery.order,restaurant=orderTarget(order);

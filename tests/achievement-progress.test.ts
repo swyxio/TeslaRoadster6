@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialDelivery, type Order } from '../shared/delivery';
+import { initialDelivery, pickupBonusFor, type Order } from '../shared/delivery';
 import { applyAchievementAwards, initialAchievements } from '../shared/achievements';
 import { normalizeAchievementTiers } from '../shared/achievement-tiers';
 import { achievementTierFamilies, applyAcceptedDelivery, applyObservedAchievement, applyTierProgress, coalesceEventRewards, deliveryTierFamilies } from '../worker/achievement-progress';
@@ -37,6 +37,17 @@ test('early delivery rewards are paid once per tier across repeated accepted sto
   assert.equal(progress['early-deliveries'].count,4);
   assert.deepEqual(deliveryTierFamilies({...pickup,elapsed:20},false),['pickups']);
   assert.deepEqual(deliveryTierFamilies({...dropoff,elapsed:30},true),['deliveries','rooftop-deliveries']);
+});
+
+test('the parking allowance does not extend early-pickup achievement timing',()=>{
+  const order:Order={restaurant:0,customer:0,stage:'pickup',elapsed:19.95,pickupEstimate:20,estimate:30,base:600};
+  assert.deepEqual(deliveryTierFamilies(order,false),['pickups','early-pickups']);
+  order.elapsed=20;
+  assert.ok(pickupBonusFor(order)>0,'the stopping bonus is still available at the estimate');
+  assert.deepEqual(deliveryTierFamilies(order,false),['pickups']);
+  order.elapsed=25;
+  assert.ok(pickupBonusFor(order)>0);
+  assert.deepEqual(deliveryTierFamilies(order,false),['pickups']);
 });
 
 test('one Dome result celebrates both its legacy award and repeatable tier bonus',()=>{

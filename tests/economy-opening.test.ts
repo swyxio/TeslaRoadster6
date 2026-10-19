@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {selectAchievementTierLadder} from '../shared/achievement-tiers';
+import {initialDelivery,pickupBonusFor} from '../shared/delivery';
 
 test('opening ledger includes the pickup tier and matches the published data',()=>{
   const output=execFileSync(process.execPath,['--import','tsx','scripts/economy-opening.ts','--json'],{encoding:'utf8'});
@@ -12,5 +13,6 @@ test('opening ledger includes the pickup tier and matches the published data',()
   assert.ok(slow);
   assert.equal(slow.points[0].deliveries,0);
   assert.equal(slow.points[0].tiers,1);
-  assert.equal(slow.points[0].gross,selectAchievementTierLadder('pickups')[0].cash);
+  const firstOrder={...initialDelivery({x:0,z:0}).order,elapsed:45};
+  assert.equal(slow.points[0].gross,selectAchievementTierLadder('pickups')[0].cash+pickupBonusFor(firstOrder));
 });
