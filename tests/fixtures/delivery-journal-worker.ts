@@ -45,8 +45,9 @@ export class DriverProfile extends BaseProfile {
   fixtureAssignment(eventId:string){return this.ctx.storage.get(`assignment:${eventId}`);}
   async fixtureLegacyAssignment(eventId:string){
     const key=`assignment:${eventId}`;
-    const saved=await this.ctx.storage.get<{done:boolean;delivery:{order:{search?:{cursor:{pair:number;leg:0|1;heading:number;version?:number}}}}}>(key);
+    const saved=await this.ctx.storage.get<{done:boolean;searchVersion?:number;delivery:{order:{search?:{cursor:{pair:number;leg:0|1;heading:number;version?:number}}}}}>(key);
     if(!saved||saved.done||!saved.delivery.order.search)throw new Error('No unfinished assignment');
+    delete saved.searchVersion;
     saved.delivery.order.search.cursor={pair:128,leg:1,heading:0};
     await this.ctx.storage.put(key,saved);
   }

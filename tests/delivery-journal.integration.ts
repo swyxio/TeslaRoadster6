@@ -278,7 +278,8 @@ try{
   const legacyFlight=rpc('submit',{...legacyCrash,intent:intent(legacyStop,0,1)},30_000);void legacyFlight.catch(()=>{});
   await until(()=>rpc<boolean>('assignment-held',legacyCrash),'legacy assignment checkpoint held');
   await rpc('legacy-assignment',{...legacyCrash,eventId:legacyStop.eventId});
-  const oldCheckpoint=await rpc<{delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  const oldCheckpoint=await rpc<{searchVersion?:number;delivery:{order:{search:{cursor:unknown}}}}>('assignment',{...legacyCrash,eventId:legacyStop.eventId});
+  assert.equal(oldCheckpoint.searchVersion,undefined);
   assert.deepEqual(oldCheckpoint.delivery.order.search.cursor,{pair:128,leg:1,heading:0});
   await stop(child);child=undefined;child=start();await ready();await rpc('freeze',legacyCrash,15_000);
   const legacyRecovered=await rpc<Profile>('profile',legacyCrash);
