@@ -1,6 +1,12 @@
-# Asset manifest: economy article
+# Asset manifest
 
-This manifest covers the economy article's supplied illustrations, gameplay captures and generated maps and charts. All exports are under [`public/blog/economy`](../blog/economy/). They are article assets, not game meshes: triangle counts, vehicle attachment names and in-game texture memory are not applicable. Raster memory estimates below are uncompressed RGBA at four bytes per pixel, not measured browser or GPU usage.
+## Bay horizon texture
+
+[`src/assets/bay-horizon.webp`](../../src/assets/bay-horizon.webp) is an original generated interpretation of distant Bay Area hills, not a photograph or elevation dataset. It was requested from OpenAI's built-in image generation tool on 2026-10-18 Pacific, using a prompt for a horizontally seamless transparent strip of coastal ridges, dry golden foothills, scattered vegetation and atmospheric haze with no sky, water, roads, vehicles, logos or text. Use is subject to the service's [individual terms](https://openai.com/policies/terms-of-use/) and [services agreement](https://openai.com/policies/services-agreement/); this record makes no claim about training inputs or exclusivity.
+
+The retained [source PNG](../../assets-src/bay-horizon.png) is 2172 × 724 RGBA, SHA-256 `b3714ad57d5411ec0d3377c50d5a4b16d160aa9b7a61bbd8166781c6657ac25c`. It is outside the public build. The 1024 × 90 RGBA WebP export is 23 KiB, approximately 0.35 MiB decoded before mipmaps, SHA-256 `b601af146342fafafd64562811dfb169a0bc589bfd77555b25facf2198224ee0`. Export with `cwebp -q 80 -m 4 -crop 0 270 2172 190 -resize 1024 0 assets-src/bay-horizon.png -o src/assets/bay-horizon.webp`. It is applied to one reusable decorative mesh; see [MAP.md](../../docs/MAP.md) for the placement and its limitations.
+
+The sections below cover the economy article's illustrations, gameplay captures and generated maps and charts. Their exports are under [`public/blog/economy`](../blog/economy/). They are article assets, not game meshes: triangle counts, vehicle attachment names and in-game texture memory are not applicable. Raster memory estimates below are uncompressed RGBA at four bytes per pixel, not measured browser or GPU usage.
 
 ## Generated concept illustrations
 
