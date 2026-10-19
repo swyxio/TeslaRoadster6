@@ -38,6 +38,17 @@ Those numbers describe this run, not a promise of smoothness. A requested video 
 
 Even with the same starting point and keys, another car can cross the route, a collision can happen at a different moment, or the room and browser can advance on slightly different schedules. A replay is an instruction to try the route again, not a deterministic movie of the previous run.
 
+We tried this with the [older radio preview](https://codex-tesland-radio-bay-drive.swyxio.workers.dev/?room=bay) and the live 0.0.34 alpha. Both runs start at the Bay approach in fresh, separate rooms. The browser accelerates down the same street, holds the jump/hover control, brakes, and switches to the first-person camera. You can see the traffic, delivery guidance and the alpha’s achievement notification along the way.
+
+<video controls playsinline preload="none" width="1600" poster="/blog/recording-webgl-playtests/preview-alpha-comparison-poster.jpg" style="max-width:100%;height:auto" aria-label="The older Tesland preview and 0.0.34 alpha drive and jump down the same Bay street, then switch to the first-person camera">
+  <source src="https://raw.githubusercontent.com/swyxio/TeslaRoadster6/b211d240c11b4f85c1fb96691be5ad3e2c4b405f/public/blog/recording-webgl-playtests/preview-alpha-comparison.mp4" type="video/mp4">
+  <a href="/blog/recording-webgl-playtests/preview-alpha-comparison.mp4">Download the preview and alpha comparison</a>.
+</video>
+
+*Left: the older preview, protocol 29. Right: the live alpha, protocol 47. The comparison plays the alpha’s game audio; hear each full-resolution recording separately: [older preview](https://raw.githubusercontent.com/swyxio/TeslaRoadster6/b211d240c11b4f85c1fb96691be5ad3e2c4b405f/public/blog/recording-webgl-playtests/preview-before.mp4) and [alpha](https://raw.githubusercontent.com/swyxio/TeslaRoadster6/b211d240c11b4f85c1fb96691be5ad3e2c4b405f/public/blog/recording-webgl-playtests/alpha-after.mp4). The sound is the game’s synthesized music and effects, raised in volume for the video; the separate podcast player was not recorded.*
+
+The two runs used the [same input script](https://github.com/swyxio/TeslaRoadster6/blob/main/scripts/playtests/blog-preview-comparison.json). Their room snapshots put the final cars about a metre apart; sampled along the way, their positions differed by up to about ten metres. The traffic and room clocks were independent, so this is a matched-route feature demonstration, not a controlled performance benchmark. The [capture notes](https://github.com/swyxio/TeslaRoadster6/blob/main/docs/benchmarks/2026-10-18-preview-alpha-playtest.md) describe the conditions and measurements.
+
 For comparisons, we keep the starting conditions, input timeline, video and relevant measurements together, then check whether the routes actually stayed comparable. In [our driving-smoothness investigation](/blog/making-driving-feel-smooth/), we separated real captures from a modeled slalom rather than presenting two different drives as a controlled performance test. The [performance playtest work](https://github.com/swyxio/TeslaRoadster6/pull/93) likewise holds a comparison when endpoints diverge too far.
 
 ## From a local run to a public clip {#publish-the-video}
