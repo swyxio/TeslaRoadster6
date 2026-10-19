@@ -79,52 +79,118 @@ function pathSummary(poses) {
   return { lengthM: round(length), points };
 }
 
-export function deliveryRoute(poses, initialOrder) {
-  const restaurant = initialOrder?.restaurant, customer = initialOrder?.customer;
-  if (typeof restaurant?.id !== 'string' || !restaurant.id || ![restaurant.x, restaurant.z].every(number) ||
-      typeof customer?.id !== 'string' || !customer.id || ![customer.x, customer.y, customer.z].every(number) || typeof customer.rooftop !== 'boolean')
-    return { status: 'unavailable', reason: 'initial delivery identity or coordinates unavailable' };
-  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup']];
-  const indices = [];
-  let searchFrom = 0;
-  for (const [completed, stage] of milestones) {
-    const offset = poses.slice(searchFrom).findIndex(p => p.deliveryCompleted === completed && p.deliveryStage === stage);
-    if (offset < 0) return { status: 'unavailable', reason: `missing delivery ${completed} ${stage}` };
-    const index = searchFrom + offset;
-    indices.push(index); searchFrom = index + 1;
-  }
+function validOrder(order) {
+  const restaurant = order?.restaurant, customer = order?.customer;
+  return typeof restaurant?.id === 'string' && !!restaurant.id && [restaurant.x, restaurant.z].every(number) &&
+    Number.isSafeInteger(restaurant.index) && restaurant.index >= 0 &&
+    typeof customer?.id === 'string' && !!customer.id && [customer.x, customer.y, customer.z].every(number) &&
+    typeof customer.rooftop === 'boolean' && Number.isSafeInteger(customer.index) && customer.index >= 0;
+}
+
+const matchesOrder = (pose, order) => pose.deliveryRestaurant === order.restaurant.index &&
+  pose.deliveryCustomer === order.customer.index && pose.deliverySearching === false;
+
+// Completion is observed in the next broadcast, not at the exact simulation
+// tick at which the stop was credited. Allow a small sampling margin.
+const atStop = (pose, target) => pose.supported === true &&
+  Math.abs(pose.x - target.x) <= 12 && Math.abs(pose.z - target.z) <= 12 &&
+  (!target.rooftop || Math.abs(pose.y - target.y) <= 1);
+
+export function deliveryRoute(poses, initialOrder, stageRepeat) {
+  const secondOrder = stageRepeat?.order;
+  if (!validOrder(initialOrder) || !validOrder(secondOrder))
+    return { status: 'unavailable', reason: 'both delivery identities, coordinates and catalog indices are required' };
+  const { stagedTick, confirmedTick } = stageRepeat;
+  if (!Number.isSafeInteger(stagedTick) || !Number.isSafeInteger(confirmedTick) || stagedTick < 0 || confirmedTick <= stagedTick)
+    return { status: 'unavailable', reason: 'second delivery staging ticks unavailable or invalid' };
+  const milestones = [[0, 'pickup'], [0, 'dropoff'], [1, 'pickup'], [1, 'dropoff'], [2, 'pickup']];
+  const find = (from, predicate) => {
+    const offset = poses.slice(from).findIndex(predicate);
+    return offset < 0 ? -1 : from + offset;
+  };
+  const start = find(0, p => p.deliveryCompleted === 0 && p.deliveryStage === 'pickup' && matchesOrder(p, initialOrder));
+  if (start < 0) return { status: 'unavailable', reason: 'missing initial delivery pickup' };
+  const pickupOne = find(start + 1, p => p.deliveryCompleted === 0 && p.deliveryStage === 'dropoff' && matchesOrder(p, initialOrder) && atStop(p, initialOrder.restaurant));
+  if (pickupOne < 0) return { status: 'unavailable', reason: 'first restaurant stop or initial order identity missing' };
+  // After a completed order, search may temporarily expose the old order as a
+  // placeholder, or finish before the next broadcast. Neither is proof of the
+  // second assignment; require its confirmed snapshot separately below.
+  const completedOne = find(pickupOne + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'pickup' && p.tick <= stagedTick && atStop(p, initialOrder.customer));
+  if (completedOne < 0) return { status: 'unavailable', reason: 'first delivery completion at its customer not observed before staging' };
+  if (poses.slice(start, completedOne).some(p => p.deliveryCompleted !== 0 || !matchesOrder(p, initialOrder)))
+    return { status: 'unavailable', reason: 'first delivery order changed before completion' };
+  const second = find(completedOne + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'pickup' && p.tick >= confirmedTick && matchesOrder(p, secondOrder));
+  if (second < 0) return { status: 'unavailable', reason: 'confirmed second delivery pickup not observed' };
+  const pickupTwo = find(second + 1, p => p.deliveryCompleted === 1 && p.deliveryStage === 'dropoff' && matchesOrder(p, secondOrder) && atStop(p, secondOrder.restaurant));
+  if (pickupTwo < 0) return { status: 'unavailable', reason: 'second restaurant stop or order identity missing' };
+  const completedTwo = find(pickupTwo + 1, p => p.deliveryCompleted === 2 && p.deliveryStage === 'pickup' && atStop(p, secondOrder.customer));
+  if (completedTwo < 0) return { status: 'unavailable', reason: 'second delivery completion at its customer not observed' };
+  if (poses.slice(second, completedTwo).some(p => p.deliveryCompleted !== 1 || !matchesOrder(p, secondOrder)))
+    return { status: 'unavailable', reason: 'second delivery order changed before completion' };
+  const indices = [start, pickupOne, second, pickupTwo, completedTwo];
   const flight = poses.slice(indices.at(-1));
   const routePoses = poses.slice(indices[0]);
-  if (!Number.isSafeInteger(routePoses[0]?.poseRevision) || routePoses.some((p, i) => p.poseRevision !== routePoses[0].poseRevision || (i && (p.tick < routePoses[i - 1].tick || p.atMs < routePoses[i - 1].atMs))))
+  if (!Number.isSafeInteger(routePoses[0]?.poseRevision) || routePoses.some((p, i) => !Number.isSafeInteger(p.tick) || ![p.atMs, p.x, p.y, p.z].every(number) || p.poseRevision !== routePoses[0].poseRevision || (i && (p.tick < routePoses[i - 1].tick || p.atMs < routePoses[i - 1].atMs))))
     return { status: 'unavailable', reason: 'route respawned or snapshots moved backwards' };
-  const jumpChanges = [];
+  const triggers = [];
   for (let i = 1; i < flight.length; i++) {
     const before = flight[i - 1], after = flight[i];
-    if (Number.isSafeInteger(before.lastJump) && after.lastJump > before.lastJump && after.tick > before.tick && number(before.jumpBurstUntil) && number(after.jumpBurstUntil) && after.jumpBurstUntil > before.jumpBurstUntil) {
-      const lift = flight.slice(i, i + 8).find(p => p.atMs - after.atMs <= 700 && p.supported === false && number(p.vy) && p.vy > .1 && number(p.thrusters) && (p.thrusters & 6) === 6);
-      if (lift) jumpChanges.push({ index: i, tick: after.tick, liftTick: lift.tick });
-    }
+    if (Number.isSafeInteger(before.lastJump) && Number.isSafeInteger(after.lastJump) && after.lastJump > before.lastJump)
+      triggers.push({ index: i, valid: after.tick > before.tick && number(before.jumpBurstUntil) && number(after.jumpBurstUntil) && after.jumpBurstUntil > before.jumpBurstUntil });
   }
-  // Require a continuous stream, not two isolated powered snapshots separated
-  // by a long gap. Bits 2 and 4 are the game's downward rocket thrusters.
-  let run = [], longest = [];
+  // A later trigger bounds the search even if that trigger lacks a burst. An
+  // airborne snapshot must never be reused to prove two different jumps.
+  const jumps = triggers.flatMap((trigger, i) => {
+    if (!trigger.valid) return [];
+    const end = triggers[i + 1]?.index ?? flight.length;
+    const start = flight[trigger.index];
+    const liftOffset = flight.slice(trigger.index, Math.min(end, trigger.index + 8)).findIndex(p => p.atMs - start.atMs <= 700 && p.supported === false && number(p.vy) && p.vy > .1 && Number.isSafeInteger(p.thrusters) && (p.thrusters & 6) === 6);
+    if (liftOffset < 0) return [];
+    const liftIndex = trigger.index + liftOffset, lift = flight[liftIndex];
+    const landing = flight.slice(liftIndex + 1, end).find(p => p.supported === true && p.tick > lift.tick);
+    return landing ? [{ tick: start.tick, liftTick: lift.tick, landingTick: landing.tick }] : [];
+  });
+  // Keep airborne intervals separate from ground travel and sampling gaps.
+  const intervals = [];
+  let airborne = [];
   for (const p of flight) {
-    const powered = p.supported === false && Number.isSafeInteger(p.thrusters) && (p.thrusters & 6) === 6;
-    const previous = run.at(-1);
-    if (!powered || (previous && (p.tick <= previous.tick || p.tick - previous.tick > 4 || p.atMs - previous.atMs > 500))) run = [];
-    if (powered) run.push(p);
-    if (run.length > longest.length) longest = run.slice();
+    const previous = airborne.at(-1);
+    if (p.supported !== false || (previous && (p.tick <= previous.tick || p.tick - previous.tick > 4 || p.atMs - previous.atMs > 500))) {
+      if (airborne.length) intervals.push(airborne);
+      airborne = [];
+    }
+    if (p.supported === false) airborne.push(p);
   }
-  const sustainedFlight = longest.length >= 5 && longest.at(-1).atMs - longest[0].atMs >= 400;
-  const landedBetween = jumpChanges.some((jump, i) => jumpChanges.slice(i + 1).some(next => flight.slice(jump.index + 1, next.index).some(p => p.supported === true)));
-  const landedAfter = jumpChanges.length >= 2 && flight.some(p => p.supported === true && p.tick > jumpChanges.at(-1).liftTick);
-  const forwardThrust = flight.some(p => p.supported === false && Number.isSafeInteger(p.thrusters) && (p.thrusters & 7) === 7);
-  const horizontalTravel = Math.max(...flight.map(p => Math.hypot(p.x - flight[0].x, p.z - flight[0].z)));
-  if (!landedBetween || !landedAfter || !sustainedFlight || !forwardThrust || horizontalTravel < 5) return { status: 'unavailable', reason: 'two jumps, their landings and sustained forward-powered flight were not observed', jumpCount: jumpChanges.length, flightSnapshots: longest.length };
+  if (airborne.length) intervals.push(airborne);
+  let selected, flightSnapshots = 0;
+  for (const interval of intervals) {
+    // Bits 2 and 4 are downward thrusters. Forward thrust need only occur
+    // briefly within the continuous powered interval, not for its duration.
+    let run = [], longest = [];
+    for (const p of interval) {
+      if (!Number.isSafeInteger(p.thrusters) || (p.thrusters & 6) !== 6) run = [];
+      else run.push(p);
+      if (run.length >= 5 && run.at(-1).atMs - run[0].atMs >= 400 && run.some(sample => (sample.thrusters & 7) === 7) && run.length > longest.length) longest = run.slice();
+    }
+    const origin = interval[0];
+    const farthest = interval.reduce((best, p) => Math.hypot(p.x - origin.x, p.z - origin.z) > Math.hypot(best.x - origin.x, best.z - origin.z) ? p : best, origin);
+    const displacement = Math.hypot(farthest.x - origin.x, farthest.z - origin.z);
+    flightSnapshots = Math.max(flightSnapshots, longest.length);
+    if (longest.length && displacement > 5 && (!selected || longest.length > selected.powered.length)) selected = { interval, powered: longest, farthest, displacement };
+  }
+  if (jumps.length < 2 || jumps.length !== triggers.length || flight.at(-1)?.supported !== true || !selected)
+    return { status: 'unavailable', reason: 'two jumps, all observed landings and sustained forward-powered flight with airborne displacement were not observed', jumpCount: jumps.length, flightSnapshots };
   const legs = indices.slice(0, -1).map((index, i) => pathSummary(poses.slice(index, indices[i + 1] + 1)));
   legs.push(pathSummary(flight));
   if (legs.some(leg => !leg)) return { status: 'unavailable', reason: 'not enough samples for all route legs' };
-  return { status: 'available', initialOrder, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumpChanges.length, jumps: jumpChanges, flightSnapshots: longest.length, horizontalTravelM: round(horizontalTravel), peakY: round(Math.max(...flight.map(p => p.y))), legs };
+  const { interval, powered, farthest, displacement } = selected;
+  const flightEvidence = { startTick: powered[0].tick, endTick: powered.at(-1).tick, durationMs: round(powered.at(-1).atMs - powered[0].atMs), snapshots: powered.length, forwardThrustTick: powered.find(p => (p.thrusters & 7) === 7).tick, airborneStartTick: interval[0].tick, airborneEndTick: interval.at(-1).tick, airborneDisplacementTick: farthest.tick, airborneDisplacementM: displacement };
+  return { status: 'available', initialOrder, secondOrder, firstCompletion: { tick: poses[completedOne].tick, x: round(poses[completedOne].x), z: round(poses[completedOne].z) }, staging: { stagedTick, confirmedTick }, milestones: indices.map((index, i) => ({ completed: milestones[i][0], stage: milestones[i][1], tick: poses[index].tick, x: round(poses[index].x), z: round(poses[index].z) })), jumpCount: jumps.length, jumps, flightSnapshots: powered.length, flight: flightEvidence, peakY: round(Math.max(...flight.map(p => p.y))), legs };
+}
+
+export function withStagingDuration(route, event) {
+  const duration = event?.type === 'stageRepeatDelivery' && event.status === 'ok' ? event.commandDurationMs : null;
+  return { ...route, staging: { ...route.staging, durationMs: number(duration) && duration >= 0 ? duration : null } };
 }
 
 function run(command, args, cwd) {
@@ -251,14 +317,15 @@ async function main() {
   const room = [begin, end].every(e => e.sample?.connection?.startsWith('● LIVE'))
     ? roomProgress(trajectory, begin.commandStartedAtMs, end.commandStartedAtMs)
     : { status: 'unavailable', reason: 'room was not live for the measurement window' };
-  const route = deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder);
+  const stageRepeat = event('stageRepeatDelivery');
+  const route = withStagingDuration(deliveryRoute(inDrive, event('waitForRoomReady')?.sample?.initialOrder, stageRepeat?.sample), stageRepeat);
   const report = {
     format: 1, startedAt, finishedAt: new Date().toISOString(), target: { revision, dirty, version, protocol: health.version },
-    environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: manifest.viewport },
+    environment: { platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: os.loadavg(), ci: !!process.env.CI, runner: manifest.runner, viewport: { ...manifest.viewport, deviceScaleFactor: manifest.viewport?.deviceScaleFactor ?? 1, isMobile: manifest.viewport?.isMobile ?? false, hasTouch: manifest.viewport?.hasTouch ?? false } },
     fixture: { scenarioSha256, recorderSha256, reporterSha256, stageSha256, motionBenchmarkSha256: fixtureSha256, motionAdapterSha256: adapterSha256, seed: 0, start: { x: -190, z: 120, yaw: -Math.PI / 2 }, captureVideo: !!values.video },
     metrics: { browserFrameIntervalP95: frame, modeledMotion: motion, roomProgress: room },
     route: { ...route, first: first ?? null, last: last ?? null, samples: inDrive.length, displacementM: number(displacement) ? round(displacement) : null },
-    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes the initial delivery, then keyboard jump and flight; the next assignment is not driven.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
+    notes: ['Browser p95 uses requestAnimationFrame callback timestamps, not GPU completion or display presentation. It includes the mostly stationary second-delivery staging wait; distance-based path matching does not control elapsed time.', 'Motion is a 120 Hz synthetic model with simulated latency; room progress uses received ticks over Node arrival time.', 'The local-only fixture seeds traffic and pauses at readiness, then runs the ordinary room tick. Street Pilot completes two deliveries; the second assignment is controlled locally for cross-version comparison. Keyboard inputs exercise jumping and flight.', 'One local client and live background traffic; server and browser share this host. Video changes workload and is reported separately.', 'Single runs are descriptive, not a statistical regression verdict.'],
   };
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));

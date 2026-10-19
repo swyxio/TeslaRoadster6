@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.worker.json",
-  "include": ["tests/fixtures/playtest-stage-worker.ts"]
+  "include": ["tests/fixtures/playtest-stage-worker.ts", "tests/fixtures/playtest-stage-test-worker.ts"]
 }
