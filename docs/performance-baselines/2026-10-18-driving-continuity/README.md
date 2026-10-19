@@ -232,6 +232,15 @@ focused checks: a steering response missed its deadline and a peer jumped
 19.73 m. Clear endpoints did not establish a safe path between them. The patch
 is diagnostic, not a continuity solution.
 
+A separate [conditional blackout-control model](blackout-control-model-20261018.tar.gz)
+(SHA-256 `10b1b25a016d20bd08b41ee8d85dcd0b5798c60748ed23f202db7c0233ca6985`)
+passed 36 focused tests. Under assumed client and server clock bounds it admits
+fresh controls during a 1.8-second snapshot blackout and fences expired inputs.
+Those clock bounds and Cloudflare behavior are not established; the model also
+demonstrates indistinguishable fresh and stale packets if drift exceeds its
+assumption. It is not wired into the Worker or client and does not address
+visual prediction or swept contacts.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -347,6 +356,15 @@ two-tick retiming allowance. For the rest, the captured data cannot distinguish
 that condition from an expired accepted-control watchdog. Individual snapshot
 age at send and the server receive tick were not recorded, so the timing burst
 does not identify a room, network or client-clock cause.
+
+The [late-input reproduction](late-input-diagnostic-6238845.tar.gz) (SHA-256
+`354e7dd463c90041625f7a8cbe7d72d570f56400fd45aaaef71a9b39b26ec953`)
+shows 274 of those 1,326 late inputs were already sent at the maximum lead;
+for 93, a later observed same-epoch snapshot had advanced more than two ticks
+past the target. This assumes ordered socket delivery and monotonic ticks; it
+does not reveal the server receive tick. A hypothetical wider late window
+admits a stale throttle while release is in flight and fails two existing
+contract checks, so it is not recommended or shipped.
 
 The movement workload was incomplete: at most three drivers met the original
 checker for even one ten-second block, none met it for all six, and 25 traveled
