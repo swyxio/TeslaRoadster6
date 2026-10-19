@@ -1339,7 +1339,7 @@ scene.start(dt=>{
     const octant=(Math.round(Math.atan2(Math.sin(bearing),Math.cos(bearing))/(Math.PI/4))+8)%8;
     $('mission').textContent=searching?'Finding a safe route…':unavailable?'Return to an open road to retry.':
       !waypoint?`${guidance?.status==='unavailable'?'No road route':'Finding road route'} · ${target.name} · ${distance} m`:
-      `${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m · ${guidance?.status==='flight'?'fly direct':'via road'}`;
+      `${['↑','↖','←','↙','↓','↘','→','↗'][octant]} ${target.name} · ${distance} m · ${guidance?.status==='flight'?'fly direct':guidance?.status==='overpass'?'exit overpass':'via road'}`;
     const protectedArea=islandProtected(e),paused=protectedArea||session.world.time>d.activeUntil;
     const pickupBonus=pickupBonusFor(order);
     $('hint').textContent=searching?'Your delivery clock is paused while we find your next route.':unavailable?'Your current delivery is paused until a safe route is available.':(protectedArea?'DELIVERY PAUSED · ':'')+(order.stage==='pickup'?`${clock(order.elapsed)} / ${clock(order.pickupEstimate)} pickup${paused&&!protectedArea?' · paused':''} · ${pickupBonus>0?`pickup bonus +${money(pickupBonus)} · ${PICKUP_STOP_ALLOWANCE}s stop allowance`:'pickup bonus expired'}`:`${clock(order.elapsed)} / ${clock(order.estimate)} estimate${paused&&!protectedArea?' · paused':''} · ${money(payoutFor(order))} if delivered now${target.rooftop?` · land on roof ${Math.round(target.y)}m up`:''}`);

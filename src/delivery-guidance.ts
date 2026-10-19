@@ -1,11 +1,12 @@
 import type { Entity } from '../shared/game';
 import type { Level } from '../shared/delivery';
+import { OVERPASS } from '../shared/map';
 import type { Point } from '../shared/traffic';
 
 type Vehicle = Pick<Entity, 'x' | 'z' | 'yaw' | 'kind' | 'supportId' | 'inDome'>;
 export type GuidanceRequest = { id:number; car:Vehicle; destination:Point; level:Level };
 export type GuidanceResponse = { id:number; path:Point[] | null };
-export type Guidance = { waypoint:Point | null; status:'ready' | 'routing' | 'unavailable' | 'flight' };
+export type Guidance = { waypoint:Point | null; status:'ready' | 'routing' | 'unavailable' | 'flight' | 'overpass' };
 
 const distance = (a:Point,b:Point) => Math.hypot(a.x-b.x,a.z-b.z);
 function segmentDistance(p:Point,a:Point,b:Point):number {
@@ -49,6 +50,12 @@ export class DeliveryGuidance {
       this.key='';this.requestId++;this.pending=false;this.path=[];
       return {waypoint:destination,status:'flight'};
     }
+    if(car.supportId==='overpass'){
+      this.key='';this.requestId++;this.pending=false;this.path=[];
+      const forward=-Math.sin(car.yaw);
+      const exit=Math.abs(forward)<.3?(car.x<(OVERPASS.start+OVERPASS.end)/2?OVERPASS.start:OVERPASS.end):forward>0?OVERPASS.end:OVERPASS.start;
+      return {waypoint:{x:exit,z:OVERPASS.z},status:'overpass'};
+    }
     if(car.supportId!=='ground'||this.workerUnavailable){
       this.key='';this.requestId++;this.pending=false;this.path=[];
       return {waypoint:null,status:'unavailable'};
@@ -65,7 +72,7 @@ export class DeliveryGuidance {
     }
     while(this.index<this.path.length-1){
       const waypoint=this.path[this.index],next=this.path[this.index+1];
-      if(distance(car,waypoint)>8&&segmentDistance(car,waypoint,next)>7)break;
+      if(distance(car,waypoint)>8&&(distance(car,destination)<10||segmentDistance(car,waypoint,next)>7))break;
       this.index++;
     }
     if(this.path.length){

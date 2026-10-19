@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld } from '../shared/game';
 import { orderTarget } from '../shared/delivery';
-import { nearbyBuildings } from '../shared/map';
+import { nearbyBuildings, OVERPASS } from '../shared/map';
 import { buildingBlocksPose } from '../shared/landmark-collision';
 import { DELIVERY_DESTINATION_SNAP, planNavigation } from '../shared/navigation';
 import { DeliveryGuidance, type GuidanceRequest } from '../src/delivery-guidance';
@@ -90,4 +90,16 @@ test('a failed route worker does not leave the mission stuck finding a route',()
   guide.receive({id:requests[0].id,path:[target]});
   assert.deepEqual(guide.update(car,target,player.delivery.level,100),{waypoint:null,status:'unavailable'});
   assert.equal(requests.length,1);
+});
+
+test('guidance leads off an overpass and replans on returning to ground',()=>{
+  const {player,car,target}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  guide.update(car,target,player.delivery.level,0);
+  const onDeck={...car,x:(OVERPASS.start+OVERPASS.end)/2,z:OVERPASS.z,yaw:-Math.PI/2,supportId:'overpass' as const};
+  assert.deepEqual(guide.update(onDeck,target,player.delivery.level,100),{waypoint:{x:OVERPASS.end,z:OVERPASS.z},status:'overpass'});
+  guide.receive({id:requests[0].id,path:[target]});
+  assert.equal(guide.update({...onDeck,x:OVERPASS.end,supportId:'ground'},target,player.delivery.level,200).status,'routing');
+  assert.equal(requests.length,2);
+  guide.receive({id:requests[1].id,path:[{x:OVERPASS.end+20,z:OVERPASS.z}]});
+  assert.equal(guide.update({...onDeck,x:OVERPASS.end,supportId:'ground'},target,player.delivery.level,300).status,'ready');
 });
