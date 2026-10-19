@@ -2,6 +2,7 @@ import * as T from 'three';
 import { requiredLevelAt } from '../shared/delivery';
 import { MARS_LAUNCH_SECONDS } from '../shared/mars';
 import { FREMONT_SPACEPORT as site } from '../shared/map';
+import { spaceportStructureBoxes } from '../shared/spaceport-structures';
 import { STARSHIP_GOAL } from '../shared/starship';
 import { constructionFraction, constructionNoseRadius } from './starship-construction';
 import { createStarshipWorkyard } from './starship-workyard';
@@ -61,13 +62,15 @@ function createTowerProgress(tower:T.Group) {
 
 /** Fictional Fremont complex. Factory, pad and tower match shared collision boxes. */
 export function buildFremontSpaceport(scene:T.Scene) {
+  const structure=(group:T.Group,kind:'factory'|'pad'|'tower')=>{
+    for(const p of spaceportStructureBoxes(kind,site[kind]))box(group,p.x,p.y,p.z,p.w,p.h,p.d,p.color);
+  };
   const factory=new T.Group();factory.position.set(site.factory.x,0,site.factory.z);scene.add(factory);
-  box(factory,0,site.factory.h/2,0,site.factory.w,site.factory.h,site.factory.d,0xd6dad9);
+  structure(factory,'factory');
   box(factory,0,17,site.factory.d/2+.12,site.factory.w,1.6,.25,0xb52c2d);
   box(factory,0,7,site.factory.d/2+.18,55,10,.35,0x31505a);
   for(let x=-60;x<=60;x+=12){
     box(factory,x,11,site.factory.d/2+.2,4,6,.2,0x557782);
-    box(factory,x,site.factory.h+.2,0,8,.4,site.factory.d-10,0x30515b);
   }
   const signCanvas=document.createElement('canvas');signCanvas.width=1024;signCanvas.height=128;
   const c=signCanvas.getContext('2d')!;c.fillStyle='#f2f3ed';c.fillRect(0,0,1024,128);c.fillStyle='#b42f2f';c.font='bold 65px system-ui';c.textAlign='center';c.fillText('TESLA × SPACEX  /  FREMONT',512,84);
@@ -80,22 +83,17 @@ export function buildFremontSpaceport(scene:T.Scene) {
   }
 
   const pad=new T.Group();pad.position.set(site.pad.x,0,site.pad.z);scene.add(pad);
-  box(pad,0,site.pad.h/2,0,site.pad.w,site.pad.h,site.pad.d,0x777e7b);
-  box(pad,0,site.pad.h+.05,0,25,.1,25,0x38454a);
+  structure(pad,'pad');
   for(const z of [-13,13])box(pad,0,site.pad.h+.12,z,27,.2,.5,0xe8b454);
 
   const tower=new T.Group();tower.position.set(site.tower.x,0,site.tower.z);scene.add(tower);
-  box(tower,0,site.tower.h/2,0,site.tower.w,site.tower.h,site.tower.d,0x687178);
+  structure(tower,'tower');
   for(const x of [-5,5])for(const z of [-5,5])box(tower,x,site.tower.h/2,z,1.4,site.tower.h,1.4,0x333f45);
   for(let y=8;y<125;y+=12){
     box(tower,0,y,6,12,1,.5,0xcbb59a);box(tower,0,y,-6,12,1,.5,0xcbb59a);
   }
   const updateTowerProgress=createTowerProgress(tower);
   updateTowerProgress(null);
-  // The fictional launch tower's arms extend toward the rocket.
-  const arms=new T.Group();tower.add(arms);
-  for(const z of [-5,5])box(arms,-15,93,z,26,2,2,0x454f54);
-  box(tower,-1,127,0,14,4,14,0x454f54);
   const workyard=createStarshipWorkyard(scene);
 
   // The site sign is deliberately beside, rather than inside, the boarding ring.
