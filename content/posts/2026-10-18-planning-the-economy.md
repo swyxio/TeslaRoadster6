@@ -4,9 +4,11 @@ Deliveries, cash-based levels, saved vehicles, income-producing Cybercabs and a 
 
 ## Rebalancing the opening {#rebalancing-the-opening}
 
-A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The new tuning brings the first delivery award to $500, makes every third delivery worth a $350 checkpoint, and prices the remote OTA shop at $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
+A playtest surfaced an early windfall: a minute of deliveries and stacked awards put about $12,000 in the wallet, while a workshop upgrade cost as little as $30. The first delivery award now pays $350, every third delivery earns a $350 checkpoint, and the remote OTA shop costs $100 per game hour. Paint starts at $750, decals at $450 and a sport motor at $2,000. Spending now asks you to choose what to buy first.
 
-The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes three deliveries and earns $3,281 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $4,731 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $9,088 in five minutes; route travel and driving skill will change these results.
+The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes three deliveries and earns $2,796 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $4,246 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $7,189 in five minutes; route travel and driving skill change these results.
+
+In a manual run on the previous build, five deliveries earned $6,160 in five active minutes. The third fare paid $573 alongside $750 in checkpoint and achievement awards. The revised balance keeps that checkpoint and the achievements, reduces the first, third and fifth delivery awards, and makes the fast pickup and delivery bonuses smaller. On a different route after tuning, three deliveries earned $2,805 in 5:02 active; building collisions slowed two trips and a police fine cost $68. Existing savings and earned achievements stay in place.
 
 <figure>
 <img src="/blog/economy/opening-wallet.svg" alt="Five modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">

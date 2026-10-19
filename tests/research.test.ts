@@ -63,10 +63,10 @@ test('an SFO drop-off earns its visit and express bonuses once alongside the far
   Object.assign(car,{...at,y:terrainHeight(at.x,at.z),supportId:'ground',speed:0,vy:0});
   step(world,new Map([['p',NEUTRAL]]),.05);
   assert.equal(player.delivery.completed,1);assert.equal(player.delivery.earned,fare);
-  assert.equal(player.delivery.cash,fare+site.cash+500+1_000);
+  assert.equal(player.delivery.cash,fare+site.cash+350+1_000);
   assert.ok(player.achievements.unlocked.includes('sfo-ground-crew'));
   assert.ok(player.achievements.unlocked.includes('sfo-express'));
   assert.equal(player.delivery.lastReward?.kind,'delivery-research');
-  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+500+1_000);
-  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+500+1_000);
+  assert.equal(player.delivery.lastReward?.amount,fare+site.cash+350+1_000);
+  step(world,new Map([['p',NEUTRAL]]),.05);assert.equal(player.delivery.cash,fare+site.cash+350+1_000);
 });

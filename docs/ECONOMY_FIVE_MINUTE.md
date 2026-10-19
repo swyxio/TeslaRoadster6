@@ -10,19 +10,27 @@ Run `pnpm exec tsx scripts/economy-opening.ts --write-chart` to regenerate the [
 
 | Path | Pickup / drop-off | Gross by 1 minute | Gross by 5 minutes | Deliveries / badges / tiers by 5 minutes | Cash after 5 minutes |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Quick | 10 s / 30 s | $1,971 | $12,172 | 7 / 4 / 4 | $14,672 |
-| Steady | 20 s / 55 s | $326 | $4,816 | 4 / 2 / 4 | $7,316 |
-| Steady, paint and OTA | 20 s / 55 s | $326 | $4,816 | 4 / 2 / 4 | $6,266 |
-| Leisurely | 30 s / 90 s | $269 | $1,811 | 2 / 1 / 3 | $4,311 |
-| Slow | 45 s / 150 s | $100 | $900 | 1 / 1 / 2 | $3,400 |
+| Quick | 10 s / 30 s | $1,557 | $7,189 | 7 / 3 / 4 | $9,689 |
+| Steady | 20 s / 55 s | $279 | $2,796 | 3 / 2 / 4 | $5,296 |
+| Steady, paint and OTA | 20 s / 55 s | $279 | $2,796 | 3 / 2 / 4 | $4,246 |
+| Leisurely | 30 s / 90 s | $243 | $1,312 | 2 / 1 / 3 | $3,812 |
+| Slow | 45 s / 150 s | $100 | $750 | 1 / 1 / 2 | $3,250 |
 
 Gross excludes the starting $2,500 and includes one-off awards. Badge and tier counts are separate; a tier can have a $0 cash award. The rapid path is an optimistic timing stress test; actual routes, traffic, early bonuses, achievements and event multipliers can make earnings different. Saved players keep their existing balances and previously earned awards when tuning changes.
 
 ### Five active minutes in the game
 
+On 2026-10-18, a fresh guest drove the production-matching v0.0.32 / protocol 46 build in local Chrome, with no purchases, event multiplier or self-drive. At 5:01 active, five deliveries had raised cash from $2,500 to $8,660: $6,160 gross. The first fare was $689 with $600 in delivery awards; the third was $573 with a $350 checkpoint and $400 Neighborhood Regular award; the fifth was $819 with a $600 Five on the Road award. The run included building collisions and use of the in-game unstuck control; it took more than five wall-clock minutes and is one route, not a typical-player benchmark.
+
+The subsequent tuning reduces the maximum pickup bonus from 40% to 25% and the early-delivery bonus from 75% to 35%. First Delivery now pays $350, Neighborhood Regular $200, and Five on the Road $400. The floor and checkpoint stay unchanged. The table above reruns the same assumed-time scenarios under the updated rules.
+
+In a second manual run on v0.0.35 / protocol 48, a fresh guest earned $2,805 across three deliveries in 5:02 active and paid one $68 police fine, ending with $5,237. The first and third trips ran late after building collisions; the second was on time. The driver bought nothing and used no self-drive. A pause and reconnect reset the HUD timer but preserved the wallet and assignment; the total combines 1:02 before reconnect and 4:00 afterward. The two manual runs followed different routes.
+
+In a separate fresh v0.0.33 game, the first manually completed delivery raised cash from $2,805 to $3,899. A local server reload interrupted the celebration, but reconnecting showed the next order and one completed delivery.
+
 On 2026-10-18, before the achievement-tier update, a fresh local driver used Street Pilot for three deliveries, reopening the route at each pickup and drop-off. At 5:01 active, the wallet showed $2,539 and the room's lifetime-earnings counter showed $3,539. The driver started with $2,500 and spent $3,500: $750 paint, $450 decal, a $2,000 sport motor and three $100 OTA charges. The first delivery paid $613 plus a $500 First Delivery award; the second paid $564 plus location rewards; the third paid $691 plus the $350 checkpoint and Neighborhood Regular award. The locked level-1 paint and decal options were visible, and the driver remained at level 0.
 
-This was one self-driving route with shop visits on a busy development machine, and took longer than five wall-clock minutes. It earned less than the four-delivery steady model and does not establish typical manual-driving income. A slow completed delivery previously could pay nothing; the current rules retain at least half its distance-adjusted base fare. In the 45/150-second scenario that raises the first fare from $32 to $300. With the new $100 pickup tier, five-minute gross is $900.
+This was one self-driving route with shop visits on a busy development machine, and took longer than five wall-clock minutes. It does not establish typical manual-driving income. A slow completed delivery previously could pay nothing; the current rules retain at least half its distance-adjusted base fare. In the 45/150-second scenario that raises the first fare from $32 to $300. With the $100 pickup tier and revised first-delivery award, five-minute gross is $750.
 
 The pacing target is at most a 25-minute P90 longest gap between one-off achievements during the first two active hours, and two to four one-off achievements in each 30-minute block. These are diagnostics for comparing ideas, not a proven measure of fun. We count individual awards separately from notifications grouped when one action earns several awards. Repeatable checkpoints and progress indicators are separate from both.
 

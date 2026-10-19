@@ -414,21 +414,26 @@ export class DriverProfile extends DurableObject<Env> {
           let assignment:Extract<DriverOutcome,{ok:true}>['assignment'];
           if(next.order.search){
             // The action must not commit until its next order is fully
-            // assigned. Bind each checkpoint to this exact projection.
+            // assigned. A deployment can change the projected balance and
+            // accessible destinations while an uncommitted search is saved.
             const context=JSON.stringify({order:next.order,completed:next.completed,level:next.level});
-            if(checkpoint && checkpoint.context!==context)return {ok:false,reason:'conflict'};
-            if(!checkpoint?.done){
+            let matchingCheckpoint=checkpoint;
+            if(matchingCheckpoint && matchingCheckpoint.context!==context){
+              await txn.delete(assignmentKey);
+              matchingCheckpoint=undefined;
+            }
+            if(!matchingCheckpoint?.done){
               const delivery=initialDelivery(next.order.search.origin);
               Object.assign(delivery,{level:next.level,completed:next.completed,order:structuredClone(next.order)});
               return {kind:'assignment',context,delivery};
             }
-            if(checkpoint.delivery.order.search)throw new Error('Completed assignment still contains a search');
-            next.order=structuredClone(checkpoint.delivery.order);
-            if(checkpoint.delivery.lastReroute){
-              const {reason,origin,level}=checkpoint.delivery.lastReroute;
+            if(matchingCheckpoint.delivery.order.search)throw new Error('Completed assignment still contains a search');
+            next.order=structuredClone(matchingCheckpoint.delivery.order);
+            if(matchingCheckpoint.delivery.lastReroute){
+              const {reason,origin,level}=matchingCheckpoint.delivery.lastReroute;
               assignment={reason,...(origin?{origin}:{}),...(level!==undefined?{level}:{})};
             }
-          } else if(checkpoint)return {ok:false,reason:'conflict'};
+          }
           const revision=record.revision+1;
           result={ok:true,revision,progress:next,awards,...(deliveryResult?{delivery:deliveryResult}:{}),...(achievementResult?{achievement:achievementResult}:{}),...(assignment?{assignment}:{})};
           await txn.put('driver',{...record,revision,sequence:intent.sequence,progress:next,incomeActivated:true} satisfies DriverRecord);
