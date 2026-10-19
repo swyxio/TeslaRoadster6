@@ -123,6 +123,7 @@ jobs:
         run: |
           pnpm build
           pnpm exec playwright install --with-deps chromium
+          command -v ffprobe > /dev/null || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
           pnpm exec wrangler dev --local --ip 127.0.0.1 --port 18787 \
             --persist-to "$RUNNER_TEMP/tesland-recorder-state" --show-interactive-dev-session false \
             > "$RUNNER_TEMP/tesland-recorder-server.log" 2>&1 &
@@ -133,7 +134,15 @@ jobs:
             if ! kill -0 "$server_pid" 2>/dev/null; then cat "$RUNNER_TEMP/tesland-recorder-server.log"; exit 1; fi
             sleep 1
           done
-          TESLAND_PLAYTEST_GPU=swiftshader pnpm exec tsx tests/playtest-recorder.integration.ts http://127.0.0.1:18787
+          TMPDIR="$RUNNER_TEMP" TESLAND_PLAYTEST_GPU=swiftshader pnpm exec tsx tests/playtest-recorder.integration.ts http://127.0.0.1:18787
+      - name: Upload recorder diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesland-recorder-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tesland-recorder-test-*/
+          if-no-files-found: warn
+          retention-days: 7
 
   measure:
     name: Paired local performance observation

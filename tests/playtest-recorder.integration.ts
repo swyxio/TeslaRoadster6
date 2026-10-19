@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
+import { compareRecording, inspectCaptureTraces, inspectVideos } from '../scripts/recording-quality.mjs';
 
 const origin = new URL(process.argv[2] ?? 'http://127.0.0.1:8787');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname)) throw new Error('Use a local disposable game only.');
@@ -99,7 +100,8 @@ try {
   const replayTarget = new URL(origin);
   replayTarget.searchParams.set('room', `replay-${randomBytes(6).toString('hex')}`);
   const replayOutput = join(dirname(output), 'replay');
-  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', 'integration-test', '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const pairedRef = 'a'.repeat(40); // Fixture identity, not a source-revision assertion.
+  const replayChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', replayTarget.href, '--target-ref', pairedRef, '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', replayOutput], { stdio: ['ignore', 'ignore', 'pipe'] });
   let replayError = '';
   replayChild.stderr.on('data', chunk => { replayError += chunk; });
   assert.equal(await new Promise<number | null>(resolve => replayChild.once('exit', resolve)), 0, replayError);
@@ -107,6 +109,24 @@ try {
   assert.equal(replayManifest.status, 'complete');
   assert.ok(replayManifest.events.some((event: { type: string; sample?: { speed?: string } }) => event.type === 'sample' && Number(event.sample?.speed) > 0), 'Replayed controls must move the car.');
   assert.ok(replayManifest.events.some((event: { type: string; sample?: { intervalsMs?: number[] } }) => event.type === 'frameStop' && (event.sample?.intervalsMs?.length ?? 0) >= 2), 'Replay must capture animation intervals.');
+  const controlTarget = new URL(origin);
+  controlTarget.searchParams.set('room', `control-${randomBytes(6).toString('hex')}`);
+  const controlOutput = join(dirname(output), 'control');
+  const controlChild = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/playtest-record.ts', '--url', controlTarget.href, '--target-ref', pairedRef, '--scenario', join(output, 'replay.json'), '--trajectory', '--gpu', gpu, '--out', controlOutput, '--no-video'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let controlError = '';
+  controlChild.stderr.on('data', chunk => { controlError += chunk; });
+  assert.equal(await new Promise<number | null>(resolve => controlChild.once('exit', resolve)), 0, controlError);
+  const controlManifest = JSON.parse(await readFile(join(controlOutput, 'manifest.json'), 'utf8'));
+  const quality = compareRecording(controlManifest, replayManifest);
+  const traces = await inspectCaptureTraces(replayManifest, join(replayOutput, 'manifest.json'));
+  const videos = await inspectVideos(replayManifest, join(replayOutput, 'manifest.json'));
+  assert.equal(quality.playerFidelity, 'UNVERIFIED');
+  // Slow software rendering may leave too few intervals for a statistical
+  // comparison; it must HOLD, not turn this functional check into a budget.
+  assert.ok(quality.reasons.every((reason: string) => reason.startsWith('Animation callback measurements')), quality.reasons.join(' '));
+  assert.ok(traces.every((trace: { status: string }) => trace.status === 'available'), JSON.stringify(traces));
+  assert.ok(videos.every((video: { status: string }) => video.status === 'available'), JSON.stringify(videos));
+  await writeFile(join(dirname(output), 'quality.json'), JSON.stringify({ ...quality, captureTraces: traces, encodedVideos: videos }, null, 2) + '\n');
 
   // Observe real DOM touch events so releasing either finger is checked
   // independently of the runner's own bookkeeping.
