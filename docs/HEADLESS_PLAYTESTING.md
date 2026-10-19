@@ -261,8 +261,13 @@ The quality report requires `ffprobe` on the path and returns `HOLD` when the
 run, timestamps, video stream, enabled audio stream or matching configuration are incomplete. It
 compares animation callback intervals, describes long screencast gaps, and
 reports host load. Recording quality is `HOLD` for those gaps or other warnings;
-otherwise it remains `UNVERIFIED` until a person checks player fidelity. It
-checks metadata and video packets, not whether images
+otherwise it remains `UNVERIFIED`. There is no automated approval path, even
+after manual review, so it always reports `qualityAcceptance: HOLD`. The diagnostic CLI exits
+1 for detected issues and 2 when its checks are clean but fidelity is still
+unverified; neither is an approval. The optional CI video run fails closed for
+both `HOLD` and `UNVERIFIED` while retaining the recording and diagnostic
+artifacts. Its automated checks do not approve player fidelity.
+It checks metadata and video packets, not whether images
 are unique or look smooth. The frame callback transfers JPEG data and adds
 recording overhead. Capture timestamps are not physical display or GPU timing;
 the full commit is an operator label and must be checked against the served

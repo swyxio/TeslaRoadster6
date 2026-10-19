@@ -81,7 +81,7 @@ export function compareRecording(control, recorded) {
     if (segment?.firstCallbackDelayMs >= 100) warnings.push(`${segment.video}: first screencast callback arrived ${round(segment.firstCallbackDelayMs)} ms after starting.`);
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
-  return { comparison: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
+  return { comparison: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED', qualityAcceptance: 'HOLD', playerFidelity: 'UNVERIFIED', reasons, warnings, withoutVideo, withVideo,
     capture: { requestedFps: recorded?.capture?.requestedFps ?? null, audio: recorded?.capture?.audio ?? null, segments: Array.isArray(segments) ? segments : [] },
     hostLoadAverage: { withoutVideo: load(control), withVideo: load(recorded) },
     limitations: [
@@ -89,7 +89,7 @@ export function compareRecording(control, recorded) {
       'Animation intervals are browser callbacks. Screencast frame timestamps and tab recording start/stop times are different capture observations; neither measures physical display presentation or GPU completion.',
       'Capture adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.',
       'When audio is enabled, the recorded run includes audio capture overhead, and its separate audio files are not proof of audible synchronization.',
-      'Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay.'
+      'Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay. Automated quality acceptance remains HOLD.'
     ] };
 }
 
@@ -252,24 +252,34 @@ export async function inspectRecordingArtifact(manifest, manifestPath) {
     if (segment?.callbackSilenceAtStopMs >= 100) warnings.push(`${segment.video}: ${round(segment.callbackSilenceAtStopMs)} ms without a callback before stopping.`);
   }
   return { artifact: reasons.length ? 'HOLD' : 'available', recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED',
-    playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles, durationChecks,
+    qualityAcceptance: 'HOLD', playerFidelity: 'UNVERIFIED', reasons, warnings, frameIntervals, encodedVideos, captureTraces, audioFiles, durationChecks,
     limitations: ['Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression.'] };
+}
+
+// Keep the saved on/off comparison consistent with the inspected artifact.
+export function mergeRecordingInspection(comparison, inspected) {
+  const reasons = [...comparison.reasons, ...(inspected.artifact === 'available' ? [] : inspected.reasons)];
+  const warnings = [...new Set([...comparison.warnings, ...inspected.warnings])];
+  return { ...comparison, artifact: inspected.artifact,
+    comparison: inspected.artifact === 'available' ? comparison.comparison : 'HOLD',
+    recordingQuality: reasons.length || warnings.length ? 'HOLD' : 'UNVERIFIED', qualityAcceptance: 'HOLD',
+    reasons, warnings, encodedVideos: inspected.encodedVideos, captureTraces: inspected.captureTraces,
+    audioFiles: inspected.audioFiles, durationChecks: inspected.durationChecks };
+}
+
+// A diagnostic observation alone never approves player-visible quality.
+export function recordingQualityApproved(result) {
+  return result?.recordingQuality === 'VERIFIED' && result?.qualityAcceptance === 'APPROVED' && result?.playerFidelity === 'VERIFIED';
 }
 
 async function main() {
   const [controlPath, recordedPath, ...rest] = process.argv.slice(2);
   if (!controlPath || !recordedPath || rest.length) throw new Error('Usage: node scripts/recording-quality.mjs NO_VIDEO_MANIFEST RECORDED_MANIFEST');
   const [control, recorded] = await Promise.all([controlPath, recordedPath].map(async path => JSON.parse(await readFile(path, 'utf8'))));
-  const result = compareRecording(control, recorded);
   const inspected = await inspectRecordingArtifact(recorded, recordedPath);
-  result.encodedVideos = inspected.encodedVideos;
-  result.captureTraces = inspected.captureTraces;
-  result.audioFiles = inspected.audioFiles;
-  result.durationChecks = inspected.durationChecks;
-  result.warnings = [...new Set([...result.warnings, ...inspected.warnings])];
-  if (inspected.artifact !== 'available') { result.comparison = 'HOLD'; result.reasons.push(...inspected.reasons); }
-  if (result.reasons.length || result.warnings.length) result.recordingQuality = 'HOLD';
+  const result = mergeRecordingInspection(compareRecording(control, recorded), inspected);
   console.log(JSON.stringify(result, null, 2));
-  if (result.recordingQuality === 'HOLD') process.exitCode = 1;
+  // Clean packet diagnostics do not establish playback or player fidelity.
+  process.exitCode = result.recordingQuality === 'HOLD' ? 1 : 2;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

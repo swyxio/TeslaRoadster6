@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos } from '../scripts/recording-quality.mjs';
+import { compareRecording, inspectAudio, inspectCaptureTraces, inspectRecordingArtifact, inspectVideos, mergeRecordingInspection, recordingQualityApproved } from '../scripts/recording-quality.mjs';
 
 const ref = 'a'.repeat(40), hash = 'b'.repeat(64);
 const run = (video: boolean) => ({
@@ -33,6 +33,7 @@ test('recording comparison describes long callback gaps without claiming player 
   const noGaps = run(true);
   noGaps.capture.segments[0].intervalMs.gapsAtLeast100Ms = 0;
   assert.equal(compareRecording(run(false), noGaps).recordingQuality, 'UNVERIFIED');
+  assert.equal(compareRecording(run(false), noGaps).qualityAcceptance, 'HOLD');
   const slow = run(true);
   slow.events[2].sample!.intervalsMs = Array(100).fill(116.7);
   assert.match(compareRecording(run(false), slow).warnings.join(' '), /callback p95 was 116.7 ms/);
@@ -196,10 +197,38 @@ test('tab capture verifies source, bytes and timing while preserving gap warning
     assert.equal(checked.artifact, 'available');
     assert.equal(checked.playerFidelity, 'UNVERIFIED');
     assert.match(checked.warnings.join(' '), /packet gaps/);
+    const merged = mergeRecordingInspection(compareRecording(control, recorded), checked);
+    assert.equal(merged.comparison, 'available');
+    assert.equal(merged.recordingQuality, 'HOLD');
+    assert.match(merged.warnings.join(' '), /packet gaps/);
+    assert.equal(merged.qualityAcceptance, 'HOLD');
+    assert.equal(recordingQualityApproved(merged), false);
+    const missingArtifact = mergeRecordingInspection(compareRecording(control, recorded), { ...checked, artifact: 'HOLD', reasons: ['Missing video.'] });
+    assert.equal(missingArtifact.comparison, 'HOLD');
+    assert.equal(missingArtifact.recordingQuality, 'HOLD');
+    assert.match(missingArtifact.reasons.join(' '), /Missing video/);
     assert.equal((await inspectRecordingArtifact({ ...recorded, capture: { ...recorded.capture, source: 'unknown' } }, recordedPath)).artifact, 'HOLD');
     const cli = spawnSync(process.execPath, ['scripts/recording-quality.mjs', controlPath, recordedPath], { encoding: 'utf8' });
     assert.equal(cli.status, 1);
     assert.match(JSON.parse(cli.stdout).warnings.join(' '), /packet gaps/);
+    // A static video can have perfect packet cadence, so clean diagnostics
+    // must not become a quality approval or a successful quality CLI exit.
+    const cleanEncode = spawnSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=16x16:r=30:d=1', '-c:v', 'libvpx', '-an', video]);
+    assert.equal(cleanEncode.status, 0, cleanEncode.stderr.toString());
+    trace.bytes = statSync(video).size; trace.settings.frameRate = 30;
+    writeFileSync(tracePath, JSON.stringify(trace));
+    const clean = await inspectRecordingArtifact(recorded, recordedPath);
+    assert.equal(clean.artifact, 'available');
+    assert.equal(clean.recordingQuality, 'UNVERIFIED');
+    assert.equal(clean.qualityAcceptance, 'HOLD');
+    const cleanMerged = mergeRecordingInspection(compareRecording(control, recorded), clean);
+    assert.equal(cleanMerged.recordingQuality, 'UNVERIFIED');
+    assert.equal(cleanMerged.qualityAcceptance, 'HOLD');
+    assert.equal(recordingQualityApproved(cleanMerged), false);
+    assert.equal(recordingQualityApproved({ ...cleanMerged, qualityAcceptance: 'APPROVED', playerFidelity: 'VERIFIED' }), false);
+    const cleanCli = spawnSync(process.execPath, ['scripts/recording-quality.mjs', controlPath, recordedPath], { encoding: 'utf8' });
+    assert.equal(cleanCli.status, 2);
+    assert.equal(JSON.parse(cleanCli.stdout).qualityAcceptance, 'HOLD');
     assert.equal(compareRecording({ ...control, capture: { ...control.capture, source: 'screencast' } }, recorded).comparison, 'HOLD');
     trace.bytes++;
     writeFileSync(tracePath, JSON.stringify(trace));

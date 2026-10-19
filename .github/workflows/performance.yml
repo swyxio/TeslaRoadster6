@@ -244,14 +244,14 @@ jobs:
             --out "$RUNNER_TEMP/tesland-performance/candidate-video" --gpu metal --port 18789 --video --video-source "$VIDEO_SOURCE" \
             > "$RUNNER_TEMP/tesland-performance/candidate-video.log" 2>&1
       - id: video_inspection
-        name: Inspect each recorded artifact
+        name: Inspect collected recordings (not quality approval)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         continue-on-error: true
         run: |
           node --input-type=module - "$RUNNER_TEMP/tesland-performance/base-video" "$RUNNER_TEMP/tesland-performance/candidate-video" <<'NODE'
           import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
           import { join } from 'node:path';
-          import { compareRecording, inspectRecordingArtifact } from './candidate/scripts/recording-quality.mjs';
+          import { compareRecording, inspectRecordingArtifact, mergeRecordingInspection, recordingQualityApproved } from './candidate/scripts/recording-quality.mjs';
           let failed = false;
           await appendFile(process.env.GITHUB_STEP_SUMMARY, '### Recording artifacts\n');
           for (const dir of process.argv.slice(2)) {
@@ -261,21 +261,21 @@ jobs:
               const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
               result = await inspectRecordingArtifact(manifest, manifestPath);
             } catch (error) {
-              result = { artifact: 'HOLD', recordingQuality: 'HOLD', playerFidelity: 'UNVERIFIED', reasons: [`Manifest unavailable: ${error.message}`], warnings: [] };
+              result = { artifact: 'HOLD', recordingQuality: 'HOLD', qualityAcceptance: 'HOLD', playerFidelity: 'UNVERIFIED', reasons: [`Manifest unavailable: ${error.message}`], warnings: [] };
             }
             await mkdir(dir, { recursive: true });
             await writeFile(join(dir, 'recording-inspection.json'), JSON.stringify(result, null, 2) + '\n');
-            await appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${dir.split('/').at(-1)}: trace and video packets ${result.artifact}; recording quality ${result.recordingQuality}; player fidelity ${result.playerFidelity}.\n`);
+            await appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${dir.split('/').at(-1)}: trace and video packets ${result.artifact}; recording quality ${result.recordingQuality}; quality acceptance ${result.qualityAcceptance}; player fidelity ${result.playerFidelity}.\n`);
             for (const item of [...result.reasons, ...result.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - ${item}\n`);
-            if (result.artifact !== 'available' || result.recordingQuality === 'HOLD') failed = true;
+            if (result.artifact !== 'available' || !recordingQualityApproved(result)) failed = true;
             try {
               const control = JSON.parse(await readFile(join(dir.replace(/-video$/, ''), 'browser', 'manifest.json'), 'utf8'));
               const recorded = JSON.parse(await readFile(manifestPath, 'utf8'));
-              const comparison = compareRecording(control, recorded);
+              const comparison = mergeRecordingInspection(compareRecording(control, recorded), result);
               await writeFile(join(dir, 'recording-comparison.json'), JSON.stringify(comparison, null, 2) + '\n');
-              await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - Video on/off comparison: ${comparison.comparison}; quality ${comparison.recordingQuality}.\n`);
+              await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - Video on/off comparison: ${comparison.comparison}; quality ${comparison.recordingQuality}; quality acceptance ${comparison.qualityAcceptance}.\n`);
               for (const item of [...comparison.reasons, ...comparison.warnings]) await appendFile(process.env.GITHUB_STEP_SUMMARY, `    - ${item}\n`);
-              if (comparison.recordingQuality === 'HOLD') failed = true;
+              if (!recordingQualityApproved(comparison)) failed = true;
             } catch (error) {
               await appendFile(process.env.GITHUB_STEP_SUMMARY, `  - Video on/off comparison: HOLD (${error.message}).\n`);
               failed = true;
@@ -290,12 +290,23 @@ jobs:
           VIDEO_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.record_video }}
         run: |
           mkdir -p "$RUNNER_TEMP/tesland-performance"
+          if [ "$VIDEO_REQUESTED" = true ]; then
+            echo '**Recording quality acceptance: HOLD.** Collection and automated checks cannot approve player fidelity. This optional video run remains on hold; inspect playback and compare against the player experience on representative hardware before relying on it.' >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f candidate/scripts/performance-compare.mjs ]; then
             node candidate/scripts/performance-compare.mjs \
               "$RUNNER_TEMP/tesland-performance/base/report.json" \
               "$RUNNER_TEMP/tesland-performance/candidate/report.json" \
               "$RUNNER_TEMP/tesland-performance/summary.md" >> "$GITHUB_STEP_SUMMARY"
             if [ "$VIDEO_REQUESTED" = true ]; then
+              for side in base candidate; do
+                echo "### $side video on/off route" >> "$GITHUB_STEP_SUMMARY"
+                node candidate/scripts/performance-compare.mjs \
+                  "$RUNNER_TEMP/tesland-performance/$side/report.json" \
+                  "$RUNNER_TEMP/tesland-performance/$side-video/report.json" \
+                  "$RUNNER_TEMP/tesland-performance/$side-video/on-off-route-summary.md" --require-route >> "$GITHUB_STEP_SUMMARY" || \
+                  echo 'The video on/off routes are unavailable or not comparable; inspect the artifact.' >> "$GITHUB_STEP_SUMMARY"
+              done
               echo '### Separate video pair' >> "$GITHUB_STEP_SUMMARY"
               node candidate/scripts/performance-compare.mjs \
                 "$RUNNER_TEMP/tesland-performance/base-video/report.json" \
@@ -314,7 +325,7 @@ jobs:
           path: ${{ runner.temp }}/tesland-performance/
           if-no-files-found: warn
           retention-days: 90
-      - name: Require complete observations
+      - name: Require complete collections (not quality approval)
         if: ${{ always() }}
         env:
           BASE_OUTCOME: ${{ steps.base.outcome }}
@@ -379,7 +390,7 @@ jobs:
           if (missing) process.exitCode = 1;
           NODE
             if [ "$VIDEO_INSPECTION_OUTCOME" != success ]; then
-              echo 'A requested recording failed artifact inspection; inspect recording-inspection.json.'
+              echo 'Recording quality acceptance is HOLD; inspect the recording and comparison artifacts.'
               exit 1
             fi
             node candidate/scripts/performance-compare.mjs \
