@@ -5,6 +5,7 @@ import { refillStationFor } from './charging';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
 import { body, contact, dimensions, verticalBounds } from './physics';
 import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
+import { buildingBoundsOverlap } from './building-bounds';
 import { primitiveExtent } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
@@ -722,7 +723,9 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
-  const nearby=nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width));
+  const size=dimensions(e.kind),radius=Math.hypot(size.length,size.width)/2;
+  const nearby=nearbyBuildings(e.x,e.z,Math.max(size.length,size.width))
+    .filter(b=>buildingBoundsOverlap(b,e.x-radius,e.x+radius,e.z-radius,e.z+radius));
   let landmarkVertical:ReturnType<typeof verticalBounds>|undefined,oldLandmarkVertical:ReturnType<typeof verticalBounds>|undefined;
   for(const b of nearby){
     if(b.parts){
@@ -760,13 +763,21 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   // An elevated roof or deck has a real underside: upward motion stops there
   // without filling the air below it with an invisible building.
   if(e.supportId===null&&e.vy>0){
-    const previousVertical=verticalBounds({...e,x:old.x,z:old.z,y:old.y,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
+    const previousPose={...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId};
+    const previousVertical=oldLandmarkVertical??verticalBounds(previousPose);
+    let current=landmarkVertical??verticalBounds(e);
     for(const b of nearby){
       if(!b.parts)continue;
+      const base=b.landmarkBase??0;
       for(const part of b.parts){
-        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
-        const current=verticalBounds(e);
-        if(surface&&previous&&previousVertical.max<=previous.bottom+.001&&current.max>surface.bottom){e.y=surface.bottom-(current.max-e.y);e.vy=0;}
+        const extent=primitiveExtent(part);
+        if(current.max<=base+extent.bottom||previousVertical.max>base+extent.top+.001)continue;
+        const surface=landmarkPartContact(b,part,e);
+        if(!surface||current.max<=surface.bottom)continue;
+        const previous=landmarkPartContact(b,part,previousPose);
+        if(previous&&previousVertical.max<=previous.bottom+.001){
+          e.y=surface.bottom-(current.max-e.y);e.vy=0;current=verticalBounds(e);
+        }
       }
     }
   }

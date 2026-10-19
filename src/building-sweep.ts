@@ -1,5 +1,6 @@
 import type { Entity } from '../shared/game';
 import type { Building } from '../shared/map';
+import { buildingBoundsOverlap } from '../shared/building-bounds';
 import { primitiveExtent } from '../shared/new-landmark-surfaces';
 import { contact, dimensions } from '../shared/physics';
 
@@ -10,6 +11,8 @@ type Pose=Pick<Entity,'kind'|'x'|'y'|'z'|'yaw'|'pitch'|'roll'|'supportId'>;
 // conservative circle because pitch, roll and support can change the envelope.
 export function buildingSweepBlocked(a:Pose,b:Pose,building:Building,landmarkPart=false):boolean {
   const spec=dimensions(a.kind),halfDiagonal=Math.hypot(spec.width,spec.length)/2,radius=halfDiagonal+.5;
+  if(building.parts&&!buildingBoundsOverlap(building,Math.min(a.x,b.x)-radius,Math.max(a.x,b.x)+radius,
+    Math.min(a.z,b.z)-radius,Math.max(a.z,b.z)+radius))return false;
   const supported=a.supportId==='ground'&&b.supportId==='ground'||
     (!!building.parts||landmarkPart)&&a.supportId===b.supportId&&a.supportId?.startsWith('roof:')===true;
   const upright=supported&&Number.isFinite(a.yaw)&&Number.isFinite(b.yaw)&&

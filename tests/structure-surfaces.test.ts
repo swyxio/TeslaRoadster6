@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import { BUILDINGS, FREMONT_SPACEPORT, buildingRoofHeight, nearbyBuildings, supportHeight } from '../shared/map';
 import { NORTH_LANDMARKS } from '../shared/north-landmarks';
+import { SOUTH_LANDMARKS } from '../shared/south-landmarks';
 import { addPlayer, createWorld, NEUTRAL, step } from '../shared/game';
 import { planNavigation } from '../shared/navigation';
 import { landmarkBlocksPose } from '../shared/landmark-collision';
@@ -28,6 +29,16 @@ function setup(){
  world.entities=[car];world.pickups=[];player.delivery.level=5;player.delivery.cash=1e8;
  return {world,car};
 }
+
+test('coordinate-keyed legacy structure catalogs have no ambiguous locations',()=>{
+ const places=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS,...EAST_SOUTH_ADDITIONS];
+ const locations=new Map<string,string>();
+ for(const place of places){
+  const key=`${place.x},${place.z}`;
+  assert.equal(locations.has(key),false,`${place.id} shares a profile location with ${locations.get(key)}`);
+  locations.set(key,place.id);
+ }
+});
 
 test('ordinary pitched roofs and round landmark caps match actual rendered rays',()=>withCanvas(()=>{
  const scene=new T.Scene();buildBay(scene);scene.updateMatrixWorld(true);
