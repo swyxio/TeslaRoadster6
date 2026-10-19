@@ -19,26 +19,34 @@
   };
   let recorder;
   let chunks;
+  const running = () => [...captures].filter(([context]) => context.state === 'running');
+  const transition = (instance, event, action) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Audio recorder ${event} timed out.`)), 10000);
+    const finish = callback => value => { clearTimeout(timer); callback(value); };
+    instance[`on${event}`] = finish(resolve);
+    instance.onerror = finish(() => reject(new Error(`Audio recorder failed to ${event}.`)));
+    try { action(); } catch (error) { clearTimeout(timer); reject(error); }
+  });
   window.__teslandAudioCapture = {
+    ready() { return running().length === 1; },
     async start() {
-      const running = [...captures].filter(([context]) => context.state === 'running');
-      if (running.length !== 1) throw new Error('Expected one running game audio graph. Trigger a game input before recording.');
+      const graphs = running();
+      if (graphs.length !== 1) throw new Error('Expected one running game audio graph. Trigger a game input before recording.');
       chunks = [];
-      recorder = new MediaRecorder(running[0][1].stream, { mimeType: 'audio/webm;codecs=opus' });
+      recorder = new MediaRecorder(graphs[0][1].stream, { mimeType: 'audio/webm;codecs=opus' });
       recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
-      await new Promise((resolve, reject) => {
-        recorder.onstart = resolve;
-        recorder.onerror = () => reject(new Error('Audio recorder failed to start.'));
-        recorder.start();
-      });
+      await transition(recorder, 'start', () => recorder.start());
+    },
+    async cancel() {
+      if (!recorder) return;
+      const current = recorder;
+      current.ondataavailable = null;
+      try { if (current.state !== 'inactive') await transition(current, 'stop', () => current.stop()); }
+      finally { recorder = undefined; chunks = undefined; }
     },
     async stop() {
       if (!recorder || recorder.state !== 'recording') throw new Error('Audio recorder is not recording.');
-      await new Promise((resolve, reject) => {
-        recorder.onstop = resolve;
-        recorder.onerror = () => reject(new Error('Audio recorder failed to stop.'));
-        recorder.stop();
-      });
+      await transition(recorder, 'stop', () => recorder.stop());
       const data = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
