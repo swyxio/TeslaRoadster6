@@ -1,5 +1,6 @@
 // One real Session and one local Wrangler room, with controlled delays only.
 // Run: pnpm exec tsx tests/input-trace.integration.ts
+// Set INPUT_TRACE_MODE=paired for the short, repeatable client/room trace.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp,rm,writeFile } from 'node:fs/promises';
@@ -10,12 +11,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Session } from '../src/session';
 import { NEUTRAL } from '../shared/game';
 
-type ClientInput={seq:number;targetTick:number;lastSnapshotTick:number;lastSnapshotAt:number;generatedAt:number;forwardedAt?:number;bufferedAmount:number};
+type ClientInput={seq:number;targetTick:number;lastSnapshotTick:number;lastSnapshotAt:number;generatedAt:number;forwardedAt?:number;bufferedAmount:number;phase:string};
 type Trace={events:Array<Record<string,any>>;dropped:number};
 const NativeSocket=globalThis.WebSocket;
 const originals={WebSocket:globalThis.WebSocket,window:globalThis.window,location:globalThis.location};
 let wireTick=-1,deliveredTick=-1,holdIncoming=false,holdNextInput=false,badEpochNext=false,futureNext=false;
 let deliveredAt=0,clientDropped=0;
+let phase='fixture',uplinkDelayMs=0;
 const heldIncoming:MessageEvent[]=[];
 const sent:ClientInput[]=[];
 const clientEvents:Array<Record<string,unknown>>=[];
@@ -25,6 +27,8 @@ class Socket {
   static OPEN=1;
   static last:Socket;
   private socket:WebSocket;
+  private timers=new Set<ReturnType<typeof setTimeout>>();
+  private lastForwardDue=0;
   onmessage?: (event:MessageEvent)=>void;
   onclose?: (event:CloseEvent)=>void;
   onerror?: (event:Event)=>void;
@@ -53,14 +57,21 @@ class Socket {
       if(badEpochNext){badEpochNext=false;message.roomEpoch='00000000-0000-4000-8000-000000000000';data=JSON.stringify(message);}
       if(futureNext){futureNext=false;message.targetTick+=100;data=JSON.stringify(message);}
       const sample:ClientInput={seq:message.seq,targetTick:message.targetTick,lastSnapshotTick:deliveredTick,lastSnapshotAt:deliveredAt,
-        generatedAt:performance.now(),bufferedAmount:this.socket.bufferedAmount};sent.push(sample);
+        generatedAt:performance.now(),bufferedAmount:this.socket.bufferedAmount,phase};sent.push(sample);
       recordClient({kind:'input-generated',...sample});
       if(holdNextInput){assert.equal(heldInput,null);holdNextInput=false;heldInput={data,sample};return;}
+      if(uplinkDelayMs||this.timers.size){
+        // Retain WebSocket order even as the artificial delay is removed.
+        const due=this.lastForwardDue=Math.max(performance.now()+uplinkDelayMs,this.lastForwardDue);
+        const timer=setTimeout(()=>{this.timers.delete(timer);sample.forwardedAt=performance.now();
+          recordClient({kind:'input-forwarded',seq:sample.seq,at:sample.forwardedAt});this.socket.send(data);},Math.max(0,due-performance.now()));
+        this.timers.add(timer);return;
+      }
       sample.forwardedAt=performance.now();recordClient({kind:'input-forwarded',seq:sample.seq,at:sample.forwardedAt});
     }
     this.socket.send(data);
   }
-  close(){this.socket.close();}
+  close(){for(const timer of this.timers)clearTimeout(timer);this.timers.clear();this.socket.close();}
 }
 const portServer=createServer();await new Promise<void>(done=>portServer.listen(0,'127.0.0.1',done));
 const port=(portServer.address() as {port:number}).port;await new Promise<void>(done=>portServer.close(()=>done()));
@@ -84,6 +95,30 @@ try{
   await until(async()=>{try{return (await fetch(base+'/health')).ok;}catch{return false;}},'Wrangler startup',60000);
   Object.assign(globalThis,{WebSocket:Socket,window:globalThis,location:{protocol:'http:',host:`127.0.0.1:${port}`}});
   session.join('sandbox-trace','Trace');await until(()=>session.status==='online'&&deliveredTick>=0,'Session online');
+  if(process.env.INPUT_TRACE_MODE==='paired'){
+    // Drive the actual Session with changed controls at roughly 20 Hz. The
+    // two faults are injected independently, followed by a recovery period.
+    for(let i=0;i<54;i++){
+      if(i===0)phase='steady';
+      if(i===5)session.queueEdge('jump',1);
+      if(i===12){phase='downlink-held';holdIncoming=true;recordClient({kind:'hold-incoming',at:performance.now(),tick:deliveredTick});}
+      if(i===14)session.queueEdge('flip',1);
+      if(i===17){Socket.last.releaseIncoming();recordClient({kind:'release-incoming',at:performance.now(),tick:deliveredTick});phase='uplink-delayed';uplinkDelayMs=75;}
+      if(i===27){phase='recovery';uplinkDelayMs=0;}
+      session.tick(.05,{...NEUTRAL,throttle:1,steer:i%2?1:-1});
+      await sleep(50);
+    }
+    await until(()=>sent.every(sample=>sample.forwardedAt!==undefined),'forward delayed commands');
+    await sleep(450);
+    const result=await trace();assert.equal(result.dropped,0);assert.equal(clientDropped,0);
+    const receipts=result.events.filter(event=>event.kind==='receipt'&&event.schedulerCalled);
+    assert.equal(receipts.length,sent.length,'every forwarded input reached the scheduler');
+    assert.deepEqual(receipts.map(event=>event.seq),sent.map(sample=>sample.seq),'input order is preserved');
+    assert.ok(result.events.some(event=>event.kind==='snapshot-send'));
+    console.log(JSON.stringify({mode:'paired',sent,trace:result,clientTrace:{events:clientEvents,dropped:clientDropped},
+      droppedInputEdges:session.droppedInputEdges},null,2));
+    console.error('PASS: short real Session/room trace; injected delays, not a 64-player or production measurement.');
+  }else{
   // Normal input and a real queued jump, observing the edge after physics.
   session.queueEdge('jump',1);session.tick(.05,{...NEUTRAL,throttle:1,jump:1});
   await until(()=>sent.length===1,'first command');const normal=sent.at(-1)!,normalReceipt=await receipt(normal.seq);
@@ -144,6 +179,7 @@ try{
     clientTrace:{events:clientEvents,dropped:clientDropped}};
   console.log(JSON.stringify(summary,null,2));
   console.error('PASS: real Session and room trace distinguish the injected delays; not a load or production measurement.');
+  }
 }finally{
   session.disconnect();Object.assign(globalThis,originals);
   try{process.kill(-child.pid!,'SIGTERM');}catch{/* already exited */}

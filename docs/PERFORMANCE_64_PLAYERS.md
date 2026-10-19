@@ -153,6 +153,35 @@ preview overlay and a fresh timing reservation would be needed for a matched
 64-player investigation. This fixture is not configured for preview and must
 not be deployed; its hostname check is not a deployment security boundary.
 
+An additional sequential local pair used the same trace overlay and runner on
+the `e07f0be` runtime (baseline checkout `abaf712`) and candidate `837789f`,
+whose only runtime difference was the serializer. Each used one real Session
+and one room: 12 steady commands, five during a roughly 255 ms ordered incoming
+frame hold, ten with a roughly 75 ms outgoing delay, and 27 during recovery.
+All 54 commands reached the scheduler in order and were accepted on both
+sides; the queued jump and flip were processed. No event-ring or queued-edge
+drops were recorded. After the outgoing delay ended, recovery command targets
+were initially six to eight ticks ahead of server receipt, versus two to four
+in the earlier phases; by the final seven recovery sends they were six to
+seven ticks ahead on baseline and four to five on candidate. Those values are
+scheduler tick distances, not measured network or visible control latency.
+The capture stopped sending afterward, so the watchdog's eventual neutral
+controls are expected. The traces do not reproduce the hosted rejection bursts,
+prove a difference between versions, or cover a slow room, contacts or rendered
+motion. The test runs used an 18-logical-CPU Mac with one-minute load roughly
+12–13; source identities, intervals and the sanitized event rings are retained
+in the [paired trace](benchmarks/2026-10-18-paired-input-trace-v48.json.gz).
+
+The reproducible `scripts/compare-snapshot-serialization.ts` correctness check
+compared complete baseline and candidate wire strings across 84 synthetic
+recipient/tick cases, including privacy, owner visibility, shared vehicles,
+interest boundaries and changed next-tick state. All matched; the
+[result](benchmarks/2026-10-18-snapshot-correctness-v48.json) records the
+source hashes and digest. This comparison is not a performance measurement.
+The serializer can be reviewed separately from any scheduling fix, but a
+current-main matched assembly comparison and room regression checks still
+need to pass on the exact release candidate.
+
 ## External experience and implications
 
 - [Glenn Fiedler's snapshot compression experiments](https://gafferongames.com/post/snapshot_compression/)
