@@ -9,6 +9,7 @@ import {SHOPS} from '../shared/upgrades';
 import {BILLBOARDS, BILLBOARD_WIDTH} from '../shared/billboards';
 import {contact} from '../shared/physics';
 import {generateRoadsideBuildings, type RoadsideExclusion} from '../shared/roadside-buildings';
+import {NEW_LANDMARKS} from '../shared/new-landmarks';
 
 const point=(p:{x:number;z:number},size=40):RoadsideExclusion=>({...p,w:size,d:size});
 const rect=(p:{x:number;z:number;width:number;length:number;yaw:number}):RoadsideExclusion=>({x:p.x,z:p.z,w:p.width,d:p.length,yaw:p.yaw});
@@ -26,7 +27,8 @@ const body=(r:RoadsideExclusion)=>({...r,yaw:r.yaw??0});
 const enlarged=(b:RoadsideExclusion,margin:number)=>({...body(b),w:b.w+margin*2,d:b.d+margin*2});
 
 test('roadside buildings are deterministic, bounded, and distributed along both coasts',()=>{
-  assert.deepEqual(generateRoadsideBuildings({...inputs,exclusions:ROADSIDE_EXCLUSIONS}),placed);
+  // The map augments generated buildings with cached physical roof parts.
+  assert.deepEqual(generateRoadsideBuildings({...inputs,exclusions:ROADSIDE_EXCLUSIONS}),placed.map(({parts,...building})=>building));
   assert.ok(placed.length>=40&&placed.length<=120,`${placed.length} buildings`);
   assert.ok(placed.some(b=>b.district==='peninsula')&&placed.some(b=>b.district==='east-bay'));
   assert.ok(placed.every(b=>b.style==='midrise'&&b.h>=8&&b.h<=17&&b.z>=650));
@@ -34,7 +36,7 @@ test('roadside buildings are deterministic, bounded, and distributed along both 
 
 test('roadside buildings have supported flat roofs and clear roads, buildings, activities and billboards',()=>{
   for(const [index,b] of placed.entries()){
-    assert.equal(buildingRoofHeight(b,b.x,b.z),b.h);
+    assert.ok(Math.abs(buildingRoofHeight(b,b.x,b.z)-(b.h+.4))<1e-9);
     for(let ix=-2;ix<=2;ix++)for(let iz=-2;iz<=2;iz++){
       const x=b.x+ix*(b.w/2+4)/2,z=b.z+iz*(b.d/2+4)/2;
       assert.ok(isLand(x,z));
@@ -43,6 +45,7 @@ test('roadside buildings have supported flat roofs and clear roads, buildings, a
     for(const road of ROADS)assert.equal(contact(enlarged(b,12),body({...road,yaw:road.angle??0})),null,`road ${index}`);
     for(const other of [...otherBuildings,...placed.slice(0,index)])assert.equal(contact(enlarged(b,8),body(other)),null,`building ${index}`);
     for(const area of exclusions)assert.equal(contact(enlarged(b,10),body(area)),null,`activity ${index}`);
+    for(const landmark of NEW_LANDMARKS)assert.equal(contact(enlarged(b,10),body(landmark)),null,`${landmark.id}: roadside building ${index}`);
     for(const billboard of BILLBOARDS)assert.equal(contact(enlarged(b,2),{...billboard,w:BILLBOARD_WIDTH,d:.35}),null,`billboard ${index}`);
     const railClearance=Math.hypot(b.w,b.d)/2+10;
     for(let i=1;i<CALTRAIN_TRACK.length;i++){

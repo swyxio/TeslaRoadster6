@@ -3,13 +3,25 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, interact, removePlayer, resetPlayer, simulationSubsteps, step, NEUTRAL, BUILDINGS } from '../shared/game';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { refillStationFor } from '../shared/charging';
-import { HILL, terrainHeight } from '../shared/map';
+import { HILL, terrainHeight, buildingRoofHeight } from '../shared/map';
+import { NEW_LANDMARKS } from '../shared/new-landmarks';
+import { dimensions } from '../shared/physics';
 import { trafficInput } from '../shared/traffic';
 import { parseMessage, roomCapacity, roomSlug } from '../worker/protocol';
 import { ScheduledInput } from '../shared/tick-input';
 import { RoomInputClient } from './room-input-client';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
+// Integration oracle: sample the point-surface API across the car's footprint.
+// Independent actual-mesh agreement and extrema checks live in structure-contact.
+function sampledRoofContact(roof:typeof BUILDINGS[number],car:ReturnType<typeof setup>['car']):number {
+ const size=dimensions(car.kind),c=Math.cos(car.yaw),s=Math.sin(car.yaw);let highest=0;
+ for(let ix=-10;ix<=10;ix++)for(let iz=-10;iz<=10;iz++){
+  const x=ix*size.width/20,z=iz*size.length/20;
+  highest=Math.max(highest,buildingRoofHeight(roof,car.x+x*c+z*s,car.z-x*s+z*c));
+ }
+ return highest;
+}
 test('presentation replay matches adaptive stepping when the authoritative count is known',()=>{
   const {world,car}=setup();world.entities=[car];Object.assign(car,{speed:32,vz:-32});
   const replay=structuredClone(world),inputs=new Map([['one',{...NEUTRAL,throttle:1,steer:.3}]]);
@@ -151,8 +163,8 @@ test('rooftop landing stays supported and can drive off; positive steer turns le
   const { world, car } = setup(); const roof = BUILDINGS[0];
   car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5; car.yaw = 0; car.supportId = null;
   for (let i = 0; i < 80; i++) step(world, new Map(), 0.05);
-  assert.equal(car.y, roof.h); assert.equal(car.vy, 0);
-  for (let i = 0; i < 30; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);
+  assert.equal(car.y, buildingRoofHeight(roof,car.x,car.z)); assert.equal(car.vy, 0);
+  for (let i = 0; i < 40; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);
   assert.ok(car.z < roof.z - roof.d / 2); assert.ok(car.y < roof.h);
   car.x = 0; car.z = 0; car.y = 0; car.vy = 0; car.speed = 10; car.yaw = 0; car.supportId = 'ground';
   step(world, new Map([['one', { ...NEUTRAL, steer: 1 }]]), 0.05);
@@ -260,8 +272,199 @@ test('curved landmark roofs support a descending vehicle at their visible surfac
   const x=roof.x+roof.w*.15,z=roof.z,height=buildingRoofHeight(roof,x,z);
   Object.assign(car,{x,z,y:height+2,vy:-6,vx:0,vz:0,supportId:null});
   for(let i=0;i<20&&car.supportId===null;i++)step(world,new Map(),.05);
-  assert.equal(car.supportId,`roof:${BUILDINGS.indexOf(roof)}`);assert.ok(Math.abs(car.y-height)<.01);
+  assert.ok(car.supportId?.startsWith(`roof:${BUILDINGS.indexOf(roof)}:`));assert.ok(Math.abs(car.y-sampledRoofContact(roof,car))<.04);
  }
+});
+
+test('a car drives off the Hornet deck and loses support at the visible edge',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-uss-hornet')!;
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ Object.assign(car,{x:place.x,z:place.z+place.d*.1,y:place.h+2,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
+ assert.ok(car.supportId?.startsWith('roof:'));
+ const deckY=place.h*.325;
+ assert.ok(Math.abs(car.y-deckY)<.05);
+ Object.assign(car,{yaw:Math.PI/2,speed:0,vx:0,vz:0});
+ const deckEdge=place.x-place.w*.42,halfLength=dimensions(car.kind).length/2;
+ let dropped=false,supportedPastCenter=false;
+ for(let i=0;i<100;i++){
+  step(world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+  if(car.x<deckEdge&&car.x+halfLength>deckEdge&&car.supportId?.startsWith('roof:'))supportedPastCenter=true;
+  if(car.supportId===null&&car.y<deckY-.01){dropped=true;break;}
+ }
+ assert.ok(dropped,`never left deck: ${car.x-place.x}, ${car.y}, ${car.supportId}`);
+ assert.ok(supportedPastCenter,'lost support while the vehicle still overlapped the deck');
+ assert.ok(car.x+halfLength<deckEdge,`fell before the vehicle cleared the deck: ${car.x-place.x}`);
+});
+
+test('empty space inside a landmark broad-phase envelope does not catch falling cars',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-uss-hornet')!;
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ // The narrow strip is inside the coarse building bounds but beyond the
+ // flight deck's outer edge, including the car's entire footprint.
+ Object.assign(car,{x:place.x+place.w*.49,z:place.z,y:place.h+2,yaw:0,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
+ assert.equal(car.supportId,'ground',`invisible support at ${car.y}`);
+ assert.equal(car.y,0);
+});
+
+test('a falling car lands when its body overlaps the deck even if its pivot is outside',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-uss-hornet')!;
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ Object.assign(car,{x:place.x+place.w*.49,z:place.z,y:place.h+2,yaw:Math.PI/2,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ assert.ok(car.x>place.x+place.w*.42,'pivot must start outside the deck');
+ assert.ok(car.x-dimensions(car.kind).length/2<place.x+place.w*.42,'body must overlap the deck');
+ for(let i=0;i<100&&car.supportId===null;i++)step(world,new Map(),.05);
+ assert.ok(car.supportId?.startsWith('roof:'),`did not land on overlapping deck: ${car.y}`);
+ assert.ok(Math.abs(car.y-place.h*.325)<.05,`landed at ${car.y}`);
+});
+
+test('visible ship and stadium walls stop cars but nearby ground stays traversable',()=>{
+ const hornet=NEW_LANDMARKS.find(p=>p.id==='new-uss-hornet')!;
+ const ship=setup();ship.world.entities=[ship.car];ship.world.pickups=[];
+ Object.assign(ship.car,{x:hornet.x-11,z:hornet.z,y:0,yaw:-Math.PI/2,speed:0,vx:0,vy:0,vz:0,supportId:'ground'});
+ let maxX=ship.car.x;
+ for(let i=0;i<60;i++){
+  step(ship.world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+  maxX=Math.max(maxX,ship.car.x);
+ }
+ assert.ok(maxX>hornet.x-10,'could not approach the visible hull');
+ assert.ok(maxX<=hornet.x-hornet.w*.30-dimensions(ship.car.kind).length/2+.15,`passed into hull: ${maxX-hornet.x}`);
+
+ const stadium=NEW_LANDMARKS.find(p=>p.id==='new-oakland-coliseum')!;
+ const stand=setup();stand.world.entities=[stand.car];stand.world.pickups=[];
+ Object.assign(stand.car,{x:stadium.x,z:stadium.z,y:stadium.h+2,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ for(let i=0;i<100&&stand.car.supportId===null;i++)step(stand.world,new Map(),.05);
+ assert.ok(Math.abs(stand.car.y-stadium.h*.21)<.05,'did not land on field');
+ Object.assign(stand.car,{yaw:-Math.PI/2,speed:0,vx:0,vz:0});
+ let furthest=stand.car.x;
+ for(let i=0;i<60;i++){
+  step(stand.world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+  furthest=Math.max(furthest,stand.car.x);
+ }
+ assert.ok(furthest>stadium.x+.2,'could not move on the field');
+ assert.ok(furthest<=stadium.x+stadium.w*.29-dimensions(stand.car.kind).length/2+.15,`passed into stand: ${furthest-stadium.x}`);
+
+ const nearby=setup();nearby.world.entities=[nearby.car];nearby.world.pickups=[];
+ Object.assign(nearby.car,{x:hornet.x-14,z:hornet.z+hornet.d,y:0,yaw:-Math.PI/2,speed:0,vx:0,vy:0,vz:0,supportId:'ground'});
+ for(let i=0;i<40;i++)step(nearby.world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+ assert.ok(nearby.car.x>hornet.x-4,`free ground is obstructed: ${nearby.car.x-hornet.x}`);
+ assert.equal(nearby.car.supportId,'ground');
+});
+
+test('angled vehicles contact a faceted arena even when their pivots are outside its polygon',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-oakland-arena')!;
+ // The authored cylinder has 12 sides. Halfway between vertices, .99 of its
+ // circumradius is outside the polygon (its apothem is cos(pi/12)).
+ const angle=Math.PI/12,r=.99;
+ assert.ok(r>Math.cos(Math.PI/12));
+ const x=place.x+place.w*.44*r*Math.sin(angle),z=place.z+place.d*.44*r*Math.cos(angle);
+ const landing=setup();landing.world.entities=[landing.car];landing.world.pickups=[];
+ Object.assign(landing.car,{x,z,y:place.h+2,yaw:angle,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ for(let i=0;i<100&&landing.car.supportId===null;i++)step(landing.world,new Map(),.05);
+ assert.ok(landing.car.supportId?.startsWith('roof:'),`missed overlapping arena: ${landing.car.y}`);
+ const roof=BUILDINGS.find(b=>b.landmarkId===place.id)!;
+ assert.ok(Math.abs(landing.car.y-sampledRoofContact(roof,landing.car))<.12,`unexpected body-edge height ${landing.car.y}`);
+ const landedId=landing.car.supportId;
+ for(let i=0;i<5;i++)step(landing.world,new Map(),.05);
+ assert.equal(landing.car.supportId,landedId,'edge support changed while stationary');
+
+ // Approach the same face from outside at an oblique angle; the visible
+ // cylinder must stop the body before its center enters the ellipse.
+ const wall=setup();wall.world.entities=[wall.car];wall.world.pickups=[];
+ Object.assign(wall.car,{x:place.x+13*Math.sin(angle),z:place.z+13*Math.cos(angle),y:0,yaw:angle,speed:0,vx:0,vy:0,vz:0,supportId:'ground'});
+ let minRadius=Infinity;
+ for(let i=0;i<60;i++){
+  step(wall.world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+  const nx=(wall.car.x-place.x)/(place.w*.44),nz=(wall.car.z-place.z)/(place.d*.44);
+  minRadius=Math.min(minRadius,Math.hypot(nx,nz));
+ }
+ assert.ok(minRadius>1,`car crossed the arena wall: normalized radius ${minRadius}`);
+ assert.ok(minRadius<1.8,`car could not approach arena: normalized radius ${minRadius}`);
+});
+
+test('the carousel has an open underside and a solid canopy above its platform',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-tilden-merry-go-round')!;
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ // This point misses the center pole and miniature horses. Start below the
+ // roof, rise into its underside, then fall to the visible circular platform.
+ const x=place.x+place.w*.15,z=place.z+place.d*.10,canopyBottom=place.h*.69;
+ Object.assign(car,{x,z,y:canopyBottom-dimensions(car.kind).height-1,yaw:0,vy:6,vx:0,vz:0,speed:0,supportId:null});
+ let highest=car.y;
+ for(let i=0;i<100;i++){
+  step(world,new Map(),.05);highest=Math.max(highest,car.y);
+  if(car.supportId!==null)break;
+ }
+ assert.ok(highest>canopyBottom-dimensions(car.kind).height-.8,`car did not rise toward canopy: ${highest}`);
+ assert.ok(highest+dimensions(car.kind).height<=canopyBottom+.08,`passed through canopy underside: ${highest}`);
+ assert.ok(car.supportId?.startsWith('roof:'),`did not land on platform: ${car.supportId}`);
+ assert.ok(Math.abs(car.y-place.h*.14)<.05,`platform height ${car.y}`);
+ Object.assign(car,{yaw:0,speed:0,vx:0,vz:0});
+ const startZ=car.z;
+ for(let i=0;i<12;i++)step(world,new Map([['one',{...NEUTRAL,throttle:1}]]),.05);
+ assert.ok(car.z<startZ-1,`could not drive under the canopy: ${car.z-startZ}`);
+ assert.ok(Math.abs(car.y-place.h*.14)<.05,`lost platform under canopy: ${car.y}`);
+});
+
+test('a pitched car hits the carousel canopy with its body when rising and landing',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-tilden-merry-go-round')!;
+ const x=place.x+place.w*.15,z=place.z+place.d*.10,canopyBottom=place.h*.69;
+ const rising=setup();rising.world.entities=[rising.car];rising.world.pickups=[];
+ const size=dimensions(rising.car.kind);
+ Object.assign(rising.car,{x,z,y:canopyBottom-3.3,yaw:0,pitch:1.2,roll:0,vy:6,vx:0,vz:0,speed:0,supportId:null});
+ let highestTop=-Infinity,attempted=false;
+ for(let i=0;i<45;i++){
+  step(rising.world,new Map(),.05);
+  // The nose and rear extend vertically with pitch; the upright-height-only
+  // calculation would let the visible end of this 4.5m car enter the roof.
+  const top=rising.car.y+Math.abs(Math.sin(rising.car.pitch))*size.length/2+Math.cos(rising.car.pitch)*size.height;
+  highestTop=Math.max(highestTop,top);
+  if(top>canopyBottom-.5)attempted=true;
+  assert.ok(top<=canopyBottom+.08,`pitched car penetrated canopy: top ${top}, underside ${canopyBottom}`);
+  if(rising.car.supportId!==null)break;
+ }
+ assert.ok(attempted,`pitched car never reached canopy: top ${highestTop}`);
+ assert.ok(rising.car.vy<=0,'canopy did not stop upward motion');
+
+ const landing=setup();landing.world.entities=[landing.car];landing.world.pickups=[];
+ // This authored position has a visible canopy top of 9.9612m by raycast.
+ // Keep pitch nonzero during the fall so the car's lower end contacts first.
+ const roofTop=9.9612;
+ Object.assign(landing.car,{x:place.x+place.w*.15,z:place.z,y:place.h+3,yaw:0,pitch:1,roll:0,vy:-5,vx:0,vz:0,speed:0,supportId:null});
+ let tiltedInFlight=false;
+ for(let i=0;i<100&&landing.car.supportId===null;i++){
+  step(landing.world,new Map(),.05);
+  if(landing.car.supportId===null){
+   const bottom=landing.car.y-Math.abs(Math.sin(landing.car.pitch))*size.length/2;
+   assert.ok(bottom>=roofTop-.08,`pitched car penetrated roof before landing: bottom ${bottom}, roof ${roofTop}`);
+   tiltedInFlight||=Math.abs(landing.car.pitch)>.4;
+  }
+ }
+ assert.ok(tiltedInFlight,'car did not remain tilted during descent');
+ assert.ok(landing.car.supportId?.startsWith('roof:'),`tilted landing missed roof: ${landing.car.supportId}`);
+ const canopy=BUILDINGS.find(b=>b.landmarkId===place.id)!;
+ assert.ok(Math.abs(landing.car.y-sampledRoofContact(canopy,landing.car))<.12,`landed at ${landing.car.y}`);
+});
+
+test('an ascending car lands when a curved landmark roof rises faster beneath it',()=>{
+ const place=NEW_LANDMARKS.find(p=>p.id==='new-oakland-arena')!;
+ const index=BUILDINGS.findIndex(building=>building.landmarkId===place.id);
+ assert.ok(index>=0);
+ const {world,car}=setup();world.entities=[car];world.pickups=[];
+ // Start with the entire body just above the dome. Starting above only
+ // the pivot height would already embed its inner edge in the curved roof.
+ Object.assign(car,{x:place.x+place.w*.2,z:place.z,yaw:0,pitch:0,roll:0,vy:2,vx:-12,vz:0,speed:0,supportId:null});
+ car.y=sampledRoofContact(BUILDINGS[index],car)+.05;
+ let approachingUpward=false;
+ for(let i=0;i<20&&car.supportId===null;i++){
+  const priorVy=car.vy,priorY=car.y,priorX=car.x;
+  step(world,new Map(),.01);
+  if(car.supportId!==null){
+   approachingUpward=priorVy>.1&&car.y>priorY&&car.x<priorX;
+  }
+ }
+ assert.ok(approachingUpward,`roof failed to catch an ascending crossing: y=${car.y}, vy=${car.vy}, support=${car.supportId}`);
+ assert.ok(car.supportId?.startsWith(`roof:${index}:`),`unexpected support ${car.supportId}`);
 });
 
 test('supply diamonds are separate and never sit on the initial player spawns',()=>{

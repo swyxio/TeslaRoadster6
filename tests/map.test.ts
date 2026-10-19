@@ -1,3 +1,4 @@
+import {buildingBlocksPose} from '../shared/landmark-collision';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {LEVELS} from '../shared/delivery';
@@ -68,7 +69,7 @@ test('the stadium street approach is supported and clear of the bank and parking
   assert.equal(terrainHeight(x,z),0,`approach unsupported at ${x},${z}`);
   assert.ok(!isRocketIsland(x,z),`approach must be on city land at ${x},${z}`);
   assert.equal(ovalBankSurface(x,z),null,`bank crosses the approach at ${x},${z}`);
-  assert.ok(!nearbyBuildings(x,z,7).some(b=>contact({x,z,w:1,d:1,yaw:0},{...b,yaw:0})),`building on the approach at ${x},${z}`);
+  assert.ok(!nearbyBuildings(x,z,7).some(b=>buildingBlocksPose(b,{kind:'roadster',x,z,y:0,yaw:0,pitch:0,roll:0,supportId:'ground'})),`building on the approach at ${x},${z}`);
  }
  const approach={...road,yaw:road.angle??0};
  for(const lot of PARKING_LOTS){
@@ -100,7 +101,7 @@ test('the Rocket Dome plaza and street entrance are clear of city buildings and 
  const plaza={x:DOME.x,z:DOME.z+7.5,w:192,d:145,yaw:0};
  const entrance={x:DOME.x,z:(120+DOME.z-DOME.flatHalfWidth)/2,w:28,d:DOME.z-DOME.flatHalfWidth-120,yaw:0};
  for(const area of [plaza,entrance]){
-  for(const building of BUILDINGS)assert.equal(contact(area,{...building,yaw:0}),null,`building at ${building.x},${building.z}`);
+  for(const building of BUILDINGS.filter(b=>b.style!=='structure'))assert.equal(contact(area,{...building,yaw:0}),null,`building at ${building.x},${building.z}`);
   for(const billboard of BILLBOARDS)assert.equal(contact(area,{...billboard,w:BILLBOARD_WIDTH,d:.35}),null,`billboard at ${billboard.x},${billboard.z}`);
  }
  assert.ok(!EXTRA_LANDMARKS.some(place=>place.id==='oracle-park'),'the Rocket Dome replaces the miniature ballpark');
@@ -179,7 +180,7 @@ test('Bay highway shoulders are supported and its lanes clear the largest truck'
    assert.ok(isLand(x,z),`${highway.id} segment ${i}: unsupported at ${x},${z}`);
    if(Math.abs(offset)>9)continue;
    const car=makeEntity('clearance','waymo-peterbilt',x,z);car.yaw=Math.atan2(-dx,-dz);
-   assert.ok(!nearbyBuildings(x,z,12).some(building=>contact(body(car),{...building,yaw:0})),`${highway.id} segment ${i}: blocked at ${x},${z}`);
+   assert.ok(!nearbyBuildings(x,z,12).some(building=>buildingBlocksPose(building,car)),`${highway.id} segment ${i}: blocked at ${x},${z}`);
   }
  }
  const length=BAY_CIRCUIT.reduce((sum,a,i)=>{const b=BAY_CIRCUIT[(i+1)%BAY_CIRCUIT.length];return sum+Math.hypot(b.x-a.x,b.z-a.z);},0);

@@ -1,16 +1,29 @@
 import type { Entity } from '../shared/game';
 import type { Building } from '../shared/map';
+import { primitiveExtent } from '../shared/new-landmark-surfaces';
 import { contact, dimensions } from '../shared/physics';
 
-type Pose=Pick<Entity,'kind'|'x'|'z'|'yaw'|'pitch'|'roll'|'supportId'>;
+type Pose=Pick<Entity,'kind'|'x'|'y'|'z'|'yaw'|'pitch'|'roll'|'supportId'>;
 
 // Returns true unless a vehicle's entire horizontal sweep is proved clear.
-// Upright ground vehicles use shared rectangular bodies; other poses keep a
+// Upright ground and same-roof vehicles use shared rectangular bodies; other poses keep a
 // conservative circle because pitch, roll and support can change the envelope.
-export function buildingSweepBlocked(a:Pose,b:Pose,building:Building):boolean {
+export function buildingSweepBlocked(a:Pose,b:Pose,building:Building,landmarkPart=false):boolean {
   const spec=dimensions(a.kind),halfDiagonal=Math.hypot(spec.width,spec.length)/2,radius=halfDiagonal+.5;
-  const upright=a.supportId==='ground'&&b.supportId==='ground'&&Number.isFinite(a.yaw)&&Number.isFinite(b.yaw)&&
+  const supported=a.supportId==='ground'&&b.supportId==='ground'||
+    (!!building.parts||landmarkPart)&&a.supportId===b.supportId&&a.supportId?.startsWith('roof:')===true;
+  const upright=supported&&Number.isFinite(a.yaw)&&Number.isFinite(b.yaw)&&
     a.pitch===0&&a.roll===0&&b.pitch===0&&b.roll===0;
+  if(building.parts){
+    const base=building.landmarkBase??0,verticalMargin=upright?0:radius;
+    for(const part of building.parts){
+      const extent=primitiveExtent(part),bottom=base+extent.bottom,top=base+extent.top;
+      if(Math.min(a.y,b.y)-verticalMargin>=top-.001||Math.max(a.y,b.y)+spec.height+verticalMargin<=bottom+.001)continue;
+      const c=Math.abs(Math.cos(extent.yaw)),s=Math.abs(Math.sin(extent.yaw));
+      if(buildingSweepBlocked(a,b,{...building,parts:undefined,x:building.x+part.x,z:building.z+part.z,w:extent.w*c+extent.d*s,d:extent.w*s+extent.d*c},true))return true;
+    }
+    return false;
+  }
   const delta=upright?Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw)):0;
   let extentX=radius,extentZ=radius;
   if(upright){

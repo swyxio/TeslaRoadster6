@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {addPlayer,createWorld,makeEntity,step,type Input} from '../shared/game';
 import {isSurface,nearbyBuildings,terrainHeight} from '../shared/map';
 import {body,contact} from '../shared/physics';
+import {buildingBlocksPose} from '../shared/landmark-collision';
 import {engageAutopilot, updateHighwayTraffic} from '../shared/traffic';
 import {snapshotFor} from '../worker/snapshot';
 
@@ -34,7 +35,7 @@ test('a clear oncoming car enters moving, hidden from every snapshot and with ph
     assert.ok(!snapshotFor(world,observer.id).entities.includes(replacement));
   }
   assert.ok(isSurface(replacement.x,replacement.z));
-  assert.ok(!nearbyBuildings(replacement.x,replacement.z,10).some(building=>contact(body(replacement),{...building,yaw:0})));
+  assert.ok(!nearbyBuildings(replacement.x,replacement.z,10).some(building=>buildingBlocksPose(building,replacement)));
   for(const other of world.entities)if(other!==replacement){
     assert.ok(Math.hypot(replacement.x-other.x,replacement.z-other.z)>=30);
     assert.equal(contact(body(replacement),body(other)),null);

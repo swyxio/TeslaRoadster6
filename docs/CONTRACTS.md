@@ -1,4 +1,4 @@
-# Implementation contracts · v46 candidate
+# Implementation contracts · v49 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -17,7 +17,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, dome roof, ferry, building roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, dome roof, ferry, building roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support. Authored building/structure roof IDs use `roof:<building-index>:<part-index>` to distinguish stacked authored surfaces; unprofiled rectangular buildings use `roof:<building-index>`. A vehicle can remain supported while its body overlaps a part's edge.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided for fast relative motion. Airborne speed is capped at 80 m/s (288 km/h) to keep collision sampling bounded; this is an arcade limit, not a general continuous-collision guarantee. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
@@ -35,11 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v47 (local highway-life candidate)
+## Wire protocol v49 candidate
 
-Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state; v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. This provisional v47 candidate adds shared highway scenery, traffic and police changes. Clients and rooms must use the same protocol and static map; incompatible clients must reload before joining. The world continues to step at 20 Hz.
+Protocol v49 fences the added shared highway scenery, currents and traffic changes from v48 clients. Protocol v48 fences the legacy structural profiles, footprint-based roof/underside contact, bridge/stadium solids, ramp walls and Dome body containment from v47 clients. Protocol v47 fences the new shared landmark collision envelopes and building identities from v46 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:47,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:49,capacity:number}`.
 
 Client messages:
 
@@ -91,7 +91,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:47, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:49, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
@@ -331,3 +331,7 @@ actionSeq, edgeBaseline}` requests, answered with `teleportResult` and a normal
 pose/control revision update on success. Normal and practice rooms reject
 teleport. See [Playtest rooms](PLAYTEST_ROOMS.md) for persistence boundaries,
 finite unlimited-spending representation and the local isolation test.
+
+## Structure collision authoring
+
+See [the structure audit](STRUCTURE_COLLISION_AUDIT.md). Static `Building.parts` is shared by collision, roof support and conservative client sweeps; render descriptions supply northern/southern models, bridge towers, stadium masonry and static Fremont masses. Parts are cached at map initialization and excluded from network snapshots. A broad-phase envelope is not a wall. New bridge/arena structures use height-aware route and traffic clearance, so elevated crossbeams cannot block ground traffic. Existing main-building route/recovery envelopes remain conservative for turning room. Rooftop deliveries use the shared surface height rather than a nominal building height. Main solid roofs/decks/posts must be tagged; paint and small trim remain decorative. Variable-height parts compute top and underside extrema over the overlapping vehicle footprint; landing and continued roof support use the same contact height. The spatial index and point-height sampler are distinct from that body contact. Ordinary upright boxes retain their constant-height fast path. Changes to any support geometry require a coordinated protocol bump at integration.

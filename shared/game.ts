@@ -3,7 +3,9 @@ import { DOME, DOME_CHARGE_RATE, chargingDomeWall } from './dome';
 export { BUILDINGS } from './map';
 import { refillStationFor } from './charging';
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
-import { body, contact, dimensions } from './physics';
+import { body, contact, dimensions, verticalBounds } from './physics';
+import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
+import { primitiveExtent } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
 import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
@@ -31,10 +33,11 @@ import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIsl
 import { airCost, flightLoad, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type DomeParticipant, type SoccerState } from './soccer';
 import { domeContact, surfaceArc } from './dome-collision';
+import { domeBodyContact } from './dome-body';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=47;
+export const PROTOCOL_VERSION=49;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -107,7 +110,7 @@ function solid(e:Entity):boolean {
   const b=body(e),radius=Math.abs(Math.cos(e.yaw))*b.w/2+Math.abs(Math.sin(e.yaw))*b.d/2;
   const rz=Math.abs(Math.sin(e.yaw))*b.w/2+Math.abs(Math.cos(e.yaw))*b.d/2;
   const islandJump=e.supportId==='island-jump'?null:islandJumpHeight(e.x,e.z);
-  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||(islandJump!==null&&e.y<islandJump-.001)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>e.y<buildingRoofHeight(building,e.x,e.z)-.001&&!!contact(b,{...building,yaw:0}));
+  return e.x-radius<MAP_BOUNDS.minX||e.x+radius>MAP_BOUNDS.maxX||e.z-rz<MAP_BOUNDS.minZ||e.z+rz>MAP_BOUNDS.maxZ||(e.supportId==='ground'&&!isSurface(e.x,e.z))||insideDeckVolume(e)||(islandJump!==null&&e.y<islandJump-.001)||nearbyBuildings(e.x,e.z,Math.max(radius,rz)+2).some(building=>building.parts?landmarkBlocksPose(building,e):e.y<buildingRoofHeight(building,e.x,e.z)-.001&&!!contact(b,{...building,yaw:0}));
 }
 function fits(world:World,e:Entity,ignore?:Entity,cleanupOwner?:string):boolean{return e.supportId!==null&&!solid(e)&&!world.entities.some(other=>other!==ignore&&other!==e&&!(cleanupOwner&&other.owner===cleanupOwner&&!other.driver&&!other.cab)&&e.y<other.y+dimensions(other.kind).height&&other.y<e.y+dimensions(e.kind).height&&!!contact(body(e),body(other)));}
 function sideSpawn(world:World,kind:Entity['kind'],side:FerrySide,ignore?:Entity,cleanupOwner?:string):{x:number;z:number;yaw:number}|null {
@@ -494,15 +497,6 @@ function capFlightSpeed(e:Entity):void {
   e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;
 }
 function applyImpulse(e:Entity,x:number,z:number){const fx=-Math.sin(e.yaw),fz=-Math.cos(e.yaw),forward=x*fx+z*fz;e.speed+=forward;e.pushX+=x-forward*fx;e.pushZ+=z-forward*fz;e.vx+=x;e.vz+=z;capFlightSpeed(e);}
-// The pivot is the center of the vehicle's underside. When pitched or rolled,
-// its length and width contribute to vertical extent on a loop or in the air.
-function verticalBounds(e:Entity):{min:number;max:number} {
-  const size=dimensions(e.kind);
-  if(e.supportId!==null&&e.supportId!=='stunt-loop'&&e.supportId!=='island-cliff')return {min:e.y,max:e.y+size.height};
-  const cosPitch=Math.cos(e.pitch),span=Math.abs(Math.sin(e.pitch))*size.length/2+Math.abs(Math.sin(e.roll)*cosPitch)*size.width/2;
-  const height=Math.cos(e.roll)*cosPitch*size.height;
-  return {min:e.y-span+Math.min(0,height),max:e.y+span+Math.max(0,height)};
-}
 type Vector3={x:number;y:number;z:number};
 const dot3=(a:Vector3,b:Vector3)=>a.x*b.x+a.y*b.y+a.z*b.z;
 function domeTangent(e:Entity,v:Vector3):Vector3 {
@@ -558,19 +552,20 @@ function resolveDomeContact(world:World,a:Entity,b:Entity):boolean {
   }
   return true;
 }
-type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null};
-function islandJumpWallHit(e:Entity,old:PreviousPose){
-  const size=dimensions(e.kind);
+type PreviousPose={x:number;y:number;z:number;supportId:SupportId|null;pitch?:number;roll?:number;yaw?:number};
+const COLLISION_RAMPS=[...ISLAND_JUMPS,STUNT_RAMP];
+function rampWallHit(e:Entity,old:PreviousPose){
+  const size=dimensions(e.kind),ramps=e.supportId==='stunt-ramp'?ISLAND_JUMPS:COLLISION_RAMPS;
   // The exact oriented sweep is only relevant near a ramp. The circumscribed
   // radius includes every yaw, including a car rotating while it moves.
   const radius=Math.hypot(size.width,size.length)/2;
-  if(!ISLAND_JUMPS.some(jump=>Math.max(old.x,e.x)+radius>=jump.start&&Math.min(old.x,e.x)-radius<=jump.end&&
+  if(!ramps.some(jump=>Math.max(old.x,e.x)+radius>=jump.start&&Math.min(old.x,e.x)-radius<=jump.end&&
     Math.max(old.z,e.z)+radius>=jump.z-jump.width/2&&Math.min(old.z,e.z)-radius<=jump.z+jump.width/2))return null;
   const vertical=verticalBounds(e);
   return sweepIslandJumpWall(old,e,{halfWidth:size.width/2,halfLength:size.length/2,yaw:e.yaw,
-    minY:vertical.min-e.y,maxY:vertical.max-e.y});
+    minY:vertical.min-e.y,maxY:vertical.max-e.y},ramps);
 }
-function resolveIslandJumpWall(e:Entity,old:PreviousPose,hit:NonNullable<ReturnType<typeof islandJumpWallHit>>):void {
+function resolveRampWall(e:Entity,old:PreviousPose,hit:NonNullable<ReturnType<typeof rampWallHit>>):void {
   e.x=hit.x;e.y=hit.y;e.z=hit.z;
   if(old.supportId==='ground'){e.supportId='ground';e.y=terrainHeight(e.x,e.z)??old.y;e.vy=0;}
   let normal=hit.normal;
@@ -657,6 +652,15 @@ function followSupport(world:World,e:Entity,old:PreviousPose):void {
     e.vy=e.supportId==='stunt-ramp'?e.vx*STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start):0;
     return;
   }
+  if(e.supportId.startsWith('roof:')){
+    const [index,partIndex]=e.supportId.slice(5).split(':').map(Number);
+    if(partIndex!==undefined){
+      const building=BUILDINGS[index],part=building?.parts?.[partIndex];
+      const surface=part&&landmarkPartContact(building,part,e);
+      if(surface){e.y=surface.top;e.vy=0;}else{e.supportId=null;e.vy=0;}
+      return;
+    }
+  }
   const height=supportHeight(e.supportId,e.x,e.z);
   if(height!==null){e.y=height;e.vy=e.supportId==='stunt-ramp'?e.vx*STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start):e.supportId==='island-bank'?bankVerticalVelocity(e.x,e.z,e.vx,e.vz):e.supportId==='island-oval'?ovalBankVerticalVelocity(e.x,e.z,e.vx,e.vz):e.supportId==='island-jump'?e.vx*islandJumpSlope(islandJumpAt(e.x,e.z)!):0;return;}
   const ground=terrainHeight(e.x,e.z);
@@ -718,9 +722,26 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
   const domeRoof=domeRoofHeight(e.x,e.z),oldDomeRoof=domeRoofHeight(old.x,old.z);
   // The curved roof can rise faster than an ascending car moves upward.
   if(!e.inDome&&domeRoof!==null&&old.y>=(oldDomeRoof??domeRoof)-.001&&e.y<=domeRoof&&(!landing||domeRoof>landing.y))landing={id:'dome-roof',y:domeRoof};
-  for(const b of nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width))){
-    const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
-    if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};
+  const nearby=nearbyBuildings(e.x,e.z,Math.max(dimensions(e.kind).length,dimensions(e.kind).width));
+  let landmarkVertical:ReturnType<typeof verticalBounds>|undefined,oldLandmarkVertical:ReturnType<typeof verticalBounds>|undefined;
+  for(const b of nearby){
+    if(b.parts){
+      landmarkVertical??=verticalBounds(e);
+      oldLandmarkVertical??=verticalBounds({...e,x:old.x,y:old.y,z:old.z,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
+      const parts=b.parts;
+      for(let i=0;i<parts.length;i++){
+        const part=parts[i],extent=primitiveExtent(part),base=b.landmarkBase??0;
+        if(landmarkVertical.min>base+extent.top+.001||oldLandmarkVertical.min<base+extent.bottom-.001)continue;
+        const surface=landmarkPartContact(b,part,e);
+        if(!surface)continue;
+        const height=surface.top,previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
+        const oldHeight=previous?.top??height;
+        if(oldLandmarkVertical.min>=oldHeight-.001&&landmarkVertical.min<=height&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}:${i}`,y:height};
+      }
+    }else{
+      const height=buildingRoofHeight(b,e.x,e.z),oldHeight=buildingRoofHeight(b,old.x,old.z);
+      if(e.vy<=0&&old.y>=oldHeight-.001&&e.y<=height&&contact(body(e),{...b,yaw:0})&&(!landing||height>landing.y))landing={id:`roof:${BUILDINGS.indexOf(b)}`,y:height};
+    }
   }
   if(landing){
     const impact=-e.vy;if(impact>12)e.health=Math.max(5,e.health-(impact-12)*.5*(e.upgrades.armor?.5:1)*damageFactor(e));
@@ -735,6 +756,19 @@ function landAirborne(world:World,e:Entity,old:PreviousPose,onRelocation?: (play
     if(!spawn){Object.assign(e,{x:old.x,y:old.y,z:old.z,vx:0,vy:0,vz:0,speed:0,pushX:0,pushZ:0});return;}
     Object.assign(e,spawn,{y:terrainHeight(spawn.x,spawn.z)??0,supportId:'ground',vx:0,vy:0,vz:0,pitch:0,roll:0,flipRemaining:0,loopAngle:null,speed:0,pushX:0,pushZ:0,autopilot:false,navigation:null});
     if(e.driver)onRelocation?.(e.driver);
+  }
+  // An elevated roof or deck has a real underside: upward motion stops there
+  // without filling the air below it with an invisible building.
+  if(e.supportId===null&&e.vy>0){
+    const previousVertical=verticalBounds({...e,x:old.x,z:old.z,y:old.y,pitch:old.pitch??e.pitch,roll:old.roll??e.roll,supportId:old.supportId});
+    for(const b of nearby){
+      if(!b.parts)continue;
+      for(const part of b.parts){
+        const surface=landmarkPartContact(b,part,e),previous=landmarkPartContact(b,part,{...e,x:old.x,z:old.z,y:old.y,yaw:old.yaw??e.yaw});
+        const current=verticalBounds(e);
+        if(surface&&previous&&previousVertical.max<=previous.bottom+.001&&current.max>surface.bottom){e.y=surface.bottom-(current.max-e.y);e.vy=0;}
+      }
+    }
   }
   if(e.supportId!=='overpass'&&contact(body(e),deckBody)){
     const bottom=deckTopAt(e.x)-OVERPASS.thickness,height=dimensions(e.kind).height;
@@ -768,12 +802,14 @@ function fitsDomeGate(e:Entity):boolean {
 function constrainDome(e:Entity,rocket:boolean):void {
   if(!e.inDome)return;
   const size=dimensions(e.kind),cos=Math.abs(Math.cos(e.yaw)),sin=Math.abs(Math.sin(e.yaw));
-  const xLimit=DOME.halfLength+DOME.x-(cos*size.width+sin*size.length)/2;
-  const xMin=2*DOME.x-xLimit;
-  if(e.x<xMin||e.x>xLimit){
-    const side=e.x<xMin?-1:1;e.x=clamp(e.x,xMin,xLimit);
-    if(e.vx*side>0)e.vx=0;
-    e.speed=0;e.pushX=0;
+  if(e.supportId!==null){
+    const xLimit=DOME.halfLength+DOME.x-(cos*size.width+sin*size.length)/2;
+    const xMin=2*DOME.x-xLimit;
+    if(e.x<xMin||e.x>xLimit){
+      const side=e.x<xMin?-1:1;e.x=clamp(e.x,xMin,xLimit);
+      if(e.vx*side>0)e.vx=0;
+      e.speed=0;e.pushX=0;
+    }
   }
   if(e.supportId==='dome')return;
   const w=DOME.flatHalfWidth,r=DOME.radius;
@@ -783,26 +819,30 @@ function constrainDome(e:Entity,rocket:boolean):void {
     if(Math.abs(e.z-DOME.z)>limit){e.z=DOME.z+Math.sign(e.z-DOME.z)*limit;e.speed=0;e.vz=0;e.pushZ=0;}
     return;
   }
-  let s:number|null=null;
-  const z=e.z-DOME.z;
-  if(z>w){
-    const a=Math.atan2(z-w,r-e.y),distance=Math.hypot(z-w,e.y-r);
-    if(distance>r)s=2*w+r*clamp(a,0,Math.PI);
-  }else if(z< -w){
-    const a=Math.atan2(-z-w,e.y-r),distance=Math.hypot(-z-w,e.y-r);
-    if(distance>r)s=4*w+Math.PI*r+r*clamp(a,0,Math.PI);
-  }else if(e.y>2*r)s=2*w+Math.PI*r+(w-z);
-  if(s===null)return;
-  const surface=domeSurface(s),toward=e.vy*surface.normalY+e.vz*surface.normalZ;
-  e.y=surface.y;e.z=surface.z;
+  const bounded=domeBodyContact(e),hit=bounded.contact;
+  if(bounded.x!==e.x){
+    if(e.vx*(e.x-bounded.x)>0)e.vx=0;
+    e.x=bounded.x;e.speed=0;e.pushX=0;
+  }
+  if(!hit)return;
+  const toward=e.vy*hit.normalY+e.vz*hit.normalZ;
   if(rocket&&toward<0){
-    const across=e.vy*surface.tangentY+e.vz*surface.tangentZ;
+    // Contact uses the full airborne body. Adhesion then deliberately changes
+    // to the existing inward-facing surface basis, with its pivot on the shell.
+    const s=hit.normalZ< -1e-8?2*w+r*Math.acos(clamp(hit.normalY,-1,1)):
+      hit.normalZ>1e-8?4*w+Math.PI*r+r*Math.acos(clamp(-hit.normalY,-1,1)):
+      hit.normalY<0?2*w+Math.PI*r+w-clamp(e.z-DOME.z,-w,w):clamp(e.z-DOME.z+w,0,2*w);
+    const surface=domeSurface(s),across=e.vy*surface.tangentY+e.vz*surface.tangentZ;
+    e.y=surface.y;e.z=surface.z;
     e.speed=Math.hypot(e.vx,across);e.yaw=Math.atan2(-e.vx,-across);
     e.vy=across*surface.tangentY;e.vz=across*surface.tangentZ;
     e.supportId='dome';e.domeS=s;e.loopAngle=null;e.pitch=0;e.roll=0;e.flipRemaining=0;
-  }else if(toward<0){
-    // Non-Rocket bodies bounce from the surface rather than adhering to it.
-    e.vy-=1.2*toward*surface.normalY;e.vz-=1.2*toward*surface.normalZ;
+  }else{
+    e.y=bounded.y;e.z=bounded.z;
+    if(toward<0){
+      // Stock cars bounce with their whole body kept inside the shell.
+      e.vy-=1.2*toward*hit.normalY;e.vz-=1.2*toward*hit.normalZ;
+    }
   }
 }
 
@@ -890,7 +930,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       e.supportId='dome';e.domeS=e.z-DOME.z+DOME.flatHalfWidth;
     }
     const oldX=e.x,oldZ=e.z,oldY=e.y,oldYaw=e.yaw,oldSupportId=e.supportId;
-    const old={x:oldX,y:oldY,z:oldZ,supportId:oldSupportId};
+    const old={x:oldX,y:oldY,z:oldZ,supportId:oldSupportId,pitch:e.pitch,roll:e.roll,yaw:oldYaw};
     const onRamp=e.supportId==='stunt-ramp',onDome=e.supportId==='dome'&&e.domeS!==null;
     const rampSlope=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
     let grounded=e.supportId!==null&&e.supportId!=='stunt-loop'&&e.supportId!=='island-cliff';
@@ -1011,10 +1051,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-(drifting?1:3)*dt);e.pushZ*=Math.exp(-(drifting?1:3)*dt);
       followSupport(world,e,old);
       if(oldSupportId==='ground'){
-        const hit=islandJumpWallHit(e,old);if(hit)resolveIslandJumpWall(e,old,hit);
-      }
-      if(oldSupportId==='ground'&&oldX>=STUNT_RAMP.end&&e.x<STUNT_RAMP.end&&Math.abs(e.z-STUNT_RAMP.z)<STUNT_RAMP.width/2&&e.y<STUNT_RAMP.height){
-        e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;e.speed*=-.25;e.vx=-Math.sin(e.yaw)*e.speed;
+        const hit=rampWallHit(e,old);if(hit)resolveRampWall(e,old,hit);
       }
       // The bottom of the loop is tangent to the street. Either direction works.
       if(rocket&&e.supportId==='ground'&&Math.abs(e.z-STUNT_LOOP.z)<STUNT_LOOP.width/2-1&&Math.abs(e.vx)>3&&
@@ -1076,9 +1113,15 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       }
       e.vy-=flightGravity*dt;capFlightSpeed(e);
       e.x+=e.vx*dt;e.y+=e.vy*dt;e.z+=e.vz*dt;
-      const jumpWall=islandJumpWallHit(e,old),jumpTop=sweepIslandJump(old,e);
+      const jumpWall=rampWallHit(e,old),jumpTop=sweepIslandJump(old,e);
+      // A legitimate top landing takes precedence over a later side contact.
+      const rampSlope=STUNT_RAMP.height/(STUNT_RAMP.end-STUNT_RAMP.start);
+      const beforeRamp=old.y-(old.x-STUNT_RAMP.start)*rampSlope,afterRamp=e.y-(e.x-STUNT_RAMP.start)*rampSlope;
+      const rampTime=beforeRamp>=0&&afterRamp<=0&&beforeRamp!==afterRamp?beforeRamp/(beforeRamp-afterRamp):Infinity;
+      const rampX=old.x+(e.x-old.x)*rampTime,rampZ=old.z+(e.z-old.z)*rampTime;
+      const rampTopTime=Number.isFinite(rampTime)&&rampHeight(rampX,rampZ)!==null?rampTime:Infinity;
       const groundTime=old.y>=0&&e.y<0?old.y/(old.y-e.y):Infinity;
-      if(jumpWall&&(!jumpTop||jumpWall.t<jumpTop.t)&&jumpWall.t<groundTime)resolveIslandJumpWall(e,old,jumpWall);
+      if(jumpWall&&jumpWall.t<Math.min(jumpTop?.t??Infinity,rampTopTime,groundTime))resolveRampWall(e,old,jumpWall);
       if(!person){
         const size=dimensions(e.kind),margin=Math.abs(Math.sin(e.yaw))*size.width/2+Math.abs(Math.cos(e.yaw))*size.length/2;
         const hit=sweepCliff(old,e,margin);if(hit)resolveCliffHit(e,hit,rocket);
@@ -1103,7 +1146,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
         // Landing can precede the final rotated-footprint check. Resolve any
         // wall overlap at the landed pose without overriding a ramp landing.
         const landed={x:e.x,y:e.y,z:e.z,supportId:e.supportId};
-        const hit=islandJumpWallHit(e,landed);if(hit)resolveIslandJumpWall(e,landed,hit);
+        const hit=rampWallHit(e,landed);if(hit)resolveRampWall(e,landed,hit);
       }
       if(e.loopAngle===null){e.speed=e.vx*(-Math.sin(e.yaw))+e.vz*(-Math.cos(e.yaw));e.pushX=e.vx+Math.sin(e.yaw)*e.speed;e.pushZ=e.vz+Math.cos(e.yaw)*e.speed;}
 
@@ -1182,7 +1225,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     if(a.supportId!==null)followSupport(world,a,oldA);
     if(b.supportId!==null)followSupport(world,b,oldB);
     for(const [e,old] of [[a,oldA],[b,oldB]] as const)if(old.supportId!=='island-jump'){
-      const hit=islandJumpWallHit(e,old);if(hit)resolveIslandJumpWall(e,old,hit);
+      const hit=rampWallHit(e,old);if(hit)resolveRampWall(e,old,hit);
     }
     if(a.inDome)constrainDome(a,hasRockets(a));
     if(b.inDome)constrainDome(b,hasRockets(b));

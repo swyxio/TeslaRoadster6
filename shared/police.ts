@@ -1,3 +1,4 @@
+import { buildingBlocksPose } from './landmark-collision';
 import type { Entity, Input, Player, World } from './game';
 import { NEUTRAL } from './game';
 import { HIGHWAYS, OVERPASS, ROADS, buildingRoofHeight, domeRoofHeight, isSurface, nearbyBuildings, overpassHeight, rampHeight, terrainHeight } from './map';
@@ -5,7 +6,8 @@ import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES } from './traffic';
 import { islandProtected } from './ferry';
 import { canAssignDeliveryRoof, updateLevel, type DeliveryState } from './delivery';
 import { hasRockets } from './upgrades';
-import { body, contact, dimensions } from './physics';
+import { dimensions } from './physics';
+import { sampleLandmarkPrimitive } from './new-landmark-surfaces';
 
 export type PoliceState = { targetId: string | null; lastSeen: number; nextPlan: number; path: Point[]; highwayPatrol?:true; airPatrol?:true; nextFlightAt?:number; cause?:'flight'|'speeding'; peakSpeedKph?:number };
 type Point = { x:number; z:number };
@@ -30,10 +32,10 @@ const points:Point[]=[];
 const rows=[-240,-180,-120,-60,0,60,120,180,240];
 for(const x of [-360,-300,-240,-180,-120,-60,0,60,330,390,450,510,570]) for(const z of rows)
   if(isSurface(x,z)&&clear(x,z))points.push({x,z});
-function clear(x:number,z:number){return !nearbyBuildings(x,z,5).some(b=>Math.abs(x-b.x)<b.w/2+4&&Math.abs(z-b.z)<b.d/2+4);}
+function clear(x:number,z:number,yaw=0){return !nearbyBuildings(x,z,5).some(b=>buildingBlocksPose(b,{kind:'model-s',x,z,y:terrainHeight(x,z)??0,yaw,pitch:0,roll:0,supportId:'ground'}));}
 function lineClear(a:Point,b:Point){
   const n=Math.ceil(Math.hypot(a.x-b.x,a.z-b.z)/8);
-  for(let i=0;i<=n;i++){const t=n?i/n:0,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;if(!isSurface(x,z)||!clear(x,z))return false;}
+  for(let i=0;i<=n;i++){const t=n?i/n:0,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;if(!isSurface(x,z)||!clear(x,z,Math.atan2(a.x-b.x,a.z-b.z)))return false;}
   return true;
 }
 const edges=points.map((a,i)=>points.map((b,j)=>({b,j})).filter(({b,j})=>j!==i&&(a.x===b.x||a.z===b.z)&&!points.some((p,k)=>k!==i&&k!==j&&((p.x===a.x&&p.x===b.x&&p.z>Math.min(a.z,b.z)&&p.z<Math.max(a.z,b.z))||(p.z===a.z&&p.z===b.z&&p.x>Math.min(a.x,b.x)&&p.x<Math.max(a.x,b.x))))&&lineClear(a,b)).map(({j})=>j));
@@ -75,8 +77,13 @@ function heightAboveSurface(e:Entity){
   const deck=overpassHeight(e.x,e.z);if(deck!==null&&deck<=e.y)floor=Math.max(floor,deck);
   const ramp=rampHeight(e.x,e.z);if(ramp!==null&&ramp<=e.y)floor=Math.max(floor,ramp);
   const dome=domeRoofHeight(e.x,e.z);if(dome!==null&&dome<=e.y)floor=Math.max(floor,dome);
-  for(const b of nearbyBuildings(e.x,e.z,0))if(Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2){
-    const roof=buildingRoofHeight(b,e.x,e.z);if(roof<=e.y)floor=Math.max(floor,roof);
+  for(const b of nearbyBuildings(e.x,e.z,0))if(b.parts||(Math.abs(e.x-b.x)<=b.w/2&&Math.abs(e.z-b.z)<=b.d/2)){
+    if(b.parts){
+      for(const part of b.parts){
+        const surface=sampleLandmarkPrimitive(part,e.x-b.x,e.z-b.z);
+        if(surface){const roof=(b.landmarkBase??0)+surface.top;if(roof<=e.y)floor=Math.max(floor,roof);}
+      }
+    }else{const roof=buildingRoofHeight(b,e.x,e.z);if(roof<=e.y)floor=Math.max(floor,roof);}
   }
   return e.y-floor;
 }
@@ -139,8 +146,7 @@ function patrolSpawnClear(world:World,cop:Entity,pose:ReturnType<typeof patrolPo
   const size=dimensions(cop.kind),fx=-Math.sin(pose.yaw),fz=-Math.cos(pose.yaw),rx=Math.cos(pose.yaw),rz=-Math.sin(pose.yaw);
   for(const ahead of [-size.length/2,size.length/2])for(const side of [-size.width/2,size.width/2])
     if(!isSurface(pose.x+fx*ahead+rx*side,pose.z+fz*ahead+rz*side))return false;
-  const candidate=body({...cop,...pose,y});
-  if(nearbyBuildings(pose.x,pose.z,size.length+4).some(building=>contact(candidate,{...building,yaw:0})))return false;
+  if(nearbyBuildings(pose.x,pose.z,size.length+4).some(building=>buildingBlocksPose(building,{...cop,...pose,y})))return false;
   return !world.entities.some(entity=>entity!==cop&&Math.hypot(entity.x-pose.x,entity.z-pose.z)<14);
 }
 function redistributePatrol(world:World,dt:number,entities:Map<string,Entity>):void {

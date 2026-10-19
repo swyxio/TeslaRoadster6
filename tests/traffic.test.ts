@@ -5,6 +5,7 @@ import { DAY_LENGTH_SECONDS, dayMinute, trafficDemand } from '../shared/day';
 import { addPlayer, createWorld, interact, makeEntity, removePlayer, step } from '../shared/game';
 import { isBridge, isSurface, nearbyBuildings } from '../shared/map';
 import { body, contact } from '../shared/physics';
+import { buildingBlocksPose } from '../shared/landmark-collision';
 import { engageAutopilot, HIGHWAY_ROUTE_IDS, ROUTES, routePose, seedHighwayTraffic, trafficInput, updateHighwayTraffic } from '../shared/traffic';
 import { VEHICLES } from '../shared/vehicles';
 import { initialSoccer } from '../shared/soccer';
@@ -265,7 +266,7 @@ test('initial highway traffic is supported and clear of buildings and the existi
   assert.equal(ambient.length,2);
   for(const car of ambient){
     assert.ok(isSurface(car.x,car.z),car.id);
-    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>contact(body(car),{...building,yaw:0})),car.id);
+    assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)),car.id);
     assert.ok(world.entities.every(other=>other===car||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
   }
 });

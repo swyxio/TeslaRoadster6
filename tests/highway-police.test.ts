@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, makeEntity, NEUTRAL, step, type Entity, type World } from '../shared/game';
 import { isSurface, nearbyBuildings, terrainHeight } from '../shared/map';
 import { body, contact, dimensions } from '../shared/physics';
+import { buildingBlocksPose } from '../shared/landmark-collision';
 import { HIGHWAY_SPEED_TRIGGER_KPH, newPolice, onHighway, policeFlight, policeInput, updatePolice } from '../shared/police';
 import { HIGHWAY_ROUTE_IDS, ROUTES, trafficInput } from '../shared/traffic';
 
@@ -30,7 +31,7 @@ function checkSupportedClear(cop:Entity,world:World){
   const size=dimensions(cop.kind),fx=-Math.sin(cop.yaw),fz=-Math.cos(cop.yaw),rx=Math.cos(cop.yaw),rz=-Math.sin(cop.yaw);
   for(const ahead of [-size.length/2,size.length/2])for(const side of [-size.width/2,size.width/2])
     assert.ok(isSurface(cop.x+fx*ahead+rx*side,cop.z+fz*ahead+rz*side));
-  assert.ok(!nearbyBuildings(cop.x,cop.z,size.length+4).some(building=>contact(body(cop),{...building,yaw:0})));
+  assert.ok(!nearbyBuildings(cop.x,cop.z,size.length+4).some(building=>buildingBlocksPose(building,cop)));
   assert.ok(!world.entities.some(other=>other!==cop&&contact(body(cop),body(other))));
   const lane=ROUTES[cop.routeId],next=lane[cop.waypoint],prev=lane[(cop.waypoint+lane.length-1)%lane.length];
   assert.ok(HIGHWAY_ROUTE_IDS.includes(cop.routeId));
