@@ -1,0 +1,141 @@
+name: Hosted room diagnostic
+
+on:
+  push:
+    branches: [codex/preview-room-throughput]
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: hosted-room-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      preview: ${{ steps.target.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostic
+          persist-credentials: false
+      - id: target
+        name: Read the explicitly pinned target
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { verifyConfig } from './diagnostic/scripts/hosted-room-target.mjs';
+          const config=JSON.parse(readFileSync('diagnostic/scripts/hosted-room-target.json','utf8'));
+          verifyConfig(config);
+          appendFileSync(process.env.GITHUB_OUTPUT,`sha=${config.sha}\npreview=${config.preview}\n`);
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the exact candidate with current main integrated
+        working-directory: candidate
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor refs/remotes/origin/main HEAD
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install and independently build static assets
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec vite build --manifest
+      - name: Verify PR, isolated bindings, health and served asset hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_PREVIEW: ${{ steps.target.outputs.preview }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/hosted-room-identity"
+          node diagnostic/scripts/hosted-room-target.mjs diagnostic/scripts/hosted-room-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/hosted-room-identity/target.json"
+          cd candidate
+          node --input-type=module -e 'import { measureGraph } from "./scripts/performance-baseline-assets.mjs"; import { writeFileSync } from "node:fs"; writeFileSync(process.env.RUNNER_TEMP+"/hosted-room-identity/asset-baseline.json",JSON.stringify({initialStaticJavaScript:measureGraph("dist","dist")},null,2));'
+          node scripts/performance-transfer.mjs "$TARGET_PREVIEW" "$RUNNER_TEMP/hosted-room-identity/asset-baseline.json" 1 > "$RUNNER_TEMP/hosted-room-identity/served-assets.json"
+      - name: Upload identity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-room-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hosted-room-identity/
+          if-no-files-found: warn
+          retention-days: 14
+
+  sample:
+    needs: identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostic
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify target again and prepare the measurement harness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ needs.identity.outputs.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/capacity-preview-diagnostic"
+          test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
+          git -C candidate merge-base --is-ancestor refs/remotes/origin/main HEAD
+          node diagnostic/scripts/hosted-room-target.mjs diagnostic/scripts/hosted-room-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/capacity-preview-diagnostic/identity-before.json"
+          cp diagnostic/scripts/hosted-room-diagnostic.ts diagnostic/scripts/hosted-room-observations.ts diagnostic/scripts/hosted-room-observations.test.ts candidate/scripts/
+          cd candidate
+          pnpm install --frozen-lockfile
+          pnpm exec tsx --test scripts/hosted-room-observations.test.ts tests/load-room.test.ts
+      - name: Run one bounded normal-room sample
+        working-directory: candidate
+        env:
+          TARGET_SOURCE_SHA: ${{ needs.identity.outputs.sha }}
+          TARGET_PREVIEW_URL: ${{ needs.identity.outputs.preview }}
+          CAPACITY_GROUP: ${{ matrix.group }}
+        run: pnpm exec tsx scripts/hosted-room-diagnostic.ts
+      - name: Recheck target after the sample
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if test -f candidate/wrangler.jsonc; then
+            node diagnostic/scripts/hosted-room-target.mjs diagnostic/scripts/hosted-room-target.json candidate/wrangler.jsonc > "$RUNNER_TEMP/capacity-preview-diagnostic/identity-after.json"
+          fi
+      - name: Upload evidence, including incomplete samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-room-${{ github.run_id }}-${{ github.run_attempt }}-group-${{ matrix.group }}
+          path: ${{ runner.temp }}/capacity-preview-diagnostic/
+          if-no-files-found: warn
+          retention-days: 14
