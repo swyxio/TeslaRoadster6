@@ -196,7 +196,7 @@ claim follows. The [raw report](load64-d05.json.gz) SHA-256 is
 `33a4cd6259d387ed3017704f13c3fad12e3a91c6c6929089757f446e58e4e652`.
 
 A separate [room-load lab](room-load-lab.tar.gz) (SHA-256
-`a9993a80c18bbd6ac4a518e0491ee53d229ef661c0e3fbd4bfe35e4cc9c1a853`)
+`2802bd29f893b0d631bf14433a8000e7f648dffced315102d2dd25054d2b45b4`)
 contains a loopback-only staging wrapper over the `d05d6f4` ordinary room and
 sampled candidate corridors for 64 drivers. It retains the ambient entities
 and normal identity/economy hooks. A short two-client functional pilot, not a
@@ -226,6 +226,26 @@ one-minute host load was 20.73 before and 19.52 after. No Worker CPU or wire
 byte measurement was obtained. The [report](staged-load64-d05.json.gz) omits
 the disposable room and driver IDs (SHA-256
 `7d525b52dae098ef8810c3aaa70cf05c3a9f8f01a5312aee174747ee08e2e0c7`).
+
+The saved original runner for this sample has SHA-256
+`bdb2f35c9d815db70b1849a400fd7e6518524486b70f842aed88b0a2dc054a45`.
+Its 20 closed clients had last valid movement samples around the same point,
+but it did not record close codes or reasons. The lab's updated runner adds
+those details, first/last state timing and rejection reasons; five focused
+controller/diagnostic tests pass, but that updated runner has not been loaded.
+
+## Hosted comparison
+
+[Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
+compared base `1f722dd` with candidate `84f9cf3` but could not complete the
+base. Its local staging Worker called the candidate-only `stopTicks` method
+against the baseline, causing a room-upgrade 500; the recorder timed out
+waiting for a live connection. The runner/browser session ended, so no
+same-session recovery is possible. The candidate completed, but the comparison
+is **HOLD**. Its 133.3 ms callback p95 was on a three-vCPU virtual host with
+one-minute load 15.47 → 13.47; it is not a GPU-completion or paired result.
+[Selected logs and reports](hosted-39178956817-summary.tar.gz) have SHA-256
+`72923a7ede64012eac8b5ba8a4d96966b36306ea7abdff451fabcbf48c49e2cf`.
 
 ## Functional verification
 
