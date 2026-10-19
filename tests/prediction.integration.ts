@@ -1,4 +1,4 @@
-// Protocol-v51 live control test. Run only against local Wrangler:
+// Protocol-v52 live control test. Run only against local Wrangler:
 // pnpm exec tsx tests/prediction.integration.ts http://127.0.0.1:8787
 import assert from 'node:assert/strict';
 import { RoomInputClient } from './room-input-client';
