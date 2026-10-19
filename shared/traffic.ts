@@ -10,7 +10,7 @@ import { body, contact } from './physics';
 import { buildingBlocksPose } from './landmark-collision';
 import { trafficDemand } from './day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from './bridge-signal';
-import { VEHICLES, VEHICLE_IDS, type VehicleId } from './vehicles';
+import { VEHICLES, VEHICLE_IDS } from './vehicles';
 import { requiredLevelAt } from './delivery';
 export type Point = {x:number;z:number};
 // Clockwise loops use the right-hand lane. The block loops cover every street;
@@ -313,7 +313,8 @@ export function trafficInput(e:Entity,world:World):Input {
   const variety=.92+(hash(e.id)%17)/100;
   // Purchased modes are quicker on clear straights, but still share the same
   // turn, following-distance and arrival limits below. These are game speeds.
-  const ambientCruise=e.id.startsWith('ambient-')&&!e.driver?15+hash(e.id)%9:26*variety;
+  // Congestion cohorts crawl together, making the air upgrade a useful choice.
+  const ambientCruise=e.id.startsWith('jam-')&&!e.driver?3:e.id.startsWith('ambient-')&&!e.driver?15+hash(e.id)%9:26*variety;
   let cruise=navigation?(navigation.join?4.5:Math.min(DRIVE_SPEED[navigation.mode??'road'],spec.maxSpeed*(e.upgrades.motor?1.1:1))):highway?Math.min(spec.maxSpeed*.92,ambientCruise):8;
   if(navigation?.exit){
     const exitIndex=route.findIndex(point=>Math.hypot(point.x-navigation.exit!.x,point.z-navigation.exit!.z)<.1);
@@ -495,7 +496,7 @@ function routeDistancePose(routeId:number,fraction:number){
   throw new Error('Empty highway route');
 }
 
-type EntityFactory=(id:string,kind:VehicleId,x:number,z:number)=>Entity;
+type EntityFactory=(id:string,kind:Entity['kind'],x:number,z:number)=>Entity;
 const AMBIENT_MAX=12; // Alongside eight city cars and four police.
 const AMBIENT_POOL_MAX=20; // Also bounds taken and abandoned optional cars.
 const AMBIENT_INTERVAL=5; // Real seconds, independent of the accelerated clock.
@@ -657,6 +658,70 @@ function addAmbient(world:World,id:string,clockwise:boolean,make:EntityFactory):
 export function seedHighwayTraffic(world:World,make:EntityFactory):void {
   const target=desiredAmbient(world.time);
   for(let i=0;i<target;i++)addAmbient(world,`ambient-seed-${i}`,i%2===0,make);
+}
+
+/** Seed slow queues in both directions at supported Bay highway sections. */
+export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number):void {
+  const sites=[{x:-300,z:550},{x:-790,z:3550},{x:700,z:7800},{x:1430,z:4050}];
+  for(const [siteIndex,site] of sites.entries())for(let direction=0;direction<2;direction++){
+    const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId];
+    let best:{segment:GeneralLane;waypoint:number;at:number;distance:number}|null=null;
+    for(let i=0;i<route.length;i++){
+      const waypoint=(i+1)%route.length,segment=generalLanes.get(`${routeId}:${waypoint}`);if(!segment)continue;
+      const {a,ux,uz,length}=segment;
+      const at=Math.max(80,Math.min(length-80,(site.x-a.x)*ux+(site.z-a.z)*uz));
+      const distance=Math.hypot(a.x+ux*at-site.x,a.z+uz*at-site.z);
+      if(!best||distance<best.distance)best={segment,waypoint,at,distance};
+    }
+    if(!best||best.distance>400)continue;
+    const {segment,waypoint,at}=best,{a,ux,uz}=segment;
+    // A single lane per direction avoids opposing merge deadlocks while
+    // keeping another lane available for manual drivers.
+    for(let row=0;row<6;row++){
+      const along=at-row*11,x=a.x+ux*along,z=a.z+uz*along;
+      const id=`jam-${siteIndex}-${direction}-0-${row}`,kind=highwayVehicles[hash(id)%highwayVehicles.length];
+      const car=make(id,kind,x,z);Object.assign(car,{yaw:Math.atan2(-ux,-uz),npc:true,autopilot:true,routeId,waypoint});
+      if(car.supportId!=='ground'||nearbyBuildings(x,z,10).some(building=>buildingBlocksPose(building,car))||
+        world.entities.some(other=>contact(body(car),body(other))))continue;
+      world.entities.push(car);
+    }
+  }
+  // Near San Jose the circuit bends, so keep this queue in the inner lane
+  // and sample positions along the actual curved route instead of offsetting it.
+  const sanJose={x:2013,z:8162};
+  for(let direction=0;direction<2;direction++){
+    const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
+    let traveled=0,bestDistance=Infinity,at=0;
+    for(let i=0;i<route.length;i++){
+      const a=route[i],b=route[(i+1)%route.length],length=lengths[i];if(!length)continue;
+      const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
+      const t=Math.max(0,Math.min(length,(sanJose.x-a.x)*dx+(sanJose.z-a.z)*dz));
+      const distance=Math.hypot(a.x+dx*t-sanJose.x,a.z+dz*t-sanJose.z);
+      if(distance<bestDistance){bestDistance=distance;at=traveled+t;}
+      traveled+=length;
+    }
+    for(let row=0;row<6;row++){
+      const pose=routeDistancePose(routeId,(at-row*11)/total),id=`jam-4-${direction}-0-${row}`;
+      const kind=highwayVehicles[hash(id)%highwayVehicles.length],car=make(id,kind,pose.x,pose.z);
+      Object.assign(car,pose,{npc:true,autopilot:true});
+      if(car.supportId!=='ground'||nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car))||
+        world.entities.some(other=>contact(body(car),body(other))))continue;
+      world.entities.push(car);
+    }
+  }
+  // A few rooms start with one cow crossing ahead of a queue; it walks to the
+  // shoulder and remains there instead of popping into or out of a player's view.
+  const seed=Math.abs(Math.trunc(fleetSeed));
+  if(seed%4===1){
+    const site=Math.floor(seed/4)%sites.length,direction=Math.floor(seed/16)%2;
+    const leader=world.entities.find(e=>e.id===`jam-${site}-${direction}-0-0`);
+    if(leader){
+      const fx=-Math.sin(leader.yaw),fz=-Math.cos(leader.yaw);
+      const cow=make('cow-crossing','person',leader.x+fx*20,leader.z+fz*20);
+      cow.yaw=leader.yaw+Math.PI/2;
+      if(cow.supportId==='ground'&&!world.entities.some(other=>contact(body(cow),body(other))))world.entities.push(cow);
+    }
+  }
 }
 
 /** Reconcile one optional highway car every five real seconds, never an occupied or visible car. */

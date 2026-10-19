@@ -8,7 +8,7 @@ import { landmarkBlocksPose, landmarkPartContact } from './landmark-collision';
 import { buildingBoundsOverlap } from './building-bounds';
 import { primitiveExtent } from './new-landmark-surfaces';
 import { EntityIndex } from './entity-index';
-import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, updateHighwayTraffic } from './traffic';
+import { engageAutopilot, routePose, trafficInput, seedHighwayTraffic, seedTrafficJams, updateHighwayTraffic } from './traffic';
 import { DELIVERY_DESTINATION_SNAP, planNavigation, type Navigation } from './navigation';
 import { isDriveMode, type DriveMode } from './drive-mode';
 import { autonomousFlight, initialAutonomousFlight } from './autonomous-flight';
@@ -96,6 +96,7 @@ export function createWorld(fleetSeed=0):World {
     }
   }
   seedHighwayTraffic(world,makeEntity);
+  seedTrafficJams(world,makeEntity,fleetSeed);
   return world;
 }
 
@@ -926,6 +927,10 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     let input:Input,autoJump=false;
     if(e.police&&(e.police.targetId||e.police.path.length)){
       const flight=policeFlight(e,world,policeInput(e,world));input=flight.input;autoJump=flight.jump;
+    }
+    else if(e.id==='cow-crossing'&&!e.driver){
+      // Walk at about one metre per second, then stop on the shoulder.
+      input=world.time>=20&&world.time<38?{...NEUTRAL,throttle:Math.max(0,Math.min(.01,(1-e.speed)*.01))}:{...NEUTRAL,brake:true};
     }
     else if(e.autopilot){
       const nav=e.navigation,player=e.driver?world.players.find(p=>p.id===e.driver):undefined;

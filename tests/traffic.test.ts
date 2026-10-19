@@ -267,11 +267,12 @@ test('initial highway traffic is supported and clear of buildings and the existi
   for(const car of ambient){
     assert.ok(isSurface(car.x,car.z),car.id);
     assert.ok(!nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car)),car.id);
-    assert.ok(world.entities.every(other=>other===car||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
+    assert.ok(world.entities.every(other=>other===car||other.id.startsWith('jam-')||Math.hypot(other.x-car.x,other.z-car.z)>=30),car.id);
+    assert.ok(world.entities.every(other=>other===car||!contact(body(car),body(other))),`${car.id} has no overlapping body`);
   }
 });
 
-test('peak target is eight city cars, twelve highway cars and four police', () => {
+test('peak target includes the bounded ambient fleet and seeded highway queues', () => {
   const world=createWorld();addPlayer(world,'budget-player','Player');
   for(let i=0;i<50;i++){
     world.time=timeAtHour(8)+i*5;
@@ -280,7 +281,9 @@ test('peak target is eight city cars, twelve highway cars and four police', () =
   assert.equal(world.entities.filter(car=>car.id.startsWith('traffic-')).length,8);
   assert.equal(world.entities.filter(car=>car.police).length,4);
   assert.equal(world.entities.filter(car=>car.id.startsWith('ambient-')).length,12);
-  assert.equal(world.entities.filter(car=>car.npc).length,24);
+  const jams=world.entities.filter(car=>car.id.startsWith('jam-')).length;
+  assert.ok(jams>=50&&jams<=60,'supported, unobstructed queue slots are populated');
+  assert.equal(world.entities.filter(car=>car.npc).length,24+jams);
 });
 
 test('a released Rocket NPC does not replay its former driver’s stunt inputs', () => {

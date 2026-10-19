@@ -19,6 +19,7 @@ import { PARKING_LOTS } from '../shared/parking-lots';
 import { RACE_COURSES } from '../shared/race-courses';
 import { playerRace } from '../shared/race';
 import { box, material, createVehicle, setVehicleDetail, setRocketKit, setThrusterEffects, setVehicleStyle } from './vehicles';
+import { createCow } from './cow';
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
@@ -347,7 +348,7 @@ export class GameScene {
     for(const e of world.entities) {
       let mesh=this.entities.get(e.id);
       if(mesh&&mesh.name!==e.kind){this.scene.remove(mesh);this.entities.delete(e.id);mesh=undefined;}
-      if(!mesh){mesh=createVehicle(e.kind);if(e.police){
+      if(!mesh){mesh=e.id==='cow-crossing'?createCow():createVehicle(e.kind);if(e.police){
         const h=VEHICLES['model-3'].height;
         box(mesh,0,h+.05,0,.9,.12,.35,0x1b2c35);
         const red=box(mesh,-.23,h+.15,0,.4,.15,.28,0xff4b48);red.name='police-red';

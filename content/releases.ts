@@ -10,7 +10,7 @@ export const RELEASES = [
     intro: 'Discover more detail and activity around the Bay.',
     sections: [
       { title: 'On the road', items: [
-        'Busier highways follow the game clock, with multiple lanes and HOV lanes open to every driver.',
+        'Slow highway queues make the case for flying; watch for the occasional cow crossing.',
         'Find directional skyways and highway patrols as you explore the Bay.',
         'Look for framed windows, detailed redwoods, vehicles and landmark facades.',
         'Buy Hyperloop Pilot in a workshop for longer self-driving trips.'

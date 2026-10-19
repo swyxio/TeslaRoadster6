@@ -194,19 +194,21 @@ test('a populated highway does not deadlock the player behind a merging car',()=
     npc:false,autopilot:true,routeId,waypoint:index+1,speed:15,supportId:'ground'});
   // The full loop now crosses the San Jose access gate at Level 6.
   player.delivery.cash=LEVELS[6].cash;player.delivery.level=6;world.time=240;
-  let distance=0,slow=0,longestSlow=0;
+  let distance=0,slow=0,longestSlow=0,stopped=0,longestStopped=0;
   for(let tick=0;tick<240*20;tick++){
     const x=car.x,previousZ=car.z;step(world,new Map(),.05);
     distance+=Math.hypot(car.x-x,car.z-previousZ);
     slow=car.speed<4?slow+.05:0;longestSlow=Math.max(longestSlow,slow);
+    stopped=car.speed<.5?stopped+.05:0;longestStopped=Math.max(longestStopped,stopped);
     for(const other of world.entities){
       if(other!==car&&Math.hypot(other.x-car.x,other.z-car.z)<15){
         assert.equal(contact(body(car),body(other)),null,'player traffic stays physically clear');
       }
     }
   }
-  assert.ok(longestSlow<5,`slow or stopped for ${longestSlow.toFixed(1)} s`);
-  assert.ok(distance>4500,`only traveled ${distance.toFixed(0)} m`);
+  assert.ok(longestSlow>20,`expected a slow queue, longest was ${longestSlow.toFixed(1)} s`);
+  assert.ok(longestStopped<5,`stopped for ${longestStopped.toFixed(1)} s`);
+  assert.ok(distance>2000,`only traveled ${distance.toFixed(0)} m`);
   assert.equal(car.health,100);assert.equal(car.autopilot,true);
 });
 
