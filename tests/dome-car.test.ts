@@ -156,7 +156,8 @@ test('airborne side approaches still enter below the roof',()=>{
     const {world,car}=setup();world.pickups=[];
     Object.assign(car,fromEnd
       ?{x:DOME.x-DOME.halfLength-10,z:DOME.z,y:10,vx:30,vz:0}
-      :{x:DOME.x-30,z:DOME.z+DOME.flatHalfWidth+DOME.radius+10,y:10,vx:0,vz:-30},
+      // Fly above the solid grandstand, through the transparent shell.
+      :{x:DOME.x-30,z:DOME.z+DOME.flatHalfWidth+DOME.radius+10,y:24,vx:0,vz:-30},
       {supportId:null,vy:0,autopilot:false});
     for(let i=0;i<40&&!car.inDome;i++)step(world,new Map(),.05);
     assert.equal(car.inDome,true,fromEnd?'end fly-in':'side fly-in');

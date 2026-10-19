@@ -1,0 +1,52 @@
+{
+  "freshGuest": true,
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "waitFor",
+      "selector": "#connection:has-text(\"LIVE\")",
+      "timeoutMs": 60000
+    },
+    {
+      "type": "waitForPoseRevision",
+      "value": 1,
+      "timeoutMs": 30000
+    },
+    {
+      "type": "wait",
+      "ms": 1200
+    },
+    {
+      "type": "screenshot",
+      "name": "before"
+    },
+    {
+      "type": "recordStart"
+    },
+    {
+      "type": "keyDown",
+      "key": "KeyW"
+    },
+    {
+      "type": "waitForTicks",
+      "count": 45
+    },
+    {
+      "type": "keyUp",
+      "key": "KeyW"
+    },
+    {
+      "type": "sample"
+    },
+    {
+      "type": "screenshot",
+      "name": "through-sutro"
+    },
+    {
+      "type": "recordStop"
+    }
+  ]
+}
