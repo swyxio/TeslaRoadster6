@@ -24,6 +24,23 @@ room capacity. The callback interval exceeds the frame-interval target on this
 VM; the synthetic speed proxy is not the gate's same-instant reference. The
 full gates remain open.
 
+## Standalone analyzer review
+
+The draft speed analyzer is not safe to use as a release gate. A
+[synthetic review script](continuity-gate-review.mjs) and its
+[recorded output](continuity-gate-review.jsonl) show `withinTarget: true` for
+missing selected-window coverage, a 2-second frame gap, two upper outliers in
+30 samples, absent visual yaw, positions that contradict recorded velocity,
+a failed authority probe, and recurring large yaw changes. The reviewed
+`scripts/driving-continuity-gate.mjs` has SHA-256
+`b3855a25b8f822e304393cb4cdbef59f7fd370f2de7018596772d3ffb14a0a21`.
+Reproduce with `node docs/performance-baselines/2026-10-18-driving-continuity/continuity-gate-review.mjs scripts/driving-continuity-gate.mjs`.
+Its CLI also exits successfully when data is unavailable. The actual local
+collector leaves clock and interpolation proof unavailable, so it does not
+produce these fabricated passes. Repair the analyzer, its exit status and
+focused regression tests before promoting even the speed-only check; this
+would still leave the rest of the continuity gate open.
+
 ## Wire-clock recovery experiment
 
 In a synthetic Session and ScheduledInput pinned-contact run, resetting the
