@@ -74,13 +74,24 @@ test('unsupported, airborne, hidden and non-flat positions do not cast a patch',
   }
 });
 
-test('the shared batch is bounded and keeps the controlled car first',()=>{
-  const shadows=new ContactShadows(new T.Scene()),camera=new T.Vector3(-120,4,-115);
+test('a motorcycle retains its contact patch while leaning into a turn',()=>{
+  const shadows=new ContactShadows(new T.Scene());
+  const bike=entity('bike',{kind:'ducati-panigale-v4',driver:'rider',steering:1,speed:18});
+  const mesh=vehicle(-120,0,-120);mesh.rotation.z=.32;
+  shadows.update([bike],new Map([[bike.id,mesh]]),new T.Vector3(-120,4,-115),bike);
+  assert.equal(shadows.mesh.count,1);
+});
+
+test('the bounded batch keeps the controlled car and favors nearby traffic',()=>{
+  const shadows=new ContactShadows(new T.Scene()),camera=new T.Vector3(-118.44,4,-115);
   const entities=Array.from({length:40},(_,i)=>entity(String(i)));
-  const meshes=new Map(entities.map((e,i)=>[e.id,vehicle(-120+i*.01,0,-120)]));
-  const controlled=entities[entities.length-1];
+  const meshes=new Map(entities.map((e,i)=>[e.id,vehicle(-120+i*.04,0,-120)]));
+  const controlled=entities[0];
   shadows.update(entities,meshes,camera,controlled);
   assert.equal(shadows.mesh.count,32);
   const matrix=new T.Matrix4(),position=new T.Vector3();shadows.mesh.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);
   assert.ok(Math.abs(position.x-meshes.get(controlled.id)!.position.x)<.00001);
+  const selected=Array.from({length:shadows.mesh.count},(_,i)=>{shadows.mesh.getMatrixAt(i,matrix);return position.setFromMatrixPosition(matrix).x;});
+  assert.ok(selected.some(x=>Math.abs(x-meshes.get('39')!.position.x)<.00001));
+  assert.ok(!selected.some(x=>Math.abs(x-meshes.get('1')!.position.x)<.00001));
 });

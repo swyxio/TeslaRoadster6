@@ -25,6 +25,7 @@ export class ContactShadows {
   private forward=new T.Vector3();
   private rotation=new T.Quaternion();
   private count=0;
+  private candidates:Entity[]=[];
 
   constructor(scene:T.Scene) {
     const size=32,pixels=new Uint8Array(size*size*4);
@@ -49,9 +50,17 @@ export class ContactShadows {
     this.count=0;
     // Always give the controlled car priority when a crowded room exceeds the cap.
     if(controlled)this.add(controlled,meshes.get(controlled.id),camera);
+    this.candidates.length=0;
     for(const entity of entities){
+      if(entity.id===controlled?.id||entity.kind==='person'||entity.supportId!=='ground'||entity.inDome)continue;
+      const vehicle=meshes.get(entity.id);
+      if(vehicle?.visible&&vehicle.position.distanceToSquared(camera)<=MAX_DISTANCE_SQUARED)this.candidates.push(entity);
+    }
+    // Only crowded scenes need sorting; retain nearby vehicles when the batch fills.
+    if(this.candidates.length>MAX_SHADOWS-this.count)this.candidates.sort((a,b)=>meshes.get(a.id)!.position.distanceToSquared(camera)-meshes.get(b.id)!.position.distanceToSquared(camera));
+    for(const entity of this.candidates){
       if(this.count===MAX_SHADOWS)break;
-      if(entity.id!==controlled?.id)this.add(entity,meshes.get(entity.id),camera);
+      this.add(entity,meshes.get(entity.id),camera);
     }
     this.mesh.count=this.count;this.mesh.visible=this.count>0;
     if(this.count)this.mesh.instanceMatrix.needsUpdate=true;
@@ -64,7 +73,8 @@ export class ContactShadows {
     const {x,y,z}=vehicle.position;
     if(vehicle.position.distanceToSquared(camera)>MAX_DISTANCE_SQUARED||Math.abs(y)>.25)return;
     this.vehicleUp.set(0,1,0).applyQuaternion(vehicle.quaternion);
-    if(this.vehicleUp.y<.95)return;
+    // Grounded motorcycles can visually lean by .32 radians in a turn.
+    if(this.vehicleUp.y<.90)return;
     const spec=VEHICLES[entity.kind],width=spec.width*.95,length=spec.length*.8;
     this.forward.set(0,0,1).applyQuaternion(vehicle.quaternion);
     const yaw=Math.atan2(this.forward.x,this.forward.z),s=Math.sin(yaw),c=Math.cos(yaw);
