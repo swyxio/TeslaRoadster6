@@ -12,6 +12,7 @@ import { buildEastSouthAdditions } from '../src/east-south-additions';
 import { buildBay } from '../src/bay-world';
 import { buildNorthLandmarks } from '../src/north-landmarks';
 import { buildFremontSpaceport } from '../src/fremont-spaceport';
+import { spaceportStructureBoxes } from '../shared/spaceport-structures';
 
 function withCanvas<T>(run:()=>T):T {
  const previous=globalThis.document;
@@ -67,6 +68,19 @@ test('Fremont factory panels and launch tower arms/cap have their rendered surfa
    assert.equal(landmarkBlocksPose(b,{...pose,y:92,supportId:null}),true,'visible arms stop airborne cars');
   }
  }
+}));
+
+test('flame channel renders the shared physical wall, bridge and deflector surfaces',()=>withCanvas(()=>{
+ const scene=new T.Scene();buildFremontSpaceport(scene);scene.updateMatrixWorld(true);
+ const group=scene.getObjectByName('starbase-pad');assert.ok(group);
+ const pad=FREMONT_SPACEPORT.pad;
+ const heights=(x:number,z:number)=>new T.Raycaster(new T.Vector3(x,200,z),new T.Vector3(0,-1,0))
+  .intersectObject(group,true).map(hit=>hit.point.y);
+ for(const part of spaceportStructureBoxes('pad',pad)){
+  const top=part.y+part.h/2;
+  assert.ok(heights(pad.x+part.x,pad.z+part.z).some(y=>Math.abs(y-top)<.001),`missing rendered channel surface at ${part.x},${part.z}, y=${top}`);
+ }
+ assert.ok(heights(pad.x,pad.z+42).every(y=>y<=.1),'outlet is open above the decorative floor');
 }));
 
 test('Sutro has open space between posts and a real underside on each crossbeam',()=>{
