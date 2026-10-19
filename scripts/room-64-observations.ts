@@ -45,7 +45,13 @@ export function movementTracker(durationMs:number) {
       }
       block.samples++;
       block.firstAtMs??=sample.atMs;
-      if(block.lastAtMs!==null)block.maxGapMs=Math.max(block.maxGapMs,sample.atMs-block.lastAtMs);
+      if(previous){
+        const gap=sample.atMs-previous.atMs;
+        block.maxGapMs=Math.max(block.maxGapMs,gap);
+        // A stall spanning a block boundary must count in both blocks.
+        const previousBlock=blocks[Math.floor(previous.atMs/10_000)];
+        previousBlock.maxGapMs=Math.max(previousBlock.maxGapMs,gap);
+      }
       block.lastAtMs=sample.atMs;
       if(Math.hypot(car.vx,car.vy,car.vz)>5)block.movingSamples++;
       if(previous&&previous.vehicle){

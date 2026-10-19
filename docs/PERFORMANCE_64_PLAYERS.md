@@ -39,6 +39,31 @@ distant owner cars. Every recipient's strings and byte totals matched. The
 18-logical-CPU host was contended (one-minute load around 21); wall-time and
 production gains are unproven. This is a candidate, not a 64-player pass.
 
+A separate [hosted comparison and room diagnostic](https://github.com/swyxio/TeslaRoadster6/actions/runs/39185379789)
+used candidate `e8560ab` and base `8be55d4`. Three alternating, same-runner
+samples of 50 broadcasts had median process CPU 169.34 → 140.00 ms clustered,
+118.85 → 104.80 ms spread and 143.75 → 136.96 ms with 64 distant owned cars.
+This remains an in-process synthetic comparison; it does not establish a room
+or network speedup.
+
+Four separate hosted runners staged 64 sessions in a sandbox room on the exact
+candidate preview. All observed 64 drivers; the 65th connection was rejected
+as full. During approximately 60 overlapping wall seconds, all 64 drivers
+completed the sampled moving blocks and each runner observed at least 59.8
+simulation seconds. The combined measured window recorded 374 late rejections
+among 84,367 sent inputs, with a one-second response drain; additional delayed
+responses may be missing. Runner snapshot-gap p95 ranged from 109.16 to
+113.70 ms. Sandbox upgrades, straight corridors and headless sessions do not
+test normal economy, contacts, rendered motion, wire bytes or server tick work.
+
+The workflow failed: three groups recorded late inputs, and main advanced from
+`8be55d4` to `c5bd893` before the post-run identity check. That main change
+only altered performance-workflow and documentation files, but the run does not
+pass the exact-base release gate. The original movement tracker also failed to
+count gaps spanning two ten-second blocks; its regression test now covers that
+case. The recorded maximum snapshot gaps were under one second per runner, but
+this sample is not a full continuity or playable-capacity pass.
+
 ## External experience and implications
 
 - [Glenn Fiedler's snapshot compression experiments](https://gafferongames.com/post/snapshot_compression/)
