@@ -65,6 +65,8 @@ test('award progress uses only known delivery and current match state',()=>{
   assert.equal(awardProgress('regular',player,world),'2 / 3 deliveries');
   assert.equal(awardProgress('regular',undefined,world),'Connect to see this drive’s progress');
   world.soccer.participants.push({playerId:player.id,touches:{roadster:true,retrofit:false,stock:false},goals:{roadster:1,retrofit:0,stock:0}});
+  assert.equal(awardProgress('dome-debut',player,world),'Ball touched · finish the match');
+  assert.equal(awardProgress('dome-champion',player,world),'Goal credited · win the match');
   assert.equal(awardProgress('rocket-rookie',player,world),'Ball touched · finish the match');
   assert.equal(awardProgress('roadster-champion',player,world),'Goal credited · win the match');
   assert.equal(awardProgress('no-rockets-needed',player,world),'Try a stock car next match');
@@ -119,6 +121,7 @@ test('award groups cover the catalog and preserve actual milestone ordering and 
   assert.deepEqual(awardDetails('deliveries-1'),{description:'Complete your first delivery.',reward:'$500 cash'});
   assert.deepEqual(awardDetails('berkeley-research'),{description:'Visit the Campanile.',reward:'$400 and 20% off efficient nozzles'});
   assert.deepEqual(awardDetails('park-it'),{description:'Complete a Park It challenge.',reward:'Award only'});
+  assert.equal(awardDetails('dome-debut').reward,'Dome power-up');
 });
 
 test('repeatable progress only exposes committed owner wallet counts',()=>{

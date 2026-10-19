@@ -27,6 +27,10 @@ export class RoomEarningsEvents {
       event_id TEXT PRIMARY KEY, requested_at INTEGER NOT NULL, won_at INTEGER NOT NULL,
       ends_at INTEGER NOT NULL, prior_until INTEGER
     );
+    CREATE TABLE IF NOT EXISTS room_earnings_aborted (
+      event_id TEXT PRIMARY KEY, requested_at INTEGER NOT NULL, won_at INTEGER NOT NULL,
+      ends_at INTEGER NOT NULL, prior_until INTEGER
+    );
     CREATE TABLE IF NOT EXISTS room_earnings_fence (
       singleton INTEGER PRIMARY KEY CHECK (singleton=1), before_ms INTEGER NOT NULL
     );
@@ -43,7 +47,7 @@ export class RoomEarningsEvents {
     return this.record(eventId,requestedAtMs,false);
   }
 
-  /** The present Dome match has no repeatable payout; publish its win atomically. */
+  /** Publish a legacy or otherwise unpayable room win atomically. */
   recordWinWithoutPayout(eventId:string,requestedAtMs:number):PreparedRoomWin {
     return this.record(eventId,requestedAtMs,true);
   }
@@ -54,11 +58,14 @@ export class RoomEarningsEvents {
     return this.storage.transactionSync(()=>{
       const sql=this.storage.sql;
       const existing=sql.exec<WinRow>(`SELECT * FROM room_earnings_wins WHERE event_id=?
-        UNION ALL SELECT * FROM room_earnings_pending WHERE event_id=?`,eventId,eventId).toArray()[0];
+        UNION ALL SELECT * FROM room_earnings_pending WHERE event_id=?
+        UNION ALL SELECT * FROM room_earnings_aborted WHERE event_id=?`,eventId,eventId,eventId).toArray()[0];
       if(existing){
         if(existing.requested_at!==requestedAtMs)throw new Error('Room win ID already used for another time');
         if(settled&&sql.exec<WinRow>('SELECT * FROM room_earnings_pending WHERE event_id=?',eventId).toArray().length)
           throw new Error('Room win is awaiting settlement');
+        if(settled&&sql.exec<WinRow>('SELECT * FROM room_earnings_aborted WHERE event_id=?',eventId).toArray().length)
+          throw new Error('Room win was aborted');
         return prepared(existing);
       }
       if(sql.exec<WinRow>('SELECT * FROM room_earnings_pending LIMIT 1').toArray().length)
@@ -67,8 +74,12 @@ export class RoomEarningsEvents {
       // A same-millisecond observation precedes this win; older unprepared
       // wins are an ordering failure and must not silently move into the future.
       if(requestedAtMs<fence-1)throw new Error('Room win is older than observed earnings');
-      const startsAtMs=Math.max(requestedAtMs,fence);validTime(startsAtMs);
-      const previous=sql.exec<{ends_at:number}>('SELECT ends_at FROM room_earnings_wins WHERE won_at<=? AND ends_at>? ORDER BY won_at DESC LIMIT 1',startsAtMs,startsAtMs).toArray()[0];
+      // Every action already observed in the same millisecond precedes the
+      // resulting win, including actions awaiting their historical rate.
+      const startsAtMs=Math.max(requestedAtMs+(settled?0:1),fence);validTime(startsAtMs);
+      // The payout was earned at the original observed instant, even if the
+      // event fence orders the new window one millisecond later.
+      const previous=sql.exec<{ends_at:number}>('SELECT ends_at FROM room_earnings_wins WHERE won_at<=? AND ends_at>? ORDER BY won_at DESC LIMIT 1',requestedAtMs,requestedAtMs).toArray()[0];
       const row={event_id:eventId,requested_at:requestedAtMs,won_at:startsAtMs,ends_at:startsAtMs+ROOM_WIN_DURATION_MS,prior_until:previous?.ends_at??null};
       const table=settled?'room_earnings_wins':'room_earnings_pending';
       sql.exec(`INSERT INTO ${table} (event_id,requested_at,won_at,ends_at,prior_until) VALUES (?,?,?,?,?)`,row.event_id,row.requested_at,row.won_at,row.ends_at,row.prior_until);
@@ -86,6 +97,23 @@ export class RoomEarningsEvents {
       const row=sql.exec<WinRow>('SELECT * FROM room_earnings_pending WHERE event_id=?',eventId).toArray()[0];
       if(!row)throw new Error('Room win has not been prepared');
       sql.exec('INSERT INTO room_earnings_wins (event_id,requested_at,won_at,ends_at,prior_until) VALUES (?,?,?,?,?)',row.event_id,row.requested_at,row.won_at,row.ends_at,row.prior_until);
+      sql.exec('DELETE FROM room_earnings_pending WHERE event_id=?',eventId);
+      return prepared(row);
+    });
+  }
+
+  /** Close a completed match without a credited winner, without a room bonus. */
+  abortWin(eventId:string):PreparedRoomWin {
+    validId(eventId);
+    return this.storage.transactionSync(()=>{
+      const sql=this.storage.sql;
+      const existing=sql.exec<WinRow>('SELECT * FROM room_earnings_aborted WHERE event_id=?',eventId).toArray()[0];
+      if(existing)return prepared(existing);
+      if(sql.exec<WinRow>('SELECT * FROM room_earnings_wins WHERE event_id=?',eventId).toArray().length)
+        throw new Error('Room win is already published');
+      const row=sql.exec<WinRow>('SELECT * FROM room_earnings_pending WHERE event_id=?',eventId).toArray()[0];
+      if(!row)throw new Error('Room win has not been prepared');
+      sql.exec('INSERT INTO room_earnings_aborted (event_id,requested_at,won_at,ends_at,prior_until) VALUES (?,?,?,?,?)',row.event_id,row.requested_at,row.won_at,row.ends_at,row.prior_until);
       sql.exec('DELETE FROM room_earnings_pending WHERE event_id=?',eventId);
       return prepared(row);
     });

@@ -187,7 +187,7 @@ export class Session {
         if(message.type==='reward'){
           const reward=message.reward as DeliveryReward;
           if(!reward||!Number.isSafeInteger(reward.id)||reward.id<1||!Number.isSafeInteger(reward.amount)||reward.amount<1||
-             !['pickup','delivery','pickup-research','delivery-research','supply-repair','supply-air','research'].includes(reward.kind))throw new Error('Invalid reward');
+             !['pickup','delivery','pickup-research','delivery-research','supply-repair','supply-air','research','dome-match'].includes(reward.kind))throw new Error('Invalid reward');
           if(reward.id>this.rewardId){this.rewardId=reward.id;this.rewards.push(reward);}
         }
         if (message.type === 'luxuryResult') this.luxuryResult = message;

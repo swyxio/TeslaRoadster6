@@ -17,7 +17,7 @@ import type { RoomEconomy } from './room-economy';
 import { StarshipLedger } from './starship';
 import { normalizeName } from './global-chat-core';
 import type { StarshipContributorGroup } from '../shared/starship';
-import { earningsMultiplier, type EarningsEvents, type SettledDeliveryEarning } from '../shared/earnings-events';
+import { activityPayout, DOME_MATCH_CASH, DOME_WIN_CASH, earningsMultiplier, type EarningsEvents, type SettledDeliveryEarning } from '../shared/earnings-events';
 import { MARKET_LOCK_KEY, MarketWallet, type MarketWalletIntent, type MarketWalletPrepared } from './market-wallet';
 
 export type SavedVehicle = { upgrades:VehicleUpgrades; tankLevel:TankLevel; style:VehicleStyle };
@@ -42,7 +42,7 @@ export type DriverAction = {kind:'progress';progress:DriverProgress;earnings?:Se
   | {kind:'cab-buy';assetId:string;order?:Order} | {kind:'cab-income';intervals:CybercabInterval[]}
   | {kind:'cab-paint';assetId:string;paint:PaintId;order?:Order} | {kind:'ticket';evidence:TicketEvidence;orderBefore:Order;completedBefore:number}
   | {kind:'delivery';stop:DeliveryStop;atMs:number;multiplier:1|1.5|2|3|null}
-  | {kind:'achievement';evidence:AchievementEvidence} | {kind:'supply';type:'repair'|'air'};
+  | {kind:'achievement';evidence:AchievementEvidence;dome?:{matchId:string;atMs:number}} | {kind:'supply';type:'repair'|'air'};
 export type EconomyIntent = {eventId:string;driverId:string;fence:string;roomId:string;revision:number;sequence:number;clock?:number;action:DriverAction;pickup?:{id:string;generation:number}};
 export type DriverOutcome =
   | {ok:true;revision:number;progress:DriverProgress;awards:AchievementId[];roomFund?:number;delivery?:{matched:boolean;earnings:SettledDeliveryEarning[];lastReward:DeliveryState['lastReward'];lastPayout:number|null};achievement?:{lastReward:DeliveryState['lastReward']};assignment?:Omit<NonNullable<DeliveryState['lastReroute']>,'id'>}
@@ -228,7 +228,7 @@ export class DriverProfile extends DurableObject<Env> {
     return this.ctx.storage.transaction(async txn=>{
       const key=`receipt:${intent.eventId}`;
       const receipt=await txn.get<Receipt>(key);
-      if(receipt)return receipt.payload===payload && (intent.action.kind!=='cab-income'&&intent.action.kind!=='delivery'||JSON.stringify(receipt.cabEvents)===JSON.stringify(cabEvents))?receipt.outcome:{ok:false,reason:'conflict'};
+      if(receipt)return receipt.payload===payload && (intent.action.kind!=='cab-income'&&intent.action.kind!=='delivery'&&!(intent.action.kind==='achievement'&&intent.action.dome)||JSON.stringify(receipt.cabEvents)===JSON.stringify(cabEvents))?receipt.outcome:{ok:false,reason:'conflict'};
       const assignmentKey=`assignment:${intent.eventId}`;
       const checkpoint=await txn.get<AssignmentCheckpoint>(assignmentKey);
       if(checkpoint && (checkpoint.payload!==payload||JSON.stringify(checkpoint.cabEvents)!==JSON.stringify(cabEvents)))return {ok:false,reason:'conflict'};
@@ -348,16 +348,26 @@ export class DriverProfile extends DurableObject<Env> {
             }
           }
         } else if(intent.action.kind==='achievement'){
-          const evidence=intent.action.evidence;
-          if(!isAchievementEvidence(evidence))error='invalid';
+          const evidence=intent.action.evidence,dome=intent.action.dome;
+          if(!isAchievementEvidence(evidence)||dome&&(evidence.kind!=='dome'||typeof dome.matchId!=='string'||!dome.matchId||!Number.isSafeInteger(dome.atMs)||dome.atMs<0))error='invalid';
           else {
+            if(dome&&!cabEvents)return {ok:false,reason:'not-ready'};
             const delivery=initialDelivery({x:0,z:0});
             Object.assign(delivery,{cash:next.cash,lifetimeIncome:next.eligibleIncome,level:levelForCash(next.cash)});
             const state=initialAchievements();state.unlocked=[...next.unlocked];
             const tier=applyObservedAchievement(delivery,state,next.achievementTiers!,evidence,next.vehicleCollections!);
             awards=tier.awards;
+            if(dome&&evidence.kind==='dome'){
+              try{
+                const amount=activityPayout(DOME_MATCH_CASH+(evidence.won?DOME_WIN_CASH:0),'dome-match',dome.atMs,cabEvents!);
+                delivery.cash+=amount;delivery.lifetimeIncome+=amount;
+                delivery.level=levelForCash(delivery.cash);
+                awards.push(...applyAchievementAwards(delivery,state,[]));
+                delivery.lastReward={id:1,kind:'dome-match',amount:delivery.cash-next.cash};
+              }catch{error='invalid';}
+            }
             if(!validAmount(delivery.cash)||!validAmount(delivery.lifetimeIncome))error='invalid';
-            else {
+            if(!error){
               next.cash=delivery.cash;next.eligibleIncome=delivery.lifetimeIncome;next.unlocked=state.unlocked;next.achievementTiers=tier.progress;next.vehicleCollections=tier.collections;
               achievementResult={lastReward:delivery.lastReward};
             }
@@ -437,7 +447,7 @@ export class DriverProfile extends DurableObject<Env> {
         }
       }
       if(!result.ok)await txn.put('driver',{...record,sequence:intent.sequence} satisfies DriverRecord);
-      await txn.put(key,{payload,outcome:result,...((intent.action.kind==='cab-income'||intent.action.kind==='delivery')&&cabEvents?{cabEvents}:{} )} satisfies Receipt);
+      await txn.put(key,{payload,outcome:result,...((intent.action.kind==='cab-income'||intent.action.kind==='delivery'||intent.action.kind==='achievement'&&intent.action.dome)&&cabEvents?{cabEvents}:{} )} satisfies Receipt);
       if(checkpoint)await txn.delete(assignmentKey);
       return result;
     });

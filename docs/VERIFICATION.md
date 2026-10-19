@@ -1,5 +1,13 @@
 # Verification · 2026-10-18 Pacific
 
+## Rocket Dome rewards candidate · protocol v47 · 2026-10-18 Pacific
+
+- Initially based on main `1f722dd`, `pnpm test` passed 1,009 tests and `pnpm build` passed; the existing large-chunk warning remains. The candidate was subsequently rebased onto `8b3d6fe` and these checks were repeated. These are functional checks, not a performance verdict.
+- The local two-client Wrangler room integration completed five goals and observed the winner's match reward and both unlocks; a spectator received no match cash. The room and chat integrations passed before the practice-only fallback was added. Neither is a capacity test.
+- Local payout fault fixtures passed twice with repeated wins, capped tiers, an uncredited result, a crash before staging, a lost publish reply, and a disconnected driver with an earlier same-millisecond delivery. While the payout history was deliberately stalled, the room tick and another driver's input and movement continued. The wallet-replay and room-earnings-event integrations also passed. These isolated fixtures are not production or throughput evidence.
+- Local Chrome displayed the Dome reward and power-up instructions on desktop and at emulated 390 × 844 portrait, 844 × 390 landscape and 568 × 320 landscape settings; controls did not overlap the score panel in the inspected frames. Awards listed both unlocks. The browser session scaled the page, so these are emulated settings, not physical-device results. An attempted portrait touch check was interrupted by a local server reload and a later browser adapter timeout; it is not a passed touch-control test.
+- The integrated driving-continuity and performance gates remain open, so this candidate is not a release.
+
 ## Boost and landing feedback candidate · 2026-10-18 Pacific
 
 - After integrating sandbox main `26fc934`, all 1,006 tests and `pnpm build` passed on `0f9b494`; the existing large-chunk warning remains. These are functional checks, not a performance verdict.

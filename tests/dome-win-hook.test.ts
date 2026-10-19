@@ -4,7 +4,7 @@ import { DOME } from '../shared/dome';
 import { CUSTOMERS } from '../shared/delivery';
 import { addPlayer, createWorld, step, travelDome } from '../shared/game';
 
-test('a verified Dome win is announced once before match awards and same-tick delivery resolution',()=>{
+test('a verified Dome win is announced once before same-tick delivery resolution',()=>{
   const world=createWorld();
   const scorer=addPlayer(world,'scorer','Scorer');
   const gone=addPlayer(world,'gone','Gone');
@@ -35,6 +35,7 @@ test('a verified Dome win is announced once before match awards and same-tick de
       if(player.id===scorer.id&&!alreadyAwarded&&player.achievements.unlocked.includes('rocket-rookie'))events.push('awards');
     },
     pickup:()=>{},
+    achievement:()=>{events.push('achievement');},
     onDomeWin:({participants,winners}:{participants:readonly typeof world.soccer.participants[number][];winners:readonly string[]})=>{
       calls++;
       events.push('win');
@@ -54,9 +55,9 @@ test('a verified Dome win is announced once before match awards and same-tick de
     },
   };
   step(world,new Map(),.05,{economy:hooks});
-  assert.deepEqual(events,['win','awards','resolve']);
-  assert.ok(scorer.achievements.unlocked.includes('rocket-rookie'));
-  assert.ok(scorer.achievements.unlocked.includes('roadster-champion'));
+  assert.deepEqual(events,['win','resolve']);
+  assert.ok(!scorer.achievements.unlocked.includes('rocket-rookie'),'the host owns match settlement');
+  assert.ok(!scorer.achievements.unlocked.includes('roadster-champion'));
   assert.equal(courier.delivery.completed,1);
   assert.equal(courier.delivery.lastPayout,2_000);
   assert.equal(world.soccer.participants[0].touches.roadster,true);

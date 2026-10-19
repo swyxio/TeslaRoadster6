@@ -1,5 +1,5 @@
 import { DOME } from './dome';
-import type { Entity } from './game';
+import type { Entity, Player } from './game';
 import { domeSurface } from './map';
 import { dimensions } from './physics';
 import { hasRockets } from './upgrades';
@@ -19,15 +19,22 @@ export type SoccerState = {
   participants:DomeParticipant[];
   lastTouch:{playerId:string;carClass:DomeCarClass}|null;
   winningPlayers:string[];
+  pulseShots:{playerId:string;readyAt:number}[];
 };
 
 const BALL_RADIUS=DOME.ballRadius, MAX_BALL_SPEED=120, RESTITUTION=.78;
+export const DOME_PULSE_COOLDOWN=15, DOME_PULSE_IMPULSE=20, DOME_CHAMPION_AIR=25;
 const GOAL_SECONDS=3, WIN_SECONDS=6, WIN_SCORE=5;
 const EPSILON=.0001;
 const kickoff=():SoccerBall=>({x:DOME.x,y:BALL_RADIUS,z:DOME.z,vx:0,vy:0,vz:0});
 
 export function initialSoccer():SoccerState {
-  return {ball:kickoff(),blueScore:0,orangeScore:0,phase:'play',phaseUntil:0,winner:null,lastScorer:null,participants:[],lastTouch:null,winningPlayers:[]};
+  return {ball:kickoff(),blueScore:0,orangeScore:0,phase:'play',phaseUntil:0,winner:null,lastScorer:null,participants:[],lastTouch:null,winningPlayers:[],pulseShots:[]};
+}
+
+/** Simulation seconds remaining until the driver's next earned Pulse Shot. */
+export function pulseShotRemaining(state:SoccerState,playerId:string,time:number):number {
+  return Math.max(0,(state.pulseShots.find(shot=>shot.playerId===playerId)?.readyAt??0)-time);
 }
 
 export function domeGoals(participant:DomeParticipant):number {
@@ -65,9 +72,15 @@ function scoreCrossing(ball:SoccerBall,dx:number,dy:number,dz:number):{t:number;
   return fitsGoal(y,z)?{t,side:dx>0?'blue':'orange'}:null;
 }
 
-function recordGoal(state:SoccerState,side:SoccerSide,time:number,entities:readonly Entity[]):void {
+function recordGoal(state:SoccerState,side:SoccerSide,time:number,entities:readonly Entity[],players:readonly Player[],canCollect?: (id:string)=>boolean):void {
   const touch=state.lastTouch,scorer=state.participants.find(p=>p.playerId===touch?.playerId);
-  if(touch&&scorer)scorer.goals[touch.carClass]++;
+  if(touch&&scorer){
+    scorer.goals[touch.carClass]++;
+    const driver=players.find(player=>player.id===touch.playerId);
+    const car=entities.find(entity=>entity.driver===touch.playerId&&entity.inDome);
+    if(driver?.achievements.unlocked.includes('dome-champion')&&car&&hasRockets(car)&&(!canCollect||canCollect(driver.id)))
+      car.air=Math.min(100,car.air+DOME_CHAMPION_AIR);
+  }
   state.lastTouch=null;
   if(side==='blue')state.blueScore++;else state.orangeScore++;
   state.lastScorer=side;
@@ -142,7 +155,7 @@ function contain(ball:SoccerBall):void {
   }
 }
 
-function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number,duration:number,dt:number,time:number):void {
+function advanceBall(state:SoccerState,entities:readonly Entity[],players:readonly Player[],elapsed:number,duration:number,dt:number,time:number,canCollect?: (id:string)=>boolean):void {
   const ball=state.ball;
   let remaining=duration,offset=elapsed;
   // The bound prevents pathological repeated overlap from making a tick unbounded.
@@ -157,7 +170,7 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number
     const crossing=scoreCrossing(ball,dx,dy,dz);
     if(crossing&&(!hit||crossing.t<=hit.t)){
       ball.x+=dx*crossing.t;ball.y+=dy*crossing.t;ball.z+=dz*crossing.t;
-      recordGoal(state,crossing.side,time,entities);return;
+      recordGoal(state,crossing.side,time,entities,players,canCollect);return;
     }
     const fraction=hit?.t??1;
     ball.x+=dx*fraction;ball.y+=dy*fraction;ball.z+=dz*fraction;
@@ -168,13 +181,20 @@ function advanceBall(state:SoccerState,entities:readonly Entity[],elapsed:number
     if(relative<0){
       recordTouch(state,hit.car);
       const impulse=-(1+RESTITUTION)*relative;ball.vx+=impulse*hit.nx;ball.vy+=impulse*hit.ny;ball.vz+=impulse*hit.nz;limitSpeed(ball);
+      const driver=hit.car.driver?players.find(player=>player.id===hit.car.driver):undefined;
+      if(driver?.achievements.unlocked.includes('dome-debut')&&pulseShotRemaining(state,driver.id,time)===0){
+        ball.vx+=DOME_PULSE_IMPULSE*hit.nx;ball.vy+=DOME_PULSE_IMPULSE*hit.ny;ball.vz+=DOME_PULSE_IMPULSE*hit.nz;limitSpeed(ball);
+        const active=state.pulseShots.find(shot=>shot.playerId===driver.id);
+        if(active)active.readyAt=time+DOME_PULSE_COOLDOWN;
+        else state.pulseShots.push({playerId:driver.id,readyAt:time+DOME_PULSE_COOLDOWN});
+      }
     }
     contain(ball);
   }
 }
 
 /** Advance server-owned soccer using real simulation seconds and the cars' authoritative poses. */
-export function stepSoccer(state:SoccerState,entities:readonly Entity[],dt:number,worldTime:number):void {
+export function stepSoccer(state:SoccerState,entities:readonly Entity[],dt:number,worldTime:number,players:readonly Player[],canCollect?: (id:string)=>boolean):void {
   if(!Number.isFinite(dt)||dt<=0||!Number.isFinite(worldTime))return;
   if(state.phase!=='play'){
     if(worldTime>=state.phaseUntil){
@@ -192,6 +212,6 @@ export function stepSoccer(state:SoccerState,entities:readonly Entity[],dt:numbe
     const drag=Math.exp(-.08*substep);
     state.ball.vx*=drag;state.ball.vz*=drag;state.ball.vy-=9.81*substep;
     limitSpeed(state.ball);
-    advanceBall(state,entities,i*substep,substep,dt,worldTime);
+    advanceBall(state,entities,players,i*substep,substep,dt,worldTime,canCollect);
   }
 }

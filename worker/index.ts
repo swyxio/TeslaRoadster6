@@ -14,7 +14,8 @@ import { initialDelivery } from '../shared/delivery';
 import { prepareNavigationGraph } from '../shared/navigation';
 import { EconomySession } from './economy-session';
 import { DriverProfile, GlobalIncome, progressFrom, type DriverProgress } from './driver-profile';
-import { RoomEconomy } from './room-economy';
+import { RoomEconomy, type AchievementStage } from './room-economy';
+import type { DomeParticipant } from '../shared/soccer';
 import { GlobalEarningsEvent } from './global-earnings-event';
 import { scheduleGlobalEarnings } from './global-earnings-admin';
 import { activityPayout, earningsMultiplier, globalWindowsForInstant, ROOM_WIN_DURATION_MS, type EarningsEvents, type EarningsWindow, type GlobalEventLease } from '../shared/earnings-events';
@@ -33,7 +34,7 @@ type Env = { ASSETS: Fetcher; ROOMS: DurableObjectNamespace<GameRoom>; CHAT: Dur
 type CabMessage=Extract<ClientMessage,{type:'cab'}>;
 type Session = { id:string; lastMessage:number; windowStart:number; count:number; lastAction:number; control:ScheduledInput; poseRevision:number; economy:EconomySession|null; syncToken:number; identityTail:Promise<void>; attachPending:boolean; guest:boolean; identitySequence:number; pendingBind:{driverId:string;fence:string}|null;cabHighWater:number;cabRequests:Map<number,{payload:string;reply:string|null}>;marketHold:MarketHold|null };
 type ControlledPose = {id:string;x:number;y:number;z:number;yaw:number;pitch:number;roll:number};
-type PendingRoomWin = {event_id:string;requested_at:number;room_id:string};
+type PendingRoomWin = {event_id:string;requested_at:number;room_id:string;stages:string|null;activate:number;settled:number};
 type RoomEarningsSnapshot = {observedAt:number;events:EarningsEvents;lease:GlobalEventLease};
 const ROOM_EARNINGS_STALE_MS=5_000;
 const reply = (body: string, status: number) => new Response(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -93,6 +94,7 @@ export class GameRoom extends DurableObject<Env> {
   private winFlight:Promise<void>|null=null;
   private hasPendingWin=false;
   private winJournalGeneration=0;
+  private winStorageReady=false;
   private propertyRefreshing=false;
   private propertyRevision=0;
 
@@ -100,23 +102,27 @@ export class GameRoom extends DurableObject<Env> {
   private ledger(){return this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(this.roomId));}
   private initWinStorage(){
     this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS game_room_pending_wins (event_id TEXT PRIMARY KEY, requested_at INTEGER NOT NULL, room_id TEXT NOT NULL)');
+    if(!this.winStorageReady){
+      const columns=new Set(this.ctx.storage.sql.exec<{name:string}>('PRAGMA table_info(game_room_pending_wins)').toArray().map(column=>column.name));
+      if(!columns.has('stages'))this.ctx.storage.sql.exec('ALTER TABLE game_room_pending_wins ADD COLUMN stages TEXT');
+      if(!columns.has('activate'))this.ctx.storage.sql.exec('ALTER TABLE game_room_pending_wins ADD COLUMN activate INTEGER NOT NULL DEFAULT 1');
+      if(!columns.has('settled'))this.ctx.storage.sql.exec('ALTER TABLE game_room_pending_wins ADD COLUMN settled INTEGER NOT NULL DEFAULT 0');
+      this.winStorageReady=true;
+    }
     this.hasPendingWin=this.pendingWins().length>0;
   }
   private pendingWins():PendingRoomWin[]{
-    return this.ctx.storage.sql.exec<PendingRoomWin>('SELECT event_id,requested_at,room_id FROM game_room_pending_wins ORDER BY requested_at,event_id').toArray();
+    return this.ctx.storage.sql.exec<PendingRoomWin>('SELECT event_id,requested_at,room_id,stages,activate,settled FROM game_room_pending_wins ORDER BY requested_at,event_id').toArray();
   }
-  /**
-   * Resolve a cab interval only after the room's own win journal has drained.
-   * New wins invalidate an in-flight observation; the caller retries rather
-   * than consuming a history page which could precede a journalled win.
-   */
+  /** Earlier physical work can resolve while a match is awaiting its payout. */
   async cabEarningsHistory(roomId:string,fromMs:number,toMs:number):Promise<EarningsWindow[]>{
     if(roomSlug(`/api/room/${roomId}`)!==roomId || !this.ctx.id.equals(this.env.ROOMS.idFromName(roomId)))
       throw new Error('Room history identity mismatch');
     if(!Number.isSafeInteger(fromMs)||!Number.isSafeInteger(toMs)||fromMs<0||toMs<fromMs||toMs>Date.now())
       throw new RangeError('Room history must be a past interval');
     this.initWinStorage();
-    if(this.pendingWins().length){
+    const blocked=()=>this.pendingWins().some(win=>toMs>win.requested_at+(win.stages===null?0:1));
+    if(blocked()){
       // The retry flight catches publish errors; the journal, not the flight's
       // completion, is the evidence that a win really reached RoomEconomy.
       this.ctx.waitUntil(this.resumeWins());
@@ -128,7 +134,7 @@ export class GameRoom extends DurableObject<Env> {
     let cursor:RoomEventCursor|undefined;
     do{
       const page=await economy.earningsHistory(fromMs,toMs,cursor);
-      if(this.winJournalGeneration!==generation||this.pendingWins().length)
+      if(this.winJournalGeneration!==generation||blocked())
         throw new Error('Room win changed during history observation');
       windows.push(...page.windows);
       cursor=page.next??undefined;
@@ -193,7 +199,27 @@ export class GameRoom extends DurableObject<Env> {
       do{
         for(let win=this.pendingWins()[0];win;win=this.pendingWins()[0]){
           const economy=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(win.room_id));
-          const published=await economy.recordEarningsWinWithoutPayout(win.event_id,win.requested_at);
+          let published;
+          if(win.stages===null)published=await economy.recordEarningsWinWithoutPayout(win.event_id,win.requested_at);
+          else {
+            const stages=JSON.parse(win.stages) as AchievementStage[];
+            if(!win.settled){
+              await economy.prepareEarningsWin(win.event_id,win.requested_at);
+              const paid=await Promise.all(stages.map(async stage=>{
+                if(await economy.domePaid(stage))return true;
+                if(!this.hasLiveWallet(stage.driverId,stage.fence)){
+                  await this.stagePendingWallet(stage.driverId,stage.fence);
+                  // With no live producer, recover accepted stages in wallet order.
+                  void economy.freeze(stage.driverId,stage.fence).catch(()=>{});
+                }
+                return economy.domePaid(stage);
+              }));
+              if(!paid.every(Boolean))throw new Error('Dome payouts are still settling');
+              this.ctx.storage.sql.exec('UPDATE game_room_pending_wins SET settled=1 WHERE event_id=?',win.event_id);
+            }
+            await economy.clearDomePaid(stages);
+            published=win.activate?await economy.commitEarningsWin(win.event_id):await economy.abortEarningsWin(win.event_id);
+          }
           // A same-millisecond observation can place the win one millisecond
           // later. Do not resume payouts from a snapshot taken before it starts.
           while(Date.now()<published.startsAtMs)await new Promise(resolve=>setTimeout(resolve,Math.min(50,published.startsAtMs-Date.now())));
@@ -218,6 +244,21 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.storage.sql.exec('INSERT INTO game_room_pending_wins (event_id,requested_at,room_id) VALUES (?,?,?)',eventId,requestedAt,this.roomId);
     // Queue the watchdog in the same synchronous write batch as the journal,
     // before sending anything or awaiting remote work.
+    const watchdog=this.ctx.storage.setAlarm(Date.now()+1000);
+    this.publishEarningsStatus();this.ctx.waitUntil(watchdog.then(()=>this.resumeWins()));
+  }
+  private recordDomeMatch(result:{participants:readonly DomeParticipant[];winners:readonly string[]},byId:Map<string,Session>){
+    const requestedAt=Date.now(),eventId=crypto.randomUUID();
+    const stages=result.participants.flatMap(participant=>{
+      const stage=byId.get(participant.playerId)?.economy?.domeMatch(participant,result.winners.includes(participant.playerId),eventId,requestedAt);
+      return stage?[stage]:[];
+    });
+    if(!stages.length){if(result.winners.length)this.recordWin(requestedAt);return;}
+    this.winJournalGeneration++;
+    this.earningsGeneration++;this.earningsSnapshot=null;this.hasPendingWin=true;
+    // Session queues have not yielded: durable descriptors precede their RPCs.
+    this.ctx.storage.sql.exec('INSERT INTO game_room_pending_wins (event_id,requested_at,room_id,stages,activate,settled) VALUES (?,?,?,?,?,0)',
+      eventId,requestedAt,this.roomId,JSON.stringify(stages),result.winners.length?1:0);
     const watchdog=this.ctx.storage.setAlarm(Date.now()+1000);
     this.publishEarningsStatus();this.ctx.waitUntil(watchdog.then(()=>this.resumeWins()));
   }
@@ -341,11 +382,31 @@ export class GameRoom extends DurableObject<Env> {
     return new Response(null,{status:101,webSocket:client});
   }
 
-  /** Called by the driver's profile before replacing the old fence. */
+  private hasLiveWallet(driverId:string,fence:string):boolean{
+    return !!this.draining.get(`${driverId}:${fence}`)?.canFinishWalletWork||[...this.sessions.values()].some(s=>
+      s.economy?.walletId===driverId&&s.economy?.currentFence===fence&&s.economy.canFinishWalletWork);
+  }
+  private async stagePendingWallet(driverId:string,fence:string):Promise<void>{
+    this.initWinStorage();
+    for(const win of this.pendingWins())if(win.stages!==null&&!win.settled){
+      const economy=this.env.ECONOMIES.get(this.env.ECONOMIES.idFromName(win.room_id));
+      for(const stage of JSON.parse(win.stages) as AchievementStage[])if(stage.driverId===driverId&&stage.fence===fence&&!await economy.domePaid(stage)){
+        const accepted=await economy.stageAchievement(stage);
+        if(accepted!=='accepted')throw new Error('Dome result is awaiting recovery');
+      }
+    }
+    if(this.hasPendingWin)this.ctx.waitUntil(this.resumeWins());
+  }
+  /** Protect unstaged journal evidence from an automatic fence replacement. */
   async hasWallet(driverId:string,fence:string):Promise<boolean>{
-    return this.draining.has(`${driverId}:${fence}`)||[...this.sessions.values()].some(s=>
+    if(this.draining.has(`${driverId}:${fence}`)||[...this.sessions.values()].some(s=>
       (s.economy?.walletId===driverId&&s.economy?.currentFence===fence)||
-      (s.pendingBind?.driverId===driverId&&s.pendingBind.fence===fence));
+      (s.pendingBind?.driverId===driverId&&s.pendingBind.fence===fence)))return true;
+    this.initWinStorage();
+    const journaled=this.pendingWins().some(win=>!win.settled&&win.stages!==null&&
+      (JSON.parse(win.stages) as AchievementStage[]).some(stage=>stage.driverId===driverId&&stage.fence===fence));
+    if(journaled)this.ctx.waitUntil(this.resumeWins());
+    return journaled;
   }
   async freezeWallet(driverId:string,fence:string):Promise<void>{
     const matches=[...this.sessions.entries()].filter(([,s])=>
@@ -353,7 +414,9 @@ export class GameRoom extends DurableObject<Env> {
       (s.pendingBind?.driverId===driverId&&s.pendingBind.fence===fence));
     for(const [socket] of matches)this.disconnect(socket,1008,'Driver opened in another room.');
     const detached=this.draining.get(`${driverId}:${fence}`);
+    if(!matches.some(([,session])=>session.economy?.canProduceWalletWork))await this.stagePendingWallet(driverId,fence);
     await Promise.all([...matches.map(([,s])=>s.economy?.freeze()),...(detached?[detached.freeze()]:[])]);
+    await this.stagePendingWallet(driverId,fence);
   }
 
   /** Called only by a DriverProfile participant, never by a client. */
@@ -364,6 +427,7 @@ export class GameRoom extends DurableObject<Env> {
     if(matches.length>1)return false;
     if(!matches.length){
       const detached=this.draining.get(`${driverId}:${fence}`);if(detached)await detached.freeze();
+      await this.stagePendingWallet(driverId,fence);
       return true;
     }
     const [socket,session]=matches[0];
@@ -734,7 +798,7 @@ export class GameRoom extends DurableObject<Env> {
       decisionsAvailable:player=>byId.get(player.id)?.economy?.decisionsAvailable??false,
       pickup:(player,car,pickup)=>{const session=byId.get(player.id);if(session&&!session.attachPending)session.economy?.pickup(player,car,pickup);},
       resolveDeliveryPayout:(_player,component)=>settlement?activityPayout(component.amount,component.kind,settlement.atMs,settlement.events):null,
-      onDomeWin:result=>{if(result.winners.length)this.recordWin();},
+      onDomeWin:result=>this.recordDomeMatch(result,byId),
     }}));
     for(const id of heldRelocations)relocated.add(id);
     this.tickCount=nextTick;
