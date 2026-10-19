@@ -6,10 +6,14 @@ import { bankSurface } from './island-stunts';
 import { OVAL_BANK, ovalBankSurface, ovalTrackPoint } from './oval-bank';
 import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps';
 import { DOME } from './dome';
+import { DOME_STRUCTURE_BOXES } from './dome-structures';
+import { bridgeTowerBoxes } from './bridge-structures';
+import { spaceportStructureBoxes } from './spaceport-structures';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
 import { NEW_LANDMARKS } from './new-landmarks';
-import { newLandmarkPrimitives, sampleLandmarkPrimitive } from './new-landmark-surfaces';
+import { existingBuildingParts } from './building-structures';
+import { newLandmarkPrimitives, sampleLandmarkPrimitive, primitiveExtent, type StructuralPrimitive } from './new-landmark-surfaces';
 import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
@@ -144,29 +148,14 @@ export function domeRoofHeight(x:number,z:number):number|null {
 }
 /** Shared roof height for the visible curved special landmarks. */
 export function buildingRoofHeight(b:Building,x:number,z:number):number {
- if(b.landmarkId){
+ if(b.parts){
   const base=b.landmarkBase??0;
   let height=0;
-  for(const part of newLandmarkPrimitives(b.landmarkId)){
+  for(const part of b.parts){
    const surface=sampleLandmarkPrimitive(part,x-b.x,z-b.z);
    if(surface)height=Math.max(height,base+surface.top);
   }
   return height;
- }
- const dome=(cx:number,cz:number,rx:number,rz:number,base:number,height:number)=>{
-  const q=((x-cx)/rx)**2+((z-cz)/rz)**2;
-  return q<=1?base+height*Math.sqrt(Math.max(0,1-q)):0;
- };
- if(b.style==='rotunda')return Math.max(14,dome(b.x,b.z,9,9,14,9));
- if(b.style==='salesforce'||b.style==='coit')return Math.max(b.h,dome(b.x,b.z,b.w*.46,b.w*.46,b.h,b.w*.46*.38));
- if(b.style==='landmark'){
-  const p=NORTH_LANDMARKS.find(p=>p.x===b.x&&p.z===b.z);
-  if(p?.shape==='rotunda')return Math.max(b.h*.72,dome(b.x,b.z,b.w*.35,b.d*.35,b.h*.72,b.h*.28));
-  if(p?.shape==='crystal')return Math.max(b.h*.26,dome(b.x,b.z,b.w*.4,b.d*.4,b.h*.26,b.h*.7));
-  if(p?.shape==='academy'||p?.shape==='greenhouse'){
-   const academy=p.shape==='academy',base=b.h*(academy?.56:.43),radius=academy?.18:.19,offset=academy?.27:.28;
-   return Math.max(base,...[-1,0,1].map(i=>dome(b.x+i*b.w*offset,b.z,b.w*radius,b.d*(academy?.4:.39),base,b.h*(academy?.4:.5))));
-  }
  }
  return b.h;
 }
@@ -185,12 +174,16 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  const b=BUILDINGS[buildingIndex];
  if(!b)return null;
  if(partIndex!==undefined){
-  if(!b.landmarkId)return null;
-  const part=newLandmarkPrimitives(b.landmarkId)[partIndex];
+  if(!b.parts)return null;
+  const part=b.parts[partIndex];
   const surface=part&&sampleLandmarkPrimitive(part,x-b.x,z-b.z);
   return surface?(b.landmarkBase??0)+surface.top:null;
  }
- return Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?buildingRoofHeight(b,x,z):null;
+ if(b.parts){
+  const height=buildingRoofHeight(b,x,z);
+  return height>0?height:null;
+ }
+ return Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?b.h:null;
 }
 export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
  if(supportHeight(id,x,z)===null)return null;
@@ -309,7 +302,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom';stationId?:string;landmarkId?:string;landmarkBase?:number};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom'|'structure';stationId?:string;landmarkId?:string;landmarkBase?:number;parts?:readonly StructuralPrimitive[]};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -421,11 +414,31 @@ const vaultBlock=BUILDINGS.findIndex(b=>b.style==='midrise'&&Math.hypot(b.x-vaul
 if(vaultBlock<0)throw new Error('The Vault background block is missing');
 BUILDINGS.splice(vaultBlock,1,{...vault,district:'peninsula',style:'luxury-showroom'});
 BUILDINGS.push(...TESLAND_MONUMENTS.map(({x,z,w,d,h})=>({x,z,w,d,h,district:'sf' as const,style:'monument' as const})));
-BUILDINGS.push(...[FREMONT_SPACEPORT.factory,FREMONT_SPACEPORT.pad,FREMONT_SPACEPORT.tower].map(({x,z,w,d,h})=>({x,z,w,d,h,district:'east-bay' as const,style:'spaceport' as const})));
+for(const kind of ['factory','pad','tower'] as const){
+ const site=FREMONT_SPACEPORT[kind];
+ BUILDINGS.push({...site,district:'east-bay',style:'spaceport',parts:spaceportStructureBoxes(kind,site).map(({color:_,...box})=>({shape:'box',...box}))});
+}
+// Physical tower legs/crossbeams and stadium masonry. Each narrow box stays
+// separately indexed, so the open road and arena gate never become full envelopes.
+for(const p of [...BRIDGES.flatMap(bridgeTowerBoxes),...DOME_STRUCTURE_BOXES.filter(p=>p.w>=1&&p.h>=1&&p.d>=1).map(p=>({...p,x:p.x+DOME.x,z:p.z+DOME.z}))]){
+ BUILDINGS.push({x:p.x,z:p.z,w:p.w,d:p.d,h:p.y+p.h/2,district:'sf',style:'structure',
+  parts:[{shape:'box',x:0,y:p.y,z:0,w:p.w,h:p.h,d:p.d}]});
+}
+// Store structural geometry once. Neither simulation nor prediction scans the catalog.
+for(const b of BUILDINGS){b.parts??=b.landmarkId?newLandmarkPrimitives(b.landmarkId):existingBuildingParts(b);}
 // Shared candidate index keeps collision cost local as the city grows.
 const CELL=60,buildingCells=new Map<string,Building[]>();
 for(const b of BUILDINGS){
- for(let x=Math.floor((b.x-b.w/2)/CELL);x<=Math.floor((b.x+b.w/2)/CELL);x++)for(let z=Math.floor((b.z-b.d/2)/CELL);z<=Math.floor((b.z+b.d/2)/CELL);z++){
+ let minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
+ // Coping, tilted pieces and pitched eaves can extend beyond the authored
+ // main body. Include them in the index without changing rendering dimensions.
+ for(const part of b.parts??[]){
+  const e=primitiveExtent(part),c=Math.abs(Math.cos(e.yaw)),s=Math.abs(Math.sin(e.yaw));
+  const rx=(e.w*c+e.d*s)/2,rz=(e.w*s+e.d*c)/2;
+  minX=Math.min(minX,b.x+part.x-rx);maxX=Math.max(maxX,b.x+part.x+rx);
+  minZ=Math.min(minZ,b.z+part.z-rz);maxZ=Math.max(maxZ,b.z+part.z+rz);
+ }
+ for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let z=Math.floor(minZ/CELL);z<=Math.floor(maxZ/CELL);z++){
   const key=`${x},${z}`,cell=buildingCells.get(key)??[];cell.push(b);buildingCells.set(key,cell);
  }
 }

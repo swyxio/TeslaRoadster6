@@ -1,0 +1,114 @@
+{
+  "scope": "Offline sampled constructor geometry, not browser physics or a proof that every visible solid is authored",
+  "profiledBuildings": 393,
+  "totalBuildings": 430,
+  "totals": {
+    "parts": 1338,
+    "samples": 590058,
+    "falseSolid": 0,
+    "missingSolid": 0,
+    "missingIndex": 0
+  },
+  "variants": {
+    "box": {
+      "parts": 947,
+      "samples": 417627,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0,
+      "maxBottomError": 0,
+      "worst": ""
+    },
+    "roof/yawed/diamond": {
+      "parts": 77,
+      "samples": 33957,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 3.552713678800501e-15,
+      "maxBottomError": 0,
+      "worst": "building 6 house part 2 at -8.290,-10.227"
+    },
+    "roof": {
+      "parts": 154,
+      "samples": 67914,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0.000001149456068105792,
+      "maxBottomError": 0,
+      "worst": "building 39 pyramid part 0 at -9.554,-9.463"
+    },
+    "cylinder/tapered": {
+      "parts": 4,
+      "samples": 1764,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0.000021925432402980505,
+      "maxBottomError": 0.00000292294551940131,
+      "worst": "building 127 airport part 1 at 4.561,-1.391"
+    },
+    "dome": {
+      "parts": 35,
+      "samples": 15435,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0.0000034248069553655114,
+      "maxBottomError": 0,
+      "worst": "building 204 landmark part 1 at 8.975,-6.715"
+    },
+    "cylinder": {
+      "parts": 110,
+      "samples": 48510,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 1.7763568394002505e-15,
+      "maxBottomError": 4.440892098500626e-16,
+      "worst": "building 280 landmark part 3 at 2.505,0.058"
+    },
+    "dome/yawed": {
+      "parts": 6,
+      "samples": 2646,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0.0000019265598893980496,
+      "maxBottomError": 0,
+      "worst": "building 214 landmark part 1 at 7.426,-8.878"
+    },
+    "box/tilted": {
+      "parts": 3,
+      "samples": 1323,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 3.552713678800501e-15,
+      "maxBottomError": 1.7763568394002505e-15,
+      "worst": "building 199 landmark part 2 at 2.138,-0.704"
+    },
+    "dome/inverted": {
+      "parts": 1,
+      "samples": 441,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 0.0000012085644680581709,
+      "maxBottomError": 0,
+      "worst": "building 199 landmark part 3 at -1.982,-10.331"
+    },
+    "cylinder/horizontal": {
+      "parts": 1,
+      "samples": 441,
+      "falseSolid": 0,
+      "missingSolid": 0,
+      "missingIndex": 0,
+      "maxTopError": 2.8564155130084146e-7,
+      "maxBottomError": 2.856415495244846e-7,
+      "worst": "building 322 landmark part 2 at 5.474,5.929"
+    }
+  }
+}

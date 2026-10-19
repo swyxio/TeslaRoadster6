@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addPlayer, createWorld, interact, removePlayer, resetPlayer, simulationSubsteps, step, NEUTRAL, BUILDINGS } from '../shared/game';
 import { STATIONS, stationStalls } from '../shared/stations';
 import { refillStationFor } from '../shared/charging';
-import { HILL, terrainHeight } from '../shared/map';
+import { HILL, terrainHeight, buildingRoofHeight } from '../shared/map';
 import { NEW_LANDMARKS } from '../shared/new-landmarks';
 import { dimensions } from '../shared/physics';
 import { trafficInput } from '../shared/traffic';
@@ -12,6 +12,16 @@ import { ScheduledInput } from '../shared/tick-input';
 import { RoomInputClient } from './room-input-client';
 
 function setup() { const world = createWorld(); const player = addPlayer(world, 'one', 'One'); const car = world.entities.find(e => e.id === player.entityId)!; return { world, player, car }; }
+// Integration oracle: sample the point-surface API across the car's footprint.
+// Independent actual-mesh agreement and extrema checks live in structure-contact.
+function sampledRoofContact(roof:typeof BUILDINGS[number],car:ReturnType<typeof setup>['car']):number {
+ const size=dimensions(car.kind),c=Math.cos(car.yaw),s=Math.sin(car.yaw);let highest=0;
+ for(let ix=-10;ix<=10;ix++)for(let iz=-10;iz<=10;iz++){
+  const x=ix*size.width/20,z=iz*size.length/20;
+  highest=Math.max(highest,buildingRoofHeight(roof,car.x+x*c+z*s,car.z-x*s+z*c));
+ }
+ return highest;
+}
 test('presentation replay matches adaptive stepping when the authoritative count is known',()=>{
   const {world,car}=setup();world.entities=[car];Object.assign(car,{speed:32,vz:-32});
   const replay=structuredClone(world),inputs=new Map([['one',{...NEUTRAL,throttle:1,steer:.3}]]);
@@ -153,8 +163,8 @@ test('rooftop landing stays supported and can drive off; positive steer turns le
   const { world, car } = setup(); const roof = BUILDINGS[0];
   car.x = roof.x; car.z = roof.z; car.y = roof.h + 1; car.vy = -5; car.yaw = 0; car.supportId = null;
   for (let i = 0; i < 80; i++) step(world, new Map(), 0.05);
-  assert.equal(car.y, roof.h); assert.equal(car.vy, 0);
-  for (let i = 0; i < 30; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);
+  assert.equal(car.y, buildingRoofHeight(roof,car.x,car.z)); assert.equal(car.vy, 0);
+  for (let i = 0; i < 40; i++) step(world, new Map([['one', { ...NEUTRAL, throttle: 1 }]]), 0.05);
   assert.ok(car.z < roof.z - roof.d / 2); assert.ok(car.y < roof.h);
   car.x = 0; car.z = 0; car.y = 0; car.vy = 0; car.speed = 10; car.yaw = 0; car.supportId = 'ground';
   step(world, new Map([['one', { ...NEUTRAL, steer: 1 }]]), 0.05);
@@ -262,7 +272,7 @@ test('curved landmark roofs support a descending vehicle at their visible surfac
   const x=roof.x+roof.w*.15,z=roof.z,height=buildingRoofHeight(roof,x,z);
   Object.assign(car,{x,z,y:height+2,vy:-6,vx:0,vz:0,supportId:null});
   for(let i=0;i<20&&car.supportId===null;i++)step(world,new Map(),.05);
-  assert.equal(car.supportId,`roof:${BUILDINGS.indexOf(roof)}`);assert.ok(Math.abs(car.y-height)<.01);
+  assert.ok(car.supportId?.startsWith(`roof:${BUILDINGS.indexOf(roof)}:`));assert.ok(Math.abs(car.y-sampledRoofContact(roof,car))<.04);
  }
 });
 
@@ -353,7 +363,8 @@ test('angled vehicles contact a faceted arena even when their pivots are outside
  Object.assign(landing.car,{x,z,y:place.h+2,yaw:angle,vy:-5,vx:0,vz:0,speed:0,supportId:null});
  for(let i=0;i<100&&landing.car.supportId===null;i++)step(landing.world,new Map(),.05);
  assert.ok(landing.car.supportId?.startsWith('roof:'),`missed overlapping arena: ${landing.car.y}`);
- assert.ok(Math.abs(landing.car.y-place.h*.54)<.2,`unexpected edge height ${landing.car.y}`);
+ const roof=BUILDINGS.find(b=>b.landmarkId===place.id)!;
+ assert.ok(Math.abs(landing.car.y-sampledRoofContact(roof,landing.car))<.12,`unexpected body-edge height ${landing.car.y}`);
  const landedId=landing.car.supportId;
  for(let i=0;i<5;i++)step(landing.world,new Map(),.05);
  assert.equal(landing.car.supportId,landedId,'edge support changed while stationary');
@@ -431,7 +442,8 @@ test('a pitched car hits the carousel canopy with its body when rising and landi
  }
  assert.ok(tiltedInFlight,'car did not remain tilted during descent');
  assert.ok(landing.car.supportId?.startsWith('roof:'),`tilted landing missed roof: ${landing.car.supportId}`);
- assert.ok(Math.abs(landing.car.y-roofTop)<.12,`landed at ${landing.car.y}`);
+ const canopy=BUILDINGS.find(b=>b.landmarkId===place.id)!;
+ assert.ok(Math.abs(landing.car.y-sampledRoofContact(canopy,landing.car))<.12,`landed at ${landing.car.y}`);
 });
 
 test('an ascending car lands when a curved landmark roof rises faster beneath it',()=>{
@@ -439,9 +451,10 @@ test('an ascending car lands when a curved landmark roof rises faster beneath it
  const index=BUILDINGS.findIndex(building=>building.landmarkId===place.id);
  assert.ok(index>=0);
  const {world,car}=setup();world.entities=[car];world.pickups=[];
- // At +.2w, the rendered arena dome is 15.275m high. Moving toward its
- // center climbs the dome faster than the car's small upward velocity.
- Object.assign(car,{x:place.x+place.w*.2,z:place.z,y:15.325,yaw:0,pitch:0,roll:0,vy:2,vx:-12,vz:0,speed:0,supportId:null});
+ // Start with the entire body just above the dome. Starting above only
+ // the pivot height would already embed its inner edge in the curved roof.
+ Object.assign(car,{x:place.x+place.w*.2,z:place.z,yaw:0,pitch:0,roll:0,vy:2,vx:-12,vz:0,speed:0,supportId:null});
+ car.y=sampledRoofContact(BUILDINGS[index],car)+.05;
  let approachingUpward=false;
  for(let i=0;i<20&&car.supportId===null;i++){
   const priorVy=car.vy,priorY=car.y,priorX=car.x;
