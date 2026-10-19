@@ -65,14 +65,14 @@ export class DeliveryGuidance {
       this.key=key;this.requestId++;this.pending=false;this.requestedAt=-Infinity;this.path=[];this.failed=false;
     }
     if(this.path.length&&this.headingAnchor){
-      if(distance(car,this.headingAnchor)>8)this.headingAnchor={x:car.x,z:car.z,yaw:car.yaw};
-      else if(Math.cos(car.yaw-this.headingAnchor.yaw)<-.7){
+      if(Math.cos(car.yaw-this.headingAnchor.yaw)<-.7){
         this.path=[];this.failed=false;this.requestedAt=-Infinity;
-      }
+      }else if(distance(car,this.headingAnchor)>8)this.headingAnchor={x:car.x,z:car.z,yaw:car.yaw};
     }
     while(this.index<this.path.length-1){
-      const waypoint=this.path[this.index],next=this.path[this.index+1];
-      if(distance(car,waypoint)>8&&(distance(car,destination)<10||segmentDistance(car,waypoint,next)>7))break;
+      const waypoint=this.path[this.index],next=this.path[this.index+1],start=this.index?this.path[this.index-1]:this.origin;
+      const passed=(car.x-waypoint.x)*(waypoint.x-start.x)+(car.z-waypoint.z)*(waypoint.z-start.z)>=0;
+      if(distance(car,waypoint)>8&&(segmentDistance(car,waypoint,next)>7||(distance(car,destination)<10&&!passed)))break;
       this.index++;
     }
     if(this.path.length){

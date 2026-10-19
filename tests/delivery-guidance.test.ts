@@ -63,12 +63,28 @@ test('turning around in place replans without treating a normal turn as a U-turn
   assert.equal(requests.length,2);
 });
 
+test('a U-turn completed while a route is being planned requests a fresh route',()=>{
+  const {player,car,target}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[{x:car.x,z:car.z-80}]});
+  assert.equal(guide.update({...car,z:car.z-10,yaw:car.yaw+Math.PI},target,player.delivery.level,100).status,'routing');
+  assert.equal(requests.length,2);
+});
+
 test('a nearby destination does not skip a remaining turn around an obstacle',()=>{
   const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
   const target={x:car.x+6,z:car.z},turn={x:car.x,z:car.z+20};
   guide.update(car,target,player.delivery.level,0);
   guide.receive({id:requests[0].id,path:[turn,target]});
   assert.deepEqual(guide.update(car,target,player.delivery.level,100).waypoint,turn);
+});
+
+test('a turn already passed stays behind when approaching a nearby destination',()=>{
+  const {player,car}=fixture(),requests:GuidanceRequest[]=[],guide=new DeliveryGuidance(request=>requests.push(request));
+  const turn={x:car.x,z:car.z+20},target={x:car.x+20,z:car.z+20};
+  guide.update(car,target,player.delivery.level,0);
+  guide.receive({id:requests[0].id,path:[turn,target]});
+  assert.deepEqual(guide.update({...car,x:car.x+15,z:car.z+20},target,player.delivery.level,100).waypoint,target);
 });
 
 test('unreachable roads are labelled instead of falling back to a bearing through buildings',()=>{
