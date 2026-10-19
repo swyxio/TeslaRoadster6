@@ -6,6 +6,32 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Watch Starship rise',
+    intro: 'See the mission grow as drivers earn across Tesland.',
+    sections: [
+      { title: 'A tower that tracks the mission', items: [
+        'The Fremont tower now shows dollar milestones and a rising bar for confirmed game-wide earnings.',
+        'Open the Starship launch view to see the exact total and watch the construction take shape.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.34-alpha',
+    label: '0.0.34 Alpha',
+    date: '2026-10-18',
+    title: 'More of the Bay',
+    intro: 'Find 100 more Bay-inspired places across the map.',
+    sections: [
+      { title: 'New landmarks', items: [
+        'Explore miniature landmarks from Marin and San Francisco to Berkeley, the Peninsula and San Jose.',
+        'The Bay is playfully compressed: landmarks are original interpretations, and some have been moved to fit the world.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.33-alpha',
+    label: '0.0.33 Alpha',
+    date: '2026-10-18',
     title: 'Find your Bay',
     intro: 'Keep driving when the Bay fills up.',
     sections: [

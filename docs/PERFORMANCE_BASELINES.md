@@ -78,6 +78,10 @@ branch and optionally explicit base and candidate refs. The default base is
 for a meaningful comparison. The optional `record_video` input also records
 each revision in a separate run after the no-video measurements.
 
+Draft pull requests use the same selection. Marking a draft ready does not
+start another measurement; if the selected run failed or was cancelled,
+re-run it in Actions or use manual dispatch.
+
 Keep the workflow's path filter in sync with `performance-select.mjs`. GitHub's
 [path-filter limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons)
 can omit matches beyond the first 3,000 changed files; use manual dispatch for

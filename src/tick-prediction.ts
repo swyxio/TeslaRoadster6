@@ -78,6 +78,7 @@ function correctionClear(from:Entity,to:Entity):boolean {
     overlaps(STUNT_LOOP.x-STUNT_LOOP.radius,STUNT_LOOP.x+STUNT_LOOP.radius,STUNT_LOOP.z-STUNT_LOOP.width/2,STUNT_LOOP.z+STUNT_LOOP.width/2)||
     overlaps(DOME.x-DOME.halfLength,DOME.x+DOME.halfLength,DOME.z-DOME.flatHalfWidth-DOME.radius,DOME.z+DOME.flatHalfWidth+DOME.radius)))return false;
   if(nearbyBuildings(midX,midZ,Math.hypot(maxX-minX,maxZ-minZ)/2).some(b=>{
+    if(b.landmarkId)return buildingSweepBlocked(from,to,b);
     const roof=b.style==='rotunda'?Math.max(b.h,23):b.style==='salesforce'||b.style==='coit'?b.h+b.w*.46*.38:b.h;
     return Math.min(from.y,to.y)<roof&&buildingSweepBlocked(from,to,b);
   }))return false;

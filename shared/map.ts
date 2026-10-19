@@ -8,6 +8,8 @@ import { islandJumpAt, islandJumpHeight, islandJumpSlope } from './island-jumps'
 import { DOME } from './dome';
 import { NORTH_LANDMARKS, NORTH_NATURAL_LANDMARKS } from './north-landmarks';
 import { SOUTH_LANDMARKS } from './south-landmarks';
+import { NEW_LANDMARKS } from './new-landmarks';
+import { newLandmarkPrimitives, sampleLandmarkPrimitive } from './new-landmark-surfaces';
 import { CHARGER_LOT, STATIONS } from './stations';
 import { LUXURY_SHOWROOM } from './luxury';
 import { TECH_CAMPUS_BUILDINGS } from './tech-campuses';
@@ -107,7 +109,7 @@ export const NATURAL_HILLS=[
 ] as const;
 /** A fictional east/west crossing of US 101, with two 90 m approaches. */
 export const OVERPASS={id:'overpass',start:-430,deckStart:-340,deckEnd:-240,end:-150,z:480,width:18,height:8,thickness:.8} as const;
-export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-jump'|'island-cliff'|'ferry'|`roof:${number}`;
+export type SupportId='ground'|'overpass'|'stunt-ramp'|'stunt-loop'|'dome'|'dome-roof'|'island-bank'|'island-oval'|'island-jump'|'island-cliff'|'ferry'|`roof:${number}`|`roof:${number}:${number}`;
 // Both simulation and the rendered mesh use these same two triangles per cell.
 function sampledHill(hill:{minX:number;maxX:number;minZ:number;maxZ:number;height:number;columns:number;rows:number;twin?:boolean},x:number,z:number):{height:number;dx:number;dz:number} {
  if(x<=hill.minX||x>=hill.maxX||z<=hill.minZ||z>=hill.maxZ)return {height:0,dx:0,dz:0};
@@ -142,6 +144,15 @@ export function domeRoofHeight(x:number,z:number):number|null {
 }
 /** Shared roof height for the visible curved special landmarks. */
 export function buildingRoofHeight(b:Building,x:number,z:number):number {
+ if(b.landmarkId){
+  const base=b.landmarkBase??0;
+  let height=0;
+  for(const part of newLandmarkPrimitives(b.landmarkId)){
+   const surface=sampleLandmarkPrimitive(part,x-b.x,z-b.z);
+   if(surface)height=Math.max(height,base+surface.top);
+  }
+  return height;
+ }
  const dome=(cx:number,cz:number,rx:number,rz:number,base:number,height:number)=>{
   const q=((x-cx)/rx)**2+((z-cz)/rz)**2;
   return q<=1?base+height*Math.sqrt(Math.max(0,1-q)):0;
@@ -170,8 +181,16 @@ export function supportHeight(id:SupportId,x:number,z:number):number|null {
  if(id==='island-jump')return islandJumpHeight(x,z);
  // Curved surfaces can have multiple heights at one point; ferry support moves.
  if(id==='stunt-loop'||id==='dome'||id==='island-cliff'||id==='ferry')return null;
- const b=BUILDINGS[Number(id.slice(5))];
- return b&&Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?buildingRoofHeight(b,x,z):null;
+ const [buildingIndex,partIndex]=id.slice(5).split(':').map(Number);
+ const b=BUILDINGS[buildingIndex];
+ if(!b)return null;
+ if(partIndex!==undefined){
+  if(!b.landmarkId)return null;
+  const part=newLandmarkPrimitives(b.landmarkId)[partIndex];
+  const surface=part&&sampleLandmarkPrimitive(part,x-b.x,z-b.z);
+  return surface?(b.landmarkBase??0)+surface.top:null;
+ }
+ return Math.abs(x-b.x)<=b.w/2&&Math.abs(z-b.z)<=b.d/2?buildingRoofHeight(b,x,z):null;
 }
 export function supportNormal(id:SupportId,x:number,z:number):{x:number;y:number;z:number}|null {
  if(supportHeight(id,x,z)===null)return null;
@@ -290,7 +309,7 @@ for(const highway of HIGHWAYS)for(let i=1;i<highway.points.length;i++){
  ROADS.push({x:(a.x+b.x)/2,z:(a.z+b.z)/2,w:highway.width??32,d:Math.hypot(dx,dz)+1,axis:'z',angle:Math.atan2(dx,dz),kind:'highway'});
 }
 
-export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom';stationId?:string};
+export type Building={x:number;z:number;w:number;d:number;h:number;district:'sf'|'oakland'|'peninsula'|'south-bay'|'east-bay';style:'house'|'midrise'|'tower'|'pyramid'|'ferry'|'coit'|'salesforce'|'tribune'|'campanile'|'airport'|'hoover'|'mission'|'rotunda'|'hospital'|'landmark'|'station-venue'|'monument'|'spaceport'|'tech-campus'|'luxury-showroom';stationId?:string;landmarkId?:string;landmarkBase?:number};
 export const BUILDINGS:Building[]=[];
 function inPark(x:number,z:number){return PARKS.some(p=>Math.abs(x-p.x)<p.w/2+8&&Math.abs(z-p.z)<p.d/2+8);}
 function blocks(district:'sf'|'oakland',xmin:number,xmax:number,zmin:number,zmax:number){
@@ -360,13 +379,16 @@ for(const {x,z,w,d,h,district,style} of LANDMARKS)BUILDINGS.push({x,z,w,d,h,dist
 // Replace only generated background blocks where a hand-authored landmark or
 // a physical hill stands. Existing special landmarks keep their own identity.
 export const EXTRA_LANDMARKS=[...NORTH_LANDMARKS,...SOUTH_LANDMARKS];
-const landmarkBuildings:Building[]=EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak')
- .map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark'}));
+const landmarkBuildings:Building[]=[
+ ...EXTRA_LANDMARKS.filter(place=>place.id!=='mission-peak').map(({x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark' as const})),
+ ...NEW_LANDMARKS.filter(place=>place.solid).map(({id,x,z,w,d,h,district})=>({x,z,w,d,h,district,style:'landmark' as const,landmarkId:id,landmarkBase:terrainHeight(x,z)??0})),
+];
 landmarkBuildings.push(...EAST_SOUTH_ADDITIONS);
+const landmarkClearances=[...landmarkBuildings,...NEW_LANDMARKS.filter(place=>!place.solid)];
 for(let i=BUILDINGS.length-1;i>=0;i--){
  const b=BUILDINGS[i];
  if(b.style!=='house'&&b.style!=='midrise'&&b.style!=='tower')continue;
- const overlapsLandmark=[...landmarkBuildings,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
+ const overlapsLandmark=[...landmarkClearances,...LANDMARKS.filter(p=>p.id==='ucsf')].some(p=>Math.abs(p.x-b.x)<(p.w+b.w)/2+1&&Math.abs(p.z-b.z)<(p.d+b.d)/2+1);
  const overlapsHill=NATURAL_HILLS.some(h=>b.x+b.w/2>h.minX&&b.x-b.w/2<h.maxX&&b.z+b.d/2>h.minZ&&b.z-b.d/2<h.maxZ);
  if(overlapsLandmark||overlapsHill)BUILDINGS.splice(i,1);
 }
