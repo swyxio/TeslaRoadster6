@@ -225,6 +225,13 @@ an actual falling-car fallback produced a 2.075 m frame step, versus 0.229 m
 with the former smoothing. Its focused reproduction passes five of seven
 checks. This prototype is not safe to integrate.
 
+An isolated [burst history experiment](burst-history-diagnostic-20261018.tar.gz)
+(SHA-256 `cdc04bb696e3539c2136d7eb2b160513dba76f6176e0eab50232ba728f86d061`)
+kept the connection alive by retaining 32 snapshots. It passed one of three
+focused checks: a steering response missed its deadline and a peer jumped
+19.73 m. Clear endpoints did not establish a safe path between them. The patch
+is diagnostic, not a continuity solution.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -375,6 +382,14 @@ schema, complete asset graph and workflow wiring are unverified; the workflow
 remains disabled. No remote diagnostic Worker or load was started. The source
 predates current main, and observer overhead is unmeasured. SHA-256:
 `28742c3cc8ae7136500a0e51a7cdd094b8612b4c2cea2e2b8bf8ee98d1df8d60`.
+
+An unapplied [acknowledgement observer prototype](ack-observer-diagnostic-20261019.tar.gz)
+(SHA-256 `e79f70f33d93dbe5c914a09759108bb9f83794319baf5a856d9fbf892892afe3`)
+passed 11 focused tests and typecheck. It records exact observed applied
+sequences and their send-to-snapshot upper bounds. It is not wired into the
+staged Session driver: that driver needs a validated exact-frame hook, the
+corrected movement tracker and a new integration test. No load test ran with
+the observer, and its overhead remains unknown.
 
 A [disabled staged-fixture prototype](hosted-stage-fixture-20261018.tar.gz)
 uses real Sessions and passed five focused tests, typechecks and a two-client
