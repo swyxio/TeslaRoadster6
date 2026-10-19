@@ -1,4 +1,4 @@
-# Implementation contracts · v46 candidate
+# Implementation contracts · v47 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -37,7 +37,7 @@ Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`
 
 ## Wire protocol v47 candidate
 
-Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. This v46 candidate adds sandbox and practice modes, sandbox teleporting, and vehicle collections. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
+Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. This v47 candidate fences the rebalanced delivery and achievement rewards. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
 Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:47,capacity:number}`.
 
