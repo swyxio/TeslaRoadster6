@@ -33,12 +33,13 @@ import { ovalBankSurface, ovalBankVerticalVelocity, sweepOvalBank } from './oval
 import { ISLAND_JUMPS, islandJumpAt, islandJumpHeight, islandJumpSlope, sweepIslandJump, sweepIslandJumpWall } from './island-jumps';
 import { airCost, flightLoad, MAX_TANK_LEVEL, type TankLevel } from './air-tank';
 import { initialSoccer, stepSoccer, type DomeParticipant, type SoccerState } from './soccer';
+import { DOME_MATCH_CASH, DOME_WIN_CASH } from './earnings-events';
 import { domeContact, surfaceArc } from './dome-collision';
 import { domeBodyContact } from './dome-body';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=49;
+export const PROTOCOL_VERSION=50;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -239,6 +240,7 @@ export function removePlayer(world:World,id:string):void {
   leaveRace(world.races,id);
   world.players=world.players.filter(p=>p.id!==id);
   world.soccer.participants=world.soccer.participants.filter(p=>p.playerId!==id);
+  world.soccer.pulseShots=world.soccer.pulseShots.filter(shot=>shot.playerId!==id);
   if(world.soccer.lastTouch?.playerId===id)world.soccer.lastTouch=null;
   // Preserve a borrower's current ride, but retire its durable asset identity
   // immediately. The ordinary temporary car disappears when it is released.
@@ -1247,7 +1249,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
    }
   }
   const soccerWasPlaying=world.soccer.phase==='play';
-  stepSoccer(world.soccer,world.entities,dt,world.time);
+  stepSoccer(world.soccer,world.entities,dt,world.time,world.players,economy?.canCollect);
   if(soccerWasPlaying&&world.soccer.phase==='win'){
     const participants:DomeParticipant[]=world.soccer.participants.filter(participant=>{
       const player=world.players.find(p=>p.id===participant.playerId);
@@ -1258,9 +1260,21 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
       const player=world.players.find(p=>p.id===participant.playerId);
       const entity=world.entities.find(e=>e.id===player?.entityId);
       if(player&&entity?.inDome){
+        // A host that receives the completed result owns the combined durable
+        // match settlement, including achievements. Never submit it twice.
+        if(economy?.onDomeWin)continue;
         const evidence=structuredClone(participant),won=world.soccer.winningPlayers.includes(player.id);
         if(economy?.achievement)economy.achievement(player,{kind:'dome',touches:evidence.touches,goals:evidence.goals,won});
-        else gameAward(player,()=>awardDomeMatchAchievements(player,evidence,won));
+        else gameAward(player,()=>{
+          // Practice rooms have no persistent economy or earnings bonuses, but
+          // should still demonstrate the same base match reward for this run.
+          const before=player.delivery.cash;
+          awardDomeMatchAchievements(player,evidence,won);
+          const amount=DOME_MATCH_CASH+(won?DOME_WIN_CASH:0);
+          player.delivery.cash+=amount;player.delivery.lifetimeIncome+=amount;
+          updateLevel(player.delivery);
+          player.delivery.lastReward={id:(player.delivery.lastReward?.id??0)+1,kind:'dome-match',amount:player.delivery.cash-before};
+        });
       }
     }
   }

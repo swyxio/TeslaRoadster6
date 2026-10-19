@@ -96,7 +96,7 @@ type AwardGroup=(typeof AWARD_GROUPS)[number]['id'];
 /** Keep every catalog award in one place; grouping does not affect its rules. */
 export function awardGroup(id:AchievementId):AwardGroup {
   if(awardDeliveryTarget(id)||id==='sky-delivery'||id==='sfo-express')return 'delivery';
-  if(['rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner'].includes(id))return 'games';
+  if(['dome-debut','dome-champion','rocket-rookie','roadster-champion','built-to-fly','garage-champion','no-rockets-needed','park-it','queue-cutter','race-finisher','race-winner'].includes(id))return 'games';
   if(['bay-hopper','roof-rider','coit-landing','salesforce-landing'].includes(id))return 'flight';
   if(id.startsWith('luxury-')||id.startsWith('tesla-drive-')||id.startsWith('npc-theft-')||id.startsWith('vault-drive-'))return 'collection';
   return 'exploration';
@@ -147,6 +147,7 @@ export function awardTier(id:AchievementId):string {
 /** The shared catalog already describes rewards; keep that as the source of truth. */
 export function awardDetails(id:AchievementId):{description:string;reward:string} {
   const description:string=ACHIEVEMENTS[id].description;
+  if(id==='dome-debut'||id==='dome-champion')return {description,reward:'Dome power-up'};
   const cash=/^(.*?)\s+Reward: (\$[\d,]+)\.$/.exec(description);
   if(cash)return {description:cash[1],reward:`${cash[2]} cash`};
   const research=/^(.*?)\s+Earn (\$[\d,]+ and 20% off .*?)\.$/.exec(description);
@@ -193,6 +194,8 @@ export function awardProgress(id:AchievementId,player:Player|undefined,world:Wor
   const participant=world.soccer.participants.find(item=>item.playerId===player.id);
   if(!participant)return 'Ready to earn';
   switch(id){
+    case 'dome-debut':return Object.values(participant.touches).some(Boolean)?'Ball touched · finish the match':'Ready to earn';
+    case 'dome-champion':return domeGoals(participant)>0?'Goal credited · win the match':'Score and win';
     case 'rocket-rookie':return participant.touches.roadster?'Ball touched · finish the match':'Ready to earn';
     case 'built-to-fly':return participant.touches.retrofit?'Ball touched · finish the match':'Ready to earn';
     case 'roadster-champion':return participant.goals.roadster>0?'Goal credited · win the match':participant.touches.roadster?'Ball touched · score and win':'Ready to earn';

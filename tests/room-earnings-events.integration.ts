@@ -68,8 +68,9 @@ try{
   const reservation=await (await post('/prepare',{id:'match-pending',time:5_000_000})).json() as PreparedRoomWin;
   assert.equal(reservation.priorActiveUntilMs,null);
   assert.equal(activityPayout(100,'dome-match',reservation.startsAtMs,{room:[],global:[]}),100,'the triggering match uses the pre-win rate');
-  assert.equal((await fetch(base+'/active?time=5000000')).status,400,'later payouts wait for the pending win');
-  assert.equal((await post('/history',{from:4_999_999,to:5_000_001})).status,400,'cab history cannot skip a pending win');
+  assert.equal(await active(5_000_000),null,'same-millisecond earlier actions retain the pre-win rate');
+  assert.deepEqual((await history(4_999_999,5_000_001)).windows,[],'earlier delivery history excludes the pending win');
+  assert.equal((await post('/history',{from:4_999_999,to:5_000_002})).status,400,'a cab interval straddling the win waits for settlement');
   assert.equal((await post('/prepare',{id:'other-match',time:5_000_001})).status,400,'a later win cannot pass a pending win');
   assert.equal((await post('/no-payout',{id:'match-pending',time:5_000_000})).status,400,'a zero-payout operation cannot publish a match awaiting payout');
   await stop();child=start();await ready();
@@ -79,7 +80,8 @@ try{
   assert.equal((await post('/commit?lose-reply=1',{id:'match-pending'})).status,503);
   assert.deepEqual(await (await post('/commit',{id:'match-pending'})).json(),reservation,'a lost publish reply is retryable');
   assert.deepEqual(await (await post('/prepare',{id:'match-pending',time:5_000_000})).json(),reservation,'retry retains the original pre-win rate');
-  assert.equal(await active(5_000_000),5_000_000+ROOM_WIN_DURATION_MS);
+  assert.equal(await active(5_000_000),null);
+  assert.equal(await active(5_000_001),5_000_001+ROOM_WIN_DURATION_MS);
   assert.equal((await post('/win',{id:'late-after-restart',time:4_000_000})).status,400,'the observation fence survives restart');
   assert.ok((await post('/win',{id:'next-point',time:4_000_001})).ok,'a persisted win remains retryable after restart');
   assert.equal((await post('/no-payout?lose-reply=1',{id:'zero-match',time:6_000_000})).status,503);
@@ -87,5 +89,11 @@ try{
   assert.equal(zero.startsAtMs,6_000_000);
   assert.equal(await active(6_000_000),6_000_000+ROOM_WIN_DURATION_MS);
   assert.equal(await (await fetch(base+'/pending')).json(),null,'zero-payout win publishes without an intermediate pending record');
+  const drawn=await (await post('/prepare',{id:'drawn-match',time:7_000_000})).json() as PreparedRoomWin;
+  assert.deepEqual(await (await post('/abort',{id:'drawn-match'})).json(),drawn);
+  assert.deepEqual(await (await post('/abort',{id:'drawn-match'})).json(),drawn,'abort is retryable');
+  assert.equal((await post('/commit',{id:'drawn-match'})).status,400);
+  assert.equal((await post('/no-payout',{id:'drawn-match',time:7_000_000})).status,400,'aborted matches cannot later become wins');
+  assert.equal(await active(7_000_001),null,'no-winner matches do not activate the room bonus');
   console.log('PASS: durable room bonus, refresh, idempotency, observation fences, pagination and restart.');
 }finally{await stop();await rm(dir,{recursive:true,force:true});}

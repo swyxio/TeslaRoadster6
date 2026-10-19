@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "label": "base",
+      "code": 0,
+      "signal": null,
+      "lowDisk": false
+    },
+    {
+      "label": "candidate",
+      "code": 0,
+      "signal": null,
+      "lowDisk": false
+    }
+  ],
+  "lowDisk": false,
+  "finishedAt": "2026-10-19T02:51:18.273Z"
+}
