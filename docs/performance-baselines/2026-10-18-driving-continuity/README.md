@@ -218,6 +218,13 @@ and reconnect-generation paths. All 209 focused tests and client typecheck
 passed. It still disconnects on the 1.8-second burst and requires browser,
 ferry, peer-contact, live-room and performance verification.
 
+A separate [scene diagnostic](scene-diagnostic-20261018.tar.gz) (SHA-256
+`90e89907cd480756b8ea65a619b156d2e4b7877e5e0a768d1f7b92ed223cac04`)
+removed the constructed ferry overlaps by using co-timed poses directly, but
+an actual falling-car fallback produced a 2.075 m frame step, versus 0.229 m
+with the former smoothing. Its focused reproduction passes five of seven
+checks. This prototype is not safe to integrate.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -233,7 +240,8 @@ lab layout, not a self-contained installed tool.
 A disposable local Wrangler room on `d05d6f4` and 64 synthetic clients ran on
 the same Apple M5 Pro (18 logical CPUs). During the 60.02 s measurement, the
 minimum observed snapshot span was 37.8 simulated seconds (median 37.9 s),
-all clients observed all players and had an applied input, and none closed.
+all clients' final roster observations included all players and each had an
+applied input, and none closed. Roster continuity was not established.
 There were 7,552 rejected inputs, including warm-up; decoded JSON across clients
 was 3,231.37 MiB. Snapshot gap p95 was 531 ms, maximum 3,269 ms, and the
 client event-loop delay p95 was 34.3 ms. Sampled owner control queues reached
@@ -285,8 +293,13 @@ was not captured. This is an incomplete diagnostic, not a capacity pass.
 
 The movement checker now counts a gap across every block it spans and requires
 short moving sample pairs to cover 80% of a block in both receipt and simulation
-time. Eight focused tests passed, including a 1.9-second cross-boundary gap,
-sparse stops, lost ticks, slow simulation and malformed states. This is still
+time. Ten focused tests passed, including a 1.9-second cross-boundary gap,
+sparse stops, lost ticks, slow simulation, malformed states and roster identity.
+The checker fences a changed room epoch before updating the input client,
+requires every recorded roster to include every expected client and separately
+requires at least 57 seconds of simulation in a 60-second sample. A two-client,
+two-second local Wrangler smoke exercised the updated path; it is not a load
+or capacity result. This is still
 a sampled proxy, not proof of continuous travel between samples. The archived
 historical reports retain their original measurements and checker; their movement
 coverage counts are upper bounds. The local checker marks sustained input

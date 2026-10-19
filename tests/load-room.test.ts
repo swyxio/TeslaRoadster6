@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { inputCoverage, movementSample, movementTracker } from '../scripts/load-room';
+import { allPlayersPresent, inputCoverage, movementSample, movementTracker, simulationProgressComplete } from '../scripts/load-room';
 
 const vehicle=(x:number,speed=12,id='car')=>({id,x,y:0,z:0,vx:speed,vy:0,vz:0});
 
@@ -80,9 +80,9 @@ test('malformed states and negative protocol metadata invalidate coverage',()=>{
   const missingWorld=movementTracker(10_000),negativeTick=movementTracker(10_000),negativeRevision=movementTracker(10_000);
   const world={players:[{id:'driver',entityId:'car'}],entities:[{...vehicle(0),driver:'driver'}]};
   for(let i=0;i<100;i++){
-    const state={tick:i*2,poseRevision:1,world:{...world,entities:[{...vehicle(i*1.2),driver:'driver'}]}};
+    const state={tick:i*2,poseRevision:1,roomEpoch:'room',world:{...world,entities:[{...vehicle(i*1.2),driver:'driver'}]}};
     const message=i===50?{...state,world:undefined}:state;
-    missingWorld.observe(movementSample(i*100,'driver',message as Parameters<typeof movementSample>[2]));
+    missingWorld.observe(movementSample(i*100,'driver','room',message as Parameters<typeof movementSample>[3]));
     negativeTick.observe({atMs:i*100,tick:i*2-200,poseRevision:1,vehicle:vehicle(i*1.2)});
     negativeRevision.observe({atMs:i*100,tick:i*2,poseRevision:-1,vehicle:vehicle(i*1.2)});
   }
@@ -93,7 +93,25 @@ test('malformed states and negative protocol metadata invalidate coverage',()=>{
   assert.equal(negativeTick.summary().blocks[0].complete,false);
   assert.equal(negativeRevision.summary().blocks[0].complete,false);
   const broken={tick:1,poseRevision:1,world:{players:null,entities:[]}};
-  assert.equal(movementSample(0,'driver',broken as unknown as Parameters<typeof movementSample>[2]).vehicle,null);
+  assert.equal(movementSample(0,'driver','room',broken as unknown as Parameters<typeof movementSample>[3]).vehicle,null);
+  const otherEpoch={tick:1,poseRevision:1,roomEpoch:'new-room',world};
+  assert.equal(movementSample(0,'driver','room',otherEpoch as Parameters<typeof movementSample>[3]).vehicle,null);
+});
+
+test('roster coverage requires every expected distinct client in each observation',()=>{
+  assert.equal(allPlayersPresent([{id:'one'},{id:'two'}],['one','two']),true);
+  assert.equal(allPlayersPresent([{id:'one'},{id:'other'}],['one','two']),false);
+  assert.equal(allPlayersPresent([{id:'one'},{id:'one'}],['one','two']),false);
+  assert.equal(allPlayersPresent([{id:'one'}],['one','one']),false);
+  assert.equal(allPlayersPresent(null,['one','two']),false);
+});
+
+test('movement coverage cannot substitute for sixty-second simulation progress',()=>{
+  assert.equal(simulationProgressComplete(60,[57,59.9],2),true);
+  assert.equal(simulationProgressComplete(60,[50.9,59.9],2),false);
+  assert.equal(simulationProgressComplete(10,[9.9,9.9],2),false);
+  assert.equal(simulationProgressComplete(60,[59.9],2),false);
+  assert.equal(simulationProgressComplete(60,new Array<number>(2),2),false);
 });
 
 test('a snapshot gap spanning two blocks invalidates both movement blocks',()=>{

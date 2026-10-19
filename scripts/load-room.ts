@@ -77,13 +77,24 @@ export function movementTracker(durationMs:number) {
 
 // Validate the world shape before extracting the driver's pose. Even an
 // otherwise ignorable malformed state must invalidate its measurement block.
-export function movementSample(atMs:number,playerId:string,message:{tick:number;poseRevision:number;world?:World}):MotionSample {
+export function movementSample(atMs:number,playerId:string,roomEpoch:string,message:{tick:number;poseRevision:number;roomEpoch?:string;world?:World}):MotionSample {
   const world=message.world;
-  if(!playerId||!world||!Array.isArray(world.players)||!Array.isArray(world.entities))
+  if(!playerId||!roomEpoch||message.roomEpoch!==roomEpoch||!world||!Array.isArray(world.players)||!Array.isArray(world.entities))
     return {atMs,tick:message.tick,poseRevision:message.poseRevision,vehicle:null};
   const player=world.players.find(item=>item&&item.id===playerId);
   const vehicle=world.entities.find(item=>item&&item.id===player?.entityId&&item.driver===playerId)??null;
   return {atMs,tick:message.tick,poseRevision:message.poseRevision,vehicle};
+}
+
+export function allPlayersPresent(players:unknown,expected:string[]):boolean {
+  if(!Array.isArray(players)||expected.some(id=>!id)||new Set(expected).size!==expected.length)return false;
+  const ids=new Set(players.flatMap(item=>item&&typeof item.id==='string'?[item.id]:[]));
+  return expected.every(id=>ids.has(id));
+}
+
+export function simulationProgressComplete(seconds:number,advances:number[],clients:number):boolean {
+  return seconds===60&&advances.length===clients&&clients>0&&
+    Array.from(advances).every(advance=>Number.isFinite(advance)&&advance>=57);
 }
 
 // A warm-up acknowledgement alone cannot prove that measured inputs applied.
@@ -106,8 +117,11 @@ if(health.version!==PROTOCOL_VERSION||count>health.capacity)throw new Error(`Ser
 const url=base.replace(/^http/,'ws')+`/api/room/load-${Date.now()}`;
 const inputs:RoomInputClient[]=[];
 const sockets:WebSocket[]=[],lastSnapshot=new Array<number>(count).fill(0),snapshotCounts=new Array<number>(count).fill(0);
-const seenPlayers=new Array<number>(count).fill(0),firstTime=new Array<number|undefined>(count),lastTime=new Array<number|undefined>(count),gaps:number[]=[];
-const playerIds=new Array<string>(count).fill(''),movement=Array.from({length:count},()=>movementTracker(seconds*1000));
+const alwaysSawPlayers=new Array<boolean>(count).fill(true),observedState=new Array<boolean>(count).fill(false);
+const firstTime=new Array<number|undefined>(count).fill(undefined),lastTime=new Array<number|undefined>(count).fill(undefined),gaps:number[]=[];
+const playerIds=new Array<string>(count).fill(''),measurementPlayers=new Array<string>(count).fill('');
+const movement=Array.from({length:count},()=>movementTracker(seconds*1000));
+const measurementEpochs=new Array<string>(count).fill('');
 const queues=Array.from({length:count},()=>({samples:0,levels:0,jumpEdges:0,flipEdges:0}));
 const loopDelay=monitorEventLoopDelay({resolution:20});
 let measuring=false,snapshots=0,bytes=0,sent=0,closed=0;
@@ -118,16 +132,21 @@ try {
   const ready=Array.from({length:count},(_,i)=>new Promise<void>((resolve,reject)=>{
     const socket=new WebSocket(url);sockets.push(socket);const input=new RoomInputClient(socket);inputs.push(input);let joined=false;
     socket.addEventListener('message',event=>{
-      const raw=String(event.data),message=JSON.parse(raw) as {type:string;id?:string;version?:number;tick:number;poseRevision:number;world?:World};
+      const raw=String(event.data),message=JSON.parse(raw) as {type:string;id?:string;version?:number;tick:number;poseRevision:number;roomEpoch?:string;world?:World};
+      if(measuring&&(message.type==='welcome'||(message.type==='state'&&message.roomEpoch!==measurementEpochs[i]))){
+        movement[i].observe({atMs:performance.now()-measurementStart,tick:message.tick,poseRevision:message.poseRevision,vehicle:null});
+        alwaysSawPlayers[i]=false;socket.close();return;
+      }
       input.observe(message);
       if(message.type==='welcome'){if(message.version!==PROTOCOL_VERSION){reject(new Error(`client ${i} received an incompatible welcome`));return;}playerIds[i]=message.id??'';socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));}
       if(!joined&&input.active){joined=true;resolve();}
       if(message.type==='state'&&measuring){
         const now=performance.now();if(lastSnapshot[i])gaps.push(now-lastSnapshot[i]);lastSnapshot[i]=now;
         snapshots++;snapshotCounts[i]++;bytes+=Buffer.byteLength(raw);
-        if(message.world&&Array.isArray(message.world.players))seenPlayers[i]=message.world.players.length;
+        observedState[i]=true;
+        alwaysSawPlayers[i]&&=allPlayersPresent(message.world?.players,measurementPlayers);
         if(message.world&&Number.isFinite(message.world.time)){firstTime[i]??=message.world.time;lastTime[i]=message.world.time;}
-        movement[i].observe(movementSample(now-measurementStart,playerIds[i],message));
+        movement[i].observe(movementSample(now-measurementStart,measurementPlayers[i],measurementEpochs[i],message));
         const control=input.control;
         if(control&&Array.isArray(control.queued)&&Array.isArray(control.jump?.pending)&&Array.isArray(control.flip?.pending)){
           const queue=queues[i];queue.samples++;queue.levels=Math.max(queue.levels,control.queued.length);
@@ -146,7 +165,9 @@ try {
   let joinTimeout:ReturnType<typeof setTimeout>;
   try {await Promise.race([Promise.all(ready),new Promise<never>((_,reject)=>{joinTimeout=setTimeout(()=>reject(new Error('Timed out joining clients')),40000);})]);}
   finally {clearTimeout(joinTimeout!);}
-  await delay(2000);loopDelay.enable();const start=performance.now(),lastSentBefore=inputs.map(input=>input.lastSeq);measurementStart=start;measuring=true;await delay(seconds*1000);measuring=false;
+  await delay(2000);loopDelay.enable();const start=performance.now(),lastSentBefore=inputs.map(input=>input.lastSeq);
+  inputs.forEach((input,i)=>{measurementEpochs[i]=input.roomEpoch;measurementPlayers[i]=playerIds[i];});
+  measurementStart=start;measuring=true;await delay(seconds*1000);measuring=false;
   const elapsed=(performance.now()-start)/1000;loopDelay.disable();gaps.sort((a,b)=>a-b);
   const advances=firstTime.map((first,i)=>first===undefined||lastTime[i]===undefined?0:lastTime[i]!-first);
   const motion=movement.map(tracker=>tracker.summary());
@@ -157,6 +178,7 @@ try {
     block.lastAtMs!==null&&block.startMs+block.durationMs-block.lastAtMs<=1000&&block.maxGapMs<=1000&&
     block.distanceM!==null&&block.distanceM<1&&block.movingFraction===0)?[index]:[]);
   const incomplete:string[]=[];
+  if(!simulationProgressComplete(seconds,advances,count))incomplete.push('simulation-progress-incomplete');
   if(seconds<10)incomplete.push('no-complete-ten-second-movement-block');
   if(seconds>=10&&seconds%10!==0)incomplete.push('partial-ten-second-movement-block');
   if(motion.some(driver=>driver.blocks.some(block=>block.durationMs===10_000&&!block.complete)))incomplete.push('not-all-drivers-sustained-moving');
@@ -168,10 +190,10 @@ try {
   // A single acknowledgement after warm-up cannot prove sustained progress.
   incomplete.push('sustained-input-acknowledgements-unmeasured');
   if(closed)incomplete.push('client-disconnected');
-  if(seenPlayers.some(players=>players!==count))incomplete.push('not-all-clients-observed');
+  if(alwaysSawPlayers.some((saw,i)=>!saw||!observedState[i]))incomplete.push('not-all-clients-observed');
   console.log(JSON.stringify({clients:count,elapsedSeconds:+elapsed.toFixed(2),closed,sentInputs:sent,inputRejections:rejectionCounts.reduce((sum,n)=>sum+n,0),rejectionCounts,...coverage,
     clientsWithAppliedInput:count-coverage.clientsWithoutAppliedInput.length,snapshots,
-    clientsSeeingAll:seenPlayers.filter(players=>players===count).length,minSnapshots:Math.min(...snapshotCounts),
+    clientsSeeingAll:alwaysSawPlayers.filter((saw,i)=>saw&&observedState[i]).length,minSnapshots:Math.min(...snapshotCounts),
     snapshotRatePerClient:+(snapshots/count/elapsed).toFixed(2),p95SnapshotGapMs:Math.round(gaps[Math.floor(gaps.length*.95)]??0),maxSnapshotGapMs:Math.round(gaps.at(-1)??0),
     decodedJsonMiB:+(bytes/1048576).toFixed(2),minSimulatedSeconds:+Math.min(...advances).toFixed(2),medianSimulatedSeconds:+advances.sort((a,b)=>a-b)[Math.floor(count/2)].toFixed(2),
     clientEventLoopP95Ms:+(loopDelay.percentile(95)/1e6).toFixed(1),movement:motion,stationaryClients,
