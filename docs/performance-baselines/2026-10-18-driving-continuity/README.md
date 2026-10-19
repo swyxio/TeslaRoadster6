@@ -145,6 +145,16 @@ separate deterministic burst case on the experimental clock exposed a 14.19 m
 presentation cut in one frame. Clock convergence near traffic and recovery
 after such a burst are not established; the experiment remains on hold.
 
+A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
+44 passing focused checks and a sourced provenance note (SHA-256
+`125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
+new steady scenario has not been run. Pinned-source inspection identifies a
+local workerd realtime-clock path and Chromium's Mach clock, but the effective
+workerd configuration/binary, exported trace origin, input timing and observer
+overhead are not attested. Its conditional interval model remains unavailable
+for a release verdict. The commands in the note describe the original temporary
+lab layout, not a self-contained installed tool.
+
 ## Local 64-client diagnostic
 
 A disposable local Wrangler room on `d05d6f4` and 64 synthetic clients ran on
