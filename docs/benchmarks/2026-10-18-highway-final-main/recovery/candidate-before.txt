@@ -1,0 +1,60 @@
+TAP version 13
+# Subtest: a stopped active leader does not cause a reverse after the stall timeout
+not ok 1 - a stopped active leader does not cause a reverse after the stall timeout
+  ---
+  duration_ms: 2.749291
+  type: 'test'
+  location: '/private/tmp/tesland-highway-pair-final-b/tests/traffic-recovery-probe.test.ts:18:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    -0.2 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: -0.2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/private/tmp/tesland-highway-pair-final-b/tests/traffic-recovery-probe.test.ts:23:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: a fast follower behind prevents a new recovery reverse
+not ok 2 - a fast follower behind prevents a new recovery reverse
+  ---
+  duration_ms: 0.592583
+  type: 'test'
+  location: '/private/tmp/tesland-highway-pair-final-b/tests/traffic-recovery-probe.test.ts:28:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    -0.2 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: -0.2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/private/tmp/tesland-highway-pair-final-b/tests/traffic-recovery-probe.test.ts:34:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 273.831375
