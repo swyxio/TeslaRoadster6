@@ -43,7 +43,14 @@ export function snapshotFor(world: World, playerId: string): World {
 // for every socket while preserving the normal JSON wire shape.
 export function prepareSnapshots(world: World, tick:number, roomEpoch:string, substeps:number): (playerId: string, control:ControlSnapshot, poseRevision:number, sync?: number) => string {
   const playerEntities = new Set(world.players.map(player=>player.entityId));
-  const entities = world.entities.map(entity=>({entity,json:JSON.stringify(entity)}));
+  const entities = world.entities.map(entity=>({entity,json:JSON.stringify(entity),
+    shared:entity.supportId==='ferry'||playerEntities.has(entity.id)||entity.driver!==null}));
+  const localEntities=entities.filter(item=>!item.shared);
+  // Players in the same area often see exactly the same traffic. Cache only
+  // the entity array for this tick, never recipient-specific players/controls.
+  // A string mask has no 32-bit limit and includes owned-car visibility.
+  const entityArrays=new Map<string,string>();
+  let allEntities:string|undefined;
   const byId = new Map(world.entities.map(entity=>[entity.id,entity]));
   const controlled = new Map(world.players.map(player=>[player.id,byId.get(player.entityId)]));
   // Each recipient sees their own collection awards; remote players do not.
@@ -65,10 +72,28 @@ export function prepareSnapshots(world: World, tick:number, roomEpoch:string, su
   const metadata=`"tick":${tick},"roomEpoch":${JSON.stringify(roomEpoch)},"substeps":${substeps}`;
   return (playerId,control,poseRevision,sync) => {
     const current=controlled.get(playerId);
-    const selected=current?entities.filter(({entity})=>visible(entity,current,playerId,playerEntities)):entities;
+    let selected:string;
+    if(!current)selected=allEntities??=entities.map(item=>item.json).join(',');
+    else{
+      let ownerOnly=false;
+      const mask=localEntities.map(({entity})=>{
+        const nearby=(entity.x-current.x)**2+(entity.z-current.z)**2<=AMBIENT_INTEREST_METERS**2;
+        if(!nearby&&entity.owner===playerId){ownerOnly=true;return '1';}
+        return nearby?'1':'0';
+      }).join('');
+      // A distant owned car often makes this projection unique. Avoid keeping
+      // all of those large arrays alive until the end of the broadcast.
+      const cached=ownerOnly?undefined:entityArrays.get(mask);
+      if(cached!==undefined)selected=cached;
+      else{
+        let local=0;
+        selected=entities.filter(item=>item.shared||mask[local++]==='1').map(item=>item.json).join(',');
+        if(!ownerOnly)entityArrays.set(mask,selected);
+      }
+    }
     const player=playerById.get(playerId);
     const visiblePlayers=player&&player.own!==player.remote
       ?remotePlayers.slice(0,player.start)+player.own+remotePlayers.slice(player.end):remotePlayers;
-    return `{"type":"state","world":{"players":${visiblePlayers}${common?`,${common}`:''},"entities":[${selected.map(item=>item.json).join(',')}]},${metadata},"poseRevision":${poseRevision},"control":${JSON.stringify(control)}${sync===undefined?'':`,"sync":${sync}`}}`;
+    return `{"type":"state","world":{"players":${visiblePlayers}${common?`,${common}`:''},"entities":[${selected}]},${metadata},"poseRevision":${poseRevision},"control":${JSON.stringify(control)}${sync===undefined?'':`,"sync":${sync}`}}`;
   };
 }

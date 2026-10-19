@@ -60,6 +60,43 @@ test('cached snapshot serialization matches the recipient-specific world',()=>{
   }
 });
 
+test('reused entity arrays preserve each recipient projection and refresh on the next tick',()=>{
+  const world=createWorld(),ids:string[]=[];
+  for(let i=0;i<8;i++){
+    const id=`driver-${i}`,player=addPlayer(world,id,`Driver ${i}`);ids.push(id);
+    const car=world.entities.find(entity=>entity.id===player.entityId)!;
+    car.x=i<4?0:AMBIENT_INTEREST_METERS*3;car.z=0;
+  }
+  // More than 32 local candidates exercise the unbounded visibility mask.
+  for(let i=0;i<40;i++){
+    const car=makeEntity(`ambient-${i}`,'model-3',i===0?AMBIENT_INTEREST_METERS:AMBIENT_INTEREST_METERS+1+i,0);
+    if(i===1)car.owner=ids[0];
+    if(i===2)car.supportId='ferry';
+    if(i===3)car.driver='remote-driver';
+    world.entities.push(car);
+  }
+  world.players[0].achievements.unlocked=['park-it','vault-drive-chiron'];
+  world.players[0].achievements.lastUnlock={id:2,achievement:'vault-drive-chiron'};
+  const snapshot=prepareSnapshots(world,10,'epoch',2);
+  const controls=ids.map((_,i)=>{
+    const control=new ScheduledInput(NEUTRAL);
+    control.receive({seq:i+1,targetTick:11,controlRevision:0,actionSeq:0,input:{...NEUTRAL,steer:i/8}},10,0);
+    return control.snapshot();
+  });
+  for(const index of [0,1,0,4,5,4,2,3,6,7]){
+    const id=ids[index],control=controls[index];
+    const expected={type:'state',world:snapshotFor(world,id),tick:10,roomEpoch:'epoch',substeps:2,poseRevision:index,control,sync:index};
+    assert.deepEqual(JSON.parse(snapshot(id,control,index,index)),JSON.parse(JSON.stringify(expected)),id);
+  }
+  const control=controls[0];
+  assert.deepEqual(JSON.parse(snapshot('missing',control,0)).world,JSON.parse(JSON.stringify(snapshotFor(world,'missing'))));
+  const changed=world.entities.find(entity=>entity.id==='ambient-0')!;
+  changed.x=AMBIENT_INTEREST_METERS+1;
+  const next=prepareSnapshots(world,12,'epoch',2);
+  assert.deepEqual(JSON.parse(next(ids[0],control,0)).world,JSON.parse(JSON.stringify(snapshotFor(world,ids[0]))));
+  assert.ok(!JSON.parse(next(ids[0],control,0)).world.entities.some((entity:{id:string})=>entity.id==='ambient-0'));
+});
+
 test('collection awards and their events are visible only to their owner',()=>{
   const world=createWorld(),one=addPlayer(world,'one','🚗 One'),two=addPlayer(world,'two','Two');
   const collectionIds=(Object.keys(ACHIEVEMENTS) as AchievementId[]).filter(isVehicleCollectionAward);
