@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A wider Bay',
+    intro: 'Look out toward the hills as you drive and fly around the Bay.',
+    sections: [
+      { title: 'On the horizon', items: [
+        'Distant Bay-inspired ridgelines surround the map and shift as you travel from San Francisco to Fremont and beyond.',
+        'The landscape is original, fictional backdrop art, made for Tesland’s compressed geography.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.41-alpha',
+    label: '0.0.41 Alpha',
+    date: '2026-10-18',
     title: 'Starbase takes shape',
     intro: 'Visit a growing Starship and launch complex in Fremont.',
     sections: [
