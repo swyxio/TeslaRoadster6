@@ -121,6 +121,15 @@ connection was rejected. Both runs failed their diagnostic gates, and separate
 hosts and network paths make the rejection counts descriptive, not proof of a
 regression or improvement. The temporary baseline PR was closed afterward.
 
+The measured late replies were unevenly distributed across the four runners:
+32, 1, 54 and 176 for the candidate; 19, 70, 283 and 31 for the baseline.
+These counts suggest investigating runner-specific and connection-specific
+conditions as well as the shared room, but they cannot locate the delay.
+The recorded send-to-rejection interval includes the return path and client
+handling; it is not one-way latency. The samples do not establish whether the
+server's tick at receipt, a stale snapshot, transport, or host scheduling
+caused a particular hosted rejection.
+
 ## Local input receipt trace
 
 `pnpm exec tsx tests/input-trace.integration.ts` runs one real `Session` against
