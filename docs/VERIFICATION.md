@@ -2,7 +2,9 @@
 
 ## Bay scenery · current-base candidate · 2026-10-19 Pacific
 
-- This branch incorporates production main `1b7b18bf` and contains the scenery and vehicle detail changes independently of the paused highway PR. Release 0.0.43 retains protocol 52. Fresh integrated tests, visual checks and matched performance evidence are pending; earlier observations below use older bases.
+- Candidate `56a2907f` is based on production main `1b7b18bf` and contains the scenery and vehicle detail changes independently of the highway PR. Release 0.0.43 retains protocol 52. The [hosted candidate tests and build](https://github.com/swyxio/TeslaRoadster6/actions/runs/39216750437) and [Cloudflare Preview](https://codex-hifi-world-rendering-bay-drive.swyxio.workers.dev) passed.
+- The [hosted visual run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39216750373) compared the same staged city and forest positions on base and candidate. Desktop and emulated 390 × 844 portrait and 844 × 390 landscape had no page or console errors; grounded rear thrust and a processed jump were observed in each mode, and the desktop on-foot view activated. City windows and the North Bay trees were inspected against the base. Moving captures differed by up to 9.78 m and two ticks, so these are not synchronized motion or physical-device checks.
+- A fresh hosted paired performance observation is still running. Earlier measurements below are descriptive and do not establish frame continuity or a performance verdict; retained traces showed callback gaps even when p95 appeared smooth.
 
 ## Bay horizon · integrated candidate · 2026-10-18 Pacific
 
