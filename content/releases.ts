@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'More of the Bay',
+    intro: 'Find 100 more Bay-inspired places across the map.',
+    sections: [
+      { title: 'New landmarks', items: [
+        'Explore miniature landmarks from Marin and San Francisco to Berkeley, the Peninsula and San Jose.',
+        'The Bay is playfully compressed: landmarks are original interpretations, and some have been moved to fit the world.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.33-alpha',
+    label: '0.0.33 Alpha',
+    date: '2026-10-18',
     title: 'Find your Bay',
     intro: 'Keep driving when the Bay fills up.',
     sections: [
