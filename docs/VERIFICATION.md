@@ -1501,3 +1501,9 @@ These observations and screenshots describe the former Alcatraz arena before the
 ## Performance workflow readiness trigger · 2026-10-18 Pacific
 
 - PR #104 integrated with production base `dacde0c` at `e953701`. All 1,026 tests and `pnpm build` passed; the existing Vite large-chunk warning remains. Ten performance-report tests and workflow syntax/expression lint also passed. External shell and Python lint were disabled for the workflow lint. The only changes to that base are the workflow event list and documentation; no gameplay or protocol code changed. Production verification follows the merge.
+
+## Hosted preview and alpha comparison · 2026-10-18 Pacific
+
+- Recorded the older hosted preview (protocol 29) and live 0.0.34 alpha (protocol 47) in fresh separate rooms using the same keyboard scenario, Chromium and ANGLE Metal on Apple M5 Pro. Both room snapshots start at (40, 60); at eight seconds their sampled positions differ by about 0.8 m, with a largest difference of about 9.9 m at the half-second samples. This is a matched-route feature demonstration, not a performance or physical-device test. See [capture notes](benchmarks/2026-10-18-preview-alpha-playtest.md).
+- The side-by-side is 8.47 seconds of H.264 video with AAC alpha game audio. Both individual recordings retain their own synthesized game sound; audio was raised 5 dB, with a measured comparison peak of −11.3 dB. Inspected representative encoded frames for the route, camera switch and visible private data. The automated run records no podcast player or microphone.
+- `pnpm test` passed 1,026 tests and `pnpm build` passed with the existing Vite large-chunk warning. At local desktop 1440×900 and emulated mobile 390×844 widths, the article had no horizontal overflow or page errors; the comparison played and sought past six seconds from the immutable range-capable source. No physical mobile device was tested.
