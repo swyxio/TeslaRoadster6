@@ -29,7 +29,8 @@ type Income={held:boolean;status:{total:number;personal:number}};
 const profile=(driver:string)=>rpc<Profile>('profile',{driver});
 const income=(driver:string)=>rpc<Income>('income',{driver});
 function connect(room='earnings'){
-  const socket=new WebSocket(`ws://127.0.0.1:${p}/api/room/${room}`),messages:Record<string,any>[]=[];sockets.push(socket);
+  const path=room.startsWith('public:')?`/api/public-room/${room.slice(7)}`:`/api/room/${room}`;
+  const socket=new WebSocket(`ws://127.0.0.1:${p}${path}`),messages:Record<string,any>[]=[];sockets.push(socket);
   const input=new RoomInputClient(socket);
   socket.onmessage=event=>{const message=JSON.parse(String(event.data));input.observe(message);messages.push(message);if(message.type==='welcome')socket.send(JSON.stringify({type:'identity',code:null,requestId:1}));};
   return {socket,input,messages,last:(type:string)=>messages.filter(message=>message.type===type).at(-1)};
@@ -197,6 +198,17 @@ try{
   assert.equal(skewAfter.driver.progress.cash-skewBefore.driver.progress.cash,2_700,'the original match settles exactly once');
   await delay(1100);
   assert.deepEqual((await profile(skewDriver)).driver.progress,skewAfter.driver.progress,'clock skew retry cannot duplicate rewards');
+
+  // Public overflow uses an internal room identity that contains a colon.
+  // Rewards must settle there through the same authoritative wallet path.
+  const overflowRoom='public:1',overflow=connect(overflowRoom);
+  await until(()=>!!overflow.last('welcome')&&!!overflow.last('wallet'),'overflow match guest connected');
+  const overflowId=overflow.last('welcome')!.id as string,overflowDriver=(await rpc<{driver:string}>('player',{room:overflowRoom,player:overflowId})).driver;
+  const overflowBefore=await profile(overflowDriver);
+  await rpc('win',{room:overflowRoom,player:overflowId});
+  await until(async()=>(await rpc<unknown[]>('wins',{room:overflowRoom})).length===1,'overflow match settles');
+  assert.equal((await profile(overflowDriver)).driver.progress.cash-overflowBefore.driver.progress.cash,2_700,'overflow winner receives the match reward and achievements');
+  assert.equal(overflow.socket.readyState,WebSocket.OPEN,'overflow player stays connected');
 
   const uncreditedRoom='uncredited',uncredited=connect(uncreditedRoom);
   await until(()=>!!uncredited.last('welcome')&&!!uncredited.last('wallet'),'uncredited match guest connected');

@@ -1,10 +1,10 @@
 # Performance release gates
 
-2026-10-18 Pacific. The current contributor instructions hold feature releases
-pending the integrated driving-continuity and performance gates below. A prior
-instruction lifted the global hold after the verified 0.0.15 / protocol v32
-production release; the current instruction supersedes it. Existing gaps
-are tracked below. See
+2026-10-18 Pacific. After the verified 0.0.15 / protocol v32 production release,
+the user lifted the global feature hold and resumed the paused development
+chats. Performance now receives periodic checks and focused review when a
+change affects driving, rendering, networking or persistence. Existing gaps
+are tracked below; they do not freeze unrelated feature releases. See
 [the audit](PERFORMANCE_AUDIT.md) and [verification](VERIFICATION.md) for evidence.
 
 ## Driving continuity comes first
@@ -79,8 +79,7 @@ Review performance daily while development continues. If the deployed runtime
 has not changed and there is no new symptom, skip repeat benchmarking. Compare
 changed builds with the recorded baseline using the same scenario and device;
 serialize heavy load/browser measurements to avoid host contention. A confirmed
-regression blocks the responsible change. Development can continue while the
-feature release hold is in effect.
+regression blocks the responsible change, not all independent development.
 
 The wallet/showroom chat owns the shared persistent wallet, identity and income
 contract. Progression, Cybercab/market, global Starship and saved-driver awards

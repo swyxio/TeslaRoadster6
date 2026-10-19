@@ -1,4 +1,4 @@
-# Implementation contracts · v47 candidate
+# Implementation contracts · v48 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -17,7 +17,7 @@ Dependency flow: UI/input → session → authoritative simulation; snapshots �
 ## Coordinates and time
 
 - Right-handed world, meters and seconds. X east/right, Y up, Z south; forward is **−Z**.
-- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, dome roof, ferry, building roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support.
+- Entity `x,y,z` is its support-center pivot, not mesh center. `y` is absolute world altitude; do not infer grounded state from altitude. `supportId` identifies ground, overpass, stunt ramp, stunt loop, island bank, island oval, island cliff, island jump, dome, dome roof, ferry, building roof or null while airborne. Loop and cliff support require `loopAngle`, and dome support requires `domeS`, because x/z alone cannot identify their heights; the ferry is a moving support. New landmark roof IDs use `roof:<building-index>:<part-index>` to distinguish stacked authored surfaces; old single-part buildings use `roof:<building-index>`. A vehicle can remain supported while its body overlaps a part's edge.
 - `yaw`, `pitch` and `roll` are radians; pitch is rotation around local X and roll around local Z. Positive yaw turns left: forward vector `(-sin(yaw),0,-cos(yaw))`. Positive steer means left.
 - `speed` is signed forward meters/second; UI converts to km/h by multiplying 3.6. `vx`, `vy` and `vz` are world velocities; pitchRate, yawRate and rollRate are angular rates. Air/health are bounded 0–100.
 - Shared simulation uses fixed 0.05-second outer steps, subdivided for fast relative motion. Airborne speed is capped at 80 m/s (288 km/h) to keep collision sampling bounded; this is an arcade limit, not a general continuous-collision guarantee. `World.time` is simulation seconds, not epoch time. Never use render delta directly for physics. `dayMinute(World.time)` derives a fictional 48-minute day; do not accelerate physics, following gaps or signals with it.
@@ -35,11 +35,11 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v47 candidate
+## Wire protocol v48 candidate
 
-Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. This v47 candidate adds Dome match reward notifications and earned abilities, including the replicated Pulse Shot cooldown. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
+Protocol v48 adds Dome match reward notifications and earned abilities, including the replicated Pulse Shot cooldown. Protocol v47 fenced the shared landmark structural collision and building identities from v46 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Health: `GET /api/health` returns `{ok:true,version:47,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Public overflow uses `GET /api/public-room/{n}` with canonical integers 1–16 and the distinct internal room identity `public:{n}`; `/api/room/public-1` remains a separate named room. Health: `GET /api/health` returns `{ok:true,version:48,capacity:number}`.
 
 Client messages:
 
@@ -91,7 +91,7 @@ Client messages:
 Server messages:
 
 ```text
-{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:47, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
+{type:"welcome", id:string, playtestMode:"sandbox"|"practice"|null, version:48, capacity:number, tick:number, roomEpoch:string, substeps:number, poseRevision:number}
 {type:"state", world:World, tick:number, roomEpoch:string, substeps:number, poseRevision:number, control:ControlSnapshot, sync?:number}
 {type:"teleportResult", requestId:number, ok:boolean}
 {type:"inputRejected", seq:number, targetTick:number, reason:"epoch"|"revision"|"action"|"order"|"late"|"future"}
@@ -139,7 +139,7 @@ Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer r
 
 Both destination requests have an action fence, a required `mode` (`road`, `jump`, `sky`), and a private `destinationResult`. The server validates the purchased per-vehicle tier and rocket capability. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; rooftop or unsafe/unreachable destinations are rejected. Map pins retain their normal road snapping. The driver may take over with manual controls.
 
-Capacity: `MAX_PLAYERS`, default 64, clamped 2–128. Production and preview use 64 as a provisional admission limit, not a validated playable capacity. A full room rejects the connection with code 4003; clients can retry or choose another named room. [Automatic public overflow](ROOM_OVERFLOW_PLAN.md) is planned, not implemented. A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. Per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object handle wallet and income accounting. Input and physics proceed without waiting on profile RPCs. See [dated isolation and performance checks](VERIFICATION.md) for the measured conditions and limits.
+Capacity: `MAX_PLAYERS`, default 64, clamped 2–128. Production and preview use 64 as a provisional admission limit, not a validated playable capacity. A full room rejects the connection with code 4003. Automatic entry tries `bay` then up to 16 public overflow rooms on a pre-welcome 4003, bounded by 20 seconds; each room makes its own authoritative admission decision. An explicit room, invite or property link stays exact and offers retry or another room. See [public placement](ROOM_OVERFLOW_PLAN.md). A named `GameRoom` owns each room’s in-memory simulation; its timer stops and world resets when empty. Per-driver `DriverProfile`, per-room `RoomEconomy` and one `GlobalIncome` Durable Object handle wallet and income accounting. Input and physics proceed without waiting on profile RPCs. See [dated isolation and performance checks](VERIFICATION.md) for the measured conditions and limits.
 
 ## Wallet and ownership transaction boundary
 
@@ -182,7 +182,7 @@ Chat messages are normalized and limited to 240 Unicode code points. The server 
 
 ## Client adapters
 
-`Session` owns `world`, `id`, `status` (`connecting|online|disconnected`), `capacity`, `error`, `roomFull`, owner-only `wallet` and action results. It sends input and room actions, `setIdentity(code)`, `luxury(action, vehicle)`, workshop requests, `mars()` boarding requests and `contributeMars(amount)`. Game startup joins `bay` by default or the room named by an invite. UI must preserve explicit connection/error/rejoin paths and match replies by request ID. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; initial connection times out after 10 seconds.
+`Session` owns `world`, `id`, `status` (`connecting|online|disconnected`), `capacity`, `error`, `roomFull`, owner-only `wallet` and action results. It sends input and room actions, `setIdentity(code)`, `luxury(action, vehicle)`, workshop requests, `mars()` boarding requests and `contributeMars(amount)`. Game startup finds an open public Bay by default or joins the exact room in an invite. Successful admission updates the address to `?room=<slug>` or `?public=<n>`; reload and Invite target the same room. The joining view supports cancellation, and stale socket callbacks cannot complete a cancelled placement. UI must preserve explicit connection/error/rejoin paths and match replies by request ID. Never display stale multiplayer as live. Server stalls exceeding 6 seconds close the connection; each initial connection attempt times out after at most 10 seconds, within the 20-second total placement deadline.
 
 `Controls.read()` returns a complete input. On blur/hidden/menu, clear keys and pointers. Multitouch uses pointer IDs and capture; release on pointerup/cancel/lost capture. Avoid stuck acceleration. Every keyboard action needs a touch equivalent. UI dialogs must neutralize controls while preserving connection heartbeats.
 
@@ -196,7 +196,7 @@ The client sets `Input.cockpit` only when cockpit is selected in a vehicle, game
 
 ## UI continuity and acceptance
 
-Keep brand/menu access in menu, game, joining and error states. Fullscreen/pointer lock must have a visible exit if introduced. Room invite links retain and automatically join the named room. Names must enter DOM through `textContent`, never HTML interpolation. Support 390×844 portrait and 844×390 landscape plus desktop; gameplay and toolbar actions must remain visible without scrolling. Menu may scroll. Touch targets ≥44px where practical; no hover-only actions. Canvas needs accessible labeling; all interactive controls must have names, focus indication, and keyboard operation.
+Keep brand/menu access in menu, game, joining and error states. Fullscreen/pointer lock must have a visible exit if introduced. Room invite links retain and automatically join the exact named or public overflow room. Names must enter DOM through `textContent`, never HTML interpolation. Support 390×844 portrait and 844×390 landscape plus desktop; gameplay and toolbar actions must remain visible without scrolling. Menu may scroll. Touch targets ≥44px where practical; no hover-only actions. Canvas needs accessible labeling; all interactive controls must have names, focus indication, and keyboard operation.
 
 ## Required handoff from every contributor
 

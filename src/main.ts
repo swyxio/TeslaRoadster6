@@ -30,6 +30,7 @@ import { LUXURY_CATALOG, LUXURY_SHOWROOM, atLuxuryShowroom, luxuryVehicle, type 
 import { VEHICLES, VEHICLE_IDS, type VehicleId } from '../shared/vehicles';
 import { GameScene } from './scene';
 import { DEFAULT_ROOM, Session, validRoom, type WalletView } from './session';
+import { publicRoomNumber, roomEntry, roomLabel, roomSearch } from './room-address';
 import { Controls } from './controls';
 import { setupControlSettings } from './control-settings';
 import { GameAudio } from './audio';
@@ -141,7 +142,7 @@ document.querySelector('#app')!.innerHTML = `
 <dialog id="identity-dialog" class="identity-dialog" aria-labelledby="identity-title"><div class="fleet-header"><div><span class="eyebrow">YOUR DRIVER</span><h2 id="identity-title">Driver identity</h2></div><button id="identity-close" type="button" aria-label="Close driver identity">✕</button></div><p id="identity-current" class="identity-current">Connecting to chat…</p><p id="identity-storage-warning" class="identity-feedback" role="alert" hidden></p><form id="identity-name-form" class="identity-block"><strong>Choose your driver name</strong><p>Other drivers will see this name in your room and in global chat. If it’s in use, we add a number.</p><label for="identity-name">Driver name</label><div class="identity-name-row"><input id="identity-name" maxlength="${MAX_NAME_LENGTH * 2}" autocomplete="nickname" placeholder="Your callsign"><button type="submit" class="identity-button">Use name</button></div><p>Change your name anytime; your driver ID stays the same.</p></form><div class="identity-block"><strong>Keep this driver</strong><p>This browser remembers your driver by default. Copy the recovery code to use the same ID on another device. Your wallet, delivery progress, achievements, and luxury collection follow your saved driver.</p><button id="identity-save" type="button" class="identity-button">Get recovery code</button><div id="identity-code-group" hidden><label for="identity-code">Your recovery code · keep it private</label><textarea id="identity-code" readonly rows="3" spellcheck="false"></textarea><button id="identity-copy" type="button" class="identity-button">Copy code</button></div><label class="identity-remember"><input id="identity-remember" type="checkbox"> Remember this driver on this browser</label><p>Starting a new driver replaces the driver remembered on this browser.</p></div><form id="identity-recover" class="identity-block"><strong>Recover on this device</strong><p>Save your current guest before switching, or its progress cannot be recovered. The same driver can be connected on one device at a time.</p><label for="identity-enter-code">Recovery code</label><textarea id="identity-enter-code" rows="2" maxlength="160" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Paste your recovery code"></textarea><div class="identity-actions"><button type="submit" class="identity-button">Recover driver</button><button id="identity-guest" type="button" class="identity-button">Start a new driver</button></div><div class="identity-actions"><button id="identity-pending" type="button" class="identity-button" hidden>Recover unfinished driver</button><button id="identity-previous" type="button" class="identity-button" hidden>Use previously saved driver</button></div></form><p id="identity-feedback" class="identity-feedback" role="status"></p><button id="identity-rejoin" type="button" class="identity-button" hidden>Rejoin with this driver</button></dialog>
 <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-title" aria-describedby="ticket-copy"><div class="ticket-icon" aria-hidden="true">!</div><span class="ticket-kicker">POLICE CITATION / FLIGHT ON PUBLIC ROADS</span><h2 id="ticket-title">Busted.</h2><p id="ticket-copy">Flying over public roads put people at risk. Police stopped your run and issued a citation.</p><strong id="ticket-amount" class="ticket-amount"></strong><div id="ticket-detail" class="ticket-detail"></div><p class="ticket-footnote">The fine has been deducted from your earnings. Longer, higher flights and repeat offenses cost more.</p><button id="ticket-acknowledge" class="primary">Acknowledge citation &amp; continue →</button></dialog>
 <div id="notice" class="notice hidden" role="status"></div>
-<div id="joining" class="connection-wait hidden" role="status" aria-live="polite">Joining your room…</div>
+<div id="joining" class="connection-wait hidden"><span id="joining-copy" role="status" aria-live="polite">Joining your room…</span><button id="joining-cancel" class="text-button" type="button">Cancel</button></div>
 <div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="mars-error" class="text-button" type="button">Starship mission &amp; launch view</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
 const mobileHud=setupMobileHud(browserStorage());
@@ -420,7 +421,13 @@ $('identity-guest').onclick=()=>{
 $('identity-rejoin').onclick=()=>{session.disconnect();$<HTMLButtonElement>('identity-rejoin').hidden=true;begin(false);};
 if(currentCode)ensureChat();
 
-const roomParam = new URLSearchParams(location.search).get('room');
+const initialEntry=roomEntry(location.search);
+let selectedEntry=initialEntry??{room:DEFAULT_ROOM,automatic:false};
+session.onRoomJoined=room=>{
+  selectedEntry={room,automatic:false};
+  $<HTMLInputElement>('room').value=publicRoomNumber(room)===null?room:roomLabel(room);
+  history.replaceState(null,'',roomSearch(room));
+};
 const playStorage=browserStorage(),previousPlay=playStorage?readLastPlayed(playStorage):null;
 if(previousPlay){
   $('last-played').textContent=`Last played ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(previousPlay.playedAt))} · ${releaseLabel(previousPlay.version)}. Saved on this browser.`;
@@ -432,16 +439,16 @@ function recordPlay(now:number){
   if(!playStorage||!writeLastPlayed(playStorage,new Date(now))){$('last-played').textContent='Last-played history could not be saved on this browser.';}
 }
 window.addEventListener('pagehide',()=>{if(playRecorded&&Date.now()-lastActiveAt<10000)recordPlay(Date.now());});
-if (roomParam && validRoom(roomParam)) $<HTMLInputElement>('room').value=roomParam;
+if(initialEntry)$<HTMLInputElement>('room').value=publicRoomNumber(initialEntry.room)===null?initialEntry.room:roomLabel(initialEntry.room);
 let menuRidePending:{kind:VehicleId;closeOnSuccess:boolean;expires:number}|null=null;
 function updateRideMenu(){
   const sandbox=playtestMode($<HTMLInputElement>('room').value.trim().toLowerCase())==='sandbox';
   for(const option of startingSelect.options)option.hidden=option.disabled=!sandbox&&!teslaIds.includes(option.value as VehicleId);
   if(!sandbox&&!teslaIds.includes(selectedVehicle)){startingSelect.value='roadster';updateStarting();}
 
-  const sameRoom=session.status==='online'&&$<HTMLInputElement>('room').value.trim().toLowerCase()===session.room;
+  const sameRoom=session.status==='online'&&selectedEntry.room===session.room;
   $('apply-ride').hidden=!sameRoom;
-  if(!menuRidePending)$('form-note').textContent=sameRoom?'Choose a ride and use Change to this ride, or return to keep your current car.':'Join friends with a room code. Change rides here or use Actions → Fleet.';
+  if(!menuRidePending)$('form-note').textContent=sameRoom?`You are in ${roomLabel(session.room)}. Choose a ride or return to your drive.`:'Join friends with a room code. Change rides here or use Actions → Fleet.';
 }
 function toggleMenu(show: boolean) {if(!show&&menuRidePending)return;if(show&&!menu){startingRideChanged=false;updateRideMenu();}menu=show;setDrawer(null);controls.clear();$('menu').classList.toggle('hidden',!show);$('hud').classList.toggle('hidden',show);$('resume').classList.toggle('hidden',!started||session.status==='disconnected');$('menu-button').setAttribute('aria-label',show?'Close menu':'Open menu');}
 function requestMenuRide(closeOnSuccess:boolean){
@@ -460,8 +467,8 @@ function requestMenuRide(closeOnSuccess:boolean){
   $('form-note').textContent='Requesting your ride…';
 }
 function begin(userGesture=true){
-  const room=$<HTMLInputElement>('room').value.trim().toLowerCase();
-  if(!validRoom(room)){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
+  const room=selectedEntry.room;
+  if(!validRoom(room)&&publicRoomNumber(room)===null){ $('form-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return; }
   ensureChat();
   if(session.status==='online'&&session.room===room){
     session.join(room,chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
@@ -474,23 +481,24 @@ function begin(userGesture=true){
   pendingShop=null;pendingOta=null;pendingStyle=null;pendingLuxury=null;luxuryStatus='';lastLuxuryKey='';stylePreviewKey='';pendingDestination=null;navigationDriving=false;shopBusyUntil=0;
   achievementEvents.reset();achievementQueue=[];clearTimeout(achievementTimer);achievementTimer=0;$('achievement-toast').classList.add('hidden');
   for(const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]'))dialog.close();
-  $<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle);history.replaceState(null,'',`?room=${encodeURIComponent(room)}`);
+  if(publicRoomNumber(room)===null)$<HTMLInputElement>('room').value=room;controls.resetSequences();session.join(room,$<HTMLInputElement>('name').value.trim()||'Driver',selectedVehicle,selectedEntry.automatic);
   playRecorded=false;lastActiveSeconds=0;lastActiveAt=0;
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
 $('playtest-fresh').onclick=()=>{location.href=`?room=practice-${crypto.randomUUID().slice(0,8)}`;};
 $('playtest-sandbox').onclick=()=>{location.href='?room=sandbox';};
-$('playtest-return').onclick=()=>{location.href='?room=bay';};
+$('playtest-return').onclick=()=>{location.href=location.pathname;};
 updateRideMenu();
 $('join').onclick=()=>begin();$('retry').onclick=()=>{if(session.walletBlocked)session.disconnect();begin();};
 $('apply-ride').onclick=()=>requestMenuRide(false);
-$<HTMLInputElement>('room').addEventListener('input',updateRideMenu);
+$<HTMLInputElement>('room').addEventListener('input',()=>{selectedEntry={room:$<HTMLInputElement>('room').value.trim().toLowerCase(),automatic:false};updateRideMenu();});
 $('error-join').onclick=()=>{
   const room=$<HTMLInputElement>('error-room').value.trim().toLowerCase();
   if(!validRoom(room)){$('error-room-note').textContent='Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';return;}
-  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;begin();
+  $('error-room-note').textContent='';$<HTMLInputElement>('room').value=room;selectedEntry={room,automatic:false};begin();
 };
+$('joining-cancel').onclick=()=>{session.disconnect();started=false;toggleMenu(true);};
 $('resume').onclick=()=>{ensureChat();toggleMenu(false);};$('menu-button').onclick=()=>{if(started)toggleMenu(!menu);};
 $('error-menu').onclick=()=>{$('error').classList.add('hidden');resetCelebration();pendingShop=null;pendingOta=null;pendingStyle=null;stylePreviewKey='';shopBusyUntil=0;session.disconnect();toggleMenu(true);};
 function cameraLabel(onFoot:boolean){
@@ -876,12 +884,12 @@ function updateMarket(){
 }
 const marketUi=createMarketUI({
   onAction:action=>market.start(action),onRefresh:()=>market.refresh(),onMore:()=>market.more(),onMoreOwned:()=>market.moreOwned(),
-  onVisit(assetId){const room=propertyRoom(assetId);if(!room){notice('This home is unavailable. Refresh the market.');return;}$<HTMLInputElement>('room').value=room;begin();},
+  onVisit(assetId){const room=propertyRoom(assetId);if(!room){notice('This home is unavailable. Refresh the market.');return;}$<HTMLInputElement>('room').value=room;selectedEntry={room,automatic:false};begin();},
   onOpenChange(open){controls.clear();controls.enabled=!open&&!openDrawer&&!menu&&session.status==='online'&&!session.walletBlocked&&!document.querySelector('dialog[open]');},
 });
 document.body.append(marketUi.element);
 $('market').onclick=()=>{setDrawer(null);controls.clear();controls.enabled=false;lastMarketKey='';updateMarket();marketUi.open();};
-$('return-bay').onclick=()=>{$<HTMLInputElement>('room').value=DEFAULT_ROOM;begin();};
+$('return-bay').onclick=()=>{$<HTMLInputElement>('room').value=DEFAULT_ROOM;selectedEntry={room:DEFAULT_ROOM,automatic:true};begin();};
 function requestLuxury(action:'buy'|'collect',id:string,source:'vault'|'workshop'='vault'){
   const vehicle=luxuryVehicle(id);if(!vehicle||pendingLuxury)return;
   luxuryStatus='';
@@ -1198,14 +1206,15 @@ scene.start(dt=>{
   // A room switch clears the presentation world until an authoritative
   // snapshot arrives; do not leave the old room's instruments on screen.
   $('hud').classList.toggle('hidden',menu||session.status!=='online'||session.walletBlocked);
-  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'&&session.walletStatus==='failed'?'○ WALLET NOT CONNECTED':session.status==='online'&&session.walletBlocked?'◌ CONNECTING WALLET…':session.status==='online'?`● ${session.playtest?`${session.sandbox?'SANDBOX':'PRACTICE'} · UNSAVED`:`LIVE / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
+  $('connection').textContent=!started?'○ CHOOSE A ROOM':session.status==='online'&&session.walletStatus==='failed'?'○ WALLET NOT CONNECTED':session.status==='online'&&session.walletBlocked?'◌ CONNECTING WALLET…':session.status==='online'?`● ${session.playtest?`${session.sandbox?'SANDBOX':'PRACTICE'} · UNSAVED`:`LIVE / ${roomLabel(session.room).toUpperCase()} / ${session.world.players.length} DRIVER${session.world.players.length===1?'':'S'}`}`:session.status==='connecting'?'◌ JOINING ROOM…':'○ DISCONNECTED';
   $('connection').title=session.status==='online'?`${session.playtest?'Progress is not saved. ':''}Room: ${session.room}`:'';
   const joiningWallet=session.status==='online'&&(session.walletStatus==='connecting'||session.walletStatus==='syncing');
-  $('joining').textContent=joiningWallet?'Connecting your wallet…':'Joining your room…';
+  $('joining-copy').textContent=joiningWallet?'Connecting your wallet…':session.findingRoom?'Finding an open Bay…':'Joining your room…';
   $('joining').classList.toggle('hidden',!started||menu||!(session.status==='connecting'||joiningWallet));
   if(started&&!menu&&(session.status==='disconnected'||session.walletStatus==='failed')){
     if(shopDialog.open)shopDialog.close();controls.clear();controls.enabled=false;$('error').classList.remove('hidden');
-    $('error-title').textContent=session.walletStatus==='failed'?'Could not connect your saved driver.':session.roomFull?'This room is full.':'Let’s get you back on the road.';
+    $('error-title').textContent=session.walletStatus==='failed'?'Could not connect your saved driver.':session.roomFull?(selectedEntry.automatic?'The Bay is busy.':'This room is full.'):'Let’s get you back on the road.';
+    $('retry').textContent=selectedEntry.automatic?'Try finding a Bay again':'Try this room again';
     $('error-copy').textContent=session.walletStatus==='failed'?`${session.walletError} Retry, or choose a guest driver in room settings.`:session.error;
     if(identityDialog.open&&session.walletStatus==='failed'){
       identityFeedback(session.walletError);$<HTMLButtonElement>('identity-rejoin').hidden=false;
@@ -1344,6 +1353,6 @@ scene.start(dt=>{
 });
 
 // A malformed invite must not silently place friends in a different room.
-if(roomParam!==null&&!validRoom(roomParam)){
-  $('form-note').textContent='Invalid room link. Start with a letter or number; use up to 32 lowercase letters, numbers, or hyphens.';
+if(!initialEntry){
+  $('form-note').textContent='Invalid room link. Check the invite, or enter a room code to join.';
 }else begin(false);

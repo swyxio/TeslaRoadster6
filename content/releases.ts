@@ -6,6 +6,45 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'Rocket Dome rewards',
+    intro: 'Play Rocket Dome to earn cash and unlock new abilities.',
+    sections: [
+      { title: 'Get in the game', items: [
+        'Touch the ball and stay through a match to earn $250, plus $500 if you win. Existing earnings bonuses apply.',
+        'Your first qualifying match unlocks Pulse Shot; your first credited win unlocks Champion Charge for rocket-equipped cars.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.34-alpha',
+    label: '0.0.34 Alpha',
+    date: '2026-10-18',
+    title: 'More of the Bay',
+    intro: 'Find 100 more Bay-inspired places across the map.',
+    sections: [
+      { title: 'New landmarks', items: [
+        'Explore miniature landmarks from Marin and San Francisco to Berkeley, the Peninsula and San Jose.',
+        'The Bay is playfully compressed: landmarks are original interpretations, and some have been moved to fit the world.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.33-alpha',
+    label: '0.0.33 Alpha',
+    date: '2026-10-18',
+    title: 'Find your Bay',
+    intro: 'Keep driving when the Bay fills up.',
+    sections: [
+      { title: 'Room for another drive', items: [
+        'When the public Bay is full, the game finds another open Bay room automatically.',
+        'Invite links take friends to your exact room. If it is full, you can retry or choose another room.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.32-alpha',
+    label: '0.0.32 Alpha',
+    date: '2026-10-18',
     title: 'A little more lift',
     intro: 'Boosts and landings bring more of the drive to life.',
     sections: [

@@ -223,11 +223,11 @@ export function updateAchievements(player:Player,e:Entity,rooftopDelivered:boole
   if(e.kind==='person'){state.groundShore=null;state.crossing=null;}
   else if(grounded){
     if(landed&&evidence){
-      const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
+      const style=BUILDINGS[parseInt(e.supportId!.slice('roof:'.length),10)]?.style;
       evidence.push({kind:'roof',roof:style==='coit'?'coit':style==='salesforce'?'salesforce':'ordinary'});
     }else if(roof&&!evidence&&unlock(state,'roof-rider'))researchCash+=500;
     if(roof&&!evidence){
-      const style=BUILDINGS[Number(e.supportId!.slice('roof:'.length))]?.style;
+      const style=BUILDINGS[parseInt(e.supportId!.slice('roof:'.length),10)]?.style;
       if(style==='coit'&&unlock(state,'coit-landing'))researchCash+=1_000;
       if(style==='salesforce'&&unlock(state,'salesforce-landing'))researchCash+=1_000;
     }
