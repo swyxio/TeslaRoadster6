@@ -37,6 +37,19 @@ None of these changes is applied. The [tests, source variants and traces](wire-c
 have SHA-256 `f668e7d0ca596692c91e8dcc827c0d83f9cb7650cbec2eaab545ad4f31844da5`.
 They are synthetic, not a Worker, browser or WAN result.
 
+## Airborne wall-contact follow-up
+
+An isolated [solid-contact signal experiment](airborne-solid-signal-followup-20261018.tar.gz)
+(SHA-256 `c9eef44f8a3d1176ff442359a273fc69b5dfbce8ba2d67d25654cfd639719edc`)
+observed a shared-physics rollback that retains falling velocity. In one
+synthetic scheduled wall trace, its experimental predictor eliminated the
+previous 21 upward-moving falling frames and reported no snap; 14 focused
+guard/hook tests and typecheck passed. The strict scheduled fixture still
+failed eight late-input rejections. The prior v6 pinned-wall test and all six
+ferry cases also failed, with up to 1.104 m displayed shore/deck overlap absent
+from authority. The raw traces, predecessor and reproduction instructions are
+retained; these results are not a live, performance or continuity-gate pass.
+
 ## Confirmed ferry timeline diagnostic
 
 An isolated experiment retains confirmed ferry hull, phase, manifest, nearby
