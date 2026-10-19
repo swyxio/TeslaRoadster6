@@ -200,6 +200,17 @@ unverified. A [second version](peer-sweep-proof-20261018-v2.tar.gz) adds a
 three-body unavailability regression and passes seven focused tests; SHA-256
 `e9615fc8be21a2c91716d5454f5442e2808878b4cc571bf6ae9a3e0a66eefa53`.
 
+The unapplied [combined identity and contact lab](presentation-combined-lab-20261018.tar.gz)
+(SHA-256 `d9f921a9df2e312e8fee8feea0fd6e1c32be0a502b58996421325c0a1bad884f`)
+passed 200 focused tests and client typecheck. A 1.8-second burst exhausts its
+history and disconnects, so that test is not a continuity pass. Before the
+disconnect fallback, a roster change caused a 94.78 m cut. The fallback freezes
+the scene behind a disconnected state in unit tests; live browser behavior,
+moving-ferry coherence, swept peer safety, integration and performance remain
+unverified. A later review found that the room-settings action clears the frozen
+state before reconnecting; that lifecycle path remains broken in this archive.
+The archive preserves both the before and after patches.
+
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
 `125113e9e83421c0f178cdfd2941d6178b4b247cd56548c177670e8955f0f4b2`). Its
@@ -338,6 +349,13 @@ substep tracing, the four-runner barrier and observer cost remain unverified.
 No remote diagnostic or 64-driver run was started. The archive includes an
 earlier readiness assessment and has SHA-256
 `27971eca577e78ca7c6cd016cf233dbe64e9518b3795787b9dabaff4975b15e6`.
+
+An additional [substep instrumentation patch](hosted-stage-substep-20261018.patch)
+(SHA-256 `dad2d16d62f032a0bff37267c3f2a351bf3ee29e7651dc2b1b87787f88fdc81b`)
+passed eight focused tests, typechecks and a two-client loopback smoke. Contact
+coverage is explicitly incomplete and its bounded buffer cannot retain the
+full 64-driver gate at eight substeps. It applies after the two prior diagnostic
+patches and is not enabled or deployed.
 
 ## Hosted comparison
 
