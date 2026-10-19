@@ -2,8 +2,8 @@
 
 ## Vehicle contact shadows · draft candidate · 2026-10-18 Pacific
 
-- A bounded, shared instance batch adds soft contact patches beneath nearby vehicles only on flat, confirmed ground or bridge deck. Unsupported, airborne, ferry, Dome, roof, ramp and hill cases are excluded; simulation and controls are unchanged.
-- This source candidate has not yet been built, run or visually inspected. Its visual benefit, motion behavior, CPU/GPU cost and desktop/mobile performance are unmeasured; do not merge it until the required same-route comparison and actual game checks are complete.
+- A bounded, shared instance batch adds soft contact patches beneath nearby vehicles only on flat, confirmed ground or bridge deck. Unsupported, airborne, ferry, Dome, roof, ramp, hill and raised parking-approach cases are excluded; simulation and controls are unchanged. Patches sit above lot pavement and below the tested road markings and low-car undertray heights.
+- Candidate `02e8803b` passed the hosted test suite in [run 39213580781](https://github.com/swyxio/TeslaRoadster6/actions/runs/39213580781), including the parking placement checks. Its paired benchmark was still pending at this observation. Desktop and mobile appearance, motion behavior and CPU/GPU cost remain unverified; do not merge until the required same-route comparison and actual game checks are complete.
 
 ## Bay horizon · integrated candidate · 2026-10-18 Pacific
 
