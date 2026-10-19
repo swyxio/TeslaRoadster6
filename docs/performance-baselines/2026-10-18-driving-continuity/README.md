@@ -145,6 +145,27 @@ separate deterministic burst case on the experimental clock exposed a 14.19 m
 presentation cut in one frame. Clock convergence near traffic and recovery
 after such a burst are not established; the experiment remains on hold.
 
+## Local 64-client diagnostic
+
+A disposable local Wrangler room on `d05d6f4` and 64 synthetic clients ran on
+the same Apple M5 Pro (18 logical CPUs). During the 60.02 s measurement, the
+minimum observed snapshot span was 37.8 simulated seconds (median 37.9 s),
+all clients observed all players and had an applied input, and none closed.
+There were 7,552 rejected inputs, including warm-up; decoded JSON across clients
+was 3,231.37 MiB. Snapshot gap p95 was 531 ms, maximum 3,269 ms, and the
+client event-loop delay p95 was 34.3 ms. Sampled owner control queues reached
+three level inputs and zero jump or flip edges; sampling does not prove peaks.
+
+No driver satisfied all six ten-second movement blocks; all 64 had at least
+one covered block with less than one metre of movement and no moving samples.
+The fixed control/spawn fixture does not ensure an unobstructed route. This is
+an incomplete workload, not a sustained-driving capacity test. The client
+generator and server shared the host; one-minute host load rose from 13.51 to
+36.62, and other geometry tests overlapped, including a 2.62 s focused test
+near the end. No production CPU, WAN, device, or isolated 64-player throughput
+claim follows. The [raw report](load64-d05.json.gz) SHA-256 is
+`33a4cd6259d387ed3017704f13c3fad12e3a91c6c6929089757f446e58e4e652`.
+
 ## Functional verification
 
 `pnpm test` passed 1,057 tests and `pnpm build` passed on `4656339`; Vite's
