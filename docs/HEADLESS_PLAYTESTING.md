@@ -97,6 +97,13 @@ operator-supplied target ref, origin/path (query omitted), browser/OS/renderer,
 viewport, command start/duration intervals, safe HUD/performance samples and
 capture settings. Command intervals are not the instant a browser dispatched an
 input event.
+Requested video fps is an encoder setting, not proof that the game rendered
+that many distinct frames or that playback resembles a player's device. Inspect
+the actual recording, frame intervals, renderer and host load. The hosted
+[two-delivery pair](performance-baselines/2026-10-18-two-delivery-cross-version/video-summary.md)
+shows real route completion but substantial capture-environment jitter, and is
+not suitable for judging player smoothness or the boost effect. Use the focused
+boost scenario on a representative GPU for that visual check.
 `--trajectory` additionally writes `trajectory.json` with the player's pose,
 delivery milestones and flight indicators from received authoritative room
 snapshots. It does not record player IDs or raw messages, nor does it measure
@@ -117,7 +124,7 @@ and `recordStop`. `waitForDelivery`, `waitForTicks`, `waitForGround`, and
 The jump action retries a keyboard press at most five times and fails if no
 real lift is observed; `hold: true` retains E for flight. The tick, ground and
 jump actions are scripted only, to keep the interactive API responsive.
-`waitForRoomReady` and `beginRoom` operate only
+`waitForRoomReady`, `beginRoom` and `stageRepeatDelivery` operate only
 on the loopback fixture described below. `frameStart` and `frameStop` capture raw requestAnimationFrame
 callback intervals without recording video; these are not GPU completion or
 display presentation times. Hold controls across a wait by pairing down/up actions.
@@ -215,6 +222,44 @@ and an unchanged pose revision. Keep the trace and inspect the video too; a
 touch-emulated browser is not a physical phone. Compare matching viewports and
 fixtures across revisions, and measure frame times in separate no-video runs.
 
+### Check recording quality
+
+The older 0.0.31/0.0.32 delivery videos were recorded on a contended virtual
+GPU and are evidence of the route, not of smooth player experience. Before
+using new footage for visual comparison, run the same scenario once without
+video and once with video, on the same machine and browser, against the same
+origin and verified build. Use a fresh seeded room for each run. On macOS with
+Metal, for example, after starting the staged fixture above:
+
+```sh
+export PLAYTEST_STAGE_SECRET="$(cut -d = -f 2 "$stage_env")"
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=quality-control&perf' \
+  --target-ref YOUR_FULL_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/quality-control --trajectory --browser chrome --gpu metal --fps 60 --no-video
+pnpm playtest:record --url 'http://127.0.0.1:8787/?room=quality-video&perf' \
+  --target-ref YOUR_FULL_COMMIT_SHA --scenario scripts/playtests/boost-landing.json \
+  --out playtest-runs/quality-video --trajectory --browser chrome --gpu metal --fps 60
+node scripts/verify-boost-landing.mjs playtest-runs/quality-video
+node scripts/recording-quality.mjs playtest-runs/quality-control/manifest.json \
+  playtest-runs/quality-video/manifest.json > playtest-runs/quality-report.json
+unset PLAYTEST_STAGE_SECRET
+```
+
+The quality report requires `ffprobe` on the path and returns `HOLD` when the
+run, timestamps, video stream, enabled audio stream or matching configuration are incomplete. It
+compares animation callback intervals, describes long screencast gaps, and
+reports host load. Recording quality is `HOLD` for those gaps or other warnings;
+otherwise it remains `UNVERIFIED` until a person checks player fidelity. It
+checks metadata and video packets, not whether images
+are unique or look smooth. The frame callback transfers JPEG data and adds
+recording overhead. Capture timestamps are not physical display or GPU timing;
+the full commit is an operator label and must be checked against the served
+build. Inspect the video and scenario trajectory, compare with real gameplay,
+and repeat on quiet representative hardware before drawing performance
+conclusions. The comparison currently requires one recording segment enclosing
+one `frameStart` / `frameStop` interval; scenarios with other layouts need
+their own analysis. Keep the private capture traces with the video.
+
 The fixture selects the same traffic cohort, stages the first driver, runs two
 setup ticks and pauses. The scenario's `freshGuest` option disables automatic
 driver saving in its disposable browser context. It waits for guest identity and a staged
@@ -223,16 +268,29 @@ same-tick snapshots keep the browser connected; they are not advancing game
 time. Only one driver may join during this pause, and begin is one-use per room
 incarnation. With this option a blocked start fails instead of waiting for
 traffic to move. The loopback-only `GET /api/playtest/status/<room>` and
-`POST /api/playtest/begin/<room>` endpoints require this secret as a bearer
+`POST /api/playtest/begin/<room>` and `POST /api/playtest/repeat/<room>` endpoints require this secret as a bearer
 token. The recorder sends it directly from its environment; it is not saved in
 the recording. These endpoints belong to the fixture, not the deployed game.
 Never expose or deploy this fixture.
 
-The script invokes the game's Street Pilot through keyboard input, waits for
-pickup and drop-off of the initial order, then uses jump and hover controls.
-The saved trajectory and report must confirm that delivery, matching initial
-order IDs and coordinates across the pair, two separate
-jump bursts with upward movement and sustained airborne thrust. The scenario
+The script invokes the game's Street Pilot through keyboard input and completes
+the first delivery. After the next normal assignment finishes searching, the
+fixture replaces only the guest's order using that revision's own initial-order
+factory at the car's current position. It verifies the same accessible target
+IDs and coordinates and never moves the car. It waits for the local guest's
+wallet and assignment queue to settle and commits the replacement through the
+normal progress queue, so the room projection, draft and disposable profile
+agree. That extra commit is part of the measured workload. This controlled second assignment
+is not a test of natural second-job selection. It is allowed once, for the
+same connected guest, vehicle and room, without a pose revision change.
+The report records the staging command duration, including assignment and
+wallet waits and snapshot confirmation. Frame p95 includes this mostly
+stationary period; distance-based route matching does not control elapsed time.
+
+The saved trajectory and report must confirm both pickups and both completed
+drop-offs at their authoritative targets, with both order IDs and coordinates
+matching across the pair, then two separate jump bursts with upward movement
+and sustained airborne thrust. The scenario
 waits for the first landing, briefly accelerates during the second flight and
 waits to land again. A respawn invalidates the route. Identical setup and inputs do not ensure
 identical trajectories if contacts or timing change; see the full-path
