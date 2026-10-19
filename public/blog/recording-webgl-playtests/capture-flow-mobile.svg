@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 630" role="img" aria-labelledby="title desc">
   <title id="title">From a playtest to a published video</title>
-  <desc id="desc">Scenario and local room to Chromium pixels, to MP4 and poster, to the dev blog. Run evidence remains private.</desc>
+  <desc id="desc">Scenario and local room to Chromium pixels and game audio, to MP4 and poster, to the dev blog. Run evidence remains private.</desc>
   <rect width="560" height="630" rx="16" fill="#f7f7f5"/>
   <g font-family="Arial, sans-serif" fill="#222b2d" text-anchor="middle">
     <rect x="30" y="25" width="350" height="95" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
     <text x="205" y="62" font-size="21" font-weight="bold">Scenario + local room</text><text x="205" y="94" font-size="18">Timed inputs, fresh start</text>
     <rect x="30" y="165" width="350" height="95" rx="12" fill="#ddf4d2" stroke="#4f9a51" stroke-width="2"/>
-    <text x="205" y="202" font-size="21" font-weight="bold">Chromium renders</text><text x="205" y="234" font-size="18">WebGL pixels → WebM</text>
+    <text x="205" y="202" font-size="21" font-weight="bold">Chromium renders</text><text x="205" y="234" font-size="18">WebGL pixels + game audio</text>
     <rect x="30" y="305" width="350" height="95" rx="12" fill="#cfe5fb" stroke="#2f7ed8" stroke-width="2"/>
     <text x="205" y="342" font-size="21" font-weight="bold">Prepare the clip</text><text x="205" y="374" font-size="18">MP4 + poster</text>
     <rect x="30" y="445" width="350" height="95" rx="12" fill="#ffd5d5" stroke="#d84b4b" stroke-width="2"/>
