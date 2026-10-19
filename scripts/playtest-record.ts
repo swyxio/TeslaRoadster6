@@ -618,7 +618,10 @@ function json(res: ServerResponse, status: number, value: unknown) { res.writeHe
 try {
   const args = values.gpu === 'metal' ? ['--use-gl=angle', '--use-angle=metal', '--enable-gpu'] : values.gpu === 'vulkan' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu'] : values.gpu === 'swiftshader' ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : [];
   if (values['video-source'] === 'tab') args.push(`--auto-select-tab-capture-source-by-title=tesland-tab-${id}`);
-  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : undefined, headless: !values.headed, args });
+  // Interactive shutdown drains accepted actions before closing the browser.
+  // Playwright's default signal handlers would otherwise close it concurrently.
+  browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : undefined,
+    headless: !values.headed, handleSIGINT: !values.serve, handleSIGTERM: !values.serve, args });
   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
   context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
   if (values['video-source'] === 'tab') {
