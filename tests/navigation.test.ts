@@ -327,6 +327,10 @@ test('destination and mini-game protocol accepts only finite bounded requests',(
   assert.deepEqual(parseMessage(JSON.stringify(delivery)),delivery);
   assert.equal(parseMessage(JSON.stringify({...delivery,requestId:0})),null);
   assert.equal(parseMessage(JSON.stringify({type:'deliveryDestination',requestId:3})),null);
+  const charger={type:'chargerDestination',requestId:4,mode:'road',...fence};
+  assert.deepEqual(parseMessage(JSON.stringify(charger)),charger);
+  assert.equal(parseMessage(JSON.stringify({...charger,mode:'teleport'})),null);
+  assert.equal(parseMessage(JSON.stringify({type:'chargerDestination',requestId:4,mode:'road'})),null);
   assert.equal(parseMessage(JSON.stringify({type:'minigame',game:'bogus',...fence})),null);
 });
 

@@ -40,7 +40,7 @@ import { domeBodyContact } from './dome-body';
 import { currentAt, currentBlockedByProgression, FLIGHT_CEILING } from './sky-currents';
 import { atLuxuryShowroom, luxuryVehicle, type LuxuryVehicleId } from './luxury';
 
-export const PROTOCOL_VERSION=56;
+export const PROTOCOL_VERSION=57;
 export const ROOM_FULL_CODE=4003;
 export const ROOM_NO_SPAWN_CODE=4002;
 export class NoSpawnError extends Error {
@@ -395,7 +395,7 @@ export function setDeliveryDestination(world:World,id:string,mode:DriveMode='roa
 /** Route to the least-cost reachable, currently unoccupied refill bay. */
 export function setChargerDestination(world:World,id:string,mode:DriveMode='road'):boolean {
   const player=world.players.find(p=>p.id===id),car=world.entities.find(e=>e.id===player?.entityId);
-  if(!player||!car||car.driver!==id||car.kind==='person'||!isDriveMode(mode)||
+  if(!player||!car||car.driver!==id||car.kind==='person'||car.supportId!=='ground'||car.inDome||!isDriveMode(mode)||
     (mode==='intercity'&&!hasIntercity(car.upgrades))||((mode==='jump'||mode==='sky')&&!hasRockets(car))||
     (mode==='jump'&&!car.upgrades.autonomyJump)||(mode==='sky'&&!car.upgrades.autonomySky))return false;
   let best:{route:Navigation;stationId:string;cost:number}|undefined;
@@ -404,8 +404,10 @@ export function setChargerDestination(world:World,id:string,mode:DriveMode='road
     if(best&&distance>=best.cost)break;
     if(requiredLevelAt(stall.x,stall.z)>player.delivery.level)continue;
     const y=terrainHeight(stall.x,stall.z);if(y===null)continue;
-    if(!fits(world,{...car,x:stall.x,y,z:stall.z,supportId:'ground'},car))continue;
     const route=planNavigation(car,stall,player.delivery.level,0,true);if(!route)continue;
+    const approach=route.path.at(-2)??{x:car.x,z:car.z};
+    const yaw=Math.atan2(-(stall.x-approach.x),-(stall.z-approach.z));
+    if(!fits(world,{...car,x:stall.x,y,z:stall.z,yaw,supportId:'ground'},car))continue;
     const cost=route.path.reduce((sum,point,index)=>sum+Math.hypot(point.x-(index?route.path[index-1].x:car.x),point.z-(index?route.path[index-1].z:car.z)),0);
     if(!best||cost<best.cost)best={route,stationId:station.id,cost};
   }

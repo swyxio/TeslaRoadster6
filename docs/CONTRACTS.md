@@ -1,4 +1,4 @@
-# Implementation contracts · v56 candidate
+# Implementation contracts · v57 candidate
 
 These contracts are the handoff for other coding agents. The lead integrator owns changes to shared schemas, physics, transport and deployment. A visual/UI task must not silently modify them. Dated local, Preview and production observations are in [VERIFICATION.md](VERIFICATION.md). Planned features are labeled separately.
 
@@ -35,13 +35,13 @@ Source of truth is exported TypeScript in `shared/game.ts`:
 
 Use the functions `createWorld`, `addPlayer`, `removePlayer`, `step`, `interact`, `resetPlayer`, `chooseVehicle`, `toggleAutopilot`, `travelDome`, `buyUpgrade`, `subscribeOta`, `parkingAction` and `raceAction`. Gameplay must not trust UI validation. Keep identity/ownership changes inside simulation functions. Iteration is deterministic for the same initial world, step sequence and inputs; UUID generation belongs to the server, not physics.
 
-## Wire protocol v56
+## Wire protocol v57
 
-Protocol v56 fences the three-lane East Bay traffic seed, steering and offscreen queue refresh from older clients. At most one unattended queue is considered every five simulated seconds; refresh requires every car and its starting position to be more than 1,600 m from every player, with the starting spots clear. Owned, occupied and non-autonomous cars are never refreshed. Protocol v55 relocated the SFO traffic seed. Each new room seeds one slow queue per direction near SFO; the cars move and do not form a permanent roadblock. The total queue budget is unchanged.
+Protocol v57 adds fenced charger-destination requests and the selected bay in navigation state. Protocol v56 fences the three-lane East Bay traffic seed, steering and offscreen queue refresh from older clients. At most one unattended queue is considered every five simulated seconds; refresh requires every car and its starting position to be more than 1,600 m from every player, with the starting spots clear. Owned, occupied and non-autonomous cars are never refreshed. Protocol v55 relocated the SFO traffic seed. Each new room seeds one slow queue per direction near SFO; the cars move and do not form a permanent roadblock. The total queue budget is unchanged.
 
 Protocol v53 fences the shared highway scenery, currents, traffic and police changes and adds intercity self-driving and delivery routing. Protocol v52 fences the Fremont pad's raised flame channel and its shared collision geometry from older clients. Protocol v51 fences the revised pickup-bonus curve and introduces road-guided delivery arrows. Protocol v50 adds Dome match reward notifications and earned abilities, including the replicated Pulse Shot cooldown. Protocol v49 fences rebalanced delivery and achievement rewards. Protocol v48 fences legacy structural profiles, footprint-based roof and underside contact, bridge and stadium solids, ramp walls and Dome body containment from v47 clients. Protocol v47 fenced the shared landmark structural collision and building identities from v46 clients. Protocol v46 added sandbox and practice modes, sandbox teleporting, and vehicle collections. Protocol v45 fenced the expanded service areas, delivery catalog and resumable assignment state, plus the moved Oakland Hegenberger station, parking area and derived venue geometry, from v44 clients. The preceding flight release used v44 to fence its rebalanced physics from v43 clients. Clients and rooms must use the same protocol and static map for prediction and authoritative play; incompatible clients must reload before joining. The world continues to step at 20 Hz.
 
-Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Public overflow uses `GET /api/public-room/{n}` with canonical integers 1–16 and the distinct internal room identity `public:{n}`; `/api/room/public-1` remains a separate named room. Health: `GET /api/health` returns `{ok:true,version:56,capacity:number}`.
+Connect same-origin WebSocket `GET /api/room/{slug}`. Slug starts with a lowercase alphanumeric, followed by up to 31 lowercase alphanumerics/hyphens. Public overflow uses `GET /api/public-room/{n}` with canonical integers 1–16 and the distinct internal room identity `public:{n}`; `/api/room/public-1` remains a separate named room. Health: `GET /api/health` returns `{ok:true,version:57,capacity:number}`.
 
 Client messages:
 
@@ -67,6 +67,7 @@ Client messages:
 {"type":"minigame","game":"park","actionSeq":7,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"destination","x":-120,"z":60,"mode":"road","requestId":3,"actionSeq":8,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"deliveryDestination","mode":"sky","requestId":4,"actionSeq":9,"edgeBaseline":{"jump":1,"flip":0}}
+{"type":"chargerDestination","mode":"road","requestId":5,"actionSeq":10,"edgeBaseline":{"jump":1,"flip":0}}
 {"type":"starship","action":"status","requestId":11}
 {"type":"starship","action":"name","name":"Driver","requestId":12}
 {"type":"mars","action":"board","requestId":5}
@@ -139,7 +140,7 @@ Limits: text-only messages ≤1024 characters, ≤90 messages/client/second, act
 
 Upgrade, style, OTA, identity and Vault requests carry a positive safe-integer request ID; corresponding results are sent only to the requester, including cooldown rejections where applicable. After a saved recovery is requested, a null identity choice leaves the driver paused until rejoin. The UI must wait for the matching result and show timeouts without claiming success. OTA subscription state and billing use authoritative game time and delivery cash, charging $100 per game hour (120 real seconds); remote purchases require an active subscription and a driven vehicle, while physical shops remain available without it. Subscriptions enabled before the rate change retain their paid remainder and then stop; the driver must re-enroll to accept the new rate. Re-enrolling during the paid remainder preserves it and charges $100 at the next renewal.
 
-Both destination requests have an action fence, a required `mode` (`road`, `intercity`, `jump`, `sky`), and a private `destinationResult`. The server validates the purchased per-vehicle tier and rocket capability. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; a checked local approach can reach a supported ground marker away from a lane. Rooftop or unsafe/unreachable destinations are rejected. Map pins retain their normal road snapping. The driver may take over with manual controls.
+All destination requests have an action fence, a required `mode` (`road`, `intercity`, `jump`, `sky`), and a private `destinationResult`. The server validates the purchased per-vehicle tier and rocket capability. `deliveryDestination` routes to the room's current pickup or dropoff, with the endpoint at most 4.5 m from its marker; a checked local approach can reach a supported ground marker away from a lane. Rooftop or unsafe/unreachable destinations are rejected. `chargerDestination` selects the least-cost reachable and currently unoccupied charging bay. Arrival is reported after the vehicle stops inside the selected bay and refill eligibility is confirmed. Map pins retain their normal road snapping. The driver may take over with manual controls.
 
 Delivery assignment checks the route from a nearby off-road ground origin as well as the route to the dropoff. Distant, rooftop, ferry and playground origins use a road anchor; the driver must first reach that road. Unfinished durable search cursors restart when their version differs from `DELIVERY_SEARCH_VERSION`. Bump that version whenever candidate ordering or route eligibility changes so an old ranked pair cannot skip a route check.
 

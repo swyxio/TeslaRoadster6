@@ -48,3 +48,13 @@ test('long holds, mismatched keys, focus, dialogs and rebinding cancel a pending
     assert.equal(doubles,0);assert.equal(triples,0);shortcut.dispose();
   }finally{env.restore();}
 });
+
+test('repeating a held Shift after controls clear does not re-arm boost or a shortcut',()=>{
+  const env=environment();try{
+    const controls=new Controls(()=>[]);controls.enabled=true;let calls=0;
+    const shortcut=listenForDoubleShift({enabled:()=>true,allowed:()=>true,now:env.now,schedule:env.schedule,onDoubleTap:()=>calls++,onTripleTap:()=>calls++});
+    env.key('keydown');assert.equal(controls.read().boost,true);controls.clear();
+    env.key('keydown','ShiftLeft',{repeat:true});assert.equal(controls.read().boost,false);
+    env.key('keyup');env.at(600);assert.equal(calls,0);shortcut.dispose();
+  }finally{env.restore();}
+});

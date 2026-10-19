@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A ride to the charger',
+    intro: 'Let your car find a reachable open charging bay.',
+    sections: [
+      { title: 'Self-driving', items: [
+        'Triple-tap Shift or choose Self-drive to charger in Actions to start a trip to an available bay.',
+        'Take over at any time with your normal driving controls.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.46-alpha',
+    label: '0.0.46 Alpha',
+    date: '2026-10-19',
     title: 'A busier East Bay',
     intro: 'Slow traffic now fills the East Bay freeway in both directions.',
     sections: [
