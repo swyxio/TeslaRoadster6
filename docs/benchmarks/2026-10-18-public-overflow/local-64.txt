@@ -1,0 +1,21 @@
+16:59  up 31 days,  8:34, 2 users, load averages: 16.49 21.08 18.93
+{
+  "clients": 64,
+  "elapsedSeconds": 60,
+  "closed": 0,
+  "sentInputs": 65280,
+  "inputRejections": 3744,
+  "clientsWithAppliedInput": 64,
+  "snapshots": 7892,
+  "clientsSeeingAll": 64,
+  "minSnapshots": 123,
+  "snapshotRatePerClient": 2.06,
+  "p95SnapshotGapMs": 1447,
+  "maxSnapshotGapMs": 3481,
+  "decodedJsonMiB": 1055.59,
+  "minSimulatedSeconds": 12.2,
+  "medianSimulatedSeconds": 12.2,
+  "clientEventLoopP95Ms": 54.1,
+  "note": "Bounded local synthetic clients send input at 20 Hz and parse all received JSON. Same-host client parsing and contention affect the result; no WAN, sustained, mobile or production capacity claim."
+}
+17:00  up 31 days,  8:35, 2 users, load averages: 34.81 25.94 20.93

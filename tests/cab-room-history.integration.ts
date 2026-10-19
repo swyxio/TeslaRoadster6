@@ -102,5 +102,12 @@ try{
   assert.deepEqual(await ok<EarningsWindow[]>('history',concurrent,{from:before-100,to:before}),[{startsAtMs:before-50,endsAtMs:before-50+600_000}]);
   assert.equal((await call('history',concurrent,{other:'wrong-room',from:before-100,to:before})).status,409,'history cannot be requested under another room identity');
   assert.equal((await call('history',concurrent,{from:before,to:Date.now()+60_000})).status,409,'future intervals cannot advance the fence');
+  const publicAt=Date.now()-10_000;
+  await ok('seed','public:1',{at:publicAt,count:1});
+  assert.equal((await ok<EarningsWindow[]>('history','public:1',{from:publicAt,to:publicAt+1})).length,1,'overflow room resolves its own economy history');
+  assert.deepEqual(await ok<EarningsWindow[]>('history','public-1',{from:publicAt,to:publicAt+1}),[],'named and overflow rooms have separate economy histories');
+  for(const room of ['public:0','public:01','public:17'])
+    assert.equal((await call('history',room,{from:publicAt,to:publicAt+1})).status,409,'noncanonical public room identity is rejected');
+  assert.equal((await call('history','public:1',{other:'public:2',from:publicAt,to:publicAt+1})).status,409,'overflow room cannot read another room history');
   console.log('PASS: cold pending wins, publication failure, lost replies, complete pages and concurrent win barrier.');
 }finally{if(child)await stop(child);await rm(dir,{recursive:true,force:true});}

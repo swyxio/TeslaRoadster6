@@ -1,9 +1,9 @@
 # Public room overflow plan
 
-2026-10-18 Pacific. This is a plan; automatic overflow is not implemented.
-Today automatic entry and `?room=bay` both enter the named Bay room. A full
-room displays an error with retry and room-choice controls. The server rejects
-excess connections with code 4003, including after asynchronous initialization.
+2026-10-18 Pacific. Automatic public placement is implemented: the game tries
+`bay`, then public overflow rooms 1–16, for at most 20 seconds. Explicit room
+and overflow invites remain exact. The server rejects excess connections with
+code 4003, including after asynchronous initialization.
 
 ## Placement
 
@@ -31,9 +31,9 @@ excess connections with code 4003, including after asynchronous initialization.
   already in a room. Revisit sequential retries if measured wait times or
   load warrant a coordinated placement service.
 
-## Before shipping
+## Verification and follow-ups
 
-Cover concurrent last-seat joins, full and available shards, bounded failure,
+Verify concurrent last-seat joins, full and available shards, bounded failure,
 backfilling, cancellation and stale callbacks. Verify that explicit Bay,
 named-room and property links remain exact; malformed links do not auto-route;
 invites and reloads return to the actual overflow room; non-full failures do
