@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-18',
+    title: 'A steadier delivery career',
+    intro: 'Delivery earnings grow more steadily as you explore the Bay.',
+    sections: [
+      { title: 'On the road', items: [
+        'Fast pickups and early deliveries still earn bonuses, with smaller peaks on the quickest trips.',
+        'The first, third and fifth delivery achievements pay less; the three-delivery checkpoint and existing saved balances stay the same.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.36-alpha',
+    label: '0.0.36 Alpha',
+    date: '2026-10-18',
     title: 'Hit what you can see',
     intro: 'Buildings, roofs and curved structures have a more faithful physical shape.',
     sections: [

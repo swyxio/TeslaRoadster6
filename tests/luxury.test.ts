@@ -67,12 +67,12 @@ test('delivery and actual region milestones pay once and survive spending',()=>{
   const entity=world.entities.find(item=>item.id===player.entityId)!;
   player.delivery.cash=0;player.delivery.lifetimeIncome=0;
   for(const count of [1,10,25,50,100]){player.delivery.completed=count;updateAchievements(player,entity,false);}
-  assert.equal(player.delivery.cash,30_200);
-  assert.equal(player.delivery.lifetimeIncome,30_200);
+  assert.equal(player.delivery.cash,29_650);
+  assert.equal(player.delivery.lifetimeIncome,29_650);
   assert.ok(player.achievements.unlocked.includes('region-oakland'));
   assert.equal(player.delivery.level,1);
   player.delivery.cash=0;updateAchievements(player,entity,false);
   assert.equal(player.delivery.cash,0);
-  assert.equal(player.delivery.lifetimeIncome,30_200);
+  assert.equal(player.delivery.lifetimeIncome,29_650);
   assert.equal(player.achievements.unlocked.filter(id=>id.startsWith('deliveries-')).length,10);
 });

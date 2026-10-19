@@ -10,9 +10,9 @@ export const ACHIEVEMENTS = {
   'bay-hopper': { name:'Bay Hopper', description:'Fly from San Francisco to Oakland, or back, without landing on a bridge or island. Reward: $500.' },
   'roof-rider': { name:'Roof Rider', description:'Land a car on a building rooftop. Reward: $500.' },
   'sky-delivery': { name:'Sky Delivery', description:'Complete a rooftop delivery. Reward: $1,000.' },
-  'regular': { name:'Neighborhood Regular', description:'Complete three deliveries. Reward: $400.' },
-  'deliveries-1': { name:'First Delivery', description:'Complete your first delivery. Reward: $500.' },
-  'deliveries-5': { name:'Five on the Road', description:'Complete 5 deliveries. Reward: $600.' },
+  'regular': { name:'Neighborhood Regular', description:'Complete three deliveries. Reward: $200.' },
+  'deliveries-1': { name:'First Delivery', description:'Complete your first delivery. Reward: $350.' },
+  'deliveries-5': { name:'Five on the Road', description:'Complete 5 deliveries. Reward: $400.' },
   'deliveries-10': { name:'Delivery Driver · Level 2', description:'Complete 10 deliveries. Reward: $1,200.' },
   'deliveries-20': { name:'Twenty on the Road', description:'Complete 20 deliveries. Reward: $1,500.' },
   'deliveries-25': { name:'Delivery Driver · Level 3', description:'Complete 25 deliveries. Reward: $2,000.' },
@@ -73,8 +73,8 @@ export const ACHIEVEMENTS = {
 } as const;
 export type AchievementId = keyof typeof ACHIEVEMENTS;
 const DELIVERY_MILESTONES=[
-  {count:1,id:'deliveries-1',reward:500}, {count:3,id:'regular',reward:400},
-  {count:5,id:'deliveries-5',reward:600}, {count:10,id:'deliveries-10',reward:1_200},
+  {count:1,id:'deliveries-1',reward:350}, {count:3,id:'regular',reward:200},
+  {count:5,id:'deliveries-5',reward:400}, {count:10,id:'deliveries-10',reward:1_200},
   {count:20,id:'deliveries-20',reward:1_500}, {count:25,id:'deliveries-25',reward:2_000},
   {count:30,id:'deliveries-30',reward:2_000}, {count:40,id:'deliveries-40',reward:2_500},
   {count:50,id:'deliveries-50',reward:5_000}, {count:75,id:'deliveries-75',reward:4_000},
