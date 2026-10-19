@@ -87,7 +87,7 @@ test('a Starbase channel wall beyond the pad envelope starts recovery',()=>{
   const world=createWorld(),player=addPlayer(world,'driver','Driver');
   const car=world.entities.find(entity=>entity.id===player.entityId)!;
   const y=terrainHeight(1964,6232)??0;
-  const join={x:1975,z:6232},destination={x:1985,z:6232};
+  const join={x:1984,z:6232},destination={x:1995,z:6232};
   Object.assign(car,{kind:'model-3',x:1964,z:6232,y,yaw:-Math.PI/2,speed:0,autopilot:true,
     navigation:{destination,path:[join,destination],index:0,status:'driving',mode:'intercity',join}});
   world.entities=[car];world.time=1;
