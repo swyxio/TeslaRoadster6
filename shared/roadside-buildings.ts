@@ -1,4 +1,5 @@
 import { contact, type Body } from './physics';
+import { primitiveExtent } from './new-landmark-surfaces';
 import type { Building, MapPoint, RoadSegment } from './map';
 
 /** Areas occupied by gameplay, scenery, or future map additions, in game meters. */
@@ -84,7 +85,14 @@ export function generateRoadsideBuildings(inputs:RoadsideBuildingInputs):Buildin
   const placed:Building[]=[];
   const roads=inputs.roads.map(road=>asBody({...road,yaw:road.angle??0}));
   const exclusions=inputs.exclusions.map(asBody);
-  const existing=inputs.buildings.map(asBody);
+  const existing=inputs.buildings.flatMap(building=>[
+    asBody(building),
+    // The spaceport channel extends beyond the pad's nominal footprint.
+    ...(building.style==='spaceport'?building.parts?.map(part=>{
+      const extent=primitiveExtent(part);
+      return {x:building.x+part.x,z:building.z+part.z,w:extent.w,d:extent.d,yaw:extent.yaw};
+    })??[]:[]),
+  ]);
   const clear=(building:Building)=>{
     const shape=asBody(building);
     if(!flatLand(building,inputs))return false;

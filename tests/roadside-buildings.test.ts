@@ -64,6 +64,23 @@ test('caller-supplied landmark exclusions prevent placement without hardcoded lo
     assert.equal(contact(enlarged(b,10),body(landmark)),null);
 });
 
+test('roadside placement clears spaceport parts outside the pad footprint',()=>{
+  const points=[{x:-400,z:600},{x:200,z:600},{x:200,z:1100},{x:-400,z:1100}];
+  const supported=(x:number,z:number)=>insidePolygon(x,z,points);
+  const fixture={highways:[{id:'peninsula',points:[{x:0,z:650},{x:0,z:1000}]}],
+    buildings:[],roads:[],exclusions:[],rail:[],regions:[{points}],isLand:supported,
+    terrainHeight:(x:number,z:number)=>supported(x,z)?0:null};
+  const original=generateRoadsideBuildings(fixture).find(b=>b.x===-76);
+  assert.ok(original,'the ordinary setback is initially available');
+  const pad={x:-250,z:original.z,w:10,d:10,h:4,district:'east-bay' as const,style:'spaceport' as const,
+    parts:[{shape:'box' as const,x:174,y:2,z:0,w:2,h:4,d:40}]};
+  const wall={x:-76,z:original.z,w:2,d:40,yaw:0};
+  const revised=generateRoadsideBuildings({...fixture,buildings:[pad]});
+  assert.ok(!revised.some(b=>b.x===original.x&&b.z===original.z));
+  assert.ok(revised.some(b=>b.x<original.x),'a clear setback remains available');
+  for(const building of revised)assert.equal(contact(enlarged(building,8),wall),null);
+});
+
 test('a narrow concave shoreline notch cannot cut through a building between terrain samples',()=>{
   const rectangle=[{x:-200,z:600},{x:200,z:600},{x:200,z:1100},{x:-200,z:1100}];
   const notched=[{x:-200,z:600},{x:200,z:600},{x:200,z:1100},
