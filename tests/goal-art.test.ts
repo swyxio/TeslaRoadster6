@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { CUISINE_ICONS, createGoalArt, goalArtKind, goalArtNearby, type CuisineIcon } from '../src/goal-art';
+import { CUISINE_ICONS, createGoalArt, goalArtCuisine, goalArtKind, goalArtNearby, type CuisineIcon } from '../src/goal-art';
+import { initialDelivery, RESTAURANTS } from '../shared/delivery';
+
+test('the active pickup selects its restaurant cuisine and dropoffs do not',()=>{
+  const order=initialDelivery({x:0,z:0}).order;
+  const pizza=RESTAURANTS.findIndex(place=>place.cuisineIcon==='pizza');
+  const burger=RESTAURANTS.findIndex(place=>place.cuisineIcon==='burger');
+  assert.ok(pizza>=0&&burger>=0);
+  assert.equal(goalArtCuisine({...order,stage:'pickup',restaurant:pizza}),'pizza');
+  assert.equal(goalArtCuisine({...order,stage:'pickup',restaurant:burger}),'burger');
+  assert.equal(goalArtCuisine({...order,stage:'dropoff',restaurant:pizza}),undefined);
+});
 
 test('only a nearby local driver sees the active delivery art',()=>{
   const target={x:10,z:20};

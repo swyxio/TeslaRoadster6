@@ -31,12 +31,12 @@ export const requiredLevelAt = requiredAccessLevelAt;
 
 // Real business identities; game positions are artistic, not surveyed locations.
 const HISTORIC_RESTAURANTS = [
-  { id: 'tartine', name: 'Tartine Bakery', address: '600 Guerrero St, San Francisco', x: -180, z: 120, source: 'https://tartinebakery.com/san-francisco/bakery' },
-  { id: 'tonys', name: 'Tony’s Pizza Napoletana', address: '1570 Stockton St, San Francisco', x: -60, z: -180, source: 'https://tonyspizzanapoletana.com/location/' },
-  { id: 'burma', name: 'Burma Superstar', address: '309 Clement St, San Francisco', x: -300, z: -120, source: 'https://www.burmasuperstar.com/' },
-  { id: 'nanking', name: 'House of Nanking', address: '919 Kearny St, San Francisco', x: 0, z: -120, source: 'https://houseofnanking.net/' },
-  { id: 'homeroom', name: 'Homeroom To Go', address: '4007 Webster St, Oakland', x: 390, z: -120, source: 'https://www.homeroom510.com/locations' },
-  { id: 'comal', name: 'Comal Next Door', address: '550 Grand Ave, Oakland', x: 510, z: 120, source: 'https://www.comalnextdoor.com/location/comal-next-door-oakland/' },
+  {"id":"tartine","name":"Tartine Bakery","x":-180,"z":120},
+  {"id":"tonys","name":"Tony’s Pizza Napoletana","x":-60,"z":-180},
+  {"id":"burma","name":"Burma Superstar","x":-300,"z":-120},
+  {"id":"nanking","name":"House of Nanking","x":0,"z":-120},
+  {"id":"homeroom","name":"Homeroom To Go","x":390,"z":-120},
+  {"id":"comal","name":"Comal Next Door","x":510,"z":120},
 ] as const;
 // Append to the original array: durable orders use numeric indices.
 export const RESTAURANTS = [

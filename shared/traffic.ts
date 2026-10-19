@@ -662,8 +662,9 @@ export function seedHighwayTraffic(world:World,make:EntityFactory):void {
 
 /** Seed slow queues in both directions at supported Bay highway sections. */
 export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number):void {
-  const sites=[{x:-300,z:550},{x:-790,z:3550},{x:700,z:7800},{x:1430,z:4050}];
+  const sites=[{x:-300,z:550},{x:-790,z:3550},{x:-698,z:1107},{x:1430,z:4050}];
   for(const [siteIndex,site] of sites.entries())for(let direction=0;direction<2;direction++){
+    if(siteIndex===2)continue; // The SFO approach bends; sample the route below.
     const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId];
     let best:{segment:GeneralLane;waypoint:number;at:number;distance:number}|null=null;
     for(let i=0;i<route.length;i++){
@@ -686,22 +687,21 @@ export function seedTrafficJams(world:World,make:EntityFactory,fleetSeed:number)
       world.entities.push(car);
     }
   }
-  // Near San Jose the circuit bends, so keep this queue in the inner lane
-  // and sample positions along the actual curved route instead of offsetting it.
-  const sanJose={x:2013,z:8162};
-  for(let direction=0;direction<2;direction++){
+  // At SFO and San Jose, sample the actual curved route so the queue stays on
+  // the supported inner lane through the bends.
+  for(const [siteIndex,site] of [[2,sites[2]],[4,{x:2013,z:8162}]] as const)for(let direction=0;direction<2;direction++){
     const routeId=HIGHWAY_ROUTE_IDS[direction],route=ROUTES[routeId],{lengths,total}=highwayLengths.get(routeId)!;
     let traveled=0,bestDistance=Infinity,at=0;
     for(let i=0;i<route.length;i++){
       const a=route[i],b=route[(i+1)%route.length],length=lengths[i];if(!length)continue;
       const dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
-      const t=Math.max(0,Math.min(length,(sanJose.x-a.x)*dx+(sanJose.z-a.z)*dz));
-      const distance=Math.hypot(a.x+dx*t-sanJose.x,a.z+dz*t-sanJose.z);
+      const t=Math.max(0,Math.min(length,(site.x-a.x)*dx+(site.z-a.z)*dz));
+      const distance=Math.hypot(a.x+dx*t-site.x,a.z+dz*t-site.z);
       if(distance<bestDistance){bestDistance=distance;at=traveled+t;}
       traveled+=length;
     }
     for(let row=0;row<6;row++){
-      const pose=routeDistancePose(routeId,(at-row*11)/total),id=`jam-4-${direction}-0-${row}`;
+      const pose=routeDistancePose(routeId,(at-row*11)/total),id=`jam-${siteIndex}-${direction}-0-${row}`;
       const kind=highwayVehicles[hash(id)%highwayVehicles.length],car=make(id,kind,pose.x,pose.z);
       Object.assign(car,pose,{npc:true,autopilot:true});
       if(car.supportId!=='ground'||nearbyBuildings(car.x,car.z,10).some(building=>buildingBlocksPose(building,car))||
