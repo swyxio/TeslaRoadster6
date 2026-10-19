@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { bridgeTowerBoxes } from '../shared/bridge-structures';
 import { STATIONS } from '../shared/stations';
 import { LUXURY_SHOWROOM } from '../shared/luxury';
 import { AIRPORT_RUNWAY, BRIDGES, BUILDINGS, DISTRICTS, HIGHWAYS, HILL, NATURAL_HILLS, LAKE_MERRITT, MAP_BOUNDS, MYSTERY_YACHT, OVERPASS, PARKS, REGIONS, ROADS, STUNT_LOOP, STUNT_RAMP, isLand, isBridge, overpassHeight, terrainHeight, type Bridge } from '../shared/map';
@@ -224,7 +225,7 @@ export function buildBay(scene:T.Scene) {
   const buildings=palettes.map(()=>[] as BoxItem[]), windows:BuildingWindow[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
-    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus')return;
+    if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus'||b.style==='structure')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda','hospital'].includes(b.style);
     if(!landmark&&!['pyramid','coit','salesforce','station-venue','luxury-showroom'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
@@ -390,12 +391,7 @@ export function buildBay(scene:T.Scene) {
     for(let t=b.start+8;t<b.end-4;t+=12)place(t,.15,0,5,.02,.15,0xe9d5a1);
     const railStart=b.id==='bay-bridge'?80:b.start,railEnd=b.id==='golden-gate'?-280:b.end;
     for(const side of [-1,1])place((railStart+railEnd)/2,.35,side*(b.width/2-.5),railEnd-railStart,.5,.7,color);
-    const towers=b.id==='golden-gate'?[-385,-300]:[105,155,245];
-    for(const t of towers){
-      const height=b.id==='golden-gate'?72:t===245?56:50;
-      for(const side of [-1,1])place(t,height/2,side*(b.width/2-1),3,height,3,color);
-      for(const y of [14,height*.57,height-3])place(t,y,0,3,2,b.width,color);
-    }
+    for(const p of bridgeTowerBoxes(b))box(p.x,p.y,p.z,p.w,p.h,p.d,p.color);
     // Cable endpoints meet the decks; the main span sags between towers.
     const spans=b.id==='golden-gate'
       ? [[b.start,-385,9,69,5],[-385,-300,69,69,43],[-300,-280,69,9,5]]
