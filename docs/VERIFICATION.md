@@ -2,6 +2,8 @@
 
 ## Bay highway life · local candidate · 2026-10-18 Pacific
 
+- On the provisional Starbase integration `50f19c48`, all 20 police and roadside-placement tests passed. Before the fixes, the new police fixture reproduced a launch across a channel wall between otherwise clear sample poses, and the roadside fixture placed a building over a part beyond the pad footprint. These focused checks precede the final release-base integration and do not establish performance.
+
 - Clean runtime candidate `a1358fe` and base `fa1713c` were measured in two sequential local no-video pairs. The standard delivery/flight paths aligned at 1.213 m p95 / 1.849 m maximum; callback p95 was 16.8 / 16.8 ms and local room simulated / wall time 0.953 / 0.955. A separate seeded highway pair exceeded its path-alignment bound (34.45 m p95 against 25 m), so its timing comparison is HOLD. Its candidate first gesture also contained an unexplained 4.1-second interval. [Reports, traces, fixtures and limitations](performance-baselines/2026-10-18-bay-highway/README.md). Neither pair establishes physical-device, GPU, capacity or production performance.
 
 - Three follow-up startup-diagnostic attempts stopped before any driving measurement: a process observation guard, a recorder exit before its output appeared, and an unrecognized transient filesystem entry. The copied recorder independently reproduced and then cleared a missing module-type setting; the failed run's stderr was not retained, so its exact cause remains unconfirmed. Cleanup was verified after each attempt. [Retained journals and reproduction note](performance-baselines/2026-10-18-bay-highway/startup-attempts/). These attempts do not resolve the 4.1-second observation.
