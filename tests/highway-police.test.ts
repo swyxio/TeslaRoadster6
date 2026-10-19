@@ -255,3 +255,25 @@ test('rocket police sweep the spaceport channel walls before launching',()=>{
   Object.assign(car,{x:1960,z:6248});
   assert.equal(policeFlight(cop,world,NEUTRAL).jump,true,'a clear hop along the channel remains available');
 });
+
+
+test('rocket patrol slowly refills on the ground between pursuits only',()=>{
+  const {world,player,car}=fixture(),cop=patrol(world,120);
+  world.players=[];world.entities=[cop];world.pickups=[];
+  cop.police!.airPatrol=true;cop.upgrades.rocket=true;cop.autopilot=false;cop.speed=0;cop.air=45;
+  for(let i=0;i<200;i++)step(world,new Map(),.05);
+  assert.ok(cop.air>54.9&&cop.air<55.1,`grounded patrol air ${cop.air}`);
+  Object.assign(car,along(150),{y:15,supportId:null,speed:0});world.players=[player];world.entities=[cop,car];
+  cop.police!.targetId=player.id;cop.police!.cause='flight';
+  assert.equal(policeFlight(cop,world,NEUTRAL).jump,true,'refilled patrol can launch again');
+  cop.police!.targetId=null;delete cop.police!.cause;world.players=[];world.entities=[cop];
+  cop.air=99.99;step(world,new Map(),.05);assert.equal(cop.air,100,'refill is capped');
+  cop.air=45;cop.driver='driver';step(world,new Map(),.05);assert.equal(cop.air,45,'player-controlled police cars do not refill');
+  cop.driver=null;cop.y=30;cop.supportId=null;step(world,new Map(),.05);assert.equal(cop.air,45,'airborne police do not refill');
+  const chase=fixture(),officer=patrol(chase.world,230);
+  officer.police!.airPatrol=true;officer.upgrades.rocket=true;officer.air=45;officer.speed=0;
+  Object.assign(chase.car,{y:15,supportId:null,speed:0});
+  officer.police!.targetId=chase.player.id;officer.police!.cause='flight';
+  step(chase.world,new Map(),.05);
+  assert.equal(officer.police!.targetId,chase.player.id);assert.equal(officer.air,45,'active pursuit does not refill');
+});

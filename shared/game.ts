@@ -1193,6 +1193,9 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
     capFlightSpeed(e);
     if(chargingDomeWall(e,hasRockets(e))&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+DOME_CHARGE_RATE*dt);
     if(refillStationFor(e)&&(!e.driver||!economy?.canCollect||economy.canCollect(e.driver)))e.air=Math.min(100,e.air+28*dt);
+    // Fictional police compressor restores patrol air between pursuits, so a
+    // long-lived room does not permanently lose its airborne response.
+    if(e.police?.airPatrol&&!e.driver&&!e.police.targetId&&e.supportId==='ground')e.air=Math.min(100,e.air+dt);
   }
   const collisionIndex=new EntityIndex(world.entities);
   const domeIndices=world.entities.flatMap((e,i)=>e.inDome?[i]:[]);
