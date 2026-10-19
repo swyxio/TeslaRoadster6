@@ -4,6 +4,10 @@ export const FUTURE_TICKS = 8;
 export const HOLD_TICKS = 6;
 export const EDGE_LATE_TICKS = 3;
 export const INPUT_TIMEOUT_MS = 300;
+// The accepted future window spans 400 ms at the room's 20 Hz tick rate.
+// Give a live connection one watchdog interval beyond that window, while
+// preserving the 300 ms stale-control cutoff and an absolute edge age bound.
+export const EDGE_TIMEOUT_MS = FUTURE_TICKS * 50 + INPUT_TIMEOUT_MS;
 
 export type InputCommand = { seq:number; targetTick:number; controlRevision:number; actionSeq:number; input:Input };
 export type EdgeBaseline = Pick<Input,'jump'|'flip'>;
@@ -155,7 +159,8 @@ export class ScheduledInput {
     for(const kind of ['jump','flip'] as const){
       const retained:TimedEdge[]=[];
       for(const edge of this[kind].pending){
-        if(nowMs-edge.receivedAtMs>INPUT_TIMEOUT_MS)outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'expired'});
+        const limit=this.lastControlInputMs===null?INPUT_TIMEOUT_MS:EDGE_TIMEOUT_MS;
+        if(nowMs-edge.receivedAtMs>limit)outcomes.push({kind,id:edge.id,targetTick:edge.targetTick,status:'expired'});
         else retained.push(edge);
       }
       this[kind].pending=retained;
