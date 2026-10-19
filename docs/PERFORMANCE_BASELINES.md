@@ -18,18 +18,37 @@ The local fixture seeds the traffic cohort and pauses the room until the guest
 and recorder are ready, then resumes the normal room clock. A generated per-run
 secret protects its local status and start endpoints. The scenario opts
 out of automatically saving the disposable driver using `freshGuest`. The player uses
-Street Pilot to reach the first pickup and complete its drop-off. The fixture
-records the initial restaurant and customer IDs and coordinates; a comparison
-holds if they differ or are unavailable. It does not drive the next assignment,
-which may differ when the delivery catalog changes. Two observed jump bursts, a landing between jumps, and
+Street Pilot to complete two pickups and drop-offs. After the first delivery's
+natural next-assignment search settles, the fixture stages the target version's
+own initial order at the current car position. This second assignment is
+controlled to make the route repeatable; it does not test natural second-job
+selection. The fixture waits for the guest's wallet queue to settle and commits
+the replacement to its disposable profile. This adds a local progress commit
+to the measured workload. The report records the elapsed `stageRepeatDelivery`
+command duration, including the wait for assignment and wallet settlement and
+the confirming room snapshot. Browser frame p95 includes this mostly stationary
+period; unequal waits can change its mixture of driving and idle frames. The
+fixture checks that the same guest and vehicle
+remain in the room, the two targets remain accessible, and no pose revision has
+changed; it never moves the car. The comparison requires both orders' restaurant and
+customer IDs and coordinates and holds if they differ or are unavailable.
+Two observed jump bursts, a landing between jumps, a final landing and
 sustained airborne thrust with forward power follow. Keyboard presses are retried a bounded number
-of times if the room does not process them. The report requires the delivery
-milestones, two separate upward bursts and sustained flight; a keypress by
-itself does not prove a jump or delivery occurred. A respawn holds the route.
+of times if the room does not process them. Each reported jump needs its own upward
+lift before the next observed trigger, followed by ground contact before another
+trigger. The report retains trigger, lift and landing ticks. It also requires
+at least 400 ms of continuously observed downward thrust with some forward
+thrust, and more than 5 m of horizontal displacement within that same airborne
+interval. Ground travel cannot satisfy the flight requirement; forward thrust
+need not last the whole interval. A keypress by itself does not prove a jump or
+delivery occurred. A respawn holds the route.
 
-The report saves two delivery legs and a flight leg from received room poses.
+The report saves four delivery legs and a flight leg from received room poses.
 Each three-dimensional path is sampled at 41 evenly spaced fractions of its own
 traveled distance, including flight altitude.
+Matching these paths does not control elapsed time; compare staging durations
+when interpreting frame p95. Missing durations are shown as unavailable and do
+not impose an unvalidated timing threshold.
 The pair must have every leg, differ in leg length by at most the greater of
 20 m or 25% of the base leg. Each leg must have p95 sampled-point separation
 at most 25 m and maximum separation at most 50 m. Missing or
@@ -38,6 +57,12 @@ not gameplay or performance targets; traffic, contacts, network scheduling and
 changed simulation may still make a run diverge. Artifacts retain the scenario,
 paths, browser, WebGL renderer, revisions and host load. A hosted runner's
 paravirtual renderer describes that VM, not a phone or physical desktop device.
+The comparator also requires explicit jump, landing and flight evidence and
+complete matching host, runner, viewport, seed, start and fixture identities.
+It reports the before/after load without imposing a load threshold. Missing
+identity or evidence holds the comparison even when both reports omit it.
+Older archived reports remain unchanged and may HOLD under these stricter
+checks; their raw manifests and trajectories can be inspected independently.
 
 ## When CI runs
 
@@ -63,8 +88,10 @@ can omit matches beyond the first 3,000 changed files; use manual dispatch for
 such diffs. Do not make this filtered workflow a required branch-protection
 check: GitHub may leave a skipped required check pending.
 
-The job builds both revisions and runs the candidate's harness against each in
-sequence on `macos-15`, using headless Chromium with the observed Apple
+The selected workflow first runs the full test suite on a separate Ubuntu
+runner, avoiding test load on the macOS measurement host. It then builds both
+revisions and runs the candidate's harness against each in sequence on
+`macos-15`, using headless Chromium with the observed Apple
 paravirtual Metal renderer. Its summary and
 artifact include the paired observations and raw traces; artifacts expire after
 90 days, including when the comparison is held. An incomplete measurement,
@@ -73,7 +100,8 @@ shown as `HOLD`, never as zero. If video was requested, both recordings must
 complete and their routes must also be comparable to each other; their summary
 is separate from the no-video measurements. Timing differences are
 descriptive: one shared-host pair is noisy, and no automatic performance
-threshold is inferred from it. Hosted VM and named local machine results must
+threshold is inferred from it. A timing difference under differing load does
+not establish a regression or improvement. Hosted VM and named local machine results must
 not be compared directly.
 
 For local runs, install the
@@ -113,11 +141,16 @@ change as a regression or proposing a numerical budget. Existing aspirational
 targets and additional coverage remain in [performance release gates](PERFORMANCE_RELEASE_GATES.md).
 
 The earlier local M5 Pro rows below used the short drive and idle room scenario.
-The archived paired observations used the prior two-delivery, five-leg route;
-they do not establish comparability for the current three-leg route. The earlier
-five-leg comparison for the expanded catalog remains HOLD because its later
-assignment diverged. Compare new observations by rerunning both versions with
-the same current harness rather than treating historical rows as matched pairs.
+Archived pairs used the prior natural two-delivery route or the intervening
+one-delivery route; neither establishes comparability with this staged
+two-delivery route. The earlier five-leg comparison for the expanded catalog
+remains HOLD because its natural later assignment diverged. Compare new
+observations by rerunning both versions with the same current harness rather
+than treating historical rows as matched pairs.
+
+A [hosted same-game reproducibility check](performance-baselines/2026-10-18-two-delivery-fixture/) completed the controlled two-delivery route on `1f722dd` and `4d7cee4`. Its heavily loaded no-video pair is a fixture check, not a performance budget or game regression comparison.
+
+A separate [hosted cross-version pair](performance-baselines/2026-10-18-two-delivery-cross-version/) completed the same controlled route on 0.0.31 `26fc934` and 0.0.32 `4d7cee4`, both without video and in separate recorded runs. Timing attribution and any performance verdict are **HOLD** under differing, heavy virtual-runner load; the video pair is not a performance delta.
 
 The [0.0.25/0.0.28 paired video proof](performance-baselines/2026-10-18-paired-video-route/)
 confirms delivery, jump and flight coverage with closely aligned paths. Video

@@ -3,7 +3,7 @@
 import worker, { GameRoom as ProductionGameRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent, MarketService } from '../../worker/index';
 import { MAP_BOUNDS, terrainHeight } from '../../shared/map';
 import { addPlayer, createEmptyWorld, createWorld, type World } from '../../shared/game';
-import { CUSTOMERS, RESTAURANTS } from '../../shared/delivery';
+import { CUSTOMERS, RESTAURANTS, initialDelivery, requiredLevelAt, type Order } from '../../shared/delivery';
 import { roomSlug } from '../../worker/protocol';
 import { prepareSnapshots } from '../../worker/snapshot';
 import type { ScheduledInput } from '../../shared/tick-input';
@@ -12,7 +12,20 @@ export { GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEve
 
 type StageVars = { PLAYTEST_X?: unknown; PLAYTEST_Z?: unknown; PLAYTEST_YAW?: unknown; PLAYTEST_SEED?: unknown; PLAYTEST_PAUSE?: unknown; PLAYTEST_STAGE_SECRET?: unknown };
 type StagePose = { x: number; y: number; z: number; yaw: number };
-type StageSession = { id: string; attachPending: boolean; guest: boolean; identitySequence: number; poseRevision: number; control: ScheduledInput };
+type StageSession = { id: string; attachPending: boolean; guest: boolean; identitySequence: number; poseRevision: number; control: ScheduledInput; economy: { pending: boolean; decisionsAvailable: boolean } | null };
+
+// Keep both catalog indices for matching room snapshots and stable descriptors
+// for comparing targets between revisions where the indices may differ.
+function describeOrder(order: Order) {
+  const restaurant = RESTAURANTS[order.restaurant], customer = CUSTOMERS[order.customer];
+  if (!Number.isSafeInteger(order.restaurant) || !Number.isSafeInteger(order.customer) || !restaurant || !customer ||
+      typeof restaurant.id !== 'string' || !restaurant.id || typeof customer.id !== 'string' || !customer.id ||
+      RESTAURANTS.filter(place => place.id === restaurant.id).length !== 1 || CUSTOMERS.filter(place => place.id === customer.id).length !== 1 ||
+      ![restaurant.x, restaurant.z, customer.x, customer.y, customer.z].every(Number.isFinite) || typeof customer.rooftop !== 'boolean') return null;
+  return { restaurant: { id: restaurant.id, x: restaurant.x, z: restaurant.z, index: order.restaurant },
+    customer: { id: customer.id, x: customer.x, y: customer.y, z: customer.z, rooftop: customer.rooftop, index: order.customer } };
+}
+type OrderDescriptor = NonNullable<ReturnType<typeof describeOrder>>;
 
 function stageOptions(env: StageVars): { seed?: number; pause: boolean } {
   let seed: number | undefined;
@@ -67,6 +80,7 @@ export class GameRoom extends ProductionGameRoom {
   private pausedWorld?: World;
   private startedWorld?: World;
   private pausedHeartbeat?: ReturnType<typeof setInterval>;
+  private repeat?: { world: World; socket: WebSocket; session: StageSession; entityId: string; kind: string; identitySequence: number; poseRevision: number; firstOrder: OrderDescriptor; used: boolean };
 
   private sessionsForStage(): Map<WebSocket, StageSession> {
     return Reflect.get(this, 'sessions') as Map<WebSocket, StageSession>;
@@ -99,9 +113,8 @@ export class GameRoom extends ProductionGameRoom {
     const player = world.players.find(candidate => candidate.id === session?.id);
     const connected = !!session && entries[0][0].readyState === 1;
     const fresh = !!player && player.delivery.level === 0 && player.delivery.completed === 0 &&
-      player.delivery.earned === 0 && player.delivery.lifetimeIncome === 0 && player.delivery.order.stage === 'pickup';
-    const restaurant = player && RESTAURANTS[player.delivery.order.restaurant];
-    const customer = player && CUSTOMERS[player.delivery.order.customer];
+      player.delivery.earned === 0 && player.delivery.lifetimeIncome === 0 && player.delivery.order.stage === 'pickup' && !player.delivery.order.search;
+    const order = player ? describeOrder(player.delivery.order) : null;
     return {
       paused: this.pausedWorld === world,
       started: this.startedWorld === world,
@@ -111,10 +124,7 @@ export class GameRoom extends ProductionGameRoom {
       sessionCount: entries.length, connected, guest: session?.guest ?? false,
       attachPending: session?.attachPending ?? false, identitySequence: session?.identitySequence ?? 0,
       fresh,
-      initialOrder: restaurant && customer ? {
-        restaurant: { id: restaurant.id, x: restaurant.x, z: restaurant.z },
-        customer: { id: customer.id, x: customer.x, y: customer.y, z: customer.z, rooftop: customer.rooftop },
-      } : null,
+      initialOrder: order,
     };
   }
 
@@ -122,19 +132,87 @@ export class GameRoom extends ProductionGameRoom {
 
   playtestBegin(room: string) {
     const status = this.stageStatus(room);
-    if (!status.ready || status.started) return { ok: false, ...status };
+    if (!status.ready || status.started || !status.initialOrder || status.initialOrder.customer.rooftop ||
+        requiredLevelAt(status.initialOrder.restaurant.x, status.initialOrder.restaurant.z) !== 0 ||
+        requiredLevelAt(status.initialOrder.customer.x, status.initialOrder.customer.z) !== 0) return { ok: false, ...status };
     const world = this.pausedWorld!;
     const [[socket, session]] = [...this.sessionsForStage()];
+    const player = world.players.find(candidate => candidate.id === session.id);
+    const car = world.entities.find(entity => entity.id === player?.entityId);
+    if (!car || world.players.length !== 1) return { ok: false, ...status };
     this.stopPausedHeartbeat();
     // Fence pre-start heartbeats and queued controls before restarting the
     // ordinary timer. The client observes the new revision in this snapshot.
     Reflect.apply(Reflect.get(this, 'invalidate'), this, [socket, session]);
+    this.repeat = { world, socket, session, entityId: car.id, kind: car.kind, identitySequence: session.identitySequence,
+      poseRevision: session.poseRevision, firstOrder: status.initialOrder, used: false };
     this.publishPausedSnapshot();
     this.pausedWorld = undefined;
     this.startedWorld = world;
     const timer = setInterval(() => Reflect.apply(Reflect.get(this, 'tick'), this, []), 50);
     Reflect.set(this, 'timer', timer);
     return { ok: true, tick: status.tick, poseRevision: session.poseRevision };
+  }
+
+  // This local-only control changes only the next order, never the pose or
+  // gameplay simulation. It is deliberately not natural job selection.
+  async playtestRepeat(room: string) {
+    if (!this.ctx.id.equals(this.env.ROOMS.idFromName(room))) throw new Error('Room identity mismatch');
+    const world = Reflect.get(this, 'world') as World, repeat = this.repeat;
+    const fail = (reason: string, retry = false) => ({ ok: false as const, retry, reason });
+    if (!repeat || repeat.world !== world || this.startedWorld !== world || repeat.used) return fail('room-not-eligible');
+    const entries = [...this.sessionsForStage()];
+    if (entries.length !== 1 || entries[0][0] !== repeat.socket || entries[0][1] !== repeat.session || repeat.socket.readyState !== 1 ||
+        !repeat.session.guest || repeat.session.attachPending || repeat.session.identitySequence !== repeat.identitySequence ||
+        repeat.session.poseRevision !== repeat.poseRevision || world.players.length !== 1) return fail('driver-changed');
+    const player = world.players[0], car = world.entities.find(entity => entity.id === player.entityId);
+    if (player.id !== repeat.session.id || !car || car.id !== repeat.entityId || car.kind !== repeat.kind) return fail('driver-changed');
+    if (player.delivery.completed !== 1 || player.delivery.level !== 0 || player.delivery.order.stage !== 'pickup') return fail('delivery-state-changed');
+    if (player.delivery.order.search) return fail('assignment-pending', true);
+    if (player.delivery.lastReroute?.reason === 'unavailable') return fail('assignment-unavailable');
+    // Even guest players have an economy draft and a private local profile.
+    // Wait until the normal first-delivery/assignment queue is fully settled;
+    // changing only the projected player would be overwritten on the next tick.
+    const economy = repeat.session.economy;
+    if (!economy || Reflect.get(economy, 'closed') || Reflect.get(economy, 'failed') || Reflect.get(economy, 'marketPaused') ||
+        typeof Reflect.get(economy, 'progress') !== 'function' || typeof Reflect.get(economy, 'enqueue') !== 'function') return fail('wallet-unavailable');
+    const draft = Reflect.get(economy, 'draft') as { delivery?: World['players'][number]['delivery'] } | undefined;
+    const committed = Reflect.get(economy, 'committed') as { completed?: number; cash?: number; earned?: number; eligibleIncome?: number; level?: number; order?: Order } | undefined;
+    const staging = Reflect.get(economy, 'staging');
+    if (!draft?.delivery || !committed?.order || !(staging instanceof Set)) return fail('wallet-incompatible');
+    const keys = ['restaurant', 'customer', 'stage', 'pickupEstimate', 'estimate', 'base'] as const;
+    if (economy.pending || Reflect.get(economy, 'processing') || staging.size || !economy.decisionsAvailable || draft.delivery.order.search || committed.order.search ||
+        draft.delivery.completed !== player.delivery.completed || committed.completed !== player.delivery.completed ||
+        draft.delivery.level !== player.delivery.level || committed.level !== player.delivery.level ||
+        draft.delivery.cash !== player.delivery.cash || committed.cash !== player.delivery.cash ||
+        draft.delivery.earned !== player.delivery.earned || committed.earned !== player.delivery.earned ||
+        draft.delivery.lifetimeIncome !== player.delivery.lifetimeIncome || committed.eligibleIncome !== player.delivery.lifetimeIncome ||
+        keys.some(key => draft.delivery!.order[key] !== player.delivery.order[key] || committed.order![key] !== player.delivery.order[key])) return fail('assignment-pending', true);
+    const stop = repeat.firstOrder.customer;
+    if (car.supportId !== 'ground' || Math.abs(car.speed) > 4 || car.vy > .1 ||
+        Math.abs(car.x - stop.x) > 12 || Math.abs(car.z - stop.z) > 12) return fail('awaiting-first-stop', true);
+    const next = initialDelivery({ x: car.x, z: car.z }).order, order = describeOrder(next);
+    if (!order || next.stage !== 'pickup' || next.search || order.customer.rooftop ||
+        requiredLevelAt(order.restaurant.x, order.restaurant.z) > player.delivery.level ||
+        requiredLevelAt(order.customer.x, order.customer.z) > player.delivery.level ||
+        JSON.stringify(order) !== JSON.stringify(repeat.firstOrder)) return fail('catalog-or-access-changed');
+    // Submit one ordinary progress commit to the disposable guest profile so
+    // its draft, durable assignment and subsequent real deliveries agree.
+    // This control cannot run for a saved driver or an in-flight wallet queue.
+    repeat.used = true;
+    draft.delivery.order = next;
+    try {
+      const progress = Reflect.apply(Reflect.get(economy, 'progress'), economy, []);
+      const outcome = await new Promise<{ ok: boolean }>(resolve => Reflect.apply(Reflect.get(economy, 'enqueue'), economy, [{ kind: 'progress', progress }, undefined, resolve]));
+      if (!outcome?.ok) return fail('wallet-rejected');
+    } catch { return fail('wallet-unavailable'); }
+    const currentEntries = [...this.sessionsForStage()];
+    if (Reflect.get(this, 'world') !== world || currentEntries.length !== 1 || currentEntries[0][0] !== repeat.socket ||
+        currentEntries[0][1] !== repeat.session || repeat.socket.readyState !== 1 || !repeat.session.guest || repeat.session.attachPending || repeat.session.economy !== economy ||
+        repeat.session.identitySequence !== repeat.identitySequence || repeat.session.poseRevision !== repeat.poseRevision ||
+        world.players.length !== 1 || world.players[0] !== player || player.entityId !== repeat.entityId || car.kind !== repeat.kind ||
+        player.delivery.completed !== 1 || JSON.stringify(describeOrder(player.delivery.order)) !== JSON.stringify(order)) return fail('driver-changed');
+    return { ok: true as const, order, stagedTick: Reflect.get(this, 'tickCount') as number, poseRevision: repeat.session.poseRevision };
   }
 
   private async stageFirst(world: World, pose: StagePose): Promise<void> {
@@ -225,9 +303,9 @@ export default {
     try { stagePose(env as unknown as StageVars); stageOptions(env as unknown as StageVars); }
     catch (error) { return new Response(error instanceof Error ? error.message : 'Invalid playtest position', { status: 500 }); }
     const url = new URL(request.url);
-    const match = /^\/api\/playtest\/(status|begin)\/([^/]+)$/.exec(url.pathname);
+    const match = /^\/api\/playtest\/(status|begin|repeat)\/([^/]+)$/.exec(url.pathname);
     if (match) {
-      if ((match[1] === 'begin' && request.method !== 'POST') || (match[1] === 'status' && request.method !== 'GET'))
+      if ((match[1] !== 'status' && request.method !== 'POST') || (match[1] === 'status' && request.method !== 'GET'))
         return new Response('Method not allowed', { status: 405 });
       const origin = request.headers.get('Origin');
       if (origin && origin !== url.origin) return new Response('Cross-origin request denied', { status: 403 });
@@ -243,7 +321,7 @@ export default {
       const rooms = env.ROOMS as unknown as DurableObjectNamespace<GameRoom>;
       const roomObject = rooms.get(rooms.idFromName(room));
       if (match[1] === 'status') return Response.json(await roomObject.playtestStatus(room));
-      const result = await roomObject.playtestBegin(room);
+      const result = match[1] === 'begin' ? await roomObject.playtestBegin(room) : await roomObject.playtestRepeat(room);
       return Response.json(result, { status: result.ok ? 200 : 409 });
     }
     return worker.fetch(request, env, ctx);
