@@ -1,0 +1,490 @@
+diff --git a/diagnostic-lab/README.md b/diagnostic-lab/README.md
+index 8048df2..d270191 100644
+--- a/diagnostic-lab/README.md
++++ b/diagnostic-lab/README.md
+@@ -5,8 +5,8 @@ This is a **nonproduction diagnostic prototype**, based on commit `a53d0998ef83e
+ ## What this adds
+ 
+ * The diagnostic-only wrapper allocates unique, non-reusable slots before serializing simultaneous joins. It keeps normal room, input, guest identity, economy session, traffic, snapshot and timer code, and stages the existing seed-0 Roadsters at the recorded corridors. A random bearer secret is required for every room socket and staging/status/export operation. Runtime routing checks the separate diagnostic Preview hostname and marker; only disposable `gha-<run>-<attempt>` rooms are accepted. The sample config is explicitly for `wrangler dev --local` and its repeated `a` token is not a live secret.
+-* Four independently runnable groups each use 16 real `Session` instances and header-bearing Node WebSockets. They wait until all 64 unique slots have joined and guest identities and economy sessions are ready. Begin fences controls and starts the existing scheduler. Each Session must observe fresh advancing ticks before a shared warmup/start tick. It uses a speed-bounded straight control and stores bounded raw input and snapshot observations; overflow is incomplete. Four groups signal completion before the first group exports bounded tick-level pose/indicator pages.
+-* Contact records are deliberately **incomplete**: `recordTick()` samples after each whole tick and may miss a substep collision, brief overlap or barrier. `ContactTrace` always uses `authoritativeCoverage=false` in this worker, and the driver always reports `authoritative-substep-contact-coverage-unavailable`. It detects bad or missing sample sequences, unexpected support/lane, sampled damage/impulse, unsealed trace and bounded pose/event overflow; none of that proves an unobstructed interval. The required true authoritative per-substep event hooks do not exist here.
++* Four independently runnable groups each use 16 real `Session` instances and header-bearing Node WebSockets. They wait until all 64 unique slots have joined and guest identities and economy sessions are ready. Begin fences controls and starts the existing scheduler. Each Session must observe fresh advancing ticks before a shared warmup/start tick. It uses a speed-bounded straight control and stores bounded raw input and snapshot observations; overflow is incomplete. Four groups signal completion before the first group exports bounded substep pose/event pages.
++* Diagnostic-only hooks surround every authoritative `advance` substep and record real entity-contact, ground static-solid, progression, island-jump-wall and stunt-ramp-wall decisions, plus end-of-substep poses with tick, index and substep count. The hooks flag ferry-secured or out-of-corridor/special-surface states, identity/revision changes, gaps and overflow. Events may capture contacts that a tick snapshot would miss. This is still **incomplete**: for example ferry/deck blocking inside `followSupport`, dome constraints, some landing and post-separation special-wall handling, and any transient unsupported path require further audit. Begin/end state checks alone cannot rule those out. `ContactTrace` keeps `authoritativeCoverage=false`, and every driver reports `authoritative-substep-contact-coverage-unavailable`; no absence-of-contact claim follows from these records. An instrumentation exception marks the trace invalid, not complete.
+ * The 64 candidate lanes came from the local `d05d6f4` preflight. The committed `shared/` tree is unchanged between that revision and `a53d0998`, but the v2 diagnostic modifies `shared/tick-input.ts` and this does not verify a later release. Rerun static and spawn-fit checks against the final source; sampled surface checks do not prove uninterrupted support or dynamic traffic avoidance. Guest economy hooks are present; saved-driver writes, recovery and financial operations are not exercised by the workload.
+ 
+ ## Focused verification
+@@ -21,9 +21,9 @@ pnpm exec tsc -p diagnostic-lab/tsconfig.client.json --noEmit
+ pnpm exec tsx diagnostic-lab/hosted-stage-preflight.ts > /private/tmp/tesland-staged-preflight.json
+ ```
+ 
+-Five focused tests passed, covering duplicate slot reservations, sealed/invalid/missing/overflow contact evidence, advancing warmup, a real `Session` using a mock socket, and Node's header-bearing WebSocket handshake to an ephemeral loopback HTTP server. Worker and client lab typechecks passed.
++Eight focused tests passed, covering duplicate slot reservations, sealed/invalid/missing/unsupported/overflow evidence, instrumented entity and static decisions and a progression gate, physics parity for a controlled two-substep run, advancing warmup, a real `Session` using a mock socket, and Node's header-bearing WebSocket handshake to an ephemeral loopback HTTP server. Worker and client lab typechecks passed.
+ 
+-The 2026-10-19 UTC two-Session functional smoke used loopback TLS and fresh local-only storage. It checked the wrong-host and unauthenticated denial, unique staged slots, duplicate-slot 409, normal economy sessions, advancing snapshots, actual movement for both cars, incomplete contact reporting 409 before trace sealing, and successful sealing/export of tick samples after four synthetic completion signals. The Worker was stopped immediately afterwards. This is not capacity, timing, Cloudflare isolation, or saved-driver evidence.
++The 2026-10-19 UTC two-Session functional smoke used loopback TLS and fresh local-only storage. It checked the wrong-host and unauthenticated denial, unique staged slots, duplicate-slot 409, normal economy sessions, advancing snapshots, actual movement for both cars, incomplete contact reporting, 409 before trace sealing, and successful sealing/export after four synthetic completion signals. It observed an adaptive tick with substep indexes 0 and 1; the Worker was stopped immediately afterwards. This is not capacity, timing, Cloudflare isolation, saved-driver, or full contact-coverage evidence.
+ 
+ To reproduce only the bounded smoke, start the Worker and wait for health on loopback:
+ 
+@@ -42,9 +42,9 @@ The smoke imports the existing `ws@8.21.0` pnpm store module for a loopback TLS
+ ## Blocking work before any hosted measurement
+ 
+ 1. Select and rebase onto the exact final source, regenerate source-matched lanes and verify each initial placement and all relevant terrain/landmark geometry. Safely remove the staging relocation's potential impact on delivery initialization or document the altered normal workload.
+-2. Implement and test authoritative per-substep recording at all relevant contact, solid, progression and special-surface decision points; prove event and time-window coverage, cap memory and export all raw data. Every gap or overflow must remain incomplete. The current whole-tick indicators and two-client smoke cannot establish lack of obstruction.
++2. Finish auditing and testing authoritative hooks at all relevant contact, solid, progression and special-surface decision points; prove event and time-window coverage and export all raw data. Every gap or overflow must remain incomplete. The current partial hooks and two-client smoke cannot establish lack of obstruction.
+ 3. Adapt and independently review the separate fail-closed provider identity checker for the staging wrapper, preview-only token binding, full static asset graph and pre/post guards; read actual Preview deployment and each same-Worker Durable Object namespace. The present checker only has synthetic provider tests, rejects the added token/config, and is not wired into the workflow. A matching eight-hex hostname may denote a version URL and is not proof of isolated Preview resources. The pinned target should live outside the checkout to avoid a self-referential source commit. Use a fresh disposable room and no real users; no token or authorization headers in artifacts or logs.
+-4. Test the real four-runner barrier, disconnect/failure behavior, raw trace export and Node transport against a bounded isolated Preview smoke after separate coordination. Observe and report staging setup and diagnostic trace overhead with paired repeated baseline/instrumented trials before interpreting throughput. The typed trace in this prototype is a bounded JavaScript object buffer (up to 200,000 poses plus 4,096 events), whose Worker memory and CPU costs are unmeasured; overflow is incomplete. A failure before all groups signal done may leave the server-side trace unavailable; that is explicitly incomplete and must not be counted as zero contacts.
++4. Test the real four-runner barrier, disconnect/failure behavior, raw trace export and Node transport against a bounded isolated Preview smoke after separate coordination. Observe and report staging setup and diagnostic trace overhead with paired repeated baseline/instrumented trials before interpreting throughput. The trace uses bounded JavaScript object buffers (up to 200,000 poses plus 4,096 events), whose Worker memory and CPU costs are unmeasured; overflow is incomplete. At 64 drivers and eight substeps per tick, the pose budget covers at most 390 full ticks (19.5 simulated seconds), so it cannot cover the 57-second gate under those conditions. Longer recordings need a separately evaluated bounded streaming/export design; simply increasing the cap is not established safe. A failure before all groups signal done may leave the server-side trace unavailable; that is explicitly incomplete and must not be counted as zero contacts.
+ 5. The fixture has **no valid per-tick production CPU timer**. Cloudflare Worker `Date.now()` and `performance.now()` can remain frozen during CPU execution, so their within-callback deltas are not tick CPU work; wall-time progression, client ACKs and runner CPU are separate measures. A validated provider-supported CPU/profiling source and its event scope/overhead are required before claiming p95 tick CPU, and sampled profiles or aggregate per-event CPU do not automatically prove per-tick p95. See https://developers.cloudflare.com/workers/reference/security-model/ and https://developers.cloudflare.com/workers/runtime-apis/performance/ .
+ 
+ The fixture is synthetic off-road staged motion, not representative dense-city traffic or production capacity. Retain the raw four-runner files and trace along with source, asset, provider, host-load and UTC/monotonic timing evidence. Do not infer absent data as zero.
+diff --git a/diagnostic-lab/hosted-stage-core.test.ts b/diagnostic-lab/hosted-stage-core.test.ts
+index 739c649..67a0fbd 100644
+--- a/diagnostic-lab/hosted-stage-core.test.ts
++++ b/diagnostic-lab/hosted-stage-core.test.ts
+@@ -1,6 +1,6 @@
+ import {test} from 'node:test';
+ import assert from 'node:assert/strict';
+-import {SlotAdmissions,WarmupGate,ContactTrace} from './hosted-stage-core';
++import {SlotAdmissions,WarmupGate,ContactTrace,unsupportedPose} from './hosted-stage-core';
+ import {MotionClock} from '../src/motion-clock';
+ 
+ test('slots are unique, finite and cannot be reused after sealing',()=>{
+@@ -26,7 +26,7 @@ test('paused equal-tick snapshots never satisfy warmup; actual Session clock nee
+ });
+ 
+ test('contact, missing observations, unsupported coverage and overflow fail closed',()=>{
+-  const pose=(slot:number)=>({tick:1,substep:0,slot,x:slot,y:0,z:0,speed:1,support:'ground'});
++  const pose=(slot:number,substeps=1)=>({tick:1,substep:0,substeps,slot,x:slot,y:0,z:0,speed:1,support:'ground'});
+   const unverified=new ContactTrace(2,2,4096,false,1);unverified.substep(1,0,1,[pose(0),pose(1)]);unverified.seal(1);
+   assert.equal(unverified.summary().complete,false);
+   assert.ok(unverified.summary().reasons.includes('authoritative-substep-hooks-unverified'));
+@@ -39,14 +39,59 @@ test('contact, missing observations, unsupported coverage and overflow fail clos
+   assert.ok(partial.summary().reasons.includes('invalid-or-missing-substep-data'));
+   const overflow=new ContactTrace(2,1,1,true,1);overflow.substep(1,0,1,[pose(0),pose(1)]);
+   assert.ok(overflow.summary().reasons.includes('trace-overflow'));
+-  const missing=new ContactTrace(2,10,1,true,1);missing.substep(1,0,2,[pose(0),pose(1)]);
++  const missing=new ContactTrace(2,10,1,true,1);missing.substep(1,0,2,[pose(0,2),pose(1,2)]);
+   const next=(slot:number)=>({...pose(slot),tick:2});missing.substep(2,0,1,[next(0),next(1)]);missing.seal(2);
+   assert.ok(missing.summary().reasons.includes('invalid-or-missing-substep-data'));
+   const uninterrupted=new ContactTrace(2,4,1,true,1);
+-  uninterrupted.substep(1,0,2,[pose(0),pose(1)]);
+-  uninterrupted.substep(1,1,2,[{...pose(0),substep:1},{...pose(1),substep:1}]);
++  uninterrupted.substep(1,0,2,[pose(0,2),pose(1,2)]);
++  uninterrupted.substep(1,1,2,[{...pose(0,2),substep:1},{...pose(1,2),substep:1}]);
+   assert.ok(uninterrupted.summary().reasons.includes('trace-not-sealed'));
+   uninterrupted.seal(1);assert.equal(uninterrupted.summary().complete,true);
++  const unsupported=new ContactTrace(1,1,0,true,1);
++  unsupported.substep(1,0,1,[pose(0)]);
++  unsupported.event({tick:1,substep:0,slot:0,kind:'unsupported',reason:'ferry-secured'});unsupported.seal(1);
++  assert.ok(unsupported.summary().reasons.includes('unsupported-simulation-path'));
++  assert.ok(unsupported.summary().reasons.includes('trace-overflow'));
++});
++
++test('unsupported special surfaces and out-of-corridor poses are explicit',()=>{
++  const lane={x:20},pose={x:20,z:3500,supportId:'ground',inDome:false,loopAngle:null};
++  assert.equal(unsupportedPose(pose,lane,4100,3000),null);
++  assert.equal(unsupportedPose({...pose,supportId:'ferry'},lane,4100,3000),'special-surface-or-flight');
++  assert.equal(unsupportedPose({...pose,inDome:true},lane,4100,3000),'special-surface-or-flight');
++  assert.equal(unsupportedPose({...pose,loopAngle:0},lane,4100,3000),'special-surface-or-flight');
++  assert.equal(unsupportedPose({...pose,x:24},lane,4100,3000),'outside-staged-corridor');
++  assert.equal(unsupportedPose({...pose,z:NaN},lane,4100,3000),'outside-staged-corridor');
++});
++
++test('authoritative decision hooks run for each substep without changing physics',async()=>{
++  const {createEmptyWorld,makeEntity,step}=await import('../shared/game');
++  const {BUILDINGS}=await import('../shared/map');
++  const world=createEmptyWorld();
++  world.entities.push(makeEntity('a','roadster',0,4100,'one'),makeEntity('b','roadster',0,4100,'two'),
++    makeEntity('wall','roadster',BUILDINGS[0].x,BUILDINGS[0].z,'three'));
++  const control=structuredClone(world),order:string[]=[],events:string[]=[];
++  step(control,new Map(),.05,{substeps:2});
++  step(world,new Map(),.05,{substeps:2,diagnostic:{
++    begin:(i,count)=>order.push(`begin:${i}/${count}`),
++    event:(i,kind,a,b)=>events.push(`${i}:${kind}:${a.id}:${b?.id??''}`),
++    end:(i,count)=>order.push(`end:${i}/${count}`),
++  }});
++  assert.deepEqual(world,control);
++  assert.deepEqual(order,['begin:0/2','end:0/2','begin:1/2','end:1/2']);
++  assert.ok(events.some(event=>event.includes(':entity:a:b')));
++  assert.ok(events.some(event=>event.includes(':solid:wall:')));
++});
++
++test('the progression gate reports the blocked player inside the simulation',async()=>{
++  const {createEmptyWorld,addPlayer,step}=await import('../shared/game');
++  const world=createEmptyWorld(),player=addPlayer(world,'gate-driver','Gate');
++  const car=world.entities.find(entity=>entity.id===player.entityId)!;
++  Object.assign(car,{x:109.9,z:60,y:0,yaw:-Math.PI/2,speed:70,supportId:'ground'});
++  const events:string[]=[];
++  step(world,new Map(),.05,{diagnostic:{begin:()=>{},event:(_i,kind,entity)=>events.push(`${kind}:${entity.id}`),end:()=>{}}});
++  assert.ok(events.includes(`progression:${car.id}`));
++  assert.equal(player.delivery.lastBlocked?.level,1);
+ });
+ 
+ test('real Session resumes input after staged equal-tick snapshots begin advancing',async()=>{
+diff --git a/diagnostic-lab/hosted-stage-core.ts b/diagnostic-lab/hosted-stage-core.ts
+index 21c6e02..f3cdbae 100644
+--- a/diagnostic-lab/hosted-stage-core.ts
++++ b/diagnostic-lab/hosted-stage-core.ts
+@@ -32,8 +32,13 @@ export class WarmupGate {
+   }
+ }
+ 
+-export type TracePose={tick:number;substep:number;slot:number;x:number;y:number;z:number;speed:number;support:string|null};
+-export type TraceEvent={tick:number;substep:number;slot:number;kind:'entity'|'solid'|'progression'|'other'};
++export type TracePose={tick:number;substep:number;substeps:number;slot:number;x:number;y:number;z:number;speed:number;support:string|null};
++export type TraceEvent={tick:number;substep:number;slot:number;kind:'entity'|'solid'|'progression'|'unsupported'|'other';reason?:string};
++export function unsupportedPose(entity:{x:number;z:number;supportId:string|null;inDome:boolean;loopAngle:number|null},lane:{x:number},startZ:number,endZ:number):string|null {
++  if(entity.inDome||entity.loopAngle!==null||entity.supportId!=='ground')return 'special-surface-or-flight';
++  if(!Number.isFinite(entity.x)||!Number.isFinite(entity.z)||Math.abs(entity.x-lane.x)>3||entity.z>startZ+3||entity.z<endZ-3)return 'outside-staged-corridor';
++  return null;
++}
+ // Bounded raw observations, plus explicit audit gaps. This prototype is never
+ // evidence of a clean interval until authoritative per-substep hookup is proven.
+ export class ContactTrace {
+@@ -41,6 +46,7 @@ export class ContactTrace {
+   readonly events:TraceEvent[]=[];
+   overflow=false;
+   invalid=false;
++  unsupported=false;
+   private lastTick:number|null=null;
+   private lastSubstep=-1;
+   private lastSubsteps=0;
+@@ -54,7 +60,7 @@ export class ContactTrace {
+       :tick!==this.lastTick+1||substep!==0||this.lastSubstep!==this.lastSubsteps-1){this.invalid=true;return;}
+     const slots=new Set<number>();
+     for(const p of poses){
+-      if(p.tick!==tick||p.substep!==substep||!Number.isInteger(p.slot)||p.slot<0||p.slot>=this.expected||slots.has(p.slot)||
++      if(p.tick!==tick||p.substep!==substep||p.substeps!==substeps||!Number.isInteger(p.slot)||p.slot<0||p.slot>=this.expected||slots.has(p.slot)||
+          ![p.x,p.y,p.z,p.speed].every(Number.isFinite)){this.invalid=true;return;}
+       slots.add(p.slot);
+     }
+@@ -64,7 +70,9 @@ export class ContactTrace {
+   }
+   event(event:TraceEvent):void {
+     if(this.sealed||!Number.isSafeInteger(event.tick)||event.tick<1||!Number.isInteger(event.substep)||event.substep<0||!Number.isInteger(event.slot)||
+-       event.slot<0||event.slot>=this.expected||!['entity','solid','progression','other'].includes(event.kind)){this.invalid=true;return;}
++       event.slot<0||event.slot>=this.expected||!['entity','solid','progression','unsupported','other'].includes(event.kind)||
++       (event.reason!==undefined&&(typeof event.reason!=='string'||event.reason.length>80))){this.invalid=true;return;}
++    if(event.kind==='unsupported')this.unsupported=true;
+     if(this.events.length>=this.maxEvents){this.overflow=true;return;}this.events.push(event);
+   }
+   seal(endTick:number):void{
+@@ -79,7 +87,8 @@ export class ContactTrace {
+     if(!this.sealed)reasons.push('trace-not-sealed');
+     if(this.invalid)reasons.push('invalid-or-missing-substep-data');
+     if(this.overflow)reasons.push('trace-overflow');
+-    if(this.events.length)reasons.push('obstruction-observed');
++    if(this.unsupported)reasons.push('unsupported-simulation-path');
++    if(this.events.some(event=>event.kind!=='unsupported'))reasons.push('obstruction-observed');
+     return {complete:reasons.length===0,reasons,poses:this.poses.length,events:this.events.length};
+   }
+ }
+diff --git a/diagnostic-lab/hosted-stage-driver.ts b/diagnostic-lab/hosted-stage-driver.ts
+index 3db3e83..7aac705 100644
+--- a/diagnostic-lab/hosted-stage-driver.ts
++++ b/diagnostic-lab/hosted-stage-driver.ts
+@@ -305,7 +305,7 @@ try {
+           traceSummary=page.summary;total=Math.max(page.summary.poses,page.summary.events);
+           raw.poses.push(...page.poses);raw.events.push(...page.events);
+         }
+-        mkdirSync(outputDir,{recursive:true});writeFileSync(join(outputDir,'stage-tick-trace.json.gz'),gzipSync(JSON.stringify({summary:traceSummary,...raw})));
++        mkdirSync(outputDir,{recursive:true});writeFileSync(join(outputDir,'stage-substep-trace.json.gz'),gzipSync(JSON.stringify({summary:traceSummary,...raw})));
+       }
+     }catch(error){traceExportError=error instanceof Error?error.message:String(error);}
+   }
+@@ -335,7 +335,7 @@ try {
+   if(slots.some(slot=>slot.lastPlayers!==64))incomplete.push('not-all-clients-observed');
+   if(movement.some(item=>item.blocks.some(block=>!block.complete)))incomplete.push('not-all-drivers-sustained-moving');
+   if(slots.some(slot=>!slot.ack.measuredApplied))incomplete.push('missing-measurement-applied-input');
+-  // Hosted worker currently records tick-level contact indicators only. Never
++  // The partial authoritative hooks are not a complete contact audit. Never
+   // claim an unobstructed measurement without authoritative substep hooks.
+   incomplete.push('authoritative-substep-contact-coverage-unavailable');
+   if(measuredRejections.length)incomplete.push('input-rejected');
+@@ -366,7 +366,7 @@ try {
+       receivedObservationMs:distribution(slot.ack.receivedMs),appliedObservationMs:distribution(slot.ack.appliedMs)})),
+     diagnosticCoverageComplete:incomplete.length===0,incomplete,
+     rejections,loadSamples,host:{platform:process.platform,node:process.version,cpus:cpus().length,totalMemoryBytes:totalmem()},
+-    note:'Four independent 16-Session runners use staged synthetic corridors. Source and provider isolation must be independently verified; tick-level contact indicators do not establish unobstructed movement. All four artifacts must be combined. ACKs measure only exact sequences observed in snapshots; received sequences can include rejected inputs. Sampled queues/history and damage/impulse cannot prove inter-snapshot bounds or absence of substep contact. Decoded bytes are not wire bytes. A one-second drain can miss replies. No server tick-work, browser-rendering, physical-device or capacity claim.',
++    note:'Four independent 16-Session runners use staged synthetic corridors. Source and provider isolation must be independently verified; partial substep hooks do not establish unobstructed movement. All four artifacts must be combined. ACKs measure only exact sequences observed in snapshots; received sequences can include rejected inputs. Sampled queues/history and damage/impulse cannot prove inter-snapshot bounds or absence of contact. Decoded bytes are not wire bytes. A one-second drain can miss replies. No server tick-work, browser-rendering, physical-device or capacity claim.',
+   };
+   mkdirSync(outputDir,{recursive:true});
+   writeFileSync(join(outputDir,`group-${group}-raw.json.gz`),gzipSync(JSON.stringify(slots.map(slot=>({samples:slot.rawSamples,inputs:slot.rawInputs,overflow:slot.rawOverflow})))));
+diff --git a/diagnostic-lab/hosted-stage-local-smoke.ts b/diagnostic-lab/hosted-stage-local-smoke.ts
+index 0765048..7744d23 100644
+--- a/diagnostic-lab/hosted-stage-local-smoke.ts
++++ b/diagnostic-lab/hosted-stage-local-smoke.ts
+@@ -39,7 +39,7 @@ try{
+   Object.defineProperty(globalThis,'location',{value:new URL(`https://${host}`),configurable:true,writable:true});
+   Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true,writable:true});
+   for(let i=0;i<2;i++){const session=new Session();sessions.push(session);session.join(room,`Driver ${i}`);}
+-  timer=setInterval(()=>{for(const s of sessions)s.tick(.016,drive?{...NEUTRAL,throttle:.1}:NEUTRAL);},16);
++  timer=setInterval(()=>{for(const s of sessions)s.tick(.016,drive?{...NEUTRAL,throttle:1}:NEUTRAL);},16);
+   await wait(()=>sessions.every(s=>s.status==='online'&&s.identityResult?.ok===true),'for real Session identity');
+   let status:any;
+   const statusUntil=performance.now()+10000;
+@@ -58,7 +58,9 @@ try{
+   const started=JSON.parse(begin.body);assert.equal(started.ok,true);gate=new WarmupGate(2,started.tick);drive=true;
+   await wait(()=>!!gate?.ready(performance.now()),'for advancing snapshots');
+   await wait(()=>sessions.every((s,i)=>{const p=s.world.players.find(x=>x.id===s.id);const car=s.world.entities.find(e=>e.id===p?.entityId);return !!car&&poses[i]-car.z>.01;}),'for each Session to move');
+-  status=JSON.parse((await request(`/api/lab/status/${room}`,{authorized:true})).body);
++  const substepDeadline=performance.now()+10000;
++  do{status=JSON.parse((await request(`/api/lab/status/${room}`,{authorized:true})).body);if(status.substeps>1)break;await new Promise(resolve=>setTimeout(resolve,30));}while(performance.now()<substepDeadline);
++  assert.ok(status.substeps>1,'expected an actual adaptive multi-substep tick');
+   assert.equal(status.started,true);assert.ok(status.tick>=started.tick+3);
+   assert.equal(status.trace.complete,false);assert.ok(status.trace.reasons.includes('authoritative-substep-hooks-unverified'));
+   assert.equal((await request(`/api/lab/trace/${room}`,{authorized:true})).status,409);
+@@ -67,7 +69,10 @@ try{
+   const trace=JSON.parse(exported.body);assert.ok(trace.poses.length>0);assert.equal(trace.summary.complete,false);
+   assert.ok(trace.summary.reasons.includes('authoritative-substep-hooks-unverified'));
+   assert.ok(!trace.summary.reasons.includes('invalid-or-missing-substep-data'));
+-  console.log(JSON.stringify({local:true,realSessions:2,uniqueSlots:true,normalEconomy:true,advancingWarmup:true,eachMoved:true,contactEvidenceIncomplete:true,traceSealedAndExported:true}));
++  assert.ok(trace.poses.every((pose:any)=>Number.isInteger(pose.substep)&&pose.substep>=0&&pose.substep<pose.substeps&&pose.substeps<=8));
++  assert.ok(trace.poses.some((pose:any)=>pose.substep>0));
++  assert.deepEqual([...new Set(trace.poses.map((pose:any)=>pose.slot))].sort(),[0,1]);
++  console.log(JSON.stringify({local:true,realSessions:2,uniqueSlots:true,normalEconomy:true,advancingWarmup:true,eachMoved:true,contactEvidenceIncomplete:true,traceSealedAndExported:true,substepIndexes:[...new Set(trace.poses.map((pose:any)=>pose.substep))].sort()}));
+ }finally{
+   if(timer)clearInterval(timer);for(const s of sessions)s.disconnect();
+ }
+diff --git a/diagnostic-lab/hosted-stage-worker.ts b/diagnostic-lab/hosted-stage-worker.ts
+index 2f702a0..717d818 100644
+--- a/diagnostic-lab/hosted-stage-worker.ts
++++ b/diagnostic-lab/hosted-stage-worker.ts
+@@ -1,11 +1,11 @@
+ // Disabled diagnostic prototype. Never deploy on bay-drive or a production route.
+ import worker, { GameRoom as BaseRoom, GlobalChat, DriverProfile, RoomEconomy, GlobalIncome, GlobalEarningsEvent, MarketService } from '../worker/index';
+ import { isDiagnosticPreview } from '../worker/input-diagnostic-guard';
+-import { addPlayer,createWorld,type World } from '../shared/game';
++import { addPlayer,createWorld,type World,type Entity,type DiagnosticSubstepHooks } from '../shared/game';
+ import { terrainHeight } from '../shared/map';
+ import { prepareSnapshots } from '../worker/snapshot';
+ import type { ScheduledInput } from '../shared/tick-input';
+-import { SlotAdmissions,ContactTrace,type TracePose } from './hosted-stage-core';
++import { SlotAdmissions,ContactTrace,unsupportedPose,type TracePose } from './hosted-stage-core';
+ import report from './preflight-result.json';
+ export {GlobalChat,DriverProfile,RoomEconomy,GlobalIncome,GlobalEarningsEvent,MarketService};
+ type Session={id:string;guest:boolean;attachPending:boolean;poseRevision:number;control:ScheduledInput;economy:{sync():number|undefined}|null;syncToken:number};
+@@ -27,11 +27,12 @@ export class GameRoom extends BaseRoom {
+   private admissions=new SlotAdmissions(this.expected);private sequence:Promise<unknown>=Promise.resolve();
+   private slots=new Map<string,number>();private ambient:string[]=[];
+   private paused?:World;private started?:World;private startedAtTick:number|null=null;private heartbeat?:ReturnType<typeof setInterval>;
+-  // Tick-level samples cannot establish substep contact completeness.
++  // Instrumented decisions still do not establish complete contact coverage.
+   private trace=new ContactTrace(this.expected,200_000,4096,false);
+   private beforeHealth=new Map<number,number>();
++  private revisions=new Map<string,number>();
++  private activeSubstep:{tick:number;index:number;count:number}|null=null;
+   private done=new Set<number>();private recording=true;
+-  private originalTick?:()=>void;
+   private sessionsForLab(){return Reflect.get(this,'sessions') as Map<WebSocket,Session>;}
+   private worldForLab(){return Reflect.get(this,'world') as World;}
+   private tickForLab(){return Reflect.get(this,'tickCount') as number;}
+@@ -42,22 +43,50 @@ export class GameRoom extends BaseRoom {
+     const data=prepareSnapshots(world,this.tickForLab(),Reflect.get(this,'roomEpoch') as string,Reflect.get(this,'lastSubsteps') as number);
+     for(const [socket,s] of sessions)try{socket.send(data(s.id,s.control.snapshot(),s.poseRevision,s.economy?.sync()??s.syncToken));}catch{}
+   }
+-  private recordTick(){
+-    const world=this.worldForLab(),tick=this.tickForLab();
+-    if(world!==this.started||!tick||!this.recording)return;
+-    const samples:TracePose[]=[];
++  private guarded(run:()=>void){try{run();}catch{this.trace.invalid=true;}}
++  private inspect(world:World,tick:number,substep:number,substeps:number):TracePose[]{
++    const samples:TracePose[]=[],sessions=new Map([...this.sessionsForLab().values()].map(s=>[s.id,s]));
+     for(const entity of world.entities){
+       if(!entity.driver)continue;const slot=this.slots.get(entity.driver);if(slot===undefined)continue;
+-      const expected=poses[slot];
+-      samples.push({tick,substep:0,slot,x:entity.x,y:entity.y,z:entity.z,speed:entity.speed,support:entity.supportId});
+-      const health=this.beforeHealth.get(slot);this.beforeHealth.set(slot,entity.health);
+-      if((health!==undefined&&entity.health<health-.001)||Math.hypot(entity.pushX,entity.pushZ)>.1||
+-         entity.supportId!=='ground'||Math.abs(entity.x-expected.x)>3||entity.z>report.startZ+3||entity.z<report.endZ-3)
+-        this.trace.event({tick,substep:0,slot,kind:'other'});
++      const s=sessions.get(entity.driver),p=world.players.find(player=>player.id===entity.driver);
++      if(!s||p?.entityId!==entity.id||s.poseRevision!==this.revisions.get(entity.driver)){
++        this.trace.event({tick,substep,slot,kind:'unsupported',reason:'identity-or-revision-changed'});
++      }
++      const reason=unsupportedPose(entity,poses[slot],report.startZ,report.endZ);
++      if(reason)this.trace.event({tick,substep,slot,kind:'unsupported',reason});
++      samples.push({tick,substep,substeps,slot,x:entity.x,y:entity.y,z:entity.z,speed:entity.speed,support:entity.supportId});
+     }
+-    // One sample per completed tick, never advertised as substep coverage.
+-    this.trace.substep(tick,0,1,samples);
++    if(samples.length!==this.expected||new Set(samples.map(sample=>sample.slot)).size!==this.expected)this.trace.invalid=true;
++    return samples;
+   }
++  private substepHooks():DiagnosticSubstepHooks{return {
++    begin:(index,count,world)=>this.guarded(()=>{
++      if(!this.recording)return;
++      if(world!==this.started||this.activeSubstep!==null){this.trace.invalid=true;return;}
++      const tick=this.tickForLab()+1;this.activeSubstep={tick,index,count};this.inspect(world,tick,index,count);
++    }),
++    event:(index,kind,entity,other,reason)=>this.guarded(()=>{
++      if(!this.recording)return;
++      const active=this.activeSubstep;if(!active||active.index!==index){this.trace.invalid=true;return;}
++      for(const target of [entity,other]){
++        const slot=target?.driver?this.slots.get(target.driver):undefined;if(slot===undefined)continue;
++        this.trace.event({tick:active.tick,substep:index,slot,kind,reason});
++      }
++    }),
++    end:(index,count,world)=>this.guarded(()=>{
++      if(!this.recording)return;
++      const active=this.activeSubstep;
++      if(!active||active.index!==index||active.count!==count||world!==this.started){this.trace.invalid=true;return;}
++      const samples=this.inspect(world,active.tick,index,count);
++      for(const sample of samples){
++        const entity=world.entities.find((e:Entity)=>e.driver&&this.slots.get(e.driver)===sample.slot)!;
++        const health=this.beforeHealth.get(sample.slot);this.beforeHealth.set(sample.slot,entity.health);
++        if((health!==undefined&&entity.health<health-.001)||Math.hypot(entity.pushX,entity.pushZ)>.1)
++          this.trace.event({tick:active.tick,substep:index,slot:sample.slot,kind:'other',reason:'damage-or-impulse'});
++      }
++      this.trace.substep(active.tick,index,count,samples);this.activeSubstep=null;
++    }),
++  };}
+   labStatus(room:string){
+     this.checkRoom(room);const world=this.worldForLab(),entries=[...this.sessionsForLab()];
+     const staged=entries.map(([socket,s])=>{
+@@ -67,7 +96,7 @@ export class GameRoom extends BaseRoom {
+     });
+     const ready=this.paused===world&&this.admissions.complete&&staged.length===this.expected&&
+       staged.every(s=>s.connected&&s.guest&&s.economy&&!s.attachPending&&s.exact);
+-    return {ready,started:this.started===world,startedAtTick:this.startedAtTick,tick:this.tickForLab(),expectedDrivers:this.expected,staged,doneGroups:this.done.size,ambientInitial:this.ambient.length,
++    return {ready,started:this.started===world,startedAtTick:this.startedAtTick,tick:this.tickForLab(),substeps:Reflect.get(this,'lastSubsteps') as number,expectedDrivers:this.expected,staged,doneGroups:this.done.size,ambientInitial:this.ambient.length,
+       ambientRetained:this.ambient.filter(id=>world.entities.some(e=>e.id===id)).length,trace:this.trace.summary()};
+   }
+   labBegin(room:string){
+@@ -77,8 +106,8 @@ export class GameRoom extends BaseRoom {
+     for(const [socket,s] of this.sessionsForLab())Reflect.apply(Reflect.get(this,'invalidate'),this,[socket,s]);
+     this.publish();this.paused=undefined;this.started=world;this.startedAtTick=status.tick;
+     this.trace=new ContactTrace(this.expected,200_000,4096,false,status.tick+1);
+-    this.originalTick=Reflect.get(this,'tick').bind(this);
+-    Reflect.set(this,'tick',()=>{this.originalTick!();this.recordTick();});
++    this.revisions=new Map([...this.sessionsForLab().values()].map(s=>[s.id,s.poseRevision]));
++    this.diagnosticSimulationHooks=this.substepHooks();
+     Reflect.apply(Reflect.get(this,'startTicks'),this,[]);
+     return {ok:true,tick:status.tick};
+   }
+@@ -91,7 +120,7 @@ export class GameRoom extends BaseRoom {
+   labDone(room:string,group:number){
+     this.checkRoom(room);
+     if(this.started!==this.worldForLab()||!Number.isInteger(group)||group<1||group>4||this.done.has(group))return {ok:false,doneGroups:this.done.size};
+-    this.done.add(group);if(this.done.size===4){this.recording=false;this.trace.seal(this.tickForLab());}
++    this.done.add(group);if(this.done.size===4){this.recording=false;if(this.activeSubstep)this.trace.invalid=true;this.trace.seal(this.tickForLab());this.diagnosticSimulationHooks=undefined;}
+     return {ok:true,doneGroups:this.done.size};
+   }
+   override async fetch(request:Request):Promise<Response>{
+diff --git a/shared/game.ts b/shared/game.ts
+index 339d823..aa2ee22 100644
+--- a/shared/game.ts
++++ b/shared/game.ts
+@@ -830,16 +830,27 @@ export function simulationSubsteps(world:World,dt:number):number {
+ }
+ // A substep override is for client presentation replay only; the room always
+ // chooses its adaptive value from the complete authoritative world.
+-export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{substeps?:number;onSubsteps?:(count:number)=>void;onRelocation?:(playerId:string)=>void;economy?:EconomyHooks}):void {
++// Diagnostic checkout only: these hooks report decisions made by the actual
++// simulation. They are not a complete contact or swept-path audit.
++export type DiagnosticSubstepHooks={
++  begin:(substep:number,substeps:number,world:World)=>void;
++  event:(substep:number,kind:'entity'|'solid'|'progression'|'unsupported',entity:Entity,other?:Entity,reason?:string)=>void;
++  end:(substep:number,substeps:number,world:World)=>void;
++};
++export function step(world:World,inputs:Map<string,Input>,dt:number,options?:{substeps?:number;onSubsteps?:(count:number)=>void;onRelocation?:(playerId:string)=>void;economy?:EconomyHooks;diagnostic?:DiagnosticSubstepHooks}):void {
+   if(!Number.isFinite(dt)||dt<=0)return;
+   dt=Math.min(dt,.05);
+   const steps=Number.isInteger(options?.substeps)&&options!.substeps!>=1&&options!.substeps!<=8?options!.substeps!:simulationSubsteps(world,dt);
+   options?.onSubsteps?.(steps);
+   const waiting=world.players.filter(player=>player.delivery.order.search);
+   const searchDriver=waiting.length?waiting[Math.floor((world.time+.001)/.05)%waiting.length].id:undefined;
+-  for(let i=0;i<steps;i++)advance(world,inputs,dt/steps,options?.onRelocation,options?.economy,i===steps-1?searchDriver:undefined);
++  for(let i=0;i<steps;i++){
++    options?.diagnostic?.begin(i,steps,world);
++    advance(world,inputs,dt/steps,options?.onRelocation,options?.economy,i===steps-1?searchDriver:undefined,options?.diagnostic,i);
++    options?.diagnostic?.end(i,steps,world);
++  }
+ }
+-function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks,searchDriver?:string):void {
++function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (playerId:string)=>void,economy?:EconomyHooks,searchDriver?:string,diagnostic?:DiagnosticSubstepHooks,substep=0):void {
+   const update=(player:Player,apply:()=>EconomyUpdateResult,ticket?:TicketEvidence)=>economy?economy.update(player,apply,ticket):apply();
+   const gameAward=(player:Player,apply:()=>void,capture?:()=>()=>void)=>economy?.gameAward?economy.gameAward(player,apply,capture):update(player,apply);
+   world.time+=dt;
+@@ -863,7 +874,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+     const manual=e.driver?inputs.get(e.driver)??{...NEUTRAL,jump:e.lastJump,flip:e.lastFlip}:{...NEUTRAL,jump:e.lastJump,flip:e.lastFlip};
+     const manualJump=manual.jump!==e.lastJump,flip=manual.flip!==e.lastFlip;
+     e.lastJump=manual.jump;e.lastFlip=manual.flip;
+-    if(ferrySecured(world.ferry,e)){e.thrusters=0;continue;}
++    if(ferrySecured(world.ferry,e)){diagnostic?.event(substep,'unsupported',e,undefined,'ferry-secured');e.thrusters=0;continue;}
+     if(e.driver&&(manual.throttle||manual.steer||manual.brake||manual.boost||manual.hover||manual.roll||manualJump||flip)){e.autopilot=false;e.navigation=null;}
+     if(e.driver&&(manualJump||flip))stuntPlayers.add(e.driver);
+     let input:Input,autoJump=false;
+@@ -1007,9 +1018,10 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+       e.x+=e.vx*dt;e.z+=e.vz*dt;e.pushX*=Math.exp(-(drifting?1:3)*dt);e.pushZ*=Math.exp(-(drifting?1:3)*dt);
+       followSupport(world,e,old);
+       if(oldSupportId==='ground'){
+-        const hit=islandJumpWallHit(e,old);if(hit)resolveIslandJumpWall(e,old,hit);
++        const hit=islandJumpWallHit(e,old);if(hit){diagnostic?.event(substep,'solid',e,undefined,'island-jump-wall');resolveIslandJumpWall(e,old,hit);}
+       }
+       if(oldSupportId==='ground'&&oldX>=STUNT_RAMP.end&&e.x<STUNT_RAMP.end&&Math.abs(e.z-STUNT_RAMP.z)<STUNT_RAMP.width/2&&e.y<STUNT_RAMP.height){
++        diagnostic?.event(substep,'solid',e,undefined,'stunt-ramp-wall');
+         e.x=oldX;e.z=oldZ;e.y=oldY;e.supportId=oldSupportId;e.speed*=-.25;e.vx=-Math.sin(e.yaw)*e.speed;
+       }
+       // The bottom of the loop is tangent to the street. Either direction works.
+@@ -1111,6 +1123,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+     enterDomeIfInside(e);
+     constrainDome(e,rocket);
+     if(blocksProgression(world,e,old)){
++      diagnostic?.event(substep,'progression',e);
+       if(oldSupportId===null&&e.supportId===null){
+         // Slide along the checkpoint and keep falling instead of reverting the
+         // entire 3D move. Test each axis against the same locked-region rule.
+@@ -1125,6 +1138,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+       e.speed=0;e.pushX=0;e.pushZ=0;e.autopilot=false;e.navigation=null;
+     }
+     if(solid(e)){
++      diagnostic?.event(substep,'solid',e);
+       e.x=oldX;e.z=oldZ;e.y=oldY;e.yaw=oldYaw;e.yawRate=0;e.supportId=oldSupportId;
+       const alreadyBlocked=solid(e);e.health=Math.max(5,e.health-Math.max(0,Math.abs(e.speed)-8)*.25*(e.upgrades.armor?.5:1)*damageFactor(e));e.speed*=e.autopilot||alreadyBlocked?0:-.25;
+       if(e.autopilot)e.steering=0;
+@@ -1155,6 +1169,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+     if(ferrySecured(world.ferry,a)||ferrySecured(world.ferry,b))continue;
+     if(a.inDome&&b.inDome&&(a.supportId==='dome'||b.supportId==='dome')){
+       if(resolveDomeContact(world,a,b)){
++        diagnostic?.event(substep,'entity',a,b,'dome');
+         collisionIndex.update(i);collisionIndex.update(j);
+         candidates=candidatesFor(i,j);cursor=0;
+       }
+@@ -1162,6 +1177,7 @@ function advance(world:World,inputs:Map<string,Input>,dt:number,onRelocation?: (
+     }
+     const av=verticalBounds(a),bv=verticalBounds(b);if(av.min>=bv.max||bv.min>=av.max)continue;
+     const hit=contact(body(a),body(b));if(!hit)continue;
++    diagnostic?.event(substep,'entity',a,b);
+     const ma=dimensions(a.kind).massKg,mb=dimensions(b.kind).massKg,total=ma+mb;
+     // Separating an arc-supported vehicle moves it off its ribbon. Release it
+     // with its actual tangent velocity so the next tick cannot snap it back.
+diff --git a/worker/index.ts b/worker/index.ts
+index 7592002..5f7cfbc 100644
+--- a/worker/index.ts
++++ b/worker/index.ts
+@@ -1,6 +1,6 @@
+ import { DurableObject } from 'cloudflare:workers';
+ import { RoomClock } from './room-clock';
+-import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input } from '../shared/game';
++import { PROTOCOL_VERSION, ROOM_FULL_CODE, ROOM_NO_SPAWN_CODE, NEUTRAL, NoSpawnError, chooseVehicle, teleportPlayer, buyUpgrade, buyVehicleStyle, subscribeOta, toggleAutopilot, addPlayer, createWorld, dispatchCybercab, retireCybercab, MAX_DISPATCHED_CABS_PER_ROOM, interact, parkingAction, raceAction, enterMinigame, setDestination, setDeliveryDestination, removePlayer, resetPlayer, step, travelDome, type Entity, type Input, type DiagnosticSubstepHooks } from '../shared/game';
+ import { planCybercabDispatch } from '../shared/cybercabs';
+ import { ScheduledInput, type EdgeBaseline, type EdgeOutcome, type InputDiagnostic } from '../shared/tick-input';
+ import { INPUT_DIAGNOSTIC_MODE, isDiagnosticPreview } from './input-diagnostic-guard';
+@@ -78,6 +78,7 @@ export default {
+ 
+ // Physics stays room-local; economy writes are isolated per player.
+ export class GameRoom extends DurableObject<Env> {
++  protected diagnosticSimulationHooks?:DiagnosticSubstepHooks;
+   private world=createWorld(Math.floor(Math.random()*VEHICLE_IDS.length));
+   private sessions=new Map<WebSocket,Session>();
+   private inputs=new Map<string,Input>();
+@@ -736,7 +737,7 @@ export class GameRoom extends DurableObject<Env> {
+     const relocated=new Set<string>();
+     let settlement:ReturnType<GameRoom['rate']>=null;
+     const marketHolds=[...this.sessions.values()].flatMap(session=>session.marketHold?[session.marketHold]:[]);
+-    const heldRelocations=withMarketHolds(this.world,marketHolds,()=>step(this.world,this.inputs,.05,{onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
++    const heldRelocations=withMarketHolds(this.world,marketHolds,()=>step(this.world,this.inputs,.05,{diagnostic:this.diagnosticSimulationHooks,onSubsteps:count=>{this.lastSubsteps=count;},onRelocation:id=>{
+       const player=this.world.players.find(item=>item.id===id);
+       const entity=this.world.entities.find(item=>item.id===player?.entityId);
+       for(const outcome of edgeResults.get(id)?.outcomes??[]){
