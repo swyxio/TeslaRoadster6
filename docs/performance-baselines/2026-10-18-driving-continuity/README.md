@@ -282,6 +282,15 @@ This is not a playable-capacity or full throughput-gate result.
 The [sanitized reports, identity evidence and exact harness](hosted-6238845-39180414284.tar.gz)
 have SHA-256 `45543e6638307f8e644d3411f429037fa9794634f06e002d046cb71342bcf9d3`.
 
+An unrun [input-rejection instrumentation prototype](input-rejection-preview-prototype.tar.gz)
+records the server handling tick and watchdog/revision state, plus client
+snapshot age. It passed 36 focused tests and typechecks. Its workflow is
+disabled and target unpinned; a separate Worker's identity, bindings and live
+metadata need verification before use, and observer cost needs a matched
+study. A watchdog already disarmed before receipt still has an ambiguous cause.
+The existing normal-spawn fixture remains insufficient for sustained movement.
+The archive has SHA-256 `e318b5742eccc260a8723232ccd05bbaa2cd42bee826ddd87c2631e1be2794e9`.
+
 ## Hosted comparison
 
 [Run 39178956817](https://github.com/swyxio/TeslaRoadster6/actions/runs/39178956817)
