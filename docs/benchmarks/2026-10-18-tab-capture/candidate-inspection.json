@@ -1,0 +1,60 @@
+{
+  "artifact": "HOLD",
+  "recordingQuality": "HOLD",
+  "playerFidelity": "UNVERIFIED",
+  "reasons": [
+    "Tab video bytes, dimensions or packet timestamps do not match its capture metadata."
+  ],
+  "warnings": [
+    "segment-001.webm: 162 encoded packet gaps of at least 100 ms; inspect the footage."
+  ],
+  "frameIntervals": {
+    "samples": 9725,
+    "seconds": 199.809,
+    "p50Ms": 16.7,
+    "p95Ms": 33.4,
+    "p99Ms": 116.6,
+    "over33_4MsPercent": 5.131,
+    "over100MsPercent": 1.131
+  },
+  "encodedVideos": [
+    {
+      "file": "segment-001.webm",
+      "status": "available",
+      "bytes": 61208733,
+      "codec": "vp8",
+      "width": 1280,
+      "height": 720,
+      "packetCount": 9413,
+      "packetDurationMs": 199648,
+      "packetNonIncreasing": 1,
+      "packetGapsAtLeast100Ms": 162,
+      "nominalRate": "1000/1",
+      "averageRate": "0/0"
+    }
+  ],
+  "captureTraces": [
+    {
+      "file": "segment-001.capture.json",
+      "status": "available",
+      "mode": "tab",
+      "bytes": 61208733,
+      "width": 1280,
+      "height": 720,
+      "spanMs": 200080.5
+    }
+  ],
+  "audioFiles": [],
+  "durationChecks": [
+    {
+      "file": "segment-001.webm",
+      "status": "available",
+      "videoPacketDurationMs": 199648,
+      "traceSpanMs": 200080.5,
+      "toleranceMs": 4001.61
+    }
+  ],
+  "limitations": [
+    "Packet inspection does not decode the video or verify playback. Capture timestamps and video packets do not establish player-perceived smoothness. Host jitter is not a game performance regression."
+  ]
+}

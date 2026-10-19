@@ -1,0 +1,71 @@
+{
+  "comparison": "available",
+  "recordingQuality": "UNVERIFIED",
+  "playerFidelity": "UNVERIFIED",
+  "reasons": [],
+  "warnings": [],
+  "withoutVideo": {
+    "samples": 3199,
+    "seconds": 200.525,
+    "p50Ms": 66.6,
+    "p95Ms": 116.7,
+    "p99Ms": 133.4,
+    "over33_4MsPercent": 64.208,
+    "over100MsPercent": 16.318
+  },
+  "withVideo": {
+    "samples": 9631,
+    "seconds": 200.125,
+    "p50Ms": 16.7,
+    "p95Ms": 33.4,
+    "p99Ms": 100,
+    "over33_4MsPercent": 5.638,
+    "over100MsPercent": 0.893
+  },
+  "capture": {
+    "requestedFps": 60,
+    "audio": false,
+    "segments": [
+      {
+        "video": "segment-001.webm",
+        "traceFile": "segment-001.capture.json",
+        "mode": "tab",
+        "finalized": true,
+        "status": "available"
+      }
+    ]
+  },
+  "hostLoadAverage": {
+    "withoutVideo": {
+      "start": [
+        24.10498046875,
+        18.10693359375,
+        10.693359375
+      ],
+      "finish": [
+        14.83935546875,
+        16.31298828125,
+        11.52587890625
+      ]
+    },
+    "withVideo": {
+      "start": [
+        14.763671875,
+        14.87646484375,
+        12.15478515625
+      ],
+      "finish": [
+        10.3525390625,
+        13.24658203125,
+        12.10595703125
+      ]
+    }
+  },
+  "limitations": [
+    "The revision is an operator-provided label; verify it against the served build. The same input script does not by itself prove identical paths or workload.",
+    "Animation intervals are browser callbacks. Screencast frame timestamps and tab recording start/stop times are different capture observations; neither measures physical display presentation or GPU completion.",
+    "Capture adds overhead. One on/off pair is descriptive and cannot isolate a cause or establish a performance budget.",
+    "When audio is enabled, the recorded run includes audio capture overhead, and its separate audio files are not proof of audible synchronization.",
+    "Video packets and timing do not prove unique rendered images, correct playback, player-perceived smoothness or visual fidelity; inspect the footage and compare against real gameplay."
+  ]
+}
