@@ -70,6 +70,9 @@ test('recording comparison holds missing, mixed or incomplete evidence', () => {
   assert.equal(compareRecording(run(true), video).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, scenarioSha256: 'different' }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, scenarioSha256: 'different' }).recordingQuality, 'HOLD');
+  const tracedControl = { ...control, runner: { ...control.runner, inputEventsSourceSha256: hash } };
+  const changedTrace = { ...video, runner: { ...video.runner, inputEventsSourceSha256: 'c'.repeat(64) } };
+  assert.equal(compareRecording(tracedControl, changedTrace).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, browserVersion: 'other' } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, runner: { ...video.runner, audioSourceSha256: 'c'.repeat(64) } }).comparison, 'HOLD');
   assert.equal(compareRecording(control, { ...video, capture: { ...video.capture, audio: true } }).comparison, 'HOLD');

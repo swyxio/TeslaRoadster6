@@ -9,6 +9,8 @@ import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import os from 'node:os';
 import { abandonControlSession, captureError as asError, CaptureSession, finalizeTabCapture, publishScreencast, releaseHeldControls, ScreencastCapture, TabChunkSink, withDeadline, writeCaptureScreenshot } from './playtest-capture';
+// @ts-expect-error The standalone diagnostic helper has no TypeScript declarations.
+import { controlEvent } from './playtest-input-events.mjs';
 
 // Recordings may contain chat and other private on-screen data.
 process.umask(0o077);
@@ -48,7 +50,7 @@ const scenarioBytes = values.scenario ? await readFile(resolve(values.scenario))
 const scenario = scenarioBytes ? JSON.parse(scenarioBytes.toString()) as Scenario : { steps: [] };
 if (!Array.isArray(scenario.steps)) throw new Error('Scenario steps must be an array.');
 const sourceHash = async (file: string) => createHash('sha256').update(await readFile(new URL(file, import.meta.url))).digest('hex');
-const [recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js'), sourceHash('./playtest-tab-capture.js')]);
+const [recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256, inputEventsSourceSha256] = await Promise.all([sourceHash('./playtest-record.ts'), sourceHash('./playtest-capture.ts'), sourceHash('./playtest-audio-capture.js'), sourceHash('./playtest-tab-capture.js'), sourceHash('./playtest-input-events.mjs')]);
 const view = scenario.viewport ?? { width: Number(values.width), height: Number(values.height), isMobile: values.mobile, hasTouch: values.mobile };
 if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width < 200 || view.width > 3840 || view.height < 200 || view.height > 2160 || (view.deviceScaleFactor !== undefined && (!(view.deviceScaleFactor > 0) || view.deviceScaleFactor > 4))) throw new Error('Invalid viewport.');
 const out = resolve(values.out ?? join('playtest-runs', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`));
@@ -62,7 +64,7 @@ const manifest: Record<string, unknown> = {
   format: 1, id, startedAt: new Date().toISOString(), status: 'running',
   target: { origin: target.origin, pathname: target.pathname, perf: target.searchParams.has('perf'), refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
-  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : values.headed ? 'chromium-headed' : 'chromium-headless-shell', gpuMode: values.gpu, headed: values.headed },
+  runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, logicalCpuCount: os.cpus().length, hostLoadAverageAtStart: os.platform() === 'win32' ? null : os.loadavg(), hostLoadAverageAtFinish: null, recorderSourceSha256, captureSourceSha256, audioSourceSha256, tabCaptureSourceSha256, inputEventsSourceSha256, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser === 'chrome' ? 'chrome' : values['video-source'] === 'tab' ? 'chromium' : values.headed ? 'chromium-headed' : 'chromium-headless-shell', gpuMode: values.gpu, headed: values.headed },
   viewport: { ...view, deviceScaleFactor: view.deviceScaleFactor ?? 1 }, capture: { enabled: !values['no-video'], source: values['video-source'], requestedFps: fps, audio: values.audio, segments: [] as Record<string, unknown>[], note: values['video-source'] === 'tab' ? 'Tab media start/stop timestamps are not captured-frame, animation-frame, GPU-completion or physical-display timing.' : 'Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead.' }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
@@ -117,17 +119,18 @@ function observeRoom(socket: PlaywrightWebSocket) {
   socket.on('framesent', ({ payload }) => {
     if (socket !== activeRoom || typeof payload !== 'string' || inputEvents.length >= 5000) return;
     try {
-      const message = JSON.parse(payload);
-      if (message.type === 'input' && (message.input?.jump > 0 || message.input?.hover === true))
-        inputEvents.push({ atMs: Math.round(performance.now() - started), type: 'sent', seq: message.seq, targetTick: message.targetTick, jump: message.input.jump, hover: message.input.hover });
+      const event = controlEvent('sent', JSON.parse(payload), Math.round(performance.now() - started));
+      if (event) inputEvents.push(event);
     } catch { /* Only the nonsecret control fields above are retained. */ }
   });
   socket.on('framereceived', ({ payload }) => {
     if (socket !== activeRoom || typeof payload !== 'string') return;
     try {
       const message = JSON.parse(payload);
-      if (message.type === 'inputEdge' && message.kind === 'jump' && inputEvents.length < 5000)
-        inputEvents.push({ atMs: Math.round(performance.now() - started), type: 'edge', id: message.id, status: message.status, targetTick: message.targetTick });
+      if (inputEvents.length < 5000) {
+        const event = controlEvent('received', message, Math.round(performance.now() - started));
+        if (event) inputEvents.push(event);
+      }
       if (message.type === 'welcome' && typeof message.id === 'string') { playerId = message.id; return; }
       if (message.type !== 'state' || !playerId || !Array.isArray(message.world?.players) || !Array.isArray(message.world?.entities)) return;
       const player = message.world.players.find((candidate: { id?: unknown }) => candidate.id === playerId);
