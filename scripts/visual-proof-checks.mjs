@@ -18,3 +18,23 @@ export function inspectGroundedBoost(manifest, poses, touch) {
   return { status: grounded.length >= 3 && distinctTicks >= 3 && durationMs >= 250 ? 'observed' : 'not_observed',
     samples: grounded.length, distinctTicks, durationMs };
 }
+
+// A later successful retry must not hide a missed first jump.
+export function inspectSingleJump(manifest, inputEvents, touch) {
+  const actions = manifest?.events;
+  if (!Array.isArray(actions) || !Array.isArray(inputEvents))
+    return { status: 'unavailable', reason: 'Missing actions or input-event trace' };
+  const action = touch ? actions.filter(event => event.type === 'touchDown')[2]
+    : actions.find(event => event.type === 'jumpUntilAirborne');
+  if (!action || action.status !== 'ok' || !Number.isFinite(action.commandStartedAtMs))
+    return { status: 'unavailable', reason: 'Missing successful jump action' };
+  const events = inputEvents.filter(event => Number.isFinite(event.atMs) && event.atMs >= action.commandStartedAtMs);
+  const sent = events.filter(event => event.type === 'sent' && Number.isSafeInteger(event.jump) && event.jump > 0);
+  const outcomes = events.filter(event => event.type === 'edge' && Number.isSafeInteger(event.id) && event.id > 0);
+  const ids = [...new Set([...sent.map(event => event.jump), ...outcomes.map(event => event.id)])];
+  if (!ids.length || !sent.length || !outcomes.length)
+    return { status: 'unavailable', reason: 'Missing sent jump or authoritative acknowledgement', ids, outcomes };
+  const failed = ids.length !== 1 || outcomes.some(event => event.status === 'expired' || event.status === 'superseded');
+  const processed = outcomes.some(event => event.id === ids[0] && event.status === 'processed');
+  return { status: failed ? 'not_observed' : processed ? 'observed' : 'unavailable', ids, outcomes };
+}
