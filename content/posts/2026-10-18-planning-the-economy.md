@@ -8,7 +8,7 @@ A playtest surfaced an early windfall: a minute of deliveries and stacked awards
 
 The chart follows five opening paths through the delivery and award calculations. With an assumed 20-second pickup and 55-second drop-off, the driver completes three deliveries and earns $2,796 in five minutes. Applying Ember red and subscribing to OTA at the start leaves $4,246 after five minutes, including three $100 OTA charges. A faster 10-second pickup and 30-second drop-off earns $7,189 in five minutes; route travel and driving skill change these results.
 
-In a separate manual run on the previous build, five deliveries earned $6,160 in five active minutes. The third fare paid $573 alongside $750 in checkpoint and achievement awards. The revised balance keeps that checkpoint and the achievements, reduces the first, third and fifth delivery awards, and makes the fast pickup and delivery bonuses smaller. Existing savings and earned achievements stay in place.
+In a manual run on the previous build, five deliveries earned $6,160 in five active minutes. The third fare paid $573 alongside $750 in checkpoint and achievement awards. The revised balance keeps that checkpoint and the achievements, reduces the first, third and fifth delivery awards, and makes the fast pickup and delivery bonuses smaller. On a different route after tuning, three deliveries earned $2,805 in 5:02 active; building collisions slowed two trips and a police fine cost $68. Existing savings and earned achievements stay in place.
 
 <figure>
 <img src="/blog/economy/opening-wallet.svg" alt="Five modeled opening paths compare the cash in the wallet each minute for five minutes, including a path that buys paint and subscribes to OTA." loading="lazy">

@@ -22,7 +22,9 @@ Gross excludes the starting $2,500 and includes one-off awards. Badge and tier c
 
 On 2026-10-18, a fresh guest drove the production-matching v0.0.32 / protocol 46 build in local Chrome, with no purchases, event multiplier or self-drive. At 5:01 active, five deliveries had raised cash from $2,500 to $8,660: $6,160 gross. The first fare was $689 with $600 in delivery awards; the third was $573 with a $350 checkpoint and $400 Neighborhood Regular award; the fifth was $819 with a $600 Five on the Road award. The run included building collisions and use of the in-game unstuck control; it took more than five wall-clock minutes and is one route, not a typical-player benchmark.
 
-The subsequent tuning reduces the maximum pickup bonus from 40% to 25% and the early-delivery bonus from 75% to 35%. First Delivery now pays $350, Neighborhood Regular $200, and Five on the Road $400. The floor and checkpoint stay unchanged. The table above reruns the same assumed-time scenarios under the updated rules; it is not a second physical replay of the manual route.
+The subsequent tuning reduces the maximum pickup bonus from 40% to 25% and the early-delivery bonus from 75% to 35%. First Delivery now pays $350, Neighborhood Regular $200, and Five on the Road $400. The floor and checkpoint stay unchanged. The table above reruns the same assumed-time scenarios under the updated rules.
+
+In a second manual run on v0.0.35 / protocol 48, a fresh guest earned $2,805 across three deliveries in 5:02 active and paid one $68 police fine, ending with $5,237. The first and third trips ran late after building collisions; the second was on time. The driver bought nothing and used no self-drive. A pause and reconnect reset the HUD timer but preserved the wallet and assignment; the total combines 1:02 before reconnect and 4:00 afterward. The two manual runs followed different routes.
 
 In a separate fresh v0.0.33 game, the first manually completed delivery raised cash from $2,805 to $3,899. A local server reload interrupted the celebration, but reconnecting showed the next order and one completed delivery.
 
