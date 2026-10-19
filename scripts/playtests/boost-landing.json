@@ -1,0 +1,29 @@
+{
+  "freshGuest": true,
+  "steps": [
+    { "type": "waitFor", "selector": "#connection:has-text(\"LIVE\")", "timeoutMs": 60000 },
+    { "type": "waitForPoseRevision", "value": 1, "timeoutMs": 30000 },
+    { "type": "waitForRoomReady", "timeoutMs": 30000 },
+    { "type": "recordStart" },
+    { "type": "frameStart" },
+    { "type": "beginRoom" },
+    { "type": "waitForTicks", "count": 20 },
+    { "type": "keyDown", "key": "KeyW" },
+    { "type": "waitForTicks", "count": 20 },
+    { "type": "keyDown", "key": "Shift" },
+    { "type": "waitForTicks", "count": 22 },
+    { "type": "screenshot", "name": "boost" },
+    { "type": "waitForTicks", "count": 8 },
+    { "type": "keyUp", "key": "Shift" },
+    { "type": "keyUp", "key": "KeyW" },
+    { "type": "waitForGround" },
+    { "type": "jumpUntilAirborne" },
+    { "type": "waitForTicks", "count": 4 },
+    { "type": "screenshot", "name": "jump" },
+    { "type": "waitForGround" },
+    { "type": "screenshot", "name": "landing" },
+    { "type": "waitForTicks", "count": 15 },
+    { "type": "frameStop" },
+    { "type": "recordStop" }
+  ]
+}

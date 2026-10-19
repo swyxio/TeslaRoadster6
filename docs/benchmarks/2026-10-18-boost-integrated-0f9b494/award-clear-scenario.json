@@ -1,0 +1,125 @@
+{
+  "freshGuest": true,
+  "steps": [
+    {
+      "type": "waitFor",
+      "selector": "#connection:has-text(\"LIVE\")",
+      "timeoutMs": 60000
+    },
+    {
+      "type": "waitForPoseRevision",
+      "value": 1,
+      "timeoutMs": 30000
+    },
+    {
+      "type": "waitForRoomReady",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "recordStart"
+    },
+    {
+      "type": "frameStart"
+    },
+    {
+      "type": "beginRoom"
+    },
+    {
+      "type": "waitForTicks",
+      "count": 20
+    },
+    {
+      "type": "touchDown",
+      "selector": "#drive-control",
+      "id": 0
+    },
+    {
+      "type": "waitForTicks",
+      "count": 20
+    },
+    {
+      "type": "touchDown",
+      "selector": "[data-control=\"ShiftLeft\"]",
+      "id": 1
+    },
+    {
+      "type": "waitForTicks",
+      "count": 22
+    },
+    {
+      "type": "screenshot",
+      "name": "boost"
+    },
+    {
+      "type": "waitForTicks",
+      "count": 8
+    },
+    {
+      "type": "waitFor",
+      "selector": "#reward.celebrate",
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "type": "touchUp",
+      "id": 1
+    },
+    {
+      "type": "touchUp",
+      "id": 0
+    },
+    {
+      "type": "waitFor",
+      "selector": "#reward.celebrate",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "type": "waitFor",
+      "selector": "#achievement-toast",
+      "state": "hidden",
+      "timeoutMs": 15000
+    },
+    {
+      "type": "waitForGround"
+    },
+    {
+      "type": "touchDown",
+      "selector": "#jump-control",
+      "id": 2
+    },
+    {
+      "type": "waitForTicks",
+      "count": 4
+    },
+    {
+      "type": "touchUp",
+      "id": 2
+    },
+    {
+      "type": "waitForTicks",
+      "count": 4
+    },
+    {
+      "type": "screenshot",
+      "name": "jump"
+    },
+    {
+      "type": "waitForGround"
+    },
+    {
+      "type": "screenshot",
+      "name": "landing"
+    },
+    {
+      "type": "waitForTicks",
+      "count": 15
+    },
+    {
+      "type": "frameStop"
+    },
+    {
+      "type": "recordStop"
+    }
+  ]
+}
