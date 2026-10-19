@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addPlayer, createWorld, enterMinigame, makeEntity, NEUTRAL, parkingAction, setDeliveryDestination, setDestination, step, travelDome, type World } from '../shared/game';
 import { updateFerry } from '../shared/ferry';
-import { HIGHWAYS, ROADS, terrainHeight } from '../shared/map';
+import { BUILDINGS, HIGHWAYS, ROADS, terrainHeight } from '../shared/map';
+import { landmarkBlocksPose } from '../shared/landmark-collision';
 import { PARKING_LOTS } from '../shared/parking-lots';
 import { newPolice, updatePolice } from '../shared/police';
 import { hasRockets } from '../shared/upgrades';
@@ -394,6 +395,31 @@ test('off-road join routes around a block before reaching the delivery',()=>{
   assert.equal(car.navigation?.status,'arrived');
   assert.equal(car.health,100);
   assert.ok(Math.hypot(car.x+180,car.z-120)<9);
+});
+
+test('off-road navigation routes around the Starbase channel walls',()=>{
+  const pad=BUILDINGS.find(building=>building.style==='spaceport'&&building.x===1960)!;
+  for(const startX of [1960,1980]){ // Inside the channel and outside its east wall.
+    const {world,player,car}=drivingWorld();
+    Object.assign(car,{kind:'roadster',x:startX,z:6232,y:terrainHeight(startX,6232),yaw:Math.PI/2,speed:0});
+    player.delivery.level=5;player.delivery.cash=LEVELS[5].cash+2_500;
+    assert.equal(landmarkBlocksPose(pad,car),false,'the starting pose is clear');
+    assert.equal(setDestination(world,'driver',{x:1913,z:6200}),true,'the open end provides a route');
+    let previous={x:car.x,z:car.z};
+    for(const next of car.navigation!.path){
+      const count=Math.max(1,Math.ceil(Math.hypot(next.x-previous.x,next.z-previous.z)*2));
+      const yaw=Math.atan2(previous.x-next.x,previous.z-next.z);
+      for(let i=1;i<=count;i++){
+        const t=i/count,x=previous.x+(next.x-previous.x)*t,z=previous.z+(next.z-previous.z)*t;
+        assert.equal(landmarkBlocksPose(pad,{...car,x,z,y:terrainHeight(x,z),yaw}),false,
+          `planned segment crosses the channel at ${x.toFixed(1)}, ${z.toFixed(1)}`);
+      }
+      previous=next;
+    }
+    simulate(world,()=>!car.autopilot,300);
+    assert.equal(car.navigation?.status,'arrived',`starting at x=${startX}`);
+    assert.equal(car.health,100,'the driven route avoids collisions');
+  }
 });
 
 test('an awkward off-road approach resumes normal road speed after passing the join',()=>{
