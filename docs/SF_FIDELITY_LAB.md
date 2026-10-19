@@ -82,11 +82,11 @@ specific license and attribution for every acquired model, texture and dataset.
 ## What the first experiment tells us
 
 On one Apple M5 Pro, local headless Chrome at 1280 × 720 and DPR 1, after a
-short warmup the existing view and the lab each showed 16.8 ms p95 frame
-interval at spawn; after the same 3.5-second W input they showed 16.8 ms and
-16.7 ms respectively. Draw calls were 286/306 at spawn and 149/166 after the
-drive (current/lab). These are short, sequential, single-driver browser
-observations on an active host; paths differed slightly. Frame callbacks and CPU
+short warmup the existing view and the lab showed 16.8 / 16.7 ms p95 frame
+interval at spawn; after the same 3.5-second W input both showed 16.8 ms.
+Draw calls were 286/306 at spawn and 149/173 after the drive (current/lab). These are short, sequential, single-driver browser
+observations on an active host; driving speeds and paths differed. An earlier
+run before the distant-car fix is retained separately in the same folder. Frame callbacks and CPU
 submission are not GPU completion, physical display or input-continuity proof.
 The screenshot, scenario, manifest and authoritative trajectories are in
 [`benchmarks/2026-10-19-sf-fidelity-lab`](benchmarks/2026-10-19-sf-fidelity-lab/).

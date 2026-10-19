@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "id": "05d669e3-45b0-4f48-b420-435d9412825c",
+  "startedAt": "2026-10-19T18:13:59.131Z",
+  "status": "failed",
+  "target": {
+    "origin": "http://127.0.0.1:18996",
+    "pathname": "/",
+    "perf": false,
+    "refProvidedByOperator": "fidelity-demo",
+    "httpStatus": 200
+  },
+  "scenarioSha256": "c67b533dbc4ccce138aa1c60e1d017b8c04cd7e263dacc89b2d9860f1f2eedba",
+  "runner": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "release": "25.4.0",
+    "cpu": "Apple M5 Pro",
+    "logicalCpuCount": 18,
+    "hostLoadAverageAtStart": [
+      4.15478515625,
+      6.1357421875,
+      5.568359375
+    ],
+    "hostLoadAverageAtFinish": [
+      3.7587890625,
+      5.82421875,
+      5.47314453125
+    ],
+    "recorderSourceSha256": "3fb2af8f6afc107289ec72b22f7fb5e7451bb73deaaba8d3cbfebbab8fda107a",
+    "captureSourceSha256": "a7cb89d075b6a09ee38b8dc7f9dffb845d3e5f70979e09ae0d00fba4d0da0111",
+    "audioSourceSha256": "6da698161eeaef5975603f660a28763a2810cde01b312502420fb9f9322040ee",
+    "tabCaptureSourceSha256": "f67eaa450f5e1865685431e9345976d968b83baf7064a8bb3bbeb0145fd3317e",
+    "inputEventsSourceSha256": "2707dce2b3d6b05f2201ba6868b83cd98aaa2389905dabc297ee95c5cc17dc98",
+    "nodeVersion": "v22.22.2",
+    "playwrightVersion": "1.64.1",
+    "browserChannel": "chrome",
+    "gpuMode": "default",
+    "headed": false,
+    "browserVersion": "155.0.8059.84",
+    "webgl": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+      "vendor": "Google Inc. (Apple)"
+    }
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "capture": {
+    "enabled": false,
+    "source": "screencast",
+    "requestedFps": 30,
+    "audio": false,
+    "segments": [],
+    "note": "Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead."
+  },
+  "events": [
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 842,
+      "commandDurationMs": 95,
+      "status": "ok"
+    },
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 937,
+      "commandDurationMs": 30002,
+      "status": "failed"
+    }
+  ],
+  "recordings": [],
+  "screenshots": [],
+  "trajectory": {
+    "file": "trajectory.json",
+    "status": "available",
+    "samples": 283,
+    "source": "received authoritative room snapshots; not displayed-frame positions"
+  },
+  "inputEvents": {
+    "file": "input-events.json",
+    "status": "available",
+    "samples": 603
+  },
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "finishedAt": "2026-10-19T18:14:30.225Z",
+  "durationMs": 31094
+}

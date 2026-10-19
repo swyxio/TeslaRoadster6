@@ -1,8 +1,9 @@
 import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUILDINGS, ROADS } from '../shared/map';
 import { VEHICLES } from '../shared/vehicles';
 import { loft } from './coachwork';
-import { box } from './vehicles';
+import { box, setVehicleDistantOverride } from './vehicles';
 
 // Opt-in visual-only experiment. Facades sit on existing SF building envelopes;
 // authoritative collision, roofs, streets and the world clock are unchanged.
@@ -98,6 +99,7 @@ export async function buildSfFidelity(scene:T.Scene) {
 }
 
 let roadsterTemplate:T.Group|undefined;
+let distantRoadsterTemplate:T.Mesh|undefined;
 /** Replace only the stock Roadster's presentation; preserve its named wheels,
  * seat, rocket hardware and effects. Dimensions and driving remain shared. */
 export function applyRoadster2026(root:T.Group) {
@@ -119,6 +121,9 @@ export function applyRoadster2026(root:T.Group) {
     // Continuous bronze-tinted canopy and angular white roof rails.
     const canopy=loft([[-l*.23,w*.375,.68,.70],[-l*.09,w*.34,.70,h*.97],[l*.12,w*.33,.72,h],[l*.32,w*.375,.73,.76]],.24,24);
     group.add(new T.Mesh(canopy,bronze));
+    // Decorative lift-fan covers remain visible when the car rolls or flies.
+    const fanGeometry=new T.CylinderGeometry(.32,.32,.04,16),fanMaterial=new T.MeshStandardMaterial({color:0x20282a,metalness:.6,roughness:.35});
+    for(const z of [-l*.23,l*.23]){const fan=new T.Mesh(fanGeometry,fanMaterial);fan.name='2026-lift-fan';fan.position.set(0,.14,z);group.add(fan);}
     for(const side of [-1,1]){
       const rail=box(group,side*w*.33,h*.92,l*.02,.07,.05,l*.54,0xeae9e4);rail.rotation.x=side===0?0:.04;
       const sill=box(group,side*w*.49,.30,0,.04,.13,l*.63,0x1a2428);
@@ -132,9 +137,30 @@ export function applyRoadster2026(root:T.Group) {
     // The front lamps are normally hidden; black slots mark their position.
     for(const side of [-1,1])box(group,side*w*.28,.46,-l*.49,w*.23,.022,.05,0x283034);
     roadsterTemplate=group;
+
+    // Distant Roadsters use a small, shared one-draw mesh with the same pearl
+    // body and bronze canopy, instead of switching back to the stock red car.
+    const parts:T.BufferGeometry[]=[];
+    const addPart=(geometry:T.BufferGeometry,color:number)=>{
+      const part=geometry.index?geometry.toNonIndexed():geometry;
+      if(part!==geometry)geometry.dispose();
+      part.deleteAttribute('uv');
+      const shade=new T.Color(color),values=new Float32Array(part.getAttribute('position').count*3);
+      for(let i=0;i<values.length;i+=3){values[i]=shade.r;values[i+1]=shade.g;values[i+2]=shade.b;}
+      part.setAttribute('color',new T.BufferAttribute(values,3));parts.push(part);
+    };
+    addPart(loft(sections,.22,8),0xf0efea);
+    addPart(loft([[-l*.23,w*.375,.68,.70],[-l*.09,w*.34,.70,h*.97],[l*.12,w*.33,.72,h],[l*.32,w*.375,.73,.76]],.24,8),0x62533e);
+    for(const side of [-1,1])for(const end of [-1,1]){
+      const wheel=new T.CylinderGeometry(.35,.35,.2,8);wheel.rotateZ(Math.PI/2);wheel.translate(side*w*.45,.35,end*wheelbase/2);addPart(wheel,0x171d20);
+    }
+    const distantGeometry=mergeGeometries(parts);parts.forEach(part=>part.dispose());
+    if(!distantGeometry)throw new Error('Could not create the SF lab Roadster LOD');
+    distantRoadsterTemplate=new T.Mesh(distantGeometry,new T.MeshStandardMaterial({vertexColors:true,metalness:.25,roughness:.5}));
   }
   const model=roadsterTemplate.clone(true);
   const shell=model.getObjectByName('2026-shell') as T.Mesh;
   shell.userData.originalVehiclePaint=shell.material;
+  setVehicleDistantOverride(root,distantRoadsterTemplate!);
   root.add(model);root.userData.sfFidelityRoadster=true;
 }
