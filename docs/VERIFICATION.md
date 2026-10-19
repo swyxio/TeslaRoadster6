@@ -23,6 +23,15 @@
 - Review found that the landscape adjustment also moved the mission panel over the cockpit dashboard. Candidate `34158a0` limits that positioning to the exterior view. In a local 568 × 320 Chrome viewport, both the cockpit dashboard and expanded mission details were visible in separate rows; the exterior route remained visible. The 390 × 844 portrait view and the build also passed, with no console errors in the checked tab.
 - The preceding production merge `5389017` was built by Cloudflare as `cb23a3ff-625e-46ae-b476-f48698c1c6dd`; live health reported protocol 50 and the 0.0.39 JavaScript/CSS hashes were unchanged. That readback does not establish capacity.
 
+## Rocket-pad scan · production · 2026-10-18 Pacific
+
+- Merge `8363cfa` passed [native Workers Build `7d2672c8`](https://dash.cloudflare.com/2d017c943ff16e4c52783635ef05e535/workers/services/view/bay-drive/production/builds/7d2672c8-faf2-44a9-8a86-b370425418c7). Both production hosts reported protocol 49 and capacity setting 64; live JavaScript and CSS hashes matched the tested build, and the 0.0.38 changelog was served. A disposable desktop Chrome sandbox joined and accelerated from 0 to 189 km/h without captured console errors; the tab was closed. No physical device, mobile viewport or sustained capacity test was performed in this smoke.
+- The [exact-head hosted comparison](https://github.com/swyxio/TeslaRoadster6/actions/runs/39192016304) aligned all five route legs. Callback p95 was 116.7 / 116.7 ms and one-room simulation/wall was 0.930 / 0.928. On the three-vCPU host, one-minute load changed 18.118 → 12.971 / 12.56 → 4.231. The performance verdict is **HOLD**; the pair does not establish causality, GPU completion, driving continuity or capacity.
+
+## Driving continuity and room timing · investigation · 2026-10-18 Pacific
+
+- The [preserved investigation](performance-baselines/2026-10-18-driving-continuity/) includes unmatched runtime experiments, raw traces and failing ferry and clock cases. The full driving-continuity and 64-player throughput gates remain **HOLD**; these experiments were not deployed as a fix. The user skipped physical-device testing for now.
+
 ## Rocket Dome rewards · integrated candidate · 2026-10-18 Pacific
 
 - The prospective combination with rocket-pad candidate `4236c30` assigns release 0.0.39 and retains protocol v50. All 1,090 tests and the build/typechecks passed; the existing large-chunk warning remains. The pad candidate is awaiting its own release.
