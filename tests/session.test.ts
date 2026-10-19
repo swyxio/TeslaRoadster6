@@ -73,7 +73,7 @@ test('owner wallet accepts valid tier progress and rejects malformed progress',(
 });
 
 test('an incompatible protocol closes before identity or driving',()=>{
-  assert.equal(PROTOCOL_VERSION,55);
+  assert.equal(PROTOCOL_VERSION,56);
   const session=new Session();session.join('bay','Alex');const socket=Socket.last;
   socket.message({type:'welcome',id:'p',version:52,capacity:64});
   assert.equal(socket.readyState,3);
