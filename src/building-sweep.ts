@@ -1,6 +1,7 @@
 import type { Entity } from '../shared/game';
 import type { Building } from '../shared/map';
-import { newLandmarkPrimitives } from '../shared/new-landmark-surfaces';
+import { buildingBoundsOverlap } from '../shared/building-bounds';
+import { primitiveExtent } from '../shared/new-landmark-surfaces';
 import { contact, dimensions } from '../shared/physics';
 
 type Pose=Pick<Entity,'kind'|'x'|'y'|'z'|'yaw'|'pitch'|'roll'|'supportId'>;
@@ -10,18 +11,19 @@ type Pose=Pick<Entity,'kind'|'x'|'y'|'z'|'yaw'|'pitch'|'roll'|'supportId'>;
 // conservative circle because pitch, roll and support can change the envelope.
 export function buildingSweepBlocked(a:Pose,b:Pose,building:Building,landmarkPart=false):boolean {
   const spec=dimensions(a.kind),halfDiagonal=Math.hypot(spec.width,spec.length)/2,radius=halfDiagonal+.5;
+  if(building.parts&&!buildingBoundsOverlap(building,Math.min(a.x,b.x)-radius,Math.max(a.x,b.x)+radius,
+    Math.min(a.z,b.z)-radius,Math.max(a.z,b.z)+radius))return false;
   const supported=a.supportId==='ground'&&b.supportId==='ground'||
-    (!!building.landmarkId||landmarkPart)&&a.supportId===b.supportId&&a.supportId?.startsWith('roof:')===true;
+    (!!building.parts||landmarkPart)&&a.supportId===b.supportId&&a.supportId?.startsWith('roof:')===true;
   const upright=supported&&Number.isFinite(a.yaw)&&Number.isFinite(b.yaw)&&
     a.pitch===0&&a.roll===0&&b.pitch===0&&b.roll===0;
-  if(building.landmarkId){
+  if(building.parts){
     const base=building.landmarkBase??0,verticalMargin=upright?0:radius;
-    for(const part of newLandmarkPrimitives(building.landmarkId)){
-      const bottom=base+(part.shape==='dome'?part.y:part.y-part.h/2);
-      const top=base+(part.shape==='dome'?part.y+part.h:part.y+part.h/2);
+    for(const part of building.parts){
+      const extent=primitiveExtent(part),bottom=base+extent.bottom,top=base+extent.top;
       if(Math.min(a.y,b.y)-verticalMargin>=top-.001||Math.max(a.y,b.y)+spec.height+verticalMargin<=bottom+.001)continue;
-      const scale=part.shape==='roof'?Math.SQRT1_2:1;
-      if(buildingSweepBlocked(a,b,{...building,landmarkId:undefined,x:building.x+part.x,z:building.z+part.z,w:part.w*scale,d:part.d*scale},true))return true;
+      const c=Math.abs(Math.cos(extent.yaw)),s=Math.abs(Math.sin(extent.yaw));
+      if(buildingSweepBlocked(a,b,{...building,parts:undefined,x:building.x+part.x,z:building.z+part.z,w:extent.w*c+extent.d*s,d:extent.w*s+extent.d*c},true))return true;
     }
     return false;
   }
