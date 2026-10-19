@@ -1,5 +1,10 @@
 # Verification · 2026-10-18 Pacific
 
+## Vehicle contact shadows · draft candidate · 2026-10-18 Pacific
+
+- A bounded, shared instance batch adds soft contact patches beneath nearby vehicles only on flat, confirmed ground or bridge deck. Unsupported, airborne, ferry, Dome, roof, ramp and hill cases are excluded; simulation and controls are unchanged.
+- This source candidate has not yet been built, run or visually inspected. Its visual benefit, motion behavior, CPU/GPU cost and desktop/mobile performance are unmeasured; do not merge it until the required same-route comparison and actual game checks are complete.
+
 ## Bay horizon · integrated candidate · 2026-10-18 Pacific
 
 - Candidate `9b7982f1` incorporates released main `f922e213` and assigns 0.0.42 / protocol v52. All 1,138 tests and the build/typechecks passed locally; the existing Vite large-chunk warning remains. The horizon is decorative: it does not change authoritative terrain, collisions or simulation.

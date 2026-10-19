@@ -40,11 +40,13 @@ import { RESEARCH_SITES, researchArrival } from '../shared/research';
 import { createPropertyScene } from './property-scene';
 import { marketPaintColor } from '../shared/market-catalog';
 import { createHorizon } from './horizon';
+import { ContactShadows } from './contact-shadows';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
   private scene = new T.Scene();
   private horizon = createHorizon(this.scene);
+  private contactShadows = new ContactShadows(this.scene);
   private sky = new T.Color();
   private nightSky = new T.Color(0x334b62);
   private daySky = new T.Color(0xa8cbd0);
@@ -486,6 +488,7 @@ export class GameScene {
     }
     for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;
     this.horizon.update(this.camera,daylight);
+    this.contactShadows.update(world.entities,this.entities,this.camera.position,controlled);
     this.renderer.render(this.scene,this.camera);
   }
   start(frame:(dt:number)=>void){
