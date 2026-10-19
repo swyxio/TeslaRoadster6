@@ -48,6 +48,7 @@ d6d434122d745a4cbdff2d1491535cd19636d5ef3ce8be9b4a0ca2c466eb5007  ./visual-pair/
 8cf850e0b4060f28198a552b70a232ab2abed92943ebf6d99a9cddff8d7d808f  ./visual-pair/A-long/at64.png
 58994b231e53fa428adadbcc38e5f6386d05e65411c4e7bb42fd9ecda9734664  ./visual-pair/A-long/before.png
 f66fa28bb508438318d547e9e232e889ebbfc8f04c8df280032d951b8565c603  ./visual-pair/A-long/manifest.json
+e1af08a1724bdf44fb0181503c36b772b26ca1e835b8d6146c5e8b76e2857401  ./visual-pair/A-long/segment-001.capture.json.gz
 463c1f49a9f5460d553db675987dc138618b1f1172dd68b6a3d161c368bef676  ./visual-pair/A-long/segment-001.webm
 fb20748c4a99595f05325e978be14277ca1cc1977a4f441f2d059c98bad32ada  ./visual-pair/A-long/trajectory.json
 5e950192b9023089ff99d0f13895fa152b0381a13be61954adc56582315926ff  ./visual-pair/A-portrait/after.png
@@ -62,6 +63,7 @@ d13346e086d1946e9a7c5aa1ced607faf20688222e0ba69b8736affb416d2f9d  ./visual-pair/
 d5e58d4b3c8bf591eec6f0fd618f77ea89be354500881a80e69d09a4f7217b2d  ./visual-pair/B-long/at64.png
 16ee41b095359c3d0d36e48ee8214b2a41fea8d1c73661db62f148029bfc56ec  ./visual-pair/B-long/before.png
 43b4950e30c4d5923d204ba7a13e22050190cecee30f07197dd0880bdd28c135  ./visual-pair/B-long/manifest.json
+c8a93e0f8168fd7516a7c39bf27f2e79f8de7e87e40a512a9b1cdfbf6ba29a0a  ./visual-pair/B-long/segment-001.capture.json.gz
 2f86daa5f15bef144f66f2a659aef88f5b51ac19b0db9690b673afef7cb4bb1f  ./visual-pair/B-long/segment-001.webm
 a140cedb42f4e386c710c9a74ff578f2aae16f4a19afbee416782eca43fd9613  ./visual-pair/B-long/trajectory.json
 e7e1049f58f6b4ff14dc8d1030189d2a9bcf8940161cf56620215723830b78d7  ./visual-pair/B-portrait/after.png
