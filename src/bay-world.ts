@@ -8,7 +8,7 @@ import { material } from './vehicles';
 import { buildRouteSignage } from './route-signage';
 import { buildNorthBayScenery } from './north-bay-scenery';
 import { buildCaltrain } from './caltrain';
-import { addBuildingWindows, type BuildingWindow } from './building-windows';
+import { addBuildingWindows, storefrontWindows, type BuildingWindow } from './building-windows';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
@@ -342,11 +342,14 @@ export function buildBay(scene:T.Scene) {
       const shades=b.h>24?[0x49676e,0x597a82,0x66838a,0x52717b]:[0x526e73,0x68828a,0x788b87,0x667c78];
       const windowWidth=b.h>24?1.9:1.45,windowHeight=b.h>24?1.9:1.7;
       const shade=(position:number,y:number)=>shades[Math.abs(i*29+Math.round(position*10)*3+Math.round(y*10)*13)%shades.length];
-      for(let y=3;y<b.h-1;y+=floorSpacing)for(let x=-b.w/2+2;x<b.w/2-1;x+=3.8){
+      const storefront=b.style==='midrise'||b.style==='tower';
+      if(storefront)windows.push(...storefrontWindows(b));
+      const firstFloor=storefront?3+floorSpacing:3;
+      for(let y=firstFloor;y<b.h-1;y+=floorSpacing)for(let x=-b.w/2+2;x<b.w/2-1;x+=3.8){
         windows.push({x:b.x+x,y,z:b.z+b.d/2+.03,width:windowWidth,height:windowHeight,angle:0,color:shade(x,y)});
         windows.push({x:b.x+x,y,z:b.z-b.d/2-.03,width:windowWidth,height:windowHeight,angle:Math.PI,color:shade(x,y)});
       }
-      for(let y=3;y<b.h-1;y+=floorSpacing)for(let z=-b.d/2+2;z<b.d/2-1;z+=3.8){
+      for(let y=firstFloor;y<b.h-1;y+=floorSpacing)for(let z=-b.d/2+2;z<b.d/2-1;z+=3.8){
         windows.push({x:b.x+b.w/2+.03,y,z:b.z+z,width:windowWidth,height:windowHeight,angle:Math.PI/2,color:shade(z,y)});
         windows.push({x:b.x-b.w/2-.03,y,z:b.z+z,width:windowWidth,height:windowHeight,angle:-Math.PI/2,color:shade(z,y)});
       }

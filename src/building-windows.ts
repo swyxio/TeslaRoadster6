@@ -1,6 +1,31 @@
 import * as T from 'three';
+import type { Building } from '../shared/map';
 
 export type BuildingWindow = { x:number; y:number; z:number; width:number; height:number; angle:number; color:number };
+
+/** Street-level glazing stays on the existing walls and shares the window batches. */
+export function storefrontWindows(b:Building):BuildingWindow[]{
+  if(b.style!=='midrise'&&b.style!=='tower')return [];
+  const seed=Math.abs(Math.round(b.x*3+b.z*7))%4;
+  const glass=[0x547b81,0x4d7283,0x587b70,0x60798a][seed];
+  const fascia=[0xc07054,0x4d9182,0xc39b5b,0x718c9d][seed];
+  const windows:BuildingWindow[]=[];
+  for(const angle of [0,Math.PI,Math.PI/2,-Math.PI/2]){
+    const side=Math.abs(Math.sin(angle))>.5,extent=side?b.w/2:b.d/2;
+    const span=(side?b.d:b.w)-2,door=1.35,gap=.2,pane=(span-door-4*gap)/4;
+    const normalX=Math.sin(angle),normalZ=Math.cos(angle);
+    const centerX=b.x+normalX*(extent+.03),centerZ=b.z+normalZ*(extent+.03);
+    const add=(offset:number,y:number,width:number,height:number,color:number)=>windows.push({
+      x:centerX+Math.cos(angle)*offset,z:centerZ-Math.sin(angle)*offset,
+      y,width,height,angle,color,
+    });
+    for(const direction of [-1,1])for(const n of [0,1])
+      add(direction*(door/2+gap+pane*(n+.5)+n*gap),1.45,pane,2.4,glass);
+    add(0,1.45,door,2.4,0x354f58);
+    add(0,3.5,span,.55,fascia);
+  }
+  return windows;
+}
 
 // Five coplanar quads give each window a glass pane and a narrow frame in a
 // single material. A shared instanced mesh keeps the per-district draw count
