@@ -6,8 +6,9 @@ import { VEHICLES } from '../shared/vehicles';
 
 const MAX_SHADOWS=32;
 const MAX_DISTANCE_SQUARED=60**2;
-// Above ordinary asphalt and lot pavement, below road markings and low cars.
-// Raised approaches are excluded below; this is not a physics height.
+// Above ordinary asphalt and lot pavement, below low-car undertrays. Some
+// road markings straddle this height and need visual inspection. Raised
+// approaches are excluded below; this is not a physics height.
 const GROUND_OFFSET=.145;
 const HILLS=[HILL,...NATURAL_HILLS];
 // Approaches are rendered as axis-aligned boxes in scene.ts.
