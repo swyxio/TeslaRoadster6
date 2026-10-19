@@ -7,7 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop } from '../shared/delivery';
+import { advanceDeliverySearch, applyDeliveryStop, CUSTOMERS, initialDelivery, isOrderAccessible, payoutFor, pickupBonusFor, rerouteInaccessibleOrder, RESTAURANTS, type DeliveryStop, type Order } from '../shared/delivery';
 import { initialAchievements } from '../shared/achievements';
 import { applyTicketEvidence } from '../shared/police';
 import { applyAcceptedDelivery } from '../worker/achievement-progress';
@@ -289,6 +289,34 @@ try{
   await rpc('freeze',legacyCrash,15_000);
   assert.deepEqual((await rpc<Profile>('profile',legacyCrash)).progress,legacyRecovered.progress,'recovery pays only once');
   assert.equal(await rpc('assignment',{...legacyCrash,eventId:legacyStop.eventId}),null);
+
+  // A completed checkpoint may also outlive its map: interruption can occur
+  // after assignment finishes but before the accepted payout commits.
+  const completedCrash=entry();await acquire(completedCrash);
+  await rpc('room-win',{...completedCrash,eventId:'completed-checkpoint-win',at:assignmentAt-1_000});
+  const completedStop=stage(completedCrash,1,5,legacyPose,null,assignmentAt);
+  assert.equal(await rpc('stage',{...completedCrash,stage:completedStop}),'accepted');
+  await rpc('hold-completed-assignment',completedCrash);
+  const completedFlight=rpc('submit',{...completedCrash,intent:intent(completedStop,0,1)},30_000);void completedFlight.catch(()=>{});
+  await until(()=>rpc<boolean>('assignment-held',completedCrash),'completed assignment checkpoint held');
+  const beforeLegacy=await rpc<{done:boolean;context:string}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+  assert.equal(beforeLegacy.done,true);
+  const staleRestaurant=(legacyPreview.order.restaurant+1)%RESTAURANTS.length;
+  const staleCustomer=(legacyPreview.order.customer+1)%CUSTOMERS.length;
+  await rpc('legacy-completed-assignment',{...completedCrash,eventId:completedStop.eventId,restaurant:staleRestaurant,customer:staleCustomer});
+  const staleCheckpoint=await rpc<{done:boolean;context:string;delivery:{order:Order}}>('assignment',{...completedCrash,eventId:completedStop.eventId});
+  assert.equal(staleCheckpoint.done,true);assert.equal(staleCheckpoint.context,beforeLegacy.context);
+  assert.equal(staleCheckpoint.delivery.order.restaurant,staleRestaurant);
+  await stop(child);child=undefined;child=start();await ready();await rpc('freeze',completedCrash,15_000);
+  const completedRecovered=await rpc<Profile>('profile',completedCrash);
+  assert.equal(completedRecovered.progress.completed,1);
+  assert.equal(completedRecovered.progress.cash,10_120+Math.round(baseFare*1.5)+500+100,'the captured room multiplier survives recovery');
+  assert.equal(completedRecovered.progress.order.restaurant,legacyPreview.order.restaurant);
+  assert.equal(completedRecovered.progress.order.customer,legacyPreview.order.customer);
+  assert.deepEqual(await rpc('sources',completedCrash),['earned-source:delivery:1:dropoff']);
+  await rpc('freeze',completedCrash,15_000);
+  assert.deepEqual((await rpc<Profile>('profile',completedCrash)).progress,completedRecovered.progress,'completed checkpoint replay pays once');
+  assert.equal(await rpc('assignment',{...completedCrash,eventId:completedStop.eventId}),null);
 
   // A ticket relocks an already-collected Oakland order. The later physical
   // dropoff is accepted while the replacement assignment is checkpointed.

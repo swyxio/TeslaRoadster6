@@ -37,8 +37,10 @@ export class DriverProfile extends BaseProfile {
   private holdDelivery=false;
   private deliveryHeld=false;
   private holdAssignment=false;
+  private holdCompletedAssignment=false;
   private assignmentHeld=false;
   fixtureHoldAssignment(){this.holdAssignment=true;}
+  fixtureHoldCompletedAssignment(){this.holdCompletedAssignment=true;}
   fixtureAssignmentHeld(){return this.assignmentHeld;}
   fixtureAssignment(eventId:string){return this.ctx.storage.get(`assignment:${eventId}`);}
   async fixtureLegacyAssignment(eventId:string){
@@ -48,7 +50,16 @@ export class DriverProfile extends BaseProfile {
     saved.delivery.order.search.cursor={pair:128,leg:1,heading:0};
     await this.ctx.storage.put(key,saved);
   }
+  async fixtureLegacyCompletedAssignment(eventId:string,restaurant:number,customer:number){
+    const key=`assignment:${eventId}`;
+    const saved=await this.ctx.storage.get<{done:boolean;searchVersion?:number;delivery:{order:{restaurant:number;customer:number}}}>(key);
+    if(!saved?.done)throw new Error('No completed assignment');
+    delete saved.searchVersion;
+    saved.delivery.order.restaurant=restaurant;saved.delivery.order.customer=customer;
+    await this.ctx.storage.put(key,saved);
+  }
   protected override async assignmentCheckpointed(_eventId:string,done:boolean){
+    if(this.holdCompletedAssignment&&done){this.holdCompletedAssignment=false;this.assignmentHeld=true;await new Promise<void>(()=>{});}
     if(this.holdAssignment&&!done){this.holdAssignment=false;this.assignmentHeld=true;await new Promise<void>(()=>{});}
   }
   fixtureHoldDelivery(){this.holdDelivery=true;}
@@ -96,9 +107,11 @@ export default {
         case 'hold-stage':await economy.fixtureHoldDelivery();return Response.json(true);
         case 'stage-held':return Response.json(await economy.fixtureDeliveryHeld());
         case 'hold-assignment':await driver.fixtureHoldAssignment();return Response.json(true);
+        case 'hold-completed-assignment':await driver.fixtureHoldCompletedAssignment();return Response.json(true);
         case 'assignment-held':return Response.json(await driver.fixtureAssignmentHeld());
         case 'assignment':return Response.json(await driver.fixtureAssignment(body.eventId)??null);
         case 'legacy-assignment':await driver.fixtureLegacyAssignment(body.eventId);return Response.json(true);
+        case 'legacy-completed-assignment':await driver.fixtureLegacyCompletedAssignment(body.eventId,body.restaurant,body.customer);return Response.json(true);
         case 'hold-profile':await driver.fixtureHoldDelivery();return Response.json(true);
         case 'profile-held':return Response.json(await driver.fixtureDeliveryHeld());
         case 'hold-fence':await driver.fixtureHoldFence(body.skip??0);return Response.json(true);
