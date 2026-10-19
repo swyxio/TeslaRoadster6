@@ -147,14 +147,27 @@ after such a burst are not established; the experiment remains on hold.
 
 A later bounded presentation-history prototype is **not applied**. It removed
 the large local burst cut in its deterministic case, but a supported head-on
-peer contact under a 400 ms delivery gap exhausted playback history and closed
-the session. Wall and existing convoy cases passed; peer-to-peer safety and
+peer contact under a 400 ms delivery gap closed the session. A contact-safety
+guard set a misleading history-exhausted flag while the snapshot queue was
+empty; the buffer did not fill in that case. Wall and existing convoy cases passed; peer-to-peer safety and
 full-world clone cost remain unproven. The [prototype patch and failing test](presentation-history-prototype.patch.gz)
 (SHA-256 `b317fcc1f1485d21483abc296f7ce001100356a8917f424b823b19b6a41725c1`)
 were saved against `af836da`; do not treat this experiment as a fix. After
 applying it to that revision, reproduce with `pnpm exec tsx --test
 --test-name-pattern 'head-on peer contact remains|wall strike remains|braking
 convoy remains' tests/session-motion.test.ts`.
+
+A subsequent isolated contact lab improved the open-road head-on and three-body
+cases, but failed three of 151 focused tests: a pinned-wall hold, false playback
+exhaustion after a jump, and ferry shore interpolation. A narrow wall withdrawal
+proof improved initial jump and steering response, yet did not resolve the
+later stall or prove swept joint-world safety. Short plausible peer relocations
+also cannot be distinguished from continuous motion without an explicit
+per-entity incarnation/pose-discontinuity token in authoritative snapshots.
+The [unapplied lab patch, reproduction notes and test log](presentation-contact-lab-20261018.tar.gz)
+have SHA-256 `a02302184a3507dcb0199b8116c6db0b9429b8449bd268b8d02f49a2d36d6882`.
+Its single local 64-player clone-cost probe is an implementation indicator,
+not a frame, room-capacity or production measurement.
 
 A follow-up [steady-clock lab](steady-clock-lab.tar.gz) retains its collector,
 44 passing focused checks and a sourced provenance note (SHA-256
