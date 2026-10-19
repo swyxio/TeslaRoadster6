@@ -20,8 +20,66 @@ The workflow verified observation completeness and route comparability; it did
 not apply the release thresholds. Callback intervals are not GPU completion or
 display presentation, and the motion model is synthetic. The single heavily
 loaded pair does not establish a causal change, representative rendering, or
-room capacity. The observed values do not satisfy the corresponding numeric
-targets in this run; the full gates remain open.
+room capacity. The callback interval exceeds the frame-interval target on this
+VM; the synthetic speed proxy is not the gate's same-instant reference. The
+full gates remain open.
+
+## Wire-clock recovery experiment
+
+In a synthetic Session and ScheduledInput pinned-contact run, resetting the
+wire clock on each newer snapshot shortened the late-rejection period from
+1183–2383 ms (25 rejected inputs) to 1183–1933 ms (16). However, the unchanged
+contact assertions still failed. A separate half-speed-room fixture processed
+one jump and one flip on the base but expired both with the rebase. A
+rate-capped follow-up preserved those edges in the selected fixtures while
+increasing late rejections, including from zero to 17 in the slow-room case.
+None of these changes is applied. The [tests, source variants and traces](wire-clock-recovery-lab-20261019.tar.gz)
+have SHA-256 `f668e7d0ca596692c91e8dcc827c0d83f9cb7650cbec2eaab545ad4f31844da5`.
+They are synthetic, not a Worker, browser or WAN result.
+
+## Confirmed ferry timeline diagnostic
+
+An isolated experiment retains confirmed ferry hull, phase, manifest, nearby
+bodies, controls and identity on a common playhead. It is explicitly unavailable
+as a safe presentation result: joint swept seam, hull and peer proofs are not
+implemented. Its final seam suite passed 7 of 12 copied cases, with boarding
+and disembarking still failing strict transition checks; some copied checks
+inspect the original predictor, so their counts are not candidate proof. In a
+separate synthetic scheduled-input case, jump and flip first appeared 400 and
+490 ms after input, respectively, despite each processing once. A recovery
+cut of 330 m was correctly flagged. A scene experiment aligned the hull and
+two riders over 241 synthetic frames on the proposed continuous playhead, but
+the raw 10 Hz fallback still stepped 2 m. The [patches, notes and raw traces](tesland-confirmed-ferry-diagnostic-20261018.tar.gz)
+have SHA-256 `86b9e1a9b51fa01b28be3bdff0fdf12fdd005b8a71ec82667377dfd468f0599d`.
+This is not an applied fix or live-room evidence.
+
+## Updated staged throughput observer
+
+The [isolated `38f56a0` observer and preflight lab](tesland-stage-38f-readiness.tar.gz)
+has SHA-256 `0e0074d0069cfed48b364ad26f18bb4512b4a80c4fe701541cd028e0a469ec66`.
+It passed 27 focused client/ACK/movement tests, eight server-hook tests and a
+two-Session loopback smoke, but sustained ACK, complete substep contact
+coverage, deployed tick CPU, real wire bytes, provider isolation and observer
+overhead remain open. Hosted load is deliberately disabled in that lab; it is
+not a room-throughput or capacity result.
+
+## Rocket-pad scan optimization
+
+On the `38f56a0` base, the rocket-pad scan now avoids the full distance
+calculation for finite positions already at least four metres away on either
+axis. Nearby and nonfinite coordinates retain the original `Math.hypot`
+comparison; eligibility callback order and the winner tie-break remain the
+same. Focused tests cover boundaries, nonfinite numbers, cooldown, eligibility,
+tie order and callbacks that mutate later candidates.
+
+The [fixture, tests, raw timings and Node profiles](tesland-pickup-perf-38f-archive.tar.gz)
+have SHA-256 `e752f910d55c7918ae6e8114b323a73b9f5c8c427e4c2251ac962d0245768e50`.
+Full world state matched at each of 250 ticks in synthetic 64-player city and
+open-lane scenes. In six alternating process-CPU pairs per scene, median time
+for those ticks was 1,038 → 624 ms and 556 → 277 ms, respectively. One-minute
+host load rose from 8.87 to 12.94 on 18 logical CPUs during the samples. This
+is a local synthetic simulation without network or normal economy; it does not
+establish a Worker tick, wire-byte, sustained-input or capacity gate.
 
 ## Matched inherited peer-contact defect
 
