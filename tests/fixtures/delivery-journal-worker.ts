@@ -36,13 +36,13 @@ export class RoomEconomy extends BaseEconomy {
 export class DriverProfile extends BaseProfile {
   private holdDelivery=false;
   private deliveryHeld=false;
-  private holdAssignment=false;
+  private holdAssignment:'pending'|'complete'|null=null;
   private assignmentHeld=false;
-  fixtureHoldAssignment(){this.holdAssignment=true;}
+  fixtureHoldAssignment(done=false){this.holdAssignment=done?'complete':'pending';}
   fixtureAssignmentHeld(){return this.assignmentHeld;}
   fixtureAssignment(eventId:string){return this.ctx.storage.get(`assignment:${eventId}`);}
   protected override async assignmentCheckpointed(_eventId:string,done:boolean){
-    if(this.holdAssignment&&!done){this.holdAssignment=false;this.assignmentHeld=true;await new Promise<void>(()=>{});}
+    if(this.holdAssignment&&(done===(this.holdAssignment==='complete'))){this.holdAssignment=null;this.assignmentHeld=true;await new Promise<void>(()=>{});}
   }
   fixtureHoldDelivery(){this.holdDelivery=true;}
   fixtureDeliveryHeld(){return this.deliveryHeld;}
@@ -88,7 +88,7 @@ export default {
         case 'sources':return Response.json(await driver.fixtureSources());
         case 'hold-stage':await economy.fixtureHoldDelivery();return Response.json(true);
         case 'stage-held':return Response.json(await economy.fixtureDeliveryHeld());
-        case 'hold-assignment':await driver.fixtureHoldAssignment();return Response.json(true);
+        case 'hold-assignment':await driver.fixtureHoldAssignment(body.done===true);return Response.json(true);
         case 'assignment-held':return Response.json(await driver.fixtureAssignmentHeld());
         case 'assignment':return Response.json(await driver.fixtureAssignment(body.eventId)??null);
         case 'hold-profile':await driver.fixtureHoldDelivery();return Response.json(true);
