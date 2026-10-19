@@ -23,13 +23,14 @@ const { values } = parseArgs({ options: {
   serve: { type: 'boolean', default: false }, port: { type: 'string', default: '0' },
   width: { type: 'string', default: '1280' }, height: { type: 'string', default: '720' },
   fps: { type: 'string', default: '30' }, 'no-video': { type: 'boolean', default: false },
-  trajectory: { type: 'boolean', default: false },
+  trajectory: { type: 'boolean', default: false }, audio: { type: 'boolean', default: false },
   mobile: { type: 'boolean', default: false }, help: { type: 'boolean', default: false },
 } });
 if (values.help) {
-  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--gpu default|metal|vulkan|swiftshader]');
+  console.log('pnpm playtest:record --url URL --target-ref REF [--scenario FILE | --serve] [--out NEW_DIRECTORY] [--headed] [--audio] [--gpu default|metal|vulkan|swiftshader]');
   process.exit(0);
 }
+if (values.audio && values['no-video']) throw new Error('--audio requires video capture.');
 if (!values.url || !values['target-ref'] || (!!values.scenario === !!values.serve)) throw new Error('Specify --url, --target-ref, and exactly one of --scenario or --serve.');
 const target = new URL(values.url);
 if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('URL must be HTTP(S) without embedded credentials.');
@@ -56,7 +57,7 @@ const manifest: Record<string, unknown> = {
   target: { origin: target.origin, pathname: target.pathname, refProvidedByOperator: values['target-ref'] },
   scenarioSha256: scenarioBytes ? createHash('sha256').update(scenarioBytes).digest('hex') : null,
   runner: { platform: os.platform(), architecture: os.arch(), release: os.release(), cpu: os.cpus()[0]?.model, nodeVersion: process.version, playwrightVersion: createRequire(import.meta.url)('playwright/package.json').version, browserChannel: values.browser, gpuMode: values.gpu, headed: values.headed },
-  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
+  viewport: view, capture: { enabled: !values['no-video'], requestedFps: fps, audio: values.audio }, events: [] as ManifestEvent[], recordings: [] as string[], screenshots: [] as string[],
 };
 const events = manifest.events as ManifestEvent[];
 const recordings = manifest.recordings as string[];
@@ -71,6 +72,9 @@ let pointerHeld = false;
 let recording = false;
 let segment = 0;
 let pendingVideo = '';
+let pendingAudio: { file: string; offsetMs: number; startCommandWindowMs: number } | undefined;
+const audioRecordings: { file: string; offsetMs: number; startCommandWindowMs: number }[] = [];
+if (values.audio) manifest.audioRecordings = audioRecordings;
 let failure: unknown;
 let actionErrors = 0;
 let pageErrors = 0;
@@ -162,10 +166,25 @@ async function sample() {
 }
 async function stopRecording() {
   if (!recording) throw new Error('No recording is active.');
-  if (!values['no-video']) await page!.screencast.stop();
-  recording = false;
-  if (!values['no-video']) recordings.push(pendingVideo);
-  pendingVideo = '';
+  let audioFailure: unknown;
+  if (pendingAudio) {
+    try {
+      const encoded = await page!.evaluate('window.__teslandAudioCapture.stop()') as string;
+      await writeFile(join(out, pendingAudio.file), Buffer.from(encoded, 'base64'), { flag: 'wx' });
+      audioRecordings.push(pendingAudio);
+    } catch (error) {
+      audioFailure = error;
+      failure ??= error;
+      (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
+    } finally { pendingAudio = undefined; }
+  }
+  try {
+    if (!values['no-video']) {
+      await page!.screencast.stop();
+      recordings.push(pendingVideo);
+    }
+  } finally { recording = false; pendingVideo = ''; }
+  if (audioFailure) throw audioFailure;
 }
 async function releaseInputs() {
   for (const key of held) { try { await page!.keyboard.up(key); } catch { /* browser already closed */ } }
@@ -361,7 +380,18 @@ async function act(action: Action): Promise<unknown> {
       case 'recordStart': {
         if (recording) throw new Error('Recording is already active.');
         pendingVideo = `segment-${String(++segment).padStart(3, '0')}.webm`;
-        if (!values['no-video']) await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps });
+        if (!values['no-video']) {
+          const videoBefore = performance.now();
+          await page!.screencast.start({ path: join(out, pendingVideo), size: { width: view.width, height: view.height }, fps });
+          const videoAfter = performance.now();
+          recording = true;
+          if (values.audio) {
+            const audioBefore = performance.now();
+            await page!.evaluate('window.__teslandAudioCapture.start()');
+            const audioAfter = performance.now();
+            pendingAudio = { file: `segment-${String(segment).padStart(3, '0')}-audio.webm`, offsetMs: ((audioBefore + audioAfter) - (videoBefore + videoAfter)) / 2, startCommandWindowMs: ((videoAfter - videoBefore) + (audioAfter - audioBefore)) / 2 };
+          }
+        }
         recording = true; result = await sample(); break;
       }
       case 'recordStop':
@@ -418,6 +448,7 @@ try {
   browser = await chromium.launch({ channel: values.browser === 'chrome' ? 'chrome' : undefined, headless: !values.headed, args });
   (manifest.runner as Record<string, unknown>).browserVersion = browser.version();
   context = await browser.newContext({ viewport: { width: view.width, height: view.height }, deviceScaleFactor: view.deviceScaleFactor ?? 1, isMobile: view.isMobile ?? false, hasTouch: view.hasTouch ?? false });
+  if (values.audio) await context.addInitScript({ content: await readFile(new URL('./playtest-audio-capture.js', import.meta.url), 'utf8') });
   if (scenario.freshGuest) {
     // The normal default auto-saves a driver in chat. The repeatable scenario
     // explicitly chooses a fresh guest in this disposable browser context.
