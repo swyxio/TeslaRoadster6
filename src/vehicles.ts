@@ -198,6 +198,10 @@ const distantTemplates=new Map<VehicleId,T.Mesh>();
 const decalTemplates=new Map<string,T.Group>();
 const distantMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.65});
 const vehicleDetails=new WeakMap<T.Object3D,{near:T.Group;far:T.Mesh}>();
+const distantOverrides=new WeakMap<T.Object3D,T.Mesh>();
+
+/** Use a shared low-detail mesh for an optional visual variant. */
+export function setVehicleDistantOverride(root:T.Object3D,mesh:T.Mesh){distantOverrides.set(root,mesh);}
 
 /** Preserve the real body silhouette, flatten distant detail into one draw. */
 function distantVehicle(kind:VehicleId):T.Mesh {
@@ -232,7 +236,7 @@ export function setVehicleDetail(root:T.Group,distanceSquared:number,forceDetail
     const near=new T.Group();near.name='vehicle-detail';
     // Incident warnings are entity-level indicators, not model detail.
     near.add(...root.children.filter(child=>child.name!=='traffic-hazard'));
-    const far=distantVehicle(root.name as VehicleId);far.name='vehicle-distant';
+    const far=distantOverrides.get(root)?.clone()??distantVehicle(root.name as VehicleId);far.name='vehicle-distant';
     root.add(near,far);state={near,far};vehicleDetails.set(root,state);
   }
   state.near.visible=detailed;state.far.visible=!detailed;

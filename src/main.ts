@@ -75,7 +75,8 @@ import { CURRENT_RELEASE, releaseLabel } from '../content/version';
 import { browserStorage, readLastPlayed, writeLastPlayed } from './release-tracker';
 import { readDriverRecovery, stageDriverRecovery, confirmDriverRecovery, setDriverRemember, forgetDriverRecovery, connectDriverWallet } from './driver-recovery';
 
-document.title=`Tesland · v${CURRENT_RELEASE.label}`;
+const sfFidelity=new URLSearchParams(location.search).get('visual')==='sf-hi';
+document.title=`Tesland${sfFidelity?' · SF fidelity experiment':''} · v${CURRENT_RELEASE.label}`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 let deliveryGuide:DeliveryGuidance|undefined;
 function roadGuidance():DeliveryGuidance {
@@ -94,7 +95,7 @@ function roadGuidance():DeliveryGuidance {
 document.querySelector('#app')!.innerHTML = `
 <canvas id="world" aria-label="Tesland 3D driving world"></canvas>
 <div class="vignette"></div>
-<header class="topbar"><div class="brand-build"><a class="brand" href="/" aria-label="Tesland home"><span class="brand-icon">↗</span> TES<span class="brand-light">LAND</span><span class="alpha">THE BAY / 2050</span></a><a class="build-version" href="/changelog/#${encodeURIComponent(CURRENT_RELEASE.version)}" target="_blank" rel="noopener noreferrer" aria-label="Tesland version ${CURRENT_RELEASE.label}; open changelog in a new tab">v${CURRENT_RELEASE.label}</a></div><div class="top-actions"><span id="connection" class="pill"><i></i> JOINING ROOM…</span><button id="chat-button" class="icon-button chat-button" aria-label="Open global chat" aria-haspopup="dialog">💬<span id="chat-unread" class="chat-unread" hidden></span></button><button id="sound-button" class="icon-button sound-button" aria-label="Sound settings" aria-haspopup="dialog">♫</button><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
+<header class="topbar"><div class="brand-build"><a class="brand" href="/" aria-label="Tesland home"><span class="brand-icon">↗</span> TES<span class="brand-light">LAND</span><span class="alpha">THE BAY / 2050</span></a><a class="build-version" href="/changelog/#${encodeURIComponent(CURRENT_RELEASE.version)}" target="_blank" rel="noopener noreferrer" aria-label="Tesland version ${CURRENT_RELEASE.label}; open changelog in a new tab">v${CURRENT_RELEASE.label}</a>${sfFidelity?'<span class="visual-experiment-label">SF FIDELITY LAB</span>':''}</div><div class="top-actions"><span id="connection" class="pill"><i></i> JOINING ROOM…</span><button id="chat-button" class="icon-button chat-button" aria-label="Open global chat" aria-haspopup="dialog">💬<span id="chat-unread" class="chat-unread" hidden></span></button><button id="sound-button" class="icon-button sound-button" aria-label="Sound settings" aria-haspopup="dialog">♫</button><button id="menu-button" class="icon-button" aria-label="Open menu">☰</button></div></header>
 <section id="menu" class="menu">
  <div class="intro"><div class="eyebrow"><span class="line"></span> THE BAY AREA / 2050</div><h1>Welcome to<br><em>Tesland.</em></h1><p class="intro-copy">The Roadsters finally arrived. Tesla and SpaceX run the Bay. You have deliveries to make.<br>Catch air, find shortcuts, and make your own way.</p>
  <div class="feature-row"><span>01 / DRIVE</span><span>02 / FLY</span><span>03 / DELIVER</span></div><p class="cockpit-invitation">Find a purple rocket to fly any car. Catch blue sky lanes for speed and air, or ride golden thermals upward. Try cockpit view with Actions → Camera.</p>
@@ -105,6 +106,7 @@ document.querySelector('#app')!.innerHTML = `
  <button id="join" class="primary">Join room <span>↗</span></button>
  <p class="form-note" id="form-note" role="status">Join friends with a room code. Change rides here or use Actions → Fleet.</p>
  <button id="control-settings-menu" type="button" class="text-button">Controls &amp; gamepad</button><br><button id="mars-menu" type="button" class="text-button">🚀 Starship mission &amp; launch view</button><br><details class="playtest-menu"><summary>Playtest · start fresh or unlock everything</summary><p>Your saved driver stays safe. Practice progress is discarded when you leave.</p><div class="playtest-options"><button id="playtest-fresh" type="button">Fresh driver · level 1 tank</button><button id="playtest-sandbox" type="button">Sandbox · all cars &amp; upgrades</button><button id="playtest-return" type="button">Return to saved driver</button></div><p>Sandbox room code: <b>sandbox</b> (or sandbox-your-name). Includes unlimited spending and map teleport. Trading, passive businesses and the Mars fund stay in the main game.</p></details>
+ <details class="playtest-menu"><summary>Visual lab · San Francisco fidelity</summary><p>Try experimental SF building facades and a 2026 Roadster-inspired model. Multiplayer and car physics stay the same; the rest of the Bay keeps its current look.</p><a id="visual-switch" class="text-button" href="/">Switch visual style</a> · <a href="/visual-lab/" target="_blank" rel="noopener noreferrer">View concept art</a></details>
  <button id="resume" class="text-button hidden">← Back to your drive</button>
  </div>
  <div class="release-links"><span>${CURRENT_RELEASE.label}</span><a id="release-changelog" href="/changelog/">Changelog</a><a href="/blog/">Dev blog</a><a href="/lore/">The story</a></div><p id="last-played" class="last-played">No earlier play recorded on this browser.</p>
@@ -160,6 +162,14 @@ document.querySelector('#app')!.innerHTML = `
 <div id="joining" class="connection-wait hidden"><span id="joining-copy" role="status" aria-live="polite">Joining your room…</span><button id="joining-cancel" class="text-button" type="button">Cancel</button></div>
 <div id="error" class="error hidden" role="alert"><h2 id="error-title">Let’s get you back on the road.</h2><p id="error-copy"></p><button id="retry" class="primary">Try this room again</button><label id="error-room-label" class="alternative-room">OR NAME ANOTHER ROOM<input id="error-room" maxlength="32" placeholder="my-crew" autocapitalize="none" spellcheck="false"></label><p id="error-room-note" class="form-note" role="status"></p><button id="error-join" class="secondary">Join another room</button><button id="mars-error" class="text-button" type="button">Starship mission &amp; launch view</button><button id="error-menu" class="text-button">Room settings</button></div>
 `;
+function updateVisualSwitch(){
+  const visualUrl=new URL(location.href);
+  if(sfFidelity)visualUrl.searchParams.delete('visual');else visualUrl.searchParams.set('visual','sf-hi');
+  const link=$<HTMLAnchorElement>('visual-switch');link.href=visualUrl.pathname+visualUrl.search+visualUrl.hash;
+  link.textContent=sfFidelity?'Switch to current visuals':'Try SF fidelity experiment';
+}
+updateVisualSwitch();
+
 const mobileHud=setupMobileHud(browserStorage());
 let selectedVehicle:VehicleId='roadster';
 let startingRideChanged=false;
@@ -441,7 +451,10 @@ let selectedEntry=initialEntry??{room:DEFAULT_ROOM,automatic:false};
 session.onRoomJoined=room=>{
   selectedEntry={room,automatic:false};
   $<HTMLInputElement>('room').value=publicRoomNumber(room)===null?room:roomLabel(room);
-  history.replaceState(null,'',roomSearch(room));
+  const address=new URL(roomSearch(room),location.href);
+  if(sfFidelity)address.searchParams.set('visual','sf-hi');
+  if(new URLSearchParams(location.search).has('perf'))address.searchParams.set('perf','');
+  history.replaceState(null,'',address.pathname+address.search);updateVisualSwitch();
 };
 const playStorage=browserStorage(),previousPlay=playStorage?readLastPlayed(playStorage):null;
 if(previousPlay){
@@ -501,9 +514,9 @@ function begin(userGesture=true){
   session.setName(chat.status==='online'&&!nameEdited?chat.name:nameInput.value.trim()||'Driver');
   started=true;$('error').classList.add('hidden');toggleMenu(false);
 }
-$('playtest-fresh').onclick=()=>{location.href=`?room=practice-${crypto.randomUUID().slice(0,8)}`;};
-$('playtest-sandbox').onclick=()=>{location.href='?room=sandbox';};
-$('playtest-return').onclick=()=>{location.href=location.pathname;};
+$('playtest-fresh').onclick=()=>{location.href=`?room=practice-${crypto.randomUUID().slice(0,8)}${sfFidelity?'&visual=sf-hi':''}`;};
+$('playtest-sandbox').onclick=()=>{location.href=`?room=sandbox${sfFidelity?'&visual=sf-hi':''}`;};
+$('playtest-return').onclick=()=>{location.href=location.pathname+(sfFidelity?'?visual=sf-hi':'');};
 updateRideMenu();
 $('join').onclick=()=>begin();$('retry').onclick=()=>{if(session.walletBlocked)session.disconnect();begin();};
 $('apply-ride').onclick=()=>requestMenuRide(false);

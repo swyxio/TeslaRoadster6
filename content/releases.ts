@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A San Francisco visual experiment',
+    intro: 'Try a different look for the Roadster and a few San Francisco buildings.',
+    sections: [
+      { title: 'Visual lab', items: [
+        'Open Visual lab from the menu to compare experimental facades and a 2026 Roadster-inspired model with the current game.',
+        'See three AI-generated concept illustrations in the lab gallery. The illustrations are not gameplay screenshots.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.47-alpha',
+    label: '0.0.47 Alpha',
+    date: '2026-10-19',
     title: 'A ride to the charger',
     intro: 'Let your car find a reachable open charging bay.',
     sections: [

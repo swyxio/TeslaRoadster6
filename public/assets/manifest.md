@@ -1,5 +1,35 @@
 # Asset manifest
 
+## San Francisco fidelity lab
+
+On 2026-10-19 the project generated three Roadster-and-San-Francisco concept
+illustrations and two generic architectural facade images with OpenAI's image
+tool. The original PNGs are in [`assets-src/visual-lab`](../../assets-src/visual-lab/)
+and the WebP exports are in [`public/visual-lab`](../visual-lab/). The concepts
+are imagined images, not gameplay captures, and the facades are not photographs
+of specific buildings. The car design is an original artistic interpretation
+informed by the 2026 Roadster reveal; no Tesla model or photograph is bundled.
+Use is subject to the image service's [individual terms](https://openai.com/policies/terms-of-use/)
+and [services agreement](https://openai.com/policies/services-agreement/); this
+record makes no claim about training inputs or exclusivity.
+
+| Export / same-named source | Pixels | WebP bytes | Use |
+| --- | --- | ---: | --- |
+| `nob-hill.webp` | 1672 × 941 | 222,624 | Concept gallery only |
+| `embarcadero.webp` | 1672 × 941 | 184,054 | Concept gallery only |
+| `golden-gate.webp` | 1536 × 1024 | 148,624 | Concept gallery only |
+| `victorian-facade.webp` | 1024 × 936 | 128,398 | Optional lab texture |
+| `office-facade.webp` | 1024 × 683 | 95,652 | Optional lab texture |
+
+The two in-game images are shared between 12 instanced facade batches on 17
+ordinary building envelopes. They are approximately 6.3 MiB combined as
+decoded RGBA before mipmaps (an estimate, not measured GPU allocation). The
+images do not attach to the car. The original procedural car retains the
+existing named wheels, seat and rocket hardware; its dimensions, material
+sharing and changes are described in [the lab](../../docs/SF_FIDELITY_LAB.md).
+Concept images never load during game play. The source PNGs are outside the
+public build.
+
 ## Bay horizon texture
 
 [`src/assets/bay-horizon.webp`](../../src/assets/bay-horizon.webp) is an original generated interpretation of distant Bay Area hills, not a photograph or elevation dataset. It was requested from OpenAI's built-in image generation tool on 2026-10-18 Pacific, using a prompt for a horizontally seamless transparent strip of coastal ridges, dry golden foothills, scattered vegetation and atmospheric haze with no sky, water, roads, vehicles, logos or text. Use is subject to the service's [individual terms](https://openai.com/policies/terms-of-use/) and [services agreement](https://openai.com/policies/services-agreement/); this record makes no claim about training inputs or exclusivity.

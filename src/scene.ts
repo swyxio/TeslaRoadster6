@@ -47,6 +47,7 @@ import { ContactShadows } from './contact-shadows';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
+  private sfFidelity?: typeof import('./sf-fidelity');
   private scene = new T.Scene();
   private horizon = createHorizon(this.scene);
   private contactShadows = new ContactShadows(this.scene);
@@ -128,6 +129,13 @@ export class GameScene {
     this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
+    if(new URLSearchParams(location.search).get('visual')==='sf-hi'){
+      void import('./sf-fidelity').then(async module=>{
+        const stats=await module.buildSfFidelity(this.scene);this.sfFidelity=module;
+        document.body.dataset.sfFidelity=`${stats.textureFallback?'fallback':'ready'}:${stats.facadeBuildings}:${stats.facadeBatches}`;
+        if(stats.textureFallback){const label=document.querySelector('.visual-experiment-label');if(label)label.textContent='SF LAB · FALLBACK ART';}
+      }).catch(error=>{document.body.dataset.sfFidelity='failed';const label=document.querySelector('.visual-experiment-label');if(label)label.textContent='SF LAB · LOAD FAILED';console.error('SF fidelity experiment failed to load',error);});
+    }
     this.scene.add(this.bayUfo.group);
     this.scene.add(this.propertyScene.group);
     this.objectiveRing.rotation.x=-Math.PI/2;this.objectiveRing.position.y=.25;this.objective.add(this.objectiveRing);
@@ -347,8 +355,8 @@ export class GameScene {
     const alpha=1-Math.exp(-14*dt);
     for(const e of world.entities) {
       let mesh=this.entities.get(e.id);
-      if(mesh&&mesh.name!==e.kind){this.scene.remove(mesh);this.entities.delete(e.id);mesh=undefined;}
-      if(!mesh){mesh=e.id==='cow-crossing'?createCow():createVehicle(e.kind);if(e.police){
+      if(mesh&&(mesh.name!==e.kind||(e.kind==='roadster'&&this.sfFidelity&&!mesh.userData.sfFidelityRoadster))){this.scene.remove(mesh);this.entities.delete(e.id);mesh=undefined;}
+      if(!mesh){mesh=e.id==='cow-crossing'?createCow():createVehicle(e.kind);if(e.kind==='roadster'&&this.sfFidelity)this.sfFidelity.applyRoadster2026(mesh);if(e.police){
         const h=VEHICLES['model-3'].height;
         box(mesh,0,h+.05,0,.9,.12,.35,0x1b2c35);
         const red=box(mesh,-.23,h+.15,0,.4,.15,.28,0xff4b48);red.name='police-red';
