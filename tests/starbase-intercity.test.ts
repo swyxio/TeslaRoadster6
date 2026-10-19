@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addPlayer, createWorld, setDestination, step, type Entity } from '../shared/game';
+import { addPlayer, createWorld, makeEntity, setDestination, step, type Entity } from '../shared/game';
 import { LEVELS, requiredLevelAt } from '../shared/delivery';
 import { landmarkBlocksPose } from '../shared/landmark-collision';
+import { trafficInput } from '../shared/traffic';
 import { BUILDINGS, terrainHeight } from '../shared/map';
 import { DELIVERY_DESTINATION_SNAP, nearestNavigationAnchor, planNavigation } from '../shared/navigation';
 
@@ -60,4 +61,37 @@ test('an off-lane delivery route enters and leaves the Starbase channel without 
   assert.equal(setDestination(world,'driver',road,'intercity'),true,'the arrived car can return to the road');
   assert.ok(car.navigation?.join,'departure rejoins the lane from off road');
   assertRouteClear();drive(road);
+});
+
+
+test('a queue inside the clear Starbase channel does not trigger wall recovery',()=>{
+  const world=createWorld(),player=addPlayer(world,'driver','Driver');
+  const car=world.entities.find(entity=>entity.id===player.entityId)!;
+  const pad=BUILDINGS.find(building=>building.style==='spaceport'&&building.x===1960)!;
+  const y=terrainHeight(1960,6190.5)??0;
+  const leader=makeEntity('channel-leader','model-3',1960,6183.5);
+  Object.assign(leader,{y,yaw:0,speed:0,npc:true,autopilot:true});
+  Object.assign(car,{kind:'model-3',x:1960,z:6190.5,y,yaw:0,speed:0,autopilot:true,
+    navigation:{destination:{x:1960,z:6175},path:[{x:1960,z:6175}],index:0,status:'driving',mode:'intercity',
+      recovery:{index:0,distance:15.5,at:0,attempts:0,reverseUntil:0}}});
+  world.entities=[car,leader];world.time=13;
+  assert.equal(landmarkBlocksPose(pad,car),false,'the car is in the open channel');
+  assert.equal(landmarkBlocksPose(pad,leader),false,'the active leader also fits');
+  const input=trafficInput(car,world);
+  assert.ok(input.throttle>=0,'the queued car does not reverse');
+  assert.equal(car.navigation?.recovery?.attempts,0);
+  assert.equal(car.navigation?.recovery?.at,world.time,'the queue resets the stall timer');
+});
+
+test('a Starbase channel wall beyond the pad envelope starts recovery',()=>{
+  const world=createWorld(),player=addPlayer(world,'driver','Driver');
+  const car=world.entities.find(entity=>entity.id===player.entityId)!;
+  const y=terrainHeight(1964,6232)??0;
+  const join={x:1975,z:6232},destination={x:1985,z:6232};
+  Object.assign(car,{kind:'model-3',x:1964,z:6232,y,yaw:-Math.PI/2,speed:0,autopilot:true,
+    navigation:{destination,path:[join,destination],index:0,status:'driving',mode:'intercity',join}});
+  world.entities=[car];world.time=1;
+  const input=trafficInput(car,world);
+  assert.equal(car.navigation?.recovery?.attempts,1,'the actual extended wall is detected');
+  assert.ok(input.throttle<0,'the clear channel behind permits a checked reverse');
 });

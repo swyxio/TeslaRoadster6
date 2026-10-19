@@ -96,7 +96,7 @@ function clearBehind(e:Entity,world:World):boolean {
     const x=e.x-forward.x*d,z=e.z-forward.z*d;
     if(!isSurface(x,z)||requiredLevelAt(x,z)>ceiling)return false;
     const pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return false;
     for(const other of world.entities){
       if(other===e)continue;
       const height=other.kind==='person'?1.9:VEHICLES[other.kind].height;
@@ -136,7 +136,7 @@ function wallAhead(e:Entity):boolean {
   const spec=VEHICLES[e.kind],forward={x:-Math.sin(e.yaw),z:-Math.cos(e.yaw)};
   for(let d=1;d<=3;d++){
     const x=e.x+forward.x*d,z=e.z+forward.z*d,pose=body({...e,x,z});
-    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
+    if(nearbyBuildings(x,z,spec.length+2).some(b=>b.style==='structure'||b.style==='spaceport'?buildingBlocksPose(b,{...e,x,z}):contact(pose,{...b,yaw:0})))return true;
   }
   return false;
 }
