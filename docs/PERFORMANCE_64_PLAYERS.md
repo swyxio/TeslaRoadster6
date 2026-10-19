@@ -64,6 +64,26 @@ count gaps spanning two ten-second blocks; its regression test now covers that
 case. The recorded maximum snapshot gaps were under one second per runner, but
 this sample is not a full continuity or playable-capacity pass.
 
+The corrected gap check was used for two further historical research samples
+against the same `c5bd893` game base. The [candidate run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39186107476)
+observed all 64 drivers moving for the measured minute, at least 59.9 simulated
+seconds per runner, and 798 late replies among 87,444 measured inputs. The
+[unchanged-runtime baseline run](https://github.com/swyxio/TeslaRoadster6/actions/runs/39186168542)
+recorded 396 late replies among 74,543 measured inputs before one client closed
+with code 1006 after about 51 seconds. Its runner then disconnected the other
+15 clients, and the remaining runners stopped when their snapshots saw 48
+players. These are different hosts and connections, with a shorter incomplete
+baseline; their rejection counts cannot establish causation or a relative
+speedup. Both were pinned preview research after main had advanced, not
+current-main release checks. Temporary baseline PR #117 was closed afterward.
+
+In the first hosted sample, 148 of 374 measured late inputs already targeted
+the maximum eight ticks beyond the latest snapshot. The observations cannot
+separate uplink, Worker handling, downlink and generator callback delays.
+Raising a minimum lead alone therefore cannot explain all misses, and changing
+the shared prediction clock requires its own motion and contact regression
+tests. This candidate does not change that clock.
+
 ## External experience and implications
 
 - [Glenn Fiedler's snapshot compression experiments](https://gafferongames.com/post/snapshot_compression/)
