@@ -422,6 +422,32 @@ test('off-road navigation routes around the Starbase channel walls',()=>{
   }
 });
 
+test('a motorcycle route does not graze a Starbase wall between samples',()=>{
+  const {world,player,car}=drivingWorld();
+  Object.assign(car,{kind:'ducati-panigale-v4',x:1960,z:6254.72,y:terrainHeight(1960,6254.72),yaw:1.936,speed:0});
+  player.delivery.level=5;player.delivery.cash=LEVELS[5].cash+2_500;
+  const pad=BUILDINGS.find(building=>building.style==='spaceport'&&building.x===1960)!;
+  assert.equal(landmarkBlocksPose(pad,car),false);
+  assert.equal(setDestination(world,'driver',{x:1900,z:6275}),true,'a route around the corner is available');
+  let previous={x:car.x,z:car.z};
+  for(const next of car.navigation!.path){
+    const count=Math.max(1,Math.ceil(Math.hypot(next.x-previous.x,next.z-previous.z)*100));
+    const yaw=Math.atan2(previous.x-next.x,previous.z-next.z);
+    for(let i=1;i<=count;i++){
+      const t=i/count,x=previous.x+(next.x-previous.x)*t,z=previous.z+(next.z-previous.z)*t;
+      assert.equal(landmarkBlocksPose(pad,{...car,x,z,y:terrainHeight(x,z),yaw}),false,
+        `planned segment grazes the channel at ${x.toFixed(2)}, ${z.toFixed(2)}`);
+    }
+    previous=next;
+  }
+  for(let i=0;i<6000&&car.autopilot;i++){
+    step(world,new Map(),.05);
+    assert.equal(landmarkBlocksPose(pad,car),false,'the driven motorcycle stays clear');
+  }
+  assert.equal(car.navigation?.status,'arrived');
+  assert.equal(car.health,100);
+});
+
 test('an awkward off-road approach resumes normal road speed after passing the join',()=>{
   const {world,car}=drivingWorld();
   Object.assign(car,{x:-225,z:40,yaw:Math.PI/2,speed:0});

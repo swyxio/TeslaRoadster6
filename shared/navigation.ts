@@ -1,5 +1,6 @@
 import { buildingBlocksPose } from './landmark-collision';
 import { primitiveExtent } from './new-landmark-surfaces';
+import { contact } from './physics';
 import { terrainHeight, isSurface, nearbyBuildings, ROADS, STUNT_LOOP, STUNT_RAMP } from './map';
 import { requiredLevelAt, type Level } from './delivery';
 import { ROUTES, type Point } from './traffic';
@@ -210,15 +211,29 @@ class NavigationQueue {
 type NavigationVehicle = Pick<Entity,'x'|'z'|'yaw'|'kind'|'supportId'|'inDome'>;
 function offRoadApproach(car:NavigationVehicle,end:Point,level:Level):Point[]|null {
   if(car.kind==='person')return null;
-  const radius=Math.max(2,VEHICLES[car.kind].width/2+1);
+  const vehicle=VEHICLES[car.kind],radius=Math.max(2,vehicle.width/2+1);
   const clear=(a:Point,b:Point)=>{
     if(!allowed(a,b,level))return false;
-    const count=Math.max(1,Math.ceil(distance(a,b)/3));
+    const length=distance(a,b),count=Math.max(1,Math.ceil(length/3));
+    const yaw=Math.atan2(a.x-b.x,a.z-b.z);
     for(let i=1;i<=count;i++){
       const t=i/count,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+      const before=(i-1)/count,px=a.x+(b.x-a.x)*before,pz=a.z+(b.z-a.z)*before;
+      const midX=(px+x)/2,midZ=(pz+z)/2,sweptLength=vehicle.length+length/count;
+      // Sweeping the body along each straight interval prevents a thin vehicle
+      // from grazing a narrow spaceport wall between point samples.
+      const swept={x:midX,z:midZ,w:vehicle.width,d:sweptLength,yaw};
+      if(nearbyBuildings(midX,midZ,Math.hypot(vehicle.width,sweptLength)/2).some(building=>
+        building.style==='spaceport'&&building.parts?.some(part=>{
+          const e=primitiveExtent(part),base=building.landmarkBase??0;
+          if(!contact(swept,{x:building.x+part.x,z:building.z+part.z,w:e.w,d:e.d,yaw:e.yaw}))return false;
+          const low=Math.min(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0);
+          const high=Math.max(terrainHeight(px,pz)??0,terrainHeight(midX,midZ)??0,terrainHeight(x,z)??0)+vehicle.height;
+          return low<base+e.top-.001&&high>base+e.bottom+.001;
+        })))return false;
       if(!isSurface(x-radius,z-radius)||!isSurface(x-radius,z+radius)||
         !isSurface(x+radius,z-radius)||!isSurface(x+radius,z+radius)||
-        nearbyBuildings(x,z,radius).some(building=>building.style==='structure'||building.style==='spaceport'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw:Math.atan2(a.x-b.x,a.z-b.z),pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
+        nearbyBuildings(x,z,radius).some(building=>building.style==='spaceport'?false:building.style==='structure'?buildingBlocksPose(building,{x,z,kind:car.kind,y:terrainHeight(x,z)??0,yaw,pitch:0,roll:0,supportId:'ground'}):Math.abs(x-building.x)<building.w/2+radius&&Math.abs(z-building.z)<building.d/2+radius))return false;
     }
     return true;
   };
