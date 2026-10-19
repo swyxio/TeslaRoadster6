@@ -1,5 +1,9 @@
 # Verification · 2026-10-18 Pacific
 
+## Bay scenery · current-base candidate · 2026-10-19 Pacific
+
+- This branch incorporates production main `1b7b18bf` and contains the scenery and vehicle detail changes independently of the paused highway PR. Release 0.0.43 retains protocol 52. Fresh integrated tests, visual checks and matched performance evidence are pending; earlier observations below use older bases.
+
 ## Bay horizon · integrated candidate · 2026-10-18 Pacific
 
 - Candidate `9b7982f1` incorporates released main `f922e213` and assigns 0.0.42 / protocol v52. All 1,138 tests and the build/typechecks passed locally; the existing Vite large-chunk warning remains. The horizon is decorative: it does not change authoritative terrain, collisions or simulation.

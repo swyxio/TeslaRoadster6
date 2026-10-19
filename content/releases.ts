@@ -5,6 +5,19 @@ export { CURRENT_RELEASE } from './version';
 export const RELEASES = [
   {
     ...CURRENT_RELEASE,
+    date: '2026-10-19',
+    title: 'A closer look at the Bay',
+    intro: 'Buildings, redwoods and vehicles have more detail to discover.',
+    sections: [
+      { title: 'Around the Bay', items: [
+        'Look for framed windows and more detailed landmark facades around the city.',
+        'Redwood canopies, vehicle wheels and lights, and autonomous sensor rigs have a more detailed look.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.42-alpha',
+    label: '0.0.42 Alpha',
     date: '2026-10-18',
     title: 'A wider Bay',
     intro: 'Look out toward the hills as you drive and fly around the Bay.',

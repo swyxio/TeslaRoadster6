@@ -1,5 +1,5 @@
 /** Kept separate so the game does not download the full changelog at startup. */
-const version='0.0.42-alpha';
+const version='0.0.43-alpha';
 export const CURRENT_RELEASE={version,label:releaseLabel(version)};
 
 export function releaseLabel(value:string):string {
