@@ -75,6 +75,7 @@ const held = new Set<string>();
 let browser: Browser | undefined;
 let context: BrowserContext | undefined;
 let page: Page | undefined;
+let browserUnusable = false;
 let touchSession: CDPSession | undefined;
 const touches = new Map<number, { x: number; y: number; id: number }>();
 let pointerHeld = false;
@@ -178,6 +179,13 @@ async function sample() {
     return { connection: document.querySelector('#connection')?.textContent?.trim() ?? null, speed: document.querySelector('#speed')?.textContent?.trim() ?? null, perf };
   }), CAPTURE_DEADLINE_MS, 'Timed out sampling the page.');
 }
+// A timed-out page operation may resume later. Never reuse that context for
+// another recording, even if closing the context itself times out.
+async function abandonBrowser() {
+  browserUnusable = true;
+  try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Tab recording browser close timed out.'); }
+  catch (error) { (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; throw asError(error, 'Could not close the recording browser.'); }
+}
 async function stopRecording() {
   if (!recording) throw new Error('No recording is active.');
   let audioFailure: unknown;
@@ -190,6 +198,7 @@ async function stopRecording() {
       audioFailure = asError(error, 'Could not finalize audio recording.');
       failure ??= audioFailure;
       (manifest.capture as Record<string, unknown>).audioFinalizationFailed = true;
+      try { await abandonBrowser(); } catch (cleanupError) { audioFailure = new AggregateError([audioFailure, cleanupError], 'Audio recording failed and its browser could not be closed.'); }
     } finally { pendingAudio = undefined; }
   }
   if (values['no-video']) { recording = false; pendingVideo = ''; if (audioFailure) throw audioFailure; return; }
@@ -207,7 +216,7 @@ async function stopRecording() {
           if (!trace || trace.chunks !== sink.chunks || trace.bytes !== sink.bytes) throw new Error('Tab recording chunks are incomplete.');
           return trace;
         } catch (error) {
-          try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Tab recording browser close timed out.'); }
+          try { await abandonBrowser(); }
           catch (cleanupError) {
             (manifest.capture as Record<string, unknown>).browserCleanupFailed = true;
             throw new AggregateError([error, cleanupError], 'Tab recording failed and its browser could not be closed.');
@@ -256,6 +265,7 @@ async function act(action: Action): Promise<unknown> {
   let key: string | undefined;
   let ok = false;
   try {
+    if (browserUnusable) throw new Error('The recording browser is unavailable after a capture failure.');
     switch (action.type) {
       case 'wait': await page!.waitForTimeout(duration(action, 'ms', 0, 60000)); break;
       case 'waitFor': {
@@ -472,7 +482,7 @@ async function act(action: Action): Promise<unknown> {
             } catch (error) {
               const partial = pendingTab; pendingTab = undefined;
               let cleanupError: Error | undefined;
-              try { await withDeadline(context!.close(), CAPTURE_DEADLINE_MS, 'Tab recording browser close timed out.'); }
+              try { await abandonBrowser(); }
               catch (failure) { cleanupError = asError(failure, 'Could not close the tab recording browser.'); (manifest.capture as Record<string, unknown>).browserCleanupFailed = true; }
               let closeFailed = false;
               try { await partial!.close(); }
@@ -502,7 +512,8 @@ async function act(action: Action): Promise<unknown> {
               // Starting audio and video is one action. A rejected audio start
               // must not leave a video running or list a partial as usable.
               const video = pendingVideo;
-              try { await withDeadline(page!.evaluate('window.__teslandAudioCapture.cancel()'), CAPTURE_DEADLINE_MS, 'Audio recording cancellation timed out.'); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not cancel audio recording.'); }
+              failure ??= asError(error, 'Could not start audio recording.');
+              try { await abandonBrowser(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not close the recording browser.'); }
               try { await stopRecording(); } catch (cleanupError) { failure ??= asError(cleanupError, 'Could not stop recording.'); }
               if (recordings.at(-1) === video) recordings.pop();
               const discarded = captureSegments.at(-1);

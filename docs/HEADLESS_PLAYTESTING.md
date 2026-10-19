@@ -96,7 +96,8 @@ segment's private `*.webm.partial` file is removed when possible. If the file
 cannot be closed, it stays private and its removal is reported incomplete. The CI
 uploads explicitly exclude partials. A timeout does not cancel a pending browser
 or file operation; inspect and remove remaining partials only after the process
-has ended. A stalled OS request can also keep the process alive after the
+has ended. A failed audio capture also makes the disposable browser unusable,
+so a late operation cannot interfere with a later segment. A stalled OS request can also keep the process alive after the
 deadline; use an external supervisor if a hard process deadline is required. The
 mechanism still requires real-browser verification: same-origin
 code can spoof the handle, and a delayed source-change event can escape the
