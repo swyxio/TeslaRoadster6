@@ -17,7 +17,12 @@ import { spaceportStructureBoxes } from '../shared/spaceport-structures';
 function withCanvas<T>(run:()=>T):T {
  const previous=globalThis.document;
  const context=new Proxy({measureText:()=>({width:100})},{get:(target,key)=>key in target?Reflect.get(target,key):()=>{}});
- Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>context})}});
+ Object.defineProperty(globalThis,'document',{configurable:true,writable:true,value:{
+  createElement:()=>({width:0,height:0,getContext:()=>context}),
+  // TextureLoader can create an image, but the roof-ray check needs only the
+  // immediate procedural fallback and must not depend on asynchronous I/O.
+  createElementNS:()=>({addEventListener:()=>{},removeEventListener:()=>{}}),
+ }});
  try{return run();}finally{if(previous===undefined)Reflect.deleteProperty(globalThis,'document');else globalThis.document=previous;}
 }
 function rayHeight(scene:T.Scene,x:number,z:number){

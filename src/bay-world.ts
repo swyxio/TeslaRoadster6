@@ -9,25 +9,31 @@ import { buildRouteSignage } from './route-signage';
 import { buildNorthBayScenery } from './north-bay-scenery';
 import { buildCaltrain } from './caltrain';
 import { addBuildingWindows, storefrontWindows, type BuildingWindow } from './building-windows';
+import { createStreetMaterials } from './street-materials';
+import { buildBayWaterfront, enhanceBayWater } from './bay-waterfront';
 
 /** Visuals derived from shared geography. Street furniture is decorative. */
 export function buildBay(scene:T.Scene) {
   const palettes=[0xd0c4b0,0xdecdb6,0xb5beb5,0xdac1a8,0xb7a898,0x9fada8,0xe1d1b9];
-  type BoxItem={x:number;y:number;z:number;w:number;h:number;d:number;angle?:number};
+  const streetMaterials=createStreetMaterials();
+  type BoxItem={x:number;y:number;z:number;w:number;h:number;d:number;angle?:number;tint?:number};
   const boxGeometry=new T.BoxGeometry(1,1,1);
   const details=new Map<number,BoxItem[]>();
-  function batches(color:number,items:BoxItem[]){
+  function batches(color:number,items:BoxItem[],override?:T.Material){
     if(!items.length)return;
-    const mesh=new T.InstancedMesh(boxGeometry,material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
-    items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle??0),scale.set(p.w,p.h,p.d))));mesh.computeBoundingSphere();scene.add(mesh);
+    const mesh=new T.InstancedMesh(boxGeometry,override??material(color),items.length),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0),tint=new T.Color();
+    items.forEach((p,i)=>{
+      mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle??0),scale.set(p.w,p.h,p.d)));
+      if(p.tint!==undefined)mesh.setColorAt(i,tint.setHex(p.tint));
+    });mesh.computeBoundingSphere();scene.add(mesh);
   }
-  function localBatches(color:number,items:BoxItem[],cellSize=700){
+  function localBatches(color:number,items:BoxItem[],cellSize=700,override?:T.Material){
     const chunks=new Map<string,BoxItem[]>();
     for(const item of items){
       const key=`${Math.floor(item.x/cellSize)},${Math.floor(item.z/cellSize)}`;
       const chunk=chunks.get(key)??[];chunk.push(item);chunks.set(key,chunk);
     }
-    for(const chunk of chunks.values())batches(color,chunk);
+    for(const chunk of chunks.values())batches(color,chunk,override);
   }
   function box(x:number,y:number,z:number,w:number,h:number,d:number,color:number){
     const items=details.get(color)??[];
@@ -36,6 +42,8 @@ export function buildBay(scene:T.Scene) {
   // Water is physically below the flat, drivable bridge decks.
   const water=new T.Mesh(new T.PlaneGeometry(MAP_BOUNDS.maxX-MAP_BOUNDS.minX+1600,MAP_BOUNDS.maxZ-MAP_BOUNDS.minZ+1600),new T.MeshStandardMaterial({color:0x478e9b,roughness:.45,metalness:.18}));
   water.rotation.x=-Math.PI/2;water.position.set((MAP_BOUNDS.minX+MAP_BOUNDS.maxX)/2,-4,(MAP_BOUNDS.minZ+MAP_BOUNDS.maxZ)/2);scene.add(water);
+  const waterController=enhanceBayWater(water);
+  buildBayWaterfront(scene);
   const shoreline:number[]=[];
   REGIONS.forEach((region,index)=>{
     const shape=new T.Shape();region.points.forEach((p,i)=>i?shape.lineTo(p.x,-p.z):shape.moveTo(p.x,-p.z));shape.closePath();
@@ -99,15 +107,15 @@ export function buildBay(scene:T.Scene) {
     const ground=new T.Mesh(new T.CylinderGeometry(island.r,island.r*1.08,.15,10),material(0x91aa7b));ground.position.set(island.x,.12,island.z);scene.add(ground);
     const tree=new T.Mesh(new T.ConeGeometry(island.r*.55,4,7),material(0x60865f));tree.position.set(island.x,2.2,island.z);scene.add(tree);
   }
-  const road=ROADS.filter(r=>r.kind!=='highway'&&r.course!=='oval').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));batches(0x505e60,road);
+  const road=ROADS.filter(r=>r.kind!=='highway'&&r.course!=='oval').map(r=>({x:r.x,y:.065,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle}));localBatches(0x505e60,road,700,streetMaterials.cityRoad);
   const highways=ROADS.filter(r=>r.kind==='highway');
-  batches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})));
+  localBatches(0x424e50,highways.map(r=>({x:r.x,y:.075,z:r.z,w:r.w,h:.12,d:r.d,angle:r.angle})),700,streetMaterials.highway);
   // Adjacent rotated rectangles leave outside wedges at bends. Round joins
   // follow the shared highway vertices and sit just below the road surfaces.
   const joins=[...new Map(HIGHWAYS.flatMap(h=>h.points.map(p=>({...p,radius:(h.width??32)/2}))).map(p=>[`${p.x},${p.z},${p.radius}`,p])).values()];
   if(joins.length){
     const geometry=new T.CircleGeometry(1,32);geometry.rotateX(-Math.PI/2);
-    const mesh=new T.InstancedMesh(geometry,material(0x424e50),joins.length),matrix=new T.Matrix4();
+    const mesh=new T.InstancedMesh(geometry,streetMaterials.highway,joins.length),matrix=new T.Matrix4();
     joins.forEach((p,i)=>mesh.setMatrixAt(i,matrix.makeScale(p.radius,1,p.radius).setPosition(p.x,.13,p.z)));
     mesh.computeBoundingSphere();scene.add(mesh);
   }
@@ -255,13 +263,20 @@ export function buildBay(scene:T.Scene) {
     const paint=new T.Mesh(labelGeometry,warningMaterial);paint.position.set(x-Math.cos(yaw)*16,.17,z+Math.sin(yaw)*16);paint.rotation.y=yaw+Math.PI;scene.add(paint);
   }
   // Distinct roofs and facade colors make districts less repetitive; windows share one draw call.
-  const buildings=palettes.map(()=>[] as BoxItem[]), windows:BuildingWindow[]=[], roofs:BoxItem[]=[];
+  const buildings=palettes.map(()=>[] as BoxItem[]), stoneBuildings:BoxItem[]=[], victorianBuildings:BoxItem[]=[], windows:BuildingWindow[]=[], roofs:BoxItem[]=[];
   BUILDINGS.forEach((b,i)=>{
     // The landmark renderers use these same shared collision envelopes.
     if(b.style==='landmark'||b.style==='monument'||b.style==='spaceport'||b.style==='tech-campus'||b.style==='structure')return;
     const index=(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7+70)%palettes.length;
     const landmark=['campanile','hoover','airport','mission','rotunda','hospital'].includes(b.style);
-    if(!landmark&&!['pyramid','coit','salesforce','station-venue','luxury-showroom'].includes(b.style))buildings[(index+palettes.length)%palettes.length].push({x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d});
+    const stoneFacade=b.style==='ferry'||(b.style==='midrise'&&b.h<=36&&Math.abs(i*11+Math.floor(b.x/60)*3+Math.floor(b.z/60)*7)%3!==0);
+    const victorianFacade=b.style==='house'&&(b.district==='sf'||b.district==='oakland')&&Math.abs(i*7+Math.floor(b.x/60)+Math.floor(b.z/60))%3!==0;
+    if(!landmark&&!['pyramid','coit','salesforce','station-venue','luxury-showroom'].includes(b.style)){
+      const item={x:b.x,y:b.h/2,z:b.z,w:b.w,h:b.h,d:b.d};
+      if(stoneFacade)stoneBuildings.push({...item,tint:[0xffffff,0xfff5eb,0xe7eeea,0xffeee1][Math.abs(index)%4]});
+      else if(victorianFacade)victorianBuildings.push({...item,tint:[0xffffff,0xfff1e5,0xe3eae5,0xf4e7db][Math.abs(index)%4]});
+      else buildings[(index+palettes.length)%palettes.length].push(item);
+    }
     if(b.style==='luxury-showroom'){
       box(b.x,b.h/2,b.z,b.w,b.h,b.d,0x29353a);
       box(b.x,3.7,b.z+b.d/2+.04,b.w-2,5.4,.1,0x526f77);
@@ -345,6 +360,9 @@ export function buildBay(scene:T.Scene) {
       const storefront=b.style==='midrise'||b.style==='tower';
       if(storefront)windows.push(...storefrontWindows(b));
       const firstFloor=storefront?3+floorSpacing:3;
+      // Detailed masonry image includes its own windows; avoid drawing a
+      // second row of unaligned panes over it. Shop windows remain 3D.
+      if(stoneFacade||victorianFacade)return;
       for(let y=firstFloor;y<b.h-1;y+=floorSpacing)for(let x=-b.w/2+2;x<b.w/2-1;x+=3.8){
         windows.push({x:b.x+x,y,z:b.z+b.d/2+.03,width:windowWidth,height:windowHeight,angle:0,color:shade(x,y)});
         windows.push({x:b.x+x,y,z:b.z-b.d/2-.03,width:windowWidth,height:windowHeight,angle:Math.PI,color:shade(x,y)});
@@ -357,7 +375,7 @@ export function buildBay(scene:T.Scene) {
   });
   // Keep far-away district details in separate instanced meshes so frustum
   // culling remains effective as the world grows to the South Bay.
-  buildings.forEach((batch,i)=>localBatches(palettes[i],batch));localBatches(0xe5d9c5,roofs);addBuildingWindows(scene,windows);
+  buildings.forEach((batch,i)=>localBatches(palettes[i],batch));localBatches(0xffffff,stoneBuildings,700,streetMaterials.facade);localBatches(0xffffff,victorianBuildings,700,streetMaterials.victorian);localBatches(0xe5d9c5,roofs);addBuildingWindows(scene,windows);
   // Lower residential blocks have pitched roofs, while downtown retains flat roofs.
   const homes=BUILDINGS.filter(b=>b.style==='house');
   const gables=new T.InstancedMesh(new T.ConeGeometry(1,1,4),material(0x8b7770),homes.length),roofMatrix=new T.Matrix4();
@@ -393,6 +411,17 @@ export function buildBay(scene:T.Scene) {
   // Ferry Building clock tower at the SF waterfront.
   box(45,17,-35,7,14,7,0xe7ddc7);box(45,24,-35,9,1,9,0xf3e7d1);
   const clock=new T.Mesh(new T.CircleGeometry(1.8,24),new T.MeshBasicMaterial({color:0xf7ebcc}));clock.position.set(48.6,19,-35);clock.rotation.y=Math.PI/2;scene.add(clock);
+  // Recessed-looking arcade panes fit on the existing collision envelope.
+  // They add the Ferry Building silhouette without adding another floor or roof.
+  const arch=new T.Shape();arch.moveTo(-.5,0);arch.lineTo(-.5,.68);arch.quadraticCurveTo(-.5,1,0,1);arch.quadraticCurveTo(.5,1,.5,.68);arch.lineTo(.5,0);arch.closePath();
+  const arches=new T.InstancedMesh(new T.ShapeGeometry(arch,8),material(0x425f66),12),archMatrix=new T.Matrix4(),archPosition=new T.Vector3(),archRotation=new T.Quaternion(),archScale=new T.Vector3(3,5.7,1),archUp=new T.Vector3(0,1,0);
+  for(let side=0;side<2;side++)for(let i=0;i<6;i++){
+    const x=45+(side?8.51:-8.51),z=-47.5+i*5;
+    arches.setMatrixAt(side*6+i,archMatrix.compose(archPosition.set(x,1,z),archRotation.setFromAxisAngle(archUp,side?Math.PI/2:-Math.PI/2),archScale));
+    for(const dz of [-1.7,1.7])box(x,3.8,z+dz,.13,5.7,.22,0xe9dcca);
+  }
+  arches.computeBoundingSphere();scene.add(arches);
+  box(48.65,19.65,-35,.06,1.3,.12,0x4a5551);box(48.65,19,-34.5,.06,.12,1,0x4a5551);
   box(45,26,-35,1,4,1,0x90a79f);
   // Waterfront piers, warehouses, and Oakland container cranes convey the working Bay.
   for(const z of [-145,-105,-65,-5,145]){
@@ -464,4 +493,5 @@ export function buildBay(scene:T.Scene) {
   // buildings. Regional bounds keep distant bridge/port details cullable.
   for(const [color,items] of details)localBatches(color,items,250);
   buildRouteSignage(scene);
+  return waterController;
 }

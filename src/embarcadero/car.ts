@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // This source is licensed CC BY; see public/embarcadero/vehicle/ATTRIBUTION.md.
-// The downloaded model is only loaded in this isolated visual demo.
+// The model is also used for the optional controlled car in the main game.
 const vehiclePath = '/embarcadero/vehicle/';
 let templatePromise: Promise<T.Group> | undefined;
 
@@ -56,6 +56,9 @@ async function loadTemplate(): Promise<T.Group> {
   bounds = new T.Box3().setFromObject(model);
 
   const paint = new T.MeshPhysicalMaterial({ color: 0xdce1df, metalness: .45, roughness: .22, clearcoat: .9, clearcoatRoughness: .15 });
+  // Mark the shared material so the main game's optional hero car can retain
+  // player paint choices without depending on asset-internal node names.
+  paint.userData.teslandHeroPaint = true;
   const glass = new T.MeshPhysicalMaterial({ color: 0x1c292e, metalness: .3, roughness: .17, clearcoat: 1, clearcoatRoughness: .08 });
   const wheelNames: Record<string, string> = {
     'TRDEF-WheelFtR': 'wheel_fr', 'TRDEF-WheelFtL': 'wheel_fl',

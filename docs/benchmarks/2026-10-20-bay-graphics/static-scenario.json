@@ -1,0 +1,12 @@
+{
+ "freshGuest": true,
+ "viewport": { "width": 1280, "height": 720, "deviceScaleFactor": 1 },
+ "steps": [
+   { "type": "frameStart" },
+   { "type": "waitFor", "selector": "#connection:has-text(\"SANDBOX\")", "timeoutMs": 60000 },
+   { "type": "wait", "ms": 8000 },
+   { "type": "sample" },
+   { "type": "screenshot", "name": "stationary" },
+   { "type": "frameStop" }
+ ]
+}

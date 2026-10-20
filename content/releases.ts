@@ -5,6 +5,19 @@ export { CURRENT_RELEASE } from './version';
 export const RELEASES = [
   {
     ...CURRENT_RELEASE,
+    date: '2026-10-20',
+    title: 'A new light on the Bay',
+    intro: 'The main game takes some of the Embarcadero demo’s visual ideas on the road.',
+    sections: [
+      { title: 'Around the Bay', items: [
+        'See a changing sky and water, textured streets and façades, and new palms around the San Francisco and Oakland waterfronts.',
+        'Drive a more detailed Roadster and look for a more recognizable Ferry Building. The Bay’s roads, collisions and multiplayer rules stay the same.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.50-alpha',
+    label: '0.0.50 Alpha',
     date: '2026-10-19',
     title: 'Another sunset on the Embarcadero',
     intro: 'The standalone visual demo has a richer waterfront and new sunset materials.',

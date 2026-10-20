@@ -23,6 +23,26 @@ Distinct cues include open original Roadster, new sports wedge, Cybertruck's ang
 
 ## Environment
 
+The multiplayer scene reuses the Embarcadero's generated asphalt, masonry and
+palm-frond art on the existing shared road and building surfaces. Palms are
+decorative, instanced by local cell and kept clear of roads, delivery markers,
+charger lots, parking and shops. The bay shader changes the appearance of the
+existing water plane; it does not change water or bridge collision. A small
+CC0 sunset panorama supplies the day-clock sky; reflections use the existing
+compact environment map to avoid a second runtime bake. The world-space
+horizon and local contact shadows remain. Full directional
+building and palm shadows are not yet modeled in the multiplayer scene. Asset
+sources and licenses are documented under `public/embarcadero/`.
+
+The controlled Roadster can asynchronously use the attributed, simplified 2020
+model from the standalone demo; all other vehicles retain the normal fleet LOD.
+Its approximately 123k triangles exceed the original 12k per-vehicle target,
+so it is limited to the controlled car and requires measured render and startup
+costs. The playable procedural car remains until the asset is ready or if it
+fails. Main-game rocket hardware, paint and physics stay on their existing
+contracts. Refractive headlamp glass is approximated by opaque reflective
+glass to avoid an additional full-scene transmission pass.
+
 Read `shared/map.ts` for land polygons, bridge decks, roads and `BUILDINGS` collision/roof positions; see MAP.md. Decorative details must not hide playable lanes, charging stalls, station rings or shop rings. Distinguish purple Rocket pickups and fictional workshops from repair and air pickups. Station IDs, source URLs, positions and stall geometry belong in shared data. The Vault building footprint and gold forecourt ring derive from `LUXURY_SHOWROOM`; keep rendered surfaces aligned with the shared collision building and arrival area. The hill, overpass, Oakland stunt ramp and loop derive their geometry from shared data. Island bank and cliff meshes use the vertices in `shared/island-stunts.ts`; the banked oval uses `shared/oval-bank.ts` including its flat grid and junction transitions. The two launch ramp meshes follow `shared/island-jumps.ts`. Preserve those physical triangles and the separate flat roads when replacing visuals. The ferry mesh follows the authoritative moving deck. Parking and race markers use shared lot/course definitions. The China Basin Rocket Dome and soccer ball visuals follow shared capsule and ball state; do not move the floor, goals, walls or ceiling independently of their authoritative geometry. Any new terrain, elevated road or ramp must update shared height, support identity and collision before its mesh is introduced. Distant hills, bridge furniture and water are scenery; do not imply unsupported traversable surfaces.
 
 ## UI alternatives
