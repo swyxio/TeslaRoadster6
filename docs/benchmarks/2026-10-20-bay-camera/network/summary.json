@@ -1,0 +1,275 @@
+{
+  "method": "Same displayed position/quaternion and authoritative tick b velocity/support feed both chase cameras. Production 0.0.51 vs 12d5cf06; 120Hz frames, landscape 1280x720, 20Hz physics; omit initial 3s from continuity stats. Synthetic transport, not browser/GPU/WAN/device.",
+  "runs": [
+    {
+      "scenario": "fast-slalom",
+      "profile": "zero",
+      "packets": {
+        "sent": 170,
+        "received": 80,
+        "batched": 0
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4731,
+        "frameAngularStepP99Deg": 0.1953,
+        "yawRateP95DegS": 18.5707,
+        "velocityStepP95Mps": 0.459,
+        "velocityStepMaxMps": 0.6395,
+        "velocityStepMaxAtMs": 6166.6667,
+        "yawRateStepP95DegS": 1.3157,
+        "yawRateStepMaxDegS": 2.3656,
+        "yawRateStepMaxAtMs": 6166.6667
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4724,
+        "frameAngularStepP99Deg": 0.2023,
+        "yawRateP95DegS": 18.4313,
+        "velocityStepP95Mps": 0.4396,
+        "velocityStepMaxMps": 0.5956,
+        "velocityStepMaxAtMs": 6166.6667,
+        "yawRateStepP95DegS": 1.1675,
+        "yawRateStepMaxDegS": 1.8952,
+        "yawRateStepMaxAtMs": 6166.6667
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    },
+    {
+      "scenario": "fast-slalom",
+      "profile": "steady150",
+      "packets": {
+        "sent": 170,
+        "received": 80,
+        "batched": 0
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4745,
+        "frameAngularStepP99Deg": 0.2074,
+        "yawRateP95DegS": 19.0346,
+        "velocityStepP95Mps": 0.4654,
+        "velocityStepMaxMps": 0.6943,
+        "velocityStepMaxAtMs": 6108.3333,
+        "yawRateStepP95DegS": 1.4134,
+        "yawRateStepMaxDegS": 2.469,
+        "yawRateStepMaxAtMs": 6158.3333
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4737,
+        "frameAngularStepP99Deg": 0.2108,
+        "yawRateP95DegS": 18.6442,
+        "velocityStepP95Mps": 0.4383,
+        "velocityStepMaxMps": 0.6478,
+        "velocityStepMaxAtMs": 6108.3333,
+        "yawRateStepP95DegS": 1.2006,
+        "yawRateStepMaxDegS": 1.9658,
+        "yawRateStepMaxAtMs": 6158.3333
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    },
+    {
+      "scenario": "fast-slalom",
+      "profile": "bunched150",
+      "packets": {
+        "sent": 170,
+        "received": 119,
+        "batched": 112
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4844,
+        "frameAngularStepP99Deg": 0.1845,
+        "yawRateP95DegS": 20.969,
+        "velocityStepP95Mps": 0.4666,
+        "velocityStepMaxMps": 0.7002,
+        "velocityStepMaxAtMs": 6516.6667,
+        "yawRateStepP95DegS": 1.3423,
+        "yawRateStepMaxDegS": 2.0814,
+        "yawRateStepMaxAtMs": 6375
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4834,
+        "frameAngularStepP99Deg": 0.2152,
+        "yawRateP95DegS": 20.0637,
+        "velocityStepP95Mps": 0.4409,
+        "velocityStepMaxMps": 0.6721,
+        "velocityStepMaxAtMs": 6516.6667,
+        "yawRateStepP95DegS": 1.1717,
+        "yawRateStepMaxDegS": 1.6387,
+        "yawRateStepMaxAtMs": 3525
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    },
+    {
+      "scenario": "flight-turn",
+      "profile": "zero",
+      "packets": {
+        "sent": 164,
+        "received": 80,
+        "batched": 0
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4831,
+        "frameAngularStepP99Deg": 0.621,
+        "yawRateP95DegS": 74.338,
+        "velocityStepP95Mps": 0.6049,
+        "velocityStepMaxMps": 1.9628,
+        "velocityStepMaxAtMs": 6800,
+        "yawRateStepP95DegS": 0.9463,
+        "yawRateStepMaxDegS": 3.5908,
+        "yawRateStepMaxAtMs": 6800
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.5056,
+        "frameAngularStepP99Deg": 0.7955,
+        "yawRateP95DegS": 94.4386,
+        "velocityStepP95Mps": 0.6578,
+        "velocityStepMaxMps": 2.0164,
+        "velocityStepMaxAtMs": 6800,
+        "yawRateStepP95DegS": 0.7624,
+        "yawRateStepMaxDegS": 7.2736,
+        "yawRateStepMaxAtMs": 6850
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    },
+    {
+      "scenario": "flight-turn",
+      "profile": "steady150",
+      "packets": {
+        "sent": 164,
+        "received": 80,
+        "batched": 0
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4848,
+        "frameAngularStepP99Deg": 0.621,
+        "yawRateP95DegS": 74.338,
+        "velocityStepP95Mps": 0.5923,
+        "velocityStepMaxMps": 2.2881,
+        "velocityStepMaxAtMs": 6766.6667,
+        "yawRateStepP95DegS": 0.9391,
+        "yawRateStepMaxDegS": 3.4055,
+        "yawRateStepMaxAtMs": 6775
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.5073,
+        "frameAngularStepP99Deg": 0.8409,
+        "yawRateP95DegS": 94.433,
+        "velocityStepP95Mps": 0.6443,
+        "velocityStepMaxMps": 2.3841,
+        "velocityStepMaxAtMs": 6766.6667,
+        "yawRateStepP95DegS": 0.7462,
+        "yawRateStepMaxDegS": 7.3343,
+        "yawRateStepMaxAtMs": 6775
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    },
+    {
+      "scenario": "flight-turn",
+      "profile": "bunched150",
+      "packets": {
+        "sent": 164,
+        "received": 117,
+        "batched": 104
+      },
+      "old": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4743,
+        "frameAngularStepP99Deg": 0.6257,
+        "yawRateP95DegS": 74.5381,
+        "velocityStepP95Mps": 0.5864,
+        "velocityStepMaxMps": 1.7811,
+        "velocityStepMaxAtMs": 7000,
+        "yawRateStepP95DegS": 0.9382,
+        "yawRateStepMaxDegS": 3.2433,
+        "yawRateStepMaxAtMs": 7000
+      },
+      "candidate": {
+        "samples": 601,
+        "cuts": 0,
+        "explicitSnapFlags": 0,
+        "frameMoveP99M": 0.4965,
+        "frameAngularStepP99Deg": 0.7817,
+        "yawRateP95DegS": 92.9861,
+        "velocityStepP95Mps": 0.6211,
+        "velocityStepMaxMps": 1.8317,
+        "velocityStepMaxAtMs": 7000,
+        "yawRateStepP95DegS": 0.848,
+        "yawRateStepMaxDegS": 5.7111,
+        "yawRateStepMaxAtMs": 7075
+      },
+      "presentationEvents": [
+        {
+          "atMs": 8.333333333333334,
+          "predicted": true,
+          "snap": false
+        }
+      ],
+      "snapDetails": []
+    }
+  ]
+}
