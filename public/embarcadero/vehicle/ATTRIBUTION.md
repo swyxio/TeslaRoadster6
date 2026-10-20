@@ -8,7 +8,7 @@ Changes: the geometry was simplified and compatible meshes were joined, while fo
 
 The intermediate can be rebuilt from the exact original with `optimize.mjs` in this directory. It requires Node.js, Three.js 0.186.0, `@gltf-transform/core`, `@gltf-transform/extensions` and `@gltf-transform/functions` 4.5.1, `draco3dgltf` 1.5.9, and `meshoptimizer` 1.3.0. Run `node optimize.mjs source.glb roadster.glb` in an environment with those packages installed. The original was a WebGI export; the optimizer intentionally removes unused WebGI viewer metadata and preserves supported glTF material extensions.
 
-The Draco decoder distributed alongside comes from Three.js and Google Draco. Three.js is [MIT licensed](https://github.com/mrdoob/three.js/blob/dev/LICENSE), and Draco is [Apache 2.0 licensed](https://github.com/google/draco/blob/main/LICENSE).
+The Draco decoder distributed alongside comes from Three.js and Google Draco. Three.js is [MIT licensed](https://github.com/mrdoob/three.js/blob/dev/LICENSE), and Draco is [Apache 2.0 licensed](./draco/LICENSE.txt).
 
 The model depicts a Tesla vehicle. This unofficial fan demo is not affiliated with Tesla.
 

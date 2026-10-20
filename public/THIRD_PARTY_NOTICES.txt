@@ -30,4 +30,4 @@ The demo modifies the model's geometry, textures, orientation and materials,
 and adds fictional rocket nozzles. For source, checksums and processing,
 see /embarcadero/vehicle/ATTRIBUTION.md.
 The Draco decoder is distributed by Google under the Apache License 2.0:
-https://github.com/google/draco/blob/main/LICENSE
+see /embarcadero/vehicle/draco/LICENSE.txt.
