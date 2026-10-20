@@ -21,7 +21,7 @@ import { createCow } from './cow';
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
-import { cockpitPose, viewLens, type CameraMode } from './camera';
+import { chaseFraming, chaseResponse, updateChase, cockpitPose, viewLens, type CameraMode } from './camera';
 import { LandingPulse } from './landing-pulse';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
@@ -99,6 +99,8 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private chaseFrame = {distance:0,height:0,lookAhead:0,focusRate:8};
+  private chaseResponseState = {motion:0,distance:0,gate:0,ready:false};
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private landingPulse = new LandingPulse();
   private predictedEntity?:string;
@@ -421,19 +423,25 @@ export class GameScene {
     this.objective.visible=!!player&&!menu&&!e?.inDome&&!player.delivery.order.search&&!(player.delivery.lastReroute?.reason==='unavailable'&&!isOrderAccessible(player.delivery.order,player.delivery.level,!e||e.kind==='person'||canAssignDeliveryRoof(e)));if(target){this.objective.position.set(target.x,target.y+(target.rooftop?.3:0),target.z);this.objectiveRing.scale.setScalar(target.rooftop?2/3:1);}
     this.objectiveBeam.visible=!cockpit;
     const cameraUp=new T.Vector3(0,1,0);
+    let chaseUpdated=false;
+    if(menu||cockpit||!e)this.chaseResponseState.ready=false;
     if(menu){
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
-      const distance=this.cameraMode==='wide'?30:portrait?18:15;
-      const lookAhead=portrait?-6:5;
+      const framing=chaseFraming(portrait,e.kind==='person'?null:VEHICLES[e.kind],this.chaseFrame);
+      this.chaseFrame.focusRate=8;
+      if(this.cameraMode==='chase'&&e.kind!=='person')chaseResponse(Math.hypot(e.vx,e.vz),e.supportId===null,!e.inDome,dt,this.chaseResponseState,this.chaseFrame);
+      else this.chaseResponseState.ready=false;
+      const distance=this.cameraMode==='wide'?30:framing.distance;
+      const lookAhead=this.cameraMode==='wide'?(portrait?-6:5):framing.lookAhead;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const mesh=this.entities.get(e.id)!;
       const visualBack=new T.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
       const yaw=Math.atan2(visualBack.x,visualBack.z);
       const back=new T.Vector3(Math.sin(yaw),surface?Math.cos(yaw)*surface.tangentY:0,surface?Math.cos(yaw)*surface.tangentZ:Math.cos(yaw));
       const position=mesh.position.clone(),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
-      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
+      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:framing.height);
       if(surface){
         // A tangent chase camera on the curved wall points out through the
         // shell. Move behind the car and look into the pitch as it climbs,
@@ -445,15 +453,18 @@ export class GameScene {
         const arenaFocus=position.clone().lerp(field,.35).add(new T.Vector3(0,1,0));
         this.follow.lerp(arenaCamera,wallView);focusTarget.lerp(arenaFocus,wallView);
       }
-      if(!this.cameraReady||this.camera.position.distanceTo(this.follow)>100){this.camera.position.copy(this.follow);this.focus.copy(focusTarget);}
-      else this.focus.lerp(focusTarget,1-Math.exp(-8*dt));
+      updateChase(this.camera.position,this.focus,this.follow,focusTarget,dt,this.cameraReady,this.chaseFrame.focusRate);
+      chaseUpdated=true;
     }
     if(cockpit&&e&&e.kind!=='person'){
       const mesh=this.entities.get(e.id)!;const pose=cockpitPose(mesh.position,mesh.quaternion,VEHICLES[e.kind]);
       this.camera.position.copy(pose.position);this.camera.quaternion.copy(pose.quaternion);this.cameraReady=true;
     }else{
-      if(!this.cameraReady){this.camera.position.copy(this.follow);this.cameraReady=true;}
-      this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));
+      if(!chaseUpdated){
+        if(!this.cameraReady)this.camera.position.copy(this.follow);
+        else this.camera.position.lerp(this.follow,1-Math.exp(-5*dt));
+      }
+      this.cameraReady=true;
       this.cameraTargetTurn.setFromUnitVectors(this.camera.up,cameraUp);this.cameraTurn.identity().slerp(this.cameraTargetTurn,1-Math.exp(-5*dt));this.camera.up.applyQuaternion(this.cameraTurn).normalize();
       this.camera.lookAt(this.focus);
     }

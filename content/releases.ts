@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-20',
+    title: 'A closer view of the Bay',
+    intro: 'The chase camera brings your car and the road ahead closer into view.',
+    sections: [
+      { title: 'Driving', items: [
+        'See more of the street and skyline, especially on a phone. Larger vehicles still have room in the frame.',
+        'Cockpit and wide camera views are unchanged.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.51-alpha',
+    label: '0.0.51 Alpha',
+    date: '2026-10-20',
     title: 'A new light on the Bay',
     intro: 'The main game takes some of the Embarcadero demo’s visual ideas on the road.',
     sections: [
