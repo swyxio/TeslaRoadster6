@@ -37,10 +37,10 @@ function recordedRun(grounded:boolean,turn:number,reverse=false):Sample[]{
  * 20 Hz shared-simulation poses, independently sampled at display frame rates. */
 function traceCamera(trace:Sample[],aspect:number,hz:number,adaptive=true){
   const car=VEHICLES.roadster,portrait=aspect<.8;
-  const framing={distance:0,height:0,lookAhead:0,focusRate:8},response={motion:0,distance:0,ready:false};
+  const framing={distance:0,height:0,lookAhead:0,focusRate:8},response={motion:0,distance:0,gate:0,ready:false};
   const camera=new T.PerspectiveCamera(55,aspect,.1,1800),focus=new T.Vector3();
   let ready=false,maxBound=0,maxAngularRate=0,maxMotionRate=0,cuts=0;
-  const velocities:T.Vector3[]=[],airborneFrames:boolean[]=[];
+  const velocities:T.Vector3[]=[],angularRates:number[]=[],airborneFrames:boolean[]=[],domeFrames:boolean[]=[];
   for(let frame=0;frame<=(trace.length-1)*.05*hz;frame++){
     const seconds=frame/hz,tick=Math.min(trace.length-2,Math.floor(seconds/.05));
     const part=Math.min(1,(seconds-tick*.05)/.05),a=trace[tick],b=trace[tick+1];
@@ -59,7 +59,8 @@ function traceCamera(trace:Sample[],aspect:number,hz:number,adaptive=true){
     const supportTransition=a.supportId===null&&ground(b.supportId)||ground(a.supportId)&&b.supportId===null;
     const airborne=supportTransition?(part<=0?a.supportId===null:part>=1?b.supportId===null:true):b.supportId===null;
     airborneFrames.push(airborne);
-    if(adaptive)chaseResponse(Math.hypot(b.vx,b.vz),airborne,1/hz,response,framing);
+    domeFrames.push(b.inDome);
+    if(adaptive)chaseResponse(Math.hypot(b.vx,b.vz),airborne,!b.inDome,1/hz,response,framing);
     const follow=pos.clone().addScaledVector(back,framing.distance).add(new T.Vector3(0,framing.height,0));
     const target=pos.clone().addScaledVector(back,-framing.lookAhead).add(new T.Vector3(0,1.3,0));
     const oldPosition=camera.position.clone(),oldRotation=camera.quaternion.clone();
@@ -67,6 +68,7 @@ function traceCamera(trace:Sample[],aspect:number,hz:number,adaptive=true){
     updateChase(camera.position,focus,follow,target,1/hz,ready,framing.focusRate);
     camera.lookAt(focus);camera.updateMatrixWorld();
     velocities.push(camera.position.clone().sub(oldPosition).multiplyScalar(hz));
+    angularRates.push(oldRotation.angleTo(camera.quaternion)*hz);
     if(ready){maxAngularRate=Math.max(maxAngularRate,oldRotation.angleTo(camera.quaternion)*hz);maxMotionRate=Math.max(maxMotionRate,oldPosition.distanceTo(camera.position)*hz);}
     ready=true;
     for(const x of [-car.width/2,car.width/2])for(const y of [0,car.height])for(const z of [-car.length/2,car.length/2]){
@@ -75,7 +77,7 @@ function traceCamera(trace:Sample[],aspect:number,hz:number,adaptive=true){
       assert.ok(point.z<1,'vehicle remains in front of camera');
     }
   }
-  return {maxBound,maxAngularRate,maxMotionRate,cuts,velocities,airborneFrames};
+  return {maxBound,maxAngularRate,maxMotionRate,cuts,velocities,angularRates,airborneFrames,domeFrames};
 }
 
 test('high-speed ground and airborne turns keep the whole car in the chase view without cuts',()=>{
@@ -131,19 +133,74 @@ test('fast takeoff and landing do not introduce a packet-shaped camera kick',()=
 
 test('framing changes gradually as 20 Hz speed and support updates cross thresholds',()=>{
   for(const hz of [30,60,120]){
-    const state={motion:0,distance:0,ready:false},framing={distance:0,height:0,lookAhead:0,focusRate:8};
+    const state={motion:0,distance:0,gate:0,ready:false},framing={distance:0,height:0,lookAhead:0,focusRate:8};
     let priorDistance=0,priorAim=5;
     for(let frame=0;frame<2*hz;frame++){
       // Alternating velocity snapshots stress both the 8 and 28 m/s thresholds.
       const tick=Math.floor(frame/hz*20),speed=[0,7,9,27,29,45][tick%6],airborne=tick>=20;
       chaseFraming(false,VEHICLES.roadster,framing);
-      chaseResponse(speed,airborne,1/hz,state,framing);
+      chaseResponse(speed,airborne,true,1/hz,state,framing);
       const extra=framing.distance-10;
       if(frame>0){
         assert.ok(Math.abs(extra-priorDistance)<=8*(1-Math.exp(-1/hz))+1e-8,'distance response stays bounded');
         assert.ok(Math.abs(framing.lookAhead-priorAim)<=5*(1-Math.exp(-8/hz))+1e-8,'aim response stays bounded');
       }
       priorDistance=extra;priorAim=framing.lookAhead;
+    }
+  }
+});
+
+test('physical Rocket Dome entry and exit do not kick the chase camera',()=>{
+  for(const entering of [true,false]){
+    const world=createEmptyWorld(),car=makeEntity('camera-car','roadster',-50,entering?145:220,'pilot');
+    Object.assign(car,entering?{yaw:Math.PI,vz:50,speed:50,tankLevel:5}:{yaw:0,vz:-50,speed:50,tankLevel:5,inDome:true,supportId:'dome',domeS:35});
+    world.entities=[car];const trace=[{...car}];
+    for(let tick=0;tick<20;tick++){
+      step(world,new Map([['pilot',{...NEUTRAL,throttle:1}]]),.05);trace.push({...car});
+    }
+    assert.ok(trace.some(sample=>sample.inDome===entering),'scenario crosses the physical gate');
+    assert.ok(trace.every(sample=>sample.y===0),'scenario stays on the flat floor near the gate');
+    for(const aspect of [1280/720,390/844])for(const hz of [30,60,120]){
+      const revised=traceCamera(trace,aspect,hz),base=traceCamera(trace,aspect,hz,false);
+      const transitions=revised.domeFrames.flatMap((inDome,i)=>i>1&&inDome!==revised.domeFrames[i-1]?[i]:[]);
+      assert.equal(transitions.length,1,'scenario crosses the gate once');
+      const frame=transitions[0];
+      const kick=revised.velocities[frame].clone().sub(revised.velocities[frame-1]);
+      const baseline=base.velocities[frame].clone().sub(base.velocities[frame-1]);
+      assert.ok(kick.clone().sub(baseline).length()*hz<25,'gate crossing must not create a sudden camera-velocity jump');
+      const turnKick=revised.angularRates[frame]-revised.angularRates[frame-1];
+      const baselineTurnKick=base.angularRates[frame]-base.angularRates[frame-1];
+      assert.ok(Math.abs(turnKick-baselineTurnKick)<.03,'gate crossing must not create a sudden camera-turn jump');
+      assert.equal(revised.cuts,0,'the gate is a continuous transition');
+    }
+  }
+});
+
+test('the chase response settles back to the existing Rocket Dome framing',()=>{
+  const state={motion:0,distance:0,gate:0,ready:false},framing={distance:0,height:0,lookAhead:0,focusRate:8};
+  chaseFraming(false,VEHICLES.roadster,framing);chaseResponse(50,false,true,1/60,state,framing);
+  for(let frame=0;frame<12*60;frame++){
+    chaseFraming(false,VEHICLES.roadster,framing);chaseResponse(50,false,false,1/60,state,framing);
+  }
+  assert.ok(Math.abs(framing.distance-10)<.001);
+  assert.ok(Math.abs(framing.lookAhead-5)<.001);
+  assert.ok(Math.abs(framing.focusRate-8)<.001);
+});
+
+test('a car remains framed when it turns immediately after leaving Rocket Dome',()=>{
+  for(const turn of [-1,1]){
+    const world=createEmptyWorld(),car=makeEntity('camera-car','roadster',-50,220,'pilot');
+    Object.assign(car,{yaw:0,vz:-50,speed:50,tankLevel:5,inDome:true,supportId:'dome',domeS:35});
+    world.entities=[car];const trace=[{...car}];
+    for(let tick=0;tick<70;tick++){
+      step(world,new Map([['pilot',{...NEUTRAL,throttle:1,steer:tick>=13?turn:0}]]),.05);trace.push({...car});
+    }
+    assert.ok(trace.some(sample=>!sample.inDome),'scenario drives out');
+    assert.ok(Math.abs(trace[30].yaw-trace[13].yaw)>.2,'scenario turns after the gate');
+    for(const aspect of [1280/720,390/844])for(const hz of [30,60,120]){
+      const {maxBound,cuts}=traceCamera(trace,aspect,hz);
+      assert.ok(maxBound<1,`exit turn ${turn}, ${aspect}, ${hz}Hz: vehicle bounds ${maxBound}`);
+      assert.equal(cuts,0);
     }
   }
 });

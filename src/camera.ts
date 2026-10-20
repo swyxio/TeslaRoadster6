@@ -11,14 +11,18 @@ export function chaseFraming(portrait:boolean, vehicle:Pick<VehicleSpec,'length'
   return out;
 }
 
-export type ChaseResponseState={motion:number;distance:number;ready:boolean};
+export type ChaseResponseState={motion:number;distance:number;gate:number;ready:boolean};
 
-/** Smooth the framing response to discrete velocity and ground/air updates. */
-export function chaseResponse(speed:number, airborne:boolean, dt:number, state:ChaseResponseState, out:{distance:number;lookAhead:number;focusRate:number}){
-  const targetMotion=T.MathUtils.clamp((Math.abs(speed)-8)/20,0,1);
-  const targetDistance=(airborne?8:4)*targetMotion;
-  if(!state.ready){state.motion=targetMotion;state.distance=targetDistance;state.ready=true;}
-  else{state.motion+=(targetMotion-state.motion)*(1-Math.exp(-8*dt));state.distance+=(targetDistance-state.distance)*(1-Math.exp(-dt));}
+/** Smooth the framing response to discrete velocity, ground/air and arena updates. */
+export function chaseResponse(speed:number, airborne:boolean, enabled:boolean, dt:number, state:ChaseResponseState, out:{distance:number;lookAhead:number;focusRate:number}){
+  const speedMotion=T.MathUtils.clamp((Math.abs(speed)-8)/20,0,1),gateTarget=enabled?1:0;
+  if(!state.ready){state.gate=gateTarget;state.motion=speedMotion*state.gate;state.distance=(airborne?8:4)*state.motion;state.ready=true;}
+  else{
+    state.gate+=(gateTarget-state.gate)*(1-Math.exp(-dt));
+    const targetMotion=speedMotion*state.gate;
+    state.motion+=(targetMotion-state.motion)*(1-Math.exp(-8*dt));
+    state.distance+=((airborne?8:4)*targetMotion-state.distance)*(1-Math.exp(-dt));
+  }
   out.lookAhead*=1-state.motion;out.distance+=state.distance;out.focusRate=8+16*state.motion;
 }
 

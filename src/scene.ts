@@ -100,7 +100,7 @@ export class GameScene {
   private basis = new T.Matrix4();
   private cameraReady = false;
   private chaseFrame = {distance:0,height:0,lookAhead:0,focusRate:8};
-  private chaseResponseState = {motion:0,distance:0,ready:false};
+  private chaseResponseState = {motion:0,distance:0,gate:0,ready:false};
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private landingPulse = new LandingPulse();
   private predictedEntity?:string;
@@ -431,7 +431,7 @@ export class GameScene {
       const portrait=this.camera.aspect<.8;
       const framing=chaseFraming(portrait,e.kind==='person'?null:VEHICLES[e.kind],this.chaseFrame);
       this.chaseFrame.focusRate=8;
-      if(this.cameraMode==='chase'&&e.kind!=='person'&&!e.inDome)chaseResponse(Math.hypot(e.vx,e.vz),e.supportId===null,dt,this.chaseResponseState,this.chaseFrame);
+      if(this.cameraMode==='chase'&&e.kind!=='person')chaseResponse(Math.hypot(e.vx,e.vz),e.supportId===null,!e.inDome,dt,this.chaseResponseState,this.chaseFrame);
       else this.chaseResponseState.ready=false;
       const distance=this.cameraMode==='wide'?30:framing.distance;
       const lookAhead=this.cameraMode==='wide'?(portrait?-6:5):framing.lookAhead;
