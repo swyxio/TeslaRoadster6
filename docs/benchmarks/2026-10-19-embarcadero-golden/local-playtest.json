@@ -1,0 +1,359 @@
+{
+  "desktop": {
+    "errors": [],
+    "route": [
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": 16.883959827334305,
+        "yaw": 0,
+        "simulationSpeed": 8.415491223310363,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 22.183959827334306,
+        "drawCalls": 616,
+        "triangles": 839000
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": 2.8680773575589784,
+        "yaw": 0,
+        "simulationSpeed": 18.92264014143633,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 8.168077357558966,
+        "drawCalls": 617,
+        "triangles": 866346
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -20.955451869073567,
+        "yaw": 0,
+        "simulationSpeed": 28.079528399358793,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -15.655451869073568,
+        "drawCalls": 578,
+        "triangles": 815074
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -52.03061649441063,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -46.730616494410626,
+        "drawCalls": 577,
+        "triangles": 800184
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -84.34421649441053,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -79.04421649441052,
+        "drawCalls": 571,
+        "triangles": 797736
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -116.6130164944104,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -111.31301649441039,
+        "drawCalls": 569,
+        "triangles": 833714
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -148.6162164944103,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -143.3162164944103,
+        "drawCalls": 505,
+        "triangles": 758270
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -180.8786164944102,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -175.5786164944102,
+        "drawCalls": 493,
+        "triangles": 714188
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -213.12821649441005,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -207.82821649441004,
+        "drawCalls": 483,
+        "triangles": 712022
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -245.14421649440996,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -239.84421649440995,
+        "drawCalls": 453,
+        "triangles": 695828
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -277.409816494411,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -272.109816494411,
+        "drawCalls": 427,
+        "triangles": 661576
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -309.5346164944126,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -304.2346164944126,
+        "drawCalls": 410,
+        "triangles": 636384
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -341.54101649441424,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -336.2410164944142,
+        "drawCalls": 403,
+        "triangles": 635440
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -373.7522164944158,
+        "yaw": 0,
+        "simulationSpeed": 32,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -368.4522164944158,
+        "drawCalls": 348,
+        "triangles": 576644
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -405.7596728462893,
+        "yaw": 0,
+        "simulationSpeed": 28.19287358153946,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -400.45967284628927,
+        "drawCalls": 330,
+        "triangles": 552772
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -413.14732246643905,
+        "yaw": 0,
+        "simulationSpeed": 0.6306963428623359,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -407.84732246643904,
+        "drawCalls": 313,
+        "triangles": 536798
+      },
+      {
+        "x": 2.15,
+        "y": 0,
+        "z": -413.52969341306806,
+        "yaw": 0,
+        "simulationSpeed": 0.27446521047322087,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": -408.22969341306805,
+        "drawCalls": 311,
+        "triangles": 502310
+      }
+    ],
+    "autoStopped": true,
+    "endNotice": "End of the waterfront. Reset to drive it again.",
+    "flight": {
+      "x": 2.15,
+      "y": 21.659233333333326,
+      "z": 20,
+      "yaw": 0,
+      "simulationSpeed": 0,
+      "cameraX": -1.2000000000000002,
+      "cameraY": 23.559233333333324,
+      "cameraZ": 25.3,
+      "drawCalls": 616,
+      "triangles": 838056
+    },
+    "land": {
+      "x": 2.15,
+      "y": 0,
+      "z": 20,
+      "yaw": 0,
+      "simulationSpeed": 0,
+      "cameraX": -1.2000000000000002,
+      "cameraY": 1.9000000000000015,
+      "cameraZ": 25.3,
+      "drawCalls": 615,
+      "triangles": 837992
+    },
+    "drive": {
+      "x": 2.15,
+      "y": 0,
+      "z": 11.870307630413784,
+      "yaw": 0,
+      "simulationSpeed": 13.39781843929351,
+      "cameraX": -1.2000000000000002,
+      "cameraY": 1.9000000000000015,
+      "cameraZ": 17.170307630413774,
+      "drawCalls": 615,
+      "triangles": 840664
+    },
+    "comparisonVisible": true,
+    "comparisonClosed": true
+  },
+  "mobile": [
+    {
+      "name": "portrait",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "errors": [],
+      "before": {
+        "x": 2.15,
+        "y": 0,
+        "z": 20,
+        "yaw": 0,
+        "simulationSpeed": 0,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 25.3,
+        "drawCalls": 391,
+        "triangles": 631614
+      },
+      "drivePressed": true,
+      "afterDrive": {
+        "x": 2.15,
+        "y": 0,
+        "z": 6.875615446394807,
+        "yaw": 0,
+        "simulationSpeed": 16.623231639089642,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 12.175615446394806,
+        "drawCalls": 488,
+        "triangles": 821228
+      },
+      "liftPressed": true,
+      "afterLift": {
+        "x": 2.15,
+        "y": 13.596166666666667,
+        "z": -11.239951691920858,
+        "yaw": 0,
+        "simulationSpeed": 5.334176669723358,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 15.496166666666667,
+        "cameraZ": -5.939951691920858,
+        "drawCalls": 497,
+        "triangles": 794414
+      },
+      "canvas": {
+        "cssWidth": 390,
+        "cssHeight": 844,
+        "width": 390,
+        "height": 844,
+        "devicePixelRatio": 3
+      }
+    },
+    {
+      "name": "landscape",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "errors": [],
+      "before": {
+        "x": 2.15,
+        "y": 0,
+        "z": 20,
+        "yaw": 0,
+        "simulationSpeed": 0,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 25.3,
+        "drawCalls": 527,
+        "triangles": 679482
+      },
+      "drivePressed": true,
+      "afterDrive": {
+        "x": 2.15,
+        "y": 0,
+        "z": 7.011925945835339,
+        "yaw": 0,
+        "simulationSpeed": 16.623231639089642,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 1.9,
+        "cameraZ": 12.311925945835345,
+        "drawCalls": 614,
+        "triangles": 866040
+      },
+      "liftPressed": true,
+      "afterLift": {
+        "x": 2.15,
+        "y": 13.582166666666668,
+        "z": -11.234617515251134,
+        "yaw": 0,
+        "simulationSpeed": 5.334176669723358,
+        "cameraX": -1.2000000000000002,
+        "cameraY": 15.482166666666666,
+        "cameraZ": -5.934617515251134,
+        "drawCalls": 603,
+        "triangles": 829394
+      },
+      "canvas": {
+        "cssWidth": 844,
+        "cssHeight": 390,
+        "width": 844,
+        "height": 390,
+        "devicePixelRatio": 3
+      }
+    }
+  ]
+}

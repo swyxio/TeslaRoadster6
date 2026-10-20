@@ -1,12 +1,12 @@
 import * as T from 'three';
+import type { Collider } from './simulation';
 
-export type Collider = {minX:number;maxX:number;minZ:number;maxZ:number;height:number};
-type MaterialName='stone'|'sand'|'cream'|'warm'|'terra'|'glass'|'glassLight'|'dark'|'metal'|'gold'|'leaf'|'trunk'|'paint'|'road'|'paving'|'wood'|'carpaint'|'tire'|'tail';
-type Shape='box'|'farbox'|'column'|'sphere'|'frond'|'arch'|'archpane'|'ring'|'carbody'|'cabin'|'wheel'|'gable'|'hull';
+type MaterialName='stone'|'sand'|'cream'|'warm'|'terra'|'glass'|'glassLight'|'dark'|'metal'|'gold'|'leaf'|'trunk'|'paint'|'road'|'paving'|'ground'|'facade'|'wood'|'carpaint'|'tire'|'tail';
+type Shape='box'|'farbox'|'column'|'sphere'|'frond'|'farfrond'|'facade'|'arch'|'archpane'|'ring'|'carbody'|'cabin'|'wheel'|'gable'|'hull'|'brace'|'braceMirror'|'towerBrace'|'towerBraceMirror';
 type Item={x:number;y:number;z:number;w:number;h:number;d:number;angle:number;color?:number};
 
-// Everything is authored locally: no photographs, external services or model
-// downloads. These textures add fine surface variation to simple shared meshes.
+// Small procedural textures supplement the packaged, original generated
+// materials. No texture needs a network request beyond the local asset path.
 function grainTexture(kind:'road'|'stone'|'trunk') {
   const c=document.createElement('canvas');c.width=256;c.height=256;
   const g=c.getContext('2d')!;
@@ -25,27 +25,22 @@ function grainTexture(kind:'road'|'stone'|'trunk') {
   texture.wrapS=texture.wrapT=T.RepeatWrapping;return texture;
 }
 
-function palmFrondGeometry() {
-  // A shared frond has a curved center rib and paired tapered leaflets. The
-  // cutout silhouette holds up against the sky without alpha-test textures.
-  const positions:number[]=[];
-  const triangle=(a:number[],b:number[],c:number[])=>positions.push(...a,...b,...c);
-  const stem=(t:number)=>[t*5.1, 2.9*Math.sin(t*Math.PI*.65)-4.1*t*t,0];
-  for(let i=0;i<20;i++){
-    const t=i/20,u=(i+1)/20,a=stem(t),b=stem(u),wa=.055*(1-t),wb=.055*(1-u);
-    triangle([a[0],a[1],-wa],[a[0],a[1],wa],[b[0],b[1],wb]);
-    triangle([a[0],a[1],-wa],[b[0],b[1],wb],[b[0],b[1],-wb]);
-  }
-  for(let i=1;i<19;i++){
-    const t=i/20,a=stem(t),b=stem(Math.min(.99,t+.075));
-    const length=.68*Math.sin(Math.PI*t)**.7;
-    for(const side of [-1,1]){
-      const tip=[a[0]+.50*(1-t),a[1]-.22*length,side*length];
-      triangle(a,b,tip);
-      triangle(a,tip,[a[0]+.12,a[1]-.06,side*.035]);
+function palmFrondGeometry(segments:number) {
+  // Curved three-dimensional ribbons use the transparent feather texture;
+  // unlike one flat crown billboard, every frond has its own parallax and
+  // participates in the same single alpha-tested shadow map.
+  const positions:number[]=[],uvs:number[]=[],indices:number[]=[];
+  for(let i=0;i<=segments;i++){
+    const t=i/segments,x=t*5.1,y=2.9*Math.sin(t*Math.PI*.65)-4.1*t*t;
+    for(const side of [-1,0,1]){
+      positions.push(x,y-.10*Math.abs(side)*Math.sin(Math.PI*t),side*1.12);
+      uvs.push(t,(side+1)/2);
     }
   }
-  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();return geometry;
+  for(let i=0;i<segments;i++)for(let side=0;side<2;side++){
+    const a=i*3+side,b=a+1,c=a+3,d=c+1;indices.push(a,c,b,b,c,d);
+  }
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
 
 // Two shared lofts give the small traffic cars rounded shoulders, a sloped
@@ -114,10 +109,19 @@ function storefrontTexture() {
 
 /** A standalone visual slice. It deliberately has no dependency on Tesland's
  * shared geography or networking; callers own the camera, light and water. */
-export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
+export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]; update(camera:T.Camera):void} {
   const colliders:Collider[]=[];
   const signs:Item[][]=[[],[],[],[]];
-  const asphalt=grainTexture('road');asphalt.repeat.set(8,90);
+  const loader=new T.TextureLoader();
+  const texture=(name:string,repeat=false)=>{
+    const map=loader.load(`/embarcadero/textures/${name}`);map.colorSpace=T.SRGBColorSpace;
+    if(repeat)map.wrapS=map.wrapT=T.RepeatWrapping;
+    map.anisotropy=4;return map;
+  };
+  const asphalt=texture('asphalt.webp',true);asphalt.repeat.set(8,130);
+  const paving=texture('paving.webp',true);paving.repeat.set(8,90);
+  const facade=texture('facade.webp');
+  const frond=texture('palm-frond.png');
   const masonry=grainTexture('stone');
   const trunk=grainTexture('trunk');
   const materials:Record<MaterialName,T.MeshStandardMaterial>={
@@ -131,11 +135,13 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     dark:new T.MeshStandardMaterial({color:0x333b36,roughness:.82}),
     metal:new T.MeshStandardMaterial({color:0x383a32,roughness:.66,metalness:.55}),
     gold:new T.MeshStandardMaterial({color:0xe3b36a,roughness:.38,metalness:.35,emissive:0x52310c,emissiveIntensity:.22}),
-    leaf:new T.MeshStandardMaterial({color:0x66723a,side:T.DoubleSide,roughness:.96}),
+    leaf:new T.MeshStandardMaterial({map:frond,color:0xffffff,alphaTest:.45,side:T.DoubleSide,roughness:.96}),
     trunk:new T.MeshStandardMaterial({color:0x977e60,map:trunk,roughness:1}),
     paint:new T.MeshStandardMaterial({color:0xede4c8,roughness:.85}),
-    road:new T.MeshStandardMaterial({color:0x596870,map:asphalt,roughness:.87}),
-    paving:new T.MeshStandardMaterial({color:0xb5aa96,roughness:.99}),
+    road:new T.MeshStandardMaterial({color:0xaaa49c,map:asphalt,roughness:.89}),
+    paving:new T.MeshStandardMaterial({color:0xe1d8c9,map:paving,roughness:.99}),
+    ground:new T.MeshStandardMaterial({color:0xb5aa96,roughness:.99}),
+    facade:new T.MeshStandardMaterial({map:facade,roughness:.94}),
     wood:new T.MeshStandardMaterial({color:0x715d4c,roughness:.96}),
     carpaint:new T.MeshStandardMaterial({color:0xffffff,roughness:.34,metalness:.22}),
     tire:new T.MeshStandardMaterial({color:0x202321,roughness:.94}),
@@ -145,20 +151,20 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   for(let i=0;i<=16;i++){const a=Math.PI-i*Math.PI/16;archShape.lineTo(Math.cos(a)*.5,Math.sin(a)*.5);}
   archShape.closePath();
   const boxGeometry=new T.BoxGeometry(1,1,1);
-  const geometries:Record<Shape,T.BufferGeometry>={box:boxGeometry,farbox:boxGeometry,column:new T.CylinderGeometry(.45,.5,1,10),sphere:new T.SphereGeometry(.5,8,5),frond:palmFrondGeometry(),arch:new T.TorusGeometry(.5,.035,4,16,Math.PI),archpane:new T.ShapeGeometry(archShape),ring:new T.TorusGeometry(.5,.025,4,24),carbody:trafficBodyGeometry(),cabin:trafficCabinGeometry(),wheel:new T.CylinderGeometry(.5,.5,1,14).rotateZ(Math.PI/2),gable:gableGeometry(),hull:ferryHullGeometry()};
-  const batches=new Map<string,{shape:Shape;material:MaterialName;items:Item[];cast:boolean}>();
+  const geometries:Record<Shape,T.BufferGeometry>={box:boxGeometry,farbox:boxGeometry,column:new T.CylinderGeometry(.45,.5,1,10),sphere:new T.SphereGeometry(.5,8,5),frond:palmFrondGeometry(12),farfrond:palmFrondGeometry(4),facade:new T.PlaneGeometry(1,1),arch:new T.TorusGeometry(.5,.035,4,16,Math.PI),archpane:new T.ShapeGeometry(archShape),ring:new T.TorusGeometry(.5,.025,4,24),carbody:trafficBodyGeometry(),cabin:trafficCabinGeometry(),wheel:new T.CylinderGeometry(.5,.5,1,14).rotateZ(Math.PI/2),gable:gableGeometry(),hull:ferryHullGeometry(),brace:new T.BoxGeometry(.12,1,.12).rotateZ(Math.PI/4),braceMirror:new T.BoxGeometry(.12,1,.12).rotateZ(-Math.PI/4),towerBrace:new T.BoxGeometry(2,19,.9).rotateX(Math.PI/4),towerBraceMirror:new T.BoxGeometry(2,19,.9).rotateX(-Math.PI/4)};
+  const batches=new Map<string,{shape:Shape;material:MaterialName;items:Item[];cast:boolean;cell:number}>();
   const add=(shape:Shape,material:MaterialName,x:number,y:number,z:number,w:number,h:number,d:number,angle=0,cast=false,color?:number)=>{
     // Cell groups remain independently culled by both the view and tracked
     // shadow cameras as the player moves down the boulevard.
     const cell=Math.floor(z/120),key=`${shape}:${material}:${cell}:${cast?'s':'n'}`;
-    const b=batches.get(key)??{shape,material,items:[],cast};b.items.push({x,y,z,w,h,d,angle,color});batches.set(key,b);
+    const b=batches.get(key)??{shape,material,items:[],cast,cell};b.items.push({x,y,z,w,h,d,angle,color});batches.set(key,b);
   };
   const box=(m:MaterialName,x:number,y:number,z:number,w:number,h:number,d:number,cast=false,color?:number)=>add('box',m,x,y,z,w,h,d,0,cast,color);
   const col=(m:MaterialName,x:number,y:number,z:number,w:number,h:number,d:number,cast=false)=>add('column',m,x,y,z,w,h,d,0,cast);
-  const solid=(cx:number,cz:number,w:number,d:number,height:number)=>colliders.push({minX:cx-w/2,maxX:cx+w/2,minZ:cz-d/2,maxZ:cz+d/2,height});
+  const solid=(cx:number,cz:number,w:number,d:number,height:number,minY?:number)=>colliders.push({minX:cx-w/2,maxX:cx+w/2,minZ:cz-d/2,maxZ:cz+d/2,height,...(minY===undefined?{}:{minY})});
 
   // Continuous road, with two curbs and a generous waterside promenade.
-  box('paving',-140.5,-.11,-150,239,.22,610);
+  box('ground',-140.5,-.11,-150,239,.22,610);
   box('road',0,-.08,-150,26,.16,610);
   box('paving',-17,.04,-150,8,.16,610);
   box('paving',21.5,.04,-150,17,.16,610);
@@ -175,15 +181,26 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   // Sidewalk trees and elegant two-arm street lamps share a handful of
   // instanced meshes. The palm's many leaflets are one reusable geometry.
   const tree=(x:number,z:number,index:number)=>{
-    const h=9.3+(index%3)*.7,segments=6;
+    const h=9.0+(index%5)*.52,segments=6;
     for(let j=0;j<segments;j++){
       const t=(j+.5)/segments,lean=.28*Math.sin(t*1.3+index)*t;
       col('trunk',x+lean,h*t,z,.74-t*.20,h/segments+.05,.74-t*.20,true);
     }
-    for(let j=0;j<17;j++){
-      const a=j*Math.PI*2/17+index*.73,upper=j%3===0;
-      const spread=upper?.64:.90+(j%3)*.055,arch=upper?1.38:.92+(j%3)*.1;
-      add('frond','leaf',x,h+.1,z,spread,arch,spread,a,true,[0xc0cc8d,0xaabb77,0xd3d69d][j%3]);
+    // Stagger high, middle and drooping leaves instead of placing a flat
+    // umbrella atop every trunk. Keep a smaller crown in far-away cells.
+    const crown=(shape:'frond'|'farfrond',count:number)=>{
+      for(let j=0;j<count;j++){
+        const a=j*Math.PI*2/count+index*.73,layer=j%4;
+        const spread=[.70,.88,1.02,.92][layer]*(.91+(index%3)*.045);
+        const arch=[1.44,1.13,.92,.76][layer];
+        add(shape,'leaf',x,h+.12+layer*.12,z,spread,arch,spread,a,true,[0xe3eccb,0xd9e7c6,0xf1edcb,0xc5d5ae][(j+index)%4]);
+      }
+    };
+    crown('frond',28);
+    crown('farfrond',9);
+    for(let j=0;j<6;j++){
+      const angle=j*Math.PI/3+index*.4;
+      add('column','trunk',x+Math.cos(angle)*.23,h-.05,z+Math.sin(angle)*.23,.16,.74,.16,angle);
     }
     solid(x,z,1.30,.84,h+.2);
     box('stone',x,.21,z,2.9,.20,2.9);
@@ -227,9 +244,28 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     for(const dz of [-.8,.8])box('metal',24,.3,z+dz,.1,.6,.10);
   }
 
-  // Four static, collidable cars add street life without an AI scheduler or
+  // Low-cost street furniture and people provide a familiar human scale.
+  // They are static, solid promenade figures, not animated traffic agents.
+  for(let z=70;z>-405;z-=35){
+    if(z< -170&&z> -270)continue;
+    col('metal',26.7,.43,z,.60,.86,.60);
+    box('dark',26.7,.92,z,.58,.1,.58);
+  }
+  const outfits=[0x39474c,0x765e4f,0x4c5753,0x9a7d69,0x41464b];
+  for(let i=0;i<30;i++){
+    const pz=72-i*16.5,px=(i%3===0?-18.1:22+(i%4)*1.2);
+    if(px>0&&pz< -173&&pz> -265)continue;
+    add('column','carpaint',px,1.04,pz,.43,.85,.30,0,false,outfits[i%outfits.length]);
+    add('sphere','sand',px,1.73,pz,.29,.34,.29);
+    for(const dx of [-.12,.12])box('dark',px+dx,.37,pz,.13,.68,.16);
+    solid(px,pz,.65,.6,1.9);
+  }
+
+  // Static, collidable cars add street life without an AI scheduler or
   // misleading animated vehicles that the collision system cannot follow.
-  for(const [x,z,color] of [[-8.5,-55,0x9eaaa4],[4.3,-70,0xe8e3d9],[-4.3,-110,0x697c7b],[0,-155,0xb5b2a3]] as number[][]){
+  // Keep the autonomous demonstration's x=2.15 lane clear, including the
+  // visible bodywork (which can extend beyond its arcade collision box).
+  for(const [x,z,color] of [[-8.5,-16,0x485458],[-4.3,-37,0xb5b2a3],[-8.5,-55,0x9eaaa4],[8.6,-70,0xe8e3d9],[-4.3,-110,0x697c7b],[-4.3,-155,0xb5b2a3],[-8.5,-200,0x646e70],[8.6,-240,0xe2d8c4],[-4.3,-300,0x929996],[8.6,-360,0x536168]] as number[][]){
     add('carbody','carpaint',x,.38,z,2,.76,4.5,0,true,color);
     add('cabin','glass',x,1.0,z,1.88,.67,4.5,0,true);
     box('carpaint',x,1.69,z+.09,1.38,.06,1.23,true,color);
@@ -251,13 +287,14 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   while(z>-430){
     const depth=[27,22,31,25,19,28,24,30][idx%8],height=[31,42,25,54,29,38,58,26][idx%8];
     const center=z-depth/2;
-    buildings.push({x:-34.8,z:center,w:27,d:depth-1,h:height,style:idx%8});z-=depth;idx++;
+    buildings.push({x:-33.0,z:center,w:27,d:depth-1,h:height,style:idx%8});z-=depth;idx++;
   }
   // Taller towers behind the street wall add a real, spatial skyline.
   for(const [x,zz,w,d,h] of [[-74,-80,27,24,72],[-78,-155,30,27,100],[-65,-235,23,23,87],[-75,-315,33,26,76]] as number[][])
     buildings.push({x,z:zz,w,d,h,style:1});
   for(const b of buildings){
     const face=b.x+b.w/2,front=b.z+b.d/2,wall=palette[b.style],tall=b.h>65;
+    const textured=!tall&&[0,2,5,7].includes(b.style),textureHeight=Math.min(18,b.h-5);
     box(wall,b.x,b.h/2,b.z,b.w,b.h,b.d,true);
     solid(b.x+.05,b.z,b.w+.85,b.d+.40,b.h+.5);
     box('cream',b.x,b.h-.35,b.z,b.w+.30,.70,b.d+.30,true);
@@ -274,9 +311,16 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
       box('stone',b.x,b.h+.13,b.z,b.w*.72,.26,b.d*.68,true);
       box('cream',b.x,b.h+.32,b.z,b.w*.74,.12,b.d*.70,true);
     }
+    // One realistic three-storey skin per mid-rise wall; real cornices,
+    // pilasters, upper floors and storefronts remain three-dimensional.
+    if(textured){
+      add('facade','facade',face+.04,4+textureHeight/2,b.z,b.d-.8,textureHeight,1,Math.PI/2);
+      add('facade','facade',b.x,4+textureHeight/2,front+.04,b.w-.8,textureHeight,1);
+    }
     const spacing=tall?3.8:3.35,floors=Math.floor((b.h-5)/spacing),cols=Math.max(3,Math.floor((b.d-2)/3.7));
     for(let floor=0;floor<floors;floor++){
       const yy=6+floor*spacing;if(yy+1.15>b.h-.8)continue;
+      if(textured&&yy-1.2<4+textureHeight)continue;
       for(let i=0;i<cols;i++){
         const zz=b.z+(i-(cols-1)/2)*(b.d-2.5)/cols;
         box('cream',face+.035,yy,zz,.08,2.32,2.0);
@@ -291,6 +335,7 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     const frontCols=Math.max(2,Math.floor((b.w-2)/4));
     for(let floor=0;floor<floors;floor++){
       const yy=6+floor*spacing;if(yy+1.15>b.h-.8)continue;
+      if(textured&&yy-1.2<4+textureHeight)continue;
       for(let i=0;i<frontCols;i++){
         const xx=b.x+(i-(frontCols-1)/2)*(b.w-2)/frontCols;
         box('cream',xx,yy,front+.04,2,.08+2.24,.08);box('glass',xx,yy,front+.10,1.8,2.08,.08);
@@ -304,8 +349,8 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     box(['terra','dark','warm'][b.style%3] as MaterialName,face+.24,3.75,b.z,.36,.65,b.d-1.0,true);
     // Slim canvas-style awnings project above the storefront windows.
     if(b.x> -50){
-      box((b.style%2?'dark':'terra'),face+.25,3.33,b.z,.40,.16,b.d-1.2,true);
-      box('cream',face+.43,3.22,b.z,.08,.18,b.d-1.2);
+      box((b.style%2?'dark':'terra'),face+.64,3.33,b.z,1.20,.16,b.d-1.2,true);
+      box('cream',face+1.20,3.22,b.z,.09,.22,b.d-1.2);
     }
     if(b.x> -50)signs[[0,2,3][b.style%3]].push({x:face+.43,y:3.76,z:b.z,w:Math.min(9,b.d-.8),h:.58,d:1,angle:Math.PI/2});
   }
@@ -320,6 +365,11 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   // the street, while retaining the same underlying hall collision envelope.
   for(const yy of [2.0,11.8,13.6,19.0])box('cream',west-.32,yy,ferry.z,.48,.3,ferry.d+.1,true);
   box('cream',west-.50,20.0,ferry.z,.65,.5,ferry.d+.4,true);
+  // The long west arcade is shaded under its overhanging cornice; a second
+  // row of mouldings makes the famous market hall legible from street level.
+  box('stone',west-.46,1.15,ferry.z,.58,.70,ferry.d+.35,true);
+  box('cream',west-.46,12.0,ferry.z,.72,.38,ferry.d+.35,true);
+  box('cream',west-.40,13.95,ferry.z,.55,.25,ferry.d+.35,true);
   signs[1].push({x:west-.36,y:13.0,z:-200,w:9,h:.8,d:1,angle:-Math.PI/2});
   for(let zf=ferry.z-ferry.d/2+3.5;zf<ferry.z+ferry.d/2-1;zf+=4.2){
     box('cream',west-.12,9,zf,.25,15,.4,true);
@@ -389,6 +439,7 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   // parallax changes naturally as the player drives or flies past.
   for(const pz of [-80,-320]){
     box('wood',46,.65,pz,34,.8,13,true);
+    solid(46,pz,34,13,1.05);
     for(const px of [33,40,48,56,62])for(const dz of [-5,5])col('wood',px,-1,pz+dz,.6,4,.6,true);
     for(let px=32;px<=62;px+=2.8)box('stone',px,1.06,pz,.05,.025,12.5);
     for(const dz of [-6.2,6.2]){
@@ -396,6 +447,13 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
       for(const y of [1.55,2.20])box('metal',48,y,pz+dz,31,.09,.09);
     }
     box('dark',63,1.05,pz,.4,.4,13);
+    // A small terminal shelter, mooring bollards and a low roof give each
+    // pier a working harbour silhouette without a new model or draw loop.
+    box('cream',47,2.6,pz,8.4,3.1,6.6,true);
+    box('dark',47,4.3,pz,9.2,.35,7.4,true);
+    for(const zz of [-2.4,0,2.4])box('glass',51.22,2.8,pz+zz,.08,1.8,1.8);
+    for(const px of [35,43,55,61])col('metal',px,1.35,pz-5.4,.3,.7,.3);
+    solid(47,pz,8.4,6.6,4.48);
   }
   for(const [fx,fz,s] of [[71,-90,1],[64,-300,.7],[103,-165,.55]] as number[][]){
     const fy=(y:number)=>y*s-.7*(1-s);
@@ -403,6 +461,9 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     box('cream',fx,fy(1.9),fz,12.4*s,.35*s,28*s,true);
     box('cream',fx,fy(3.6),fz,12*s,3.4*s,26*s,true);
     box('cream',fx,fy(5.9),fz,9.5*s,2*s,16*s,true);
+    solid(fx,fz,12.4*s,28*s,fy(2.075));
+    solid(fx,fz,12*s,26*s,fy(5.3));
+    solid(fx,fz,9.5*s,16*s,fy(6.9));
     box('dark',fx,fy(6.95),fz,9.9*s,.2*s,16.5*s);
     for(const side of [-1,1]){
       for(let zf=-9;zf<=9;zf+=4){
@@ -418,8 +479,10 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   // The opposite shore is deliberately a low-cost 3D ridge, not a backdrop
   // attached to the camera. Its changing angle makes the bay feel spatial.
   const hills=new T.BufferGeometry(),hillPositions:number[]=[],hillColors:number[]=[],hillIndices:number[]=[],hillUVs:number[]=[];
-  const hillSteps=156,hillZ=(i:number)=>-1500+i*13;
-  const ridgeColors=[new T.Color(0x879a8d),new T.Color(0x9ca99a),new T.Color(0xb1b9a9)];
+  // Continue beyond the camera's far plane in both directions: the opposite
+  // shore should not end in a vertical wall when viewed from the air.
+  const hillSteps=400,hillZ=(i:number)=>-3600+i*18;
+  const ridgeColors=[new T.Color(0xe0e8de),new T.Color(0xe5e9e4),new T.Color(0xe8eae7)];
   for(let row=0;row<3;row++)for(let i=0;i<=hillSteps;i++){
     const zz=hillZ(i),x=650+row*200;
     const warped=zz+70*Math.sin(zz*.0038+row*.37);
@@ -438,7 +501,7 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   for(let i=0;i<=hillSteps;i++){
     const zz=hillZ(i);
     hillPositions.push(650,-.7,zz);
-    const c=new T.Color(0x9aa898).multiplyScalar(.94+.06*Math.sin(zz*.013));hillColors.push(c.r,c.g,c.b);
+    const c=new T.Color(0xe0e8de).multiplyScalar(.94+.06*Math.sin(zz*.013));hillColors.push(c.r,c.g,c.b);
     hillUVs.push((zz+1500)/280,-.35);
   }
   for(let i=0;i<hillSteps;i++)hillIndices.push(i,i+1,groundStart+i, i+1,groundStart+i+1,groundStart+i);
@@ -446,17 +509,9 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   hills.setAttribute('color',new T.Float32BufferAttribute(hillColors,3));
   hills.setAttribute('uv',new T.Float32BufferAttribute(hillUVs,2));
   hills.setIndex(hillIndices);hills.computeVertexNormals();
-  // A low-contrast procedural ground texture suggests scrub, ridges and
-  // streets instead of presenting one flat polygon at the horizon.
-  const hillside=document.createElement('canvas');hillside.width=hillside.height=256;
-  const hg=hillside.getContext('2d')!;hg.fillStyle='#f0f0eb';hg.fillRect(0,0,256,256);
-  let hillSeed=6703;const hillRandom=()=>{hillSeed=(hillSeed*1664525+1013904223)>>>0;return hillSeed/4294967296;};
-  for(let i=0;i<1800;i++){
-    hg.fillStyle=i%5?'rgba(58,78,61,.10)':'rgba(137,107,73,.09)';
-    hg.fillRect(hillRandom()*256,hillRandom()*256,1+hillRandom()*5,1+hillRandom()*2);
-  }
-  const hillTexture=new T.CanvasTexture(hillside);hillTexture.colorSpace=T.SRGBColorSpace;
-  hillTexture.wrapS=hillTexture.wrapT=T.RepeatWrapping;
+  // The distant hills remain spatial meshes, with a generated land-only
+  // material, rather than a painted image fixed to the camera.
+  const hillTexture=texture('shoreline.webp',true);
   scene.add(new T.Mesh(hills,new T.MeshStandardMaterial({map:hillTexture,vertexColors:true,roughness:1,side:T.DoubleSide})));
   // Small clustered blocks imply settlements across the bay without large,
   // isolated toy towers. They are beyond the playable boundary.
@@ -470,19 +525,31 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   }
 
   // Bay Bridge silhouette. Its separate towers, deck and suspension cables
-  // stay in world space and do not add collision to the playable boulevard.
-  const bridgeZ=-440,deckY=21;
+  // stay in world space. The deck and towers support flying and landing.
+  const bridgeZ=-345,deckY=21;
   box('metal',305,deckY,bridgeZ,510,2.2,12,true);
+  solid(305,bridgeZ,510,12,deckY+1.1,deckY-2.5);
   box('stone',305,deckY-1.8,bridgeZ,510,1.4,8);
+  // Repeating steel girders are instanced along the suspended deck. The
+  // lower chord and diagonal bracing make a dimensional bridge silhouette.
+  for(const side of [-1,1]){
+    box('metal',305,deckY-5.0,bridgeZ+side*5,510,.35,.3);
+    for(let x=55;x<555;x+=10){
+      add('brace','metal',x,deckY-3,bridgeZ+side*5,9,5,.18);
+      add('braceMirror','metal',x,deckY-3,bridgeZ+side*5,9,5,.18);
+    }
+  }
   for(const tx of [145,390]){
     for(const dz of [-4.5,4.5]){
       box('metal',tx,58,bridgeZ+dz,3.8,74,3.8,true);
       box('stone',tx,19,bridgeZ+dz,7,8,7,true);
+      solid(tx,bridgeZ+dz,3.8,3.8,95);
+      solid(tx,bridgeZ+dz,7,7,23);
     }
     for(const y of [35,52,70,88])box('metal',tx,y,bridgeZ,3,2.2,12,true);
     for(let y=31;y<81;y+=15){
-      const cross=new T.Mesh(geometries.box,materials.metal);cross.position.set(tx,y+7.5,bridgeZ);cross.scale.set(2,19,.9);cross.rotation.x=Math.PI/4;scene.add(cross);
-      const cross2=cross.clone();cross2.rotation.x=-Math.PI/4;scene.add(cross2);
+      add('towerBrace','metal',tx,y+7.5,bridgeZ,1,1,1);
+      add('towerBraceMirror','metal',tx,y+7.5,bridgeZ,1,1,1);
     }
   }
   for(const side of [-1,1]){
@@ -499,10 +566,12 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
   }
 
   const matrix=new T.Matrix4(),position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3(),up=new T.Vector3(0,1,0),color=new T.Color();
+  const palmDetail:{cell:number;near:boolean;mesh:T.InstancedMesh}[]=[];
   for(const b of batches.values()){
     const mesh=new T.InstancedMesh(geometries[b.shape],materials[b.material],b.items.length);
     b.items.forEach((p,i)=>{mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle),scale.set(p.w,p.h,p.d)));if(p.color!==undefined)mesh.setColorAt(i,color.setHex(p.color));});
-    mesh.castShadow=b.cast;mesh.receiveShadow=b.shape!=='frond';mesh.computeBoundingSphere();scene.add(mesh);
+    mesh.castShadow=b.cast;mesh.receiveShadow=b.shape!=='frond'&&b.shape!=='farfrond';mesh.computeBoundingSphere();scene.add(mesh);
+    if(b.shape==='frond'||b.shape==='farfrond')palmDetail.push({cell:b.cell,near:b.shape==='frond',mesh});
   }
   const signMaterial=new T.MeshStandardMaterial({map:storefrontTexture(),roughness:.9});
   signs.forEach((items,index)=>{
@@ -513,5 +582,13 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]} {
     items.forEach((p,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(p.x,p.y,p.z),rotation.setFromAxisAngle(up,p.angle),scale.set(p.w,p.h,1))));
     mesh.computeBoundingSphere();scene.add(mesh);
   });
-  return {colliders};
+  const update=(camera:T.Camera)=>{
+    // Cell-level switching avoids thousands of individual objects or per-tree
+    // distance calculations. The crown retains a useful silhouette far away.
+    for(const detail of palmDetail){
+      const distance=Math.abs(camera.position.z-(detail.cell+.5)*120);
+      detail.mesh.visible=detail.near ? distance<195 : distance>=195;
+    }
+  };
+  return {colliders,update};
 }

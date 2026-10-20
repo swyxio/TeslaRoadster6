@@ -39,23 +39,23 @@ const lighting = createEmbarcaderoLighting(scene, renderer);
 const loading = document.querySelector<HTMLElement>('#loading')!;
 let car: T.Group;
 try {
-  car = await Promise.resolve(createEmbarcaderoCar());
+  [car] = await Promise.all([createEmbarcaderoCar(), lighting.ready]);
   loading.remove();
 } catch (error) {
-  loading.textContent = 'The Roadster could not be loaded. Please refresh to try again.';
+  loading.textContent = 'The waterfront assets could not be loaded. Please refresh to try again.';
   throw error;
 }
 scene.add(car);
 const wheels = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']
   .map(name => car.getObjectByName(name)).filter((wheel): wheel is T.Object3D => Boolean(wheel));
 const exhaust = new T.InstancedMesh(
-  new T.ConeGeometry(0.12, 0.8, 8),
-  new T.MeshBasicMaterial({ color: 0xa4dcff, transparent: true, opacity: 0.7, blending: T.AdditiveBlending, depthWrite: false }),
+  new T.ConeGeometry(0.075, 0.38, 8),
+  new T.MeshBasicMaterial({ color: 0xffc18a, transparent: true, opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false }),
   4,
 );
 const exhaustTransform = new T.Object3D();
 for (const [index, x] of [-0.48, -0.16, 0.16, 0.48].entries()) {
-  exhaustTransform.position.set(x, 0.34, 2.65);
+  exhaustTransform.position.set(x, 0.34, (car.userData.exhaustRear as number) + 0.20);
   exhaustTransform.rotation.x = Math.PI / 2;
   exhaustTransform.updateMatrix();
   exhaust.setMatrixAt(index, exhaustTransform.matrix);
@@ -227,6 +227,7 @@ function frame(now: number) {
   camera.position.lerp(desiredCamera, follow);
   cameraLook.lerp(desiredLook, follow);
   camera.lookAt(cameraLook);
+  world.update(camera);
   lighting.update(visualPosition, dt);
   renderer.render(scene, camera);
   if (frameMs > 0 && frameMs < 1000) { frameTimes.push(frameMs); if (frameTimes.length > 240) frameTimes.shift(); }
