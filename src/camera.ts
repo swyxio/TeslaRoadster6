@@ -3,6 +3,14 @@ import type { VehicleSpec } from '../shared/vehicles';
 
 export type CameraMode = 'chase' | 'wide' | 'cockpit';
 
+/** Keep the closer road-level chase view clear of larger vehicle bodies. */
+export function chaseFraming(portrait:boolean, vehicle:Pick<VehicleSpec,'length'|'height'>|null, out:{distance:number;height:number;lookAhead:number}){
+  out.distance=vehicle?Math.max(portrait?14:10,vehicle.length*1.5+3):portrait?18:15;
+  out.height=vehicle?Math.max(portrait?6:4.5,vehicle.height*1.6+1):8;
+  out.lookAhead=vehicle?(portrait?0:5):(portrait?-6:5);
+  return out;
+}
+
 /** A bounded, frame-rate independent lens response for powered chase views. */
 export function chaseLens(current:number, thrusting:boolean, dt:number, reducedMotion=false) {
   if(reducedMotion)return 55;

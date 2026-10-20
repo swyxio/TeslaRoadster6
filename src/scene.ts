@@ -21,7 +21,7 @@ import { createCow } from './cow';
 import { DriverLabels } from './vehicle-labels';
 import { addIslandStunts } from './island-stunts';
 import { addIslandJumps } from './island-jumps';
-import { cockpitPose, viewLens, type CameraMode } from './camera';
+import { chaseFraming, cockpitPose, viewLens, type CameraMode } from './camera';
 import { LandingPulse } from './landing-pulse';
 import { SHOPS, hasRockets } from '../shared/upgrades';
 import { createRocketDome } from './rocket-dome';
@@ -99,6 +99,7 @@ export class GameScene {
   private cameraTargetTurn = new T.Quaternion();
   private basis = new T.Matrix4();
   private cameraReady = false;
+  private chaseFrame = {distance:0,height:0,lookAhead:0};
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private landingPulse = new LandingPulse();
   private predictedEntity?:string;
@@ -425,15 +426,16 @@ export class GameScene {
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
-      const distance=this.cameraMode==='wide'?30:portrait?18:15;
-      const lookAhead=portrait?-6:5;
+      const framing=chaseFraming(portrait,e.kind==='person'?null:VEHICLES[e.kind],this.chaseFrame);
+      const distance=this.cameraMode==='wide'?30:framing.distance;
+      const lookAhead=this.cameraMode==='wide'?(portrait?-6:5):framing.lookAhead;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const mesh=this.entities.get(e.id)!;
       const visualBack=new T.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
       const yaw=Math.atan2(visualBack.x,visualBack.z);
       const back=new T.Vector3(Math.sin(yaw),surface?Math.cos(yaw)*surface.tangentY:0,surface?Math.cos(yaw)*surface.tangentZ:Math.cos(yaw));
       const position=mesh.position.clone(),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
-      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
+      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:framing.height);
       if(surface){
         // A tangent chase camera on the curved wall points out through the
         // shell. Move behind the car and look into the pitch as it climbs,
