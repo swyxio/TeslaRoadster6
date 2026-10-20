@@ -4,9 +4,10 @@
 
 Open `/?room=sandbox-sf-fidelity&visual=sf-hi` to drive the experiment and
 `/visual-lab/` for three AI-generated *concept illustrations*. The illustrations
-are not screenshots. The experiment overlays two generated facade images on 17
-existing, ordinary San Francisco building envelopes, textures the existing
-streets, and presents an original Roadster-inspired model. It does not reproduce
+are not screenshots. The experiment overlays two generated facade images on 25
+existing San Francisco building envelopes, textures the existing streets, and
+adds sidewalk tiles and trees. The Roadster-inspired model has a closer chase
+camera and revised bodywork. It does not reproduce
 the real buildings or the concepts' quality. Landmark geometry, the compressed
 map, roofs, collisions, simulation and multiplayer remain the existing game.
 In the menu, **Visual lab** switches back to the ordinary rendering. Textures and
@@ -93,10 +94,90 @@ The screenshot, scenario, manifest and authoritative trajectories are in
 Mobile screenshots are Chrome touch emulation, not real-device results. The
 normal performance and crowded-room gates remain open.
 
-The lab's visual result is intentionally limited: only 17 generic buildings
-receive the flat facade overlays, while many landmarks and street surfaces keep
-the original style. It is useful for comparing the idea and transport cost, not
-as proof of a high-fidelity city. The next meaningful experiment is one coherent
-walkable/drivable SF block with real kit geometry, correctly modeled curbs and
-roofs, matched collisions, lighting and a measured mobile run. Decide whether
-to expand after comparing its appearance and costs with this lab.
+## Second visual pass
+
+The concepts fill the frame with a large car, distinctive buildings, street
+details and a distant skyline. The first lab view made the car small and exposed
+large blank building faces and pavement. This pass brings the car closer,
+reshapes its rear and canopy, adds shallow house trim and facade sides to eight
+more buildings, and places instanced sidewalks and trees around existing roads.
+It changes presentation only; the closer camera is specific to the lab's
+Roadster chase view. The shared collision geometry and driving are unchanged.
+
+[Before](benchmarks/2026-10-19-sf-fidelity-round-2/before/start.png) and
+[after](benchmarks/2026-10-19-sf-fidelity-round-2/after/start.png) show the
+same spawn view, not the illustrations. On one Apple M5 Pro, local headless
+Chrome at 1280 × 720 / DPR 1 showed 16.7 / 16.8 ms p95 frame intervals at
+spawn and 16.8 / 16.8 ms after the same short drive (0.0.48 / candidate).
+Spawn draw calls were 305 / 308 and triangles 272,288 / 295,658. Host load,
+camera view, vehicle positions and traffic varied; this is a bounded visual
+check, not proof of equivalent GPU cost, motion continuity or mobile
+performance. The [scenario and raw captures](benchmarks/2026-10-19-sf-fidelity-round-2/)
+are retained for review. Mobile views were checked with Chrome touch emulation,
+not a physical phone.
+
+The result remains far from the concepts: the map still has blank buildings,
+flat ground and simplified landmarks, and its generated facades are not real
+addresses. A coherent SF block with real kit geometry, matched collision and
+roofs, and measured mobile performance is the next meaningful step.
+
+## Next: a halfway-to-the-concept street
+
+This is a proposal, not a shipped feature or a claim that visual quality can be
+measured as an exact percentage. Make one continuous 100–200 m drivable slice
+near the SF spawn before improving the rest of the Bay. Match a street-level
+view, a fast turning view and an airborne view against the same places in the
+current game. The concept illustrations are inspirational, not geometrically
+accurate references for those camera poses.
+
+1. **A real Roadster asset.** Author a properly proportioned hero car with
+   smooth body panels, wheel arches, glass, light bar, underbody and materials;
+   preserve separate animated wheels, rocket effects, paint and the existing
+   vehicle dimensions and origin. Its chase framing needs to be legible at speed
+   as well as parked, without sacrificing road visibility or continuity.
+2. **A coherent block.** Make four to six reusable SF building modules: bay
+   windows, stoops, cornices, storefronts, roof edges and modern offices. Use
+   actual shallow geometry where it changes the silhouette, and baked material
+   detail elsewhere. Add one recognizable landmark and a simple layered
+   skyline. Assemble against shared building footprints; if a solid wall, roof
+   or terrain must change, update its authoritative surface and collisions with
+   the visual mesh. Trees and other non-solid decorations must remain clearly
+   separated from those collision contracts.
+3. **Street scale and grounding.** Use repeatable asphalt, sidewalk and curb
+   materials, road markings, a few poles and parked props, and several tree
+   variants. Favor reusable meshes and atlases over one draw per window. Keep
+   flight views and the car's clearance over roofs in the test, so visual detail
+   does not introduce misleading invisible obstacles.
+4. **Lighting and materials.** Try an outdoor reflection environment, tuned
+   directional sun and hemisphere light, subtle baked ambient occlusion and a
+   grounded car contact shadow that follows the car and fades with altitude.
+   Keep the existing day/night cycle; do not bake a fixed sunny shadow into every
+   surface. Test one bounded real-time shadow separately before adopting it:
+   each shadow-casting light entails an additional render pass.
+5. **Cheap production.** Author the small kit in Blender, use an offline seeded
+   layout and export shared glTF/GLB meshes, materials and lightweight LODs.
+   Batch repeated parts by spatial cell and preload the next cell ahead of fast
+   cars; avoid loading or drawing a separate asset per window. Original or
+   [Poly Haven CC0](https://polyhaven.com/license) materials and HDRIs are
+   candidates, subject to per-asset quality and resolution review. See
+   [Epic's City Sample](https://dev.epicgames.com/documentation/unreal-engine/city-sample-project-unreal-engine-demonstration)
+   for the modular offline-generation pattern, [Three.js instancing](https://threejs.org/docs/pages/InstancedMesh.html),
+   and [glTF loader support](https://threejs.org/docs/pages/GLTFLoader.html).
+   These do not bring Unreal's Nanite or global illumination into WebGL.
+
+As initial experiment sizes, not proven budgets, try 50–100k additional
+visible triangles, one or two 1024-pixel material atlases and a 2–4 MB optional
+download. A 1024² uncompressed RGBA texture plus mipmaps is approximately
+5.3 MiB in memory; a small WebP download does not imply equally small GPU
+residency. Test KTX2/Basis compression and decoder/upload cost before choosing a
+format. The current spawn observation already has roughly 308 draw calls and
+296k triangles, so measure the *whole* scene instead of treating the new block
+in isolation.
+
+Compare cold/warm transfer, decoded texture memory, draw calls, triangles,
+CPU submission, frame p95/p99, GPU timing where available, input/motion
+continuity and simulation progress. Run the same route on desktop and on a real
+phone, including fast turns, flight and collision/roof checks. Browser touch
+emulation and a single smooth-looking screenshot are not physical-device or
+driving-continuity acceptance. Keep the existing lab optional until the new
+slice is playable and the responsible changes have no confirmed regression.

@@ -47,6 +47,7 @@ import { ContactShadows } from './contact-shadows';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
+  private readonly sfFidelityEnabled = new URLSearchParams(location.search).get('visual')==='sf-hi';
   private sfFidelity?: typeof import('./sf-fidelity');
   private scene = new T.Scene();
   private horizon = createHorizon(this.scene);
@@ -129,10 +130,10 @@ export class GameScene {
     this.sun.position.set(-100,160,80); this.scene.add(this.sun);
     const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
     this.buildWorld();
-    if(new URLSearchParams(location.search).get('visual')==='sf-hi'){
+    if(this.sfFidelityEnabled){
       void import('./sf-fidelity').then(async module=>{
         const stats=await module.buildSfFidelity(this.scene);this.sfFidelity=module;
-        document.body.dataset.sfFidelity=`${stats.textureFallback?'fallback':'ready'}:${stats.facadeBuildings}:${stats.facadeBatches}`;
+        document.body.dataset.sfFidelity=`${stats.textureFallback?'fallback':'ready'}:${stats.facadeBuildings}:${stats.facadeBatches}:${stats.sidewalks}:${stats.trees}`;
         if(stats.textureFallback){const label=document.querySelector('.visual-experiment-label');if(label)label.textContent='SF LAB · FALLBACK ART';}
       }).catch(error=>{document.body.dataset.sfFidelity='failed';const label=document.querySelector('.visual-experiment-label');if(label)label.textContent='SF LAB · LOAD FAILED';console.error('SF fidelity experiment failed to load',error);});
     }
@@ -301,8 +302,10 @@ export class GameScene {
     this.sky.lerp(this.twilightSky,twilight*.18);
     (this.scene.background as T.Color).copy(this.sky);
     (this.scene.fog as T.Fog).color.copy(this.sky);
-    this.hemisphere.intensity=.8+daylight*.6;
-    this.sun.intensity=.5+daylight*1.7;
+    // Give the experimental scene a little more directional contrast without
+    // adding a shadow-map pass or overriding the shared day/night clock.
+    this.hemisphere.intensity=this.sfFidelityEnabled ? .7+daylight*.5 : .8+daylight*.6;
+    this.sun.intensity=this.sfFidelityEnabled ? .5+daylight*2.05 : .5+daylight*1.7;
     this.sun.color.copy(this.daylightSun).lerp(this.twilightSun,twilight);
     this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
@@ -448,15 +451,21 @@ export class GameScene {
       const t=performance.now()*.000035;this.follow.set(245+Math.sin(t)*25,235,400);this.focus.set(50,8,0);
     }else if(e&&!cockpit){
       const portrait=this.camera.aspect<.8;
-      const distance=this.cameraMode==='wide'?30:portrait?18:15;
-      const lookAhead=portrait?-6:5;
+      // The opt-in Roadster shot is lower and closer, so the car and street
+      // read at driving scale. Derive the offsets from its shared dimensions;
+      // the standard, wide, on-foot and cockpit cameras stay unchanged.
+      const labRoadster=this.sfFidelityEnabled&&this.cameraMode==='chase'&&e.kind==='roadster';
+      const car=VEHICLES.roadster;
+      const distance=this.cameraMode==='wide'?30:labRoadster?Math.max(7.5,car.length*(portrait?2.4:1.85)):portrait?18:15;
+      const height=this.cameraMode==='wide'?23:labRoadster?Math.max(3.2,car.height*(portrait?3.2:2.8)):8;
+      const lookAhead=labRoadster?(portrait?0:3):portrait?-6:5;
       const surface=e.supportId==='dome'&&e.domeS!==null?domeSurface(e.domeS):null;
       const mesh=this.entities.get(e.id)!;
       const visualBack=new T.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
       const yaw=Math.atan2(visualBack.x,visualBack.z);
       const back=new T.Vector3(Math.sin(yaw),surface?Math.cos(yaw)*surface.tangentY:0,surface?Math.cos(yaw)*surface.tangentZ:Math.cos(yaw));
       const position=mesh.position.clone(),focusTarget=position.clone().addScaledVector(back,-lookAhead).addScaledVector(cameraUp,1.3);
-      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,this.cameraMode==='wide'?23:8);
+      this.follow.copy(position).addScaledVector(back,distance).addScaledVector(cameraUp,height);
       if(surface){
         // A tangent chase camera on the curved wall points out through the
         // shell. Move behind the car and look into the pitch as it climbs,

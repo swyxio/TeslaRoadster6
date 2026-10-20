@@ -1,9 +1,7 @@
 import * as T from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BUILDINGS, ROADS } from '../shared/map';
-import { VEHICLES } from '../shared/vehicles';
-import { loft } from './coachwork';
-import { box, setVehicleDistantOverride } from './vehicles';
+import { BUILDINGS, ROADS, terrainHeight } from '../shared/map';
+import { NORTH_LANDMARKS } from '../shared/north-landmarks';
+import { buildSfFidelityStreets } from './sf-fidelity-streets';
 
 // Opt-in visual-only experiment. Facades sit on existing SF building envelopes;
 // authoritative collision, roofs, streets and the world clock are unchanged.
@@ -58,20 +56,47 @@ export async function buildSfFidelity(scene:T.Scene) {
     catch {textureFallback=true;return facadeTexture(index===0?'house':'office',0);}
   }));
   const buckets=new Map<string,{kind:'house'|'office';variant:number;faces:Face[]}>();
-  for(const b of BUILDINGS){
-    if(b.district!=='sf'||!['house','midrise','tower'].includes(b.style))continue;
-    const kind=b.style==='house'?'house':'office';
-    const variant=Math.abs(Math.round(b.x*13+b.z*17))%3;
+  const trim:Face[]=[];
+  const plainSideLandmarks=new Map(NORTH_LANDMARKS.filter(p=>p.district==='sf'&&['modern','theatre','plaza','pier','cliff'].includes(p.shape)).map(p=>[`${p.x}:${p.z}`,p.shape]));
+  let facadeBuildings=0;
+  const addFaces=(kind:'house'|'office',variant:number,x:number,z:number,faces:Face[])=>{
     // Small cells retain useful frustum culling without per-building draws.
-    const key=`${kind}:${variant}:${Math.floor(b.x/180)}:${Math.floor(b.z/180)}`;
+    const key=`${kind}:${variant}:${Math.floor(x/180)}:${Math.floor(z/180)}`;
     const bucket=buckets.get(key)??{kind,variant,faces:[]};
-    const y=b.h/2;
-    bucket.faces.push(
-      {x:b.x,y,z:b.z+b.d/2+.09,w:b.w,h:b.h,angle:0},
-      {x:b.x,y,z:b.z-b.d/2-.09,w:b.w,h:b.h,angle:Math.PI},
-      {x:b.x+b.w/2+.09,y,z:b.z,w:b.d,h:b.h,angle:Math.PI/2},
-      {x:b.x-b.w/2-.09,y,z:b.z,w:b.d,h:b.h,angle:-Math.PI/2});
-    buckets.set(key,bucket);
+    bucket.faces.push(...faces);buckets.set(key,bucket);facadeBuildings++;
+  };
+  for(const b of BUILDINGS){
+    if(b.district!=='sf')continue;
+    const variant=Math.abs(Math.round(b.x*13+b.z*17))%3;
+    if(['house','midrise','tower'].includes(b.style)){
+      const kind=b.style==='house'?'house':'office',y=b.h/2;
+      const faces=[
+        {x:b.x,y,z:b.z+b.d/2+.09,w:b.w,h:b.h,angle:0},
+        {x:b.x,y,z:b.z-b.d/2-.09,w:b.w,h:b.h,angle:Math.PI},
+        {x:b.x+b.w/2+.09,y,z:b.z,w:b.d,h:b.h,angle:Math.PI/2},
+        {x:b.x-b.w/2-.09,y,z:b.z,w:b.d,h:b.h,angle:-Math.PI/2}];
+      addFaces(kind,variant,b.x,b.z,faces);
+      if(kind==='house')for(const face of faces)for(const height of [2.7,b.h-.45]){
+        // Shallow architectural courses stop well below the shared roof and
+        // remain cosmetic: the underlying collision envelope is unchanged.
+        trim.push({...face,y:height,h:.14,w:face.w-.2});
+      }
+      continue;
+    }
+    // Older SF landmarks have authored fronts and roofs. Their largest plain
+    // ground-level box has a shared collision primitive, so its two sides and
+    // rear can carry material without stretching art across the envelope or
+    // hiding that landmark's front. Named landmark models stay untouched.
+    if(b.style!=='landmark'||b.landmarkId||b.x< -410||b.x>90||b.z< -270||b.z>230)continue;
+    const landmarkShape=plainSideLandmarks.get(`${b.x}:${b.z}`);
+    if(!landmarkShape)continue;
+    const body=b.parts?.[0];
+    if(!body||body.shape!=='box'||body.x!==0||body.z!==0||body.w<8||body.d<8||body.h<6||Math.abs(body.y-body.h/2)>.01)continue;
+    const y=(terrainHeight(b.x,b.z)??0)+body.y;
+    addFaces(landmarkShape==='modern'?'office':'house',variant,b.x,b.z,[
+      {x:b.x,y,z:b.z-body.d/2-.025,w:body.w,h:body.h,angle:Math.PI},
+      {x:b.x+body.w/2+.025,y,z:b.z,w:body.d,h:body.h,angle:Math.PI/2},
+      {x:b.x-body.w/2-.025,y,z:b.z,w:body.d,h:body.h,angle:-Math.PI/2}]);
   }
   const group=new T.Group();group.name='sf-fidelity-facades';
   const geometry=new T.PlaneGeometry(1,1);
@@ -82,6 +107,11 @@ export async function buildSfFidelity(scene:T.Scene) {
     if(!mats.has(materialKey))mats.set(materialKey,new T.MeshStandardMaterial({map:textures[kind==='house'?0:1],color:[0xffffff,0xe6e2dc,0xd7e4df][variant],roughness:.82}));
     const mesh=new T.InstancedMesh(geometry,mats.get(materialKey)!,faces.length);
     faces.forEach((f,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(f.x,f.y,f.z),rotation.setFromAxisAngle(up,f.angle),scale.set(f.w,f.h,1))));
+    mesh.computeBoundingSphere();group.add(mesh);
+  }
+  if(trim.length){
+    const mesh=new T.InstancedMesh(new T.BoxGeometry(1,1,1),new T.MeshStandardMaterial({color:0xd3c8b3,roughness:.9}),trim.length);
+    trim.forEach((f,i)=>mesh.setMatrixAt(i,matrix.compose(position.set(f.x,f.y,f.z),rotation.setFromAxisAngle(up,f.angle),scale.set(f.w,f.h,.08))));
     mesh.computeBoundingSphere();group.add(mesh);
   }
   scene.add(group);
@@ -95,72 +125,9 @@ export async function buildSfFidelity(scene:T.Scene) {
   const roadGeometry=new T.PlaneGeometry(1,1);roadGeometry.rotateX(-Math.PI/2);
   const roadMesh=new T.InstancedMesh(roadGeometry,new T.MeshStandardMaterial({map:asphaltTexture,roughness:1}),roads.length);
   roads.forEach((r,i)=>roadMesh.setMatrixAt(i,matrix.compose(position.set(r.x,.133,r.z),rotation.setFromAxisAngle(up,r.angle??0),scale.set(r.w,1,r.d))));roadMesh.computeBoundingSphere();group.add(roadMesh);
-  return {facadeBuildings:[...buckets.values()].reduce((n,b)=>n+b.faces.length/4,0),facadeBatches:buckets.size,textureFallback};
+  const streets=buildSfFidelityStreets(scene);
+  return {facadeBuildings,facadeBatches:buckets.size,textureFallback,sidewalks:streets.sidewalks,trees:streets.trees};
 }
 
-let roadsterTemplate:T.Group|undefined;
-let distantRoadsterTemplate:T.Mesh|undefined;
-/** Replace only the stock Roadster's presentation; preserve its named wheels,
- * seat, rocket hardware and effects. Dimensions and driving remain shared. */
-export function applyRoadster2026(root:T.Group) {
-  for(const child of [...root.children])if(child instanceof T.Mesh&&!child.name)root.remove(child);
-  if(!roadsterTemplate){
-    const {length:l,width:w,height:h,wheelbase}=VEHICLES.roadster;
-    const group=new T.Group();group.name='roadster-2026-body';
-    const pearl=new T.MeshPhysicalMaterial({color:0xf0efea,metalness:.36,roughness:.24,clearcoat:1,clearcoatRoughness:.16});
-    const bronze=new T.MeshPhysicalMaterial({color:0x62533e,metalness:.53,roughness:.19,clearcoat:1});
-        const sections:[number,number,number,number][]=[[-.50,.80,.30,.44],[-.44,.92,.25,.53],[-.30,1,.23,.69],[-.10,.97,.23,.73],[.12,.98,.23,.76],[.33,1,.24,.79],[.47,.96,.27,.76],[.50,.92,.31,.72]].map(([z,x,b,t])=>[z*l,x*w/2,b,t]);
-    const dense:[number,number,number,number][]=[];
-    for(let i=0;i<sections.length-1;i++)for(let j=0;j<8;j++)dense.push(sections[i].map((v,k)=>v+(sections[i+1][k]-v)*j/8) as [number,number,number,number]);dense.push(sections[sections.length-1]);
-    const body=loft(dense,.22,32).clone(),p=body.getAttribute('position');
-    for(let i=0;i<p.count;i++){
-      const x=p.getX(i),z=p.getZ(i),y=p.getY(i),delta=Math.min(Math.abs(z-wheelbase/2),Math.abs(z+wheelbase/2));
-      if(Math.abs(x)>w*.34&&delta<.395&&y<.62)p.setY(i,Math.max(y,.35+Math.sqrt(Math.max(0,.395**2-delta**2))));
-    }
-    body.computeVertexNormals();const shell=new T.Mesh(body,pearl);shell.name='2026-shell';group.add(shell);
-    // Continuous bronze-tinted canopy and angular white roof rails.
-    const canopy=loft([[-l*.23,w*.375,.68,.70],[-l*.09,w*.34,.70,h*.97],[l*.12,w*.33,.72,h],[l*.32,w*.375,.73,.76]],.24,24);
-    group.add(new T.Mesh(canopy,bronze));
-    // Decorative lift-fan covers remain visible when the car rolls or flies.
-    const fanGeometry=new T.CylinderGeometry(.32,.32,.04,16),fanMaterial=new T.MeshStandardMaterial({color:0x20282a,metalness:.6,roughness:.35});
-    for(const z of [-l*.23,l*.23]){const fan=new T.Mesh(fanGeometry,fanMaterial);fan.name='2026-lift-fan';fan.position.set(0,.14,z);group.add(fan);}
-    for(const side of [-1,1]){
-      const rail=box(group,side*w*.33,h*.92,l*.02,.07,.05,l*.54,0xeae9e4);rail.rotation.x=side===0?0:.04;
-      const sill=box(group,side*w*.49,.30,0,.04,.13,l*.63,0x1a2428);
-      sill.name='2026-sill';
-      box(group,side*w*.49,.63,l*.06,.025,.025,.19,0x242a2b);
-    }
-    box(group,0,.64,l*.502,w*.85,.17,.04,0x11191d);
-    box(group,0,.67,l*.508,w*.82,.05,.02,0xef3d36);
-    box(group,0,.34,l*.501,w*.76,.23,.04,0x0d1519);
-    box(group,0,.31,-l*.50,w*.78,.10,.04,0x121a1e);
-    // The front lamps are normally hidden; black slots mark their position.
-    for(const side of [-1,1])box(group,side*w*.28,.46,-l*.49,w*.23,.022,.05,0x283034);
-    roadsterTemplate=group;
 
-    // Distant Roadsters use a small, shared one-draw mesh with the same pearl
-    // body and bronze canopy, instead of switching back to the stock red car.
-    const parts:T.BufferGeometry[]=[];
-    const addPart=(geometry:T.BufferGeometry,color:number)=>{
-      const part=geometry.index?geometry.toNonIndexed():geometry;
-      if(part!==geometry)geometry.dispose();
-      part.deleteAttribute('uv');
-      const shade=new T.Color(color),values=new Float32Array(part.getAttribute('position').count*3);
-      for(let i=0;i<values.length;i+=3){values[i]=shade.r;values[i+1]=shade.g;values[i+2]=shade.b;}
-      part.setAttribute('color',new T.BufferAttribute(values,3));parts.push(part);
-    };
-    addPart(loft(sections,.22,8),0xf0efea);
-    addPart(loft([[-l*.23,w*.375,.68,.70],[-l*.09,w*.34,.70,h*.97],[l*.12,w*.33,.72,h],[l*.32,w*.375,.73,.76]],.24,8),0x62533e);
-    for(const side of [-1,1])for(const end of [-1,1]){
-      const wheel=new T.CylinderGeometry(.35,.35,.2,8);wheel.rotateZ(Math.PI/2);wheel.translate(side*w*.45,.35,end*wheelbase/2);addPart(wheel,0x171d20);
-    }
-    const distantGeometry=mergeGeometries(parts);parts.forEach(part=>part.dispose());
-    if(!distantGeometry)throw new Error('Could not create the SF lab Roadster LOD');
-    distantRoadsterTemplate=new T.Mesh(distantGeometry,new T.MeshStandardMaterial({vertexColors:true,metalness:.25,roughness:.5}));
-  }
-  const model=roadsterTemplate.clone(true);
-  const shell=model.getObjectByName('2026-shell') as T.Mesh;
-  shell.userData.originalVehiclePaint=shell.material;
-  setVehicleDistantOverride(root,distantRoadsterTemplate!);
-  root.add(model);root.userData.sfFidelityRoadster=true;
-}
+export { applyRoadster2026 } from './sf-fidelity-roadster';

@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "id": "97a1ccba-1c73-4a16-826b-35543f050bfb",
+  "startedAt": "2026-10-20T03:08:14.597Z",
+  "status": "complete",
+  "target": {
+    "origin": "http://127.0.0.1:18887",
+    "pathname": "/",
+    "perf": true,
+    "refProvidedByOperator": "candidate-0.0.49-dirty",
+    "httpStatus": 200
+  },
+  "scenarioSha256": "6b195aa1eccee6e6dad850d4c1bfc5389fd6f8eb59450f8b1cdd7c0edb5a70f8",
+  "runner": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "release": "25.4.0",
+    "cpu": "Apple M5 Pro",
+    "logicalCpuCount": 18,
+    "hostLoadAverageAtStart": [
+      10.125,
+      9.46240234375,
+      7.73876953125
+    ],
+    "hostLoadAverageAtFinish": [
+      9.87451171875,
+      9.42138671875,
+      7.734375
+    ],
+    "recorderSourceSha256": "3fb2af8f6afc107289ec72b22f7fb5e7451bb73deaaba8d3cbfebbab8fda107a",
+    "captureSourceSha256": "a7cb89d075b6a09ee38b8dc7f9dffb845d3e5f70979e09ae0d00fba4d0da0111",
+    "audioSourceSha256": "6da698161eeaef5975603f660a28763a2810cde01b312502420fb9f9322040ee",
+    "tabCaptureSourceSha256": "f67eaa450f5e1865685431e9345976d968b83baf7064a8bb3bbeb0145fd3317e",
+    "inputEventsSourceSha256": "2707dce2b3d6b05f2201ba6868b83cd98aaa2389905dabc297ee95c5cc17dc98",
+    "nodeVersion": "v22.22.2",
+    "playwrightVersion": "1.64.1",
+    "browserChannel": "chrome",
+    "gpuMode": "default",
+    "headed": false,
+    "browserVersion": "155.0.8059.85",
+    "webgl": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+      "vendor": "Google Inc. (Apple)"
+    }
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true
+  },
+  "capture": {
+    "enabled": false,
+    "source": "screencast",
+    "requestedFps": 30,
+    "audio": false,
+    "segments": [],
+    "note": "Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead."
+  },
+  "events": [
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 1189,
+      "commandDurationMs": 130,
+      "status": "ok"
+    },
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 1319,
+      "commandDurationMs": 8,
+      "status": "ok"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 1327,
+      "commandDurationMs": 1502,
+      "status": "ok"
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 2829,
+      "commandDurationMs": 82,
+      "status": "ok",
+      "sample": {
+        "file": "start.png"
+      }
+    },
+    {
+      "type": "touchDown",
+      "commandStartedAtMs": 2911,
+      "commandDurationMs": 211,
+      "status": "ok"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 3122,
+      "commandDurationMs": 2201,
+      "status": "ok"
+    },
+    {
+      "type": "touchUp",
+      "commandStartedAtMs": 5323,
+      "commandDurationMs": 35,
+      "status": "ok"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 5358,
+      "commandDurationMs": 202,
+      "status": "ok"
+    },
+    {
+      "type": "sample",
+      "commandStartedAtMs": 5560,
+      "commandDurationMs": 2,
+      "status": "ok",
+      "sample": {
+        "connection": "● SANDBOX · UNSAVED",
+        "speed": "153",
+        "perf": {
+          "samples": 240,
+          "fps": 55.46439878904639,
+          "frameP95Ms": 16.700000000000728,
+          "cpuP95Ms": 3.6999999955296516,
+          "drawCalls": 140,
+          "triangles": 273582,
+          "pickupMeshes": 54,
+          "visiblePickups": 54
+        }
+      }
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 5562,
+      "commandDurationMs": 54,
+      "status": "ok",
+      "sample": {
+        "file": "drive.png"
+      }
+    }
+  ],
+  "recordings": [],
+  "screenshots": [
+    "start.png",
+    "drive.png"
+  ],
+  "trajectory": {
+    "file": "trajectory.json",
+    "status": "available",
+    "samples": 43,
+    "source": "received authoritative room snapshots; not displayed-frame positions"
+  },
+  "inputEvents": {
+    "file": "input-events.json",
+    "status": "available",
+    "samples": 87
+  },
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "finishedAt": "2026-10-20T03:08:20.373Z",
+  "durationMs": 5777
+}

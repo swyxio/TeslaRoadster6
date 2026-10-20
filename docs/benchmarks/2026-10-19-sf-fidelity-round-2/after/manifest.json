@@ -1,0 +1,179 @@
+{
+  "format": 1,
+  "id": "251916e0-0ed3-4091-8cb9-fe36a01848a4",
+  "startedAt": "2026-10-20T03:07:45.212Z",
+  "status": "complete",
+  "target": {
+    "origin": "http://127.0.0.1:18887",
+    "pathname": "/",
+    "perf": true,
+    "refProvidedByOperator": "candidate-0.0.49-dirty",
+    "httpStatus": 200
+  },
+  "scenarioSha256": "079dafde2b1fb672dea9862943189718cdff0eb5db48064489876693ca3f9db2",
+  "runner": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "release": "25.4.0",
+    "cpu": "Apple M5 Pro",
+    "logicalCpuCount": 18,
+    "hostLoadAverageAtStart": [
+      10.67822265625,
+      9.5205078125,
+      7.69970703125
+    ],
+    "hostLoadAverageAtFinish": [
+      9.3525390625,
+      9.2822265625,
+      7.64599609375
+    ],
+    "recorderSourceSha256": "3fb2af8f6afc107289ec72b22f7fb5e7451bb73deaaba8d3cbfebbab8fda107a",
+    "captureSourceSha256": "a7cb89d075b6a09ee38b8dc7f9dffb845d3e5f70979e09ae0d00fba4d0da0111",
+    "audioSourceSha256": "6da698161eeaef5975603f660a28763a2810cde01b312502420fb9f9322040ee",
+    "tabCaptureSourceSha256": "f67eaa450f5e1865685431e9345976d968b83baf7064a8bb3bbeb0145fd3317e",
+    "inputEventsSourceSha256": "2707dce2b3d6b05f2201ba6868b83cd98aaa2389905dabc297ee95c5cc17dc98",
+    "nodeVersion": "v22.22.2",
+    "playwrightVersion": "1.64.1",
+    "browserChannel": "chrome",
+    "gpuMode": "default",
+    "headed": false,
+    "browserVersion": "155.0.8059.85",
+    "webgl": {
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+      "vendor": "Google Inc. (Apple)"
+    }
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "capture": {
+    "enabled": false,
+    "source": "screencast",
+    "requestedFps": 30,
+    "audio": false,
+    "segments": [],
+    "note": "Callback timestamps are instrumented screencast evidence, not encoded-frame, animation-frame, GPU-completion or physical-display timing. JPEG callback delivery adds overhead."
+  },
+  "events": [
+    {
+      "type": "waitFor",
+      "commandStartedAtMs": 1568,
+      "commandDurationMs": 291,
+      "status": "ok"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 1859,
+      "commandDurationMs": 4001,
+      "status": "ok"
+    },
+    {
+      "type": "sample",
+      "commandStartedAtMs": 5860,
+      "commandDurationMs": 3,
+      "status": "ok",
+      "sample": {
+        "connection": "● SANDBOX · UNSAVED",
+        "speed": "000",
+        "perf": {
+          "samples": 240,
+          "fps": 54.80828518575859,
+          "frameP95Ms": 16.799999999999727,
+          "cpuP95Ms": 4,
+          "drawCalls": 308,
+          "triangles": 295658,
+          "pickupMeshes": 54,
+          "visiblePickups": 54
+        }
+      }
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 5863,
+      "commandDurationMs": 127,
+      "status": "ok",
+      "sample": {
+        "file": "start.png"
+      }
+    },
+    {
+      "type": "keyDown",
+      "commandStartedAtMs": 5990,
+      "commandDurationMs": 161,
+      "status": "ok",
+      "key": "KeyW"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 6151,
+      "commandDurationMs": 3502,
+      "status": "ok"
+    },
+    {
+      "type": "keyUp",
+      "commandStartedAtMs": 9653,
+      "commandDurationMs": 1,
+      "status": "ok",
+      "key": "KeyW"
+    },
+    {
+      "type": "wait",
+      "commandStartedAtMs": 9654,
+      "commandDurationMs": 601,
+      "status": "ok"
+    },
+    {
+      "type": "sample",
+      "commandStartedAtMs": 10255,
+      "commandDurationMs": 2,
+      "status": "ok",
+      "sample": {
+        "connection": "● SANDBOX · UNSAVED",
+        "speed": "177",
+        "perf": {
+          "samples": 240,
+          "fps": 58.066389238362525,
+          "frameP95Ms": 16.799999999999272,
+          "cpuP95Ms": 3.899999998509884,
+          "drawCalls": 167,
+          "triangles": 262474,
+          "pickupMeshes": 54,
+          "visiblePickups": 54
+        }
+      }
+    },
+    {
+      "type": "screenshot",
+      "commandStartedAtMs": 10258,
+      "commandDurationMs": 101,
+      "status": "ok",
+      "sample": {
+        "file": "drive.png"
+      }
+    }
+  ],
+  "recordings": [],
+  "screenshots": [
+    "start.png",
+    "drive.png"
+  ],
+  "trajectory": {
+    "file": "trajectory.json",
+    "status": "available",
+    "samples": 84,
+    "source": "received authoritative room snapshots; not displayed-frame positions"
+  },
+  "inputEvents": {
+    "file": "input-events.json",
+    "status": "available",
+    "samples": 173
+  },
+  "browserErrors": {
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "finishedAt": "2026-10-20T03:07:55.764Z",
+  "durationMs": 10553
+}
