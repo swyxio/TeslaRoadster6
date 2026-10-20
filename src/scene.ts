@@ -1,8 +1,6 @@
 import * as T from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { VEHICLES } from '../shared/vehicles';
 import { THRUSTER_REAR, type World } from '../shared/game';
-import { dayMinute } from '../shared/day';
 import { BAY_BRIDGE_SIGNAL, bayBridgeSignal } from '../shared/bridge-signal';
 import { isTrafficIncident } from '../shared/traffic';
 import { DISTRICTS, FERRY_DOCKS, LANDMARKS, MYSTERY_YACHT, TESLAND_MONUMENTS, domeSurface, supportNormal, terrainHeight } from '../shared/map';
@@ -44,21 +42,18 @@ import { createPropertyScene } from './property-scene';
 import { marketPaintColor } from '../shared/market-catalog';
 import { createHorizon } from './horizon';
 import { ContactShadows } from './contact-shadows';
+import { createBayLighting } from './bay-lighting';
+import { updateHeroRoadster } from './hero-roadster';
 
 export class GameScene {
   private renderer: T.WebGLRenderer;
   private sfFidelity?: typeof import('./sf-fidelity');
+  private readonly sfFidelityRequested = new URLSearchParams(location.search).get('visual')==='sf-hi';
   private scene = new T.Scene();
   private horizon = createHorizon(this.scene);
   private contactShadows = new ContactShadows(this.scene);
-  private sky = new T.Color();
-  private nightSky = new T.Color(0x334b62);
-  private daySky = new T.Color(0xa8cbd0);
-  private twilightSky = new T.Color(0xe7b59c);
-  private daylightSun = new T.Color(0xffdfb5);
-  private twilightSun = new T.Color(0xffbb87);
-  private hemisphere = new T.HemisphereLight(0xe9f5ff,0x626953,1.4);
-  private sun = new T.DirectionalLight(0xffdfb5,2.2);
+  private lighting: ReturnType<typeof createBayLighting>;
+  private water?: ReturnType<typeof buildBay>;
   private signalRed = new T.MeshBasicMaterial({color:0x551b19});
   private signalGreen = new T.MeshBasicMaterial({color:0x173d2b});
   private camera = new T.PerspectiveCamera(55,1,.1,1800);
@@ -123,13 +118,9 @@ export class GameScene {
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = .82;
-    this.scene.background = new T.Color(0xa8cbd0);
-    this.scene.fog = new T.Fog(0xa8cbd0,350,1200);
-    this.scene.add(this.hemisphere);
-    this.sun.position.set(-100,160,80); this.scene.add(this.sun);
-    const pmrem=new T.PMREMGenerator(this.renderer),room=new RoomEnvironment();this.scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
+    this.lighting = createBayLighting(this.scene,this.renderer);
     this.buildWorld();
-    if(new URLSearchParams(location.search).get('visual')==='sf-hi'){
+    if(this.sfFidelityRequested){
       void import('./sf-fidelity').then(async module=>{
         const stats=await module.buildSfFidelity(this.scene);this.sfFidelity=module;
         document.body.dataset.sfFidelity=`${stats.textureFallback?'fallback':'ready'}:${stats.facadeBuildings}:${stats.facadeBatches}`;
@@ -147,7 +138,7 @@ export class GameScene {
   }
   private buildWorld() {
     const scene=this.scene;
-    buildBay(scene);
+    this.water=buildBay(scene);
     buildBayRoadsideScenery(scene);
     buildNorthLandmarks(scene);
     // Local batches keep distant parts cullable; each atlas holds at most 48 labels.
@@ -291,20 +282,6 @@ export class GameScene {
     const signal=bayBridgeSignal(world.time).state;
     this.signalRed.color.setHex(signal==='red'?0xff453b:0x551b19);
     this.signalGreen.color.setHex(signal==='green'?0x54ff96:0x173d2b);
-    // The shared clock advances the sky; vehicle physics always use real simulation seconds.
-    const phase=(dayMinute(world.time)-360)/1440*Math.PI*2;
-    const daylight=Math.max(0,Math.min(1,(Math.sin(phase)+.22)/.55));
-    const twilight=Math.max(0,1-Math.abs(Math.sin(phase))/.3);
-    this.sky.copy(this.nightSky).lerp(this.daySky,daylight);
-    // A slight warm coastal horizon at sunrise/sunset, with the existing
-    // sky and fog sharing one color and no extra post-processing pass.
-    this.sky.lerp(this.twilightSky,twilight*.18);
-    (this.scene.background as T.Color).copy(this.sky);
-    (this.scene.fog as T.Fog).color.copy(this.sky);
-    this.hemisphere.intensity=.8+daylight*.6;
-    this.sun.intensity=.5+daylight*1.7;
-    this.sun.color.copy(this.daylightSun).lerp(this.twilightSun,twilight);
-    this.sun.position.set(-160*Math.cos(phase),Math.max(20,160*Math.sin(phase)),80);
     const ferryTarget=new T.Vector3(world.ferry.x,0,world.ferry.z);
     this.ferryMotion.copy(this.ferry.position).multiplyScalar(-1);
     if(this.ferry.position.distanceTo(ferryTarget)>35)this.ferry.position.copy(ferryTarget);else this.ferry.position.lerp(ferryTarget,1-Math.exp(-14*dt));
@@ -490,6 +467,7 @@ export class GameScene {
       // Custom finishes need their detailed meshes; the shared distant mesh has stock colors.
       const customized=e.kind!=='person'&&(e.style.paint!=='stock'||e.style.decal!=='none'||marketPaintColor(e.marketPaint)!==null);
       const detailed=setVehicleDetail(mesh,this.camera.position.distanceToSquared(mesh.position),e.id===controlled?.id||!!e.police||customized);
+      if(e.kind==='roadster')updateHeroRoadster(mesh,e.id===controlled?.id&&!this.sfFidelityRequested,this.renderer,this.camera,this.scene);
       if(detailed&&e.kind!=='person'){
         setVehicleStyle(mesh,e.kind,e.style,marketPaintColor(e.marketPaint));
         if(!VEHICLES[e.kind].airThrusters)setRocketKit(mesh,e.kind,e.upgrades.rocket);
@@ -502,6 +480,9 @@ export class GameScene {
       }
     }
     for(const label of this.labels)label.visible=label.position.distanceTo(this.camera.position)>(label.userData.hideWithin??80);for(const label of this.shopLabels)label.visible=label.position.distanceTo(this.camera.position)>35;
+    // The shared clock advances the sky; vehicle physics use real seconds.
+    const daylight=this.lighting.update(world.time,this.camera);
+    this.water?.update(world.time+elapsed,daylight,this.lighting.sunDirection);
     this.horizon.update(this.camera,daylight);
     this.contactShadows.update(world.entities,this.entities,this.camera.position,controlled);
     this.renderer.render(this.scene,this.camera);

@@ -1,0 +1,17 @@
+{
+  "freshGuest": true,
+  "steps": [
+    { "type": "waitFor", "selector": "#connection:has-text(\"SANDBOX\")", "timeoutMs": 60000 },
+    { "type": "wait", "ms": 2000 },
+    { "type": "touchDown", "selector": "#drive-control" },
+    { "type": "wait", "ms": 2500 },
+    { "type": "sample" },
+    { "type": "assertNumberAbove", "selector": "#speed", "value": 0 },
+    { "type": "touchUp" },
+    { "type": "touchDown", "selector": "#jump-control" },
+    { "type": "wait", "ms": 800 },
+    { "type": "touchUp" },
+    { "type": "wait", "ms": 2000 },
+    { "type": "screenshot", "name": "after" }
+  ]
+}

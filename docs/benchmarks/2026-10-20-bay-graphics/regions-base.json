@@ -1,0 +1,195 @@
+{
+  "kind": "base",
+  "errors": [],
+  "results": [
+    {
+      "name": "spawn",
+      "pose": {
+        "x": 40,
+        "y": 0,
+        "z": 60,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 126
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.98800119987996,
+        "frameP95Ms": 10,
+        "cpuP95Ms": 2.7999999970197678,
+        "drawCalls": 285,
+        "triangles": 271188,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "sf-ferry",
+      "pose": {
+        "x": -59.999999999999986,
+        "y": 0,
+        "z": -120.10689871651783,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 178
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 120.00600030001502,
+        "frameP95Ms": 9.600000000000364,
+        "cpuP95Ms": 3,
+        "drawCalls": 181,
+        "triangles": 237223,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "bay-bridge",
+      "pose": {
+        "x": 110.00034877232143,
+        "y": 0,
+        "z": 59.786376953125,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 226
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.98800119988006,
+        "frameP95Ms": 9.799999999999272,
+        "cpuP95Ms": 2.7999999970197678,
+        "drawCalls": 354,
+        "triangles": 280456,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "oakland",
+      "pose": {
+        "x": 419.7154017857143,
+        "y": 0,
+        "z": 59.965122767857146,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 274
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.89808662636754,
+        "frameP95Ms": 9.799999999999272,
+        "cpuP95Ms": 3.3999999910593033,
+        "drawCalls": 767,
+        "triangles": 355208,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "oakland-flight",
+      "pose": {
+        "x": 419.7154017857143,
+        "y": 4.796651576171984,
+        "z": 59.965122767857146,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 322
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.48620930001003,
+        "frameP95Ms": 9.700000000000728,
+        "cpuP95Ms": 3.2999999970197678,
+        "drawCalls": 786,
+        "triangles": 355346,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "oakland-cockpit",
+      "pose": {
+        "x": 419.7154017857143,
+        "y": 3.4046055115985983,
+        "z": 59.965122767857146,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 330
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.9820026995951,
+        "frameP95Ms": 9.700000000000728,
+        "cpuP95Ms": 3.2999999970197678,
+        "drawCalls": 966,
+        "triangles": 378842,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "stanford",
+      "pose": {
+        "x": -940.2839006696429,
+        "y": 0,
+        "z": 4029.858224051339,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 434
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 119.99999999999999,
+        "frameP95Ms": 9.900000000001455,
+        "cpuP95Ms": 1.8999999910593033,
+        "drawCalls": 83,
+        "triangles": 182858,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "fremont",
+      "pose": {
+        "x": 1769.715401785714,
+        "y": 0,
+        "z": 6034.893624441964,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 482
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 120.02400480096028,
+        "frameP95Ms": 9.80000000000291,
+        "cpuP95Ms": 2.7000000029802322,
+        "drawCalls": 374,
+        "triangles": 242496,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    },
+    {
+      "name": "san-jose",
+      "pose": {
+        "x": 1704.8577008928569,
+        "y": 0,
+        "z": 8729.929722377232,
+        "yaw": 1.5707963267948966,
+        "speed": 0,
+        "tick": 532
+      },
+      "perf": {
+        "samples": 240,
+        "fps": 120.018002700405,
+        "frameP95Ms": 10.099999999998545,
+        "cpuP95Ms": 2.5,
+        "drawCalls": 211,
+        "triangles": 207106,
+        "pickupMeshes": 54,
+        "visiblePickups": 54
+      }
+    }
+  ]
+}

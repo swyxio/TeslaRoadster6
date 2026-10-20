@@ -11,6 +11,7 @@ scene lighting separately. Generated geography is illustrative, not a survey.
 | `asphalt.webp` | 768 × 768 | Repeatable road albedo. Resized, opposite-edge blended, WebP quality 82. |
 | `paving.webp` | 768 × 768 | Repeatable sidewalk albedo. Cropped to a two-course repeat, resized, opposite-edge blended, WebP quality 82. |
 | `palm-frond.png` | 1024 × 418 | One feather-palm frond, stem at left. Resized with transparency preserved; near-zero-alpha fringe removed, lossless PNG. |
+| `palm-frond.webp` | 1024 × 418 | The same frond, WebP quality 88 with lossless alpha, used in the main game. |
 | `shoreline.webp` | 1024 × 512 | Illustrative East Bay hills for a distant 3D surface. Resized, WebP quality 81. |
 
 Both repeat textures were inspected as 2 × 2 tiles. The palm was inspected
