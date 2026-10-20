@@ -4,9 +4,10 @@
 
 Open `/?room=sandbox-sf-fidelity&visual=sf-hi` to drive the experiment and
 `/visual-lab/` for three AI-generated *concept illustrations*. The illustrations
-are not screenshots. The experiment overlays two generated facade images on 17
-existing, ordinary San Francisco building envelopes, textures the existing
-streets, and presents an original Roadster-inspired model. It does not reproduce
+are not screenshots. The experiment overlays two generated facade images on 25
+existing San Francisco building envelopes, textures the existing streets, and
+adds sidewalk tiles and trees. The Roadster-inspired model has a closer chase
+camera and revised bodywork. It does not reproduce
 the real buildings or the concepts' quality. Landmark geometry, the compressed
 map, roofs, collisions, simulation and multiplayer remain the existing game.
 In the menu, **Visual lab** switches back to the ordinary rendering. Textures and
@@ -93,10 +94,29 @@ The screenshot, scenario, manifest and authoritative trajectories are in
 Mobile screenshots are Chrome touch emulation, not real-device results. The
 normal performance and crowded-room gates remain open.
 
-The lab's visual result is intentionally limited: only 17 generic buildings
-receive the flat facade overlays, while many landmarks and street surfaces keep
-the original style. It is useful for comparing the idea and transport cost, not
-as proof of a high-fidelity city. The next meaningful experiment is one coherent
-walkable/drivable SF block with real kit geometry, correctly modeled curbs and
-roofs, matched collisions, lighting and a measured mobile run. Decide whether
-to expand after comparing its appearance and costs with this lab.
+## Second visual pass
+
+The concepts fill the frame with a large car, distinctive buildings, street
+details and a distant skyline. The first lab view made the car small and exposed
+large blank building faces and pavement. This pass brings the car closer,
+reshapes its rear and canopy, adds shallow house trim and facade sides to eight
+more buildings, and places instanced sidewalks and trees around existing roads.
+It changes presentation only; the closer camera is specific to the lab's
+Roadster chase view. The shared collision geometry and driving are unchanged.
+
+[Before](benchmarks/2026-10-19-sf-fidelity-round-2/before/start.png) and
+[after](benchmarks/2026-10-19-sf-fidelity-round-2/after/start.png) show the
+same spawn view, not the illustrations. On one Apple M5 Pro, local headless
+Chrome at 1280 × 720 / DPR 1 showed 16.7 / 16.8 ms p95 frame intervals at
+spawn and 16.8 / 16.8 ms after the same short drive (0.0.48 / candidate).
+Spawn draw calls were 305 / 308 and triangles 272,288 / 295,658. Host load,
+camera view, vehicle positions and traffic varied; this is a bounded visual
+check, not proof of equivalent GPU cost, motion continuity or mobile
+performance. The [scenario and raw captures](benchmarks/2026-10-19-sf-fidelity-round-2/)
+are retained for review. Mobile views were checked with Chrome touch emulation,
+not a physical phone.
+
+The result remains far from the concepts: the map still has blank buildings,
+flat ground and simplified landmarks, and its generated facades are not real
+addresses. A coherent SF block with real kit geometry, matched collision and
+roofs, and measured mobile performance is the next meaningful step.

@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A closer look at San Francisco',
+    intro: 'The visual lab brings the Roadster and nearby streets into focus.',
+    sections: [
+      { title: 'Visual lab', items: [
+        'The Roadster has a closer chase view and revised bodywork; sidewalks, street trees and more building details fill in the San Francisco spawn area.',
+        'This is still an opt-in visual experiment: the concept illustrations show a longer-term goal, not the in-game result.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.48-alpha',
+    label: '0.0.48 Alpha',
+    date: '2026-10-19',
     title: 'A San Francisco visual experiment',
     intro: 'Try a different look for the Roadster and a few San Francisco buildings.',
     sections: [

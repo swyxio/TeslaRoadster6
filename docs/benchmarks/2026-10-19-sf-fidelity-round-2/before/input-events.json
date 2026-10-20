@@ -1,0 +1,1772 @@
+[
+  {
+    "atMs": 1828,
+    "type": "sent",
+    "seq": 1,
+    "targetTick": 3,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 1836,
+    "type": "sent",
+    "seq": 2,
+    "targetTick": 5,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 1870,
+    "type": "sent",
+    "seq": 3,
+    "targetTick": 6,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 1921,
+    "type": "sent",
+    "seq": 4,
+    "targetTick": 7,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 1971,
+    "type": "sent",
+    "seq": 5,
+    "targetTick": 9,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2020,
+    "type": "sent",
+    "seq": 6,
+    "targetTick": 10,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2081,
+    "type": "sent",
+    "seq": 7,
+    "targetTick": 11,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2121,
+    "type": "sent",
+    "seq": 8,
+    "targetTick": 13,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2172,
+    "type": "sent",
+    "seq": 9,
+    "targetTick": 14,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2220,
+    "type": "sent",
+    "seq": 10,
+    "targetTick": 15,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2270,
+    "type": "sent",
+    "seq": 11,
+    "targetTick": 17,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2321,
+    "type": "sent",
+    "seq": 12,
+    "targetTick": 18,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2369,
+    "type": "sent",
+    "seq": 13,
+    "targetTick": 19,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2420,
+    "type": "sent",
+    "seq": 14,
+    "targetTick": 20,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2469,
+    "type": "sent",
+    "seq": 15,
+    "targetTick": 21,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2520,
+    "type": "sent",
+    "seq": 16,
+    "targetTick": 22,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2569,
+    "type": "sent",
+    "seq": 17,
+    "targetTick": 22,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2620,
+    "type": "sent",
+    "seq": 18,
+    "targetTick": 23,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2669,
+    "type": "sent",
+    "seq": 19,
+    "targetTick": 24,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2720,
+    "type": "sent",
+    "seq": 20,
+    "targetTick": 25,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2769,
+    "type": "sent",
+    "seq": 21,
+    "targetTick": 26,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2820,
+    "type": "sent",
+    "seq": 22,
+    "targetTick": 27,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2870,
+    "type": "sent",
+    "seq": 23,
+    "targetTick": 28,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2919,
+    "type": "sent",
+    "seq": 24,
+    "targetTick": 29,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 2973,
+    "type": "sent",
+    "seq": 25,
+    "targetTick": 30,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3019,
+    "type": "sent",
+    "seq": 26,
+    "targetTick": 30,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3069,
+    "type": "sent",
+    "seq": 27,
+    "targetTick": 31,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3120,
+    "type": "sent",
+    "seq": 28,
+    "targetTick": 32,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3169,
+    "type": "sent",
+    "seq": 29,
+    "targetTick": 33,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3221,
+    "type": "sent",
+    "seq": 30,
+    "targetTick": 34,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3269,
+    "type": "sent",
+    "seq": 31,
+    "targetTick": 35,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3320,
+    "type": "sent",
+    "seq": 32,
+    "targetTick": 36,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3370,
+    "type": "sent",
+    "seq": 33,
+    "targetTick": 37,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3420,
+    "type": "sent",
+    "seq": 34,
+    "targetTick": 38,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3469,
+    "type": "sent",
+    "seq": 35,
+    "targetTick": 39,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3520,
+    "type": "sent",
+    "seq": 36,
+    "targetTick": 40,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3569,
+    "type": "sent",
+    "seq": 37,
+    "targetTick": 41,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3620,
+    "type": "sent",
+    "seq": 38,
+    "targetTick": 41,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3669,
+    "type": "sent",
+    "seq": 39,
+    "targetTick": 42,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3720,
+    "type": "sent",
+    "seq": 40,
+    "targetTick": 43,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3768,
+    "type": "sent",
+    "seq": 41,
+    "targetTick": 44,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3820,
+    "type": "sent",
+    "seq": 42,
+    "targetTick": 45,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3869,
+    "type": "sent",
+    "seq": 43,
+    "targetTick": 46,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3922,
+    "type": "sent",
+    "seq": 44,
+    "targetTick": 47,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 3969,
+    "type": "sent",
+    "seq": 45,
+    "targetTick": 48,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4019,
+    "type": "sent",
+    "seq": 46,
+    "targetTick": 49,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4069,
+    "type": "sent",
+    "seq": 47,
+    "targetTick": 49,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4120,
+    "type": "sent",
+    "seq": 48,
+    "targetTick": 50,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4169,
+    "type": "sent",
+    "seq": 49,
+    "targetTick": 51,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4219,
+    "type": "sent",
+    "seq": 50,
+    "targetTick": 51,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4269,
+    "type": "sent",
+    "seq": 51,
+    "targetTick": 52,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4320,
+    "type": "sent",
+    "seq": 52,
+    "targetTick": 53,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4369,
+    "type": "sent",
+    "seq": 53,
+    "targetTick": 54,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4419,
+    "type": "sent",
+    "seq": 54,
+    "targetTick": 55,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4470,
+    "type": "sent",
+    "seq": 55,
+    "targetTick": 56,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4518,
+    "type": "sent",
+    "seq": 56,
+    "targetTick": 57,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4569,
+    "type": "sent",
+    "seq": 57,
+    "targetTick": 58,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4619,
+    "type": "sent",
+    "seq": 58,
+    "targetTick": 59,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4669,
+    "type": "sent",
+    "seq": 59,
+    "targetTick": 60,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4719,
+    "type": "sent",
+    "seq": 60,
+    "targetTick": 61,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4769,
+    "type": "sent",
+    "seq": 61,
+    "targetTick": 62,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4819,
+    "type": "sent",
+    "seq": 62,
+    "targetTick": 63,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4869,
+    "type": "sent",
+    "seq": 63,
+    "targetTick": 64,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4919,
+    "type": "sent",
+    "seq": 64,
+    "targetTick": 65,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 4969,
+    "type": "sent",
+    "seq": 65,
+    "targetTick": 65,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5020,
+    "type": "sent",
+    "seq": 66,
+    "targetTick": 66,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5069,
+    "type": "sent",
+    "seq": 67,
+    "targetTick": 67,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5121,
+    "type": "sent",
+    "seq": 68,
+    "targetTick": 68,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5169,
+    "type": "sent",
+    "seq": 69,
+    "targetTick": 69,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5220,
+    "type": "sent",
+    "seq": 70,
+    "targetTick": 70,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5269,
+    "type": "sent",
+    "seq": 71,
+    "targetTick": 71,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5319,
+    "type": "sent",
+    "seq": 72,
+    "targetTick": 72,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5369,
+    "type": "sent",
+    "seq": 73,
+    "targetTick": 73,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5419,
+    "type": "sent",
+    "seq": 74,
+    "targetTick": 74,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5469,
+    "type": "sent",
+    "seq": 75,
+    "targetTick": 75,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5519,
+    "type": "sent",
+    "seq": 76,
+    "targetTick": 76,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5569,
+    "type": "sent",
+    "seq": 77,
+    "targetTick": 77,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5619,
+    "type": "sent",
+    "seq": 78,
+    "targetTick": 78,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5669,
+    "type": "sent",
+    "seq": 79,
+    "targetTick": 79,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5719,
+    "type": "sent",
+    "seq": 80,
+    "targetTick": 80,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5769,
+    "type": "sent",
+    "seq": 81,
+    "targetTick": 81,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5819,
+    "type": "sent",
+    "seq": 82,
+    "targetTick": 82,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5869,
+    "type": "sent",
+    "seq": 83,
+    "targetTick": 83,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5920,
+    "type": "sent",
+    "seq": 84,
+    "targetTick": 84,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 5969,
+    "type": "sent",
+    "seq": 85,
+    "targetTick": 85,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6018,
+    "type": "sent",
+    "seq": 86,
+    "targetTick": 86,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6070,
+    "type": "sent",
+    "seq": 87,
+    "targetTick": 87,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6118,
+    "type": "sent",
+    "seq": 88,
+    "targetTick": 88,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6169,
+    "type": "sent",
+    "seq": 89,
+    "targetTick": 89,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6255,
+    "type": "sent",
+    "seq": 90,
+    "targetTick": 90,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6425,
+    "type": "sent",
+    "seq": 91,
+    "targetTick": 92,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6453,
+    "type": "sent",
+    "seq": 92,
+    "targetTick": 93,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6486,
+    "type": "sent",
+    "seq": 93,
+    "targetTick": 94,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6521,
+    "type": "sent",
+    "seq": 94,
+    "targetTick": 94,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6569,
+    "type": "sent",
+    "seq": 95,
+    "targetTick": 96,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6622,
+    "type": "sent",
+    "seq": 96,
+    "targetTick": 97,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6670,
+    "type": "sent",
+    "seq": 97,
+    "targetTick": 98,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6719,
+    "type": "sent",
+    "seq": 98,
+    "targetTick": 99,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6770,
+    "type": "sent",
+    "seq": 99,
+    "targetTick": 100,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6819,
+    "type": "sent",
+    "seq": 100,
+    "targetTick": 101,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6870,
+    "type": "sent",
+    "seq": 101,
+    "targetTick": 102,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6921,
+    "type": "sent",
+    "seq": 102,
+    "targetTick": 102,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 6970,
+    "type": "sent",
+    "seq": 103,
+    "targetTick": 103,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7020,
+    "type": "sent",
+    "seq": 104,
+    "targetTick": 104,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7070,
+    "type": "sent",
+    "seq": 105,
+    "targetTick": 105,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7119,
+    "type": "sent",
+    "seq": 106,
+    "targetTick": 106,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7170,
+    "type": "sent",
+    "seq": 107,
+    "targetTick": 107,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7219,
+    "type": "sent",
+    "seq": 108,
+    "targetTick": 108,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7273,
+    "type": "sent",
+    "seq": 109,
+    "targetTick": 109,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7319,
+    "type": "sent",
+    "seq": 110,
+    "targetTick": 110,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7372,
+    "type": "sent",
+    "seq": 111,
+    "targetTick": 111,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7421,
+    "type": "sent",
+    "seq": 112,
+    "targetTick": 112,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7470,
+    "type": "sent",
+    "seq": 113,
+    "targetTick": 112,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7520,
+    "type": "sent",
+    "seq": 114,
+    "targetTick": 113,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7569,
+    "type": "sent",
+    "seq": 115,
+    "targetTick": 114,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7620,
+    "type": "sent",
+    "seq": 116,
+    "targetTick": 115,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7669,
+    "type": "sent",
+    "seq": 117,
+    "targetTick": 116,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7720,
+    "type": "sent",
+    "seq": 118,
+    "targetTick": 117,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7769,
+    "type": "sent",
+    "seq": 119,
+    "targetTick": 118,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7820,
+    "type": "sent",
+    "seq": 120,
+    "targetTick": 119,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7870,
+    "type": "sent",
+    "seq": 121,
+    "targetTick": 120,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7919,
+    "type": "sent",
+    "seq": 122,
+    "targetTick": 121,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 7970,
+    "type": "sent",
+    "seq": 123,
+    "targetTick": 122,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8019,
+    "type": "sent",
+    "seq": 124,
+    "targetTick": 123,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8070,
+    "type": "sent",
+    "seq": 125,
+    "targetTick": 124,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8119,
+    "type": "sent",
+    "seq": 126,
+    "targetTick": 124,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8171,
+    "type": "sent",
+    "seq": 127,
+    "targetTick": 125,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8220,
+    "type": "sent",
+    "seq": 128,
+    "targetTick": 126,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8270,
+    "type": "sent",
+    "seq": 129,
+    "targetTick": 127,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8320,
+    "type": "sent",
+    "seq": 130,
+    "targetTick": 128,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8371,
+    "type": "sent",
+    "seq": 131,
+    "targetTick": 129,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8421,
+    "type": "sent",
+    "seq": 132,
+    "targetTick": 130,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8470,
+    "type": "sent",
+    "seq": 133,
+    "targetTick": 131,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8520,
+    "type": "sent",
+    "seq": 134,
+    "targetTick": 132,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8570,
+    "type": "sent",
+    "seq": 135,
+    "targetTick": 133,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8620,
+    "type": "sent",
+    "seq": 136,
+    "targetTick": 134,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8670,
+    "type": "sent",
+    "seq": 137,
+    "targetTick": 135,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8720,
+    "type": "sent",
+    "seq": 138,
+    "targetTick": 135,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8770,
+    "type": "sent",
+    "seq": 139,
+    "targetTick": 136,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8820,
+    "type": "sent",
+    "seq": 140,
+    "targetTick": 137,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8869,
+    "type": "sent",
+    "seq": 141,
+    "targetTick": 138,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8922,
+    "type": "sent",
+    "seq": 142,
+    "targetTick": 139,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 8968,
+    "type": "sent",
+    "seq": 143,
+    "targetTick": 140,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9019,
+    "type": "sent",
+    "seq": 144,
+    "targetTick": 140,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9069,
+    "type": "sent",
+    "seq": 145,
+    "targetTick": 141,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9118,
+    "type": "sent",
+    "seq": 146,
+    "targetTick": 142,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9168,
+    "type": "sent",
+    "seq": 147,
+    "targetTick": 143,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9219,
+    "type": "sent",
+    "seq": 148,
+    "targetTick": 144,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9270,
+    "type": "sent",
+    "seq": 149,
+    "targetTick": 145,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9319,
+    "type": "sent",
+    "seq": 150,
+    "targetTick": 146,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9370,
+    "type": "sent",
+    "seq": 151,
+    "targetTick": 147,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9419,
+    "type": "sent",
+    "seq": 152,
+    "targetTick": 148,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9469,
+    "type": "sent",
+    "seq": 153,
+    "targetTick": 149,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9518,
+    "type": "sent",
+    "seq": 154,
+    "targetTick": 150,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9568,
+    "type": "sent",
+    "seq": 155,
+    "targetTick": 151,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9618,
+    "type": "sent",
+    "seq": 156,
+    "targetTick": 152,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9668,
+    "type": "sent",
+    "seq": 157,
+    "targetTick": 152,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9719,
+    "type": "sent",
+    "seq": 158,
+    "targetTick": 153,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9769,
+    "type": "sent",
+    "seq": 159,
+    "targetTick": 154,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9819,
+    "type": "sent",
+    "seq": 160,
+    "targetTick": 155,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9870,
+    "type": "sent",
+    "seq": 161,
+    "targetTick": 156,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9923,
+    "type": "sent",
+    "seq": 162,
+    "targetTick": 157,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9953,
+    "type": "sent",
+    "seq": 163,
+    "targetTick": 157,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 9988,
+    "type": "sent",
+    "seq": 164,
+    "targetTick": 158,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10020,
+    "type": "sent",
+    "seq": 165,
+    "targetTick": 159,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10068,
+    "type": "sent",
+    "seq": 166,
+    "targetTick": 159,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10120,
+    "type": "sent",
+    "seq": 167,
+    "targetTick": 160,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10168,
+    "type": "sent",
+    "seq": 168,
+    "targetTick": 161,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10220,
+    "type": "sent",
+    "seq": 169,
+    "targetTick": 162,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10270,
+    "type": "sent",
+    "seq": 170,
+    "targetTick": 163,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10320,
+    "type": "sent",
+    "seq": 171,
+    "targetTick": 164,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10370,
+    "type": "sent",
+    "seq": 172,
+    "targetTick": 165,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10420,
+    "type": "sent",
+    "seq": 173,
+    "targetTick": 166,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10469,
+    "type": "sent",
+    "seq": 174,
+    "targetTick": 167,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10520,
+    "type": "sent",
+    "seq": 175,
+    "targetTick": 168,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10569,
+    "type": "sent",
+    "seq": 176,
+    "targetTick": 169,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  },
+  {
+    "atMs": 10630,
+    "type": "sent",
+    "seq": 177,
+    "targetTick": 170,
+    "controlRevision": 0,
+    "actionSeq": 0,
+    "jump": 0,
+    "hover": false
+  }
+]
