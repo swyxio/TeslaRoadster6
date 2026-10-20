@@ -11,6 +11,24 @@ export function chaseFraming(portrait:boolean, vehicle:Pick<VehicleSpec,'length'
   return out;
 }
 
+export type ChaseResponseState={motion:number;distance:number;ready:boolean};
+
+/** Smooth the framing response to discrete velocity and ground/air updates. */
+export function chaseResponse(speed:number, airborne:boolean, dt:number, state:ChaseResponseState, out:{distance:number;lookAhead:number;focusRate:number}){
+  const targetMotion=T.MathUtils.clamp((Math.abs(speed)-8)/20,0,1);
+  const targetDistance=(airborne?8:4)*targetMotion;
+  if(!state.ready){state.motion=targetMotion;state.distance=targetDistance;state.ready=true;}
+  else{state.motion+=(targetMotion-state.motion)*(1-Math.exp(-8*dt));state.distance+=(targetDistance-state.distance)*(1-Math.exp(-dt));}
+  out.lookAhead*=1-state.motion;out.distance+=state.distance;out.focusRate=8+16*state.motion;
+}
+
+/** Smooth the chase position and aim independently; retain intentional cuts. */
+export function updateChase(position:T.Vector3,focus:T.Vector3,follow:T.Vector3,target:T.Vector3,dt:number,ready:boolean,focusRate:number){
+  if(!ready||position.distanceTo(follow)>100){position.copy(follow);focus.copy(target);return;}
+  position.lerp(follow,1-Math.exp(-5*dt));
+  focus.lerp(target,1-Math.exp(-focusRate*dt));
+}
+
 /** A bounded, frame-rate independent lens response for powered chase views. */
 export function chaseLens(current:number, thrusting:boolean, dt:number, reducedMotion=false) {
   if(reducedMotion)return 55;
