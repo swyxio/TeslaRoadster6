@@ -109,12 +109,39 @@ function storefrontTexture() {
 
 /** A standalone visual slice. It deliberately has no dependency on Tesland's
  * shared geography or networking; callers own the camera, light and water. */
-export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]; update(camera:T.Camera):void} {
+export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]; ready:Promise<string[]>; update(camera:T.Camera):void} {
   const colliders:Collider[]=[];
   const signs:Item[][]=[[],[],[],[]];
+  const failures:string[]=[];
+  const pending:Promise<void>[]=[];
   const loader=new T.TextureLoader();
   const texture=(name:string,repeat=false)=>{
-    const map=loader.load(`/embarcadero/textures/${name}`);map.colorSpace=T.SRGBColorSpace;
+    let finishLoading!:()=>void;
+    const loaded=new Promise<void>(resolve=>{finishLoading=resolve;});
+    let finished=false,timer:number;
+    const finish=(failed:boolean)=>{
+      if(finished)return;
+      finished=true;window.clearTimeout(timer);
+      // Keep the demo playable if one locally hosted image fails. Fronds need
+      // an alpha-shaped fallback; other materials can use their base color.
+      if(failed){
+        failures.push(name);
+        const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
+        const ctx=canvas.getContext('2d');
+        if(ctx){
+          ctx.fillStyle=name==='palm-frond.png'?'#416b36':'#ffffff';
+          if(name==='palm-frond.png'){
+            ctx.beginPath();ctx.moveTo(1,32);ctx.quadraticCurveTo(30,3,63,32);
+            ctx.quadraticCurveTo(30,61,1,32);ctx.fill();
+          } else ctx.fillRect(0,0,64,64);
+          map.source.data=canvas;map.needsUpdate=true;
+        }
+      }
+      finishLoading();
+    };
+    const map:T.Texture=loader.load(`/embarcadero/textures/${name}`,()=>finish(false),undefined,()=>finish(true));
+    timer=window.setTimeout(()=>finish(true),8000);
+    pending.push(loaded);map.colorSpace=T.SRGBColorSpace;
     if(repeat)map.wrapS=map.wrapT=T.RepeatWrapping;
     map.anisotropy=4;return map;
   };
@@ -590,5 +617,5 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]; update(ca
       detail.mesh.visible=detail.near ? distance<195 : distance>=195;
     }
   };
-  return {colliders,update};
+  return {colliders,ready:Promise.all(pending).then(()=>failures),update};
 }

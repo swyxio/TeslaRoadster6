@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-20T06:29:57.588Z",
+  "browser": "155.0.8059.85",
+  "viewport": [
+    1440,
+    900
+  ],
+  "dpr": 1,
+  "device": "Apple M5 Pro",
+  "note": "Unmodified local Vite pages, fresh cache-disabled contexts, ABBA order. Ready means loading UI removed; baseline may not wait for every image.",
+  "legs": [
+    {
+      "name": "baseline",
+      "port": 18895,
+      "readyMs": 225.73341600000003,
+      "settledMs": 704.8583749999998,
+      "transferBytes": 3703419,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ],
+      "loadAfter": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ]
+    },
+    {
+      "name": "candidate",
+      "port": 18911,
+      "readyMs": 176.60725000000002,
+      "settledMs": 652.3727920000001,
+      "transferBytes": 6071276,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ],
+      "loadAfter": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ]
+    },
+    {
+      "name": "candidate",
+      "port": 18911,
+      "readyMs": 226.53233399999954,
+      "settledMs": 702.867209,
+      "transferBytes": 6071276,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ],
+      "loadAfter": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ]
+    },
+    {
+      "name": "baseline",
+      "port": 18895,
+      "readyMs": 199.65537500000028,
+      "settledMs": 677.3039579999986,
+      "transferBytes": 3703419,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ],
+      "loadAfter": [
+        21.5869140625,
+        25.82958984375,
+        24.45166015625
+      ]
+    }
+  ]
+}

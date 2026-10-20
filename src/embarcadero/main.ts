@@ -38,8 +38,9 @@ const world = buildEmbarcadero(scene);
 const lighting = createEmbarcaderoLighting(scene, renderer);
 const loading = document.querySelector<HTMLElement>('#loading')!;
 let car: T.Group;
+let missingTextures: string[];
 try {
-  [car] = await Promise.all([createEmbarcaderoCar(), lighting.ready]);
+  [car, , missingTextures] = await Promise.all([createEmbarcaderoCar(), lighting.ready, world.ready]);
   loading.remove();
 } catch (error) {
   loading.textContent = 'The waterfront assets could not be loaded. Please refresh to try again.';
@@ -92,6 +93,10 @@ function showNotice(message: string) {
   notice.classList.add('visible');
   window.clearTimeout(noticeTimer);
   noticeTimer = window.setTimeout(() => notice.classList.remove('visible'), 3000);
+}
+if (missingTextures.length) {
+  console.warn('Embarcadero textures unavailable:', missingTextures);
+  showNotice('Some waterfront textures could not load; using simpler materials.');
 }
 function reset(message?: string) {
   Object.assign(state, initialCar());
