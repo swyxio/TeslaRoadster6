@@ -120,3 +120,64 @@ The result remains far from the concepts: the map still has blank buildings,
 flat ground and simplified landmarks, and its generated facades are not real
 addresses. A coherent SF block with real kit geometry, matched collision and
 roofs, and measured mobile performance is the next meaningful step.
+
+## Next: a halfway-to-the-concept street
+
+This is a proposal, not a shipped feature or a claim that visual quality can be
+measured as an exact percentage. Make one continuous 100–200 m drivable slice
+near the SF spawn before improving the rest of the Bay. Match a street-level
+view, a fast turning view and an airborne view against the same places in the
+current game. The concept illustrations are inspirational, not geometrically
+accurate references for those camera poses.
+
+1. **A real Roadster asset.** Author a properly proportioned hero car with
+   smooth body panels, wheel arches, glass, light bar, underbody and materials;
+   preserve separate animated wheels, rocket effects, paint and the existing
+   vehicle dimensions and origin. Its chase framing needs to be legible at speed
+   as well as parked, without sacrificing road visibility or continuity.
+2. **A coherent block.** Make four to six reusable SF building modules: bay
+   windows, stoops, cornices, storefronts, roof edges and modern offices. Use
+   actual shallow geometry where it changes the silhouette, and baked material
+   detail elsewhere. Add one recognizable landmark and a simple layered
+   skyline. Assemble against shared building footprints; if a solid wall, roof
+   or terrain must change, update its authoritative surface and collisions with
+   the visual mesh. Trees and other non-solid decorations must remain clearly
+   separated from those collision contracts.
+3. **Street scale and grounding.** Use repeatable asphalt, sidewalk and curb
+   materials, road markings, a few poles and parked props, and several tree
+   variants. Favor reusable meshes and atlases over one draw per window. Keep
+   flight views and the car's clearance over roofs in the test, so visual detail
+   does not introduce misleading invisible obstacles.
+4. **Lighting and materials.** Try an outdoor reflection environment, tuned
+   directional sun and hemisphere light, subtle baked ambient occlusion and a
+   grounded car contact shadow that follows the car and fades with altitude.
+   Keep the existing day/night cycle; do not bake a fixed sunny shadow into every
+   surface. Test one bounded real-time shadow separately before adopting it:
+   each shadow-casting light entails an additional render pass.
+5. **Cheap production.** Author the small kit in Blender, use an offline seeded
+   layout and export shared glTF/GLB meshes, materials and lightweight LODs.
+   Batch repeated parts by spatial cell and preload the next cell ahead of fast
+   cars; avoid loading or drawing a separate asset per window. Original or
+   [Poly Haven CC0](https://polyhaven.com/license) materials and HDRIs are
+   candidates, subject to per-asset quality and resolution review. See
+   [Epic's City Sample](https://dev.epicgames.com/documentation/unreal-engine/city-sample-project-unreal-engine-demonstration)
+   for the modular offline-generation pattern, [Three.js instancing](https://threejs.org/docs/pages/InstancedMesh.html),
+   and [glTF loader support](https://threejs.org/docs/pages/GLTFLoader.html).
+   These do not bring Unreal's Nanite or global illumination into WebGL.
+
+As initial experiment sizes, not proven budgets, try 50–100k additional
+visible triangles, one or two 1024-pixel material atlases and a 2–4 MB optional
+download. A 1024² uncompressed RGBA texture plus mipmaps is approximately
+5.3 MiB in memory; a small WebP download does not imply equally small GPU
+residency. Test KTX2/Basis compression and decoder/upload cost before choosing a
+format. The current spawn observation already has roughly 308 draw calls and
+296k triangles, so measure the *whole* scene instead of treating the new block
+in isolation.
+
+Compare cold/warm transfer, decoded texture memory, draw calls, triangles,
+CPU submission, frame p95/p99, GPU timing where available, input/motion
+continuity and simulation progress. Run the same route on desktop and on a real
+phone, including fast turns, flight and collision/roof checks. Browser touch
+emulation and a single smooth-looking screenshot are not physical-device or
+driving-continuity acceptance. Keep the existing lab optional until the new
+slice is playable and the responsible changes have no confirmed regression.
