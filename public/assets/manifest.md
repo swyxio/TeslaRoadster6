@@ -1,5 +1,18 @@
 # Asset manifest
 
+## Bay waterfront palm
+
+The main game's [`palm-frond.webp`](../embarcadero/textures/palm-frond.webp)
+is a 1024 × 418, 145,990-byte WebP derived from the retained
+[`palm-frond.png`](../embarcadero/textures/palm-frond.png). Its SHA-256 is
+`3547b45c3154cb207b5b3493122c3afbfba832f69d37fb47325632e5741cb37a`.
+The uncompressed RGBA texture is approximately 1.63 MiB before mipmaps;
+GPU allocation is not measured. It is shared by instanced foliage, not attached
+to a vehicle. The original was generated with OpenAI's image tool; its prompt,
+processing and applicable usage terms are documented in the
+[texture attribution](../embarcadero/textures/ATTRIBUTION.md) and
+[generated-asset terms](#san-francisco-fidelity-lab).
+
 ## San Francisco fidelity lab
 
 On 2026-10-19 the project generated three Roadster-and-San-Francisco concept
