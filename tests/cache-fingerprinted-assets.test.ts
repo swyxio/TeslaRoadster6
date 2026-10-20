@@ -98,3 +98,18 @@ test('accepts 100 unique rules and rejects 101', () => {
     } finally { f.cleanup(); }
   }
 });
+
+test('includes and removes the independent demo manifest', () => {
+  const main = 'assets/main-AbCd1234.js';
+  const demo = 'assets/embarcadero-Demo1234.js';
+  const f = fixture({ main: { file: main } }, [main, demo]);
+  const demoManifest = join(f.dist, '.vite/embarcadero-manifest.json');
+  writeFileSync(demoManifest, JSON.stringify({ demo: { file: demo } }));
+  try {
+    const result = f.run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(readFileSync(f.headersPath, 'utf8'), /embarcadero-Demo1234\.js/);
+    assert.equal(existsSync(f.manifestPath), false);
+    assert.equal(existsSync(demoManifest), false);
+  } finally { f.cleanup(); }
+});

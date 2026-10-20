@@ -1,0 +1,42 @@
+:root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#fff9e8;font-synthesis:none;--ink:#182d32;--gold:#ffd199}*{box-sizing:border-box}html,body,#app,.scene{width:100%;height:100%;margin:0;overflow:hidden}body{background:#7fa2b6}.scene{position:fixed;inset:0}.scene canvas{display:block}.topbar{position:absolute;top:max(22px,env(safe-area-inset-top));left:max(28px,env(safe-area-inset-left));right:max(28px,env(safe-area-inset-right));display:flex;align-items:flex-start;justify-content:space-between;gap:14px;text-shadow:0 1px 8px #182830aa}.brand{color:white;font-weight:850;letter-spacing:.04em;text-decoration:none;font-size:18px}.brand span{font-size:10px;letter-spacing:.16em;font-weight:600;opacity:.85}.caption{font-size:10px;letter-spacing:.18em;margin-top:7px;font-weight:750;color:#ffe0a9}.top-actions{display:flex;gap:8px}button{font:inherit;cursor:pointer;border:1px solid #ffffff50;color:#fff7e6;background:#1a3338d9;border-radius:8px;padding:10px 13px;font-size:12px;font-weight:700;box-shadow:0 3px 20px #0b1a2450}button:hover{background:#2a4b4f}button:focus-visible,a:focus-visible{outline:3px solid #ffd199;outline-offset:3px}.description{position:absolute;left:max(28px,env(safe-area-inset-left));top:max(94px,calc(env(safe-area-inset-top) + 72px));padding:12px 15px;background:#172f34c9;border-left:2px solid #ffcf87;border-radius:2px 8px 8px 2px;display:grid;gap:4px;box-shadow:0 4px 18px #10212a30}.description strong{font-size:14px}.description span{font-size:11px;color:#cbd8ce}.readout{position:absolute;right:max(28px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));background:#1a3339d9;border:1px solid #fff2cc35;border-radius:10px;padding:14px 18px;min-width:150px;box-shadow:0 6px 24px #10212a45}.readout span{display:block;font-size:9px;letter-spacing:.14em;color:#d1dfd5;font-weight:700}.readout strong{font-size:42px;font-weight:400;line-height:1.3}.readout small{font-size:10px}.desktop-help{position:absolute;left:50%;bottom:max(25px,env(safe-area-inset-bottom));transform:translateX(-50%);white-space:nowrap;background:#173136c9;border-radius:7px;padding:9px 13px;color:#f3f0df;font-size:11px;letter-spacing:.02em}.desktop-help i{font-style:normal;color:#ffca8b;padding:0 4px}.notice{position:absolute;left:50%;top:18%;transform:translateX(-50%);background:#173136ec;border-radius:8px;padding:10px 15px;opacity:0;pointer-events:none;transition:opacity .2s}.notice.visible{opacity:1}.stats{position:absolute;right:max(28px,env(safe-area-inset-right));top:max(78px,calc(env(safe-area-inset-top) + 56px));background:#152d32ed;border:1px solid #ffffff40;border-radius:8px;padding:14px 16px;max-width:285px;font:12px/1.5 ui-monospace,monospace;box-shadow:0 4px 20px #10212a60}.stats strong{color:#ffce87;font-size:10px;letter-spacing:.1em}.stats p{white-space:pre-line;margin:8px 0}.stats small{color:#c8d7ce;font:10px/1.4 system-ui}.stats[hidden]{display:none}.touch-controls{display:none}.hud-hidden .description,.hud-hidden .readout,.hud-hidden .desktop-help,.hud-hidden .topbar,.hud-hidden .stats{visibility:hidden}dialog{width:min(1100px,92vw);max-height:90vh;background:#173138;color:#f8f2e3;border:1px solid #8ca9a3;border-radius:12px;padding:22px;box-shadow:0 15px 80px #0a1b2088}dialog::backdrop{background:#081a20c9}.dialog-head{display:flex;justify-content:space-between;align-items:flex-start}.dialog-head span{font-size:10px;letter-spacing:.16em;color:#ffd398}.dialog-head h1{font-size:24px;margin:5px 0}.dialog-head button{font-size:22px;padding:2px 12px}dialog p{color:#c9d9d2;font-size:13px}dialog img{display:block;width:100%;height:auto;border-radius:6px}
+@media (pointer:coarse){.desktop-help{display:none}.touch-controls{position:absolute;inset:0;display:block;pointer-events:none}.touch-controls button{touch-action:none;pointer-events:auto;min-width:63px;min-height:53px;background:#f4dfbbdc;color:#1b3031;font-size:13px;box-shadow:0 3px 0 #947e65,0 4px 16px #0d1b2040;user-select:none;-webkit-user-select:none}.touch-controls button.pressed{background:#ffc584;transform:translateY(2px);box-shadow:0 1px 0 #947e65}.touch-left,.touch-right{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(2,1fr);gap:8px;pointer-events:none}.touch-left{left:max(14px,env(safe-area-inset-left))}.touch-right{right:max(14px,env(safe-area-inset-right))}.touch-right .drive{grid-column:span 2;background:#e6a07f;min-height:57px}.readout{bottom:150px;right:max(14px,env(safe-area-inset-right));min-width:125px;padding:9px 12px}.readout strong{font-size:31px}.topbar{left:max(14px,env(safe-area-inset-left));right:max(14px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top))}.top-actions{gap:4px}.top-actions button{font-size:10px;padding:8px}.description{left:max(14px,env(safe-area-inset-left));top:max(72px,calc(env(safe-area-inset-top) + 58px));padding:8px 10px}.description span{font-size:10px}.stats{right:14px;top:64px}.brand{font-size:16px}.brand span{display:none}.caption{font-size:9px}.hud-hidden .touch-controls{visibility:visible}}
+@media (pointer:coarse) and (orientation:landscape){.touch-left,.touch-right{bottom:max(10px,env(safe-area-inset-bottom))}.touch-controls button{min-width:53px;min-height:39px}.touch-right .drive{min-height:39px}.readout{bottom:105px}.description{top:60px}.topbar{top:10px}}
+.loading{position:absolute;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;border-radius:8px;background:#173136ed;color:#fff4dd;font-size:13px;box-shadow:0 4px 24px #0a1c2280}
+.description a{color:#ffe0aa;text-decoration:underline;text-underline-offset:2px}
+.comparison{position:absolute;z-index:3;right:max(28px,env(safe-area-inset-right));top:max(75px,calc(env(safe-area-inset-top) + 55px));width:min(520px,44vw);background:#173138ec;color:#f8f2e3;border:1px solid #8ca9a3;border-radius:10px;padding:13px;box-shadow:0 8px 40px #0a1b2080}.comparison[hidden]{display:none}.comparison p{margin:5px 0 10px;color:#c9d9d2;font-size:11px}.comparison img{display:block;width:100%;height:auto;border-radius:5px}.comparison .dialog-head h1{font-size:16px}.comparison .dialog-head button{font-size:18px;padding:1px 8px}.comparison .dialog-head span{font-size:9px}.comparison+.stats{z-index:4}@media(pointer:coarse){.comparison{right:14px;top:60px;width:min(440px,calc(100vw - 28px))}}
+
+/* Compare the live, still-drivable canvas and the illustration without hiding either. */
+.comparing{background:#10292e}
+.comparing .scene{width:50%;height:auto;aspect-ratio:16 / 10;top:50%;right:auto;bottom:auto;transform:translateY(-50%)}
+.comparing .topbar{right:calc(50vw + 16px);z-index:4}
+.comparing .readout,.comparing .stats{right:calc(50vw + 16px)}
+.comparing .desktop-help,.comparing .notice{left:25%}
+.comparing .comparison{inset:0 0 0 auto;width:50%;height:100%;border-radius:0;padding:24px;display:flex;flex-direction:column;justify-content:center;gap:10px;overflow:auto;background:#10292e;box-shadow:-8px 0 30px #0b1c2070}
+.comparing .comparison[hidden]{display:none}
+.comparing .comparison .dialog-head{position:absolute;left:24px;right:24px;top:24px}
+.comparing .comparison p{margin:48px 0 0}
+.comparing .comparison img{width:100%;height:auto;max-height:70%;object-fit:contain}
+@media (max-width:700px) and (orientation:portrait){
+ .comparing .scene{width:100%;height:50%;aspect-ratio:auto;top:0;bottom:auto;transform:none}
+ .comparing .topbar{right:max(14px,env(safe-area-inset-right))}
+ .comparing .brand span,.comparing .caption,.comparing .description{display:none}
+ .comparing .readout{right:14px;bottom:calc(50% + 10px)}
+ .comparing .stats{right:14px;top:52px}
+ .comparing .desktop-help{display:none}
+ .comparing .notice{left:50%;top:12%}
+ .comparing .comparison{inset:50% 0 0;width:100%;height:50%;padding:14px;gap:4px}
+ .comparing .comparison .dialog-head{left:14px;right:14px;top:10px}
+ .comparing .comparison p{margin:36px 0 0}
+ .comparing .comparison img{max-height:75%}
+ .comparing .touch-left,.comparing .touch-right{bottom:calc(50% + 10px)}
+ .comparing .touch-controls button{min-width:42px;min-height:35px}
+ .comparing .touch-right .drive{min-height:35px}
+ .comparing .readout{bottom:calc(50% + 130px);min-width:90px}
+ .comparing .readout strong{font-size:24px}
+}
+@media (pointer:coarse) and (orientation:landscape){
+ .comparing .touch-right{right:calc(50vw + 14px)}
+ .comparing .touch-controls button{min-width:45px;min-height:34px}
+ .comparing .touch-right .drive{min-height:34px}
+ .comparing .description{display:none}
+}

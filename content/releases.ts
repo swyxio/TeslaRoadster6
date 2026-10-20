@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'A golden-hour drive on the Embarcadero',
+    intro: 'Try a standalone waterfront visual demo and compare it with the concept art.',
+    sections: [
+      { title: 'Visual demo', items: [
+        'Drive, fly or watch a self-drive Roadster-inspired rocket car in a separate Embarcadero scene, with sunset light, shadows, the Ferry Building, piers and a distant shoreline.',
+        'Compare the live scene side by side with the concept illustration and open the frame-timing panel. This offline experiment uses simplified physics; it does not save progress or join multiplayer.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.48-alpha',
+    label: '0.0.48 Alpha',
+    date: '2026-10-19',
     title: 'A San Francisco visual experiment',
     intro: 'Try a different look for the Roadster and a few San Francisco buildings.',
     sections: [

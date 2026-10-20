@@ -21,3 +21,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+Embarcadero visual demo vehicle model:
+“Tesla Roadster 2020” by metarex.4d, licensed under CC BY 4.0:
+https://sketchfab.com/3d-models/tesla-roadster-2020-1fbf29e297bd4a17ac39a00a378441d8
+https://creativecommons.org/licenses/by/4.0/
+The demo modifies the model's geometry, textures, orientation and materials,
+and adds fictional rocket nozzles. For source, checksums and processing,
+see /embarcadero/vehicle/ATTRIBUTION.md.
+The Draco decoder is distributed by Google under the Apache License 2.0:
+see /embarcadero/vehicle/draco/LICENSE.txt.

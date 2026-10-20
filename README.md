@@ -6,6 +6,8 @@ Formerly Poly AV and Bay Drive. In our fictional 2050, the Roadsters have finall
 
 See [verification](docs/VERIFICATION.md) for observed checks and known limitations, the [performance audit](docs/PERFORMANCE_AUDIT.md) for benchmarks, [performance baselines](docs/PERFORMANCE_BASELINES.md) for selective regression reports, and [headless playtesting](docs/HEADLESS_PLAYTESTING.md) for repeatable recordings and local agent controls.
 
+**Visual experiment:** The standalone [Embarcadero demo](experiments/embarcadero/) explores golden-hour lighting and waterfront scenery; see its [comparison and local performance notes](docs/EMBARCADERO_DEMO.md). It runs separately from the multiplayer game.
+
 ![Driving across the Bay Bridge toward Oakland](docs/screenshots/bay-bridge-drive.jpg)
 
 **Delivery:** Pick up at a gold marker and stop at the customer. Reach the restaurant quickly for a pickup bonus, then beat the active-time delivery estimate for another bonus; late deliveries pay less. Current cash determines your level and which regions are open; purchases and tickets can lower it again. The HUD shows the next milestone. Flying near police can lead to a citation; some orders lead to rooftops when your vehicle has rockets and a Level 3 air tank. See [delivery design](docs/DELIVERY.md).

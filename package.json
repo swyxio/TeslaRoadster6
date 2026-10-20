@@ -1,13 +1,13 @@
 {
   "name": "tesland",
-  "version": "0.0.48-alpha",
+  "version": "0.0.49-alpha",
   "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:server": "wrangler dev --port 8787",
-    "build": "pnpm typecheck && vite build --manifest && node scripts/cache-fingerprinted-assets.mjs && tsx scripts/build-public-pages.ts",
+    "build": "pnpm typecheck && vite build --manifest && vite build --config vite.embarcadero.config.ts && node scripts/cache-fingerprinted-assets.mjs && tsx scripts/build-public-pages.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.playtest.json --noEmit && tsc -p tsconfig.playtest-worker.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "ci": "pnpm test && pnpm build",
