@@ -543,8 +543,8 @@ export function buildEmbarcadero(scene:T.Scene):{colliders:Collider[]; update(ca
     for(const dz of [-4.5,4.5]){
       box('metal',tx,58,bridgeZ+dz,3.8,74,3.8,true);
       box('stone',tx,19,bridgeZ+dz,7,8,7,true);
-      solid(tx,bridgeZ+dz,3.8,3.8,95);
-      solid(tx,bridgeZ+dz,7,7,23);
+      solid(tx,bridgeZ+dz,3.8,3.8,95,21);
+      solid(tx,bridgeZ+dz,7,7,23,15);
     }
     for(const y of [35,52,70,88])box('metal',tx,y,bridgeZ,3,2.2,12,true);
     for(let y=31;y<81;y+=15){

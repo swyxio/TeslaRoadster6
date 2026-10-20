@@ -62,3 +62,24 @@ test('an elevated bridge stops upward flight and supports landing', () => {
   for (let i = 0; i < 180; i++) stepCar(landing, emptyControls(), 1 / 60, bridge);
   assert.equal(landing.y, 11);
 });
+
+test('a bridge tower blocks its visible base but leaves the water below clear', () => {
+  const tower = [
+    { minX: 143.1, maxX: 146.9, minZ: -342.4, maxZ: -338.6, minY: 21, height: 95 },
+    { minX: 141.5, maxX: 148.5, minZ: -344, maxZ: -337, minY: 15, height: 23 },
+  ];
+  const below = { ...initialCar(), x: 145, z: -330, y: 5, speed: 24 };
+  for (let i = 0; i < 50; i++) stepCar(below, emptyControls(), 1 / 60, tower);
+  assert.ok(below.z < -344, 'car can fly under the suspended tower');
+
+  const atBase = { ...initialCar(), x: 145, z: -330, y: 16, speed: 24 };
+  let hit = false;
+  for (let i = 0; i < 40; i++) {
+    if (stepCar(atBase, emptyControls(), 1 / 60, tower) === 'collision') {
+      hit = true;
+      break;
+    }
+  }
+  assert.ok(hit, 'visible stone base blocks the car');
+  assert.ok(atBase.z >= -337 + 2.25);
+});
