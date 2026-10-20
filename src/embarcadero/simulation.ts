@@ -3,8 +3,14 @@ export type Controls = {
   lift: boolean; boost: boolean; brake: boolean; rollLeft: boolean; rollRight: boolean;
 };
 
-export type Collider = { minX: number; maxX: number; minZ: number; maxZ: number; height: number };
+export type Collider = { minX: number; maxX: number; minZ: number; maxZ: number; height: number; minY?: number };
 export type CarState = { x: number; y: number; z: number; yaw: number; roll: number; speed: number; verticalSpeed: number };
+
+// Collision remains an axis-aligned arcade approximation; these dimensions
+// describe the body around its ground-contact position rather than its mesh.
+const HALF_WIDTH = 1.05;
+const HALF_LENGTH = 2.25;
+const CAR_HEIGHT = 1.3;
 
 export const emptyControls = (): Controls => ({
   throttle: false, reverse: false, left: false, right: false, lift: false,
@@ -29,6 +35,7 @@ export function stepCar(car: CarState, input: Controls, dt: number, colliders: r
   car.roll += (targetRoll - car.roll) * (1 - Math.exp(-4 * dt));
 
   const oldY = car.y;
+  let collision = false;
   car.verticalSpeed += ((input.lift ? 18 : 0) - 9.8) * dt;
   car.verticalSpeed = Math.max(-22, Math.min(14, car.verticalSpeed));
   car.y = Math.min(180, car.y + car.verticalSpeed * dt);
@@ -37,10 +44,22 @@ export function stepCar(car: CarState, input: Controls, dt: number, colliders: r
     // Land on the top of solid structures rather than dropping through them.
     for (const box of colliders) {
       if (oldY >= box.height && car.y <= box.height &&
-          car.x + 1.05 > box.minX && car.x - 1.05 < box.maxX &&
-          car.z + 2.25 > box.minZ && car.z - 2.25 < box.maxZ) {
+          car.x + HALF_WIDTH > box.minX && car.x - HALF_WIDTH < box.maxX &&
+          car.z + HALF_LENGTH > box.minZ && car.z - HALF_LENGTH < box.maxZ) {
         car.y = box.height;
         car.verticalSpeed = 0;
+      }
+    }
+  } else {
+    // Elevated surfaces have undersides as well as tops. Clamp an ascending
+    // car against the underside instead of allowing it to fly through it.
+    for (const box of colliders) {
+      if (box.minY !== undefined && oldY + CAR_HEIGHT <= box.minY && car.y + CAR_HEIGHT >= box.minY &&
+          car.x + HALF_WIDTH > box.minX && car.x - HALF_WIDTH < box.maxX &&
+          car.z + HALF_LENGTH > box.minZ && car.z - HALF_LENGTH < box.maxZ) {
+        car.y = box.minY - CAR_HEIGHT;
+        car.verticalSpeed = 0;
+        collision = true;
       }
     }
   }
@@ -53,13 +72,14 @@ export function stepCar(car: CarState, input: Controls, dt: number, colliders: r
   const dx = -Math.sin(car.yaw) * car.speed * dt;
   const dz = -Math.cos(car.yaw) * car.speed * dt;
   const blocked = (x: number, z: number) => colliders.some(box =>
-    car.y < box.height && x + 1.05 > box.minX && x - 1.05 < box.maxX && z + 2.25 > box.minZ && z - 2.25 < box.maxZ,
+    car.y < box.height && car.y + CAR_HEIGHT > (box.minY ?? 0) &&
+    x + HALF_WIDTH > box.minX && x - HALF_WIDTH < box.maxX &&
+    z + HALF_LENGTH > box.minZ && z - HALF_LENGTH < box.maxZ,
   );
-  let collision = false;
-  if (!blocked(car.x + dx, car.z)) car.x += dx;
-  else collision = true;
-  if (!blocked(car.x, car.z + dz)) car.z += dz;
-  else collision = true;
+  if (dx && !blocked(car.x + dx, car.z)) car.x += dx;
+  else if (dx) collision = true;
+  if (dz && !blocked(car.x, car.z + dz)) car.z += dz;
+  else if (dz) collision = true;
   if (collision) car.speed *= 0.45;
   car.x = Math.max(-250, Math.min(400, car.x));
   car.z = Math.max(-450, Math.min(150, car.z));

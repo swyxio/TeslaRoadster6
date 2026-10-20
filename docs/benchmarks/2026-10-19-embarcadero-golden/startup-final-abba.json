@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-20T06:32:39.260Z",
+  "browser": "155.0.8059.85",
+  "viewport": [
+    1440,
+    900
+  ],
+  "dpr": 1,
+  "device": "Apple M5 Pro",
+  "note": "Unmodified local Vite pages, fresh cache-disabled contexts, ABBA order. Ready means loading UI removed; baseline may not wait for every image.",
+  "legs": [
+    {
+      "name": "baseline",
+      "port": 18895,
+      "readyMs": 181.69958399999996,
+      "settledMs": 658.0707919999995,
+      "transferBytes": 3703419,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ],
+      "loadAfter": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ]
+    },
+    {
+      "name": "candidate",
+      "port": 18911,
+      "readyMs": 163.11549999999988,
+      "settledMs": 643.8130419999998,
+      "transferBytes": 6072246,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ],
+      "loadAfter": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ]
+    },
+    {
+      "name": "candidate",
+      "port": 18911,
+      "readyMs": 216.12212499999987,
+      "settledMs": 697.5276670000003,
+      "transferBytes": 6072246,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ],
+      "loadAfter": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ]
+    },
+    {
+      "name": "baseline",
+      "port": 18895,
+      "readyMs": 163.6620839999996,
+      "settledMs": 643.3747920000005,
+      "transferBytes": 3703419,
+      "pendingAtReady": [],
+      "errors": [],
+      "loadBefore": [
+        14.73388671875,
+        20.07421875,
+        22.234375
+      ],
+      "loadAfter": [
+        14.7548828125,
+        19.98974609375,
+        22.19189453125
+      ]
+    }
+  ]
+}

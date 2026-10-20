@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 // This sky is painted once in code; it contains no borrowed imagery. The same
 // panorama is prefiltered by Three.js for inexpensive, static car reflections.
@@ -130,22 +131,49 @@ function createWaterNoise(): T.DataTexture {
 export function createEmbarcaderoLighting(
   scene: T.Scene,
   renderer: T.WebGLRenderer,
-): { update(position: T.Vector3, dt: number): void } {
+): { ready: Promise<void>; update(position: T.Vector3, dt: number): void } {
   // This diagonal is aligned with the waterfront palms: at the starting
   // viewpoint their long frond shadows fall across the road in front of the
   // car. Use the same direction for the sky and water reflection.
-  const sunDirection = new T.Vector3(0.62, 0.34, -0.71).normalize();
-  const sky = createSky(sunDirection);
-  scene.background = sky;
-  scene.environment = sky;
-  scene.environmentIntensity = 0.85;
-  scene.fog = new T.Fog(0xd8d0c2, 350, 1500);
+  // The brightest pixel in the CC0 panorama is at azimuth +0.626 and
+  // elevation +0.110 radians. The same 1.4-radian Y rotation is applied to
+  // both the background and reflections, and to the directional sun.
+  const skyRotation = 1.4;
+  const skyAzimuth = 0.626 - skyRotation;
+  const skyElevation = 0.110;
+  const sunDirection = new T.Vector3(
+    Math.cos(skyAzimuth) * Math.cos(skyElevation),
+    Math.sin(skyElevation),
+    Math.sin(skyAzimuth) * Math.cos(skyElevation),
+  );
+  // Keep a painted sky visible while the local HDR panorama is loading.
+  const temporarySky = createSky(sunDirection);
+  scene.background = temporarySky;
+  scene.environment = temporarySky;
+  scene.backgroundIntensity = 1;
+  scene.environmentIntensity = 0.35;
+  scene.fog = new T.Fog(0xd3c1ad, 500, 1800);
+  const ready = Promise.all([
+    new RGBELoader().loadAsync('/embarcadero/environment/qwantani-sunset-1k.hdr'),
+    new T.TextureLoader().loadAsync('/embarcadero/environment/qwantani-sunset-background.webp'),
+  ]).then(([sky, background]) => {
+    sky.mapping = T.EquirectangularReflectionMapping;
+    background.mapping = T.EquirectangularReflectionMapping;
+    background.colorSpace = T.SRGBColorSpace;
+    scene.backgroundRotation.y = skyRotation;
+    scene.environmentRotation.y = skyRotation;
+    // The display-referred, lightly blue-graded derivative keeps the sky
+    // legible at the horizon; the original HDR still lights reflections.
+    scene.background = background;
+    scene.environment = sky;
+    temporarySky.dispose();
+  });
 
   // Keep enough neutral fill to see shaded surfaces, without washing out the
   // leaf patterns cast by the strong amber sun. No extra rendering pass.
-  const fill = new T.HemisphereLight(0xd2d5d2, 0x8e7865, 0.92);
+  const fill = new T.HemisphereLight(0xc2d8e4, 0xb5977d, 1.05);
   scene.add(fill);
-  const sun = new T.DirectionalLight(0xffad6a, 4.4);
+  const sun = new T.DirectionalLight(0xffb56f, 3.8);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -75;
@@ -153,7 +181,7 @@ export function createEmbarcaderoLighting(
   sun.shadow.camera.top = 75;
   sun.shadow.camera.bottom = -75;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 420;
+  sun.shadow.camera.far = 600;
   sun.shadow.bias = -0.00025;
   sun.shadow.normalBias = 0.025;
   scene.add(sun, sun.target);
@@ -214,9 +242,12 @@ export function createEmbarcaderoLighting(
     `,
     side: T.DoubleSide,
   });
-  const water = new T.Mesh(new T.PlaneGeometry(2600, 3000), waterMaterial);
+  // Extend beneath the opaque shore and beyond the camera's far plane.  The
+  // playable waterfront is finite, but its water must not end in a rectangle
+  // when a flying player looks across or past the edge of the street slice.
+  const water = new T.Mesh(new T.PlaneGeometry(8000, 8000), waterMaterial);
   water.rotation.x = -Math.PI / 2;
-  water.position.set(1330, -0.6, -550);
+  water.position.set(0, -0.6, -150);
   water.frustumCulled = true;
   scene.add(water);
 
@@ -231,9 +262,9 @@ export function createEmbarcaderoLighting(
       Math.round(position.z / shadowStep) * shadowStep,
     );
     sun.target.position.copy(focus);
-    sun.position.copy(focus).addScaledVector(sunDirection, 200);
+    sun.position.copy(focus).addScaledVector(sunDirection, 260);
     waterMaterial.uniforms.uTime.value = (waterMaterial.uniforms.uTime.value + Math.max(0, Math.min(dt, 0.1))) % 10000;
   };
   update(new T.Vector3(0, 0, 20), 0);
-  return { update };
+  return { ready, update };
 }

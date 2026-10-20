@@ -17,8 +17,8 @@ function addRocketNozzles(root: T.Group, rear: number) {
   for (const x of [-.48, -.16, .16, .48]) {
     const ring = new T.Mesh(ringGeometry, trim);
     const hole = new T.Mesh(boreGeometry, bore);
-    ring.position.set(x, .34, rear + .014);
-    hole.position.set(x, .34, rear + .013);
+    ring.position.set(x, .34, rear - .13);
+    hole.position.set(x, .34, rear - .131);
     group.add(ring, hole);
   }
   root.add(group);
@@ -74,6 +74,7 @@ async function loadTemplate(): Promise<T.Group> {
     object.material = Array.isArray(object.material) ? object.material.map(replace) : replace(object.material);
   });
   addRocketNozzles(car, bounds.max.z);
+  car.userData.exhaustRear = bounds.max.z - .13;
   return car;
 }
 

@@ -33,3 +33,53 @@ test('landing in the bay requests a reset', () => {
   const car = { ...initialCar(), x: 40, y: 0.05, verticalSpeed: -2 };
   assert.equal(stepCar(car, emptyControls(), 1 / 30, []), 'water');
 });
+
+test('an elevated bridge permits flight beneath it and blocks its edge', () => {
+  const bridge = [{ minX: -8, maxX: 8, minZ: -10, maxZ: 0, minY: 10, height: 11 }];
+  const under = { ...initialCar(), x: 0, z: 5, y: 4, speed: 24 };
+  for (let i = 0; i < 30; i++) stepCar(under, emptyControls(), 1 / 60, bridge);
+  assert.ok(under.z < 0, 'car crosses underneath instead of hitting an invisible wall');
+
+  const side = { ...initialCar(), x: 0, z: 5, y: 10.1, speed: 24 };
+  let hit = false;
+  for (let i = 0; i < 20; i++) {
+    if (stepCar(side, emptyControls(), 1 / 60, bridge) === 'collision') hit = true;
+  }
+  assert.ok(hit);
+  assert.ok(side.z >= 2.25, 'car cannot pass through the elevated deck side');
+});
+
+test('an elevated bridge stops upward flight and supports landing', () => {
+  const bridge = [{ minX: -8, maxX: 8, minZ: -10, maxZ: 0, minY: 10, height: 11 }];
+  const ascending = { ...initialCar(), x: 0, z: -5, y: 8, verticalSpeed: 6 };
+  let hit = false;
+  for (let i = 0; i < 20; i++) {
+    if (stepCar(ascending, emptyControls(), 1 / 60, bridge) === 'collision') hit = true;
+  }
+  assert.ok(hit);
+  assert.ok(ascending.y <= 8.7 + 1e-8, 'car roof does not penetrate the underside');
+  const landing = { ...initialCar(), x: 0, z: -5, y: 15 };
+  for (let i = 0; i < 180; i++) stepCar(landing, emptyControls(), 1 / 60, bridge);
+  assert.equal(landing.y, 11);
+});
+
+test('a bridge tower blocks its visible base but leaves the water below clear', () => {
+  const tower = [
+    { minX: 143.1, maxX: 146.9, minZ: -342.4, maxZ: -338.6, minY: 21, height: 95 },
+    { minX: 141.5, maxX: 148.5, minZ: -344, maxZ: -337, minY: 15, height: 23 },
+  ];
+  const below = { ...initialCar(), x: 145, z: -330, y: 5, speed: 24 };
+  for (let i = 0; i < 50; i++) stepCar(below, emptyControls(), 1 / 60, tower);
+  assert.ok(below.z < -344, 'car can fly under the suspended tower');
+
+  const atBase = { ...initialCar(), x: 145, z: -330, y: 16, speed: 24 };
+  let hit = false;
+  for (let i = 0; i < 40; i++) {
+    if (stepCar(atBase, emptyControls(), 1 / 60, tower) === 'collision') {
+      hit = true;
+      break;
+    }
+  }
+  assert.ok(hit, 'visible stone base blocks the car');
+  assert.ok(atBase.z >= -337 + 2.25);
+});

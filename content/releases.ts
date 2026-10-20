@@ -6,6 +6,19 @@ export const RELEASES = [
   {
     ...CURRENT_RELEASE,
     date: '2026-10-19',
+    title: 'Another sunset on the Embarcadero',
+    intro: 'The standalone visual demo has a richer waterfront and new sunset materials.',
+    sections: [
+      { title: 'Visual demo', items: [
+        'Drive or fly past fuller palms, textured buildings and a more detailed Ferry Building, with a wider bay, piers, ferries and a braced Bay Bridge.',
+        'A sunset sky lights the scene and reflects on the Roadster. The independent experiment remains separate from the multiplayer map.'
+      ] }
+    ]
+  },
+  {
+    version: '0.0.49-alpha',
+    label: '0.0.49 Alpha',
+    date: '2026-10-19',
     title: 'A golden-hour drive on the Embarcadero',
     intro: 'Try a standalone waterfront visual demo and compare it with the concept art.',
     sections: [
